@@ -1,5 +1,4 @@
 # app/models.py
-
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import date
@@ -13,7 +12,7 @@ def none_if_nan(v):
             return None
     except Exception:
         pass
-    if isinstance(v, str) and v.lower() == "nan":
+    if isinstance(v, str) and v.strip().upper() == "NA":
         return None
     if isinstance(v, dict) and "$numberDouble" in v:
         try:
@@ -43,7 +42,7 @@ class PyObjectId:
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):
-        # In JSON, we want to represent this type as a string.
+        # Represent this type as a string in JSON schema.
         return {"type": "string"}
 
     def __init__(self, oid: str):
@@ -86,8 +85,8 @@ class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: int
     sex: Optional[str] = Field(default=None)
-    age_reported: Optional[str] = Field(default=None)
-    cohort: Optional[str] = Field(default=None)
+    age_reported: Optional[str] = Field(default=None)  # New field for age reported
+    cohort: Optional[str] = Field(default=None)        # New field for cohort (e.g., "born" vs. "fetus")
     individual_DOI: Optional[str] = Field(default=None)
 
     model_config = {
@@ -108,6 +107,10 @@ class Phenotype(BaseModel):
     modifier: Optional[str] = None
     described: bool
 
+    model_config = {
+        "extra": "allow"
+    }
+
 
 # ------------------------------
 # Report model
@@ -116,9 +119,9 @@ class Report(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     report_id: int
     individual_id: int
-    report_date: date
-    report_review_date: date
-    reviewed_by: Optional[int] = Field(default=None)
+    report_date: Optional[date] = Field(default=None)
+    report_review_date: Optional[date] = Field(default=None)
+    reviewed_by: Optional[int] = Field(default=None)  # Reference to a User's user_id
     phenotypes: Optional[List[Phenotype]] = Field(default=[])
 
     model_config = {
@@ -131,6 +134,34 @@ class Report(BaseModel):
 
 
 # ------------------------------
+# Variant sub-models for nested data
+# ------------------------------
+class VariantClassifications(BaseModel):
+    verdict: Optional[str] = None
+    criteria: Optional[str] = None
+    comment: Optional[str] = None
+    system: Optional[str] = None
+    classification_date: Optional[date] = None
+
+    model_config = {"extra": "allow"}
+
+
+class VariantAnnotations(BaseModel):
+    variant_type: Optional[str] = None
+    variant_reported: Optional[str] = None
+    ID: Optional[str] = None
+    hg19_INFO: Optional[str] = None
+    hg19: Optional[str] = None
+    hg38_INFO: Optional[str] = None
+    hg38: Optional[str] = None
+    varsome: Optional[str] = None
+    detection_method: Optional[str] = None
+    segregation: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+
+# ------------------------------
 # Variant model
 # ------------------------------
 class Variant(BaseModel):
@@ -138,23 +169,8 @@ class Variant(BaseModel):
     variant_id: int
     individual_id: int
     is_current: bool
-    # Classifications:
-    verdict_classification: Optional[str] = Field(default=None)
-    criteria_classification: Optional[str] = Field(default=None)
-    comment_classification: Optional[str] = Field(default=None)
-    system_classification: Optional[str] = Field(default=None)
-    date_classification: Optional[date] = Field(default=None)
-    # Annotations:
-    variant_type: Optional[str] = Field(default=None)
-    variant_reported: Optional[str] = Field(default=None)
-    ID: Optional[str] = Field(default=None)
-    hg19_INFO: Optional[str] = Field(default=None)
-    hg19: Optional[str] = Field(default=None)
-    hg38_INFO: Optional[str] = Field(default=None)
-    hg38: Optional[str] = Field(default=None)
-    varsome: Optional[str] = Field(default=None)
-    detection_method: Optional[str] = Field(default=None)
-    segregation: Optional[str] = Field(default=None)
+    classifications: Optional[VariantClassifications] = None
+    annotations: Optional[VariantAnnotations] = None
 
     model_config = {
         "from_attributes": True,
@@ -164,20 +180,15 @@ class Variant(BaseModel):
         "extra": "allow"
     }
 
-    @field_validator("ID", mode="before")
+    @field_validator("annotations", mode="before")
     @classmethod
-    def validate_id_field(cls, v):
-        return none_if_nan(v)
-
-    @field_validator("hg19_INFO", mode="before")
-    @classmethod
-    def validate_hg19_info(cls, v):
-        return none_if_nan(v)
-
-    @field_validator("hg38_INFO", mode="before")
-    @classmethod
-    def validate_hg38_info(cls, v):
-        return none_if_nan(v)
+    def validate_annotations(cls, v):
+        # If annotations is a dict, apply none_if_nan to certain fields.
+        if isinstance(v, dict):
+            v['ID'] = none_if_nan(v.get('ID'))
+            v['hg19_INFO'] = none_if_nan(v.get('hg19_INFO'))
+            v['hg38_INFO'] = none_if_nan(v.get('hg38_INFO'))
+        return v
 
 
 # ------------------------------
@@ -201,7 +212,6 @@ class Publication(BaseModel):
     firstauthor_lastname: Optional[str] = Field(default=None)
     firstauthor_firstname: Optional[str] = Field(default=None)
     update_date: Optional[date] = Field(default=None)
-    # New fields:
     PDF_drive_link: Optional[str] = Field(default=None)
     assignee: Optional[int] = Field(default=None)
     IndividualsReviewed: Optional[int] = Field(default=None)

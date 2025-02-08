@@ -3,6 +3,7 @@ import asyncio
 import math
 import re
 import pandas as pd
+from dateutil import parser as date_parser  # requires: pip install python-dateutil
 from app.database import db
 from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant
@@ -16,13 +17,10 @@ GID_INDIVIDUALS = "0"             # Individuals sheet
 GID_PUBLICATIONS = "1670256162"   # Publications sheet
 
 # ---------------------------------------------------
-# Helper: Convert NA values to None.
+# Helper: Convert NA values (or NaN) to None.
 def none_if_nan(v):
-    try:
-        if isinstance(v, float) and math.isnan(v):
-            return None
-    except Exception:
-        pass
+    if pd.isna(v):
+        return None
     if isinstance(v, str) and v.strip().upper() == "NA":
         return None
     return v
@@ -34,17 +32,17 @@ def csv_url(spreadsheet_id: str, gid: str) -> str:
     return url
 
 # ---------------------------------------------------
-def import_users():
+async def import_users():
     print("[import_users] Starting import of reviewers/users.")
     url = csv_url(SPREADSHEET_ID, GID_REVIEWERS)
     print(f"[import_users] Fetching reviewers from URL: {url}")
     reviewers_df = pd.read_csv(url)
     print(f"[import_users] Raw columns: {reviewers_df.columns.tolist()}")
-
+    
     reviewers_df = reviewers_df.dropna(how="all")
     reviewers_df.columns = [col.strip() for col in reviewers_df.columns if isinstance(col, str)]
     print(f"[import_users] Normalized columns: {reviewers_df.columns.tolist()}")
-
+    
     expected_columns = [
         'user_id', 'user_name', 'password', 'email',
         'user_role', 'first_name', 'family_name', 'orcid'
@@ -53,7 +51,7 @@ def import_users():
     if missing:
         raise KeyError(f"[import_users] Missing expected columns in Reviewers sheet: {missing}\n"
                        f"Normalized columns are: {reviewers_df.columns.tolist()}")
-
+    
     users_df = reviewers_df[expected_columns].sort_values('user_id')
     validated_users = []
     for idx, row in users_df.iterrows():
@@ -62,62 +60,68 @@ def import_users():
             validated_users.append(user.dict(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_users] Validation error in row {idx}: {e}")
-    
     print(f"[import_users] Inserting {len(validated_users)} valid users into database...")
-    db.users.delete_many({})
+    await db.users.delete_many({})
     if validated_users:
-        db.users.insert_many(validated_users)
+        await db.users.insert_many(validated_users)
     print(f"[import_users] Imported {len(validated_users)} users.")
 
 # ---------------------------------------------------
-def import_individuals():
+async def import_individuals():
     print("[import_individuals] Starting import of individuals.")
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     print(f"[import_individuals] Fetching individuals from URL: {url}")
     individuals_df = pd.read_csv(url)
     print(f"[import_individuals] Raw columns: {individuals_df.columns.tolist()}")
-
+    
     individuals_df = individuals_df.dropna(how="all")
+    # Limit to only the required columns:
+    required_columns = [
+        'individual_id', 'DupCheck', 'IndividualIdentifier', 
+        'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported'
+    ]
+    individuals_df = individuals_df[required_columns]
+    # Rename "Sex" to "sex" so it matches our model (and keep other names as is)
     if "Sex" in individuals_df.columns:
         individuals_df = individuals_df.rename(columns={"Sex": "sex"})
     print(f"[import_individuals] Normalized columns: {individuals_df.columns.tolist()}")
-
+    
     validated_individuals = []
     for idx, row in individuals_df.iterrows():
         try:
+            # Use extra fields by relying on the model_config (make sure your Individual model allows extra)
             indiv = Individual(**row)
             validated_individuals.append(indiv.dict(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_individuals] Validation error in row {idx}: {e}")
-    
     print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals into database...")
-    db.individuals.delete_many({})
+    await db.individuals.delete_many({})
     if validated_individuals:
-        db.individuals.insert_many(validated_individuals)
+        await db.individuals.insert_many(validated_individuals)
     print(f"[import_individuals] Imported {len(validated_individuals)} individuals.")
 
 # ---------------------------------------------------
-def import_publications():
+async def import_publications():
     print("[import_publications] Starting import of publications.")
     url = csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
     print(f"[import_publications] Fetching publications from URL: {url}")
     publications_df = pd.read_csv(url)
     print(f"[import_publications] Raw columns: {publications_df.columns.tolist()}")
-
+    
     publications_df = publications_df.dropna(how="all")
     print(f"[import_publications] Normalized columns: {publications_df.columns.tolist()}")
-
+    
     # Build a mapping from reviewer email to user_id.
     user_mapping = {}
-    for user_doc in db.users.find({}, {"email": 1, "user_id": 1}):
+    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
+    for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["user_id"]
     print(f"[import_publications] User mapping: {user_mapping}")
-
+    
     validated_publications = []
     for idx, row in publications_df.iterrows():
         try:
-            # Convert legacy "Assigne" (if present) from email to user_id.
             if "Assigne" in row:
                 assignee_email = row["Assigne"]
                 if pd.notna(assignee_email):
@@ -127,17 +131,16 @@ def import_publications():
             validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_publications] Validation error in row {idx}: {e}")
-    
     print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
-    db.publications.delete_many({})
+    await db.publications.delete_many({})
     if validated_publications:
-        db.publications.insert_many(validated_publications)
+        await db.publications.insert_many(validated_publications)
     print(f"[import_publications] Imported {len(validated_publications)} publications.")
 
 # ---------------------------------------------------
-def import_reports():
+async def import_reports():
     print("[import_reports] Starting import of reports.")
-    # Assume report data is in the Individuals sheet.
+    # For now, we remove the date fields from reports.
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     print(f"[import_reports] Fetching report data from URL: {url}")
     df = pd.read_csv(url)
@@ -145,14 +148,15 @@ def import_reports():
     df = df.dropna(how="all")
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
     print(f"[import_reports] Normalized columns: {df.columns.tolist()}")
-
+    
     # Build a mapping from reviewer email to user_id.
     user_mapping = {}
-    for user_doc in db.users.find({}, {"email": 1, "user_id": 1}):
+    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
+    for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["user_id"]
     print(f"[import_reports] User mapping: {user_mapping}")
-
+    
     validated_reports = []
     if 'report_id' not in df.columns:
         print("[import_reports] No 'report_id' column found; skipping report import.")
@@ -160,17 +164,18 @@ def import_reports():
         report_rows = df[df['report_id'].notna()]
         for idx, row in report_rows.iterrows():
             try:
-                report_data = {}
-                report_data['report_id'] = row['report_id']
-                report_data['individual_id'] = row['individual_id']
-                report_data['report_review_date'] = row.get('ReviewDate')
-                report_data['report_date'] = row.get('ReportDate', row.get('ReviewDate'))
+                # Build a report record without any date fields.
+                report_data = {
+                    'report_id': row['report_id'],
+                    'individual_id': row['individual_id']
+                    # Omit report_date and report_review_date for now.
+                }
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
                 else:
                     report_data['reviewed_by'] = None
-                # Assume phenotype information is stored in a column named "Phenotypes"
+                # Process phenotypes if present (stored in "Phenotypes" column)
                 phenotypes_str = row.get('Phenotypes')
                 phenotypes_list = []
                 if pd.notna(phenotypes_str):
@@ -189,17 +194,15 @@ def import_reports():
                 validated_reports.append(rep.dict(by_alias=True, exclude_none=True))
             except Exception as e:
                 print(f"[import_reports] Validation error in row {idx}: {e}")
-    
     print(f"[import_reports] Inserting {len(validated_reports)} valid reports into database...")
-    db.reports.delete_many({})
+    await db.reports.delete_many({})
     if validated_reports:
-        db.reports.insert_many(validated_reports)
+        await db.reports.insert_many(validated_reports)
     print(f"[import_reports] Imported {len(validated_reports)} reports.")
 
 # ---------------------------------------------------
-def import_variants():
+async def import_variants():
     print("[import_variants] Starting import of variants.")
-    # Assume variant data is in the Individuals sheet.
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     print(f"[import_variants] Fetching variant data from URL: {url}")
     df = pd.read_csv(url)
@@ -216,24 +219,22 @@ def import_variants():
         variant_id_counter = 1
         for idx, row in variant_rows.iterrows():
             try:
-                variant_data = {}
-                variant_data['variant_id'] = variant_id_counter
-                variant_id_counter += 1
-                variant_data['individual_id'] = row['individual_id']
-                variant_data['is_current'] = True  # Mark as current by default
-                variant_data['variant_type'] = row.get('VariantType')
-                variant_data['variant_reported'] = row.get('VariantReported')
-                # Convert problematic fields: use none_if_nan to clean NaN values.
-                variant_data['ID'] = none_if_nan(row.get('ID'))
-                variant_data['hg19_INFO'] = none_if_nan(row.get('hg19_INFO'))
-                variant_data['hg19'] = none_if_nan(row.get('hg19'))
-                variant_data['hg38_INFO'] = none_if_nan(row.get('hg38_INFO'))
-                variant_data['hg38'] = none_if_nan(row.get('hg38'))
-
-                # Parse the Varsome field into transcript, c_dot, and p_dot.
-                varsome_val = row.get('Varsome')
-                if pd.notna(varsome_val) and str(varsome_val).strip().upper() != "NA":
-                    # Expected format: "HNF1B(NM_000458.4):c.406C>G (p.Gln136Glu)"
+                variant_data = {
+                    'variant_id': variant_id_counter,
+                    'individual_id': row['individual_id'],
+                    'is_current': True,
+                    'variant_type': row.get('VariantType'),
+                    'variant_reported': row.get('VariantReported'),
+                    'ID': none_if_nan(row.get('ID')),
+                    'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
+                    'hg19': none_if_nan(row.get('hg19')),
+                    'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
+                    'hg38': none_if_nan(row.get('hg38'))
+                }
+                # Process Varsome: if present and not "NA", attempt to parse
+                varsome_val = none_if_nan(row.get('Varsome'))
+                if varsome_val is not None:
+                    variant_data['varsome'] = str(varsome_val)
                     pattern = r"^[^(]+\(([^)]+)\):([^ ]+)\s+(\(p\..+\))"
                     m = re.match(pattern, str(varsome_val))
                     if m:
@@ -241,45 +242,42 @@ def import_variants():
                         variant_data['c_dot'] = m.group(2)
                         variant_data['p_dot'] = m.group(3)
                     else:
-                        # Fallback: assign the raw string to transcript only.
                         variant_data['transcript'] = str(varsome_val)
-                # Else, leave transcript, c_dot, p_dot as None.
-
                 variant_data['detection_method'] = none_if_nan(row.get('DetecionMethod'))
                 variant_data['segregation'] = none_if_nan(row.get('Segregation'))
                 
                 var = Variant(**variant_data)
                 validated_variants.append(var.dict(by_alias=True, exclude_none=True))
+                variant_id_counter += 1
             except Exception as e:
                 print(f"[import_variants] Validation error in row {idx}: {e}")
-    
     print(f"[import_variants] Inserting {len(validated_variants)} valid variants into database...")
-    db.variants.delete_many({})
+    await db.variants.delete_many({})
     if validated_variants:
-        db.variants.insert_many(validated_variants)
+        await db.variants.insert_many(validated_variants)
     print(f"[import_variants] Imported {len(validated_variants)} variants.")
 
 # ---------------------------------------------------
 async def main():
     print("[main] Starting migration process...")
     try:
-        import_users()
+        await import_users()
     except Exception as e:
         print(f"[main] Error during import_users: {e}")
     try:
-        import_individuals()
+        await import_individuals()
     except Exception as e:
         print(f"[main] Error during import_individuals: {e}")
     try:
-        import_publications()
+        await import_publications()
     except Exception as e:
         print(f"[main] Error during import_publications: {e}")
     try:
-        import_reports()
+        await import_reports()
     except Exception as e:
         print(f"[main] Error during import_reports: {e}")
     try:
-        import_variants()
+        await import_variants()
     except Exception as e:
         print(f"[main] Error during import_variants: {e}")
     print("[main] Migration process complete.")
