@@ -212,10 +212,7 @@ class Publication(BaseModel):
     firstauthor_lastname: Optional[str] = Field(default=None)
     firstauthor_firstname: Optional[str] = Field(default=None)
     update_date: Optional[date] = Field(default=None)
-    PDF_drive_link: Optional[str] = Field(default=None)
     assignee: Optional[int] = Field(default=None)
-    IndividualsReviewed: Optional[int] = Field(default=None)
-    Comment: Optional[str] = Field(default=None)
 
     model_config = {
         "from_attributes": True,
