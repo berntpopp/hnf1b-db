@@ -16,6 +16,10 @@ GID_REVIEWERS = "1321366018"      # Reviewers sheet
 GID_INDIVIDUALS = "0"             # Individuals sheet
 GID_PUBLICATIONS = "1670256162"   # Publications sheet
 
+# GIDs for additional mapping sheets:
+PHENOTYPE_GID = "1119329208"       # Phenotype sheet
+MODIFIER_GID   = "1741928801"       # Phenotype Modifier sheet
+
 # ---------------------------------------------------
 # Helper: Convert NA (or NaN) values to None.
 def none_if_nan(v):
@@ -30,6 +34,51 @@ def csv_url(spreadsheet_id: str, gid: str) -> str:
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     print(f"[csv_url] Built URL: {url}")
     return url
+
+# ---------------------------------------------------
+async def load_phenotype_mappings():
+    """
+    Load the phenotype mapping from the Phenotype sheet.
+    Returns a dict mapping phenotype_category (lowercase) to a dict
+    with keys "phenotype_id" and "name".
+    """
+    url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
+    df = pd.read_csv(url)
+    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    mapping = {}
+    # For each row, use the 'phenotype_category' (lowercase) as key.
+    for idx, row in df.iterrows():
+        cat = str(row["phenotype_category"]).strip().lower()
+        # If there are multiple rows for the same category, you may choose the first one.
+        if cat not in mapping:
+            mapping[cat] = {
+                "phenotype_id": row["phenotype_id"],
+                "name": row["phenotype_name"]
+            }
+    print(f"[load_phenotype_mappings] Loaded phenotype mapping for {len(mapping)} categories.")
+    return mapping
+
+# ---------------------------------------------------
+async def load_modifier_mappings():
+    """
+    Load the phenotype modifier mapping from the Modifier sheet.
+    Returns a dict mapping standardized modifier strings (lowercase)
+    and their synonyms to a dict with keys "modifier_id" and "name".
+    """
+    url = csv_url(SPREADSHEET_ID, MODIFIER_GID)
+    df = pd.read_csv(url)
+    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    mapping = {}
+    for idx, row in df.iterrows():
+        key = str(row["modifier_name"]).strip().lower()
+        mapping[key] = {"modifier_id": row["modifier_id"], "name": row["modifier_name"].strip()}
+        # If there are synonyms (comma-separated), add them as keys as well.
+        if pd.notna(row.get("modifier_synonyms")):
+            synonyms = row["modifier_synonyms"].split(",")
+            for syn in synonyms:
+                mapping[syn.strip().lower()] = {"modifier_id": row["modifier_id"], "name": row["modifier_name"].strip()}
+    print(f"[load_modifier_mappings] Loaded modifier mapping for {len(mapping)} keys.")
+    return mapping
 
 # ---------------------------------------------------
 async def import_users():
@@ -156,6 +205,10 @@ async def import_reports():
         user_mapping[email] = user_doc["user_id"]
     print(f"[import_reports] User mapping: {user_mapping}")
 
+    # Load phenotype and modifier mappings.
+    phenotype_mapping = await load_phenotype_mappings()
+    modifier_mapping = await load_modifier_mappings()
+
     # Define the list of phenotype columns to integrate.
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
@@ -187,20 +240,30 @@ async def import_reports():
                 else:
                     report_data['reviewed_by'] = None
                 
-                # Build the phenotypes as a list.
+                # Build phenotypes as an array of objects.
                 phenotypes_list = []
                 for col in phenotype_cols:
                     if col in df.columns:
                         raw_val = row.get(col)
-                        val = str(raw_val).strip() if pd.notna(raw_val) else ""
-                        # Include every phenotype. 'described' is True if there is any non-empty value.
-                        described = True if val != "" else False
-                        phenotypes_list.append({
-                            "phenotype_id": col,
-                            "name": col,
-                            "modifier": val,
+                        # Convert value to a string (or empty if missing)
+                        reported_val = str(raw_val).strip() if pd.notna(raw_val) else ""
+                        # Lookup standardized phenotype info by using the column name (lowercased)
+                        pheno_key = col.strip().lower()
+                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
+                        # Determine modifier using the reported value.
+                        mod_key = reported_val.lower() if reported_val != "" else ""
+                        mod_info = modifier_mapping.get(mod_key) if mod_key != "" else None
+                        modifier_std = mod_info["name"] if mod_info else reported_val
+                        # Set described flag: if reported value is non‑empty and not "no"/"not reported", then True.
+                        described = False if reported_val in ["", "no", "not reported"] else True
+                        pheno_obj = {
+                            "phenotype_id": std_info["phenotype_id"],
+                            "name": std_info["name"],
+                            "modifier": modifier_std,
+                            "modifier_id": mod_info["modifier_id"] if mod_info else None,
                             "described": described
-                        })
+                        }
+                        phenotypes_list.append(pheno_obj)
                 report_data['phenotypes'] = phenotypes_list
                 rep = Report(**report_data)
                 validated_reports.append(rep.dict(by_alias=True, exclude_none=True))
