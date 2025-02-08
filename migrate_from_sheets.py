@@ -17,7 +17,7 @@ GID_INDIVIDUALS = "0"             # Individuals sheet
 GID_PUBLICATIONS = "1670256162"   # Publications sheet
 
 # ---------------------------------------------------
-# Helper: Convert NA values (or NaN) to None.
+# Helper: Convert NA (or NaN) values to None.
 def none_if_nan(v):
     if pd.isna(v):
         return None
@@ -38,11 +38,11 @@ async def import_users():
     print(f"[import_users] Fetching reviewers from URL: {url}")
     reviewers_df = pd.read_csv(url)
     print(f"[import_users] Raw columns: {reviewers_df.columns.tolist()}")
-    
+
     reviewers_df = reviewers_df.dropna(how="all")
     reviewers_df.columns = [col.strip() for col in reviewers_df.columns if isinstance(col, str)]
     print(f"[import_users] Normalized columns: {reviewers_df.columns.tolist()}")
-    
+
     expected_columns = [
         'user_id', 'user_name', 'password', 'email',
         'user_role', 'first_name', 'family_name', 'orcid'
@@ -51,7 +51,7 @@ async def import_users():
     if missing:
         raise KeyError(f"[import_users] Missing expected columns in Reviewers sheet: {missing}\n"
                        f"Normalized columns are: {reviewers_df.columns.tolist()}")
-    
+
     users_df = reviewers_df[expected_columns].sort_values('user_id')
     validated_users = []
     for idx, row in users_df.iterrows():
@@ -73,7 +73,7 @@ async def import_individuals():
     print(f"[import_individuals] Fetching individuals from URL: {url}")
     individuals_df = pd.read_csv(url)
     print(f"[import_individuals] Raw columns: {individuals_df.columns.tolist()}")
-    
+
     individuals_df = individuals_df.dropna(how="all")
     # Limit to only the required columns:
     required_columns = [
@@ -81,15 +81,14 @@ async def import_individuals():
         'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported'
     ]
     individuals_df = individuals_df[required_columns]
-    # Rename "Sex" to "sex" so it matches our model (and keep other names as is)
+    # Rename "Sex" to "sex" so it matches our model.
     if "Sex" in individuals_df.columns:
         individuals_df = individuals_df.rename(columns={"Sex": "sex"})
     print(f"[import_individuals] Normalized columns: {individuals_df.columns.tolist()}")
-    
+
     validated_individuals = []
     for idx, row in individuals_df.iterrows():
         try:
-            # Use extra fields by relying on the model_config (make sure your Individual model allows extra)
             indiv = Individual(**row)
             validated_individuals.append(indiv.dict(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -107,10 +106,10 @@ async def import_publications():
     print(f"[import_publications] Fetching publications from URL: {url}")
     publications_df = pd.read_csv(url)
     print(f"[import_publications] Raw columns: {publications_df.columns.tolist()}")
-    
+
     publications_df = publications_df.dropna(how="all")
     print(f"[import_publications] Normalized columns: {publications_df.columns.tolist()}")
-    
+
     # Build a mapping from reviewer email to user_id.
     user_mapping = {}
     user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
@@ -118,7 +117,7 @@ async def import_publications():
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["user_id"]
     print(f"[import_publications] User mapping: {user_mapping}")
-    
+
     validated_publications = []
     for idx, row in publications_df.iterrows():
         try:
@@ -140,7 +139,7 @@ async def import_publications():
 # ---------------------------------------------------
 async def import_reports():
     print("[import_reports] Starting import of reports.")
-    # For now, we remove the date fields from reports.
+    # For now, we omit any date fields.
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     print(f"[import_reports] Fetching report data from URL: {url}")
     df = pd.read_csv(url)
@@ -148,7 +147,7 @@ async def import_reports():
     df = df.dropna(how="all")
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
     print(f"[import_reports] Normalized columns: {df.columns.tolist()}")
-    
+
     # Build a mapping from reviewer email to user_id.
     user_mapping = {}
     user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
@@ -156,7 +155,20 @@ async def import_reports():
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["user_id"]
     print(f"[import_reports] User mapping: {user_mapping}")
-    
+
+    # Define the list of phenotype columns to integrate.
+    phenotype_cols = [
+        'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
+        'KidneyBiopsy', 'RenalHypoplasia', 'SolitaryKidney', 'UrinaryTractMalformation',
+        'GenitalTractAbnormality', 'AntenatalRenalAbnormalities', 'Hypomagnesemia',
+        'Hypokalemia', 'Hyperuricemia', 'Gout', 'MODY', 'PancreaticHypoplasia',
+        'ExocrinePancreaticInsufficiency', 'Hyperparathyroidism', 'NeurodevelopmentalDisorder',
+        'MentalDisease', 'Seizures', 'BrainAbnormality', 'PrematureBirth',
+        'CongenitalCardiacAnomalies', 'EyeAbnormality', 'ShortStature',
+        'MusculoskeletalFeatures', 'DysmorphicFeatures', 'ElevatedHepaticTransaminase',
+        'AbnormalLiverPhysiology'
+    ]
+
     validated_reports = []
     if 'report_id' not in df.columns:
         print("[import_reports] No 'report_id' column found; skipping report import.")
@@ -164,31 +176,31 @@ async def import_reports():
         report_rows = df[df['report_id'].notna()]
         for idx, row in report_rows.iterrows():
             try:
-                # Build a report record without any date fields.
                 report_data = {
                     'report_id': row['report_id'],
                     'individual_id': row['individual_id']
-                    # Omit report_date and report_review_date for now.
+                    # Date fields are omitted for now.
                 }
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
                 else:
                     report_data['reviewed_by'] = None
-                # Process phenotypes if present (stored in "Phenotypes" column)
-                phenotypes_str = row.get('Phenotypes')
+                
+                # Build the phenotypes as a list.
                 phenotypes_list = []
-                if pd.notna(phenotypes_str):
-                    for entry in phenotypes_str.split(';'):
-                        parts = entry.split('|')
-                        if len(parts) >= 2:
-                            pheno = {
-                                "phenotype_id": parts[0].strip(),
-                                "name": parts[1].strip(),
-                                "modifier": parts[2].strip() if len(parts) > 2 else None,
-                                "described": parts[3].strip().lower() == "true" if len(parts) > 3 else False
-                            }
-                            phenotypes_list.append(pheno)
+                for col in phenotype_cols:
+                    if col in df.columns:
+                        raw_val = row.get(col)
+                        val = str(raw_val).strip() if pd.notna(raw_val) else ""
+                        # Include every phenotype. 'described' is True if there is any non-empty value.
+                        described = True if val != "" else False
+                        phenotypes_list.append({
+                            "phenotype_id": col,
+                            "name": col,
+                            "modifier": val,
+                            "described": described
+                        })
                 report_data['phenotypes'] = phenotypes_list
                 rep = Report(**report_data)
                 validated_reports.append(rep.dict(by_alias=True, exclude_none=True))
@@ -231,9 +243,9 @@ async def import_variants():
                     'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
                     'hg38': none_if_nan(row.get('hg38'))
                 }
-                # Process Varsome: if present and not "NA", attempt to parse
+                # Process Varsome: if present and not "NA", attempt to parse into transcript, c_dot, and p_dot.
                 varsome_val = none_if_nan(row.get('Varsome'))
-                if varsome_val is not None:
+                if pd.notna(varsome_val):
                     variant_data['varsome'] = str(varsome_val)
                     pattern = r"^[^(]+\(([^)]+)\):([^ ]+)\s+(\(p\..+\))"
                     m = re.match(pattern, str(varsome_val))
