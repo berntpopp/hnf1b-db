@@ -1,3 +1,4 @@
+# File: app/models.py
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
@@ -19,33 +20,24 @@ def none_if_nan(v):
 
 # ------------------------------------------------------------------------------
 # Custom type for MongoDB ObjectId.
-class PyObjectId:
+# We subclass from str so that it is naturally serializable.
+class PyObjectId(str):
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
 
     @classmethod
     def validate(cls, v, info=None):
-        if isinstance(v, cls):
-            return v
         if isinstance(v, BsonObjectId):
-            return cls(str(v))
+            return str(v)
         if isinstance(v, str):
-            return cls(v)
-        raise TypeError("Invalid type for PyObjectId")
+            # Optionally, you can add additional validation here (e.g., length check)
+            return v
+        raise TypeError("Invalid type for ObjectId")
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):
         return {"type": "string"}
-
-    def __init__(self, oid: str):
-        self.oid = oid
-
-    def __str__(self):
-        return self.oid
-
-    def __repr__(self):
-        return f"PyObjectId({self.oid})"
 
 # ------------------------------------------------------------------------------
 # User model (for reviewers/users)
@@ -246,5 +238,5 @@ class Publication(BaseModel):
         return none_if_nan(v)
 
 # ------------------------------------------------------------------------------
-# Update forward references (for self-referencing embedded models)
+# Update forward references for self-referencing embedded models.
 Individual.update_forward_refs()

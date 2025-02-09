@@ -10,11 +10,11 @@ router = APIRouter()
 async def get_individuals(
     skip: int = 0,
     limit: int = 10,
-    sex: Optional[str] = Query(None, description="Filter by sex")
+    Sex: Optional[str] = Query(None, description="Filter by sex")
 ):
     query = {}
-    if sex:
-        query["sex"] = sex
+    if Sex:
+        query["Sex"] = sex
     cursor = db.individuals.find(query).skip(skip).limit(limit)
     individuals = await cursor.to_list(length=limit)
     if not individuals:
