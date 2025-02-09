@@ -1,4 +1,3 @@
-# migrate_from_sheets.py
 import asyncio
 import math
 import re
@@ -20,7 +19,6 @@ PHENOTYPE_GID = "1119329208"       # Phenotype sheet
 MODIFIER_GID   = "1741928801"      # Modifier sheet
 
 # ---------------------------------------------------
-# Helper: Convert NA (or NaN) values to None.
 def none_if_nan(v):
     if pd.isna(v):
         return None
@@ -38,14 +36,14 @@ def csv_url(spreadsheet_id: str, gid: str) -> str:
 async def load_phenotype_mappings():
     """
     Load the phenotype mapping from the Phenotype sheet.
-    Returns a dict mapping the lowercased phenotype category to a dict with standardized keys.
+    Returns a dict mapping the lowercased phenotype category to a dict with keys:
+      "phenotype_id" and "name".
     """
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
     df = pd.read_csv(url)
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
     mapping = {}
     for idx, row in df.iterrows():
-        # Use the lowercased phenotype_category as key.
         key = str(row["phenotype_category"]).strip().lower()
         mapping[key] = {
             "phenotype_id": row["phenotype_id"],
@@ -57,8 +55,9 @@ async def load_phenotype_mappings():
 # ---------------------------------------------------
 async def load_modifier_mappings():
     """
-    Load the phenotype modifier mapping from the Modifier sheet.
-    Returns a dict mapping standardized modifier strings and their synonyms to their standardized info.
+    Load the modifier mapping from the Modifier sheet.
+    Returns a dict mapping standardized modifier strings (and their synonyms) to a dict with keys:
+      "modifier_id" and "name".
     """
     url = csv_url(SPREADSHEET_ID, MODIFIER_GID)
     df = pd.read_csv(url)
@@ -116,8 +115,14 @@ async def import_individuals_with_reports():
         'individual_id', 'DupCheck', 'IndividualIdentifier', 
         'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported'
     ]
+    # Rename "Sex" to "sex"
+    if "Sex" in df.columns:
+        df = df.rename(columns={"Sex": "sex"})
+
     # Report-specific columns: we assume that if a row has a report_id, it holds report info.
+    # (For this example we use only 'report_id' and 'ReviewBy')
     report_cols = ['report_id', 'ReviewBy']
+
     # Define phenotype columns to integrate.
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
@@ -156,26 +161,28 @@ async def import_individuals_with_reports():
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
                 else:
                     report_data['reviewed_by'] = None
-                # Build phenotypes as a dictionary.
+
+                # Build phenotypes as a dictionary mapping standardized HPO term to phenotype data.
                 phenotypes_obj = {}
                 for col in phenotype_cols:
-                    if col in df.columns:
-                        raw_val = row.get(col)
-                        reported_val = str(raw_val).strip() if pd.notna(raw_val) else ""
-                        # Use the lowercased column name as key.
-                        pheno_key = col.strip().lower()
-                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
-                        mod_key = reported_val.lower() if reported_val != "" else ""
-                        mod_info = modifier_mapping.get(mod_key) if mod_key != "" else None
-                        modifier_std = mod_info["name"] if mod_info else reported_val
-                        described = False if reported_val in ["", "no", "not reported"] else True
-                        phenotypes_obj[std_info["phenotype_id"]] = {
-                            "phenotype_id": std_info["phenotype_id"],
-                            "name": std_info["name"],
-                            "modifier": modifier_std,
-                            "modifier_id": mod_info["modifier_id"] if mod_info else None,
-                            "described": described
-                        }
+                    # Always include an entry for each phenotype column.
+                    raw_val = row.get(col, "")
+                    reported_val = str(raw_val).strip() if pd.notna(raw_val) else ""
+                    # Use the lowercased column name as key to lookup standardized info.
+                    pheno_key = col.strip().lower()
+                    std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
+                    mod_key = reported_val.lower()
+                    mod_info = modifier_mapping.get(mod_key) if mod_key else None
+                    modifier_std = mod_info["name"] if mod_info else reported_val
+                    # If reported value is empty, "no", or "not reported", set described=False.
+                    described = False if reported_val in ["", "no", "not reported"] else True
+                    phenotypes_obj[std_info["phenotype_id"]] = {
+                        "phenotype_id": std_info["phenotype_id"],
+                        "name": std_info["name"],
+                        "modifier": modifier_std,
+                        "modifier_id": mod_info["modifier_id"] if mod_info else None,
+                        "described": described
+                    }
                 report_data['phenotypes'] = phenotypes_obj
                 reports.append(report_data)
         base_data['reports'] = reports
@@ -184,7 +191,7 @@ async def import_individuals_with_reports():
             validated_individuals.append(indiv.dict(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_individuals] Validation error for individual {indiv_id}: {e}")
-    print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals with reports into database...")
+    print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals with embedded reports into database...")
     await db.individuals.delete_many({})
     if validated_individuals:
         await db.individuals.insert_many(validated_individuals)
@@ -212,6 +219,7 @@ async def import_publications():
                 if pd.notna(assignee_email):
                     row["assignee"] = user_mapping.get(assignee_email.strip().lower())
                 row = row.drop(labels=["Assigne"])
+            from app.models import Publication  # ensure Publication model is imported
             pub = Publication(**row)
             validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -225,30 +233,53 @@ async def import_publications():
 # ---------------------------------------------------
 async def import_variants():
     print("[import_variants] Starting import of variants.")
+    # Load the entire individuals sheet to extract variant data.
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     df = pd.read_csv(url)
     df = df.dropna(how="all")
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
-    validated_variants = []
-    if 'VariantType' not in df.columns:
-        print("[import_variants] No 'VariantType' column found; skipping variant import.")
-    else:
-        variant_rows = df[df['VariantType'].notna()]
-        variant_id_counter = 1
-        for idx, row in variant_rows.iterrows():
-            try:
+    print(f"[import_variants] Normalized columns: {df.columns.tolist()}")
+
+    # We assume the following columns are used for variant uniqueness:
+    variant_key_cols = ['VariantType', 'VariantReported', 'ID', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38', 'Varsome']
+    # We'll also capture detection_method and segregation per individual.
+    unique_variants = {}  # key -> dict with variant data and list of individual_ids
+    individual_variant_info = {}  # individual_id -> dict with detection_method and segregation
+
+    for idx, row in df.iterrows():
+        # Only process rows with a VariantType.
+        if pd.notna(row.get('VariantType')):
+            # Build a key based on the variant columns.
+            key_parts = []
+            for col in variant_key_cols:
+                val = none_if_nan(row.get(col))
+                key_parts.append(str(val).strip() if val is not None else "")
+            variant_key = "|".join(key_parts)
+            individual_id = row['individual_id']
+            # Record detection_method and segregation for this individual.
+            det_method = none_if_nan(row.get('DetecionMethod'))
+            seg = none_if_nan(row.get('Segregation'))
+            individual_variant_info[individual_id] = {
+                "detection_method": det_method,
+                "segregation": seg
+            }
+            # If this variant key already exists, add this individual_id.
+            if variant_key in unique_variants:
+                if individual_id not in unique_variants[variant_key]['individual_ids']:
+                    unique_variants[variant_key]['individual_ids'].append(individual_id)
+            else:
+                # Build variant data.
                 variant_data = {
-                    'variant_id': variant_id_counter,
-                    'individual_id': row['individual_id'],
-                    'is_current': True,
                     'variant_type': row.get('VariantType'),
                     'variant_reported': row.get('VariantReported'),
                     'ID': none_if_nan(row.get('ID')),
                     'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
                     'hg19': none_if_nan(row.get('hg19')),
                     'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                    'hg38': none_if_nan(row.get('hg38'))
+                    'hg38': none_if_nan(row.get('hg38')),
+                    'varsome': none_if_nan(row.get('Varsome'))
                 }
+                # Process Varsome: try to extract transcript, c_dot, p_dot if possible.
                 varsome_val = none_if_nan(row.get('Varsome'))
                 if pd.notna(varsome_val):
                     variant_data['varsome'] = str(varsome_val)
@@ -260,18 +291,63 @@ async def import_variants():
                         variant_data['p_dot'] = m.group(3)
                     else:
                         variant_data['transcript'] = str(varsome_val)
-                variant_data['detection_method'] = none_if_nan(row.get('DetecionMethod'))
-                variant_data['segregation'] = none_if_nan(row.get('Segregation'))
-                var = Variant(**variant_data)
-                validated_variants.append(var.dict(by_alias=True, exclude_none=True))
-                variant_id_counter += 1
-            except Exception as e:
-                print(f"[import_variants] Validation error in row {idx}: {e}")
-    print(f"[import_variants] Inserting {len(validated_variants)} valid variants into database...")
+                unique_variants[variant_key] = {
+                    "variant_data": variant_data,
+                    "individual_ids": [individual_id]
+                }
+
+    print(f"[import_variants] Found {len(unique_variants)} unique variants.")
+
+    # Now assign sequential variant_id values and prepare Variant documents.
+    validated_variants = []
+    variant_id_counter = 1
+    variant_key_to_id = {}
+    for key, info in unique_variants.items():
+        variant_doc = info["variant_data"]
+        variant_doc['variant_id'] = variant_id_counter
+        variant_doc['individual_ids'] = info["individual_ids"]
+        from app.models import Variant  # ensure Variant model is imported
+        try:
+            var = Variant(**variant_doc)
+            validated_variants.append(var.dict(by_alias=True, exclude_none=True))
+            variant_key_to_id[key] = variant_id_counter
+            variant_id_counter += 1
+        except Exception as e:
+            print(f"[import_variants] Validation error for variant key {key}: {e}")
+
+    print(f"[import_variants] Inserting {len(validated_variants)} unique variants into database...")
     await db.variants.delete_many({})
     if validated_variants:
         await db.variants.insert_many(validated_variants)
     print(f"[import_variants] Imported {len(validated_variants)} variants.")
+
+    # ---------------------------------------------------
+    # Now update individuals: add a 'variant' field in each individual document
+    # based on the individual_variant_info mapping and variant_key_to_id.
+    print("[import_variants] Updating individuals with variant references...")
+    individuals_cursor = db.individuals.find({})
+    async for indiv_doc in individuals_cursor:
+        indiv_id = indiv_doc.get("individual_id")
+        # Look up the variant key(s) for this individual.
+        # Here we scan through unique_variants to find a key that contains this individual.
+        found_variant_id = None
+        for key, info in unique_variants.items():
+            if indiv_id in info["individual_ids"]:
+                found_variant_id = variant_key_to_id.get(key)
+                break
+        if found_variant_id is not None:
+            # Get detection_method and segregation info from individual_variant_info.
+            det_seg = individual_variant_info.get(indiv_id, {})
+            variant_ref = {
+                "variant_id": found_variant_id,
+                "detection_method": det_seg.get("detection_method"),
+                "segregation": det_seg.get("segregation")
+            }
+            await db.individuals.update_one(
+                {"_id": indiv_doc["_id"]},
+                {"$set": {"variant": variant_ref}}
+            )
+    print("[import_variants] Updated individuals with variant references.")
 
 # ---------------------------------------------------
 async def main():

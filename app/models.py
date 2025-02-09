@@ -1,4 +1,3 @@
-# app/models.py
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
@@ -82,8 +81,8 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Here we store the report_id, reviewed_by (a user_id), and a dictionary
-# of phenotypes, where each key is the standardized HPO term and the value is a Phenotype object.
+# The phenotypes field is now a dictionary mapping standardized HPO term (the key)
+# to a Phenotype object.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[int] = None  # Reference to a User's user_id
@@ -92,8 +91,16 @@ class Report(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Individual model (combining base data and embedded reports)
-# This model now includes fields from your main sheet plus an embedded list of reports.
+# IndividualVariant model (for storing per‐individual variant info)
+class IndividualVariant(BaseModel):
+    variant_id: int
+    detection_method: Optional[str] = None
+    segregation: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
+# Individual model (combining base data, embedded reports, and a variant reference)
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: int
@@ -101,12 +108,11 @@ class Individual(BaseModel):
     age_reported: Optional[str] = None
     cohort: Optional[str] = None
     individual_DOI: Optional[str] = None
-    # Additional fields imported from the sheet:
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
     Problematic: Optional[str] = None
-    # Embedded reports (a list of Report objects)
     reports: Optional[List[Report]] = Field(default_factory=list)
+    variant: Optional[IndividualVariant] = None  # Link to the individual's variant info
 
     model_config = {
         "from_attributes": True,
@@ -119,12 +125,11 @@ class Individual(BaseModel):
     @field_validator("Problematic", mode="before")
     @classmethod
     def validate_problematic(cls, v):
-        # Convert NaN or None to an empty string so that the field is always a string.
         val = none_if_nan(v)
         return val if val is not None else ""
 
 # ------------------------------------------------------------------------------
-# Variant sub-models for nested data
+# Variant Classifications model
 class VariantClassifications(BaseModel):
     verdict: Optional[str] = None
     criteria: Optional[str] = None
@@ -134,6 +139,8 @@ class VariantClassifications(BaseModel):
 
     model_config = {"extra": "allow"}
 
+# ------------------------------------------------------------------------------
+# Variant Annotations model – note that detection_method and segregation are removed.
 class VariantAnnotations(BaseModel):
     variant_type: Optional[str] = None
     variant_reported: Optional[str] = None
@@ -143,18 +150,19 @@ class VariantAnnotations(BaseModel):
     hg38_INFO: Optional[str] = None
     hg38: Optional[str] = None
     varsome: Optional[str] = None
-    detection_method: Optional[str] = None
-    segregation: Optional[str] = None
+    transcript: Optional[str] = None
+    c_dot: Optional[str] = None
+    p_dot: Optional[str] = None
 
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Variant model (stored separately; may be many-to-many linked to individuals)
+# Variant model (unique across the database)
+# Instead of storing a single individual_id, we store a list of individual_ids.
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
-    individual_id: int
-    is_current: bool
+    individual_ids: List[int] = Field(default_factory=list)
     classifications: Optional[VariantClassifications] = None
     annotations: Optional[VariantAnnotations] = None
 
