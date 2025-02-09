@@ -81,8 +81,8 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# The phenotypes field is now a dictionary mapping standardized HPO term (the key)
-# to a Phenotype object.
+# Here the phenotypes field is a dictionary whose keys are standardized HPO term strings
+# and whose values are Phenotype objects.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[int] = None  # Reference to a User's user_id
@@ -91,9 +91,11 @@ class Report(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# IndividualVariant model (for storing per‐individual variant info)
+# IndividualVariant model (per-individual variant info)
+# This stores the MongoDB ObjectId (as PyObjectId) of the unique Variant document
+# along with the detection_method and segregation for that individual.
 class IndividualVariant(BaseModel):
-    variant_id: int
+    variant_ref: PyObjectId  # Link to the Variant document _id
     detection_method: Optional[str] = None
     segregation: Optional[str] = None
 
@@ -110,9 +112,10 @@ class Individual(BaseModel):
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
-    Problematic: Optional[str] = None
-    reports: Optional[List[Report]] = Field(default_factory=list)
-    variant: Optional[IndividualVariant] = None  # Link to the individual's variant info
+    # Force Problematic to be a string (default to empty string if missing)
+    Problematic: str = ""
+    reports: List[Report] = Field(default_factory=list)
+    variant: Optional[IndividualVariant] = None  # Embedded variant info
 
     model_config = {
         "from_attributes": True,
@@ -140,7 +143,7 @@ class VariantClassifications(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Variant Annotations model – note that detection_method and segregation are removed.
+# Variant Annotations model – detection_method and segregation are removed here.
 class VariantAnnotations(BaseModel):
     variant_type: Optional[str] = None
     variant_reported: Optional[str] = None
@@ -158,11 +161,11 @@ class VariantAnnotations(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Variant model (unique across the database)
-# Instead of storing a single individual_id, we store a list of individual_ids.
+# Instead of storing a single individual_id, we store a list of individual_ids as MongoDB ObjectIds.
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
-    individual_ids: List[int] = Field(default_factory=list)
+    individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: Optional[VariantClassifications] = None
     annotations: Optional[VariantAnnotations] = None
 
@@ -243,5 +246,5 @@ class Publication(BaseModel):
         return none_if_nan(v)
 
 # ------------------------------------------------------------------------------
-# Update forward references for self-referencing models.
+# Update forward references (for self-referencing embedded models)
 Individual.update_forward_refs()
