@@ -1,11 +1,13 @@
 # app/models.py
+from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import date
 import math
 from bson import ObjectId as BsonObjectId  # Provided by PyMongo
 
-# Utility function to treat NaN values as None.
+# ------------------------------------------------------------------------------
+# Utility function: Convert NA (or NaN) values to None.
 def none_if_nan(v):
     try:
         if isinstance(v, float) and math.isnan(v):
@@ -14,16 +16,9 @@ def none_if_nan(v):
         pass
     if isinstance(v, str) and v.strip().upper() == "NA":
         return None
-    if isinstance(v, dict) and "$numberDouble" in v:
-        try:
-            val = float(v["$numberDouble"])
-            if math.isnan(val):
-                return None
-            return str(val) if val.is_integer() else str(val)
-        except Exception:
-            return None
     return v
 
+# ------------------------------------------------------------------------------
 # Custom type for MongoDB ObjectId.
 class PyObjectId:
     @classmethod
@@ -42,7 +37,6 @@ class PyObjectId:
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):
-        # Represent this type as a string in JSON schema.
         return {"type": "string"}
 
     def __init__(self, oid: str):
@@ -54,10 +48,8 @@ class PyObjectId:
     def __repr__(self):
         return f"PyObjectId({self.oid})"
 
-
-# ------------------------------
+# ------------------------------------------------------------------------------
 # User model (for reviewers/users)
-# ------------------------------
 class User(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     user_id: int
@@ -67,7 +59,7 @@ class User(BaseModel):
     user_role: str
     first_name: str
     family_name: str
-    orcid: Optional[str] = Field(default=None)
+    orcid: Optional[str] = None
 
     model_config = {
         "from_attributes": True,
@@ -77,52 +69,44 @@ class User(BaseModel):
         "extra": "allow"
     }
 
-
-# ------------------------------
-# Individual model
-# ------------------------------
-class Individual(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    individual_id: int
-    sex: Optional[str] = Field(default=None)
-    age_reported: Optional[str] = Field(default=None)  # New field for age reported
-    cohort: Optional[str] = Field(default=None)        # New field for cohort (e.g., "born" vs. "fetus")
-    individual_DOI: Optional[str] = Field(default=None)
-
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
-    }
-
-
-# ------------------------------
-# Phenotype sub-model for Reports
-# ------------------------------
+# ------------------------------------------------------------------------------
+# Phenotype sub-model for reports
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
     modifier: Optional[str] = None
+    modifier_id: Optional[str] = None
     described: bool
 
-    model_config = {
-        "extra": "allow"
-    }
+    model_config = {"extra": "allow"}
 
-
-# ------------------------------
-# Report model
-# ------------------------------
+# ------------------------------------------------------------------------------
+# Report model (to be embedded in an Individual)
+# Here we store the report_id, reviewed_by (a user_id), and a dictionary
+# of phenotypes, where each key is the standardized HPO term and the value is a Phenotype object.
 class Report(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
     report_id: int
+    reviewed_by: Optional[int] = None  # Reference to a User's user_id
+    phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
+# Individual model (combining base data and embedded reports)
+# This model now includes fields from your main sheet plus an embedded list of reports.
+class Individual(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: int
-    report_date: Optional[date] = Field(default=None)
-    report_review_date: Optional[date] = Field(default=None)
-    reviewed_by: Optional[int] = Field(default=None)  # Reference to a User's user_id
-    phenotypes: Optional[List[Phenotype]] = Field(default=[])
+    sex: Optional[str] = None
+    age_reported: Optional[str] = None
+    cohort: Optional[str] = None
+    individual_DOI: Optional[str] = None
+    # Additional fields imported from the sheet:
+    DupCheck: Optional[str] = None
+    IndividualIdentifier: Optional[str] = None
+    Problematic: Optional[str] = None
+    # Embedded reports (a list of Report objects)
+    reports: Optional[List[Report]] = Field(default_factory=list)
 
     model_config = {
         "from_attributes": True,
@@ -132,10 +116,15 @@ class Report(BaseModel):
         "extra": "allow"
     }
 
+    @field_validator("Problematic", mode="before")
+    @classmethod
+    def validate_problematic(cls, v):
+        # Convert NaN or None to an empty string so that the field is always a string.
+        val = none_if_nan(v)
+        return val if val is not None else ""
 
-# ------------------------------
+# ------------------------------------------------------------------------------
 # Variant sub-models for nested data
-# ------------------------------
 class VariantClassifications(BaseModel):
     verdict: Optional[str] = None
     criteria: Optional[str] = None
@@ -144,7 +133,6 @@ class VariantClassifications(BaseModel):
     classification_date: Optional[date] = None
 
     model_config = {"extra": "allow"}
-
 
 class VariantAnnotations(BaseModel):
     variant_type: Optional[str] = None
@@ -160,10 +148,8 @@ class VariantAnnotations(BaseModel):
 
     model_config = {"extra": "allow"}
 
-
-# ------------------------------
-# Variant model
-# ------------------------------
+# ------------------------------------------------------------------------------
+# Variant model (stored separately; may be many-to-many linked to individuals)
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
@@ -183,36 +169,33 @@ class Variant(BaseModel):
     @field_validator("annotations", mode="before")
     @classmethod
     def validate_annotations(cls, v):
-        # If annotations is a dict, apply none_if_nan to certain fields.
         if isinstance(v, dict):
             v['ID'] = none_if_nan(v.get('ID'))
             v['hg19_INFO'] = none_if_nan(v.get('hg19_INFO'))
             v['hg38_INFO'] = none_if_nan(v.get('hg38_INFO'))
         return v
 
-
-# ------------------------------
+# ------------------------------------------------------------------------------
 # Publication model
-# ------------------------------
 class Publication(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     publication_id: int
     publication_alias: str
-    publication_type: Optional[str] = Field(default=None)
-    publication_entry_date: Optional[date] = Field(default=None)
-    PMID: Optional[str] = Field(default=None)
-    DOI: Optional[str] = Field(default=None)
-    PDF: Optional[str] = Field(default=None)
-    title: Optional[str] = Field(default=None)
-    abstract: Optional[str] = Field(default=None)
-    publication_date: Optional[date] = Field(default=None)
-    journal_abbreviation: Optional[str] = Field(default=None)
-    journal: Optional[str] = Field(default=None)
-    keywords: Optional[str] = Field(default=None)
-    firstauthor_lastname: Optional[str] = Field(default=None)
-    firstauthor_firstname: Optional[str] = Field(default=None)
-    update_date: Optional[date] = Field(default=None)
-    assignee: Optional[int] = Field(default=None)
+    publication_type: Optional[str] = None
+    publication_entry_date: Optional[date] = None
+    PMID: Optional[str] = None
+    DOI: Optional[str] = None
+    PDF: Optional[str] = None
+    title: Optional[str] = None
+    abstract: Optional[str] = None
+    publication_date: Optional[date] = None
+    journal_abbreviation: Optional[str] = None
+    journal: Optional[str] = None
+    keywords: Optional[str] = None
+    firstauthor_lastname: Optional[str] = None
+    firstauthor_firstname: Optional[str] = None
+    update_date: Optional[date] = None
+    assignee: Optional[int] = None
 
     model_config = {
         "from_attributes": True,
@@ -250,3 +233,7 @@ class Publication(BaseModel):
     @classmethod
     def validate_pdf(cls, v):
         return none_if_nan(v)
+
+# ------------------------------------------------------------------------------
+# Update forward references for self-referencing models.
+Individual.update_forward_refs()
