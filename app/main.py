@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI
-from app.endpoints import individuals, reports, publications, variants
+from app.endpoints import individuals, publications, variants
 
 app = FastAPI(
     title="HNF1B-db API",
@@ -9,7 +9,6 @@ app = FastAPI(
 )
 
 app.include_router(individuals.router, prefix="/api/individuals", tags=["Individuals"])
-app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(publications.router, prefix="/api/publications", tags=["Publications"])
 app.include_router(variants.router, prefix="/api/variants", tags=["Variants"])
 
