@@ -98,9 +98,10 @@ class IndividualVariant(BaseModel):
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: int
-    sex: Optional[str] = None
-    age_reported: Optional[str] = None
-    cohort: Optional[str] = None
+    Sex: Optional[str] = None
+    AgeReported: Optional[str] = None
+    AgeOnset: Optional[str] = None
+    Cohort: Optional[str] = None
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None

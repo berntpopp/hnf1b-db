@@ -100,8 +100,6 @@ async def import_individuals_with_reports():
 
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 
                  'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
-    if "Sex" in df.columns:
-        df = df.rename(columns={"Sex": "sex"})
 
     # Define phenotype columns to integrate.
     phenotype_cols = [

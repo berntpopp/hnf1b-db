@@ -15,7 +15,7 @@
   **Fields:**  
   - `_id` (MongoDB ObjectId)  
   - `individual_id` (numeric identifier)  
-  - `sex`  
+  - `Sex`  
   - `age_reported` (or you could use separate fields for birth date, age at report, etc.)  
   - `cohort` (for example, “born” vs. “fetus”)  
   - *Relationships:* You might later add an array of report IDs (or simply reference reports by individual_id)
@@ -121,7 +121,7 @@ Stores basic demographic information for each individual with HNF1B disease.
 {
   "_id": "ObjectId(...)",
   "individual_id": 101,
-  "sex": "male",
+  "Sex": "male",
   "individual_DOI": "optional external identifier"
 }
 ```
