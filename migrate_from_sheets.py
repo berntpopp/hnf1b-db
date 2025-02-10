@@ -103,10 +103,10 @@ async def import_publications():
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
     user_mapping = {}
-    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
+    user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
-        user_mapping[email] = user_doc["user_id"]
+        user_mapping[email] = user_doc["_id"]
     print(f"[import_publications] User mapping: {user_mapping}")
     validated_publications = []
     for idx, row in publications_df.iterrows():
@@ -148,11 +148,12 @@ async def import_individuals_with_reports():
     }
     print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
 
+    # Build user mapping from reviewers: key = lowercased email, value = _id of the user document
+    user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     user_mapping = {}
-    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
     for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
-        user_mapping[email] = user_doc["user_id"]
+        user_mapping[email] = user_doc["_id"]
 
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
@@ -173,12 +174,13 @@ async def import_individuals_with_reports():
     validated_individuals = []
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
-        # Save and remove the base publication value (if available) from base_data
+        # Save and remove the base Publication value (if available) from base_data
         base_publication_alias = base_data.pop('Publication', None)
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
                 report_data = {'report_id': row['report_id']}
+                # Link the reviewing user: lookup the ReviewBy column (using email) to get the user _id.
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
@@ -203,8 +205,8 @@ async def import_individuals_with_reports():
                     }
                 report_data['phenotypes'] = phenotypes_obj
 
-                # Get the publication alias from the current row.
-                # If missing in the row, fallback to the base publication value.
+                # Link the publication: get the Publication column from the current row,
+                # if missing, fallback to the base publication value.
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias

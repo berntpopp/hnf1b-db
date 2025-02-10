@@ -71,10 +71,10 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Added field "publication_ref" to store the MongoDB ObjectID for the linked publication.
+# Now, reviewed_by stores the MongoDB ObjectID (as a PyObjectId) of the reviewer.
 class Report(BaseModel):
     report_id: int
-    reviewed_by: Optional[int] = None  # Reference to a User's user_id
+    reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
 
