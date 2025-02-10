@@ -21,6 +21,11 @@ async def get_variants(
         description="Page size"
     )
 ):
+    """
+    Retrieve a paginated list of variants.
+
+    The response includes variants with nested classifications and annotations.
+    """
     query = {}
     if filters:
         query.update(filters)

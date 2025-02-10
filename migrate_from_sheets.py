@@ -27,6 +27,19 @@ def none_if_nan(v):
     return v
 
 # ---------------------------------------------------
+def parse_date(value):
+    """Convert a date-like value to a Python datetime object using Pandas."""
+    try:
+        if value is None:
+            return None
+        dt = pd.to_datetime(value, errors='coerce')
+        if pd.isnull(dt):
+            return None
+        return dt.to_pydatetime()
+    except Exception:
+        return None
+
+# ---------------------------------------------------
 def csv_url(spreadsheet_id: str, gid: str) -> str:
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     print(f"[csv_url] Built URL: {url}")
@@ -130,12 +143,10 @@ async def import_publications():
             if "Assigne" in row:
                 assignee_val = row["Assigne"]
                 if pd.notna(assignee_val):
-                    # Map using the reviewer abbreviation (lowercased)
                     row["assignee"] = reviewer_mapping.get(assignee_val.strip().lower())
                 else:
                     row["assignee"] = None
                 row = row.drop(labels=["Assigne"])
-            # The Comment column is left in place and will be parsed into the Publication model.
             pub = Publication(**row)
             validated_publications.append(pub.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -206,7 +217,6 @@ async def import_individuals_with_reports():
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
                 report_data = {'report_id': row['report_id']}
-                # Link the reviewing user: lookup the ReviewBy column (using email) to get the user _id.
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
@@ -219,13 +229,11 @@ async def import_individuals_with_reports():
                     pheno_key = col.strip().lower()
                     std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
                     lower_val = reported_val.lower()
-                    # If cell value is exactly one of these, then use it directly.
                     if lower_val in ["yes", "no", "not reported"]:
                         described = lower_val
                         modifier_obj = None
                     else:
                         described = "yes"
-                        # Manual mapping for common modifier strings.
                         manual_modifier_map = {
                             "unilateral left": "left",
                             "unilateral right": "right",
@@ -240,13 +248,11 @@ async def import_individuals_with_reports():
                     phenotypes_obj[std_info["phenotype_id"]] = {
                         "phenotype_id": std_info["phenotype_id"],
                         "name": std_info["name"],
-                        "modifier": modifier_obj,  # Nested object with modifier info (or None)
+                        "modifier": modifier_obj,
                         "described": described
                     }
                 report_data['phenotypes'] = phenotypes_obj
 
-                # Link the publication: get the Publication column from the current row;
-                # if missing, fallback to the base publication value.
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias
@@ -257,16 +263,10 @@ async def import_individuals_with_reports():
                         report_data["publication_ref"] = pub_obj_id
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
-                # Link the review date: get the ReviewDate from the current row; if missing, fallback to base value.
-                review_date_val = row.get('ReviewDate')
-                if not pd.notna(review_date_val) and base_review_date:
-                    review_date_val = base_review_date
-                if pd.notna(review_date_val):
+                review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
+                if review_date_val is not None:
                     report_data["review_date"] = review_date_val
-                # Link the comment: get the Comment from the current row; if missing, fallback to base value.
-                comment_val = row.get('Comment')
-                if not pd.notna(comment_val) and base_comment:
-                    comment_val = base_comment
+                comment_val = row.get('Comment') or base_comment
                 if pd.notna(comment_val):
                     report_data["comment"] = str(comment_val).strip()
                 else:
@@ -311,7 +311,6 @@ async def import_variants():
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
             sp_indiv_id = row['individual_id']
-            # Fix the typo if any in detection method column name.
             det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
             seg = none_if_nan(row.get('Segregation'))
             individual_variant_info[sp_indiv_id] = {
@@ -326,12 +325,50 @@ async def import_variants():
                     'criteria': none_if_nan(row.get('criteria_classification')),
                     'comment': none_if_nan(row.get('comment_classification')),
                     'system': none_if_nan(row.get('system_classification')),
-                    'classification_date': none_if_nan(row.get('date_classification'))
+                    'classification_date': parse_date(row.get('date_classification'))
+                }
+            # Build variant_data without the varsome/transcript fields.
+            variant_data = {
+                'variant_type': row.get('VariantType'),
+                'variant_reported': row.get('VariantReported'),
+                'ID': none_if_nan(row.get('ID')),
+                'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
+                'hg19': none_if_nan(row.get('hg19')),
+                'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
+                'hg38': none_if_nan(row.get('hg38'))
+            }
+            # Build annotation data from the varsome column.
+            annotation = {}
+            varsome_val = none_if_nan(row.get('Varsome'))
+            if pd.notna(varsome_val):
+                varsome_str = str(varsome_val)
+                pattern = r"^[^(]+\(([^)]+)\):([^ ]+)\s+(\(p\..+\))"
+                m = re.match(pattern, varsome_str)
+                if m:
+                    transcript = m.group(1)
+                    c_dot = m.group(2)
+                    p_dot = m.group(3)
+                else:
+                    transcript = varsome_str
+                    c_dot = None
+                    p_dot = None
+                # Use date_classification as the annotation date.
+                annotation = {
+                    "transcript": transcript,
+                    "c_dot": c_dot,
+                    "p_dot": p_dot,
+                    "source": "varsome",
+                    "annotation_date": parse_date(row.get('date_classification'))
                 }
             if variant_key in unique_variants:
                 if sp_indiv_id not in unique_variants[variant_key]['individual_ids']:
                     unique_variants[variant_key]['individual_ids'].append(sp_indiv_id)
-                # Append the classification if not empty and not already present.
+                if annotation and any(annotation.values()):
+                    if 'annotations' in unique_variants[variant_key]:
+                        if annotation not in unique_variants[variant_key]['annotations']:
+                            unique_variants[variant_key]['annotations'].append(annotation)
+                    else:
+                        unique_variants[variant_key]['annotations'] = [annotation]
                 if classification and any(classification.values()):
                     if 'classifications' in unique_variants[variant_key]:
                         if classification not in unique_variants[variant_key]['classifications']:
@@ -339,30 +376,10 @@ async def import_variants():
                     else:
                         unique_variants[variant_key]['classifications'] = [classification]
             else:
-                variant_data = {
-                    'variant_type': row.get('VariantType'),
-                    'variant_reported': row.get('VariantReported'),
-                    'ID': none_if_nan(row.get('ID')),
-                    'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
-                    'hg19': none_if_nan(row.get('hg19')),
-                    'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                    'hg38': none_if_nan(row.get('hg38')),
-                    'varsome': none_if_nan(row.get('Varsome'))
-                }
-                varsome_val = none_if_nan(row.get('Varsome'))
-                if pd.notna(varsome_val):
-                    variant_data['varsome'] = str(varsome_val)
-                    pattern = r"^[^(]+\(([^)]+)\):([^ ]+)\s+(\(p\..+\))"
-                    m = re.match(pattern, str(varsome_val))
-                    if m:
-                        variant_data['transcript'] = m.group(1)
-                        variant_data['c_dot'] = m.group(2)
-                        variant_data['p_dot'] = m.group(3)
-                    else:
-                        variant_data['transcript'] = str(varsome_val)
                 unique_variants[variant_key] = {
                     "variant_data": variant_data,
                     "individual_ids": [sp_indiv_id],
+                    "annotations": [annotation] if annotation and any(annotation.values()) else [],
                     "classifications": [classification] if classification and any(classification.values()) else []
                 }
     print(f"[import_variants] Found {len(unique_variants)} unique variants.")
@@ -383,8 +400,8 @@ async def import_variants():
             if spid in spid_to_objid:
                 objid_list.append(spid_to_objid[spid])
         variant_doc['individual_ids'] = objid_list
-        # Insert the classifications list.
         variant_doc['classifications'] = info.get('classifications', [])
+        variant_doc['annotations'] = info.get('annotations', [])
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 

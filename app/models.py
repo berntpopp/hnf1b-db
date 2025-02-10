@@ -2,8 +2,9 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
-from datetime import date, datetime
+from datetime import datetime
 import math
+import pandas as pd  # Used for consistent date parsing
 from bson import ObjectId as BsonObjectId  # Provided by PyMongo
 
 # ------------------------------------------------------------------------------
@@ -17,6 +18,20 @@ def none_if_nan(v):
     if isinstance(v, str) and v.strip().upper() == "NA":
         return None
     return v
+
+# ------------------------------------------------------------------------------
+# Helper function for parsing dates using Pandas (returns a datetime)
+def parse_date_value(value) -> Optional[datetime]:
+    try:
+        if value is None:
+            return None
+        # Convert using pandas; this returns a Timestamp (a subclass of datetime)
+        dt = pd.to_datetime(value, errors='coerce')
+        if pd.isnull(dt):
+            return None
+        return dt.to_pydatetime()
+    except Exception:
+        return None
 
 # ------------------------------------------------------------------------------
 # Custom type for MongoDB ObjectId.
@@ -72,13 +87,13 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Now includes reviewed_by (a reviewer’s ObjectID), review_date, and comment.
+# Now includes reviewed_by (a reviewer's ObjectId), review_date, and comment.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
-    review_date: Optional[datetime] = None  # Review date
+    review_date: Optional[datetime] = None  # Review date (as datetime)
     comment: Optional[str] = None  # Report comment (may be empty)
 
     model_config = {"extra": "allow"}
@@ -142,36 +157,40 @@ class VariantClassifications(BaseModel):
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[date] = None
+    classification_date: Optional[datetime] = None  # Changed to datetime
 
     model_config = {"extra": "allow"}
 
+    @field_validator("classification_date", mode="before")
+    @classmethod
+    def parse_classification_date(cls, v):
+        return parse_date_value(v)
+
 # ------------------------------------------------------------------------------
-# Variant Annotations model – detection_method and segregation are removed here.
-class VariantAnnotations(BaseModel):
-    variant_type: Optional[str] = None
-    variant_reported: Optional[str] = None
-    ID: Optional[str] = None
-    hg19_INFO: Optional[str] = None
-    hg19: Optional[str] = None
-    hg38_INFO: Optional[str] = None
-    hg38: Optional[str] = None
-    varsome: Optional[str] = None
+# New Variant Annotation model – for nested annotations
+class VariantAnnotation(BaseModel):
     transcript: Optional[str] = None
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
+    source: Optional[str] = None  # For example, "varsome"
+    annotation_date: Optional[datetime] = None  # Changed to datetime
 
     model_config = {"extra": "allow"}
 
+    @field_validator("annotation_date", mode="before")
+    @classmethod
+    def parse_annotation_date(cls, v):
+        return parse_date_value(v)
+
 # ------------------------------------------------------------------------------
 # Variant model (unique across the database)
-# Now includes a list of classification objects.
+# Now includes a list of classification objects and a list of annotation objects.
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
     individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: List[VariantClassifications] = Field(default_factory=list)
-    annotations: Optional[VariantAnnotations] = None
+    annotations: List[VariantAnnotation] = Field(default_factory=list)
 
     model_config = {
         "from_attributes": True,
@@ -184,10 +203,7 @@ class Variant(BaseModel):
     @field_validator("annotations", mode="before")
     @classmethod
     def validate_annotations(cls, v):
-        if isinstance(v, dict):
-            v['ID'] = none_if_nan(v.get('ID'))
-            v['hg19_INFO'] = none_if_nan(v.get('hg19_INFO'))
-            v['hg38_INFO'] = none_if_nan(v.get('hg38_INFO'))
+        # No additional validation needed for our new structure.
         return v
 
 # ------------------------------------------------------------------------------
@@ -197,19 +213,19 @@ class Publication(BaseModel):
     publication_id: int
     publication_alias: str
     publication_type: Optional[str] = None
-    publication_entry_date: Optional[date] = None
+    publication_entry_date: Optional[datetime] = None
     PMID: Optional[str] = None
     DOI: Optional[str] = None
     PDF: Optional[str] = None
     title: Optional[str] = None
     abstract: Optional[str] = None
-    publication_date: Optional[date] = None
+    publication_date: Optional[datetime] = None
     journal_abbreviation: Optional[str] = None
     journal: Optional[str] = None
     keywords: Optional[str] = None
     firstauthor_lastname: Optional[str] = None
     firstauthor_firstname: Optional[str] = None
-    update_date: Optional[date] = None
+    update_date: Optional[datetime] = None
     # NEW: The Comment column from the Publications sheet.
     comment: Optional[str] = None
     # NEW: The assignee field is now a nested object containing reviewer info.
