@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
-from datetime import date
+from datetime import date, datetime
 import math
 from bson import ObjectId as BsonObjectId  # Provided by PyMongo
 
@@ -71,14 +71,29 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Now, reviewed_by stores the MongoDB ObjectID (as a PyObjectId) of the reviewer.
+# Now, reviewed_by stores the MongoDB ObjectID of the reviewer,
+# and review_date stores the date/time of review.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
+    review_date: Optional[datetime] = None  # NEW: review date
 
     model_config = {"extra": "allow"}
+
+    @field_validator("review_date", mode="before")
+    @classmethod
+    def parse_review_date(cls, v):
+        if not v:
+            return None
+        if isinstance(v, str):
+            try:
+                # Expected format: "1/9/2021 19:15:59" (month/day/year hour:minute:second)
+                return datetime.strptime(v.strip(), "%m/%d/%Y %H:%M:%S")
+            except Exception as e:
+                raise ValueError(f"Could not parse review_date: {v}") from e
+        return v
 
 # ------------------------------------------------------------------------------
 # IndividualVariant model (per-individual variant info)

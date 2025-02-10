@@ -102,8 +102,9 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
-    user_mapping = {}
+    # Build a user mapping: key = lowercased email, value = user _id.
     user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
+    user_mapping = {}
     for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["_id"]
@@ -135,10 +136,12 @@ async def import_individuals_with_reports():
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
 
-    # Build base_cols list; include "Publication" only if it exists (case sensitive)
+    # Build base_cols list; include "Publication" and "ReviewDate" if they exist (case sensitive)
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
     if "Publication" in df.columns:
         base_cols.append("Publication")
+    if "ReviewDate" in df.columns:
+        base_cols.append("ReviewDate")
 
     # Build publication mapping: keys are the lowercased publication_alias from publications
     pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
@@ -148,7 +151,7 @@ async def import_individuals_with_reports():
     }
     print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
 
-    # Build user mapping from reviewers: key = lowercased email, value = _id of the user document
+    # Build user mapping from reviewers: key = lowercased email, value = _id
     user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     user_mapping = {}
     for user_doc in user_docs:
@@ -174,8 +177,9 @@ async def import_individuals_with_reports():
     validated_individuals = []
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
-        # Save and remove the base Publication value (if available) from base_data
+        # Save and remove the base Publication and ReviewDate values (if available) from base_data
         base_publication_alias = base_data.pop('Publication', None)
+        base_review_date = base_data.pop('ReviewDate', None)
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
@@ -205,7 +209,7 @@ async def import_individuals_with_reports():
                     }
                 report_data['phenotypes'] = phenotypes_obj
 
-                # Link the publication: get the Publication column from the current row,
+                # Link the publication: get the Publication column from the current row;
                 # if missing, fallback to the base publication value.
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
@@ -217,6 +221,14 @@ async def import_individuals_with_reports():
                         report_data["publication_ref"] = pub_obj_id
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
+
+                # Link the review date: get the ReviewDate from the current row; if missing, fallback to base value.
+                review_date_val = row.get('ReviewDate')
+                if not pd.notna(review_date_val) and base_review_date:
+                    review_date_val = base_review_date
+                if pd.notna(review_date_val):
+                    report_data["review_date"] = review_date_val
+
                 reports.append(report_data)
         base_data['reports'] = reports
         try:
