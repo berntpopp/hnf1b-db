@@ -63,21 +63,23 @@ class User(BaseModel):
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
-    modifier: Optional[Dict[str, Optional[str]]] = None  # Nested object from modifier mapping
-    described: str  # Should be one of "yes", "no", or "not reported"
+    # The modifier is now stored as a nested object (if available) with keys like id, name, description, and synonyms.
+    modifier: Optional[Dict[str, Optional[str]]] = None  
+    # The described value should be one of "yes", "no", or "not reported".
+    described: str  
 
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Now, reviewed_by stores the MongoDB ObjectID of the reviewer,
-# and review_date stores the date/time of review.
+# Now includes reviewed_by (a reviewer’s ObjectID), review_date, and comment.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
-    review_date: Optional[datetime] = None  # review date
+    review_date: Optional[datetime] = None  # Review date
+    comment: Optional[str] = None  # Report comment (may be empty)
 
     model_config = {"extra": "allow"}
 
@@ -88,7 +90,7 @@ class Report(BaseModel):
             return None
         if isinstance(v, str):
             try:
-                # Expected format: "1/9/2021 19:15:59" (month/day/year hour:minute:second)
+                # Expected format: "1/9/2021 19:15:59"
                 return datetime.strptime(v.strip(), "%m/%d/%Y %H:%M:%S")
             except Exception as e:
                 raise ValueError(f"Could not parse review_date: {v}") from e
@@ -207,7 +209,10 @@ class Publication(BaseModel):
     firstauthor_lastname: Optional[str] = None
     firstauthor_firstname: Optional[str] = None
     update_date: Optional[date] = None
-    assignee: Optional[int] = None
+    # NEW: The Comment column from the Publications sheet.
+    comment: Optional[str] = None
+    # NEW: The assignee field is now a nested object containing reviewer info.
+    assignee: Optional[Dict[str, Optional[str]]] = None  
 
     model_config = {
         "from_attributes": True,

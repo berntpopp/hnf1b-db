@@ -67,7 +67,6 @@ async def load_modifier_mappings():
             "description": row.get("modifier_description", "").strip(),
             "synonyms": row.get("modifier_synonyms", "").strip()
         }
-        # Also map each synonym (if provided)
         if pd.notna(row.get("modifier_synonyms")):
             synonyms = row["modifier_synonyms"].split(",")
             for syn in synonyms:
@@ -113,21 +112,30 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
-    # Build a user mapping: key = lowercased email, value = user _id.
-    user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
-    user_mapping = {}
+    # Build a reviewer mapping using the abbreviation.
+    # We assume that the reviewer abbreviation is stored in the "user_name" field.
+    user_docs = await db.users.find({}, {"user_name": 1, "user_id": 1, "email": 1}).to_list(length=None)
+    reviewer_mapping = {}
     for user_doc in user_docs:
-        email = user_doc["email"].strip().lower()
-        user_mapping[email] = user_doc["_id"]
-    print(f"[import_publications] User mapping: {user_mapping}")
+        key = user_doc["user_name"].strip().lower()
+        reviewer_mapping[key] = {
+            "user_id": str(user_doc["user_id"]),
+            "email": user_doc["email"],
+            "abbreviation": user_doc["user_name"]
+        }
+    print(f"[import_publications] Reviewer mapping: {reviewer_mapping}")
     validated_publications = []
     for idx, row in publications_df.iterrows():
         try:
             if "Assigne" in row:
-                assignee_email = row["Assigne"]
-                if pd.notna(assignee_email):
-                    row["assignee"] = user_mapping.get(assignee_email.strip().lower())
+                assignee_val = row["Assigne"]
+                if pd.notna(assignee_val):
+                    # Map using the reviewer abbreviation (lowercased)
+                    row["assignee"] = reviewer_mapping.get(assignee_val.strip().lower())
+                else:
+                    row["assignee"] = None
                 row = row.drop(labels=["Assigne"])
+            # The Comment column is left in place and will be parsed into the Publication model.
             pub = Publication(**row)
             validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -147,12 +155,14 @@ async def import_individuals_with_reports():
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
 
-    # Build base_cols list; include "Publication" and "ReviewDate" if they exist (case sensitive)
+    # Build base_cols list; include "Publication", "ReviewDate", and "Comment" if they exist (case sensitive)
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
     if "Publication" in df.columns:
         base_cols.append("Publication")
     if "ReviewDate" in df.columns:
         base_cols.append("ReviewDate")
+    if "Comment" in df.columns:
+        base_cols.append("Comment")
 
     # Build publication mapping: keys are the lowercased publication_alias from publications
     pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
@@ -188,9 +198,10 @@ async def import_individuals_with_reports():
     validated_individuals = []
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
-        # Save and remove the base Publication and ReviewDate values (if available) from base_data
+        # Save and remove the base Publication, ReviewDate, and Comment values (if available) from base_data
         base_publication_alias = base_data.pop('Publication', None)
         base_review_date = base_data.pop('ReviewDate', None)
+        base_comment = base_data.pop('Comment', None)
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
@@ -208,12 +219,13 @@ async def import_individuals_with_reports():
                     pheno_key = col.strip().lower()
                     std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
                     lower_val = reported_val.lower()
+                    # If cell value is exactly one of these, then use it directly.
                     if lower_val in ["yes", "no", "not reported"]:
                         described = lower_val
                         modifier_obj = None
                     else:
                         described = "yes"
-                        # Apply manual mapping for common modifier strings.
+                        # Manual mapping for common modifier strings.
                         manual_modifier_map = {
                             "unilateral left": "left",
                             "unilateral right": "right",
@@ -228,7 +240,7 @@ async def import_individuals_with_reports():
                     phenotypes_obj[std_info["phenotype_id"]] = {
                         "phenotype_id": std_info["phenotype_id"],
                         "name": std_info["name"],
-                        "modifier": modifier_obj,  # Nested object with modifier info or None
+                        "modifier": modifier_obj,  # Nested object with modifier info (or None)
                         "described": described
                     }
                 report_data['phenotypes'] = phenotypes_obj
@@ -251,6 +263,14 @@ async def import_individuals_with_reports():
                     review_date_val = base_review_date
                 if pd.notna(review_date_val):
                     report_data["review_date"] = review_date_val
+                # Link the comment: get the Comment from the current row; if missing, fallback to base value.
+                comment_val = row.get('Comment')
+                if not pd.notna(comment_val) and base_comment:
+                    comment_val = base_comment
+                if pd.notna(comment_val):
+                    report_data["comment"] = str(comment_val).strip()
+                else:
+                    report_data["comment"] = ""
                 reports.append(report_data)
         base_data['reports'] = reports
         try:
