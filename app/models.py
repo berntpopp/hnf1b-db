@@ -165,11 +165,12 @@ class VariantAnnotations(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Variant model (unique across the database)
+# Now includes a list of classification objects.
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
     individual_ids: List[PyObjectId] = Field(default_factory=list)
-    classifications: Optional[VariantClassifications] = None
+    classifications: List[VariantClassifications] = Field(default_factory=list)
     annotations: Optional[VariantAnnotations] = None
 
     model_config = {

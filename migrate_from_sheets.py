@@ -96,7 +96,7 @@ async def import_users():
     for idx, row in users_df.iterrows():
         try:
             user = User(**row)
-            validated_users.append(user.dict(by_alias=True, exclude_none=True))
+            validated_users.append(user.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_users] Validation error in row {idx}: {e}")
     print(f"[import_users] Inserting {len(validated_users)} valid users into database...")
@@ -137,7 +137,7 @@ async def import_publications():
                 row = row.drop(labels=["Assigne"])
             # The Comment column is left in place and will be parsed into the Publication model.
             pub = Publication(**row)
-            validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
+            validated_publications.append(pub.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_publications] Validation error in row {idx}: {e}")
     print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
@@ -275,7 +275,7 @@ async def import_individuals_with_reports():
         base_data['reports'] = reports
         try:
             indiv = Individual(**base_data)
-            validated_individuals.append(indiv.dict(by_alias=True, exclude_none=True))
+            validated_individuals.append(indiv.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_individuals] Validation error for individual {indiv_id}: {e}")
     print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals with embedded reports into database...")
@@ -297,6 +297,12 @@ async def import_variants():
     unique_variants = {}
     individual_variant_info = {}
 
+    # Classification columns to be extracted from the Individuals sheet.
+    classification_cols = [
+        'verdict_classification', 'criteria_classification',
+        'comment_classification', 'system_classification', 'date_classification'
+    ]
+
     for idx, row in df.iterrows():
         if pd.notna(row.get('VariantType')):
             key_parts = []
@@ -305,15 +311,33 @@ async def import_variants():
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
             sp_indiv_id = row['individual_id']
-            det_method = none_if_nan(row.get('DetecionMethod'))
+            # Fix the typo if any in detection method column name.
+            det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
             seg = none_if_nan(row.get('Segregation'))
             individual_variant_info[sp_indiv_id] = {
                 "detection_method": det_method,
                 "segregation": seg
             }
+            # Extract classification data from the current row.
+            classification = {}
+            if any(col in row and pd.notna(row.get(col)) for col in classification_cols):
+                classification = {
+                    'verdict': none_if_nan(row.get('verdict_classification')),
+                    'criteria': none_if_nan(row.get('criteria_classification')),
+                    'comment': none_if_nan(row.get('comment_classification')),
+                    'system': none_if_nan(row.get('system_classification')),
+                    'classification_date': none_if_nan(row.get('date_classification'))
+                }
             if variant_key in unique_variants:
                 if sp_indiv_id not in unique_variants[variant_key]['individual_ids']:
                     unique_variants[variant_key]['individual_ids'].append(sp_indiv_id)
+                # Append the classification if not empty and not already present.
+                if classification and any(classification.values()):
+                    if 'classifications' in unique_variants[variant_key]:
+                        if classification not in unique_variants[variant_key]['classifications']:
+                            unique_variants[variant_key]['classifications'].append(classification)
+                    else:
+                        unique_variants[variant_key]['classifications'] = [classification]
             else:
                 variant_data = {
                     'variant_type': row.get('VariantType'),
@@ -338,7 +362,8 @@ async def import_variants():
                         variant_data['transcript'] = str(varsome_val)
                 unique_variants[variant_key] = {
                     "variant_data": variant_data,
-                    "individual_ids": [sp_indiv_id]
+                    "individual_ids": [sp_indiv_id],
+                    "classifications": [classification] if classification and any(classification.values()) else []
                 }
     print(f"[import_variants] Found {len(unique_variants)} unique variants.")
 
@@ -358,6 +383,8 @@ async def import_variants():
             if spid in spid_to_objid:
                 objid_list.append(spid_to_objid[spid])
         variant_doc['individual_ids'] = objid_list
+        # Insert the classifications list.
+        variant_doc['classifications'] = info.get('classifications', [])
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 
