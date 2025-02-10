@@ -63,9 +63,8 @@ class User(BaseModel):
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
-    modifier: Optional[str] = None
-    modifier_id: Optional[str] = None
-    described: bool
+    modifier: Optional[Dict[str, Optional[str]]] = None  # Nested object from modifier mapping
+    described: str  # Should be one of "yes", "no", or "not reported"
 
     model_config = {"extra": "allow"}
 
@@ -78,7 +77,7 @@ class Report(BaseModel):
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
-    review_date: Optional[datetime] = None  # NEW: review date
+    review_date: Optional[datetime] = None  # review date
 
     model_config = {"extra": "allow"}
 

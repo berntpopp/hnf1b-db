@@ -61,11 +61,22 @@ async def load_modifier_mappings():
     mapping = {}
     for idx, row in df.iterrows():
         key = str(row["modifier_name"]).strip().lower()
-        mapping[key] = {"modifier_id": row["modifier_id"], "name": row["modifier_name"].strip()}
+        mapping[key] = {
+            "modifier_id": row["modifier_id"],
+            "name": row["modifier_name"].strip(),
+            "description": row.get("modifier_description", "").strip(),
+            "synonyms": row.get("modifier_synonyms", "").strip()
+        }
+        # Also map each synonym (if provided)
         if pd.notna(row.get("modifier_synonyms")):
             synonyms = row["modifier_synonyms"].split(",")
             for syn in synonyms:
-                mapping[syn.strip().lower()] = {"modifier_id": row["modifier_id"], "name": row["modifier_name"].strip()}
+                mapping[syn.strip().lower()] = {
+                    "modifier_id": row["modifier_id"],
+                    "name": row["modifier_name"].strip(),
+                    "description": row.get("modifier_description", "").strip(),
+                    "synonyms": row.get("modifier_synonyms", "").strip()
+                }
     print(f"[load_modifier_mappings] Loaded mapping for {len(mapping)} modifier keys.")
     return mapping
 
@@ -196,15 +207,28 @@ async def import_individuals_with_reports():
                     reported_val = str(raw_val).strip() if pd.notna(raw_val) else ""
                     pheno_key = col.strip().lower()
                     std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
-                    mod_key = reported_val.lower()
-                    mod_info = modifier_mapping.get(mod_key) if mod_key else None
-                    modifier_std = mod_info["name"] if mod_info else reported_val
-                    described = False if reported_val in ["", "no", "not reported"] else True
+                    lower_val = reported_val.lower()
+                    if lower_val in ["yes", "no", "not reported"]:
+                        described = lower_val
+                        modifier_obj = None
+                    else:
+                        described = "yes"
+                        # Apply manual mapping for common modifier strings.
+                        manual_modifier_map = {
+                            "unilateral left": "left",
+                            "unilateral right": "right",
+                            "unilateral unspecified": "unilateral",
+                            "bilateral": "bilateral"
+                        }
+                        if pheno_key in ["congenitalcardiacanomalies", "antenatalrenalabnormalities"]:
+                            modifier_key = "congenital onset"
+                        else:
+                            modifier_key = manual_modifier_map.get(lower_val, lower_val)
+                        modifier_obj = modifier_mapping.get(modifier_key)
                     phenotypes_obj[std_info["phenotype_id"]] = {
                         "phenotype_id": std_info["phenotype_id"],
                         "name": std_info["name"],
-                        "modifier": modifier_std,
-                        "modifier_id": mod_info["modifier_id"] if mod_info else None,
+                        "modifier": modifier_obj,  # Nested object with modifier info or None
                         "described": described
                     }
                 report_data['phenotypes'] = phenotypes_obj
@@ -221,14 +245,12 @@ async def import_individuals_with_reports():
                         report_data["publication_ref"] = pub_obj_id
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
-
                 # Link the review date: get the ReviewDate from the current row; if missing, fallback to base value.
                 review_date_val = row.get('ReviewDate')
                 if not pd.notna(review_date_val) and base_review_date:
                     review_date_val = base_review_date
                 if pd.notna(review_date_val):
                     report_data["review_date"] = review_date_val
-
                 reports.append(report_data)
         base_data['reports'] = reports
         try:
