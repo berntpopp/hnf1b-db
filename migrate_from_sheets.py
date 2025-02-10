@@ -1,4 +1,4 @@
-# migrate_from_sheets.py
+# File: migrate_from_sheets.py
 import asyncio
 import math
 import re
@@ -33,10 +33,16 @@ def csv_url(spreadsheet_id: str, gid: str) -> str:
     return url
 
 # ---------------------------------------------------
+def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Strip whitespace from DataFrame column names."""
+    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    return df
+
+# ---------------------------------------------------
 async def load_phenotype_mappings():
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
     df = pd.read_csv(url)
-    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    df = normalize_dataframe_columns(df)
     mapping = {}
     for idx, row in df.iterrows():
         key = str(row["phenotype_category"]).strip().lower()
@@ -51,7 +57,7 @@ async def load_phenotype_mappings():
 async def load_modifier_mappings():
     url = csv_url(SPREADSHEET_ID, MODIFIER_GID)
     df = pd.read_csv(url)
-    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    df = normalize_dataframe_columns(df)
     mapping = {}
     for idx, row in df.iterrows():
         key = str(row["modifier_name"]).strip().lower()
@@ -69,7 +75,7 @@ async def import_users():
     url = csv_url(SPREADSHEET_ID, GID_REVIEWERS)
     reviewers_df = pd.read_csv(url)
     reviewers_df = reviewers_df.dropna(how="all")
-    reviewers_df.columns = [col.strip() for col in reviewers_df.columns if isinstance(col, str)]
+    reviewers_df = normalize_dataframe_columns(reviewers_df)
     expected_columns = ['user_id', 'user_name', 'password', 'email',
                         'user_role', 'first_name', 'family_name', 'orcid']
     missing = [col for col in expected_columns if col not in reviewers_df.columns]
@@ -90,18 +96,64 @@ async def import_users():
     print(f"[import_users] Imported {len(validated_users)} users.")
 
 # ---------------------------------------------------
+async def import_publications():
+    print("[import_publications] Starting import of publications.")
+    url = csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
+    publications_df = pd.read_csv(url)
+    publications_df = publications_df.dropna(how="all")
+    publications_df = normalize_dataframe_columns(publications_df)
+    user_mapping = {}
+    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
+    for user_doc in user_docs:
+        email = user_doc["email"].strip().lower()
+        user_mapping[email] = user_doc["user_id"]
+    print(f"[import_publications] User mapping: {user_mapping}")
+    validated_publications = []
+    for idx, row in publications_df.iterrows():
+        try:
+            if "Assigne" in row:
+                assignee_email = row["Assigne"]
+                if pd.notna(assignee_email):
+                    row["assignee"] = user_mapping.get(assignee_email.strip().lower())
+                row = row.drop(labels=["Assigne"])
+            pub = Publication(**row)
+            validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
+        except Exception as e:
+            print(f"[import_publications] Validation error in row {idx}: {e}")
+    print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
+    await db.publications.delete_many({})
+    if validated_publications:
+        await db.publications.insert_many(validated_publications)
+    print(f"[import_publications] Imported {len(validated_publications)} publications.")
+
+# ---------------------------------------------------
 async def import_individuals_with_reports():
     print("[import_individuals] Starting import of individuals with embedded reports.")
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     df = pd.read_csv(url)
     df = df.dropna(how="all")
-    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
 
-    base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 
-                 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
+    # Build base_cols list; include "Publication" only if it exists (case sensitive)
+    base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
+    if "Publication" in df.columns:
+        base_cols.append("Publication")
 
-    # Define phenotype columns to integrate.
+    # Build publication mapping: keys are the lowercased publication_alias from publications
+    pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
+    publication_mapping = {
+        doc["publication_alias"].strip().lower(): doc["_id"]
+        for doc in pub_docs if "publication_alias" in doc
+    }
+    print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
+
+    user_mapping = {}
+    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
+    for user_doc in user_docs:
+        email = user_doc["email"].strip().lower()
+        user_mapping[email] = user_doc["user_id"]
+
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
         'KidneyBiopsy', 'RenalHypoplasia', 'SolitaryKidney', 'UrinaryTractMalformation',
@@ -114,12 +166,6 @@ async def import_individuals_with_reports():
         'AbnormalLiverPhysiology'
     ]
 
-    user_mapping = {}
-    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
-    for user_doc in user_docs:
-        email = user_doc["email"].strip().lower()
-        user_mapping[email] = user_doc["user_id"]
-
     phenotype_mapping = await load_phenotype_mappings()
     modifier_mapping = await load_modifier_mappings()
 
@@ -127,6 +173,8 @@ async def import_individuals_with_reports():
     validated_individuals = []
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
+        # Save and remove the base publication value (if available) from base_data
+        base_publication_alias = base_data.pop('Publication', None)
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
@@ -136,7 +184,6 @@ async def import_individuals_with_reports():
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
                 else:
                     report_data['reviewed_by'] = None
-                # Build phenotypes as a dictionary mapping standardized HPO term to phenotype data.
                 phenotypes_obj = {}
                 for col in phenotype_cols:
                     raw_val = row.get(col, "")
@@ -155,6 +202,19 @@ async def import_individuals_with_reports():
                         "described": described
                     }
                 report_data['phenotypes'] = phenotypes_obj
+
+                # Get the publication alias from the current row.
+                # If missing in the row, fallback to the base publication value.
+                pub_alias = row.get('Publication')
+                if not pd.notna(pub_alias) and base_publication_alias:
+                    pub_alias = base_publication_alias
+                if pd.notna(pub_alias):
+                    pub_alias_lower = str(pub_alias).strip().lower()
+                    pub_obj_id = publication_mapping.get(pub_alias_lower)
+                    if pub_obj_id:
+                        report_data["publication_ref"] = pub_obj_id
+                    else:
+                        print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
                 reports.append(report_data)
         base_data['reports'] = reports
         try:
@@ -169,51 +229,17 @@ async def import_individuals_with_reports():
     print(f"[import_individuals] Imported {len(validated_individuals)} individuals with embedded reports.")
 
 # ---------------------------------------------------
-async def import_publications():
-    print("[import_publications] Starting import of publications.")
-    url = csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
-    publications_df = pd.read_csv(url)
-    publications_df = publications_df.dropna(how="all")
-    publications_df.columns = [col.strip() for col in publications_df.columns if isinstance(col, str)]
-    user_mapping = {}
-    user_docs = await db.users.find({}, {"email": 1, "user_id": 1}).to_list(length=None)
-    for user_doc in user_docs:
-        email = user_doc["email"].strip().lower()
-        user_mapping[email] = user_doc["user_id"]
-    print(f"[import_publications] User mapping: {user_mapping}")
-    validated_publications = []
-    for idx, row in publications_df.iterrows():
-        try:
-            if "Assigne" in row:
-                assignee_email = row["Assigne"]
-                if pd.notna(assignee_email):
-                    row["assignee"] = user_mapping.get(assignee_email.strip().lower())
-                row = row.drop(labels=["Assigne"])
-            from app.models import Publication
-            pub = Publication(**row)
-            validated_publications.append(pub.dict(by_alias=True, exclude_none=True))
-        except Exception as e:
-            print(f"[import_publications] Validation error in row {idx}: {e}")
-    print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
-    await db.publications.delete_many({})
-    if validated_publications:
-        await db.publications.insert_many(validated_publications)
-    print(f"[import_publications] Imported {len(validated_publications)} publications.")
-
-# ---------------------------------------------------
 async def import_variants():
     print("[import_variants] Starting import of variants.")
-    # Load the individuals sheet to extract variant data.
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
     df = pd.read_csv(url)
     df = df.dropna(how="all")
-    df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    df = normalize_dataframe_columns(df)
     print(f"[import_variants] Normalized columns: {df.columns.tolist()}")
 
-    # Determine uniqueness using these columns.
     variant_key_cols = ['VariantType', 'VariantReported', 'ID', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38', 'Varsome']
-    unique_variants = {}  # key -> dict with variant data and list of spreadsheet individual_ids
-    individual_variant_info = {}  # spreadsheet individual_id -> dict with detection_method and segregation
+    unique_variants = {}
+    individual_variant_info = {}
 
     for idx, row in df.iterrows():
         if pd.notna(row.get('VariantType')):
@@ -260,7 +286,6 @@ async def import_variants():
                 }
     print(f"[import_variants] Found {len(unique_variants)} unique variants.")
 
-    # Build mapping from spreadsheet individual_id to MongoDB ObjectId.
     spid_to_objid = {}
     async for doc in db.individuals.find({}, {"individual_id": 1}):
         spid = doc.get("individual_id")
@@ -268,32 +293,27 @@ async def import_variants():
             spid_to_objid[spid] = doc["_id"]
 
     variant_docs_to_insert = []
-    variant_key_to_objid = {}
     variant_id_counter = 1
     for key, info in unique_variants.items():
         variant_doc = info["variant_data"]
         variant_doc['variant_id'] = variant_id_counter
-        # Convert spreadsheet individual_ids to MongoDB ObjectIds.
         objid_list = []
         for spid in info["individual_ids"]:
             if spid in spid_to_objid:
                 objid_list.append(spid_to_objid[spid])
         variant_doc['individual_ids'] = objid_list
         variant_docs_to_insert.append(variant_doc)
-        variant_key_to_objid[key] = variant_id_counter
         variant_id_counter += 1
 
     print(f"[import_variants] Inserting {len(variant_docs_to_insert)} unique variants into database...")
     await db.variants.delete_many({})
     inserted_result = await db.variants.insert_many(variant_docs_to_insert)
     inserted_ids = inserted_result.inserted_ids
-    # Build mapping from variant key to inserted ObjectId (order-preserved).
     variant_key_to_objid = {}
     for i, key in enumerate(unique_variants.keys()):
         variant_key_to_objid[key] = inserted_ids[i]
     print(f"[import_variants] Inserted {len(variant_docs_to_insert)} unique variants into database.")
 
-    # Now update Individuals: for each Individual document, update its 'variant' field with an embedded IndividualVariant.
     print("[import_variants] Updating individuals with variant references...")
     async for indiv_doc in db.individuals.find({}):
         sp_indiv_id = indiv_doc.get("individual_id")
@@ -323,13 +343,13 @@ async def main():
     except Exception as e:
         print(f"[main] Error during import_users: {e}")
     try:
-        await import_individuals_with_reports()
-    except Exception as e:
-        print(f"[main] Error during import_individuals_with_reports: {e}")
-    try:
         await import_publications()
     except Exception as e:
         print(f"[main] Error during import_publications: {e}")
+    try:
+        await import_individuals_with_reports()
+    except Exception as e:
+        print(f"[main] Error during import_individuals_with_reports: {e}")
     try:
         await import_variants()
     except Exception as e:

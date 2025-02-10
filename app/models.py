@@ -20,7 +20,6 @@ def none_if_nan(v):
 
 # ------------------------------------------------------------------------------
 # Custom type for MongoDB ObjectId.
-# We subclass from str so that it is naturally serializable.
 class PyObjectId(str):
     @classmethod
     def __get_validators__(cls):
@@ -31,7 +30,6 @@ class PyObjectId(str):
         if isinstance(v, BsonObjectId):
             return str(v)
         if isinstance(v, str):
-            # Optionally, you can add additional validation here (e.g., length check)
             return v
         raise TypeError("Invalid type for ObjectId")
 
@@ -73,19 +71,17 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Here the phenotypes field is a dictionary whose keys are standardized HPO term strings
-# and whose values are Phenotype objects.
+# Added field "publication_ref" to store the MongoDB ObjectID for the linked publication.
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[int] = None  # Reference to a User's user_id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
+    publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
 
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
 # IndividualVariant model (per-individual variant info)
-# This stores the MongoDB ObjectId (as PyObjectId) of the unique Variant document
-# along with the detection_method and segregation for that individual.
 class IndividualVariant(BaseModel):
     variant_ref: PyObjectId  # Link to the Variant document _id
     detection_method: Optional[str] = None
@@ -105,7 +101,6 @@ class Individual(BaseModel):
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
-    # Force Problematic to be a string (default to empty string if missing)
     Problematic: str = ""
     reports: List[Report] = Field(default_factory=list)
     variant: Optional[IndividualVariant] = None  # Embedded variant info
@@ -154,7 +149,6 @@ class VariantAnnotations(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Variant model (unique across the database)
-# Instead of storing a single individual_id, we store a list of individual_ids as MongoDB ObjectIds.
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
