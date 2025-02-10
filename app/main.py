@@ -1,26 +1,26 @@
-# app/main.py
+# In app/main.py (snippet)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.endpoints import individuals, publications, variants
+from app.endpoints import individuals, publications, variants, aggregations
 
 app = FastAPI(
     title="HNF1B-db API",
-    description="The API powering the HNF1B-db website and providing endpoints for individuals, reports, publications, and variants.",
+    description="The API powering the HNF1B-db website, including endpoints for individuals, publications, variants, and aggregations.",
     version="0.1.0"
 )
 
-# Configure CORS to allow requests from everywhere
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(individuals.router, prefix="/api/individuals", tags=["Individuals"])
 app.include_router(publications.router, prefix="/api/publications", tags=["Publications"])
 app.include_router(variants.router, prefix="/api/variants", tags=["Variants"])
+app.include_router(aggregations.router, prefix="/api/aggregations", tags=["Aggregations"])
 
 if __name__ == "__main__":
     import uvicorn
