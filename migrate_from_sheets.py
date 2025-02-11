@@ -252,6 +252,12 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
+    # Normalize the comment column: rename "Comment" (from the sheet) to "comment"
+    if "Comment" in publications_df.columns:
+        publications_df.rename(columns={"Comment": "comment"}, inplace=True)
+    # Convert NaN in the comment column to None
+    if "comment" in publications_df.columns:
+        publications_df["comment"] = publications_df["comment"].apply(none_if_nan)
     user_docs = await db.users.find({}, {"user_name": 1, "user_id": 1, "email": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
