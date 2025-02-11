@@ -79,9 +79,9 @@ class Phenotype(BaseModel):
     phenotype_id: str
     name: str
     # The modifier is now stored as a nested object (if available) with keys like id, name, description, and synonyms.
-    modifier: Optional[Dict[str, Optional[str]]] = None
+    modifier: Optional[Dict[str, Optional[str]]] = None  
     # The described value should be one of "yes", "no", or "not reported".
-    described: str
+    described: str  
 
     model_config = {"extra": "allow"}
 
@@ -234,8 +234,8 @@ class Publication(BaseModel):
     publication_id: int
     publication_alias: str
     publication_type: Optional[str] = None
-    publication_entry_date: Optional[datetime] = None
-    PMID: Optional[str] = None
+    publication_entry_date: Optional[datetime] = Field(default_factory=lambda: datetime(2021, 11, 1))
+    PMID: Optional[int] = None
     DOI: Optional[str] = None
     PDF: Optional[str] = None
     title: Optional[str] = None
@@ -244,9 +244,9 @@ class Publication(BaseModel):
     journal_abbreviation: Optional[str] = None
     journal: Optional[str] = None
     keywords: Optional[str] = None
-    # Removed firstauthor_lastname/firstauthor_firstname.
+    # Removed firstauthor_lastname/firstauthor_firstname; instead we use:
     authors: List[Author] = Field(default_factory=list)
-    update_date: Optional[datetime] = None
+    update_date: Optional[datetime] = Field(default_factory=datetime.now)
     comment: Optional[str] = None
     assignee: Optional[Dict[str, Optional[str]]] = None  
 
@@ -273,9 +273,11 @@ class Publication(BaseModel):
         v = none_if_nan(v)
         if v is None:
             return None
-        if isinstance(v, (int, float)):
-            return str(v)
-        return v
+        try:
+            # Convert PMID to integer
+            return int(v)
+        except Exception:
+            return None
 
     @field_validator("DOI", mode="before")
     @classmethod

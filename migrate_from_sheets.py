@@ -202,7 +202,7 @@ def update_publication_with_pubmed(pub: dict) -> dict:
     pmid = pub.get("PMID")
     if not pmid:
         return pub
-    pubmed_info = get_pubmed_info(pmid)
+    pubmed_info = get_pubmed_info(str(pmid))
     if pubmed_info:
         if not pub.get("title"):
             pub["title"] = pubmed_info.get("title", "")
