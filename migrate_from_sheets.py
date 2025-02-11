@@ -7,6 +7,10 @@ from app.database import db
 from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant
 
+# NEW: Import Entrez from BioPython for PubMed queries.
+from Bio import Entrez
+Entrez.email = "your_email@example.com"  # Replace with your email address
+
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
 
 # GIDs for each sheet:
@@ -93,6 +97,107 @@ async def load_modifier_mappings():
     return mapping
 
 # ---------------------------------------------------
+# NEW: Helper function to retrieve PubMed information given a PMID.
+def get_pubmed_info(pmid: str) -> dict:
+    if not pmid:
+        return {}
+    try:
+        handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
+        records = Entrez.read(handle)
+        handle.close()
+        if "PubmedArticle" not in records or len(records["PubmedArticle"]) == 0:
+            return {}
+        article = records["PubmedArticle"][0]
+        medline = article["MedlineCitation"]
+        article_data = medline.get("Article", {})
+        pmid_val = str(medline.get("PMID", ""))
+        doi = None
+        if "ELocationID" in article_data:
+            for eid in article_data["ELocationID"]:
+                if eid.attributes.get("EIdType") == "doi":
+                    doi = str(eid)
+                    break
+        title = article_data.get("ArticleTitle", "")
+        abstract = ""
+        if "Abstract" in article_data:
+            abstract_texts = article_data["Abstract"].get("AbstractText", [])
+            if isinstance(abstract_texts, list):
+                abstract = " ".join(abstract_texts)
+            else:
+                abstract = abstract_texts
+        journal = article_data.get("Journal", {})
+        journal_title = journal.get("Title", "")
+        journal_abbr = journal.get("ISOAbbreviation", "")
+        pub_date = journal.get("JournalIssue", {}).get("PubDate", {})
+        year = pub_date.get("Year", "")
+        raw_month = pub_date.get("Month", "01")
+        day = pub_date.get("Day", "01")
+        # Normalize month: if raw_month is alphabetic (e.g. "Dec"), convert it to a number.
+        import calendar
+        try:
+            if raw_month.isalpha():
+                month_num = list(calendar.month_abbr).index(raw_month.capitalize())
+            else:
+                month_num = int(raw_month)
+        except Exception:
+            month_num = 1
+        publication_date = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
+        keywords = []
+        if "KeywordList" in medline:
+            for klist in medline["KeywordList"]:
+                keywords.extend(klist)
+        firstauthor_lastname = ""
+        firstauthor_firstname = ""
+        if "AuthorList" in article_data and len(article_data["AuthorList"]) > 0:
+            first_author = article_data["AuthorList"][0]
+            firstauthor_lastname = first_author.get("LastName", "")
+            firstauthor_firstname = first_author.get("ForeName", "")
+        return {
+            "pmid": pmid_val,
+            "doi": doi,
+            "title": title,
+            "abstract": abstract,
+            "year": year,
+            "month": raw_month,
+            "day": day,
+            "jabbrv": journal_abbr,
+            "journal": journal_title,
+            "keywords": ", ".join(keywords),
+            "lastname": firstauthor_lastname,
+            "firstname": firstauthor_firstname,
+            "publication_date": publication_date
+        }
+    except Exception as e:
+        print(f"Error retrieving PubMed info for PMID {pmid}: {e}")
+        return {}
+
+# ---------------------------------------------------
+# NEW: Helper function to update a publication record with PubMed data.
+def update_publication_with_pubmed(pub: dict) -> dict:
+    pmid = pub.get("PMID")
+    if not pmid:
+        return pub
+    pubmed_info = get_pubmed_info(pmid)
+    if pubmed_info:
+        if not pub.get("title"):
+            pub["title"] = pubmed_info.get("title", "")
+        if not pub.get("abstract"):
+            pub["abstract"] = pubmed_info.get("abstract", "")
+        if not pub.get("publication_date") and pubmed_info.get("publication_date"):
+            pub["publication_date"] = pubmed_info.get("publication_date")
+        if not pub.get("journal_abbreviation"):
+            pub["journal_abbreviation"] = pubmed_info.get("jabbrv", "")
+        if not pub.get("journal"):
+            pub["journal"] = pubmed_info.get("journal", "")
+        if not pub.get("keywords"):
+            pub["keywords"] = pubmed_info.get("keywords", "")
+        if not pub.get("firstauthor_lastname"):
+            pub["firstauthor_lastname"] = pubmed_info.get("lastname", "")
+        if not pub.get("firstauthor_firstname"):
+            pub["firstauthor_firstname"] = pubmed_info.get("firstname", "")
+    return pub
+
+# ---------------------------------------------------
 async def import_users():
     print("[import_users] Starting import of reviewers/users.")
     url = csv_url(SPREADSHEET_ID, GID_REVIEWERS)
@@ -146,7 +251,11 @@ async def import_publications():
                     row["assignee"] = None
                 row = row.drop(labels=["Assigne"])
             pub = Publication(**row)
-            validated_publications.append(pub.model_dump(by_alias=True, exclude_none=True))
+            pub_dict = pub.model_dump(by_alias=True, exclude_none=True)
+            # NEW: Update publication with PubMed info if PMID is provided and title is empty.
+            if pub_dict.get("PMID") and not pub_dict.get("title"):
+                pub_dict = update_publication_with_pubmed(pub_dict)
+            validated_publications.append(pub_dict)
         except Exception as e:
             print(f"[import_publications] Validation error in row {idx}: {e}")
     print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
