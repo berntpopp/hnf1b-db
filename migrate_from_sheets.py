@@ -60,7 +60,7 @@ def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
 def read_vep_file(filepath):
     """
     Read a VEP file that contains multiple header lines starting with "##" and one header line starting with "#".
-    Skips lines starting with "##" and removes the leading '#' from the header line.
+    Skips lines beginning with "##" and removes the leading '#' from the header line.
     Renames the uploaded variation column to "var_id" and filters for Feature == "NM_000458.4".
     """
     with open(filepath, "r") as f:
@@ -77,12 +77,10 @@ def read_vep_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
-    # Rename the uploaded variation column to "var_id"
     for col in df.columns:
         if col.startswith("Uploaded_variation") or col.startswith("#Uploaded_variation"):
             df.rename(columns={col: "var_id"}, inplace=True)
             break
-    # Filter rows for the transcript of interest
     if "Feature" in df.columns:
         df = df[df["Feature"] == "NM_000458.4"]
     print(f"[DEBUG] Read VEP file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
@@ -92,7 +90,7 @@ def read_vep_file(filepath):
 def read_vcf_file(filepath):
     """
     Read a VCF file by skipping header lines starting with "##" and removing the leading '#' from the header.
-    Computes a 'vcf_hg38' field from CHROM, POS, REF, and ALT.
+    Computes a 'vcf_hg38' field by concatenating CHROM, POS, REF, and ALT.
     Renames the ID column to 'var_id'.
     """
     with open(filepath, "r") as f:
@@ -109,6 +107,7 @@ def read_vcf_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
+    # NOTE: Do not prepend "chr" since the VCF already contains it.
     df["vcf_hg38"] = df["CHROM"].astype(str) + "-" + df["POS"].astype(str) + "-" + df["REF"] + "-" + df["ALT"]
     df = df[["ID", "vcf_hg38"]].rename(columns={"ID": "var_id"})
     print(f"[DEBUG] Read VCF file '{filepath}' with {df.shape[0]} rows")
@@ -118,7 +117,8 @@ def read_vcf_file(filepath):
 def read_cadd_file(filepath):
     """
     Read a gzipped CADD file that contains header lines starting with "##" and one header line starting with "#".
-    Skips lines starting with "##" and removes the leading '#' from the header line.
+    Skips lines beginning with "##" and removes the leading '#' from the header line.
+    Computes a 'vcf_hg38' field using the CADD columns.
     """
     with gzip.open(filepath, "rt", encoding="utf-8") as f:
         lines = f.readlines()
@@ -134,8 +134,34 @@ def read_cadd_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
+    df["vcf_hg38"] = "chr" + df["Chrom"].astype(str) + "-" + df["Pos"].astype(str) + "-" + df["Ref"] + "-" + df["Alt"]
     print(f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
     return df
+
+# ---------------------------------------------------
+def parse_vep_extra(df):
+    """
+    Parse the 'Extra' column of a VEP DataFrame to extract additional annotations,
+    replicating the logic of the legacy R code.
+    First, drop the 'CADD_PHRED' column (if present) to avoid duplicate columns.
+    """
+    df = df.copy()
+    if "CADD_PHRED" in df.columns:
+        df = df.drop(columns=["CADD_PHRED"])
+    df["Extra"] = df["Extra"].fillna("")
+    df = df.assign(Extra = df["Extra"].str.split(";")).explode("Extra")
+    df["Extra"] = df["Extra"].str.strip()
+    df = df[df["Extra"] != ""]
+    df[["key", "value"]] = df["Extra"].str.split("=", n=1, expand=True)
+    df = df.assign(value = df["value"].str.split(",")).explode("value")
+    df["value"] = df["value"].str.strip()
+    index_cols = [col for col in df.columns if col not in ["key", "value", "Extra"]]
+    df_pivot = df.pivot_table(index=index_cols, columns="key", values="value", aggfunc="max").reset_index()
+    if "HGVSc" in df_pivot.columns:
+        df_pivot["HGVSc"] = df_pivot["HGVSc"].str.split(":").str[1]
+    if "HGVSp" in df_pivot.columns:
+        df_pivot["HGVSp"] = df_pivot["HGVSp"].str.split(":").str[1]
+    return df_pivot
 
 # ---------------------------------------------------
 async def load_phenotype_mappings():
@@ -524,7 +550,8 @@ async def import_variants():
         
         # 5. Load the CADD file and compute its vcf_hg38 field.
         cadd = read_cadd_file("data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz")
-        cadd["vcf_hg38"] = "chr" + cadd["Chrom"].astype(str) + "-" + cadd["Pos"].astype(str) + "-" + cadd["Ref"] + "-" + cadd["Alt"]
+        # CADD already includes "chr" in its Chrom column so we do not prepend.
+        cadd["vcf_hg38"] = cadd["Chrom"].astype(str) + "-" + cadd["Pos"].astype(str) + "-" + cadd["Ref"] + "-" + cadd["Alt"]
         print(f"[DEBUG] CADD data shape: {cadd.shape}")
         
         # 6. Merge the combined VEP data with the CADD data on vcf_hg38.
@@ -532,22 +559,19 @@ async def import_variants():
         vep_annot.rename(columns={"PHRED": "CADD_PHRED"}, inplace=True)
         print(f"[DEBUG] Merged VEP/CADD data shape: {vep_annot.shape}")
         
-        # 7. Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
-        #    (The idea is that the primary variant data from Google Sheets will use its "hg38" column, which should be identical.)
+        # 7. Parse the Extra column from the VEP files to extract additional annotations.
+        vep_parsed = parse_vep_extra(vep_annot)
+        print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
+        
+        # Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
         annotation_map = {}
-        for _, row in vep_annot.iterrows():
+        for _, row in vep_parsed.iterrows():
             vcf_key = row.get("vcf_hg38")
             if pd.notna(vcf_key):
-                c_dot = row.get("c_dot")
-                if not c_dot and pd.notna(row.get("HGVSc")) and ":" in row.get("HGVSc"):
-                    c_dot = row.get("HGVSc").split(":")[1]
-                p_dot = row.get("p_dot")
-                if not p_dot and pd.notna(row.get("HGVSp")) and ":" in row.get("HGVSp"):
-                    p_dot = row.get("HGVSp").split(":")[1]
                 annotation_obj = {
                     "transcript": row.get("transcript"),
-                    "c_dot": c_dot,
-                    "p_dot": p_dot,
+                    "c_dot": row.get("HGVSc"),  # from parsed Extra
+                    "p_dot": row.get("HGVSp"),  # from parsed Extra
                     "source": "vep",
                     "annotation_date": parse_date(row.get("Uploaded_date")) if "Uploaded_date" in row and pd.notna(row.get("Uploaded_date")) else None,
                     "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None
@@ -597,13 +621,12 @@ async def import_variants():
                     'system': none_if_nan(row.get('system_classification')),
                     'classification_date': parse_date(row.get('date_classification'))
                 }
-            # We construct the variant data from the Google Sheets.
             variant_data = {
                 'variant_type': row.get('VariantType'),
                 'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
                 'hg19': none_if_nan(row.get('hg19')),
                 'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                'hg38': none_if_nan(row.get('hg38'))  # This is the constructed identifier matching vcf_hg38
+                'hg38': none_if_nan(row.get('hg38'))  # This constructed identifier should match vcf_hg38 from VCF files.
             }
             annotation = {}
             varsome_val = none_if_nan(row.get('Varsome'))
