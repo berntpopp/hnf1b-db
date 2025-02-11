@@ -9,7 +9,7 @@ from app.models import User, Individual, Publication, Report, Variant
 
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez
-Entrez.email = "your_email@example.com"  # Replace with your email address
+Entrez.email = "your_email@example.com"  # Replace with your actual email address
 
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
 
@@ -132,7 +132,6 @@ def get_pubmed_info(pmid: str) -> dict:
         year = pub_date.get("Year", "")
         raw_month = pub_date.get("Month", "01")
         day = pub_date.get("Day", "01")
-        # Normalize month: if raw_month is alphabetic (e.g. "Dec"), convert it to a number.
         import calendar
         try:
             if raw_month.isalpha():
@@ -142,16 +141,43 @@ def get_pubmed_info(pmid: str) -> dict:
         except Exception:
             month_num = 1
         publication_date = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
+        # --- Extract MeSH terms and chemicals ---
+        mesh_terms = []
+        if "MeshHeadingList" in medline:
+            for mesh in medline["MeshHeadingList"]:
+                if "QualifierName" in mesh and mesh["QualifierName"]:
+                    for qual in mesh["QualifierName"]:
+                        mesh_terms.append(str(qual))
+                elif "DescriptorName" in mesh:
+                    mesh_terms.append(str(mesh["DescriptorName"]))
+        chemicals = []
+        if "ChemicalList" in medline:
+            for chem in medline["ChemicalList"]:
+                if "NameOfSubstance" in chem:
+                    chemicals.append(str(chem["NameOfSubstance"]))
+        suppl_mesh = []
+        if "SupplMeshList" in medline:
+            for s in medline["SupplMeshList"]:
+                suppl_mesh.append(str(s))
         keywords = []
         if "KeywordList" in medline:
             for klist in medline["KeywordList"]:
                 keywords.extend(klist)
-        firstauthor_lastname = ""
-        firstauthor_firstname = ""
+        all_keywords = keywords + mesh_terms + chemicals + suppl_mesh
+        # --- Build authors list ---
+        authors = []
         if "AuthorList" in article_data and len(article_data["AuthorList"]) > 0:
-            first_author = article_data["AuthorList"][0]
-            firstauthor_lastname = first_author.get("LastName", "")
-            firstauthor_firstname = first_author.get("ForeName", "")
+            for author in article_data["AuthorList"]:
+                author_obj = {
+                    "lastname": author.get("LastName", ""),
+                    "firstname": author.get("ForeName", ""),
+                    "initials": author.get("Initials", ""),
+                    "affiliations": []
+                }
+                if "AffiliationInfo" in author:
+                    for aff in author["AffiliationInfo"]:
+                        author_obj["affiliations"].append(str(aff.get("Affiliation", "")).strip())
+                authors.append(author_obj)
         return {
             "pmid": pmid_val,
             "doi": doi,
@@ -162,9 +188,8 @@ def get_pubmed_info(pmid: str) -> dict:
             "day": day,
             "jabbrv": journal_abbr,
             "journal": journal_title,
-            "keywords": ", ".join(keywords),
-            "lastname": firstauthor_lastname,
-            "firstname": firstauthor_firstname,
+            "keywords": ", ".join(all_keywords),
+            "authors": authors,
             "publication_date": publication_date
         }
     except Exception as e:
@@ -191,10 +216,7 @@ def update_publication_with_pubmed(pub: dict) -> dict:
             pub["journal"] = pubmed_info.get("journal", "")
         if not pub.get("keywords"):
             pub["keywords"] = pubmed_info.get("keywords", "")
-        if not pub.get("firstauthor_lastname"):
-            pub["firstauthor_lastname"] = pubmed_info.get("lastname", "")
-        if not pub.get("firstauthor_firstname"):
-            pub["firstauthor_firstname"] = pubmed_info.get("firstname", "")
+        pub["authors"] = pubmed_info.get("authors", [])
     return pub
 
 # ---------------------------------------------------

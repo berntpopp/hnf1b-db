@@ -79,9 +79,9 @@ class Phenotype(BaseModel):
     phenotype_id: str
     name: str
     # The modifier is now stored as a nested object (if available) with keys like id, name, description, and synonyms.
-    modifier: Optional[Dict[str, Optional[str]]] = None  
+    modifier: Optional[Dict[str, Optional[str]]] = None
     # The described value should be one of "yes", "no", or "not reported".
-    described: str  
+    described: str
 
     model_config = {"extra": "allow"}
 
@@ -218,6 +218,16 @@ class Variant(BaseModel):
         return v
 
 # ------------------------------------------------------------------------------
+# New Author model – for holding individual author details
+class Author(BaseModel):
+    lastname: Optional[str] = None
+    firstname: Optional[str] = None
+    initials: Optional[str] = None
+    affiliations: List[str] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
 # Publication model
 class Publication(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -234,8 +244,8 @@ class Publication(BaseModel):
     journal_abbreviation: Optional[str] = None
     journal: Optional[str] = None
     keywords: Optional[str] = None
-    firstauthor_lastname: Optional[str] = None
-    firstauthor_firstname: Optional[str] = None
+    # Removed firstauthor_lastname/firstauthor_firstname.
+    authors: List[Author] = Field(default_factory=list)
     update_date: Optional[datetime] = None
     comment: Optional[str] = None
     assignee: Optional[Dict[str, Optional[str]]] = None  
