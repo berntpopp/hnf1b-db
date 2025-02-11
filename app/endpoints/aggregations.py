@@ -102,11 +102,11 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
     
     Args:
         collection: The Motor collection (e.g. db.individuals).
-        report_field: The field within the latest report to group by (e.g. "age_onset" or "cohort").
+        report_field: The field within the newest report to group by (e.g. "age_onset", "cohort", or "family_history").
         
     Returns:
         A dictionary with:
-          - "total_count": The total number of individuals (that have at least one report).
+          - "total_count": The total number of individuals (with at least one report).
           - "grouped_counts": A list of documents with keys:
               - "_id": The value of the specified report field.
               - "count": The number of individuals with that value in their newest report.
@@ -132,7 +132,7 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
           }
         }
     ]
-    # If the field is age_onset, normalize its value.
+    # If aggregating on age_onset, normalize its value.
     if report_field == "age_onset":
         pipeline.append({
             "$set": {
@@ -160,6 +160,44 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
             ]
         }
     })
+    result = await collection.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
+
+
+async def _aggregate_variant_field(collection, field_name: str) -> dict:
+    """
+    Helper function to aggregate the Individuals collection by a specified field
+    contained within the embedded 'variant' object.
+    
+    Args:
+        collection: The Motor collection (e.g. db.individuals).
+        field_name: The field inside the variant object to group by (e.g. "detection_method" or "segregation").
+        
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals that have a non-empty variant.
+          - "grouped_counts": A list of documents with keys:
+              - "_id": The value of the specified variant field.
+              - "count": The number of individuals with that value.
+    """
+    pipeline = [
+        { "$match": { "variant": { "$exists": True, "$ne": {} } } },
+        { "$project": { "target": f"$variant.{field_name}" } },
+        { "$facet": {
+            "grouped_counts": [
+                { "$group": { "_id": "$target", "count": { "$sum": 1 } } },
+                { "$sort": { "_id": 1 } }
+            ],
+            "total_count": [
+                { "$count": "total" }
+            ]
+        } }
+    ]
     result = await collection.aggregate(pipeline).to_list(length=1)
     if result:
         grouped_counts = result[0].get("grouped_counts", [])
@@ -319,3 +357,157 @@ async def count_individuals_by_cohort() -> dict:
               - "count": The number of individuals with that cohort.
     """
     return await _aggregate_latest_report_field(db.individuals, "cohort")
+
+
+@router.get("/individuals/family-history-count", tags=["Aggregations"])
+async def count_individuals_by_family_history() -> dict:
+    """
+    Aggregate individuals by the 'family_history' field of their newest report.
+    
+    For each individual, the newest report is selected based on the maximum 'report_date'.
+    Then, individuals are grouped by the value of 'family_history' in that report.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals with at least one report.
+          - "grouped_counts": List of documents with keys:
+              - "_id": The family_history value.
+              - "count": The number of individuals with that family_history.
+    """
+    return await _aggregate_latest_report_field(db.individuals, "family_history")
+
+
+@router.get("/individuals/detection-method-count", tags=["Aggregations"])
+async def count_individuals_by_detection_method() -> dict:
+    """
+    Aggregate individuals by the 'detection_method' field found in their variant object.
+    
+    Only individuals with a non-empty variant object are considered.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals with variant data.
+          - "grouped_counts": List of documents with keys:
+              - "_id": The detection method.
+              - "count": The number of individuals with that detection method.
+    """
+    return await _aggregate_variant_field(db.individuals, "detection_method")
+
+
+@router.get("/individuals/segregation-count", tags=["Aggregations"])
+async def count_individuals_by_segregation() -> dict:
+    """
+    Aggregate individuals by the 'segregation' field found in their variant object.
+    
+    Only individuals with a non-empty variant object are considered.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals with variant data.
+          - "grouped_counts": List of documents with keys:
+              - "_id": The segregation value.
+              - "count": The number of individuals with that segregation.
+    """
+    return await _aggregate_variant_field(db.individuals, "segregation")
+
+
+@router.get("/individuals/phenotype-described-count", tags=["Aggregations"])
+async def count_phenotypes_by_described() -> dict:
+    """
+    Aggregate the phenotypes from the newest report (review) of each individual.
+    
+    The pipeline converts the 'phenotypes' object in the newest report into an array,
+    unwinds it, and then groups by phenotype_id and name.
+    For each phenotype, counts for each 'described' category ("yes", "no", and "not reported")
+    are accumulated and then grouped into a sub-object.
+    Finally, the results are sorted in descending order by the "yes" count.
+    
+    Returns:
+        A dictionary with a key "results" containing a list of documents.
+        Each document has:
+          - phenotype_id: The phenotype identifier.
+          - name: The phenotype name.
+          - counts: An object with keys:
+              - "yes": Count of individuals with described "yes".
+              - "no": Count of individuals with described "no".
+              - "not reported": Count of individuals with described "not reported".
+    """
+    pipeline = [
+        # Only process individuals that have at least one report.
+        { "$match": { "reports": { "$exists": True, "$ne": [] } } },
+        # Compute the newest report by comparing report_date.
+        { "$set": {
+              "latest_report": {
+                  "$reduce": {
+                      "input": "$reports",
+                      "initialValue": { "report_date": datetime(1970, 1, 1) },
+                      "in": {
+                          "$cond": [
+                              { "$gt": ["$$this.report_date", "$$value.report_date"] },
+                              "$$this",
+                              "$$value"
+                          ]
+                      }
+                  }
+              }
+          }
+        },
+        # Convert the phenotypes object to an array.
+        { "$project": {
+              "phenotypes": { "$objectToArray": "$latest_report.phenotypes" }
+          }
+        },
+        # Unwind the phenotypes array.
+        { "$unwind": "$phenotypes" },
+        # Group by phenotype (using phenotype_id and name) and count the categories.
+        { "$group": {
+              "_id": {
+                  "phenotype_id": "$phenotypes.v.phenotype_id",
+                  "name": "$phenotypes.v.name"
+              },
+              "yes": {
+                  "$sum": {
+                      "$cond": [
+                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "yes" ] },
+                          1,
+                          0
+                      ]
+                  }
+              },
+              "no": {
+                  "$sum": {
+                      "$cond": [
+                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "no" ] },
+                          1,
+                          0
+                      ]
+                  }
+              },
+              "not_reported": {
+                  "$sum": {
+                      "$cond": [
+                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "not reported" ] },
+                          1,
+                          0
+                      ]
+                  }
+              }
+          }
+        },
+        # Project into a structured object.
+        { "$project": {
+              "_id": 0,
+              "phenotype_id": "$_id.phenotype_id",
+              "name": "$_id.name",
+              "counts": {
+                  "yes": "$yes",
+                  "no": "$no",
+                  "not reported": "$not_reported"
+              }
+          }
+        },
+        # Sort by highest yes count.
+        { "$sort": { "counts.yes": -1 } }
+    ]
+    results = await db.individuals.aggregate(pipeline).to_list(length=None)
+    return {"results": results}
