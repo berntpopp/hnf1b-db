@@ -125,8 +125,6 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
-    # Build a reviewer mapping using the abbreviation.
-    # We assume that the reviewer abbreviation is stored in the "user_name" field.
     user_docs = await db.users.find({}, {"user_name": 1, "user_id": 1, "email": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
@@ -165,8 +163,6 @@ async def import_individuals_with_reports():
     df = df.dropna(how="all")
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
-
-    # Build base_cols list; include "Publication", "ReviewDate", and "Comment" if they exist (case sensitive)
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
     if "Publication" in df.columns:
         base_cols.append("Publication")
@@ -174,22 +170,17 @@ async def import_individuals_with_reports():
         base_cols.append("ReviewDate")
     if "Comment" in df.columns:
         base_cols.append("Comment")
-
-    # Build publication mapping: keys are the lowercased publication_alias from publications
     pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
     publication_mapping = {
         doc["publication_alias"].strip().lower(): doc["_id"]
         for doc in pub_docs if "publication_alias" in doc
     }
     print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
-
-    # Build user mapping from reviewers: key = lowercased email, value = _id
     user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     user_mapping = {}
     for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["_id"]
-
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
         'KidneyBiopsy', 'RenalHypoplasia', 'SolitaryKidney', 'UrinaryTractMalformation',
@@ -201,15 +192,12 @@ async def import_individuals_with_reports():
         'MusculoskeletalFeatures', 'DysmorphicFeatures', 'ElevatedHepaticTransaminase',
         'AbnormalLiverPhysiology'
     ]
-
     phenotype_mapping = await load_phenotype_mappings()
     modifier_mapping = await load_modifier_mappings()
-
     grouped = df.groupby('individual_id')
     validated_individuals = []
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
-        # Save and remove the base Publication, ReviewDate, and Comment values (if available) from base_data
         base_publication_alias = base_data.pop('Publication', None)
         base_review_date = base_data.pop('ReviewDate', None)
         base_comment = base_data.pop('Comment', None)
@@ -252,7 +240,6 @@ async def import_individuals_with_reports():
                         "described": described
                     }
                 report_data['phenotypes'] = phenotypes_obj
-
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias
@@ -293,15 +280,23 @@ async def import_variants():
     df = normalize_dataframe_columns(df)
     print(f"[import_variants] Normalized columns: {df.columns.tolist()}")
 
-    variant_key_cols = ['VariantType', 'VariantReported', 'ID', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38', 'Varsome']
+    # Build unique key using these columns (do not include VariantReported or Varsome)
+    variant_key_cols = ['VariantType', 'ID', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
     unique_variants = {}
     individual_variant_info = {}
 
-    # Classification columns to be extracted from the Individuals sheet.
+    # Classification columns to be extracted.
     classification_cols = [
         'verdict_classification', 'criteria_classification',
         'comment_classification', 'system_classification', 'date_classification'
     ]
+
+    # Build publication mapping for linking publications via Publication column.
+    pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
+    publication_mapping = {
+         doc["publication_alias"].strip().lower(): doc["_id"]
+         for doc in pub_docs if "publication_alias" in doc
+    }
 
     for idx, row in df.iterrows():
         if pd.notna(row.get('VariantType')):
@@ -317,7 +312,7 @@ async def import_variants():
                 "detection_method": det_method,
                 "segregation": seg
             }
-            # Extract classification data from the current row.
+            # Extract classification data.
             classification = {}
             if any(col in row and pd.notna(row.get(col)) for col in classification_cols):
                 classification = {
@@ -327,17 +322,16 @@ async def import_variants():
                     'system': none_if_nan(row.get('system_classification')),
                     'classification_date': parse_date(row.get('date_classification'))
                 }
-            # Build variant_data without the varsome/transcript fields.
+            # Build variant_data without VariantReported and Varsome.
             variant_data = {
                 'variant_type': row.get('VariantType'),
-                'variant_reported': row.get('VariantReported'),
                 'ID': none_if_nan(row.get('ID')),
                 'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
                 'hg19': none_if_nan(row.get('hg19')),
                 'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
                 'hg38': none_if_nan(row.get('hg38'))
             }
-            # Build annotation data from the varsome column.
+            # Build annotation from the Varsome column.
             annotation = {}
             varsome_val = none_if_nan(row.get('Varsome'))
             if pd.notna(varsome_val):
@@ -352,7 +346,6 @@ async def import_variants():
                     transcript = varsome_str
                     c_dot = None
                     p_dot = None
-                # Use date_classification as the annotation date.
                 annotation = {
                     "transcript": transcript,
                     "c_dot": c_dot,
@@ -360,25 +353,39 @@ async def import_variants():
                     "source": "varsome",
                     "annotation_date": parse_date(row.get('date_classification'))
                 }
+            # Build reported entry from VariantReported and Publication columns.
+            reported_entry = {}
+            vr = none_if_nan(row.get('VariantReported'))
+            if vr:
+                reported_entry["variant_reported"] = vr
+                pub_val = none_if_nan(row.get('Publication'))
+                if pub_val:
+                    pub_obj_id = publication_mapping.get(str(pub_val).strip().lower())
+                    reported_entry["publication_ref"] = pub_obj_id
+                else:
+                    reported_entry["publication_ref"] = None
+
+            # Update unique_variants.
             if variant_key in unique_variants:
                 if sp_indiv_id not in unique_variants[variant_key]['individual_ids']:
                     unique_variants[variant_key]['individual_ids'].append(sp_indiv_id)
+                if reported_entry and "variant_reported" in reported_entry:
+                    rep_arr = unique_variants[variant_key].setdefault("reported", [])
+                    if reported_entry not in rep_arr:
+                        rep_arr.append(reported_entry)
                 if annotation and any(annotation.values()):
-                    if 'annotations' in unique_variants[variant_key]:
-                        if annotation not in unique_variants[variant_key]['annotations']:
-                            unique_variants[variant_key]['annotations'].append(annotation)
-                    else:
-                        unique_variants[variant_key]['annotations'] = [annotation]
+                    ann_arr = unique_variants[variant_key].setdefault("annotations", [])
+                    if annotation not in ann_arr:
+                        ann_arr.append(annotation)
                 if classification and any(classification.values()):
-                    if 'classifications' in unique_variants[variant_key]:
-                        if classification not in unique_variants[variant_key]['classifications']:
-                            unique_variants[variant_key]['classifications'].append(classification)
-                    else:
-                        unique_variants[variant_key]['classifications'] = [classification]
+                    cls_arr = unique_variants[variant_key].setdefault("classifications", [])
+                    if classification not in cls_arr:
+                        cls_arr.append(classification)
             else:
                 unique_variants[variant_key] = {
                     "variant_data": variant_data,
                     "individual_ids": [sp_indiv_id],
+                    "reported": [reported_entry] if reported_entry and "variant_reported" in reported_entry else [],
                     "annotations": [annotation] if annotation and any(annotation.values()) else [],
                     "classifications": [classification] if classification and any(classification.values()) else []
                 }
@@ -402,6 +409,7 @@ async def import_variants():
         variant_doc['individual_ids'] = objid_list
         variant_doc['classifications'] = info.get('classifications', [])
         variant_doc['annotations'] = info.get('annotations', [])
+        variant_doc['reported'] = info.get('reported', [])
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 

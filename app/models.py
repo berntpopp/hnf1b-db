@@ -157,7 +157,7 @@ class VariantClassifications(BaseModel):
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[datetime] = None  # Changed to datetime
+    classification_date: Optional[datetime] = None  # Now datetime
 
     model_config = {"extra": "allow"}
 
@@ -173,7 +173,7 @@ class VariantAnnotation(BaseModel):
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
     source: Optional[str] = None  # For example, "varsome"
-    annotation_date: Optional[datetime] = None  # Changed to datetime
+    annotation_date: Optional[datetime] = None  # Now datetime
 
     model_config = {"extra": "allow"}
 
@@ -183,14 +183,26 @@ class VariantAnnotation(BaseModel):
         return parse_date_value(v)
 
 # ------------------------------------------------------------------------------
+# New ReportedEntry model – for holding variant_reported and publication reference
+class ReportedEntry(BaseModel):
+    variant_reported: str
+    publication_ref: Optional[PyObjectId] = None
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
 # Variant model (unique across the database)
-# Now includes a list of classification objects and a list of annotation objects.
+# Now includes:
+#  - classifications: list of VariantClassifications
+#  - annotations: list of VariantAnnotation
+#  - reported: list of ReportedEntry objects (holding variant_reported values and publication references)
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: int
     individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: List[VariantClassifications] = Field(default_factory=list)
     annotations: List[VariantAnnotation] = Field(default_factory=list)
+    reported: List[ReportedEntry] = Field(default_factory=list)
 
     model_config = {
         "from_attributes": True,
@@ -203,7 +215,6 @@ class Variant(BaseModel):
     @field_validator("annotations", mode="before")
     @classmethod
     def validate_annotations(cls, v):
-        # No additional validation needed for our new structure.
         return v
 
 # ------------------------------------------------------------------------------
@@ -226,9 +237,7 @@ class Publication(BaseModel):
     firstauthor_lastname: Optional[str] = None
     firstauthor_firstname: Optional[str] = None
     update_date: Optional[datetime] = None
-    # NEW: The Comment column from the Publications sheet.
     comment: Optional[str] = None
-    # NEW: The assignee field is now a nested object containing reviewer info.
     assignee: Optional[Dict[str, Optional[str]]] = None  
 
     model_config = {
