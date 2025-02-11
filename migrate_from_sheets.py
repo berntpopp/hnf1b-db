@@ -227,7 +227,7 @@ async def import_users():
     reviewers_df = reviewers_df.dropna(how="all")
     reviewers_df = normalize_dataframe_columns(reviewers_df)
     expected_columns = ['user_id', 'user_name', 'password', 'email',
-                        'user_role', 'first_name', 'family_name', 'orcid']
+                        'user_role', 'first_name', 'family_name', 'orcid', 'abbreviation']
     missing = [col for col in expected_columns if col not in reviewers_df.columns]
     if missing:
         raise KeyError(f"[import_users] Missing expected columns in Reviewers sheet: {missing}")
@@ -258,23 +258,22 @@ async def import_publications():
     # Convert NaN in the comment column to None
     if "comment" in publications_df.columns:
         publications_df["comment"] = publications_df["comment"].apply(none_if_nan)
-    user_docs = await db.users.find({}, {"user_name": 1, "user_id": 1, "email": 1}).to_list(length=None)
+    # --- Build reviewer mapping using the "Assigne" column.
+    # We now match the value in the "Assigne" column to the "abbreviation" field in the users collection.
+    user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
-        key = user_doc["user_name"].strip().lower()
-        reviewer_mapping[key] = {
-            "user_id": str(user_doc["user_id"]),
-            "email": user_doc["email"],
-            "abbreviation": user_doc["user_name"]
-        }
+        # Use the value in the "abbreviation" field as the key (lowercased)
+        key = user_doc["abbreviation"].strip().lower()
+        reviewer_mapping[key] = user_doc["_id"]
     print(f"[import_publications] Reviewer mapping: {reviewer_mapping}")
     validated_publications = []
     for idx, row in publications_df.iterrows():
         try:
             if "Assigne" in row:
-                assignee_val = row["Assigne"]
-                if pd.notna(assignee_val):
-                    row["assignee"] = reviewer_mapping.get(assignee_val.strip().lower())
+                assigne_val = row["Assigne"]
+                if pd.notna(assigne_val):
+                    row["assignee"] = reviewer_mapping.get(assigne_val.strip().lower())
                 else:
                     row["assignee"] = None
                 row = row.drop(labels=["Assigne"])

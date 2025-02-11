@@ -248,7 +248,8 @@ class Publication(BaseModel):
     authors: List[Author] = Field(default_factory=list)
     update_date: Optional[datetime] = Field(default_factory=datetime.now)
     comment: Optional[str] = None
-    assignee: Optional[Dict[str, Optional[str]]] = None  
+    # UPDATED: assignee now stores a reference to a User's ObjectId.
+    assignee: Optional[PyObjectId] = None  
 
     model_config = {
         "from_attributes": True,
