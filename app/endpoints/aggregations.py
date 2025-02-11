@@ -1,5 +1,6 @@
 # File: app/endpoints/aggregations.py
 
+from datetime import datetime
 from fastapi import APIRouter
 from app.database import db
 
@@ -15,7 +16,7 @@ async def _aggregate_with_total(collection, group_field: str) -> dict:
         group_field: The field to group by (e.g. "Sex" for individuals).
         
     Returns:
-        A dictionary with keys:
+        A dictionary with:
           - "total_count": The total number of documents.
           - "grouped_counts": A list of grouped results (each with _id and count).
     """
@@ -32,6 +33,133 @@ async def _aggregate_with_total(collection, group_field: str) -> dict:
             }
         }
     ]
+    result = await collection.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
+
+
+async def _aggregate_individual_counts(collection, group_field: str) -> dict:
+    """
+    Helper function that aggregates a collection by a given field while summing the number
+    of individuals carrying each variant. Each document is assumed to have an 'individual_ids'
+    array; its size is computed and summed.
+    
+    Args:
+        collection: The Motor collection (e.g. db.variants).
+        group_field: The field to group by (e.g. "variant_type").
+        
+    Returns:
+        A dictionary with:
+          - "total_count": Sum of all individual counts across the collection.
+          - "grouped_counts": List of documents with keys '_id' (group key) and 'individual_total'.
+    """
+    pipeline = [
+        {
+            "$project": {
+                group_field: 1,
+                "individual_count": {"$size": {"$ifNull": ["$individual_ids", []]}}
+            }
+        },
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {
+                        "$group": {
+                            "_id": f"${group_field}",
+                            "individual_total": {"$sum": "$individual_count"}
+                        }
+                    },
+                    {"$sort": {"_id": 1}}
+                ],
+                "total_count": [
+                    {
+                        "$group": {
+                            "_id": None,
+                            "total": {"$sum": "$individual_count"}
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+    result = await collection.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
+
+
+async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
+    """
+    Helper function to aggregate the Individuals collection by a specified field extracted
+    from the newest (most recent) report in each individual's reports array.
+    
+    Args:
+        collection: The Motor collection (e.g. db.individuals).
+        report_field: The field within the latest report to group by (e.g. "age_onset" or "cohort").
+        
+    Returns:
+        A dictionary with:
+          - "total_count": The total number of individuals (that have at least one report).
+          - "grouped_counts": A list of documents with keys:
+              - "_id": The value of the specified report field.
+              - "count": The number of individuals with that value in their newest report.
+    """
+    pipeline = [
+        # Only process individuals that have at least one report.
+        { "$match": { "reports": { "$exists": True, "$ne": [] } } },
+        # Compute the newest report by comparing report_date.
+        { "$set": {
+              "latest_report": {
+                  "$reduce": {
+                      "input": "$reports",
+                      "initialValue": {"report_date": datetime(1970, 1, 1)},
+                      "in": {
+                          "$cond": [
+                              { "$gt": ["$$this.report_date", "$$value.report_date"] },
+                              "$$this",
+                              "$$value"
+                          ]
+                      }
+                  }
+              }
+          }
+        }
+    ]
+    # If the field is age_onset, normalize its value.
+    if report_field == "age_onset":
+        pipeline.append({
+            "$set": {
+                "latest_report.age_onset": {
+                    "$cond": [
+                        { "$eq": [ { "$toLower": "$latest_report.age_onset" }, "prenatal" ] },
+                        "prenatal",
+                        { "$cond": [
+                            { "$eq": [ { "$toLower": "$latest_report.age_onset" }, "not reported" ] },
+                            "not reported",
+                            "postnatal"
+                        ] }
+                    ]
+                }
+            }
+        })
+    pipeline.append({
+        "$facet": {
+            "grouped_counts": [
+                { "$group": { "_id": f"$latest_report.{report_field}", "count": { "$sum": 1 } } },
+                { "$sort": { "_id": 1 } }
+            ],
+            "total_count": [
+                { "$count": "total" }
+            ]
+        }
+    })
     result = await collection.aggregate(pipeline).to_list(length=1)
     if result:
         grouped_counts = result[0].get("grouped_counts", [])
@@ -80,3 +208,114 @@ async def count_publications_by_type() -> dict:
           - "grouped_counts": List of documents with keys "_id" (publication type) and "count".
     """
     return await _aggregate_with_total(db.publications, "publication_type")
+
+
+@router.get("/variants/newest-classification-verdict-count", tags=["Aggregations"])
+async def count_variants_by_newest_verdict() -> dict:
+    """
+    Count variants grouped by the 'verdict' field of the newest (most recent) classification object.
+    
+    The newest classification is determined by the maximum 'classification_date' within the 'classifications' array.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of variant documents.
+          - "grouped_counts": List of documents with keys "_id" (verdict) and "count".
+    """
+    pipeline = [
+        {
+            "$set": {
+                "latest_classification": {
+                    "$reduce": {
+                        "input": "$classifications",
+                        "initialValue": {"classification_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {
+                        "$group": {
+                            "_id": "$latest_classification.verdict",
+                            "count": {"$sum": 1}
+                        }
+                    },
+                    {"$sort": {"_id": 1}}
+                ],
+                "total_count": [
+                    {"$count": "total"}
+                ]
+            }
+        }
+    ]
+    result = await db.variants.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
+
+
+@router.get("/variants/individual-count-by-type", tags=["Aggregations"])
+async def count_individuals_by_variant_type() -> dict:
+    """
+    For each variant type, sum the total number of individuals carrying that variant.
+    
+    Each variant document contains an 'individual_ids' array.
+    This endpoint projects the size of that array, groups by 'variant_type', and sums the sizes.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": The overall sum of individuals (summed across all variants).
+          - "grouped_counts": A list of documents with keys:
+              - "_id": The variant type.
+              - "individual_total": Sum of individuals carrying variants of that type.
+    """
+    return await _aggregate_individual_counts(db.variants, "variant_type")
+
+
+@router.get("/individuals/age-onset-count", tags=["Aggregations"])
+async def count_individuals_by_age_onset() -> dict:
+    """
+    Aggregate individuals by the 'age_onset' field of their newest report.
+    
+    For each individual, the newest report is selected based on the maximum 'report_date'.
+    Then, if the age_onset value (case-insensitive) is "prenatal" or "not reported", that value is preserved.
+    Any other value (e.g. "8y", "7m", "postnatal") is normalized to "postnatal".
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals with at least one report.
+          - "grouped_counts": List of documents with keys:
+              - "_id": The standardized age_onset value.
+              - "count": The number of individuals with that age_onset.
+    """
+    return await _aggregate_latest_report_field(db.individuals, "age_onset")
+
+
+@router.get("/individuals/cohort-count", tags=["Aggregations"])
+async def count_individuals_by_cohort() -> dict:
+    """
+    Aggregate individuals by the 'cohort' field of their newest report.
+    
+    For each individual, the newest report is selected based on the maximum 'report_date'.
+    Then, individuals are grouped by the value of 'cohort' in that report.
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of individuals with at least one report.
+          - "grouped_counts": List of documents with keys:
+              - "_id": The cohort value.
+              - "count": The number of individuals with that cohort.
+    """
+    return await _aggregate_latest_report_field(db.individuals, "cohort")
