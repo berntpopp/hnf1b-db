@@ -570,3 +570,87 @@ async def cumulative_publications() -> dict:
     ]
     result = await db.publications.aggregate(facet_pipeline).to_list(length=1)
     return result[0] if result else {"overall": [], "byType": []}
+
+
+@router.get("/variants/small_variants", tags=["Aggregations"])
+async def get_variant_small_variants() -> dict:
+    """Retrieve variants of type SNV or indel and extract flag information.
+
+    For each variant that matches variant_type in ['SNV', 'indel'], this endpoint extracts:
+      - variant_id,
+      - verdict from the newest (most recent) classification (based on classification_date),
+      - transcript, c_dot, p_dot, and protein_position from the newest annotation (by annotation_date)
+        among annotations with source 'vep',
+      - individual_count: number of individuals carrying the variant (computed as the length of the individual_ids array),
+      - cadd_score: the CADD score from the newest VEP annotation.
+
+    Returns:
+        A dictionary with a key "small_variants" containing an array of flag objects.
+    """
+    pipeline = [
+        # 1. Filter for variants with type SNV or indel.
+        {
+            "$match": {
+                "variant_type": {"$in": ["SNV", "indel"]}
+            }
+        },
+        # 2. Determine the newest classification and filter annotations for source "vep".
+        {
+            "$set": {
+                "latest_classification": {
+                    "$reduce": {
+                        "input": "$classifications",
+                        "initialValue": {"classification_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                },
+                "vep_annotations": {
+                    "$filter": {
+                        "input": "$annotations",
+                        "as": "annotation",
+                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                    }
+                }
+            }
+        },
+        # 3. Determine the newest annotation among those with source "vep".
+        {
+            "$set": {
+                "latest_vep_annotation": {
+                    "$reduce": {
+                        "input": "$vep_annotations",
+                        "initialValue": {"annotation_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        # 4. Project the required fields along with the count of individuals and the CADD score.
+        {
+            "$project": {
+                "_id": 0,
+                "variant_id": 1,
+                "verdict": "$latest_classification.verdict",
+                "transcript": "$latest_vep_annotation.transcript",
+                "c_dot": "$latest_vep_annotation.c_dot",
+                "p_dot": "$latest_vep_annotation.p_dot",
+                "protein_position": "$latest_vep_annotation.protein_position",
+                "individual_count": {"$size": {"$ifNull": ["$individual_ids", []]}},
+                "cadd_score": "$latest_vep_annotation.cadd_phred"
+            }
+        }
+    ]
+    results = await db.variants.aggregate(pipeline).to_list(length=None)
+    return {"small_variants": results}
