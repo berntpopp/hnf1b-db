@@ -582,9 +582,9 @@ async def import_variants():
                     "SpliceAI_pred": row.get("SpliceAI_pred"),  # from parsed Extra
                     "ClinVar": row.get("ClinVar"),  # from parsed Extra
                     "ClinVar_CLNSIG": row.get("ClinVar_CLNSIG"),  # from parsed Extra
+                    "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None,
                     "source": "vep",
-                    "annotation_date": parse_date(row.get("Uploaded_date")) if "Uploaded_date" in row and pd.notna(row.get("Uploaded_date")) else None,
-                    "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None
+                    "annotation_date": parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else pd.to_datetime("2022-10-07").to_pydatetime()
                 }
                 annotation_map[vcf_key] = annotation_obj
         print(f"[DEBUG] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
