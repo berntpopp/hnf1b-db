@@ -21,7 +21,7 @@ GID_PUBLICATIONS = "1670256162"   # Publications sheet
 
 # GIDs for additional mapping sheets:
 PHENOTYPE_GID = "1119329208"       # Phenotype sheet
-MODIFIER_GID   = "1741928801"      # Modifier sheet
+MODIFIER_GID = "1741928801"        # Modifier sheet
 
 # ---------------------------------------------------
 def none_if_nan(v):
@@ -161,7 +161,7 @@ def parse_vep_extra(df):
         df_pivot["HGVSc"] = df_pivot["HGVSc"].str.split(":").str[1]
     if "HGVSp" in df_pivot.columns:
         df_pivot["HGVSp"] = df_pivot["HGVSp"].str.split(":").str[1]
-    # DEBUG: Print out the columns available after parsing
+    # DEBUG: Print out the columns available after parsing Extra.
     print("[DEBUG] Columns after parsing Extra:", list(df_pivot.columns))
     return df_pivot
 
@@ -566,25 +566,28 @@ async def import_variants():
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
         print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
         
+        # Set default annotation date if not found.
+        default_date = pd.to_datetime("2022-10-07").to_pydatetime()
+        
         # Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
         annotation_map = {}
         for _, row in vep_parsed.iterrows():
             vcf_key = row.get("vcf_hg38")
             if pd.notna(vcf_key):
                 annotation_obj = {
-                    "transcript": row.get("Feature"),  # from parsed Extra
-                    "c_dot": row.get("HGVSc"),  # from parsed Extra
-                    "p_dot": row.get("HGVSp"),  # from parsed Extra
-                    "cDNA_position": row.get("cDNA_position"),  # from parsed Extra
-                    "protein_position": row.get("Protein_position"),  # from parsed Extra
-                    "impact": row.get("IMPACT"),  # from parsed Extra
-                    "variant_class": row.get("VARIANT_CLASS"),  # from parsed Extra
-                    "SpliceAI_pred": row.get("SpliceAI_pred"),  # from parsed Extra
-                    "ClinVar": row.get("ClinVar"),  # from parsed Extra
-                    "ClinVar_CLNSIG": row.get("ClinVar_CLNSIG"),  # from parsed Extra
+                    "transcript": none_if_nan(row.get("Feature")),  # using Feature column for transcript
+                    "c_dot": none_if_nan(row.get("HGVSc")),           # from parsed Extra
+                    "p_dot": none_if_nan(row.get("HGVSp")),           # from parsed Extra
+                    "cDNA_position": none_if_nan(row.get("cDNA_position")),
+                    "protein_position": none_if_nan(row.get("Protein_position")),
+                    "impact": none_if_nan(row.get("IMPACT")),
+                    "variant_class": none_if_nan(row.get("VARIANT_CLASS")),
+                    "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
+                    "ClinVar": none_if_nan(row.get("ClinVar")),
+                    "ClinVar_CLNSIG": none_if_nan(row.get("ClinVar_CLNSIG")),
                     "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None,
                     "source": "vep",
-                    "annotation_date": parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else pd.to_datetime("2022-10-07").to_pydatetime()
+                    "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else None) or default_date
                 }
                 annotation_map[vcf_key] = annotation_obj
         print(f"[DEBUG] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
