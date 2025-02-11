@@ -284,15 +284,11 @@ class Publication(BaseModel):
     publication_date: Optional[datetime] = None
     journal_abbreviation: Optional[str] = None
     journal: Optional[str] = None
-    # UPDATED: keywords is now a list of strings.
     keywords: Optional[List[str]] = Field(default_factory=list)
-    # NEW: medical_specialty field as a list of strings.
     medical_specialty: Optional[List[str]] = Field(default_factory=list)
-    # Removed firstauthor_lastname/firstauthor_firstname; instead we use:
     authors: List[Author] = Field(default_factory=list)
     update_date: Optional[datetime] = Field(default_factory=datetime.now)
     comment: Optional[str] = None
-    # UPDATED: assignee now stores a reference to a User's ObjectId.
     assignee: Optional[PyObjectId] = None  
 
     model_config = {
@@ -332,6 +328,12 @@ class Publication(BaseModel):
     @classmethod
     def validate_pdf(cls, v):
         return none_if_nan(v)
+
+    # NEW: Convert publication_date to a datetime using our helper function.
+    @field_validator("publication_date", mode="before")
+    @classmethod
+    def parse_publication_date(cls, v):
+        return parse_date_value(v)
 
 # ------------------------------------------------------------------------------
 # Update forward references for self-referencing embedded models.

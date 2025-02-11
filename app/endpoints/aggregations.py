@@ -112,9 +112,7 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
               - "count": The number of individuals with that value in their newest report.
     """
     pipeline = [
-        # Only process individuals that have at least one report.
         { "$match": { "reports": { "$exists": True, "$ne": [] } } },
-        # Compute the newest report by comparing report_date.
         { "$set": {
               "latest_report": {
                   "$reduce": {
@@ -132,7 +130,6 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
           }
         }
     ]
-    # If aggregating on age_onset, normalize its value.
     if report_field == "age_onset":
         pipeline.append({
             "$set": {
@@ -433,9 +430,7 @@ async def count_phenotypes_by_described() -> dict:
               - "not reported": Count of individuals with described "not reported".
     """
     pipeline = [
-        # Only process individuals that have at least one report.
         { "$match": { "reports": { "$exists": True, "$ne": [] } } },
-        # Compute the newest report by comparing report_date.
         { "$set": {
               "latest_report": {
                   "$reduce": {
@@ -452,14 +447,11 @@ async def count_phenotypes_by_described() -> dict:
               }
           }
         },
-        # Convert the phenotypes object to an array.
         { "$project": {
               "phenotypes": { "$objectToArray": "$latest_report.phenotypes" }
           }
         },
-        # Unwind the phenotypes array.
         { "$unwind": "$phenotypes" },
-        # Group by phenotype (using phenotype_id and name) and count the categories.
         { "$group": {
               "_id": {
                   "phenotype_id": "$phenotypes.v.phenotype_id",
@@ -494,7 +486,6 @@ async def count_phenotypes_by_described() -> dict:
               }
           }
         },
-        # Project into a structured object.
         { "$project": {
               "_id": 0,
               "phenotype_id": "$_id.phenotype_id",
@@ -506,8 +497,76 @@ async def count_phenotypes_by_described() -> dict:
               }
           }
         },
-        # Sort by highest yes count.
         { "$sort": { "counts.yes": -1 } }
     ]
     results = await db.individuals.aggregate(pipeline).to_list(length=None)
     return {"results": results}
+
+
+@router.get("/publications/cumulative-count", tags=["Aggregations"])
+async def cumulative_publications() -> dict:
+    """
+    Aggregate the publications collection to compute cumulative counts in one-month intervals.
+    
+    Two facets are returned:
+      - overall: Cumulative count of all publications over time.
+      - byType: Cumulative count over time grouped by publication_type.
+    
+    Each facet uses $dateTrunc to group publication_date into month intervals, and
+    $setWindowFields to compute a running total.
+    
+    Returns:
+        A dictionary with keys:
+          - "overall": List of documents with monthDate, monthlyCount, and cumulativeCount.
+          - "byType": List of documents with monthDate, publication_type, monthlyCount, and cumulativeCount.
+    """
+    overall_pipeline = [
+        { "$set": { "monthDate": { "$dateTrunc": { "date": "$publication_date", "unit": "month" } } } },
+        { "$group": { "_id": "$monthDate", "monthlyCount": { "$sum": 1 } } },
+        { "$sort": { "_id": 1 } },
+        { "$setWindowFields": {
+            "sortBy": { "_id": 1 },
+            "output": {
+                "cumulativeCount": {
+                    "$sum": "$monthlyCount",
+                    "window": { "documents": [ "unbounded", "current" ] }
+                }
+            }
+        } },
+        { "$project": { "_id": 0, "monthDate": "$_id", "monthlyCount": 1, "cumulativeCount": 1 } }
+    ]
+
+    by_type_pipeline = [
+        { "$set": { "monthDate": { "$dateTrunc": { "date": "$publication_date", "unit": "month" } } } },
+        { "$group": {
+            "_id": { "monthDate": "$monthDate", "publication_type": "$publication_type" },
+            "monthlyCount": { "$sum": 1 }
+        } },
+        { "$set": {
+            "monthDate": "$_id.monthDate",
+            "publication_type": "$_id.publication_type"
+        } },
+        { "$sort": { "monthDate": 1 } },
+        { "$setWindowFields": {
+            "partitionBy": "$publication_type",
+            "sortBy": { "monthDate": 1 },
+            "output": {
+                "cumulativeCount": {
+                    "$sum": "$monthlyCount",
+                    "window": { "documents": [ "unbounded", "current" ] }
+                }
+            }
+        } },
+        { "$project": { "_id": 0, "monthDate": 1, "publication_type": 1, "monthlyCount": 1, "cumulativeCount": 1 } }
+    ]
+
+    facet_pipeline = [
+        {
+            "$facet": {
+                "overall": overall_pipeline,
+                "byType": by_type_pipeline
+            }
+        }
+    ]
+    result = await db.publications.aggregate(facet_pipeline).to_list(length=1)
+    return result[0] if result else {"overall": [], "byType": []}

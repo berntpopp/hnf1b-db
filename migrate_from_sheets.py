@@ -1,3 +1,5 @@
+# File: migrate_from_sheets.py
+
 import asyncio
 import math
 import re
@@ -277,7 +279,9 @@ def get_pubmed_info(pmid: str) -> dict:
                 month_num = int(raw_month)
         except Exception:
             month_num = 1
-        publication_date = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
+        # Build a publication_date string then parse it to a datetime.
+        pub_date_str = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
+        publication_date = parse_date(pub_date_str)
         mesh_terms = []
         if "MeshHeadingList" in medline:
             for mesh in medline["MeshHeadingList"]:
@@ -372,7 +376,6 @@ async def import_users():
     validated_users = []
     for idx, row in users_df.iterrows():
         try:
-            # Let the model validator handle formatting of user_id if desired.
             user = User(**row)
             validated_users.append(user.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -402,6 +405,11 @@ async def import_publications():
         publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(
             lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
         )
+    # NEW: Convert publication_date column from string to datetime.
+    if "publication_date" in publications_df.columns:
+        # Force conversion by using pd.to_datetime and then converting to python datetime objects.
+        publications_df["publication_date"] = pd.to_datetime(publications_df["publication_date"], errors='coerce').dt.to_pydatetime()
+    
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
@@ -446,7 +454,6 @@ async def import_individuals_with_reports():
         base_cols.append("ReviewDate")
     if "Comment" in df.columns:
         base_cols.append("Comment")
-    # Format the individual_id values
     df["individual_id"] = df["individual_id"].apply(format_individual_id)
     pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
     publication_mapping = {
@@ -482,7 +489,6 @@ async def import_individuals_with_reports():
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
-                # Format report_id before passing to the model.
                 report_id_formatted = format_report_id(row['report_id'])
                 report_data = {'report_id': report_id_formatted}
                 review_by_email = row.get('ReviewBy')
@@ -655,7 +661,6 @@ async def import_variants():
                 val = none_if_nan(row.get(col))
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
-            # Format individual_id from the sheet so it matches the formatted id in the database.
             sp_indiv_id = format_individual_id(row['individual_id'])
             det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
             seg = none_if_nan(row.get('Segregation'))
@@ -677,7 +682,7 @@ async def import_variants():
                 'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
                 'hg19': none_if_nan(row.get('hg19')),
                 'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                'hg38': none_if_nan(row.get('hg38'))  # This constructed identifier should match vcf_hg38 from VCF files.
+                'hg38': none_if_nan(row.get('hg38'))
             }
             annotation = {}
             varsome_val = none_if_nan(row.get('Varsome'))
@@ -746,7 +751,6 @@ async def import_variants():
     variant_id_counter = 1
     for key, info in unique_variants.items():
         variant_doc = info["variant_data"]
-        # Format variant_id using our helper function.
         variant_doc['variant_id'] = format_variant_id(variant_id_counter)
         objid_list = []
         for spid in info["individual_ids"]:
@@ -756,7 +760,6 @@ async def import_variants():
         variant_doc['classifications'] = info.get('classifications', [])
         variant_doc['annotations'] = info.get('annotations', [])
         variant_doc['reported'] = info.get('reported', [])
-        # NEW: Use the constructed identifier "hg38" from the primary data (Google Sheets) to join with the annotation map.
         vcf_key = variant_doc.get("hg38")
         print(f"[DEBUG] Processing variant with hg38: {vcf_key}")
         if vcf_key and vcf_key in annotation_map:
