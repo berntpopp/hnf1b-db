@@ -307,16 +307,18 @@ async def import_individuals_with_reports():
     df = df.dropna(how="all")
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
-    base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Cohort', 'Sex', 'AgeOnset', 'AgeReported']
+    # Only include columns that belong to the individual base (remove AgeReported, AgeOnset, and Cohort)
+    base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Sex']
     if "Publication" in df.columns:
         base_cols.append("Publication")
     if "ReviewDate" in df.columns:
         base_cols.append("ReviewDate")
     if "Comment" in df.columns:
         base_cols.append("Comment")
-    pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
+    pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
+    # Build publication mapping with publication_date included.
     publication_mapping = {
-        doc["publication_alias"].strip().lower(): doc["_id"]
+        doc["publication_alias"].strip().lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
         for doc in pub_docs if "publication_alias" in doc
     }
     print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
@@ -389,9 +391,12 @@ async def import_individuals_with_reports():
                     pub_alias = base_publication_alias
                 if pd.notna(pub_alias):
                     pub_alias_lower = str(pub_alias).strip().lower()
-                    pub_obj_id = publication_mapping.get(pub_alias_lower)
-                    if pub_obj_id:
-                        report_data["publication_ref"] = pub_obj_id
+                    pub_obj = publication_mapping.get(pub_alias_lower)
+                    if pub_obj:
+                        report_data["publication_ref"] = pub_obj["_id"]
+                        # NEW: Set report_date from the publication's publication_date if available.
+                        if pub_obj.get("publication_date"):
+                            report_data["report_date"] = pub_obj.get("publication_date")
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
                 review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
@@ -402,6 +407,11 @@ async def import_individuals_with_reports():
                     report_data["comment"] = str(comment_val).strip()
                 else:
                     report_data["comment"] = ""
+                # NEW: Add report-level fields moved from the individual
+                report_data["age_reported"] = none_if_nan(row.get("AgeReported"))
+                report_data["age_onset"] = none_if_nan(row.get("AgeOnset"))
+                report_data["cohort"] = none_if_nan(row.get("Cohort"))
+                report_data["family_history"] = none_if_nan(row.get("FamilyHistory"))
                 reports.append(report_data)
         base_data['reports'] = reports
         try:
@@ -537,9 +547,9 @@ async def import_variants():
 
     spid_to_objid = {}
     async for doc in db.individuals.find({}, {"individual_id": 1}):
-        spid = doc.get("individual_id")
-        if spid is not None:
-            spid_to_objid[spid] = doc["_id"]
+        sp_indiv_id = doc.get("individual_id")
+        if sp_indiv_id is not None:
+            spid_to_objid[sp_indiv_id] = doc["_id"]
 
     variant_docs_to_insert = []
     variant_id_counter = 1

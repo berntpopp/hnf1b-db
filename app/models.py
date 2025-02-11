@@ -87,7 +87,9 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Now includes reviewed_by (a reviewer's ObjectId), review_date, and comment.
+# Now includes reviewed_by (a reviewer's ObjectId), review_date, comment,
+# plus additional fields: family_history, age_reported, age_onset, cohort,
+# and report_date (derived from the linked publication's publication_date).
 class Report(BaseModel):
     report_id: int
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
@@ -95,6 +97,12 @@ class Report(BaseModel):
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
     review_date: Optional[datetime] = None  # Review date (as datetime)
     comment: Optional[str] = None  # Report comment (may be empty)
+    # New fields (moved from the individual and added as required)
+    family_history: Optional[str] = None  # Family history value from the Individuals sheet
+    age_reported: Optional[str] = None    # Age reported for this report
+    age_onset: Optional[str] = None       # Age at onset for this report
+    cohort: Optional[str] = None          # Cohort information for this report
+    report_date: Optional[datetime] = None  # Report date (from publication.publication_date)
 
     model_config = {"extra": "allow"}
 
@@ -111,6 +119,19 @@ class Report(BaseModel):
                 raise ValueError(f"Could not parse review_date: {v}") from e
         return v
 
+    @field_validator("report_date", mode="before")
+    @classmethod
+    def parse_report_date(cls, v):
+        if not v:
+            return None
+        if isinstance(v, str):
+            try:
+                # Try to parse the report date using the helper function.
+                return parse_date_value(v)
+            except Exception as e:
+                raise ValueError(f"Could not parse report_date: {v}") from e
+        return v
+
 # ------------------------------------------------------------------------------
 # IndividualVariant model (per-individual variant info)
 class IndividualVariant(BaseModel):
@@ -122,13 +143,11 @@ class IndividualVariant(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Individual model (combining base data, embedded reports, and a variant reference)
+# NOTE: Removed AgeReported, AgeOnset, and Cohort from the individual model per new requirements.
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: int
     Sex: Optional[str] = None
-    AgeReported: Optional[str] = None
-    AgeOnset: Optional[str] = None
-    Cohort: Optional[str] = None
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
