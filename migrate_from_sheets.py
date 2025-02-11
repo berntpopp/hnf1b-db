@@ -1,7 +1,8 @@
-# File: migrate_from_sheets.py
 import asyncio
 import math
 import re
+import io
+import gzip
 import pandas as pd
 from app.database import db
 from app.config import settings
@@ -53,6 +54,87 @@ def csv_url(spreadsheet_id: str, gid: str) -> str:
 def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Strip whitespace from DataFrame column names."""
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
+    return df
+
+# ---------------------------------------------------
+def read_vep_file(filepath):
+    """
+    Read a VEP file that contains multiple header lines starting with "##" and one header line starting with "#".
+    Skips lines starting with "##" and removes the leading '#' from the header line.
+    Renames the uploaded variation column to "var_id" and filters for Feature == "NM_000458.4".
+    """
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+    data_lines = []
+    header_found = False
+    for line in lines:
+        if line.startswith("##"):
+            continue
+        if not header_found and line.startswith("#"):
+            data_lines.append(line.lstrip("#"))
+            header_found = True
+        elif header_found:
+            data_lines.append(line)
+    csv_data = io.StringIO("".join(data_lines))
+    df = pd.read_csv(csv_data, sep="\t", dtype=str)
+    # Rename the uploaded variation column to "var_id"
+    for col in df.columns:
+        if col.startswith("Uploaded_variation") or col.startswith("#Uploaded_variation"):
+            df.rename(columns={col: "var_id"}, inplace=True)
+            break
+    # Filter rows for the transcript of interest
+    if "Feature" in df.columns:
+        df = df[df["Feature"] == "NM_000458.4"]
+    print(f"[DEBUG] Read VEP file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
+    return df
+
+# ---------------------------------------------------
+def read_vcf_file(filepath):
+    """
+    Read a VCF file by skipping header lines starting with "##" and removing the leading '#' from the header.
+    Computes a 'vcf_hg38' field from CHROM, POS, REF, and ALT.
+    Renames the ID column to 'var_id'.
+    """
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+    data_lines = []
+    header_found = False
+    for line in lines:
+        if line.startswith("##"):
+            continue
+        if not header_found and line.startswith("#"):
+            data_lines.append(line.lstrip("#"))
+            header_found = True
+        elif header_found:
+            data_lines.append(line)
+    csv_data = io.StringIO("".join(data_lines))
+    df = pd.read_csv(csv_data, sep="\t", dtype=str)
+    df["vcf_hg38"] = df["CHROM"].astype(str) + "-" + df["POS"].astype(str) + "-" + df["REF"] + "-" + df["ALT"]
+    df = df[["ID", "vcf_hg38"]].rename(columns={"ID": "var_id"})
+    print(f"[DEBUG] Read VCF file '{filepath}' with {df.shape[0]} rows")
+    return df
+
+# ---------------------------------------------------
+def read_cadd_file(filepath):
+    """
+    Read a gzipped CADD file that contains header lines starting with "##" and one header line starting with "#".
+    Skips lines starting with "##" and removes the leading '#' from the header line.
+    """
+    with gzip.open(filepath, "rt", encoding="utf-8") as f:
+        lines = f.readlines()
+    data_lines = []
+    header_found = False
+    for line in lines:
+        if line.startswith("##"):
+            continue
+        if not header_found and line.startswith("#"):
+            data_lines.append(line.lstrip("#"))
+            header_found = True
+        elif header_found:
+            data_lines.append(line)
+    csv_data = io.StringIO("".join(data_lines))
+    df = pd.read_csv(csv_data, sep="\t", dtype=str)
+    print(f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
     return df
 
 # ---------------------------------------------------
@@ -140,7 +222,6 @@ def get_pubmed_info(pmid: str) -> dict:
         except Exception:
             month_num = 1
         publication_date = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
-        # --- Extract MeSH terms and chemicals ---
         mesh_terms = []
         if "MeshHeadingList" in medline:
             for mesh in medline["MeshHeadingList"]:
@@ -162,9 +243,7 @@ def get_pubmed_info(pmid: str) -> dict:
         if "KeywordList" in medline:
             for klist in medline["KeywordList"]:
                 keywords.extend(klist)
-        # Return keywords as a list (do not join into a single string)
         all_keywords = keywords + mesh_terms + chemicals + suppl_mesh
-        # --- Build authors list ---
         authors = []
         if "AuthorList" in article_data and len(article_data["AuthorList"]) > 0:
             for author in article_data["AuthorList"]:
@@ -188,10 +267,10 @@ def get_pubmed_info(pmid: str) -> dict:
             "day": day,
             "jabbrv": journal_abbr,
             "journal": journal_title,
-            "keywords": all_keywords,  # Return as a list
+            "keywords": all_keywords,
             "authors": authors,
             "publication_date": publication_date,
-            "medical_specialty": []  # Currently empty; adjust if needed.
+            "medical_specialty": []
         }
     except Exception as e:
         print(f"Error retrieving PubMed info for PMID {pmid}: {e}")
@@ -254,24 +333,17 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
-    # Normalize the comment column: rename "Comment" (from the sheet) to "comment"
     if "Comment" in publications_df.columns:
         publications_df.rename(columns={"Comment": "comment"}, inplace=True)
-    # Convert NaN in the comment column to None
     if "comment" in publications_df.columns:
         publications_df["comment"] = publications_df["comment"].apply(none_if_nan)
-    # Convert keywords column (if present) into a list of strings.
     if "keywords" in publications_df.columns:
         publications_df["keywords"] = publications_df["keywords"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
-    # Convert medical_specialty column (if present) into a list of strings.
     if "medical_specialty" in publications_df.columns:
         publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
-    # --- Build reviewer mapping using the "Assigne" column.
-    # We now match the value in the "Assigne" column to the "abbreviation" field in the users collection.
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
-        # Use the value in the "abbreviation" field as the key (lowercased)
         key = user_doc["abbreviation"].strip().lower()
         reviewer_mapping[key] = user_doc["_id"]
     print(f"[import_publications] Reviewer mapping: {reviewer_mapping}")
@@ -287,7 +359,6 @@ async def import_publications():
                 row = row.drop(labels=["Assigne"])
             pub = Publication(**row)
             pub_dict = pub.model_dump(by_alias=True, exclude_none=True)
-            # NEW: Update publication with PubMed info if PMID is provided and title is empty.
             if pub_dict.get("PMID") and not pub_dict.get("title"):
                 pub_dict = update_publication_with_pubmed(pub_dict)
             validated_publications.append(pub_dict)
@@ -307,7 +378,6 @@ async def import_individuals_with_reports():
     df = df.dropna(how="all")
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
-    # Only include columns that belong to the individual base (remove AgeReported, AgeOnset, and Cohort)
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Sex']
     if "Publication" in df.columns:
         base_cols.append("Publication")
@@ -316,7 +386,6 @@ async def import_individuals_with_reports():
     if "Comment" in df.columns:
         base_cols.append("Comment")
     pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
-    # Build publication mapping with publication_date included.
     publication_mapping = {
         doc["publication_alias"].strip().lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
         for doc in pub_docs if "publication_alias" in doc
@@ -394,7 +463,6 @@ async def import_individuals_with_reports():
                     pub_obj = publication_mapping.get(pub_alias_lower)
                     if pub_obj:
                         report_data["publication_ref"] = pub_obj["_id"]
-                        # NEW: Set report_date from the publication's publication_date if available.
                         if pub_obj.get("publication_date"):
                             report_data["report_date"] = pub_obj.get("publication_date")
                     else:
@@ -407,7 +475,6 @@ async def import_individuals_with_reports():
                     report_data["comment"] = str(comment_val).strip()
                 else:
                     report_data["comment"] = ""
-                # NEW: Add report-level fields moved from the individual
                 report_data["age_reported"] = none_if_nan(row.get("AgeReported"))
                 report_data["age_onset"] = none_if_nan(row.get("AgeOnset"))
                 report_data["cohort"] = none_if_nan(row.get("Cohort"))
@@ -434,18 +501,73 @@ async def import_variants():
     df = normalize_dataframe_columns(df)
     print(f"[import_variants] Normalized columns: {df.columns.tolist()}")
 
-    # Build unique key using these columns (do not include VariantReported or Varsome)
-    variant_key_cols = ['VariantType', 'ID', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
+    # NEW: Load VEP and CADD annotations following the workflow:
+    try:
+        # 1. Load the VCF files for small and large variants.
+        vcf_small = read_vcf_file("data/HNF1B_all_small.vcf")
+        vcf_large = read_vcf_file("data/HNF1B_all_large.vcf")
+        print(f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, VCF large rows: {vcf_large.shape[0]}")
+        
+        # 2. Load the VEP files for small and large variants (filtering for transcript NM_000458.4)
+        vep_small = read_vep_file("data/HNF1B_all_small.vep.txt")
+        vep_large = read_vep_file("data/HNF1B_all_large.vep.txt")
+        print(f"[DEBUG] VEP small rows: {vep_small.shape[0]}, VEP large rows: {vep_large.shape[0]}")
+        
+        # 3. Join the VEP annotations to the VCF data using the key "var_id"
+        vep_small_ann = pd.merge(vep_small, vcf_small, on="var_id", how="left")
+        vep_large_ann = pd.merge(vep_large, vcf_large, on="var_id", how="left")
+        print(f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; large shape: {vep_large_ann.shape}")
+        
+        # 4. Combine the annotated VEP data from small and large variants.
+        vep_combined = pd.concat([vep_small_ann, vep_large_ann], ignore_index=True)
+        print(f"[DEBUG] Combined VEP data shape: {vep_combined.shape}")
+        
+        # 5. Load the CADD file and compute its vcf_hg38 field.
+        cadd = read_cadd_file("data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz")
+        cadd["vcf_hg38"] = "chr" + cadd["Chrom"].astype(str) + "-" + cadd["Pos"].astype(str) + "-" + cadd["Ref"] + "-" + cadd["Alt"]
+        print(f"[DEBUG] CADD data shape: {cadd.shape}")
+        
+        # 6. Merge the combined VEP data with the CADD data on vcf_hg38.
+        vep_annot = pd.merge(vep_combined, cadd[["vcf_hg38", "PHRED"]], on="vcf_hg38", how="left")
+        vep_annot.rename(columns={"PHRED": "CADD_PHRED"}, inplace=True)
+        print(f"[DEBUG] Merged VEP/CADD data shape: {vep_annot.shape}")
+        
+        # 7. Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
+        #    (The idea is that the primary variant data from Google Sheets will use its "hg38" column, which should be identical.)
+        annotation_map = {}
+        for _, row in vep_annot.iterrows():
+            vcf_key = row.get("vcf_hg38")
+            if pd.notna(vcf_key):
+                c_dot = row.get("c_dot")
+                if not c_dot and pd.notna(row.get("HGVSc")) and ":" in row.get("HGVSc"):
+                    c_dot = row.get("HGVSc").split(":")[1]
+                p_dot = row.get("p_dot")
+                if not p_dot and pd.notna(row.get("HGVSp")) and ":" in row.get("HGVSp"):
+                    p_dot = row.get("HGVSp").split(":")[1]
+                annotation_obj = {
+                    "transcript": row.get("transcript"),
+                    "c_dot": c_dot,
+                    "p_dot": p_dot,
+                    "source": "vep",
+                    "annotation_date": parse_date(row.get("Uploaded_date")) if "Uploaded_date" in row and pd.notna(row.get("Uploaded_date")) else None,
+                    "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None
+                }
+                annotation_map[vcf_key] = annotation_obj
+        print(f"[DEBUG] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
+    except Exception as e:
+        print(f"[import_variants] Error loading VEP/CADD annotations: {e}")
+        annotation_map = {}
+
+    # Build unique key for the primary variant data (from Google Sheets) using these columns.
+    variant_key_cols = ['VariantType', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
     unique_variants = {}
     individual_variant_info = {}
 
-    # Classification columns to be extracted.
     classification_cols = [
         'verdict_classification', 'criteria_classification',
         'comment_classification', 'system_classification', 'date_classification'
     ]
 
-    # Build publication mapping for linking publications via Publication column.
     pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
     publication_mapping = {
          doc["publication_alias"].strip().lower(): doc["_id"]
@@ -466,7 +588,6 @@ async def import_variants():
                 "detection_method": det_method,
                 "segregation": seg
             }
-            # Extract classification data.
             classification = {}
             if any(col in row and pd.notna(row.get(col)) for col in classification_cols):
                 classification = {
@@ -476,16 +597,14 @@ async def import_variants():
                     'system': none_if_nan(row.get('system_classification')),
                     'classification_date': parse_date(row.get('date_classification'))
                 }
-            # Build variant_data without VariantReported and Varsome.
+            # We construct the variant data from the Google Sheets.
             variant_data = {
                 'variant_type': row.get('VariantType'),
-                'ID': none_if_nan(row.get('ID')),
                 'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
                 'hg19': none_if_nan(row.get('hg19')),
                 'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                'hg38': none_if_nan(row.get('hg38'))
+                'hg38': none_if_nan(row.get('hg38'))  # This is the constructed identifier matching vcf_hg38
             }
-            # Build annotation from the Varsome column.
             annotation = {}
             varsome_val = none_if_nan(row.get('Varsome'))
             if pd.notna(varsome_val):
@@ -507,7 +626,6 @@ async def import_variants():
                     "source": "varsome",
                     "annotation_date": parse_date(row.get('date_classification'))
                 }
-            # Build reported entry from VariantReported and Publication columns.
             reported_entry = {}
             vr = none_if_nan(row.get('VariantReported'))
             if vr:
@@ -519,7 +637,6 @@ async def import_variants():
                 else:
                     reported_entry["publication_ref"] = None
 
-            # Update unique_variants.
             if variant_key in unique_variants:
                 if sp_indiv_id not in unique_variants[variant_key]['individual_ids']:
                     unique_variants[variant_key]['individual_ids'].append(sp_indiv_id)
@@ -564,6 +681,14 @@ async def import_variants():
         variant_doc['classifications'] = info.get('classifications', [])
         variant_doc['annotations'] = info.get('annotations', [])
         variant_doc['reported'] = info.get('reported', [])
+        # NEW: Use the constructed identifier "hg38" from the primary data (Google Sheets) to join with the annotation map.
+        vcf_key = variant_doc.get("hg38")
+        print(f"[DEBUG] Processing variant with hg38: {vcf_key}")
+        if vcf_key and vcf_key in annotation_map:
+            print(f"[DEBUG] Found VEP/CADD annotation for hg38: {vcf_key}")
+            variant_doc['annotations'].append(annotation_map[vcf_key])
+        else:
+            print(f"[DEBUG] No VEP/CADD annotation found for hg38: {vcf_key}")
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 
