@@ -97,7 +97,6 @@ async def load_modifier_mappings():
     return mapping
 
 # ---------------------------------------------------
-# NEW: Helper function to retrieve PubMed information given a PMID.
 def get_pubmed_info(pmid: str) -> dict:
     if not pmid:
         return {}
@@ -163,6 +162,7 @@ def get_pubmed_info(pmid: str) -> dict:
         if "KeywordList" in medline:
             for klist in medline["KeywordList"]:
                 keywords.extend(klist)
+        # Return keywords as a list (do not join into a single string)
         all_keywords = keywords + mesh_terms + chemicals + suppl_mesh
         # --- Build authors list ---
         authors = []
@@ -188,16 +188,16 @@ def get_pubmed_info(pmid: str) -> dict:
             "day": day,
             "jabbrv": journal_abbr,
             "journal": journal_title,
-            "keywords": ", ".join(all_keywords),
+            "keywords": all_keywords,  # Return as a list
             "authors": authors,
-            "publication_date": publication_date
+            "publication_date": publication_date,
+            "medical_specialty": []  # Currently empty; adjust if needed.
         }
     except Exception as e:
         print(f"Error retrieving PubMed info for PMID {pmid}: {e}")
         return {}
 
 # ---------------------------------------------------
-# NEW: Helper function to update a publication record with PubMed data.
 def update_publication_with_pubmed(pub: dict) -> dict:
     pmid = pub.get("PMID")
     if not pmid:
@@ -215,8 +215,10 @@ def update_publication_with_pubmed(pub: dict) -> dict:
         if not pub.get("journal"):
             pub["journal"] = pubmed_info.get("journal", "")
         if not pub.get("keywords"):
-            pub["keywords"] = pubmed_info.get("keywords", "")
+            pub["keywords"] = pubmed_info.get("keywords", [])
         pub["authors"] = pubmed_info.get("authors", [])
+        if not pub.get("medical_specialty"):
+            pub["medical_specialty"] = pubmed_info.get("medical_specialty", [])
     return pub
 
 # ---------------------------------------------------
@@ -258,6 +260,12 @@ async def import_publications():
     # Convert NaN in the comment column to None
     if "comment" in publications_df.columns:
         publications_df["comment"] = publications_df["comment"].apply(none_if_nan)
+    # Convert keywords column (if present) into a list of strings.
+    if "keywords" in publications_df.columns:
+        publications_df["keywords"] = publications_df["keywords"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
+    # Convert medical_specialty column (if present) into a list of strings.
+    if "medical_specialty" in publications_df.columns:
+        publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
     # --- Build reviewer mapping using the "Assigne" column.
     # We now match the value in the "Assigne" column to the "abbreviation" field in the users collection.
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)

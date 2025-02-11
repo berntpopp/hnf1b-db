@@ -243,7 +243,10 @@ class Publication(BaseModel):
     publication_date: Optional[datetime] = None
     journal_abbreviation: Optional[str] = None
     journal: Optional[str] = None
-    keywords: Optional[str] = None
+    # UPDATED: keywords is now a list of strings.
+    keywords: Optional[List[str]] = Field(default_factory=list)
+    # NEW: medical_specialty field as a list of strings.
+    medical_specialty: Optional[List[str]] = Field(default_factory=list)
     # Removed firstauthor_lastname/firstauthor_firstname; instead we use:
     authors: List[Author] = Field(default_factory=list)
     update_date: Optional[datetime] = Field(default_factory=datetime.now)
