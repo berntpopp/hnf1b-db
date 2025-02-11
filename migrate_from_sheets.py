@@ -161,6 +161,8 @@ def parse_vep_extra(df):
         df_pivot["HGVSc"] = df_pivot["HGVSc"].str.split(":").str[1]
     if "HGVSp" in df_pivot.columns:
         df_pivot["HGVSp"] = df_pivot["HGVSp"].str.split(":").str[1]
+    # DEBUG: Print out the columns available after parsing
+    print("[DEBUG] Columns after parsing Extra:", list(df_pivot.columns))
     return df_pivot
 
 # ---------------------------------------------------
@@ -562,6 +564,7 @@ async def import_variants():
         # 7. Parse the Extra column from the VEP files to extract additional annotations.
         vep_parsed = parse_vep_extra(vep_annot)
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
+        print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
         
         # Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
         annotation_map = {}
@@ -569,9 +572,16 @@ async def import_variants():
             vcf_key = row.get("vcf_hg38")
             if pd.notna(vcf_key):
                 annotation_obj = {
-                    "transcript": row.get("transcript"),
+                    "transcript": row.get("Feature"),  # from parsed Extra
                     "c_dot": row.get("HGVSc"),  # from parsed Extra
                     "p_dot": row.get("HGVSp"),  # from parsed Extra
+                    "cDNA_position": row.get("cDNA_position"),  # from parsed Extra
+                    "protein_position": row.get("Protein_position"),  # from parsed Extra
+                    "impact": row.get("IMPACT"),  # from parsed Extra
+                    "variant_class": row.get("VARIANT_CLASS"),  # from parsed Extra
+                    "SpliceAI_pred": row.get("SpliceAI_pred"),  # from parsed Extra
+                    "ClinVar": row.get("ClinVar"),  # from parsed Extra
+                    "ClinVar_CLNSIG": row.get("ClinVar_CLNSIG"),  # from parsed Extra
                     "source": "vep",
                     "annotation_date": parse_date(row.get("Uploaded_date")) if "Uploaded_date" in row and pd.notna(row.get("Uploaded_date")) else None,
                     "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None
