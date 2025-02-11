@@ -25,7 +25,6 @@ def parse_date_value(value) -> Optional[datetime]:
     try:
         if value is None:
             return None
-        # Convert using pandas; this returns a Timestamp (a subclass of datetime)
         dt = pd.to_datetime(value, errors='coerce')
         if pd.isnull(dt):
             return None
@@ -91,7 +90,7 @@ class Phenotype(BaseModel):
 # plus additional fields: family_history, age_reported, age_onset, cohort,
 # and report_date (derived from the linked publication's publication_date).
 class Report(BaseModel):
-    report_id: int
+    report_id: str  # Changed from int to str
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
@@ -132,6 +131,15 @@ class Report(BaseModel):
                 raise ValueError(f"Could not parse report_date: {v}") from e
         return v
 
+    @field_validator("report_id", mode="before")
+    @classmethod
+    def format_report_id(cls, v):
+        # If v is numeric (or string digits) then format it with "rep" prefix
+        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
+            return f"rep{int(v):04d}"
+        # Otherwise, if already formatted, return as is.
+        return v
+
 # ------------------------------------------------------------------------------
 # IndividualVariant model (per-individual variant info)
 class IndividualVariant(BaseModel):
@@ -146,7 +154,7 @@ class IndividualVariant(BaseModel):
 # NOTE: Removed AgeReported, AgeOnset, and Cohort from the individual model per new requirements.
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    individual_id: int
+    individual_id: str  # Changed from int to str
     Sex: Optional[str] = None
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
@@ -168,6 +176,13 @@ class Individual(BaseModel):
     def validate_problematic(cls, v):
         val = none_if_nan(v)
         return val if val is not None else ""
+
+    @field_validator("individual_id", mode="before")
+    @classmethod
+    def format_individual_id(cls, v):
+        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
+            return f"ind{int(v):04d}"
+        return v
 
 # ------------------------------------------------------------------------------
 # Variant Classifications model
@@ -217,7 +232,7 @@ class ReportedEntry(BaseModel):
 #  - reported: list of ReportedEntry objects (holding variant_reported values and publication references)
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    variant_id: int
+    variant_id: str  # Changed from int to str
     individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: List[VariantClassifications] = Field(default_factory=list)
     annotations: List[VariantAnnotation] = Field(default_factory=list)
@@ -234,6 +249,13 @@ class Variant(BaseModel):
     @field_validator("annotations", mode="before")
     @classmethod
     def validate_annotations(cls, v):
+        return v
+
+    @field_validator("variant_id", mode="before")
+    @classmethod
+    def format_variant_id(cls, v):
+        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
+            return f"var{int(v):04d}"
         return v
 
 # ------------------------------------------------------------------------------
@@ -297,7 +319,6 @@ class Publication(BaseModel):
         if v is None:
             return None
         try:
-            # Convert PMID to integer
             return int(v)
         except Exception:
             return None

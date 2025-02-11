@@ -23,7 +23,36 @@ GID_PUBLICATIONS = "1670256162"   # Publications sheet
 PHENOTYPE_GID = "1119329208"       # Phenotype sheet
 MODIFIER_GID = "1741928801"        # Modifier sheet
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
+# Helper functions for formatting identifiers
+def format_individual_id(value):
+    """Format an individual id as 'ind' followed by a 4-digit zero-padded number."""
+    try:
+        if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+            return f"ind{int(value):04d}"
+    except Exception:
+        pass
+    return value
+
+def format_report_id(value):
+    """Format a report id as 'rep' followed by a 4-digit zero-padded number."""
+    try:
+        if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+            return f"rep{int(value):04d}"
+    except Exception:
+        pass
+    return value
+
+def format_variant_id(value):
+    """Format a variant id as 'var' followed by a 4-digit zero-padded number."""
+    try:
+        if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+            return f"var{int(value):04d}"
+    except Exception:
+        pass
+    return value
+
+# ----------------------------------------------------------------------
 def none_if_nan(v):
     if pd.isna(v):
         return None
@@ -31,7 +60,7 @@ def none_if_nan(v):
         return None
     return v
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def parse_date(value):
     """Convert a date-like value to a Python datetime object using Pandas."""
     try:
@@ -44,19 +73,19 @@ def parse_date(value):
     except Exception:
         return None
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def csv_url(spreadsheet_id: str, gid: str) -> str:
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     print(f"[csv_url] Built URL: {url}")
     return url
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Strip whitespace from DataFrame column names."""
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
     return df
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def read_vep_file(filepath):
     """
     Read a VEP file that contains multiple header lines starting with "##" and one header line starting with "#".
@@ -86,7 +115,7 @@ def read_vep_file(filepath):
     print(f"[DEBUG] Read VEP file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
     return df
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def read_vcf_file(filepath):
     """
     Read a VCF file by skipping header lines starting with "##" and removing the leading '#' from the header.
@@ -113,7 +142,7 @@ def read_vcf_file(filepath):
     print(f"[DEBUG] Read VCF file '{filepath}' with {df.shape[0]} rows")
     return df
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def read_cadd_file(filepath):
     """
     Read a gzipped CADD file that contains header lines starting with "##" and one header line starting with "#".
@@ -138,7 +167,7 @@ def read_cadd_file(filepath):
     print(f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
     return df
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def parse_vep_extra(df):
     """
     Parse the 'Extra' column of a VEP DataFrame to extract additional annotations,
@@ -149,11 +178,11 @@ def parse_vep_extra(df):
     if "CADD_PHRED" in df.columns:
         df = df.drop(columns=["CADD_PHRED"])
     df["Extra"] = df["Extra"].fillna("")
-    df = df.assign(Extra = df["Extra"].str.split(";")).explode("Extra")
+    df = df.assign(Extra=df["Extra"].str.split(";")).explode("Extra")
     df["Extra"] = df["Extra"].str.strip()
     df = df[df["Extra"] != ""]
     df[["key", "value"]] = df["Extra"].str.split("=", n=1, expand=True)
-    df = df.assign(value = df["value"].str.split(",")).explode("value")
+    df = df.assign(value=df["value"].str.split(",")).explode("value")
     df["value"] = df["value"].str.strip()
     index_cols = [col for col in df.columns if col not in ["key", "value", "Extra"]]
     df_pivot = df.pivot_table(index=index_cols, columns="key", values="value", aggfunc="max").reset_index()
@@ -161,11 +190,10 @@ def parse_vep_extra(df):
         df_pivot["HGVSc"] = df_pivot["HGVSc"].str.split(":").str[1]
     if "HGVSp" in df_pivot.columns:
         df_pivot["HGVSp"] = df_pivot["HGVSp"].str.split(":").str[1]
-    # DEBUG: Print out the columns available after parsing Extra.
     print("[DEBUG] Columns after parsing Extra:", list(df_pivot.columns))
     return df_pivot
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def load_phenotype_mappings():
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
     df = pd.read_csv(url)
@@ -180,7 +208,7 @@ async def load_phenotype_mappings():
     print(f"[load_phenotype_mappings] Loaded mapping for {len(mapping)} phenotype categories.")
     return mapping
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def load_modifier_mappings():
     url = csv_url(SPREADSHEET_ID, MODIFIER_GID)
     df = pd.read_csv(url)
@@ -206,7 +234,7 @@ async def load_modifier_mappings():
     print(f"[load_modifier_mappings] Loaded mapping for {len(mapping)} modifier keys.")
     return mapping
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def get_pubmed_info(pmid: str) -> dict:
     if not pmid:
         return {}
@@ -304,7 +332,7 @@ def get_pubmed_info(pmid: str) -> dict:
         print(f"Error retrieving PubMed info for PMID {pmid}: {e}")
         return {}
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 def update_publication_with_pubmed(pub: dict) -> dict:
     pmid = pub.get("PMID")
     if not pmid:
@@ -328,7 +356,7 @@ def update_publication_with_pubmed(pub: dict) -> dict:
             pub["medical_specialty"] = pubmed_info.get("medical_specialty", [])
     return pub
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def import_users():
     print("[import_users] Starting import of reviewers/users.")
     url = csv_url(SPREADSHEET_ID, GID_REVIEWERS)
@@ -344,6 +372,7 @@ async def import_users():
     validated_users = []
     for idx, row in users_df.iterrows():
         try:
+            # Let the model validator handle formatting of user_id if desired.
             user = User(**row)
             validated_users.append(user.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
@@ -354,7 +383,7 @@ async def import_users():
         await db.users.insert_many(validated_users)
     print(f"[import_users] Imported {len(validated_users)} users.")
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def import_publications():
     print("[import_publications] Starting import of publications.")
     url = csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
@@ -366,9 +395,13 @@ async def import_publications():
     if "comment" in publications_df.columns:
         publications_df["comment"] = publications_df["comment"].apply(none_if_nan)
     if "keywords" in publications_df.columns:
-        publications_df["keywords"] = publications_df["keywords"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
+        publications_df["keywords"] = publications_df["keywords"].apply(
+            lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
+        )
     if "medical_specialty" in publications_df.columns:
-        publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else [])
+        publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(
+            lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
+        )
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
@@ -398,7 +431,7 @@ async def import_publications():
         await db.publications.insert_many(validated_publications)
     print(f"[import_publications] Imported {len(validated_publications)} publications.")
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def import_individuals_with_reports():
     print("[import_individuals] Starting import of individuals with embedded reports.")
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
@@ -413,6 +446,8 @@ async def import_individuals_with_reports():
         base_cols.append("ReviewDate")
     if "Comment" in df.columns:
         base_cols.append("Comment")
+    # Format the individual_id values
+    df["individual_id"] = df["individual_id"].apply(format_individual_id)
     pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
     publication_mapping = {
         doc["publication_alias"].strip().lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
@@ -447,7 +482,9 @@ async def import_individuals_with_reports():
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
-                report_data = {'report_id': row['report_id']}
+                # Format report_id before passing to the model.
+                report_id_formatted = format_report_id(row['report_id'])
+                report_data = {'report_id': report_id_formatted}
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
@@ -520,7 +557,7 @@ async def import_individuals_with_reports():
         await db.individuals.insert_many(validated_individuals)
     print(f"[import_individuals] Imported {len(validated_individuals)} individuals with embedded reports.")
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def import_variants():
     print("[import_variants] Starting import of variants.")
     url = csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
@@ -618,7 +655,8 @@ async def import_variants():
                 val = none_if_nan(row.get(col))
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
-            sp_indiv_id = row['individual_id']
+            # Format individual_id from the sheet so it matches the formatted id in the database.
+            sp_indiv_id = format_individual_id(row['individual_id'])
             det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
             seg = none_if_nan(row.get('Segregation'))
             individual_variant_info[sp_indiv_id] = {
@@ -708,7 +746,8 @@ async def import_variants():
     variant_id_counter = 1
     for key, info in unique_variants.items():
         variant_doc = info["variant_data"]
-        variant_doc['variant_id'] = variant_id_counter
+        # Format variant_id using our helper function.
+        variant_doc['variant_id'] = format_variant_id(variant_id_counter)
         objid_list = []
         for spid in info["individual_ids"]:
             if spid in spid_to_objid:
@@ -758,7 +797,7 @@ async def import_variants():
             )
     print("[import_variants] Updated individuals with variant references.")
 
-# ---------------------------------------------------
+# ----------------------------------------------------------------------
 async def main():
     print("[main] Starting migration process...")
     try:
