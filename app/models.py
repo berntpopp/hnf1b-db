@@ -1,7 +1,7 @@
 # File: app/models.py
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import math
 import pandas as pd  # Used for consistent date parsing
@@ -184,7 +184,7 @@ class VariantClassifications(BaseModel):
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[datetime] = None
+    classification_date: Optional[datetime] = None  # Now datetime
 
     model_config = {"extra": "allow"}
 
@@ -200,7 +200,7 @@ class VariantAnnotation(BaseModel):
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
     source: Optional[str] = None  # e.g. "varsome"
-    annotation_date: Optional[datetime] = None
+    annotation_date: Optional[datetime] = None  # Now datetime
 
     model_config = {"extra": "allow"}
 
@@ -345,9 +345,6 @@ class Protein(BaseModel):
     transcript: str
     protein: str
     features: Dict[str, List[ProteinFeature]] = Field(default_factory=dict)
-    # The features field maps each FeatureKey (e.g. "domain", "exon", etc.)
-    # to an array of ProteinFeature objects.
-
     model_config = {
         "from_attributes": True,
         "populate_by_name": True,
@@ -359,9 +356,9 @@ class Protein(BaseModel):
 # ------------------------------------------------------------------------------
 # New Exon model for gene structure.
 class Exon(BaseModel):
-    exon_number: Optional[int] = None  # Optional exon number if available.
-    start: Optional[int] = None         # Exon start position.
-    stop: Optional[int] = None          # Exon end position.
+    exon_number: Optional[int] = None  # Sequential exon number.
+    start: Optional[int] = None         # Genomic start coordinate.
+    stop: Optional[int] = None          # Genomic end coordinate.
 
     model_config = {"extra": "allow"}
 
@@ -369,14 +366,13 @@ class Exon(BaseModel):
 # New Gene model – represents the genomic structure of the HNF1B gene.
 class Gene(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    gene_symbol: str         # For example, "HNF1B"
-    transcript: str          # For example, "NM_000458.4"
+    gene_symbol: str         # e.g. "HNF1B"
+    ensembl_gene_id: str       # e.g. "ENSG00000275410"
+    transcript: str          # Canonical transcript id (including version)
     exons: List[Exon] = Field(default_factory=list)
-    # For convenience, we also store the exon coordinates under hg19 and hg38 keys.
-    hg19: Dict[str, Any] = Field(default_factory=dict)
+    # Genomic exon data for each reference assembly.
     hg38: Dict[str, Any] = Field(default_factory=dict)
-    # Optionally, you could include UTR information if available.
-
+    hg19: Dict[str, Any] = Field(default_factory=dict)
     model_config = {
         "from_attributes": True,
         "populate_by_name": True,

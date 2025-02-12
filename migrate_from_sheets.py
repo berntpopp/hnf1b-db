@@ -10,8 +10,12 @@ from app.database import db
 from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant
 # NEW: Import Entrez from BioPython for PubMed queries.
-from Bio import Entrez
-from Bio import Entrez, SeqIO
+from Bio import Entrez, SeqIO  # Existing: for other functions
+from app.database import db
+from app.config import settings
+from app.models import User, Individual, Publication, Report, Variant, Protein, Gene, Exon
+import requests
+
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
 
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
@@ -886,89 +890,105 @@ async def import_proteins():
 
 
 # ----------------------------------------------------------------------
-def fetch_gene_structure(transcript: str = "NM_000458.4") -> dict:
+def fetch_gene_data(symbol: str, server_url: str) -> dict:
     """
-    Fetch the gene structure for a given transcript (default NM_000458.4)
-    using Entrez/GenBank. Returns a dictionary with the gene symbol, transcript,
-    and a list of exon coordinates.
+    Fetch the expanded gene record for the given symbol from the specified Ensembl server.
     """
-    print(f"[fetch_gene_structure] Fetching GenBank record for transcript {transcript}")
-    # Fetch the record in text mode using rettype="gb" (GenBank format)
-    handle = Entrez.efetch(db="nucleotide", id=transcript, rettype="gb", retmode="text")
-    record = SeqIO.read(handle, "genbank")
-    handle.close()
+    url = f"{server_url}/lookup/symbol/homo_sapiens/{symbol}?expand=1"
+    headers = {"Content-Type": "application/json"}
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    return data
 
-    exons = []
-    # First, try to see if there are explicit exon features.
-    for feature in record.features:
-        if feature.type.lower() == "exon":
-            try:
-                # Biopython uses 0-based start; add 1 to convert to 1-based.
-                start = int(feature.location.start) + 1
-                stop = int(feature.location.end)
-            except Exception:
-                start, stop = None, None
-            exon_number = None
-            if "number" in feature.qualifiers:
-                try:
-                    exon_number = int(feature.qualifiers["number"][0])
-                except Exception:
-                    exon_number = None
-            exons.append({
-                "exon_number": exon_number,
-                "start": start,
-                "stop": stop
-            })
-    # If no explicit exon features were found, try using the mRNA feature join locations.
-    if not exons:
-        for feature in record.features:
-            if feature.type.lower() == "mRNA":
-                if hasattr(feature.location, "parts"):
-                    for idx, part in enumerate(feature.location.parts, start=1):
-                        start = int(part.start) + 1
-                        stop = int(part.end)
-                        exons.append({
-                            "exon_number": idx,
-                            "start": start,
-                            "stop": stop
-                        })
-                break
-    if not exons:
-        raise ValueError(f"No exon information found for transcript {transcript}")
+# ----------------------------------------------------------------------
+def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
+    """
+    Given a gene record (from the lookup endpoint), find the canonical transcript and
+    return its id along with a list of its exons. Each exon is formatted as a dict with
+    keys: exon_number, start, and stop.
+    """
+    canonical_transcript_id = gene_data.get("canonical_transcript")
+    transcripts = gene_data.get("Transcript", [])
+    canonical_exons = []
+    transcript_id = None
+    # First, try to find the transcript flagged as canonical.
+    for transcript in transcripts:
+        if transcript.get("is_canonical") == 1:
+            transcript_id = transcript.get("id")
+            exons = transcript.get("Exon", [])
+            canonical_exons = exons
+            break
+    # Fallback: use the first transcript if no canonical one is found.
+    if not canonical_exons and transcripts:
+        transcript = transcripts[0]
+        transcript_id = transcript.get("id")
+        canonical_exons = transcript.get("Exon", [])
+    # Format exons: sort by start coordinate and assign sequential exon numbers.
+    formatted_exons = []
+    canonical_exons.sort(key=lambda x: x.get("start", 0))
+    for idx, exon in enumerate(canonical_exons, start=1):
+        formatted_exons.append({
+            "exon_number": idx,
+            "start": exon.get("start"),
+            "stop": exon.get("end")
+        })
+    return transcript_id, formatted_exons
 
-    gene_structure = {
-        "gene_symbol": "HNF1B",
-        "transcript": transcript,
-        "exons": exons,
-        # For simplicity, we duplicate the exon data for hg19 and hg38.
-        "hg19": {"exons": exons},
-        "hg38": {"exons": exons}
+# ----------------------------------------------------------------------
+def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
+    """
+    Fetch gene structure for the given gene symbol (e.g. "HNF1B") from both the GRCh38
+    and GRCh37 endpoints. Returns a gene document that includes:
+      - gene_symbol (display_name)
+      - ensembl_gene_id
+      - transcript (canonical transcript id)
+      - exons (from GRCh38, as default)
+      - hg38: { "exons": [...] }
+      - hg19: { "exons": [...] }
+    """
+    # Fetch gene data for GRCh38
+    server_hg38 = "https://rest.ensembl.org"
+    gene_data_hg38 = fetch_gene_data(symbol, server_hg38)
+    transcript_hg38, exons_hg38 = extract_canonical_transcript_exons(gene_data_hg38)
+    
+    # Fetch gene data for GRCh37 (hg19)
+    server_hg19 = "https://grch37.rest.ensembl.org"
+    gene_data_hg19 = fetch_gene_data(symbol, server_hg19)
+    _, exons_hg19 = extract_canonical_transcript_exons(gene_data_hg19)
+    
+    gene_document = {
+        "gene_symbol": gene_data_hg38.get("display_name", symbol),
+        "ensembl_gene_id": gene_data_hg38.get("id"),
+        "transcript": transcript_hg38,
+        "exons": exons_hg38,  # default: GRCh38 exons
+        "hg38": {"exons": exons_hg38},
+        "hg19": {"exons": exons_hg19}
     }
-    print(f"[fetch_gene_structure] Fetched gene structure: {gene_structure}")
-    return gene_structure
-
+    return gene_document
 
 # ----------------------------------------------------------------------
 async def import_genes():
     """
-    Import the genomic structure for the HNF1B gene (transcript NM_000458.4)
-    using Entrez/Biopython. The resulting document includes exon start and stop
-    positions and is inserted into the 'genes' collection.
+    Import the genomic structure for the HNF1B gene using the Ensembl lookup endpoint.
+    The function fetches gene data for both GRCh38 and GRCh37 (hg19) and builds a gene
+    document that includes exon coordinates from the canonical transcript. The document
+    is inserted into the 'genes' collection.
     """
     try:
-        gene_data = fetch_gene_structure("NM_000458.4")
+        gene_document = fetch_gene_structure_from_symbol("HNF1B")
     except Exception as e:
         print(f"[import_genes] Error fetching gene structure: {e}")
         return
-
-    print(f"[import_genes] Fetched gene data: {gene_data}")
-
+    print(f"[import_genes] Fetched gene document: {gene_document}")
     print("[import_genes] Inserting gene document into the 'genes' collection...")
     await db.genes.delete_many({})
-    await db.genes.insert_one(gene_data)
+    await db.genes.insert_one(gene_document)
     print("[import_genes] Successfully imported gene structure.")
 
 # ----------------------------------------------------------------------
+# (Other migration functions such as import_users(), import_publications(), etc., remain unchanged.)
+
 async def main():
     print("[main] Starting migration process...")
     try:
