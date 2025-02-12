@@ -11,6 +11,7 @@ from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez
+from Bio import Entrez, SeqIO
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
 
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
@@ -883,6 +884,90 @@ async def import_proteins():
     await db.proteins.insert_one(protein_doc)
     print(f"[import_proteins] Successfully imported protein document for '{gene_val}'.")
 
+
+# ----------------------------------------------------------------------
+def fetch_gene_structure(transcript: str = "NM_000458.4") -> dict:
+    """
+    Fetch the gene structure for a given transcript (default NM_000458.4)
+    using Entrez/GenBank. Returns a dictionary with the gene symbol, transcript,
+    and a list of exon coordinates.
+    """
+    print(f"[fetch_gene_structure] Fetching GenBank record for transcript {transcript}")
+    # Fetch the record in text mode using rettype="gb" (GenBank format)
+    handle = Entrez.efetch(db="nucleotide", id=transcript, rettype="gb", retmode="text")
+    record = SeqIO.read(handle, "genbank")
+    handle.close()
+
+    exons = []
+    # First, try to see if there are explicit exon features.
+    for feature in record.features:
+        if feature.type.lower() == "exon":
+            try:
+                # Biopython uses 0-based start; add 1 to convert to 1-based.
+                start = int(feature.location.start) + 1
+                stop = int(feature.location.end)
+            except Exception:
+                start, stop = None, None
+            exon_number = None
+            if "number" in feature.qualifiers:
+                try:
+                    exon_number = int(feature.qualifiers["number"][0])
+                except Exception:
+                    exon_number = None
+            exons.append({
+                "exon_number": exon_number,
+                "start": start,
+                "stop": stop
+            })
+    # If no explicit exon features were found, try using the mRNA feature join locations.
+    if not exons:
+        for feature in record.features:
+            if feature.type.lower() == "mRNA":
+                if hasattr(feature.location, "parts"):
+                    for idx, part in enumerate(feature.location.parts, start=1):
+                        start = int(part.start) + 1
+                        stop = int(part.end)
+                        exons.append({
+                            "exon_number": idx,
+                            "start": start,
+                            "stop": stop
+                        })
+                break
+    if not exons:
+        raise ValueError(f"No exon information found for transcript {transcript}")
+
+    gene_structure = {
+        "gene_symbol": "HNF1B",
+        "transcript": transcript,
+        "exons": exons,
+        # For simplicity, we duplicate the exon data for hg19 and hg38.
+        "hg19": {"exons": exons},
+        "hg38": {"exons": exons}
+    }
+    print(f"[fetch_gene_structure] Fetched gene structure: {gene_structure}")
+    return gene_structure
+
+
+# ----------------------------------------------------------------------
+async def import_genes():
+    """
+    Import the genomic structure for the HNF1B gene (transcript NM_000458.4)
+    using Entrez/Biopython. The resulting document includes exon start and stop
+    positions and is inserted into the 'genes' collection.
+    """
+    try:
+        gene_data = fetch_gene_structure("NM_000458.4")
+    except Exception as e:
+        print(f"[import_genes] Error fetching gene structure: {e}")
+        return
+
+    print(f"[import_genes] Fetched gene data: {gene_data}")
+
+    print("[import_genes] Inserting gene document into the 'genes' collection...")
+    await db.genes.delete_many({})
+    await db.genes.insert_one(gene_data)
+    print("[import_genes] Successfully imported gene structure.")
+
 # ----------------------------------------------------------------------
 async def main():
     print("[main] Starting migration process...")
@@ -906,6 +991,10 @@ async def main():
         await import_proteins()
     except Exception as e:
         print(f"[main] Error during import_proteins: {e}")
+    try:
+        await import_genes()
+    except Exception as e:
+        print(f"[main] Error during import_genes: {e}")
     print("[main] Migration process complete.")
 
 if __name__ == "__main__":

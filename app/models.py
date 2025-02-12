@@ -357,5 +357,34 @@ class Protein(BaseModel):
     }
 
 # ------------------------------------------------------------------------------
+# New Exon model for gene structure.
+class Exon(BaseModel):
+    exon_number: Optional[int] = None  # Optional exon number if available.
+    start: Optional[int] = None         # Exon start position.
+    stop: Optional[int] = None          # Exon end position.
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
+# New Gene model – represents the genomic structure of the HNF1B gene.
+class Gene(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    gene_symbol: str         # For example, "HNF1B"
+    transcript: str          # For example, "NM_000458.4"
+    exons: List[Exon] = Field(default_factory=list)
+    # For convenience, we also store the exon coordinates under hg19 and hg38 keys.
+    hg19: Dict[str, Any] = Field(default_factory=dict)
+    hg38: Dict[str, Any] = Field(default_factory=dict)
+    # Optionally, you could include UTR information if available.
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {PyObjectId: lambda v: str(v)},
+        "extra": "allow"
+    }
+
+# ------------------------------------------------------------------------------
 # Update forward references for self-referencing embedded models.
 Individual.update_forward_refs()
