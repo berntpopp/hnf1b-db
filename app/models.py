@@ -52,7 +52,7 @@ class PyObjectId(str):
         return {"type": "string"}
 
 # ------------------------------------------------------------------------------
-# User model (for reviewers/users)
+# User model
 class User(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     user_id: int
@@ -77,7 +77,7 @@ class User(BaseModel):
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
-    # The modifier is now stored as a nested object (if available) with keys like id, name, description, and synonyms.
+    # The modifier is now stored as a nested object (if available)
     modifier: Optional[Dict[str, Optional[str]]] = None  
     # The described value should be one of "yes", "no", or "not reported".
     described: str  
@@ -86,22 +86,19 @@ class Phenotype(BaseModel):
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
-# Now includes reviewed_by (a reviewer's ObjectId), review_date, comment,
-# plus additional fields: family_history, age_reported, age_onset, cohort,
-# and report_date (derived from the linked publication's publication_date).
 class Report(BaseModel):
     report_id: str  # Changed from int to str
     reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
     publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
-    review_date: Optional[datetime] = None  # Review date (as datetime)
-    comment: Optional[str] = None  # Report comment (may be empty)
-    # New fields (moved from the individual and added as required)
-    family_history: Optional[str] = None  # Family history value from the Individuals sheet
-    age_reported: Optional[str] = None    # Age reported for this report
-    age_onset: Optional[str] = None       # Age at onset for this report
-    cohort: Optional[str] = None          # Cohort information for this report
-    report_date: Optional[datetime] = None  # Report date (from publication.publication_date)
+    review_date: Optional[datetime] = None
+    comment: Optional[str] = None
+    # New fields:
+    family_history: Optional[str] = None
+    age_reported: Optional[str] = None
+    age_onset: Optional[str] = None
+    cohort: Optional[str] = None
+    report_date: Optional[datetime] = None  # Derived from the publication
 
     model_config = {"extra": "allow"}
 
@@ -125,7 +122,6 @@ class Report(BaseModel):
             return None
         if isinstance(v, str):
             try:
-                # Try to parse the report date using the helper function.
                 return parse_date_value(v)
             except Exception as e:
                 raise ValueError(f"Could not parse report_date: {v}") from e
@@ -134,14 +130,12 @@ class Report(BaseModel):
     @field_validator("report_id", mode="before")
     @classmethod
     def format_report_id(cls, v):
-        # If v is numeric (or string digits) then format it with "rep" prefix
         if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
             return f"rep{int(v):04d}"
-        # Otherwise, if already formatted, return as is.
         return v
 
 # ------------------------------------------------------------------------------
-# IndividualVariant model (per-individual variant info)
+# IndividualVariant model
 class IndividualVariant(BaseModel):
     variant_ref: PyObjectId  # Link to the Variant document _id
     detection_method: Optional[str] = None
@@ -150,8 +144,7 @@ class IndividualVariant(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Individual model (combining base data, embedded reports, and a variant reference)
-# NOTE: Removed AgeReported, AgeOnset, and Cohort from the individual model per new requirements.
+# Individual model
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     individual_id: str  # Changed from int to str
@@ -185,13 +178,13 @@ class Individual(BaseModel):
         return v
 
 # ------------------------------------------------------------------------------
-# Variant Classifications model
+# VariantClassifications model
 class VariantClassifications(BaseModel):
     verdict: Optional[str] = None
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[datetime] = None  # Now datetime
+    classification_date: Optional[datetime] = None
 
     model_config = {"extra": "allow"}
 
@@ -201,13 +194,13 @@ class VariantClassifications(BaseModel):
         return parse_date_value(v)
 
 # ------------------------------------------------------------------------------
-# New Variant Annotation model – for nested annotations
+# VariantAnnotation model
 class VariantAnnotation(BaseModel):
     transcript: Optional[str] = None
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
-    source: Optional[str] = None  # For example, "varsome"
-    annotation_date: Optional[datetime] = None  # Now datetime
+    source: Optional[str] = None  # e.g. "varsome"
+    annotation_date: Optional[datetime] = None
 
     model_config = {"extra": "allow"}
 
@@ -217,7 +210,7 @@ class VariantAnnotation(BaseModel):
         return parse_date_value(v)
 
 # ------------------------------------------------------------------------------
-# New ReportedEntry model – for holding variant_reported and publication reference
+# ReportedEntry model
 class ReportedEntry(BaseModel):
     variant_reported: str
     publication_ref: Optional[PyObjectId] = None
@@ -225,11 +218,7 @@ class ReportedEntry(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Variant model (unique across the database)
-# Now includes:
-#  - classifications: list of VariantClassifications
-#  - annotations: list of VariantAnnotation
-#  - reported: list of ReportedEntry objects (holding variant_reported values and publication references)
+# Variant model
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     variant_id: str  # Changed from int to str
@@ -259,7 +248,7 @@ class Variant(BaseModel):
         return v
 
 # ------------------------------------------------------------------------------
-# New Author model – for holding individual author details
+# Author model
 class Author(BaseModel):
     lastname: Optional[str] = None
     firstname: Optional[str] = None
@@ -329,11 +318,43 @@ class Publication(BaseModel):
     def validate_pdf(cls, v):
         return none_if_nan(v)
 
-    # NEW: Convert publication_date to a datetime using our helper function.
     @field_validator("publication_date", mode="before")
     @classmethod
     def parse_publication_date(cls, v):
         return parse_date_value(v)
+
+# ------------------------------------------------------------------------------
+# New ProteinFeature model – used for holding domain/structure information.
+class ProteinFeature(BaseModel):
+    start_position: Optional[int] = None  # Computed from the "position" column.
+    end_position: Optional[int] = None    # Computed from the "position" column.
+    start: Optional[int] = None           # Original start column value.
+    length: Optional[int] = None          # Length of the feature.
+    description: Optional[str] = ""
+    description_short: Optional[str] = ""
+    source: Optional[str] = ""
+    height: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+# ------------------------------------------------------------------------------
+# New Protein model – represents the protein structure and domains.
+class Protein(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    gene: str
+    transcript: str
+    protein: str
+    features: Dict[str, List[ProteinFeature]] = Field(default_factory=dict)
+    # The features field maps each FeatureKey (e.g. "domain", "exon", etc.)
+    # to an array of ProteinFeature objects.
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {PyObjectId: lambda v: str(v)},
+        "extra": "allow"
+    }
 
 # ------------------------------------------------------------------------------
 # Update forward references for self-referencing embedded models.

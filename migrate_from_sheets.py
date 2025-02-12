@@ -9,7 +9,6 @@ import pandas as pd
 from app.database import db
 from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant
-
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
@@ -26,7 +25,6 @@ PHENOTYPE_GID = "1119329208"       # Phenotype sheet
 MODIFIER_GID = "1741928801"        # Modifier sheet
 
 # ----------------------------------------------------------------------
-# Helper functions for formatting identifiers
 def format_individual_id(value):
     """Format an individual id as 'ind' followed by a 4-digit zero-padded number."""
     try:
@@ -138,7 +136,6 @@ def read_vcf_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
-    # NOTE: Do not prepend "chr" since the VCF already contains it.
     df["vcf_hg38"] = df["CHROM"].astype(str) + "-" + df["POS"].astype(str) + "-" + df["REF"] + "-" + df["ALT"]
     df = df[["ID", "vcf_hg38"]].rename(columns={"ID": "var_id"})
     print(f"[DEBUG] Read VCF file '{filepath}' with {df.shape[0]} rows")
@@ -172,8 +169,7 @@ def read_cadd_file(filepath):
 # ----------------------------------------------------------------------
 def parse_vep_extra(df):
     """
-    Parse the 'Extra' column of a VEP DataFrame to extract additional annotations,
-    replicating the logic of the legacy R code.
+    Parse the 'Extra' column of a VEP DataFrame to extract additional annotations.
     First, drop the 'CADD_PHRED' column (if present) to avoid duplicate columns.
     """
     df = df.copy()
@@ -279,7 +275,6 @@ def get_pubmed_info(pmid: str) -> dict:
                 month_num = int(raw_month)
         except Exception:
             month_num = 1
-        # Build a publication_date string then parse it to a datetime.
         pub_date_str = f"{year}-{month_num:02d}-{int(day):02d}" if year else ""
         publication_date = parse_date(pub_date_str)
         mesh_terms = []
@@ -405,9 +400,7 @@ async def import_publications():
         publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(
             lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
         )
-    # NEW: Convert publication_date column from string to datetime.
     if "publication_date" in publications_df.columns:
-        # Force conversion by using pd.to_datetime and then converting to python datetime objects.
         publications_df["publication_date"] = pd.to_datetime(publications_df["publication_date"], errors='coerce').dt.to_pydatetime()
     
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
@@ -572,55 +565,44 @@ async def import_variants():
     df = normalize_dataframe_columns(df)
     print(f"[import_variants] Normalized columns: {df.columns.tolist()}")
 
-    # NEW: Load VEP and CADD annotations following the workflow:
     try:
-        # 1. Load the VCF files for small and large variants.
         vcf_small = read_vcf_file("data/HNF1B_all_small.vcf")
         vcf_large = read_vcf_file("data/HNF1B_all_large.vcf")
         print(f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, VCF large rows: {vcf_large.shape[0]}")
         
-        # 2. Load the VEP files for small and large variants (filtering for transcript NM_000458.4)
         vep_small = read_vep_file("data/HNF1B_all_small.vep.txt")
         vep_large = read_vep_file("data/HNF1B_all_large.vep.txt")
         print(f"[DEBUG] VEP small rows: {vep_small.shape[0]}, VEP large rows: {vep_large.shape[0]}")
         
-        # 3. Join the VEP annotations to the VCF data using the key "var_id"
         vep_small_ann = pd.merge(vep_small, vcf_small, on="var_id", how="left")
         vep_large_ann = pd.merge(vep_large, vcf_large, on="var_id", how="left")
         print(f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; large shape: {vep_large_ann.shape}")
         
-        # 4. Combine the annotated VEP data from small and large variants.
         vep_combined = pd.concat([vep_small_ann, vep_large_ann], ignore_index=True)
         print(f"[DEBUG] Combined VEP data shape: {vep_combined.shape}")
         
-        # 5. Load the CADD file and compute its vcf_hg38 field.
         cadd = read_cadd_file("data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz")
-        # CADD already includes "chr" in its Chrom column so we do not prepend.
         cadd["vcf_hg38"] = cadd["Chrom"].astype(str) + "-" + cadd["Pos"].astype(str) + "-" + cadd["Ref"] + "-" + cadd["Alt"]
         print(f"[DEBUG] CADD data shape: {cadd.shape}")
         
-        # 6. Merge the combined VEP data with the CADD data on vcf_hg38.
         vep_annot = pd.merge(vep_combined, cadd[["vcf_hg38", "PHRED"]], on="vcf_hg38", how="left")
         vep_annot.rename(columns={"PHRED": "CADD_PHRED"}, inplace=True)
         print(f"[DEBUG] Merged VEP/CADD data shape: {vep_annot.shape}")
         
-        # 7. Parse the Extra column from the VEP files to extract additional annotations.
         vep_parsed = parse_vep_extra(vep_annot)
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
         print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
         
-        # Set default annotation date if not found.
         default_date = pd.to_datetime("2022-10-07").to_pydatetime()
         
-        # Build a mapping from the constructed identifier vcf_hg38 (from the VCF) to the annotation dictionary.
         annotation_map = {}
         for _, row in vep_parsed.iterrows():
             vcf_key = row.get("vcf_hg38")
             if pd.notna(vcf_key):
                 annotation_obj = {
-                    "transcript": none_if_nan(row.get("Feature")),  # using Feature column for transcript
-                    "c_dot": none_if_nan(row.get("HGVSc")),           # from parsed Extra
-                    "p_dot": none_if_nan(row.get("HGVSp")),           # from parsed Extra
+                    "transcript": none_if_nan(row.get("Feature")),
+                    "c_dot": none_if_nan(row.get("HGVSc")),
+                    "p_dot": none_if_nan(row.get("HGVSp")),
                     "cDNA_position": none_if_nan(row.get("cDNA_position")),
                     "protein_position": none_if_nan(row.get("Protein_position")),
                     "impact": none_if_nan(row.get("IMPACT")),
@@ -633,12 +615,11 @@ async def import_variants():
                     "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else None) or default_date
                 }
                 annotation_map[vcf_key] = annotation_obj
-        print(f"[DEBUG] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
+        print(f"[import_variants] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
     except Exception as e:
         print(f"[import_variants] Error loading VEP/CADD annotations: {e}")
         annotation_map = {}
 
-    # Build unique key for the primary variant data (from Google Sheets) using these columns.
     variant_key_cols = ['VariantType', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
     unique_variants = {}
     individual_variant_info = {}
@@ -801,6 +782,99 @@ async def import_variants():
     print("[import_variants] Updated individuals with variant references.")
 
 # ----------------------------------------------------------------------
+async def import_proteins():
+    """
+    Import the protein structure and domains for the HNF1B gene from the domains sheet.
+    Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA' with empty values,
+    splits the "position" field into start_position and end_position, groups rows by FeatureKey,
+    and constructs a Protein document which is inserted into the 'proteins' collection.
+    """
+    gid_proteins = "810380453"
+    url = csv_url(SPREADSHEET_ID, gid_proteins)
+    print(f"[import_proteins] Reading proteins CSV from URL: {url}")
+    df = pd.read_csv(url)
+    df = normalize_dataframe_columns(df)
+
+    expected_columns = [
+        "gene", "transcript", "protein", "FeatureKey", "position",
+        "start", "length", "description", "description_short", "source", "height"
+    ]
+    missing = [col for col in expected_columns if col not in df.columns]
+    if missing:
+        raise KeyError(f"[import_proteins] Missing expected columns in proteins sheet: {missing}")
+
+    def sanitize_value(val: any) -> str:
+        s = str(val).strip() if val is not None else ""
+        return "" if s.upper() == "NA" else s
+
+    for col in df.columns:
+        df[col] = df[col].apply(sanitize_value)
+
+    # Extract the common fields (assumed identical for all rows)
+    gene_val = sanitize_value(df.iloc[0]["gene"])
+    transcript_val = sanitize_value(df.iloc[0]["transcript"])
+    protein_val = sanitize_value(df.iloc[0]["protein"])
+
+    features = {}
+    for _, row in df.iterrows():
+        feature_key = sanitize_value(row["FeatureKey"])
+        if feature_key not in features:
+            features[feature_key] = []
+        pos_str = sanitize_value(row["position"])
+        if ".." in pos_str:
+            parts = pos_str.split("..")
+            try:
+                start_position = int(parts[0])
+                end_position = int(parts[1])
+            except Exception:
+                start_position, end_position = None, None
+        else:
+            try:
+                start_position = int(pos_str) if pos_str else None
+                end_position = int(pos_str) if pos_str else None
+            except Exception:
+                start_position, end_position = None, None
+
+        try:
+            start_val = int(sanitize_value(row["start"])) if sanitize_value(row["start"]).isdigit() else sanitize_value(row["start"])
+        except Exception:
+            start_val = sanitize_value(row["start"])
+        try:
+            length_val = int(sanitize_value(row["length"])) if sanitize_value(row["length"]).isdigit() else sanitize_value(row["length"])
+        except Exception:
+            length_val = sanitize_value(row["length"])
+        try:
+            height_val = int(sanitize_value(row["height"])) if sanitize_value(row["height"]).isdigit() else sanitize_value(row["height"])
+        except Exception:
+            height_val = sanitize_value(row["height"])
+
+        feature_obj = {
+            "start_position": start_position,
+            "end_position": end_position,
+            "start": start_val,
+            "length": length_val,
+            "description": sanitize_value(row["description"]),
+            "description_short": sanitize_value(row["description_short"]),
+            "source": sanitize_value(row["source"]),
+            "height": height_val
+        }
+        features[feature_key].append(feature_obj)
+
+    protein_doc = {
+        "gene": gene_val,
+        "transcript": transcript_val,
+        "protein": protein_val,
+        "features": features
+    }
+    print(f"[import_proteins] Prepared protein document for gene '{gene_val}':")
+    print(protein_doc)
+
+    print(f"[import_proteins] Inserting protein document into the 'proteins' collection...")
+    await db.proteins.delete_many({})
+    await db.proteins.insert_one(protein_doc)
+    print(f"[import_proteins] Successfully imported protein document for '{gene_val}'.")
+
+# ----------------------------------------------------------------------
 async def main():
     print("[main] Starting migration process...")
     try:
@@ -819,6 +893,10 @@ async def main():
         await import_variants()
     except Exception as e:
         print(f"[main] Error during import_variants: {e}")
+    try:
+        await import_proteins()
+    except Exception as e:
+        print(f"[main] Error during import_proteins: {e}")
     print("[main] Migration process complete.")
 
 if __name__ == "__main__":
