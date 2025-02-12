@@ -55,7 +55,7 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
     Returns:
         A dictionary with:
           - "total_count": Sum of all individual counts across the collection.
-          - "grouped_counts": List of documents with keys '_id' (group key) and 'individual_total'.
+          - "grouped_counts": List of documents with keys '_id' (group key) and 'count'.
     """
     pipeline = [
         {
@@ -70,7 +70,7 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
                     {
                         "$group": {
                             "_id": f"${group_field}",
-                            "individual_total": {"$sum": "$individual_count"}
+                            "count": {"$sum": "$individual_count"}
                         }
                     },
                     {"$sort": {"_id": 1}}
@@ -314,7 +314,7 @@ async def count_individuals_by_variant_type() -> dict:
           - "total_count": The overall sum of individuals (summed across all variants).
           - "grouped_counts": A list of documents with keys:
               - "_id": The variant type.
-              - "individual_total": Sum of individuals carrying variants of that type.
+              - "count": Sum of individuals carrying variants of that type.
     """
     return await _aggregate_individual_counts(db.variants, "variant_type")
 
