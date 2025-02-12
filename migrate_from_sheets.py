@@ -785,7 +785,7 @@ async def import_variants():
 async def import_proteins():
     """
     Import the protein structure and domains for the HNF1B gene from the domains sheet.
-    Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA' with empty values,
+    Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA'/'nan' with empty values,
     splits the "position" field into start_position and end_position, groups rows by FeatureKey,
     and constructs a Protein document which is inserted into the 'proteins' collection.
     """
@@ -803,14 +803,16 @@ async def import_proteins():
     if missing:
         raise KeyError(f"[import_proteins] Missing expected columns in proteins sheet: {missing}")
 
+    # Update sanitize_value to treat both "NA" and "nan" (case-insensitive) as empty.
     def sanitize_value(val: any) -> str:
         s = str(val).strip() if val is not None else ""
-        return "" if s.upper() == "NA" else s
+        return "" if s.upper() in ("NA", "NAN") else s
 
+    # Apply the sanitization for all columns.
     for col in df.columns:
         df[col] = df[col].apply(sanitize_value)
 
-    # Extract the common fields (assumed identical for all rows)
+    # Extract common fields (assumed identical for all rows).
     gene_val = sanitize_value(df.iloc[0]["gene"])
     transcript_val = sanitize_value(df.iloc[0]["transcript"])
     protein_val = sanitize_value(df.iloc[0]["protein"])
@@ -820,6 +822,7 @@ async def import_proteins():
         feature_key = sanitize_value(row["FeatureKey"])
         if feature_key not in features:
             features[feature_key] = []
+
         pos_str = sanitize_value(row["position"])
         if ".." in pos_str:
             parts = pos_str.split("..")
@@ -835,18 +838,24 @@ async def import_proteins():
             except Exception:
                 start_position, end_position = None, None
 
+        # Convert numeric fields using the sanitized value.
         try:
-            start_val = int(sanitize_value(row["start"])) if sanitize_value(row["start"]).isdigit() else sanitize_value(row["start"])
+            start_str = sanitize_value(row["start"])
+            start_val = int(start_str) if start_str.isdigit() else None
         except Exception:
-            start_val = sanitize_value(row["start"])
+            start_val = None
+
         try:
-            length_val = int(sanitize_value(row["length"])) if sanitize_value(row["length"]).isdigit() else sanitize_value(row["length"])
+            length_str = sanitize_value(row["length"])
+            length_val = int(length_str) if length_str.isdigit() else None
         except Exception:
-            length_val = sanitize_value(row["length"])
+            length_val = None
+
         try:
-            height_val = int(sanitize_value(row["height"])) if sanitize_value(row["height"]).isdigit() else sanitize_value(row["height"])
+            height_str = sanitize_value(row["height"])
+            height_val = int(height_str) if height_str.isdigit() else None
         except Exception:
-            height_val = sanitize_value(row["height"])
+            height_val = None
 
         feature_obj = {
             "start_position": start_position,
