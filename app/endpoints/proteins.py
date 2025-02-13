@@ -1,41 +1,57 @@
 # File: app/endpoints/proteins.py
-from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from typing import Any, Dict, Optional
+from bson import ObjectId
 from app.models import Protein
 from app.database import db
-from app.dependencies import parse_filter
+from app.utils import parse_filters, parse_sort, build_pagination_meta
 
 router = APIRouter()
 
-@router.get("/", response_model=List[Protein])
+@router.get("/", response_model=Dict[str, Any], summary="Get Proteins")
 async def get_proteins(
-    filters: Dict[str, Any] = Depends(parse_filter),
-    page_after: Optional[str] = Query(
-        None,
-        alias="page[after]",
-        description="Cursor pagination: last gene value from the previous page"
-    ),
-    page_size: int = Query(
-        10,
-        alias="page[size]",
-        description="Page size"
+    request: Request,
+    page: int = Query(1, ge=1, description="Current page number"),
+    page_size: int = Query(10, ge=1, description="Number of proteins per page"),
+    sort: Optional[str] = Query(
+        None, description="Sort field (e.g. 'gene' or '-gene'); defaults to sorting by gene"
     )
-):
+) -> Dict[str, Any]:
     """
     Retrieve a paginated list of proteins.
 
     This endpoint queries the `proteins` collection for protein structure and domain data.
-    Optionally, you may supply a filter dictionary and cursor-based pagination by the gene field.
+    Supports JSON:API–style filtering via query parameters.
+    For example:
+      /proteins?filter[domain]=kinase&sort=-gene&page=2&page_size=10
     """
-    query = {}
-    if filters:
-        query.update(filters)
-    # For pagination, we assume that the 'gene' field is used as a cursor.
-    if page_after is not None:
-        query["gene"] = {"$gt": page_after}
+    # Build filters from the request query parameters
+    query_params = dict(request.query_params)
+    filters = parse_filters(query_params)
+    
+    # Use provided sort or default to sorting by "gene" ascending.
+    sort_option = parse_sort(sort) if sort else ("gene", 1)
+    
+    collection = db.proteins
+    total = await collection.count_documents(filters)
+    skip_count = (page - 1) * page_size
 
-    cursor = db.proteins.find(query).sort("gene", 1).limit(page_size)
+    cursor = collection.find(filters)
+    if sort_option:
+        cursor = cursor.sort(*sort_option)
+    cursor = cursor.skip(skip_count).limit(page_size)
     proteins = await cursor.to_list(length=page_size)
+
     if not proteins:
         raise HTTPException(status_code=404, detail="No proteins found")
-    return proteins
+
+    base_url = str(request.url).split("?")[0]
+    meta = build_pagination_meta(base_url, page, page_size, total)
+    
+    # Convert the proteins and metadata into JSON-friendly types.
+    response_data = jsonable_encoder(
+        {"data": proteins, "meta": meta},
+        custom_encoder={ObjectId: lambda o: str(o)}
+    )
+    return response_data
