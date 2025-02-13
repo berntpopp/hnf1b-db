@@ -48,8 +48,6 @@ async def search_documents(
             "'individuals', 'variants', or 'publications'."
         ),
     ),
-    page: int = Query(1, ge=1, description="Current page number"),
-    page_size: int = Query(10, ge=1, description="Number of items per page"),
     reduce_doc: bool = Query(
         True,
         description=(
@@ -71,7 +69,7 @@ async def search_documents(
       - A "matched" dictionary containing only the fields that matched the query.
 
     Example:
-        /api/search?q=HNF1B&collection=variants&page=1&page_size=10
+        /api/search?q=HNF1B&collection=variants
     """
     start_time = time.perf_counter()
     pattern = re.compile(q, re.IGNORECASE)
@@ -91,7 +89,8 @@ async def search_documents(
     # For nested fields, use dot notation (e.g., "classifications.verdict").
     search_fields = {
         "individuals": [
-            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier", "family_history", "age_onset", "cohort"
+            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier",
+            "family_history", "age_onset", "cohort"
         ],
         "variants": [
             "variant_id",
@@ -132,9 +131,8 @@ async def search_documents(
         filter_query = {
             "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields.get(coll, [])]
         }
-        skip_count = (page - 1) * page_size
-        cursor = db[coll].find(filter_query).skip(skip_count).limit(page_size)
-        documents = await cursor.to_list(length=page_size)
+        cursor = db[coll].find(filter_query)
+        documents = await cursor.to_list(length=None)
 
         if reduce_doc:
             reduced_documents = []
