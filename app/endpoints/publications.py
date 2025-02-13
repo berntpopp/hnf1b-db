@@ -6,11 +6,20 @@ from typing import Any, Dict, Optional
 from bson import ObjectId
 from app.models import Publication
 from app.database import db
-from app.utils import parse_sort, build_pagination_meta, parse_filter_json, parse_deep_object_filters
+from app.utils import (
+    parse_sort,
+    build_pagination_meta,
+    parse_filter_json,
+    parse_deep_object_filters,
+)
 
 router = APIRouter()
 
-@router.get("/", response_model=Dict[str, Any], summary="Get Publications")
+@router.get(
+    "/",
+    response_model=Dict[str, Any],
+    summary="Get Publications"
+)
 async def get_publications(
     request: Request,
     page: int = Query(1, ge=1, description="Current page number"),
@@ -19,11 +28,12 @@ async def get_publications(
         None,
         description="Sort field (e.g. 'publication_id' for ascending or '-publication_id' for descending order)"
     ),
-    filter: Optional[str] = Query(
+    filter_query: Optional[str] = Query(
         None,
+        alias="filter",
         description=(
             "Filtering criteria as a JSON string. Example: "
-            "{\"status\": \"active\", \"publication_date\": {\"gt\": \"2021-01-01\"}}"
+            '{"status": "active", "publication_date": {"gt": "2021-01-01"}}'
         )
     )
 ) -> Dict[str, Any]:
@@ -38,7 +48,7 @@ async def get_publications(
     start_time = time.perf_counter()  # Start timing
 
     # Parse the JSON filter into a dictionary.
-    raw_filter = parse_filter_json(filter)
+    raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
     
     # Determine sort option (default to ascending by "publication_id").
@@ -61,8 +71,17 @@ async def get_publications(
     end_time = time.perf_counter()  # End timing
     exec_time = end_time - start_time
 
+    # Include extra query parameters (e.g. sort and filter) in the pagination links.
+    extra_params: Dict[str, Any] = {}
+    if sort:
+        extra_params["sort"] = sort
+    if filter_query:
+        extra_params["filter"] = filter_query
+
     # Build pagination metadata including execution time (in ms).
-    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=exec_time)
+    meta = build_pagination_meta(
+        base_url, page, page_size, total, query_params=extra_params, execution_time=exec_time
+    )
 
     # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
     response_data = jsonable_encoder(

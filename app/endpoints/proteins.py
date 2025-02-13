@@ -16,7 +16,11 @@ async def get_proteins(
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of proteins per page"),
     sort: Optional[str] = Query(
-        None, description="Sort field (e.g. 'gene' for ascending or '-gene' for descending order). Defaults to sorting by gene."
+        None,
+        description=(
+            "Sort field (e.g. 'gene' for ascending or '-gene' for descending order). "
+            "Defaults to sorting by gene."
+        )
     )
 ) -> Dict[str, Any]:
     """
@@ -51,10 +55,17 @@ async def get_proteins(
 
     base_url = str(request.url).split("?")[0]
     end_time = time.perf_counter()  # End timing
-    exec_time = end_time - start_time
+    execution_time = end_time - start_time
+
+    # Build extra query parameters by retaining all except pagination-specific ones.
+    extra_params: Dict[str, Any] = {
+        k: v for k, v in request.query_params.items() if k not in {"page", "page_size"}
+    }
 
     # Build pagination metadata including execution time.
-    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=exec_time)
+    meta = build_pagination_meta(
+        base_url, page, page_size, total, query_params=extra_params, execution_time=execution_time
+    )
     
     # Convert the proteins and metadata into JSON-friendly types.
     response_data = jsonable_encoder(

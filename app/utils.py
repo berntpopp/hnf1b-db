@@ -1,10 +1,14 @@
 import json
 import re
+import urllib.parse
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException
 from pymongo import ASCENDING, DESCENDING
+
+# Pre-compile the regex pattern used for filter parsing.
+_FILTER_REGEX = re.compile(r"filter\[(\w+)(?:\]\[(\w+)\])?\]")
 
 
 def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
@@ -21,21 +25,21 @@ def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
     Note: Conversion (e.g. to int or datetime) should be handled in your model or later.
     """
     filters: Dict[str, Any] = {}
+    op_map = {
+        "gt": "$gt",
+        "gte": "$gte",
+        "lt": "$lt",
+        "lte": "$lte",
+        "ne": "$ne",
+        "in": "$in",
+    }
     for key, value in query_params.items():
         if key.startswith("filter[") and key.endswith("]"):
-            match = re.fullmatch(r"filter\[(\w+)(?:\]\[(\w+)\])?\]", key)
+            match = _FILTER_REGEX.fullmatch(key)
             if match:
                 field = match.group(1)
                 operator = match.group(2)
                 if operator:
-                    op_map = {
-                        "gt": "$gt",
-                        "gte": "$gte",
-                        "lt": "$lt",
-                        "lte": "$lte",
-                        "ne": "$ne",
-                        "in": "$in",
-                    }
                     mongo_op = op_map.get(operator)
                     if not mongo_op:
                         raise HTTPException(
@@ -62,7 +66,7 @@ def parse_filter_json(filter_json: Optional[str]) -> Dict[str, Any]:
         return {}
     try:
         return json.loads(filter_json)
-    except Exception as e:
+    except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail="Invalid JSON in filter parameter") from e
 
 
@@ -118,7 +122,12 @@ def parse_sort(sort: Optional[str]) -> Optional[Tuple[str, int]]:
 
 
 def build_pagination_meta(
-    base_url: str, page: int, page_size: int, total: int, execution_time: Optional[float] = None
+    base_url: str,
+    page: int,
+    page_size: int,
+    total: int,
+    query_params: Optional[Dict[str, Any]] = None,
+    execution_time: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Returns a metadata dictionary following JSON:API conventions.
@@ -127,16 +136,24 @@ def build_pagination_meta(
       - total: total number of documents.
       - page: current page number.
       - page_size: number of items per page.
-      - links: URLs to prev/next pages (if applicable).
+      - links: URLs to prev/next pages (if applicable). The links include
+               any extra query parameters (e.g. filter and sort) provided.
       - execution_time_ms: (optional) Execution time in milliseconds.
     """
     meta = {"total": total, "page": page, "page_size": page_size}
     links = {}
+    query_params = query_params or {}
+
     if page > 1:
-        links["prev"] = f"{base_url}?page={page - 1}&page_size={page_size}"
+        prev_query = query_params.copy()
+        prev_query.update({"page": page - 1, "page_size": page_size})
+        links["prev"] = f"{base_url}?{urllib.parse.urlencode(prev_query)}"
     if page * page_size < total:
-        links["next"] = f"{base_url}?page={page + 1}&page_size={page_size}"
+        next_query = query_params.copy()
+        next_query.update({"page": page + 1, "page_size": page_size})
+        links["next"] = f"{base_url}?{urllib.parse.urlencode(next_query)}"
     meta["links"] = links
+
     if execution_time is not None:
         meta["execution_time_ms"] = round(execution_time * 1000, 2)
     return meta

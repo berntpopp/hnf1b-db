@@ -1,11 +1,9 @@
-# File: app/endpoints/individuals.py
-import json
 import time
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from typing import Any, Dict, Optional
 from bson import ObjectId
-from app.models import Individual
 from app.database import db
 from app.utils import (
     parse_sort,
@@ -16,20 +14,29 @@ from app.utils import (
 
 router = APIRouter()
 
-@router.get("/", response_model=Dict[str, Any], summary="Get Individuals")
+
+@router.get(
+    "/",
+    response_model=Dict[str, Any],
+    summary="Get Individuals"
+)
 async def get_individuals(
     request: Request,
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of individuals per page"),
     sort: Optional[str] = Query(
         None,
-        description="Sort field (e.g. 'individual_id' for ascending or '-individual_id' for descending order)",
+        description=(
+            "Sort field (e.g. 'individual_id' for ascending or '-individual_id' "
+            "for descending order)"
+        ),
     ),
-    filter: Optional[str] = Query(
+    filter_query: Optional[str] = Query(
         None,
+        alias="filter",
         description=(
             "Filtering criteria as a JSON string. Example: "
-            "{\"Sex\": \"male\", \"individual_id\": {\"gt\": \"ind0930\"}}"
+            '{"Sex": "male", "individual_id": {"gt": "ind0930"}}'
         ),
     ),
 ) -> Dict[str, Any]:
@@ -43,8 +50,8 @@ async def get_individuals(
     """
     start_time = time.perf_counter()  # Start measuring execution time
 
-    # Parse the JSON filter into a dictionary.
-    raw_filter = parse_filter_json(filter)
+    # Parse and convert the filter JSON string into a MongoDB filter.
+    raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
 
     # Determine the sort option (default to ascending by "individual_id").
@@ -63,12 +70,25 @@ async def get_individuals(
     if not individuals:
         raise HTTPException(status_code=404, detail="No individuals found")
 
+    # Build the base URL (without query parameters)
     base_url = str(request.url).split("?")[0]
+
+    # Include current query parameters (e.g. sort and filter) in pagination links.
+    extra_params: Dict[str, Any] = {}
+    if sort:
+        extra_params["sort"] = sort
+    if filter_query:
+        extra_params["filter"] = filter_query
+
     end_time = time.perf_counter()  # End timing
     execution_time = end_time - start_time
 
     # Build pagination metadata, including execution time in milliseconds.
-    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=execution_time)
+    meta = build_pagination_meta(
+        base_url, page, page_size, total,
+        query_params=extra_params,
+        execution_time=execution_time
+    )
 
     # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
     response_data = jsonable_encoder(
