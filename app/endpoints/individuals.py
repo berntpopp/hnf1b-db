@@ -1,3 +1,4 @@
+# File: app/endpoints/individuals.py
 import time
 from typing import Any, Dict, Optional
 
@@ -13,7 +14,6 @@ from app.utils import (
 )
 
 router = APIRouter()
-
 
 @router.get(
     "/",
@@ -39,20 +39,45 @@ async def get_individuals(
             '{"Sex": "male", "individual_id": {"gt": "ind0930"}}'
         ),
     ),
+    q: Optional[str] = Query(
+        None,
+        description=(
+            "Search query to search across predefined fields: "
+            "individual_id, Sex, individual_DOI, IndividualIdentifier, family_history, age_onset, cohort"
+        ),
+    ),
 ) -> Dict[str, Any]:
     """
-    Retrieve a paginated list of individuals.
+    Retrieve a paginated list of individuals, optionally filtered by a JSON filter
+    and/or a search query.
 
     The filter parameter should be provided as a JSON string.
-    
+    Additionally, if a search query `q` is provided, the endpoint will search across:
+      - individual_id
+      - Sex
+      - individual_DOI
+      - IndividualIdentifier
+      - family_history
+      - age_onset
+      - cohort
+
     Example:
-      /individuals?sort=-individual_id&page=1&page_size=10&filter={"Sex": "male", "individual_id": {"gt": "ind0930"}}
+      /individuals?sort=-individual_id&page=1&page_size=10&filter={"Sex": "male"}&q=ind0930
     """
     start_time = time.perf_counter()  # Start measuring execution time
 
-    # Parse and convert the filter JSON string into a MongoDB filter.
+    # Parse and convert the JSON filter (if provided) into a MongoDB filter.
     raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
+
+    # If a search query 'q' is provided, build a search filter for predefined fields.
+    if q:
+        search_fields = [
+            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier",
+            "family_history", "age_onset", "cohort"
+        ]
+        search_filter = {"$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]}
+        filters = {"$and": [filters, search_filter]} if filters else search_filter
 
     # Determine the sort option (default to ascending by "individual_id").
     sort_option = parse_sort(sort) if sort else ("individual_id", 1)
@@ -73,12 +98,14 @@ async def get_individuals(
     # Build the base URL (without query parameters)
     base_url = str(request.url).split("?")[0]
 
-    # Include current query parameters (e.g. sort and filter) in pagination links.
+    # Include current query parameters (e.g., sort, filter, and search query) in pagination links.
     extra_params: Dict[str, Any] = {}
     if sort:
         extra_params["sort"] = sort
     if filter_query:
         extra_params["filter"] = filter_query
+    if q:
+        extra_params["q"] = q
 
     end_time = time.perf_counter()  # End timing
     execution_time = end_time - start_time

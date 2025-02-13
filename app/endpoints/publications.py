@@ -1,8 +1,9 @@
 # File: app/endpoints/publications.py
 import time
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from typing import Any, Dict, Optional
 from bson import ObjectId
 from app.models import Publication
 from app.database import db
@@ -35,22 +36,47 @@ async def get_publications(
             "Filtering criteria as a JSON string. Example: "
             '{"status": "active", "publication_date": {"gt": "2021-01-01"}}'
         )
+    ),
+    q: Optional[str] = Query(
+        None,
+        description=(
+            "Search query to search across predefined fields: "
+            "publication_id, publication_type, title, abstract, DOI, PMID, journal"
+        )
     )
 ) -> Dict[str, Any]:
     """
-    Retrieve a paginated list of publications.
+    Retrieve a paginated list of publications, optionally filtered by a JSON filter
+    and/or a search query.
 
     The filter parameter should be provided as a JSON string.
-    
+    Additionally, if a search query `q` is provided, the endpoint will search across:
+      - publication_id
+      - publication_type
+      - title
+      - abstract
+      - DOI
+      - PMID
+      - journal
+
     Example:
-      /publications?sort=-publication_id&page=1&page_size=10&filter={"status": "active", "publication_date": {"gt": "2021-01-01"}}
+      /publications?sort=-publication_id&page=1&page_size=10&filter={"status": "active"}&q=2021
     """
     start_time = time.perf_counter()  # Start timing
 
-    # Parse the JSON filter into a dictionary.
+    # Parse the JSON filter (if provided) into a MongoDB filter.
     raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
     
+    # If a search query 'q' is provided, build a search filter for predefined publication fields.
+    if q:
+        search_fields = [
+            "publication_id", "publication_type", "title", 
+            "abstract", "DOI", "PMID", "journal"
+        ]
+        search_filter = {"$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]}
+        filters = {"$and": [filters, search_filter]} if filters else search_filter
+
     # Determine sort option (default to ascending by "publication_id").
     sort_option = parse_sort(sort) if sort else ("publication_id", 1)
 
@@ -71,12 +97,14 @@ async def get_publications(
     end_time = time.perf_counter()  # End timing
     exec_time = end_time - start_time
 
-    # Include extra query parameters (e.g. sort and filter) in the pagination links.
+    # Prepare extra query parameters (including sort, filter, and search query).
     extra_params: Dict[str, Any] = {}
     if sort:
         extra_params["sort"] = sort
     if filter_query:
         extra_params["filter"] = filter_query
+    if q:
+        extra_params["q"] = q
 
     # Build pagination metadata including execution time (in ms).
     meta = build_pagination_meta(
