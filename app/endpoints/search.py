@@ -7,10 +7,8 @@ from fastapi.encoders import jsonable_encoder
 from bson import ObjectId
 
 from app.database import db
-from app.utils import build_pagination_meta
 
 router = APIRouter()
-
 
 @router.get(
     "/",
@@ -35,10 +33,10 @@ async def search_documents(
     individuals, variants, and publications collections.
 
     If the `collection` parameter is specified, only that collection is searched.
-    The response follows JSON:API recommendations, including pagination metadata.
+    This response does not include pagination metadata.
 
     Example:
-        /api/search?q=HNF1B&collection=individuals&page=1&page_size=10
+        /api/search?q=HNF1B&collection=variants&page=1&page_size=10
     """
     start_time = time.perf_counter()
 
@@ -54,10 +52,29 @@ async def search_documents(
         collections_to_search = allowed_collections
 
     # Define search fields per collection for regex matching.
+    # Use dot notation for nested fields (e.g., "classifications.verdict").
     search_fields = {
-        "individuals": ["individual_id", "Sex", "individual_DOI", "IndividualIdentifier"],
-        "variants": ["variant_id", "hg19", "hg19_INFO", "hg38", "hg38_INFO", "variant_type"],
-        "publications": ["publication_id", "publication_type", "title", "abstract", "DOI", "PMID", "journal"],
+        "individuals": [
+            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier"
+        ],
+        "variants": [
+            "variant_id",
+            "hg19",
+            "hg19_INFO",
+            "hg38",
+            "hg38_INFO",
+            "variant_type",
+            "classifications.verdict"  # Nested field search
+        ],
+        "publications": [
+            "publication_id",
+            "publication_type",
+            "title",
+            "abstract",
+            "DOI",
+            "PMID",
+            "journal"
+        ],
     }
 
     # Create a case-insensitive regex filter.
@@ -67,19 +84,14 @@ async def search_documents(
     for coll in collections_to_search:
         # Build a filter that matches if any of the specified fields match the regex.
         filter_query = {"$or": [{field: regex} for field in search_fields.get(coll, [])]}
-        total = await db[coll].count_documents(filter_query)
         skip_count = (page - 1) * page_size
         cursor = db[coll].find(filter_query).skip(skip_count).limit(page_size)
         documents = await cursor.to_list(length=page_size)
-        base_url = str(request.url).split("?")[0]
-        meta = build_pagination_meta(
-            base_url, page, page_size, total, query_params={"q": q, "collection": coll}
-        )
-        results[coll] = {"data": documents, "meta": meta}
+        results[coll] = {"data": documents}
 
     end_time = time.perf_counter()
     execution_time_ms = round((end_time - start_time) * 1000, 2)
     response = {"results": results, "execution_time_ms": execution_time_ms}
 
-    # Use custom encoder for ObjectId to avoid JSON serialization errors.
+    # Use a custom encoder for ObjectId to avoid JSON serialization errors.
     return jsonable_encoder(response, custom_encoder={ObjectId: lambda o: str(o)})
