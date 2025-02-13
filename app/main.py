@@ -1,7 +1,7 @@
 # File: app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.endpoints import individuals, publications, variants, aggregations, proteins, genes
+from app.endpoints import individuals, publications, variants, aggregations, proteins, genes, search
 
 app = FastAPI(
     title="HNF1B-db API",
@@ -22,6 +22,7 @@ app.include_router(publications.router, prefix="/api/publications", tags=["Publi
 app.include_router(variants.router, prefix="/api/variants", tags=["Variants"])
 app.include_router(proteins.router, prefix="/api/proteins", tags=["Proteins"])
 app.include_router(genes.router, prefix="/api/genes", tags=["Genes"])
+app.include_router(search.router, prefix="/api/search", tags=["Search"])
 app.include_router(aggregations.router, prefix="/api/aggregations", tags=["Aggregations"])
 
 if __name__ == "__main__":
