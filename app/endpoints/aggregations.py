@@ -654,3 +654,54 @@ async def get_variant_small_variants() -> dict:
     ]
     results = await db.variants.aggregate(pipeline).to_list(length=None)
     return {"small_variants": results}
+
+@router.get("/summary", tags=["Aggregations"])
+async def get_summary_stats() -> dict:
+    """
+    Retrieve summary statistics for main collections.
+    
+    For Individuals:
+      - Count the total number of individuals.
+      - Sum the total number of reports across all individuals.
+    
+    For Variants and Publications:
+      - Count the total number of documents.
+    
+    Returns:
+        A dictionary with:
+            {
+                "individuals": <int>,
+                "total_reports": <int>,
+                "variants": <int>,
+                "publications": <int>
+            }
+    """
+    # Get counts for each collection using count_documents.
+    individuals_count = await db.individuals.count_documents({})
+    variants_count = await db.variants.count_documents({})
+    publications_count = await db.publications.count_documents({})
+
+    # Compute total number of reports across all individuals.
+    # For each document, if "reports" is missing, treat it as an empty list.
+    pipeline = [
+        {
+            "$project": {
+                "report_count": {"$size": {"$ifNull": ["$reports", []]}}
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "total_reports": {"$sum": "$report_count"}
+            }
+        }
+    ]
+    reports_result = await db.individuals.aggregate(pipeline).to_list(length=1)
+    total_reports = reports_result[0]["total_reports"] if reports_result else 0
+
+    return {
+        "individuals": individuals_count,
+        "total_reports": total_reports,
+        "variants": variants_count,
+        "publications": publications_count,
+    }
