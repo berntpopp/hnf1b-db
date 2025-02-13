@@ -1,11 +1,12 @@
 # File: app/endpoints/variants.py
+import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from typing import Any, Dict, Optional
 from bson import ObjectId
 from app.models import Variant
 from app.database import db
-from app.utils import parse_filters, parse_sort, build_pagination_meta
+from app.utils import parse_sort, build_pagination_meta, parse_filter_json, parse_deep_object_filters
 
 router = APIRouter()
 
@@ -15,29 +16,38 @@ async def get_variants(
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of variants per page"),
     sort: Optional[str] = Query(
-        None, description="Sort field (e.g. 'variant_id' or '-variant_id')"
+        None, 
+        description="Sort field (e.g. 'variant_id' for ascending or '-variant_id' for descending order)"
+    ),
+    filter: Optional[str] = Query(
+        None,
+        description=(
+            "Filtering criteria as a JSON string. Example: "
+            "{\"status\": \"active\", \"variant_id\": {\"gt\": \"var1000\"}}"
+        )
     )
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of variants.
 
-    The response includes variants with nested classifications and annotations.
-    Supports JSON:API–style filtering via query parameters, e.g.:
-        /variants?filter[status]=active&sort=-variant_id&page=2&page_size=10
-    """
-    # Build filters from the query parameters
-    query_params = dict(request.query_params)
-    filters = parse_filters(query_params)
+    The filter parameter should be provided as a JSON string.
     
-    # Determine sort order; default to ascending by "variant_id"
+    Example:
+      /variants?sort=-variant_id&page=1&page_size=10&filter={"status": "active", "variant_id": {"gt": "var1000"}}
+    """
+    start_time = time.perf_counter()  # Start timing
+
+    # Parse the JSON filter string into a dictionary.
+    raw_filter = parse_filter_json(filter)
+    filters = parse_deep_object_filters(raw_filter)
+    
+    # Determine the sort option (default to ascending by "variant_id").
     sort_option = parse_sort(sort) if sort else ("variant_id", 1)
 
-    # Retrieve the collection and count the total documents matching filters
     collection = db.variants
     total = await collection.count_documents(filters)
     skip_count = (page - 1) * page_size
 
-    # Build the MongoDB cursor using skip() and limit()
     cursor = collection.find(filters)
     if sort_option:
         cursor = cursor.sort(*sort_option)
@@ -47,11 +57,13 @@ async def get_variants(
     if not variants:
         raise HTTPException(status_code=404, detail="No variants found")
 
-    # Build pagination metadata
     base_url = str(request.url).split("?")[0]
-    meta = build_pagination_meta(base_url, page, page_size, total)
+    end_time = time.perf_counter()  # End timing
+    execution_time = end_time - start_time
 
-    # Convert the data to JSON-friendly types (e.g. converting ObjectId to str)
+    # Build pagination metadata, including execution time (in milliseconds)
+    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=execution_time)
+
     response_data = jsonable_encoder(
         {"data": variants, "meta": meta},
         custom_encoder={ObjectId: lambda o: str(o)}

@@ -1,11 +1,12 @@
 # File: app/endpoints/publications.py
+import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from typing import Any, Dict, Optional
 from bson import ObjectId
 from app.models import Publication
 from app.database import db
-from app.utils import parse_filters, parse_sort, build_pagination_meta
+from app.utils import parse_sort, build_pagination_meta, parse_filter_json, parse_deep_object_filters
 
 router = APIRouter()
 
@@ -15,23 +16,34 @@ async def get_publications(
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of publications per page"),
     sort: Optional[str] = Query(
-        None, description="Sort field (e.g. 'publication_id' or '-publication_id')"
+        None,
+        description="Sort field (e.g. 'publication_id' for ascending or '-publication_id' for descending order)"
+    ),
+    filter: Optional[str] = Query(
+        None,
+        description=(
+            "Filtering criteria as a JSON string. Example: "
+            "{\"status\": \"active\", \"publication_date\": {\"gt\": \"2021-01-01\"}}"
+        )
     )
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of publications.
 
-    Supports JSON:API–style filtering via query parameters.
-    For example:
-      /publications?filter[status]=active&filter[publication_date][gt]=2021-01-01&sort=-publication_id
+    The filter parameter should be provided as a JSON string.
+    
+    Example:
+      /publications?sort=-publication_id&page=1&page_size=10&filter={"status": "active", "publication_date": {"gt": "2021-01-01"}}
     """
-    # Extract all query parameters and build the filter dict.
-    query_params = dict(request.query_params)
-    filters = parse_filters(query_params)
+    start_time = time.perf_counter()  # Start timing
+
+    # Parse the JSON filter into a dictionary.
+    raw_filter = parse_filter_json(filter)
+    filters = parse_deep_object_filters(raw_filter)
     
-    # Use the provided sort parameter or default to sorting by publication_id ascending.
+    # Determine sort option (default to ascending by "publication_id").
     sort_option = parse_sort(sort) if sort else ("publication_id", 1)
-    
+
     collection = db.publications
     total = await collection.count_documents(filters)
     skip_count = (page - 1) * page_size
@@ -46,9 +58,13 @@ async def get_publications(
         raise HTTPException(status_code=404, detail="No publications found")
 
     base_url = str(request.url).split("?")[0]
-    meta = build_pagination_meta(base_url, page, page_size, total)
+    end_time = time.perf_counter()  # End timing
+    exec_time = end_time - start_time
 
-    # Convert the publications to JSON-friendly format.
+    # Build pagination metadata including execution time (in ms).
+    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=exec_time)
+
+    # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
     response_data = jsonable_encoder(
         {"data": publications, "meta": meta},
         custom_encoder={ObjectId: lambda o: str(o)}

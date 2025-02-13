@@ -1,4 +1,5 @@
 # File: app/endpoints/proteins.py
+import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from typing import Any, Dict, Optional
@@ -15,18 +16,20 @@ async def get_proteins(
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of proteins per page"),
     sort: Optional[str] = Query(
-        None, description="Sort field (e.g. 'gene' or '-gene'); defaults to sorting by gene"
+        None, description="Sort field (e.g. 'gene' for ascending or '-gene' for descending order). Defaults to sorting by gene."
     )
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of proteins.
 
     This endpoint queries the `proteins` collection for protein structure and domain data.
-    Supports JSON:API–style filtering via query parameters.
+    It supports JSON:API–style filtering via query parameters.
     For example:
       /proteins?filter[domain]=kinase&sort=-gene&page=2&page_size=10
     """
-    # Build filters from the request query parameters
+    start_time = time.perf_counter()  # Start timing
+
+    # Build filters from the request query parameters.
     query_params = dict(request.query_params)
     filters = parse_filters(query_params)
     
@@ -47,7 +50,11 @@ async def get_proteins(
         raise HTTPException(status_code=404, detail="No proteins found")
 
     base_url = str(request.url).split("?")[0]
-    meta = build_pagination_meta(base_url, page, page_size, total)
+    end_time = time.perf_counter()  # End timing
+    exec_time = end_time - start_time
+
+    # Build pagination metadata including execution time.
+    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=exec_time)
     
     # Convert the proteins and metadata into JSON-friendly types.
     response_data = jsonable_encoder(

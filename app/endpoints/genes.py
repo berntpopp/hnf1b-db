@@ -1,4 +1,5 @@
 # File: app/endpoints/genes.py
+import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from typing import Any, Dict, Optional
@@ -15,7 +16,8 @@ async def get_genes(
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of genes per page"),
     sort: Optional[str] = Query(
-        None, description="Sort field (e.g. 'gene_symbol' or '-gene_symbol'; '-' indicates descending order)"
+        None,
+        description="Sort field (e.g. 'gene_symbol' for ascending or '-gene_symbol' for descending order)"
     )
 ) -> Dict[str, Any]:
     """
@@ -25,6 +27,8 @@ async def get_genes(
     It supports JSON:API–style filtering via query parameters, for example:
       /genes?filter[status]=active&sort=-gene_symbol&page=2&page_size=10
     """
+    start_time = time.perf_counter()  # Start timing
+
     # Build filters from query parameters.
     query_params = dict(request.query_params)
     filters = parse_filters(query_params)
@@ -46,9 +50,12 @@ async def get_genes(
     if not genes:
         raise HTTPException(status_code=404, detail="No genes found")
 
-    # Build pagination metadata.
     base_url = str(request.url).split("?")[0]
-    meta = build_pagination_meta(base_url, page, page_size, total)
+    end_time = time.perf_counter()  # End timing
+    exec_time = end_time - start_time
+
+    # Build pagination metadata including execution time.
+    meta = build_pagination_meta(base_url, page, page_size, total, execution_time=exec_time)
 
     # Convert the result to JSON-friendly data (e.g., convert ObjectId to str).
     response_data = jsonable_encoder(
