@@ -1,6 +1,7 @@
 import json
 import re
 import urllib.parse
+import math
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -134,6 +135,7 @@ def build_pagination_meta(
     
     Contains:
       - total: total number of documents.
+      - total_pages: total number of pages.
       - page: current page number.
       - page_size: number of items per page.
       - links: URLs to prev/next pages (if applicable). The links include
@@ -141,6 +143,10 @@ def build_pagination_meta(
       - execution_time_ms: (optional) Execution time in milliseconds.
     """
     meta = {"total": total, "page": page, "page_size": page_size}
+    # Calculate total pages (using ceiling division)
+    total_pages = (total + page_size - 1) // page_size
+    meta["total_pages"] = total_pages
+
     links = {}
     query_params = query_params or {}
 
