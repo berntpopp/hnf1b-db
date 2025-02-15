@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.endpoints import individuals, publications, variants, aggregations, proteins, genes, search
+from app.endpoints import auth
 
 app = FastAPI(
     title="HNF1B-db API",
@@ -24,6 +25,7 @@ app.include_router(proteins.router, prefix="/api/proteins", tags=["Proteins"])
 app.include_router(genes.router, prefix="/api/genes", tags=["Genes"])
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
 app.include_router(aggregations.router, prefix="/api/aggregations", tags=["Aggregations"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 
 if __name__ == "__main__":
     import uvicorn
