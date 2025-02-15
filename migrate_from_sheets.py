@@ -1,5 +1,3 @@
-# File: migrate_from_sheets.py
-
 import asyncio
 import math
 import re
@@ -9,11 +7,9 @@ import pandas as pd
 from app.database import db
 from app.config import settings
 from app.models import User, Individual, Publication, Report, Variant, Protein, Gene, Exon
+
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez, SeqIO  # Existing: for other functions
-from app.database import db
-from app.config import settings
-from app.models import User, Individual, Publication, Report, Variant, Protein, Gene, Exon
 import requests
 
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
@@ -207,10 +203,15 @@ def parse_vep_extra(df):
 
 # ----------------------------------------------------------------------
 async def load_phenotype_mappings():
+    """
+    Load the phenotype mapping from the phenotype sheet.
+    (For non-renal phenotypes the original logic is used.)
+    """
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
     df = pd.read_csv(url)
     df = normalize_dataframe_columns(df)
     mapping = {}
+    # For non-renal phenotypes, we use the last row (as before)
     for idx, row in df.iterrows():
         key = str(row["phenotype_category"]).strip().lower()
         mapping[key] = {
@@ -459,6 +460,7 @@ async def import_individuals_with_reports():
     df = df.dropna(how="all")
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
+
     base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Sex']
     if "Publication" in df.columns:
         base_cols.append("Publication")
@@ -466,18 +468,26 @@ async def import_individuals_with_reports():
         base_cols.append("ReviewDate")
     if "Comment" in df.columns:
         base_cols.append("Comment")
+
     df["individual_id"] = df["individual_id"].apply(format_individual_id)
+
     pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
     publication_mapping = {
         doc["publication_alias"].strip().lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
         for doc in pub_docs if "publication_alias" in doc
     }
     print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
+
     user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     user_mapping = {}
     for user_doc in user_docs:
         email = user_doc["email"].strip().lower()
         user_mapping[email] = user_doc["_id"]
+
+    # Load mappings (the general phenotype mapping is used for non-kidney phenotypes)
+    phenotype_mapping = await load_phenotype_mappings()
+    modifier_mapping = await load_modifier_mappings()
+
     phenotype_cols = [
         'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
         'KidneyBiopsy', 'RenalHypoplasia', 'SolitaryKidney', 'UrinaryTractMalformation',
@@ -489,55 +499,129 @@ async def import_individuals_with_reports():
         'MusculoskeletalFeatures', 'DysmorphicFeatures', 'ElevatedHepaticTransaminase',
         'AbnormalLiverPhysiology'
     ]
-    phenotype_mapping = await load_phenotype_mappings()
-    modifier_mapping = await load_modifier_mappings()
+
+    # --- Special logic for RenalInsufficancy ---
+    # For any sample that has a value in RenalInsufficancy:
+    # - If the cell is empty, treat it as "not reported".
+    # - For "no" or "not reported", add the HP:0012622 mapping with described set to the cell value.
+    # - Otherwise (if a stage value), add the stage mapping (with described "yes")
+    #   and also add HP:0012622 (chronic kidney disease, not specified) with described "yes".
+    renal_mapping = {
+        "chronic kidney disease, not specified": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
+        "stage 1 chronic kidney disease": {"phenotype_id": "HP:0012623", "name": "Stage 1 chronic kidney disease"},
+        "stage 2 chronic kidney disease": {"phenotype_id": "HP:0012624", "name": "Stage 2 chronic kidney disease"},
+        "stage 3 chronic kidney disease": {"phenotype_id": "HP:0012625", "name": "Stage 3 chronic kidney disease"},
+        "stage 4 chronic kidney disease": {"phenotype_id": "HP:0012626", "name": "Stage 4 chronic kidney disease"},
+        "stage 5 chronic kidney disease": {"phenotype_id": "HP:0003774", "name": "Stage 5 chronic kidney disease"},
+        "no": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
+        "not reported": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"}
+    }
+    # --- End special logic ---
+
     grouped = df.groupby('individual_id')
     validated_individuals = []
+
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
         base_publication_alias = base_data.pop('Publication', None)
         base_review_date = base_data.pop('ReviewDate', None)
         base_comment = base_data.pop('Comment', None)
+
         reports = []
         for idx, row in group.iterrows():
             if pd.notna(row.get('report_id')):
                 report_id_formatted = format_report_id(row['report_id'])
                 report_data = {'report_id': report_id_formatted}
+
                 review_by_email = row.get('ReviewBy')
                 if pd.notna(review_by_email):
                     report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
                 else:
                     report_data['reviewed_by'] = None
+
+                # Build up the phenotypes
                 phenotypes_obj = {}
                 for col in phenotype_cols:
                     raw_val = row.get(col, "")
                     reported_val = str(raw_val).strip() if pd.notna(raw_val) else ""
                     pheno_key = col.strip().lower()
-                    std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
                     lower_val = reported_val.lower()
-                    if lower_val in ["yes", "no", "not reported"]:
-                        described = lower_val
-                        modifier_obj = None
-                    else:
-                        described = "yes"
-                        manual_modifier_map = {
-                            "unilateral left": "left",
-                            "unilateral right": "right",
-                            "unilateral unspecified": "unilateral",
-                            "bilateral": "bilateral"
-                        }
-                        if pheno_key in ["congenitalcardiacanomalies", "antenatalrenalabnormalities"]:
-                            modifier_key = "congenital onset"
+
+                    if pheno_key == "renalinsufficancy":
+                        if lower_val == "":
+                            lower_val = "not reported"
+                        if lower_val in renal_mapping:
+                            std_info = renal_mapping[lower_val]
+                            # For "no" or "not reported", use that value as described.
+                            if lower_val in ["no", "not reported"]:
+                                described = lower_val
+                                # Add only HP:0012622 mapping
+                                entry = {
+                                    "phenotype_id": std_info["phenotype_id"],
+                                    "name": std_info["name"],
+                                    "modifier": None,
+                                    "described": described
+                                }
+                                phenotypes_obj[std_info["phenotype_id"]] = entry
+                            else:
+                                # For stage values, add the stage mapping...
+                                described = "yes"
+                                entry_stage = {
+                                    "phenotype_id": std_info["phenotype_id"],
+                                    "name": std_info["name"],
+                                    "modifier": None,
+                                    "described": described
+                                }
+                                phenotypes_obj[std_info["phenotype_id"]] = entry_stage
+                                # ...and also add the chronic kidney disease, not specified mapping.
+                                extra = renal_mapping["chronic kidney disease, not specified"]
+                                entry_extra = {
+                                    "phenotype_id": extra["phenotype_id"],
+                                    "name": extra["name"],
+                                    "modifier": None,
+                                    "described": "yes"
+                                }
+                                phenotypes_obj[extra["phenotype_id"]] = entry_extra
                         else:
-                            modifier_key = manual_modifier_map.get(lower_val, lower_val)
-                        modifier_obj = modifier_mapping.get(modifier_key)
-                    phenotypes_obj[std_info["phenotype_id"]] = {
-                        "phenotype_id": std_info["phenotype_id"],
-                        "name": std_info["name"],
-                        "modifier": modifier_obj,
-                        "described": described
-                    }
+                            print(f"[import_individuals] Warning: no matching renal phenotype for '{reported_val}'")
+                            std_info = {"phenotype_id": "UNKNOWN", "name": reported_val}
+                            described = "yes"
+                            modifier_obj = None
+                            phenotypes_obj[std_info["phenotype_id"]] = {
+                                "phenotype_id": std_info["phenotype_id"],
+                                "name": std_info["name"],
+                                "modifier": modifier_obj,
+                                "described": described
+                            }
+                    else:
+                        # Use original logic for all other phenotype columns.
+                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
+                        if lower_val in ["yes", "no", "not reported"]:
+                            described = lower_val
+                            modifier_obj = None
+                        else:
+                            described = "yes"
+                            manual_modifier_map = {
+                                "unilateral left": "left",
+                                "unilateral right": "right",
+                                "unilateral unspecified": "unilateral",
+                                "bilateral": "bilateral"
+                            }
+                            if pheno_key in ["congenitalcardiacanomalies", "antenatalrenalabnormalities"]:
+                                modifier_key = "congenital onset"
+                            else:
+                                modifier_key = manual_modifier_map.get(lower_val, lower_val)
+                            modifier_obj = modifier_mapping.get(modifier_key)
+                        phenotypes_obj[std_info["phenotype_id"]] = {
+                            "phenotype_id": std_info["phenotype_id"],
+                            "name": std_info["name"],
+                            "modifier": modifier_obj,
+                            "described": described
+                        }
+
                 report_data['phenotypes'] = phenotypes_obj
+
+                # Publication linking
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias
@@ -550,25 +634,34 @@ async def import_individuals_with_reports():
                             report_data["report_date"] = pub_obj.get("publication_date")
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
+
+                # Review date
                 review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
                 if review_date_val is not None:
                     report_data["review_date"] = review_date_val
+
+                # Comment
                 comment_val = row.get('Comment') or base_comment
                 if pd.notna(comment_val):
                     report_data["comment"] = str(comment_val).strip()
                 else:
                     report_data["comment"] = ""
+
+                # Additional fields
                 report_data["age_reported"] = none_if_nan(row.get("AgeReported"))
                 report_data["age_onset"] = none_if_nan(row.get("AgeOnset"))
                 report_data["cohort"] = none_if_nan(row.get("Cohort"))
                 report_data["family_history"] = none_if_nan(row.get("FamilyHistory"))
+
                 reports.append(report_data)
+
         base_data['reports'] = reports
         try:
             indiv = Individual(**base_data)
             validated_individuals.append(indiv.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_individuals] Validation error for individual {indiv_id}: {e}")
+
     print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals with embedded reports into database...")
     await db.individuals.delete_many({})
     if validated_individuals:
@@ -661,13 +754,16 @@ async def import_variants():
                 val = none_if_nan(row.get(col))
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
+
             sp_indiv_id = format_individual_id(row['individual_id'])
             det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
             seg = none_if_nan(row.get('Segregation'))
+
             individual_variant_info[sp_indiv_id] = {
                 "detection_method": det_method,
                 "segregation": seg
             }
+
             classification = {}
             if any(col in row and pd.notna(row.get(col)) for col in classification_cols):
                 classification = {
@@ -677,6 +773,7 @@ async def import_variants():
                     'system': none_if_nan(row.get('system_classification')),
                     'classification_date': parse_date(row.get('date_classification'))
                 }
+
             variant_data = {
                 'variant_type': row.get('VariantType'),
                 'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
@@ -684,6 +781,7 @@ async def import_variants():
                 'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
                 'hg38': none_if_nan(row.get('hg38'))
             }
+
             annotation = {}
             varsome_val = none_if_nan(row.get('Varsome'))
             if pd.notna(varsome_val):
@@ -705,6 +803,7 @@ async def import_variants():
                     "source": "varsome",
                     "annotation_date": parse_date(row.get('date_classification'))
                 }
+
             reported_entry = {}
             vr = none_if_nan(row.get('VariantReported'))
             if vr:
@@ -739,6 +838,7 @@ async def import_variants():
                     "annotations": [annotation] if annotation and any(annotation.values()) else [],
                     "classifications": [classification] if classification and any(classification.values()) else []
                 }
+
     print(f"[import_variants] Found {len(unique_variants)} unique variants.")
 
     spid_to_objid = {}
@@ -760,6 +860,7 @@ async def import_variants():
         variant_doc['classifications'] = info.get('classifications', [])
         variant_doc['annotations'] = info.get('annotations', [])
         variant_doc['reported'] = info.get('reported', [])
+
         vcf_key = variant_doc.get("hg38")
         print(f"[DEBUG] Processing variant with hg38: {vcf_key}")
         if vcf_key and vcf_key in annotation_map:
@@ -767,6 +868,7 @@ async def import_variants():
             variant_doc['annotations'].append(annotation_map[vcf_key])
         else:
             print(f"[DEBUG] No VEP/CADD annotation found for hg38: {vcf_key}")
+
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 
@@ -822,16 +924,13 @@ async def import_proteins():
     if missing:
         raise KeyError(f"[import_proteins] Missing expected columns in proteins sheet: {missing}")
 
-    # Update sanitize_value to treat both "NA" and "nan" (case-insensitive) as empty.
     def sanitize_value(val: any) -> str:
         s = str(val).strip() if val is not None else ""
         return "" if s.upper() in ("NA", "NAN") else s
 
-    # Apply the sanitization for all columns.
     for col in df.columns:
         df[col] = df[col].apply(sanitize_value)
 
-    # Extract common fields (assumed identical for all rows).
     gene_val = sanitize_value(df.iloc[0]["gene"])
     transcript_val = sanitize_value(df.iloc[0]["transcript"])
     protein_val = sanitize_value(df.iloc[0]["protein"])
@@ -857,7 +956,6 @@ async def import_proteins():
             except Exception:
                 start_position, end_position = None, None
 
-        # Convert numeric fields using the sanitized value.
         try:
             start_str = sanitize_value(row["start"])
             start_val = int(start_str) if start_str.isdigit() else None
