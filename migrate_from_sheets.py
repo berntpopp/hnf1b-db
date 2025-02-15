@@ -205,18 +205,18 @@ def parse_vep_extra(df):
 async def load_phenotype_mappings():
     """
     Load the phenotype mapping from the phenotype sheet.
-    (For non-renal phenotypes the original logic is used.)
+    Now each mapping includes the phenotype group (from the 'phenotype_group' column).
     """
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
     df = pd.read_csv(url)
     df = normalize_dataframe_columns(df)
     mapping = {}
-    # For non-renal phenotypes, we use the last row (as before)
     for idx, row in df.iterrows():
         key = str(row["phenotype_category"]).strip().lower()
         mapping[key] = {
             "phenotype_id": row["phenotype_id"],
-            "name": row["phenotype_name"]
+            "name": row["phenotype_name"],
+            "group": row.get("phenotype_group", "").strip()
         }
     print(f"[load_phenotype_mappings] Loaded mapping for {len(mapping)} phenotype categories.")
     return mapping
@@ -502,31 +502,46 @@ async def import_individuals_with_reports():
 
     # --- Special logic for RenalInsufficancy ---
     renal_mapping = {
-        "chronic kidney disease, not specified": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
-        "stage 1 chronic kidney disease": {"phenotype_id": "HP:0012623", "name": "Stage 1 chronic kidney disease"},
-        "stage 2 chronic kidney disease": {"phenotype_id": "HP:0012624", "name": "Stage 2 chronic kidney disease"},
-        "stage 3 chronic kidney disease": {"phenotype_id": "HP:0012625", "name": "Stage 3 chronic kidney disease"},
-        "stage 4 chronic kidney disease": {"phenotype_id": "HP:0012626", "name": "Stage 4 chronic kidney disease"},
-        "stage 5 chronic kidney disease": {"phenotype_id": "HP:0003774", "name": "Stage 5 chronic kidney disease"},
-        "no": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
-        "not reported": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"}
+        "chronic kidney disease, not specified": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"},
+        "stage 1 chronic kidney disease": {"phenotype_id": "HP:0012623", "name": "Stage 1 chronic kidney disease", "group": "Kidney"},
+        "stage 2 chronic kidney disease": {"phenotype_id": "HP:0012624", "name": "Stage 2 chronic kidney disease", "group": "Kidney"},
+        "stage 3 chronic kidney disease": {"phenotype_id": "HP:0012625", "name": "Stage 3 chronic kidney disease", "group": "Kidney"},
+        "stage 4 chronic kidney disease": {"phenotype_id": "HP:0012626", "name": "Stage 4 chronic kidney disease", "group": "Kidney"},
+        "stage 5 chronic kidney disease": {"phenotype_id": "HP:0003774", "name": "Stage 5 chronic kidney disease", "group": "Kidney"},
+        "no": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"},
+        "not reported": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"}
     }
     # --- End special logic ---
 
     # --- Special logic for KidneyBiopsy ---
-    # Regardless of the cell value, every individual gets both phenotypes.
-    # Their "described" flag is determined as follows:
-    # - If the cell is empty, treat as "not reported".
-    # - If the cell is "no" or "not reported": both get that value.
-    # - If the cell is "multiple glomerular cysts": HP:0100611 gets "yes", ORPHA:2260 gets "no".
-    # - If the cell is "oligomeganephronia": ORPHA:2260 gets "yes", HP:0100611 gets "no".
-    # - If the cell is "oligomeganephronia and multiple glomerular cysts": both get "yes".
+    # Every individual gets both phenotype entries.
+    # The "described" flag for each is determined as follows:
+    # - If empty, treat as "not reported".
+    # - If "no" or "not reported": both get that value.
+    # - If "multiple glomerular cysts": HP:0100611 gets "yes", ORPHA:2260 gets "no".
+    # - If "oligomeganephronia": ORPHA:2260 gets "yes", HP:0100611 gets "no".
+    # - If "oligomeganephronia and multiple glomerular cysts": both get "yes".
     kidneybiopsy_mapping = {
-        "not reported": {"HP:0100611": "not reported", "ORPHA:2260": "not reported"},
-        "no": {"HP:0100611": "no", "ORPHA:2260": "no"},
-        "multiple glomerular cysts": {"HP:0100611": "yes", "ORPHA:2260": "no"},
-        "oligomeganephronia": {"HP:0100611": "no", "ORPHA:2260": "yes"},
-        "oligomeganephronia and multiple glomerular cysts": {"HP:0100611": "yes", "ORPHA:2260": "yes"}
+        "not reported": {
+            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "not reported"},
+            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "not reported"}
+        },
+        "no": {
+            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "no"},
+            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "no"}
+        },
+        "multiple glomerular cysts": {
+            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "yes"},
+            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "no"}
+        },
+        "oligomeganephronia": {
+            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "no"},
+            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "yes"}
+        },
+        "oligomeganephronia and multiple glomerular cysts": {
+            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "yes"},
+            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "yes"}
+        }
     }
     # --- End special logic ---
 
@@ -569,6 +584,7 @@ async def import_individuals_with_reports():
                                 entry = {
                                     "phenotype_id": std_info["phenotype_id"],
                                     "name": std_info["name"],
+                                    "group": std_info.get("group", ""),
                                     "modifier": None,
                                     "described": described
                                 }
@@ -578,6 +594,7 @@ async def import_individuals_with_reports():
                                 entry_stage = {
                                     "phenotype_id": std_info["phenotype_id"],
                                     "name": std_info["name"],
+                                    "group": std_info.get("group", ""),
                                     "modifier": None,
                                     "described": described
                                 }
@@ -586,6 +603,7 @@ async def import_individuals_with_reports():
                                 entry_extra = {
                                     "phenotype_id": extra["phenotype_id"],
                                     "name": extra["name"],
+                                    "group": extra.get("group", ""),
                                     "modifier": None,
                                     "described": "yes"
                                 }
@@ -598,42 +616,28 @@ async def import_individuals_with_reports():
                             phenotypes_obj[std_info["phenotype_id"]] = {
                                 "phenotype_id": std_info["phenotype_id"],
                                 "name": std_info["name"],
+                                "group": "",
                                 "modifier": modifier_obj,
                                 "described": described
                             }
                     elif pheno_key == "kidneybiopsy":
                         if lower_val == "":
                             lower_val = "not reported"
-                        # Always assign both phenotype identifiers.
                         mapping_vals = kidneybiopsy_mapping.get(lower_val)
                         if mapping_vals:
-                            # Create entry for HP:0100611
-                            entry_hp = {
-                                "phenotype_id": "HP:0100611",
-                                "name": "Multiple glomerular cysts",
-                                "modifier": None,
-                                "described": mapping_vals["HP:0100611"]
-                            }
-                            # Create entry for ORPHA:2260
-                            entry_orpha = {
-                                "phenotype_id": "ORPHA:2260",
-                                "name": "Oligomeganephronia",
-                                "modifier": None,
-                                "described": mapping_vals["ORPHA:2260"]
-                            }
-                            phenotypes_obj["HP:0100611"] = entry_hp
-                            phenotypes_obj["ORPHA:2260"] = entry_orpha
+                            phenotypes_obj["HP:0100611"] = mapping_vals["HP:0100611"]
+                            phenotypes_obj["ORPHA:2260"] = mapping_vals["ORPHA:2260"]
                         else:
                             print(f"[import_individuals] Warning: no matching KidneyBiopsy phenotype for '{reported_val}'")
                             phenotypes_obj["UNKNOWN"] = {
                                 "phenotype_id": "UNKNOWN",
                                 "name": reported_val,
+                                "group": "",
                                 "modifier": None,
                                 "described": "yes"
                             }
                     else:
-                        # Use original logic for all other phenotype columns.
-                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col})
+                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col, "group": ""})
                         if lower_val in ["yes", "no", "not reported"]:
                             described = lower_val
                             modifier_obj = None
@@ -653,6 +657,7 @@ async def import_individuals_with_reports():
                         phenotypes_obj[std_info["phenotype_id"]] = {
                             "phenotype_id": std_info["phenotype_id"],
                             "name": std_info["name"],
+                            "group": std_info.get("group", ""),
                             "modifier": modifier_obj,
                             "described": described
                         }
@@ -673,19 +678,16 @@ async def import_individuals_with_reports():
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
 
-                # Review date
                 review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
                 if review_date_val is not None:
                     report_data["review_date"] = review_date_val
 
-                # Comment
                 comment_val = row.get('Comment') or base_comment
                 if pd.notna(comment_val):
                     report_data["comment"] = str(comment_val).strip()
                 else:
                     report_data["comment"] = ""
 
-                # Additional fields
                 report_data["age_reported"] = none_if_nan(row.get("AgeReported"))
                 report_data["age_onset"] = none_if_nan(row.get("AgeOnset"))
                 report_data["cohort"] = none_if_nan(row.get("Cohort"))
@@ -1061,19 +1063,16 @@ def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
     transcripts = gene_data.get("Transcript", [])
     canonical_exons = []
     transcript_id = None
-    # First, try to find the transcript flagged as canonical.
     for transcript in transcripts:
         if transcript.get("is_canonical") == 1:
             transcript_id = transcript.get("id")
             exons = transcript.get("Exon", [])
             canonical_exons = exons
             break
-    # Fallback: use the first transcript if no canonical one is found.
     if not canonical_exons and transcripts:
         transcript = transcripts[0]
         transcript_id = transcript.get("id")
         canonical_exons = transcript.get("Exon", [])
-    # Format exons: sort by start coordinate and assign sequential exon numbers.
     formatted_exons = []
     canonical_exons.sort(key=lambda x: x.get("start", 0))
     for idx, exon in enumerate(canonical_exons, start=1):
@@ -1096,12 +1095,10 @@ def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
       - hg38: { "exons": [...] }
       - hg19: { "exons": [...] }
     """
-    # Fetch gene data for GRCh38
     server_hg38 = "https://rest.ensembl.org"
     gene_data_hg38 = fetch_gene_data(symbol, server_hg38)
     transcript_hg38, exons_hg38 = extract_canonical_transcript_exons(gene_data_hg38)
     
-    # Fetch gene data for GRCh37 (hg19)
     server_hg19 = "https://grch37.rest.ensembl.org"
     gene_data_hg19 = fetch_gene_data(symbol, server_hg19)
     _, exons_hg19 = extract_canonical_transcript_exons(gene_data_hg19)
@@ -1110,7 +1107,7 @@ def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
         "gene_symbol": gene_data_hg38.get("display_name", symbol),
         "ensembl_gene_id": gene_data_hg38.get("id"),
         "transcript": transcript_hg38,
-        "exons": exons_hg38,  # default: GRCh38 exons
+        "exons": exons_hg38,
         "hg38": {"exons": exons_hg38},
         "hg19": {"exons": exons_hg19}
     }
