@@ -501,11 +501,6 @@ async def import_individuals_with_reports():
     ]
 
     # --- Special logic for RenalInsufficancy ---
-    # For any sample that has a value in RenalInsufficancy:
-    # - If the cell is empty, treat it as "not reported".
-    # - For "no" or "not reported", add the HP:0012622 mapping with described set to the cell value.
-    # - Otherwise (if a stage value), add the stage mapping (with described "yes")
-    #   and also add HP:0012622 (chronic kidney disease, not specified) with described "yes".
     renal_mapping = {
         "chronic kidney disease, not specified": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
         "stage 1 chronic kidney disease": {"phenotype_id": "HP:0012623", "name": "Stage 1 chronic kidney disease"},
@@ -515,6 +510,23 @@ async def import_individuals_with_reports():
         "stage 5 chronic kidney disease": {"phenotype_id": "HP:0003774", "name": "Stage 5 chronic kidney disease"},
         "no": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"},
         "not reported": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified"}
+    }
+    # --- End special logic ---
+
+    # --- Special logic for KidneyBiopsy ---
+    # Regardless of the cell value, every individual gets both phenotypes.
+    # Their "described" flag is determined as follows:
+    # - If the cell is empty, treat as "not reported".
+    # - If the cell is "no" or "not reported": both get that value.
+    # - If the cell is "multiple glomerular cysts": HP:0100611 gets "yes", ORPHA:2260 gets "no".
+    # - If the cell is "oligomeganephronia": ORPHA:2260 gets "yes", HP:0100611 gets "no".
+    # - If the cell is "oligomeganephronia and multiple glomerular cysts": both get "yes".
+    kidneybiopsy_mapping = {
+        "not reported": {"HP:0100611": "not reported", "ORPHA:2260": "not reported"},
+        "no": {"HP:0100611": "no", "ORPHA:2260": "no"},
+        "multiple glomerular cysts": {"HP:0100611": "yes", "ORPHA:2260": "no"},
+        "oligomeganephronia": {"HP:0100611": "no", "ORPHA:2260": "yes"},
+        "oligomeganephronia and multiple glomerular cysts": {"HP:0100611": "yes", "ORPHA:2260": "yes"}
     }
     # --- End special logic ---
 
@@ -552,10 +564,8 @@ async def import_individuals_with_reports():
                             lower_val = "not reported"
                         if lower_val in renal_mapping:
                             std_info = renal_mapping[lower_val]
-                            # For "no" or "not reported", use that value as described.
                             if lower_val in ["no", "not reported"]:
                                 described = lower_val
-                                # Add only HP:0012622 mapping
                                 entry = {
                                     "phenotype_id": std_info["phenotype_id"],
                                     "name": std_info["name"],
@@ -564,7 +574,6 @@ async def import_individuals_with_reports():
                                 }
                                 phenotypes_obj[std_info["phenotype_id"]] = entry
                             else:
-                                # For stage values, add the stage mapping...
                                 described = "yes"
                                 entry_stage = {
                                     "phenotype_id": std_info["phenotype_id"],
@@ -573,7 +582,6 @@ async def import_individuals_with_reports():
                                     "described": described
                                 }
                                 phenotypes_obj[std_info["phenotype_id"]] = entry_stage
-                                # ...and also add the chronic kidney disease, not specified mapping.
                                 extra = renal_mapping["chronic kidney disease, not specified"]
                                 entry_extra = {
                                     "phenotype_id": extra["phenotype_id"],
@@ -592,6 +600,36 @@ async def import_individuals_with_reports():
                                 "name": std_info["name"],
                                 "modifier": modifier_obj,
                                 "described": described
+                            }
+                    elif pheno_key == "kidneybiopsy":
+                        if lower_val == "":
+                            lower_val = "not reported"
+                        # Always assign both phenotype identifiers.
+                        mapping_vals = kidneybiopsy_mapping.get(lower_val)
+                        if mapping_vals:
+                            # Create entry for HP:0100611
+                            entry_hp = {
+                                "phenotype_id": "HP:0100611",
+                                "name": "Multiple glomerular cysts",
+                                "modifier": None,
+                                "described": mapping_vals["HP:0100611"]
+                            }
+                            # Create entry for ORPHA:2260
+                            entry_orpha = {
+                                "phenotype_id": "ORPHA:2260",
+                                "name": "Oligomeganephronia",
+                                "modifier": None,
+                                "described": mapping_vals["ORPHA:2260"]
+                            }
+                            phenotypes_obj["HP:0100611"] = entry_hp
+                            phenotypes_obj["ORPHA:2260"] = entry_orpha
+                        else:
+                            print(f"[import_individuals] Warning: no matching KidneyBiopsy phenotype for '{reported_val}'")
+                            phenotypes_obj["UNKNOWN"] = {
+                                "phenotype_id": "UNKNOWN",
+                                "name": reported_val,
+                                "modifier": None,
+                                "described": "yes"
                             }
                     else:
                         # Use original logic for all other phenotype columns.
