@@ -8,7 +8,7 @@ import gzip
 import pandas as pd
 from app.database import db
 from app.config import settings
-from app.models import User, Individual, Publication, Report, Variant
+from app.models import User, Individual, Publication, Report, Variant, Protein, Gene, Exon
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez, SeqIO  # Existing: for other functions
 from app.database import db
@@ -53,6 +53,15 @@ def format_variant_id(value):
     try:
         if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
             return f"var{int(value):04d}"
+    except Exception:
+        pass
+    return value
+
+def format_publication_id(value):
+    """Format a publication id as 'pub' followed by a 4-digit zero-padded number."""
+    try:
+        if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+            return f"pub{int(value):04d}"
     except Exception:
         pass
     return value
@@ -393,6 +402,11 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
+    
+    # Ensure the publication_id is formatted as a padded identifier.
+    if "publication_id" in publications_df.columns:
+        publications_df["publication_id"] = publications_df["publication_id"].apply(format_publication_id)
+    
     if "Comment" in publications_df.columns:
         publications_df.rename(columns={"Comment": "comment"}, inplace=True)
     if "comment" in publications_df.columns:
@@ -888,7 +902,6 @@ async def import_proteins():
     await db.proteins.insert_one(protein_doc)
     print(f"[import_proteins] Successfully imported protein document for '{gene_val}'.")
 
-
 # ----------------------------------------------------------------------
 def fetch_gene_data(symbol: str, server_url: str) -> dict:
     """
@@ -987,8 +1000,6 @@ async def import_genes():
     print("[import_genes] Successfully imported gene structure.")
 
 # ----------------------------------------------------------------------
-# (Other migration functions such as import_users(), import_publications(), etc., remain unchanged.)
-
 async def main():
     print("[main] Starting migration process...")
     try:

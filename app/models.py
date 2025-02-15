@@ -77,9 +77,7 @@ class User(BaseModel):
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
-    # The modifier is now stored as a nested object (if available)
     modifier: Optional[Dict[str, Optional[str]]] = None  
-    # The described value should be one of "yes", "no", or "not reported".
     described: str  
 
     model_config = {"extra": "allow"}
@@ -88,17 +86,16 @@ class Phenotype(BaseModel):
 # Report model (to be embedded in an Individual)
 class Report(BaseModel):
     report_id: str  # Changed from int to str
-    reviewed_by: Optional[PyObjectId] = None  # Reference to a User's _id
+    reviewed_by: Optional[PyObjectId] = None  
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
-    publication_ref: Optional[PyObjectId] = None  # Link to the Publication document _id
+    publication_ref: Optional[PyObjectId] = None  
     review_date: Optional[datetime] = None
     comment: Optional[str] = None
-    # New fields:
     family_history: Optional[str] = None
     age_reported: Optional[str] = None
     age_onset: Optional[str] = None
     cohort: Optional[str] = None
-    report_date: Optional[datetime] = None  # Derived from the publication
+    report_date: Optional[datetime] = None  
 
     model_config = {"extra": "allow"}
 
@@ -109,7 +106,6 @@ class Report(BaseModel):
             return None
         if isinstance(v, str):
             try:
-                # Expected format: "1/9/2021 19:15:59"
                 return datetime.strptime(v.strip(), "%m/%d/%Y %H:%M:%S")
             except Exception as e:
                 raise ValueError(f"Could not parse review_date: {v}") from e
@@ -137,7 +133,7 @@ class Report(BaseModel):
 # ------------------------------------------------------------------------------
 # IndividualVariant model
 class IndividualVariant(BaseModel):
-    variant_ref: PyObjectId  # Link to the Variant document _id
+    variant_ref: PyObjectId  
     detection_method: Optional[str] = None
     segregation: Optional[str] = None
 
@@ -147,14 +143,14 @@ class IndividualVariant(BaseModel):
 # Individual model
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    individual_id: str  # Changed from int to str
+    individual_id: str  
     Sex: Optional[str] = None
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
     Problematic: str = ""
     reports: List[Report] = Field(default_factory=list)
-    variant: Optional[IndividualVariant] = None  # Embedded variant info
+    variant: Optional[IndividualVariant] = None  
 
     model_config = {
         "from_attributes": True,
@@ -184,7 +180,7 @@ class VariantClassifications(BaseModel):
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[datetime] = None  # Now datetime
+    classification_date: Optional[datetime] = None  
 
     model_config = {"extra": "allow"}
 
@@ -199,8 +195,8 @@ class VariantAnnotation(BaseModel):
     transcript: Optional[str] = None
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
-    source: Optional[str] = None  # e.g. "varsome"
-    annotation_date: Optional[datetime] = None  # Now datetime
+    source: Optional[str] = None  
+    annotation_date: Optional[datetime] = None  
 
     model_config = {"extra": "allow"}
 
@@ -221,7 +217,7 @@ class ReportedEntry(BaseModel):
 # Variant model
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    variant_id: str  # Changed from int to str
+    variant_id: str  
     individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: List[VariantClassifications] = Field(default_factory=list)
     annotations: List[VariantAnnotation] = Field(default_factory=list)
@@ -258,10 +254,10 @@ class Author(BaseModel):
     model_config = {"extra": "allow"}
 
 # ------------------------------------------------------------------------------
-# Publication model
+# Publication model with padded publication_id (e.g. "pub0001")
 class Publication(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    publication_id: int
+    publication_id: str  # Now a padded identifier.
     publication_alias: str
     publication_type: Optional[str] = None
     publication_entry_date: Optional[datetime] = Field(default_factory=lambda: datetime(2021, 11, 1))
@@ -291,10 +287,13 @@ class Publication(BaseModel):
     @field_validator("publication_id", mode="before")
     @classmethod
     def validate_publication_id(cls, v):
+        # If the value is a dict with $numberInt, extract the integer.
         if isinstance(v, dict) and "$numberInt" in v:
-            return int(v["$numberInt"])
+            v = int(v["$numberInt"])
         if isinstance(v, (int, float)):
-            return int(v)
+            return f"pub{int(v):04d}"
+        if isinstance(v, str) and v.isdigit():
+            return f"pub{int(v):04d}"
         return v
 
     @field_validator("PMID", mode="before")
@@ -326,10 +325,10 @@ class Publication(BaseModel):
 # ------------------------------------------------------------------------------
 # New ProteinFeature model – used for holding domain/structure information.
 class ProteinFeature(BaseModel):
-    start_position: Optional[int] = None  # Computed from the "position" column.
-    end_position: Optional[int] = None    # Computed from the "position" column.
-    start: Optional[int] = None           # Original start column value.
-    length: Optional[int] = None          # Length of the feature.
+    start_position: Optional[int] = None  
+    end_position: Optional[int] = None    
+    start: Optional[int] = None           
+    length: Optional[int] = None          
     description: Optional[str] = ""
     description_short: Optional[str] = ""
     source: Optional[str] = ""
@@ -356,9 +355,9 @@ class Protein(BaseModel):
 # ------------------------------------------------------------------------------
 # New Exon model for gene structure.
 class Exon(BaseModel):
-    exon_number: Optional[int] = None  # Sequential exon number.
-    start: Optional[int] = None         # Genomic start coordinate.
-    stop: Optional[int] = None          # Genomic end coordinate.
+    exon_number: Optional[int] = None  
+    start: Optional[int] = None         
+    stop: Optional[int] = None          
 
     model_config = {"extra": "allow"}
 
@@ -366,11 +365,10 @@ class Exon(BaseModel):
 # New Gene model – represents the genomic structure of the HNF1B gene.
 class Gene(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    gene_symbol: str         # e.g. "HNF1B"
-    ensembl_gene_id: str       # e.g. "ENSG00000275410"
-    transcript: str          # Canonical transcript id (including version)
+    gene_symbol: str         
+    ensembl_gene_id: str       
+    transcript: str          
     exons: List[Exon] = Field(default_factory=list)
-    # Genomic exon data for each reference assembly.
     hg38: Dict[str, Any] = Field(default_factory=dict)
     hg19: Dict[str, Any] = Field(default_factory=dict)
     model_config = {
