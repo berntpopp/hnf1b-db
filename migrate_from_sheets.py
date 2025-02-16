@@ -758,6 +758,7 @@ async def import_variants():
                     "cDNA_position": none_if_nan(row.get("cDNA_position")),
                     "protein_position": none_if_nan(row.get("Protein_position")),
                     "impact": none_if_nan(row.get("IMPACT")),
+                    "effect": none_if_nan(row.get("Consequence")),
                     "variant_class": none_if_nan(row.get("VARIANT_CLASS")),
                     "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
                     "ClinVar": none_if_nan(row.get("ClinVar")),
