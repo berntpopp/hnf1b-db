@@ -174,6 +174,8 @@ def read_cadd_file(filepath):
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
     df["vcf_hg38"] = "chr" + df["Chrom"].astype(str) + "-" + df["Pos"].astype(str) + "-" + df["Ref"] + "-" + df["Alt"]
     print(f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
+    print("[DEBUG] First 10 rows of CADD data:")
+    print(df.head(10).to_string())
     return df
 
 # ----------------------------------------------------------------------
@@ -732,15 +734,19 @@ async def import_variants():
         
         vep_combined = pd.concat([vep_small_ann, vep_large_ann], ignore_index=True)
         print(f"[DEBUG] Combined VEP data shape: {vep_combined.shape}")
+        print("[DEBUG] First 10 rows of combined VEP/VCF data:")
+        print(vep_combined.head(10).to_string())
         
         cadd = read_cadd_file("data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz")
-        cadd["vcf_hg38"] = cadd["Chrom"].astype(str) + "-" + cadd["Pos"].astype(str) + "-" + cadd["Ref"] + "-" + cadd["Alt"]
         print(f"[DEBUG] CADD data shape: {cadd.shape}")
         
         vep_annot = pd.merge(vep_combined, cadd[["vcf_hg38", "PHRED"]], on="vcf_hg38", how="left")
-        vep_annot.rename(columns={"PHRED": "CADD_PHRED"}, inplace=True)
+        vep_annot.rename(columns={"PHRED": "CADD_PHRED_v16"}, inplace=True)
         print(f"[DEBUG] Merged VEP/CADD data shape: {vep_annot.shape}")
-        
+        print(f"[DEBUG] Columns after merging CADD: {list(vep_annot.columns)}")
+        print("[DEBUG] First 10 rows of merged VEP/CADD data:")
+        print(vep_annot.head(10).to_string())
+
         vep_parsed = parse_vep_extra(vep_annot)
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
         print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
@@ -763,7 +769,7 @@ async def import_variants():
                     "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
                     "ClinVar": none_if_nan(row.get("ClinVar")),
                     "ClinVar_CLNSIG": none_if_nan(row.get("ClinVar_CLNSIG")),
-                    "cadd_phred": float(row["CADD_PHRED"]) if pd.notna(row.get("CADD_PHRED")) else None,
+                    "cadd_phred": float(row["CADD_PHRED_v16"]) if pd.notna(row.get("CADD_PHRED_v16")) else None,
                     "source": "vep",
                     "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else None) or default_date
                 }
