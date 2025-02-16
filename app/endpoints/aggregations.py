@@ -981,3 +981,238 @@ async def count_variants_by_effect_group() -> dict:
         total_count = total_docs[0]["total"] if total_docs else 0
         return {"total_count": total_count, "grouped_counts": grouped_counts}
     return {"total_count": 0, "grouped_counts": []}
+
+
+@router.get("/individuals/phenotype-cohort-count", tags=["Aggregations"])
+async def phenotype_cohort_counts() -> dict:
+    """
+    For each individual (with at least one report), using the phenotypes from the newest report,
+    classify the individual as follows:
+    
+      - MODY: Has "Maturity-onset diabetes of the young" (described == "yes").
+      
+      - CAKUT: Has any of these kidney-related phenotypes (described == "yes"):
+          • "Multicystic kidney dysplasia",
+          • "Unilateral renal agenesis",
+          • "Renal hypoplasia",
+          • "Abnormal renal morphology"
+        OR has "Abnormality of the genital system" (described == "yes") AND also has any kidney-related phenotype.
+      
+      - any_kidney: Defined as the presence (described == "yes") of any of:
+          "Chronic kidney disease",
+          "Stage 1 chronic kidney disease",
+          "Stage 2 chronic kidney disease",
+          "Stage 3 chronic kidney disease",
+          "Stage 4 chronic kidney disease",
+          "Stage 5 chronic kidney disease",
+          "Multicystic kidney dysplasia",
+          "Renal hypoplasia",
+          "Renal cyst",
+          "Unilateral renal agenesis",
+          "Abnormal renal morphology",
+          "Renal cortical hyperechogenicity",
+          "Multiple glomerular cysts",
+          "Oligomeganephronia"
+      
+    Then, define mutually exclusive groups:
+      - MODY_only: MODY true and CAKUT false.
+      - CAKUT_only: CAKUT true and MODY false.
+      - CAKUT_MODY: Both CAKUT and MODY are true.
+      - Other: Neither MODY nor CAKUT.
+      
+    Finally, return cohort-level counts for each group.
+    """
+    pipeline = [
+        # 1. Consider only individuals with at least one report.
+        {"$match": {"reports": {"$exists": True, "$ne": []}}},
+        
+        # 2. Select the newest report based on report_date.
+        {"$set": {
+            "newest_report": {
+                "$reduce": {
+                    "input": "$reports",
+                    "initialValue": {"report_date": datetime(1970, 1, 1)},
+                    "in": {
+                        "$cond": [
+                            {"$gt": ["$$this.report_date", "$$value.report_date"]},
+                            "$$this",
+                            "$$value"
+                        ]
+                    }
+                }
+            }
+        }},
+        
+        # 3. Convert the newest report's phenotypes object to an array.
+        {"$set": {
+            "phenotype_entries": {"$objectToArray": "$newest_report.phenotypes"}
+        }},
+        
+        # 4. Compute any_kidney flag (true if any kidney-related phenotype is present with described == "yes").
+        {"$set": {
+            "any_kidney": {
+                "$gt": [
+                    {"$size": {
+                        "$filter": {
+                            "input": "$phenotype_entries",
+                            "as": "p",
+                            "cond": {
+                                "$and": [
+                                    {"$in": ["$$p.v.name", [
+                                        "Chronic kidney disease",
+                                        "Stage 1 chronic kidney disease",
+                                        "Stage 2 chronic kidney disease",
+                                        "Stage 3 chronic kidney disease",
+                                        "Stage 4 chronic kidney disease",
+                                        "Stage 5 chronic kidney disease",
+                                        "Multicystic kidney dysplasia",
+                                        "Renal hypoplasia",
+                                        "Renal cyst",
+                                        "Unilateral renal agenesis",
+                                        "Abnormal renal morphology",
+                                        "Renal cortical hyperechogenicity",
+                                        "Multiple glomerular cysts",
+                                        "Oligomeganephronia"
+                                    ]]},
+                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                ]
+                            }
+                        }
+                    }},
+                    0
+                ]
+            }
+        }},
+        
+        # 5. Compute MODY flag (true if "Maturity-onset diabetes of the young" is present with described == "yes").
+        {"$set": {
+            "MODY": {
+                "$gt": [
+                    {"$size": {
+                        "$filter": {
+                            "input": "$phenotype_entries",
+                            "as": "p",
+                            "cond": {
+                                "$and": [
+                                    {"$eq": ["$$p.v.name", "Maturity-onset diabetes of the young"]},
+                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                ]
+                            }
+                        }
+                    }},
+                    0
+                ]
+            }
+        }},
+        
+        # 6. Compute CAKUT flag:
+        #    Option A: One of these kidney-specific phenotypes is present with described == "yes".
+        #    Option B: "Abnormality of the genital system" is present (described == "yes") AND any_kidney is true.
+        {"$set": {
+            "CAKUT": {
+                "$or": [
+                    {
+                        "$gt": [
+                            {"$size": {
+                                "$filter": {
+                                    "input": "$phenotype_entries",
+                                    "as": "p",
+                                    "cond": {
+                                        "$and": [
+                                            {"$in": ["$$p.v.name", [
+                                                "Multicystic kidney dysplasia",
+                                                "Unilateral renal agenesis",
+                                                "Renal hypoplasia",
+                                                "Abnormal renal morphology"
+                                            ]]},
+                                            {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                        ]
+                                    }
+                                }
+                            }},
+                            0
+                        ]
+                    },
+                    {
+                        "$and": [
+                            {
+                                "$gt": [
+                                    {"$size": {
+                                        "$filter": {
+                                            "input": "$phenotype_entries",
+                                            "as": "p",
+                                            "cond": {
+                                                "$and": [
+                                                    {"$eq": ["$$p.v.name", "Abnormality of the genital system"]},
+                                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                                ]
+                                            }
+                                        }
+                                    }},
+                                    0
+                                ]
+                            },
+                            "$any_kidney"
+                        ]
+                    }
+                ]
+            }
+        }},
+        
+        # 7. Define mutually exclusive flags.
+        {"$set": {
+            "MODY_only": {
+                "$and": [
+                    "$MODY",
+                    {"$eq": ["$CAKUT", False]}
+                ]
+            },
+            "CAKUT_only": {
+                "$and": [
+                    "$CAKUT",
+                    {"$eq": ["$MODY", False]}
+                ]
+            },
+            "CAKUT_MODY": {
+                "$and": [
+                    "$CAKUT",
+                    "$MODY"
+                ]
+            },
+            "Other": {
+                "$and": [
+                    {"$eq": ["$MODY", False]},
+                    {"$eq": ["$CAKUT", False]}
+                ]
+            }
+        }},
+        
+        # 8. Group across all individuals to compute cohort-level counts.
+        {"$group": {
+            "_id": None,
+            "total_count": {"$sum": 1},
+            "MODY_only_count": {"$sum": {"$cond": ["$MODY_only", 1, 0]}},
+            "CAKUT_only_count": {"$sum": {"$cond": ["$CAKUT_only", 1, 0]}},
+            "CAKUT_MODY_count": {"$sum": {"$cond": ["$CAKUT_MODY", 1, 0]}},
+            "Other_count": {"$sum": {"$cond": ["$Other", 1, 0]}}
+        }},
+        {"$project": {
+            "_id": 0,
+            "total_count": 1,
+            "MODY_only_count": 1,
+            "CAKUT_only_count": 1,
+            "CAKUT_MODY_count": 1,
+            "Other_count": 1
+        }}
+    ]
+    
+    results = await db.individuals.aggregate(pipeline).to_list(length=1)
+    if results:
+        return results[0]
+    return {
+        "total_count": 0,
+        "MODY_only_count": 0,
+        "CAKUT_only_count": 0,
+        "CAKUT_MODY_count": 0,
+        "Other_count": 0
+    }

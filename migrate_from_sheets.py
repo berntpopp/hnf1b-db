@@ -183,19 +183,25 @@ def parse_vep_extra(df):
     """
     Parse the 'Extra' column of a VEP DataFrame to extract additional annotations.
     First, drop the 'CADD_PHRED' column (if present) to avoid duplicate columns.
+    Note: For CNVs the Extra column may be empty, so rows without Extra will be dropped.
     """
     df = df.copy()
     if "CADD_PHRED" in df.columns:
         df = df.drop(columns=["CADD_PHRED"])
     df["Extra"] = df["Extra"].fillna("")
-    df = df.assign(Extra=df["Extra"].str.split(";")).explode("Extra")
-    df["Extra"] = df["Extra"].str.strip()
-    df = df[df["Extra"] != ""]
-    df[["key", "value"]] = df["Extra"].str.split("=", n=1, expand=True)
-    df = df.assign(value=df["value"].str.split(",")).explode("value")
-    df["value"] = df["value"].str.strip()
-    index_cols = [col for col in df.columns if col not in ["key", "value", "Extra"]]
-    df_pivot = df.pivot_table(index=index_cols, columns="key", values="value", aggfunc="max").reset_index()
+    # Explode only if Extra is non-empty; otherwise keep the row so other annotation columns are preserved.
+    df_exploded = df[df["Extra"] != ""].assign(Extra=df["Extra"].str.split(";")).explode("Extra")
+    df_exploded["Extra"] = df_exploded["Extra"].str.strip()
+    df_exploded = df_exploded[df_exploded["Extra"] != ""]
+    if not df_exploded.empty:
+        df_exploded[["key", "value"]] = df_exploded["Extra"].str.split("=", n=1, expand=True)
+        df_exploded = df_exploded.assign(value=df_exploded["value"].str.split(",")).explode("value")
+        df_exploded["value"] = df_exploded["value"].str.strip()
+        index_cols = [col for col in df_exploded.columns if col not in ["key", "value", "Extra"]]
+        df_pivot = df_exploded.pivot_table(index=index_cols, columns="key", values="value", aggfunc="max").reset_index()
+    else:
+        # If no Extra info exists (e.g. for CNVs), return the original dataframe.
+        df_pivot = df.copy()
     if "HGVSc" in df_pivot.columns:
         df_pivot["HGVSc"] = df_pivot["HGVSc"].str.split(":").str[1]
     if "HGVSp" in df_pivot.columns:
@@ -516,13 +522,6 @@ async def import_individuals_with_reports():
     # --- End special logic ---
 
     # --- Special logic for KidneyBiopsy ---
-    # Every individual gets both phenotype entries.
-    # The "described" flag for each is determined as follows:
-    # - If empty, treat as "not reported".
-    # - If "no" or "not reported": both get that value.
-    # - If "multiple glomerular cysts": HP:0100611 gets "yes", ORPHA:2260 gets "no".
-    # - If "oligomeganephronia": ORPHA:2260 gets "yes", HP:0100611 gets "no".
-    # - If "oligomeganephronia and multiple glomerular cysts": both get "yes".
     kidneybiopsy_mapping = {
         "not reported": {
             "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "not reported"},
@@ -746,6 +745,7 @@ async def import_variants():
         print("[DEBUG] First 10 rows of merged VEP/CADD data:")
         print(vep_annot.head(10).to_string())
 
+        # Build annotation_map from parsed Extra (if any)
         vep_parsed = parse_vep_extra(vep_annot)
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
         print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
@@ -774,9 +774,33 @@ async def import_variants():
                 }
                 annotation_map[vcf_key] = annotation_obj
         print(f"[import_variants] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
+
+        # For CNVs (variants with <DEL> or <DUP>), try to grab any available annotation from vep_annot
+        cnv_annotation_map = {}
+        for _, row in vep_annot.iterrows():
+            vcf_key = row.get("vcf_hg38")
+            if vcf_key and (("<DEL>" in vcf_key) or ("<DUP>" in vcf_key)):
+                if vcf_key not in annotation_map:
+                    annotation_obj = {
+                        "transcript": none_if_nan(row.get("Feature")),
+                        "c_dot": none_if_nan(row.get("HGVSc")),
+                        "p_dot": none_if_nan(row.get("HGVSp")),
+                        "impact": none_if_nan(row.get("IMPACT")),
+                        "effect": none_if_nan(row.get("Consequence")),
+                        "variant_class": none_if_nan(row.get("VARIANT_CLASS")),
+                        "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
+                        "ClinVar": none_if_nan(row.get("ClinVar")),
+                        "ClinVar_CLNSIG": none_if_nan(row.get("ClinVar_CLNSIG")),
+                        "cadd_phred": float(row["CADD_PHRED_v16"]) if pd.notna(row.get("CADD_PHRED_v16")) else None,
+                        "source": "vep",
+                        "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else default_date)
+                    }
+                    cnv_annotation_map[vcf_key] = annotation_obj
+
     except Exception as e:
         print(f"[import_variants] Error loading VEP/CADD annotations: {e}")
         annotation_map = {}
+        cnv_annotation_map = {}
 
     variant_key_cols = ['VariantType', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
     unique_variants = {}
@@ -909,11 +933,15 @@ async def import_variants():
 
         vcf_key = variant_doc.get("hg38")
         print(f"[DEBUG] Processing variant with hg38: {vcf_key}")
-        if vcf_key and vcf_key in annotation_map:
-            print(f"[DEBUG] Found VEP/CADD annotation for hg38: {vcf_key}")
-            variant_doc['annotations'].append(annotation_map[vcf_key])
-        else:
-            print(f"[DEBUG] No VEP/CADD annotation found for hg38: {vcf_key}")
+        if vcf_key:
+            if vcf_key in annotation_map:
+                print(f"[DEBUG] Found VEP/CADD annotation for hg38: {vcf_key}")
+                variant_doc['annotations'].append(annotation_map[vcf_key])
+            elif (("<DEL>" in vcf_key) or ("<DUP>" in vcf_key)) and vcf_key in cnv_annotation_map:
+                print(f"[DEBUG] Found CNV annotation for hg38: {vcf_key}")
+                variant_doc['annotations'].append(cnv_annotation_map[vcf_key])
+            else:
+                print(f"[DEBUG] No VEP/CADD annotation found for hg38: {vcf_key}")
 
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
