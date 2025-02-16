@@ -667,6 +667,7 @@ async def import_individuals_with_reports():
                 report_data['phenotypes'] = phenotypes_obj
 
                 # Publication linking
+                review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
                 pub_alias = row.get('Publication')
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias
@@ -677,18 +678,16 @@ async def import_individuals_with_reports():
                         report_data["publication_ref"] = pub_obj["_id"]
                         if pub_obj.get("publication_date"):
                             report_data["report_date"] = pub_obj.get("publication_date")
+                        else:
+                            report_data["report_date"] = review_date_val
                     else:
                         print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
+                        report_data["report_date"] = review_date_val
+                else:
+                    report_data["report_date"] = review_date_val
 
-                review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
                 if review_date_val is not None:
                     report_data["review_date"] = review_date_val
-
-                comment_val = row.get('Comment') or base_comment
-                if pd.notna(comment_val):
-                    report_data["comment"] = str(comment_val).strip()
-                else:
-                    report_data["comment"] = ""
 
                 report_data["age_reported"] = none_if_nan(row.get("AgeReported"))
                 report_data["age_onset"] = none_if_nan(row.get("AgeOnset"))
