@@ -705,3 +705,279 @@ async def get_summary_stats() -> dict:
         "variants": variants_count,
         "publications": publications_count,
     }
+
+
+@router.get("/variants/impact-group-count", tags=["Aggregations"])
+async def count_variants_by_impact_group() -> dict:
+    """
+    Aggregate variants into impact groups based on the newest VEP annotation's impact value
+    and the newest classification's verdict. Grouping logic:
+      - If impact == "MODERATE" => "nT"
+      - If impact == "HIGH" => "T"
+      - If impact == "LOW" and verdict == "LP/P" => "T"
+      - If impact == "MODIFIER" and verdict == "LP/P" => "T"
+      - If impact is null and verdict == "LP/P" => "T"
+      - Else => "other"
+    
+    Returns:
+        A dictionary with:
+          - "total_count": Total number of variants processed.
+          - "grouped_counts": A list of documents with keys "_id" (impact group) and "count".
+    """
+    pipeline = [
+        # 1. Get the newest classification and filter annotations for source "vep"
+        {
+            "$set": {
+                "latest_classification": {
+                    "$reduce": {
+                        "input": "$classifications",
+                        "initialValue": {"classification_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                },
+                "vep_annotations": {
+                    "$filter": {
+                        "input": "$annotations",
+                        "as": "annotation",
+                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                    }
+                }
+            }
+        },
+        # 2. Get the newest VEP annotation based on annotation_date
+        {
+            "$set": {
+                "latest_vep_annotation": {
+                    "$reduce": {
+                        "input": "$vep_annotations",
+                        "initialValue": {"annotation_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        # 3. Compute impact_groups according to the specified logic
+        {
+            "$set": {
+                "impact_groups": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {"$eq": ["$latest_vep_annotation.impact", "MODERATE"]},
+                                "then": "nT"
+                            },
+                            {
+                                "case": {"$eq": ["$latest_vep_annotation.impact", "HIGH"]},
+                                "then": "T"
+                            },
+                            {
+                                "case": {
+                                    "$and": [
+                                        {"$eq": ["$latest_vep_annotation.impact", "LOW"]},
+                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                    ]
+                                },
+                                "then": "T"
+                            },
+                            {
+                                "case": {
+                                    "$and": [
+                                        {"$eq": ["$latest_vep_annotation.impact", "MODIFIER"]},
+                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                    ]
+                                },
+                                "then": "T"
+                            },
+                            {
+                                "case": {
+                                    "$and": [
+                                        {"$eq": ["$latest_vep_annotation.impact", None]},
+                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                    ]
+                                },
+                                "then": "T"
+                            }
+                        ],
+                        "default": "other"
+                    }
+                }
+            }
+        },
+        # 4. Group by the computed impact_groups and count the documents
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {"$group": {"_id": "$impact_groups", "count": {"$sum": 1}}},
+                    {"$sort": {"_id": 1}}
+                ],
+                "total_count": [
+                    {"$count": "total"}
+                ]
+            }
+        }
+    ]
+
+    result = await db.variants.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
+
+
+@router.get("/variants/effect-group-count", tags=["Aggregations"])
+async def count_variants_by_effect_group() -> dict:
+    """
+    Aggregate variants into effect groups based on the newest VEP annotation's effect and impact values,
+    as well as the newest classification's verdict. The grouping logic is:
+      - If effect == "transcript_ablation" => "17qDel"
+      - If effect == "transcript_amplification" => "17qDup"
+      - If impact == "MODERATE" => "nT"
+      - If impact is null and verdict == "LP/P" => "T"
+      - If impact == "LOW" and verdict == "LP/P" => "T"
+      - If effect is in the list of severe effects => "T"
+      - Else => "other"
+      
+    Returns:
+        A dictionary with:
+          - "total_count": The total number of variants processed.
+          - "grouped_counts": A list of documents with keys "_id" (effect group) and "count".
+    """
+    pipeline = [
+        # 1. Extract the newest classification and filter annotations for VEP.
+        {
+            "$set": {
+                "latest_classification": {
+                    "$reduce": {
+                        "input": "$classifications",
+                        "initialValue": {"classification_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                },
+                "vep_annotations": {
+                    "$filter": {
+                        "input": "$annotations",
+                        "as": "annotation",
+                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                    }
+                }
+            }
+        },
+        # 2. Reduce the VEP annotations to the one with the most recent annotation_date.
+        {
+            "$set": {
+                "latest_vep_annotation": {
+                    "$reduce": {
+                        "input": "$vep_annotations",
+                        "initialValue": {"annotation_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                "$$this",
+                                "$$value"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        # 3. Compute effect_groups using the provided logic.
+        {
+            "$set": {
+                "effect_groups": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {"$eq": ["$latest_vep_annotation.effect", "transcript_ablation"]},
+                                "then": "17qDel"
+                            },
+                            {
+                                "case": {"$eq": ["$latest_vep_annotation.effect", "transcript_amplification"]},
+                                "then": "17qDup"
+                            },
+                            {
+                                "case": {"$eq": ["$latest_vep_annotation.impact", "MODERATE"]},
+                                "then": "nT"
+                            },
+                            {
+                                "case": {
+                                    "$and": [
+                                        {"$eq": ["$latest_vep_annotation.impact", None]},
+                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                    ]
+                                },
+                                "then": "T"
+                            },
+                            {
+                                "case": {
+                                    "$and": [
+                                        {"$eq": ["$latest_vep_annotation.impact", "LOW"]},
+                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                    ]
+                                },
+                                "then": "T"
+                            },
+                            {
+                                "case": {
+                                    "$in": [
+                                        "$latest_vep_annotation.effect",
+                                        [
+                                            "stop_gained",
+                                            "start_lost",
+                                            "stop_lost",
+                                            "frameshift_variant",
+                                            "splice_donor_variant",
+                                            "splice_acceptor_variant",
+                                            "splice_donor_5th_base_variant",
+                                            "coding_sequence_variant"
+                                        ]
+                                    ]
+                                },
+                                "then": "T"
+                            }
+                        ],
+                        "default": "other"
+                    }
+                }
+            }
+        },
+        # 4. Group by the computed effect_groups and get the total document count.
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {"$group": {"_id": "$effect_groups", "count": {"$sum": 1}}},
+                    {"$sort": {"_id": 1}}
+                ],
+                "total_count": [
+                    {"$count": "total"}
+                ]
+            }
+        }
+    ]
+
+    result = await db.variants.aggregate(pipeline).to_list(length=1)
+    if result:
+        grouped_counts = result[0].get("grouped_counts", [])
+        total_docs = result[0].get("total_count", [])
+        total_count = total_docs[0]["total"] if total_docs else 0
+        return {"total_count": total_count, "grouped_counts": grouped_counts}
+    return {"total_count": 0, "grouped_counts": []}
