@@ -105,6 +105,9 @@ async def search_documents(
             "annotations.p_dot",
             "annotations.impact",
             "annotations.variant_class",
+            "annotations.effect",
+            "annotations.impact",
+            "annotations.ClinVar_CLNSIG",
         ],
         "publications": [
             "publication_id",
