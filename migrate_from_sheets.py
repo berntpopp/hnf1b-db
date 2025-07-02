@@ -1,18 +1,20 @@
 import asyncio
-import re
-import io
 import gzip
+import io
+import re
+
 import pandas as pd
-from app.database import db
-from app.models import (
-    User,
-    Individual,
-    Publication,
-)
+import requests
 
 # NEW: Import Entrez from BioPython for PubMed queries.
 from Bio import Entrez
-import requests
+
+from app.database import db
+from app.models import (
+    Individual,
+    Publication,
+    User,
+)
 
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
 
@@ -112,10 +114,11 @@ def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------------------------------------------------
 def read_vep_file(filepath):
     """
-    Read a VEP file that contains multiple header lines starting with "##" and one
-    header line starting with "#". Skips lines beginning with "##" and removes the
-    leading '#' from the header line. Renames the uploaded variation column to "var_id"
-    and filters for Feature == "NM_000458.4".
+    Read a VEP file that contains multiple header lines starting with "##" and one.
+
+    Skips lines beginning with "##" and removes the leading '#' from the header line.
+    Renames the uploaded variation column to "var_id" and filters for
+    Feature == "NM_000458.4".
     """
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -149,9 +152,10 @@ def read_vep_file(filepath):
 # ----------------------------------------------------------------------
 def read_vcf_file(filepath):
     """
-    Read a VCF file by skipping header lines starting with "##" and removing the
-    leading '#' from the header. Computes a 'vcf_hg38' field by concatenating
-    CHROM, POS, REF, and ALT. Renames the ID column to 'var_id'.
+    Read a VCF file by skipping header lines starting with "##" and removing the '#'.
+
+    Computes a 'vcf_hg38' field by concatenating CHROM, POS, REF, and ALT.
+    Renames the ID column to 'var_id'.
     """
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -184,9 +188,10 @@ def read_vcf_file(filepath):
 # ----------------------------------------------------------------------
 def read_cadd_file(filepath):
     """
-    Read a gzipped CADD file that contains header lines starting with "##" and one
-    header line starting with "#". Skips lines beginning with "##" and removes the
-    leading '#' from the header line. Computes a 'vcf_hg38' field using the CADD columns.
+    Read a gzipped CADD file that contains header lines starting with "##" and one.
+
+    Skips lines beginning with "##" and removes the leading '#' from the header line.
+    Computes a 'vcf_hg38' field using the CADD columns.
     """
     with gzip.open(filepath, "rt", encoding="utf-8") as f:
         lines = f.readlines()
@@ -225,6 +230,7 @@ def read_cadd_file(filepath):
 def parse_vep_extra(df):
     """
     Parse the 'Extra' column of a VEP DataFrame to extract additional annotations.
+
     First, drop the 'CADD_PHRED' column (if present) to avoid duplicate columns.
     Note: For CNVs the Extra column may be empty, so rows without Extra will be dropped.
     """
@@ -268,6 +274,7 @@ def parse_vep_extra(df):
 async def load_phenotype_mappings():
     """
     Load the phenotype mapping from the phenotype sheet.
+
     Now each mapping includes the phenotype group (from the 'phenotype_group' column).
     """
     url = csv_url(SPREADSHEET_ID, PHENOTYPE_GID)
@@ -960,19 +967,22 @@ async def import_variants():
         vcf_small = read_vcf_file("data/HNF1B_all_small.vcf")
         vcf_large = read_vcf_file("data/HNF1B_all_large.vcf")
         print(
-            f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, VCF large rows: {vcf_large.shape[0]}"
+            f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, "
+            f"VCF large rows: {vcf_large.shape[0]}"
         )
 
         vep_small = read_vep_file("data/HNF1B_all_small.vep.txt")
         vep_large = read_vep_file("data/HNF1B_all_large.vep.txt")
         print(
-            f"[DEBUG] VEP small rows: {vep_small.shape[0]}, VEP large rows: {vep_large.shape[0]}"
+            f"[DEBUG] VEP small rows: {vep_small.shape[0]}, "
+            f"VEP large rows: {vep_large.shape[0]}"
         )
 
         vep_small_ann = pd.merge(vep_small, vcf_small, on="var_id", how="left")
         vep_large_ann = pd.merge(vep_large, vcf_large, on="var_id", how="left")
         print(
-            f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; large shape: {vep_large_ann.shape}"
+            f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; "
+            f"large shape: {vep_large_ann.shape}"
         )
 
         vep_combined = pd.concat([vep_small_ann, vep_large_ann], ignore_index=True)
@@ -1039,7 +1049,8 @@ async def import_variants():
             f"entries. Example keys: {list(annotation_map.keys())[:5]}"
         )
 
-        # For CNVs (variants with <DEL> or <DUP>), try to grab any available annotation from vep_annot
+        # For CNVs (variants with <DEL> or <DUP>), try to grab any available
+        # annotation from vep_annot
         cnv_annotation_map = {}
         for _, row in vep_annot.iterrows():
             vcf_key = row.get("vcf_hg38")
@@ -1256,7 +1267,8 @@ async def import_variants():
     for i, key in enumerate(unique_variants.keys()):
         variant_key_to_objid[key] = inserted_ids[i]
     print(
-        f"[import_variants] Inserted {len(variant_docs_to_insert)} unique variants into database."
+        f"[import_variants] Inserted {len(variant_docs_to_insert)} unique "
+        f"variants into database."
     )
 
     print("[import_variants] Updating individuals with variant references...")
@@ -1284,9 +1296,10 @@ async def import_variants():
 async def import_proteins():
     """
     Import the protein structure and domains for the HNF1B gene from the domains sheet.
+
     Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA'/'nan' with empty
-    values, splits the "position" field into start_position and end_position, groups rows
-    by FeatureKey, and constructs a Protein document which is inserted into the
+    values, splits the "position" field into start_position and end_position, groups
+    rows by FeatureKey, and constructs a Protein document which is inserted into the
     'proteins' collection.
     """
     gid_proteins = "810380453"
@@ -1396,8 +1409,9 @@ async def import_proteins():
 # ----------------------------------------------------------------------
 def fetch_gene_data(symbol: str, server_url: str) -> dict:
     """
-    Fetch the expanded gene record for the given symbol from the specified
-    Ensembl server.
+    Fetch the expanded gene record for the given symbol from the specified server.
+
+    Uses the Ensembl REST API to fetch gene data.
     """
     url = f"{server_url}/lookup/symbol/homo_sapiens/{symbol}?expand=1"
     headers = {"Content-Type": "application/json"}
@@ -1410,6 +1424,8 @@ def fetch_gene_data(symbol: str, server_url: str) -> dict:
 # ----------------------------------------------------------------------
 def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
     """
+    Extract canonical transcript and exons from gene data.
+
     Given a gene record (from the lookup endpoint), find the canonical transcript and
     return its id along with a list of its exons. Each exon is formatted as a dict with
     keys: exon_number, start, and stop.
@@ -1440,8 +1456,9 @@ def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
 # ----------------------------------------------------------------------
 def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
     """
-    Fetch gene structure for the given gene symbol (e.g. "HNF1B") from both the GRCh38
-    and GRCh37 endpoints. Returns a gene document that includes:
+    Fetch gene structure for the given gene symbol from both GRCh38 and GRCh37.
+
+    Returns a gene document that includes:
       - gene_symbol (display_name)
       - ensembl_gene_id
       - transcript (canonical transcript id)
@@ -1472,6 +1489,7 @@ def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
 async def import_genes():
     """
     Import the genomic structure for the HNF1B gene using the Ensembl lookup endpoint.
+
     The function fetches gene data for both GRCh38 and GRCh37 (hg19) and builds a gene
     document that includes exon coordinates from the canonical transcript. The document
     is inserted into the 'genes' collection.

@@ -1,13 +1,14 @@
 # File: app/endpoints/auth.py
-import jwt
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Depends, status
+
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
+
 from app.config import settings
 from app.database import db
-from app.models import User
 
 router = APIRouter()
 
@@ -24,9 +25,9 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
     """
     Verify the provided password.
 
-    If the stored password does not appear to be a bcrypt hash (i.e. it doesn't start with "$2"),
-    fall back to a plain-text comparison. This allows you to use your existing users while you
-    transition to hashed passwords.
+    If the stored password does not appear to be a bcrypt hash (i.e. it doesn't
+    start with "$2"), fall back to a plain-text comparison. This allows you to
+    use your existing users while you transition to hashed passwords.
     """
     if not stored_password.startswith("$2"):
         # Fallback: plain text comparison (insecure)
@@ -112,7 +113,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
       - **client_id**: (Optional)
       - **client_secret**: (Optional)
 
-    It validates the credentials against the database and returns a JWT token if successful.
+    It validates the credentials against the database and returns a JWT token
+    if successful.
     """
     user_doc = await db.users.find_one({"user_name": form_data.username})
     if not user_doc:

@@ -2,15 +2,16 @@
 import time
 from typing import Any, Dict, Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from bson import ObjectId
+
 from app.database import db
 from app.utils import (
-    parse_sort,
     build_pagination_meta,
-    parse_filter_json,
     parse_deep_object_filters,
+    parse_filter_json,
+    parse_sort,
 )
 
 router = APIRouter()
@@ -40,16 +41,18 @@ async def get_individuals(
         None,
         description=(
             "Search query to search across predefined fields: "
-            "individual_id, Sex, individual_DOI, IndividualIdentifier, family_history, age_onset, cohort"
+            "individual_id, Sex, individual_DOI, IndividualIdentifier, "
+            "family_history, age_onset, cohort"
         ),
     ),
 ) -> Dict[str, Any]:
-    """
-    Retrieve a paginated list of individuals, optionally filtered by a JSON filter
-    and/or a search query.
+    """Retrieve a paginated list of individuals.
+
+    Optionally filtered by a JSON filter and/or a search query.
 
     The filter parameter should be provided as a JSON string.
-    Additionally, if a search query `q` is provided, the endpoint will search across:
+    Additionally, if a search query `q` is provided, the endpoint will search
+    across:
       - individual_id
       - Sex
       - individual_DOI
@@ -59,7 +62,8 @@ async def get_individuals(
       - cohort
 
     Example:
-      /individuals?sort=-individual_id&page=1&page_size=10&filter={"Sex": "male"}&q=ind0930
+      /individuals?sort=-individual_id&page=1&page_size=10&filter={"Sex":
+      "male"}&q=ind0930
     """
     start_time = time.perf_counter()  # Start measuring execution time
 
@@ -102,7 +106,8 @@ async def get_individuals(
     # Build the base URL (without query parameters)
     base_url = str(request.url).split("?")[0]
 
-    # Include current query parameters (e.g., sort, filter, and search query) in pagination links.
+    # Include current query parameters (e.g., sort, filter, and search query)
+    # in pagination links.
     extra_params: Dict[str, Any] = {}
     if sort:
         extra_params["sort"] = sort

@@ -1,12 +1,13 @@
 # File: app/endpoints/genes.py
 import time
+from typing import Any, Dict, Optional
+
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from typing import Any, Dict, Optional
-from bson import ObjectId
-from app.models import Gene
+
 from app.database import db
-from app.utils import parse_filters, parse_sort, build_pagination_meta
+from app.utils import build_pagination_meta, parse_filters, parse_sort
 
 router = APIRouter()
 
@@ -19,7 +20,8 @@ async def get_genes(
     sort: Optional[str] = Query(
         None,
         description=(
-            "Sort field (e.g. 'gene_symbol' for ascending or '-gene_symbol' for descending order)"
+            "Sort field (e.g. 'gene_symbol' for ascending or '-gene_symbol' "
+            "for descending order)"
         ),
     ),
 ) -> Dict[str, Any]:

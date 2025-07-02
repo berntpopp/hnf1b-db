@@ -2,16 +2,16 @@
 import time
 from typing import Any, Dict, Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from bson import ObjectId
-from app.models import Publication
+
 from app.database import db
 from app.utils import (
-    parse_sort,
     build_pagination_meta,
-    parse_filter_json,
     parse_deep_object_filters,
+    parse_filter_json,
+    parse_sort,
 )
 
 router = APIRouter()
@@ -24,7 +24,10 @@ async def get_publications(
     page_size: int = Query(10, ge=1, description="Number of publications per page"),
     sort: Optional[str] = Query(
         None,
-        description="Sort field (e.g. 'publication_id' for ascending or '-publication_id' for descending order)",
+        description=(
+            "Sort field (e.g. 'publication_id' for ascending or "
+            "'-publication_id' for descending order)"
+        ),
     ),
     filter_query: Optional[str] = Query(
         None,
@@ -43,9 +46,9 @@ async def get_publications(
     ),
 ) -> Dict[str, Any]:
     """
-    Retrieve a paginated list of publications, optionally filtered by a JSON filter
-    and/or a search query.
+    Retrieve a paginated list of publications.
 
+    Publications can be filtered by a JSON filter and/or a search query.
     The filter parameter should be provided as a JSON string.
     Additionally, if a search query `q` is provided, the endpoint will search across:
       - publication_id
@@ -57,7 +60,8 @@ async def get_publications(
       - journal
 
     Example:
-      /publications?sort=-publication_id&page=1&page_size=10&filter={"status": "active"}&q=2021
+      /publications?sort=-publication_id&page=1&page_size=10&filter={"status":
+      "active"}&q=2021
     """
     start_time = time.perf_counter()  # Start timing
 
@@ -65,7 +69,8 @@ async def get_publications(
     raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
 
-    # If a search query 'q' is provided, build a search filter for predefined publication fields.
+    # If a search query 'q' is provided, build a search filter for predefined
+    # publication fields.
     if q:
         search_fields = [
             "publication_id",

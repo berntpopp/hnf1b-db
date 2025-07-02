@@ -1,6 +1,7 @@
 # File: app/dependencies.py
+from typing import Any, Dict, Optional
+
 from fastapi import Query
-from typing import Dict, Any, Optional
 
 
 def parse_filter(
@@ -14,6 +15,7 @@ def parse_filter(
 ) -> Dict[str, Any]:
     """
     Parses a filter query string into a dictionary.
+
     For example, if filter is "Sex:male,AgeReported:30",
     returns: {"Sex": "male", "AgeReported": "30"}
     """

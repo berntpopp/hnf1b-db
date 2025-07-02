@@ -1,12 +1,13 @@
 # File: app/endpoints/proteins.py
 import time
+from typing import Any, Dict, Optional
+
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from typing import Any, Dict, Optional
-from bson import ObjectId
-from app.models import Protein
+
 from app.database import db
-from app.utils import parse_filters, parse_sort, build_pagination_meta
+from app.utils import build_pagination_meta, parse_filters, parse_sort
 
 router = APIRouter()
 
@@ -27,7 +28,8 @@ async def get_proteins(
     """
     Retrieve a paginated list of proteins.
 
-    This endpoint queries the `proteins` collection for protein structure and domain data.
+    This endpoint queries the `proteins` collection for protein structure and
+    domain data.
     It supports JSON:API–style filtering via query parameters.
     For example:
       /proteins?filter[domain]=kinase&sort=-gene&page=2&page_size=10

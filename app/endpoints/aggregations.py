@@ -1,15 +1,18 @@
 # File: app/endpoints/aggregations.py
 
 from datetime import datetime
+
 from fastapi import APIRouter
+
 from app.database import db
 
 router = APIRouter()
 
 
 async def _aggregate_with_total(collection, group_field: str) -> dict:
-    """
-    Helper function to perform an aggregation that returns both grouped counts and the total document count.
+    """Helper function to perform an aggregation.
+
+    Returns both grouped counts and the total document count.
 
     Args:
         collection: The Motor collection (e.g. db.individuals).
@@ -42,9 +45,10 @@ async def _aggregate_with_total(collection, group_field: str) -> dict:
 
 async def _aggregate_individual_counts(collection, group_field: str) -> dict:
     """
-    Helper function that aggregates a collection by a given field while summing the number
-    of individuals carrying each variant. Each document is assumed to have an 'individual_ids'
-    array; its size is computed and summed.
+    Helper function that aggregates a collection by a given field.
+
+    Sums the number of individuals carrying each variant. Each document is
+    assumed to have an 'individual_ids' array; its size is computed and summed.
 
     Args:
         collection: The Motor collection (e.g. db.variants).
@@ -90,19 +94,24 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
 
 async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
     """
-    Helper function to aggregate the Individuals collection by a specified field extracted
-    from the newest (most recent) report in each individual's reports array.
+    Aggregate Individuals by a field from their newest report.
+
+    Helper function to aggregate the Individuals collection by a specified field
+    extracted from the newest (most recent) report in each individual's reports
+    array.
 
     Args:
         collection: The Motor collection (e.g. db.individuals).
-        report_field: The field within the newest report to group by (e.g. "age_onset", "cohort", or "family_history").
+        report_field: The field within the newest report to group by
+            (e.g. "age_onset", "cohort", or "family_history").
 
     Returns:
         A dictionary with:
           - "total_count": The total number of individuals (with at least one report).
           - "grouped_counts": A list of documents with keys:
               - "_id": The value of the specified report field.
-              - "count": The number of individuals with that value in their newest report.
+              - "count": The number of individuals with that value in their
+                newest report.
     """
     pipeline = [
         {"$match": {"reports": {"$exists": True, "$ne": []}}},
@@ -181,16 +190,20 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
 
 async def _aggregate_variant_field(collection, field_name: str) -> dict:
     """
+    Aggregate Individuals by a field within their variant object.
+
     Helper function to aggregate the Individuals collection by a specified field
     contained within the embedded 'variant' object.
 
     Args:
         collection: The Motor collection (e.g. db.individuals).
-        field_name: The field inside the variant object to group by (e.g. "detection_method" or "segregation").
+        field_name: The field inside the variant object to group by
+            (e.g. "detection_method" or "segregation").
 
     Returns:
         A dictionary with:
-          - "total_count": Total number of individuals that have a non-empty variant.
+          - "total_count": Total number of individuals that have a
+            non-empty variant.
           - "grouped_counts": A list of documents with keys:
               - "_id": The value of the specified variant field.
               - "count": The number of individuals with that value.
@@ -220,12 +233,15 @@ async def _aggregate_variant_field(collection, field_name: str) -> dict:
 @router.get("/individuals/sex-count", tags=["Aggregations"])
 async def count_individuals_by_sex() -> dict:
     """
-    Count individuals grouped by their 'Sex' field, along with the total number of individuals.
+    Count individuals grouped by their 'Sex' field.
+
+    Also returns the total number of individuals.
 
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals.
-          - "grouped_counts": List of documents with keys "_id" (sex) and "count".
+          - "grouped_counts": List of documents with keys "_id" (sex)
+            and "count".
     """
     return await _aggregate_with_total(db.individuals, "Sex")
 
@@ -233,13 +249,15 @@ async def count_individuals_by_sex() -> dict:
 @router.get("/variants/type-count", tags=["Aggregations"])
 async def count_variants_by_type() -> dict:
     """
-    Count variants grouped by their type (stored in 'variant_type'),
-    along with the total number of variants.
+    Count variants grouped by their type.
+
+    Groups by the 'variant_type' field and returns the total number of variants.
 
     Returns:
         A dictionary with:
           - "total_count": Total number of variants.
-          - "grouped_counts": List of documents with keys "_id" (variant type) and "count".
+          - "grouped_counts": List of documents with keys "_id"
+            (variant type) and "count".
     """
     return await _aggregate_with_total(db.variants, "variant_type")
 
@@ -247,13 +265,15 @@ async def count_variants_by_type() -> dict:
 @router.get("/publications/type-count", tags=["Aggregations"])
 async def count_publications_by_type() -> dict:
     """
-    Count publications grouped by their 'publication_type' field,
-    along with the total number of publications.
+    Count publications grouped by their 'publication_type' field.
+
+    Also returns the total number of publications.
 
     Returns:
         A dictionary with:
           - "total_count": Total number of publications.
-          - "grouped_counts": List of documents with keys "_id" (publication type) and "count".
+          - "grouped_counts": List of documents with keys "_id"
+            (publication type) and "count".
     """
     return await _aggregate_with_total(db.publications, "publication_type")
 
@@ -261,14 +281,16 @@ async def count_publications_by_type() -> dict:
 @router.get("/variants/newest-classification-verdict-count", tags=["Aggregations"])
 async def count_variants_by_newest_verdict() -> dict:
     """
-    Count variants grouped by the 'verdict' field of the newest (most recent) classification object.
+    Count variants grouped by the 'verdict' field of the newest classification.
 
-    The newest classification is determined by the maximum 'classification_date' within the 'classifications' array.
+    The newest classification is determined by the maximum 'classification_date'
+    within the 'classifications' array.
 
     Returns:
         A dictionary with:
           - "total_count": Total number of variant documents.
-          - "grouped_counts": List of documents with keys "_id" (verdict) and "count".
+          - "grouped_counts": List of documents with keys "_id" (verdict)
+            and "count".
     """
     pipeline = [
         {
@@ -320,14 +342,16 @@ async def count_variants_by_newest_verdict() -> dict:
 @router.get("/variants/individual-count-by-type", tags=["Aggregations"])
 async def count_individuals_by_variant_type() -> dict:
     """
-    For each variant type, sum the total number of individuals carrying that variant.
+    Sum the total number of individuals for each variant type.
 
     Each variant document contains an 'individual_ids' array.
-    This endpoint projects the size of that array, groups by 'variant_type', and sums the sizes.
+    This endpoint projects the size of that array, groups by 'variant_type',
+    and sums the sizes.
 
     Returns:
         A dictionary with:
-          - "total_count": The overall sum of individuals (summed across all variants).
+          - "total_count": The overall sum of individuals (summed across
+            all variants).
           - "grouped_counts": A list of documents with keys:
               - "_id": The variant type.
               - "count": Sum of individuals carrying variants of that type.
@@ -340,13 +364,15 @@ async def count_individuals_by_age_onset() -> dict:
     """
     Aggregate individuals by the 'age_onset' field of their newest report.
 
-    For each individual, the newest report is selected based on the maximum 'report_date'.
-    Then, if the age_onset value (case-insensitive) is "prenatal" or "not reported", that value is preserved.
+    For each individual, the newest report is selected based on the maximum
+    'report_date'. Then, if the age_onset value (case-insensitive) is
+    "prenatal" or "not reported", that value is preserved.
     Any other value (e.g. "8y", "7m", "postnatal") is normalized to "postnatal".
 
     Returns:
         A dictionary with:
-          - "total_count": Total number of individuals with at least one report.
+          - "total_count": Total number of individuals with at least one
+            report.
           - "grouped_counts": List of documents with keys:
               - "_id": The standardized age_onset value.
               - "count": The number of individuals with that age_onset.
@@ -359,12 +385,14 @@ async def count_individuals_by_cohort() -> dict:
     """
     Aggregate individuals by the 'cohort' field of their newest report.
 
-    For each individual, the newest report is selected based on the maximum 'report_date'.
-    Then, individuals are grouped by the value of 'cohort' in that report.
+    For each individual, the newest report is selected based on the maximum
+    'report_date'. Then, individuals are grouped by the value of 'cohort' in
+    that report.
 
     Returns:
         A dictionary with:
-          - "total_count": Total number of individuals with at least one report.
+          - "total_count": Total number of individuals with at least one
+            report.
           - "grouped_counts": List of documents with keys:
               - "_id": The cohort value.
               - "count": The number of individuals with that cohort.
@@ -377,12 +405,14 @@ async def count_individuals_by_family_history() -> dict:
     """
     Aggregate individuals by the 'family_history' field of their newest report.
 
-    For each individual, the newest report is selected based on the maximum 'report_date'.
-    Then, individuals are grouped by the value of 'family_history' in that report.
+    For each individual, the newest report is selected based on the maximum
+    'report_date'. Then, individuals are grouped by the value of
+    'family_history' in that report.
 
     Returns:
         A dictionary with:
-          - "total_count": Total number of individuals with at least one report.
+          - "total_count": Total number of individuals with at least one
+            report.
           - "grouped_counts": List of documents with keys:
               - "_id": The family_history value.
               - "count": The number of individuals with that family_history.
@@ -402,7 +432,8 @@ async def count_individuals_by_detection_method() -> dict:
           - "total_count": Total number of individuals with variant data.
           - "grouped_counts": List of documents with keys:
               - "_id": The detection method.
-              - "count": The number of individuals with that detection method.
+              - "count": The number of individuals with that detection
+                method.
     """
     return await _aggregate_variant_field(db.individuals, "detection_method")
 
@@ -429,10 +460,10 @@ async def count_phenotypes_by_described() -> dict:
     """
     Aggregate the phenotypes from the newest report (review) of each individual.
 
-    The pipeline converts the 'phenotypes' object in the newest report into an array,
-    unwinds it, and then groups by phenotype_id and name.
-    For each phenotype, counts for each 'described' category ("yes", "no", and "not reported")
-    are accumulated and then grouped into a sub-object.
+    The pipeline converts the 'phenotypes' object in the newest report into an
+    array, unwinds it, and then groups by phenotype_id and name.
+    For each phenotype, counts for each 'described' category ("yes", "no", and
+    "not reported") are accumulated and then grouped into a sub-object.
     Finally, the results are sorted in descending order by the "yes" count.
 
     Returns:
@@ -511,7 +542,11 @@ async def count_phenotypes_by_described() -> dict:
                 "_id": 0,
                 "phenotype_id": "$_id.phenotype_id",
                 "name": "$_id.name",
-                "counts": {"yes": "$yes", "no": "$no", "not reported": "$not_reported"},
+                "counts": {
+                    "yes": "$yes",
+                    "no": "$no",
+                    "not reported": "$not_reported",
+                },
             }
         },
         {"$sort": {"counts.yes": -1}},
@@ -523,7 +558,7 @@ async def count_phenotypes_by_described() -> dict:
 @router.get("/publications/cumulative-count", tags=["Aggregations"])
 async def cumulative_publications() -> dict:
     """
-    Aggregate the publications collection to compute cumulative counts in one-month intervals.
+    Compute cumulative publication counts in one-month intervals.
 
     Two facets are returned:
       - overall: Cumulative count of all publications over time.
@@ -534,8 +569,10 @@ async def cumulative_publications() -> dict:
 
     Returns:
         A dictionary with keys:
-          - "overall": List of documents with monthDate, monthlyCount, and cumulativeCount.
-          - "byType": List of documents with monthDate, publication_type, monthlyCount, and cumulativeCount.
+          - "overall": List of documents with monthDate, monthlyCount, and
+            cumulativeCount.
+          - "byType": List of documents with monthDate, publication_type,
+            monthlyCount, and cumulativeCount.
     """
     overall_pipeline = [
         {
@@ -626,21 +663,26 @@ async def cumulative_publications() -> dict:
 async def get_variant_small_variants() -> dict:
     """Retrieve variants of type SNV or indel and extract flag information.
 
-    For each variant that matches variant_type in ['SNV', 'indel'], this endpoint extracts:
+    For each variant that matches variant_type in ['SNV', 'indel'], this
+    endpoint extracts:
       - variant_id,
-      - verdict from the newest (most recent) classification (based on classification_date),
-      - transcript, c_dot, p_dot, and protein_position from the newest annotation (by annotation_date)
-        among annotations with source 'vep',
-      - individual_count: number of individuals carrying the variant (computed as the length of the individual_ids array),
+      - verdict from the newest (most recent) classification (based on
+        classification_date),
+      - transcript, c_dot, p_dot, and protein_position from the newest
+        annotation (by annotation_date) among annotations with source 'vep',
+      - individual_count: number of individuals carrying the variant (computed
+        as the length of the individual_ids array),
       - cadd_score: the CADD score from the newest VEP annotation.
 
     Returns:
-        A dictionary with a key "small_variants" containing an array of flag objects.
+        A dictionary with a key "small_variants" containing an array of flag
+        objects.
     """
     pipeline = [
         # 1. Filter for variants with type SNV or indel.
         {"$match": {"variant_type": {"$in": ["SNV", "indel"]}}},
-        # 2. Determine the newest classification and filter annotations for source "vep".
+        # 2. Determine the newest classification and filter annotations for
+        # source "vep".
         {
             "$set": {
                 "latest_classification": {
@@ -693,7 +735,8 @@ async def get_variant_small_variants() -> dict:
                 }
             }
         },
-        # 4. Project the required fields along with the count of individuals and the CADD score.
+        # 4. Project the required fields along with the count of individuals
+        # and the CADD score.
         {
             "$project": {
                 "_id": 0,
@@ -714,8 +757,7 @@ async def get_variant_small_variants() -> dict:
 
 @router.get("/summary", tags=["Aggregations"])
 async def get_summary_stats() -> dict:
-    """
-    Retrieve summary statistics for main collections.
+    """Retrieve summary statistics for main collections.
 
     For Individuals:
       - Count the total number of individuals.
@@ -757,9 +799,10 @@ async def get_summary_stats() -> dict:
 
 @router.get("/variants/impact-group-count", tags=["Aggregations"])
 async def count_variants_by_impact_group() -> dict:
-    """
-    Aggregate variants into impact groups based on the newest VEP annotation's impact value
-    and the newest classification's verdict. Grouping logic:
+    """Aggregate variants into impact groups.
+
+    Groups are based on the newest VEP annotation's impact value and the newest
+    classification's verdict. Grouping logic:
       - If impact == "MODERATE" => "nT"
       - If impact == "HIGH" => "T"
       - If impact == "LOW" and verdict == "LP/P" => "T"
@@ -770,7 +813,8 @@ async def count_variants_by_impact_group() -> dict:
     Returns:
         A dictionary with:
           - "total_count": Total number of variants processed.
-          - "grouped_counts": A list of documents with keys "_id" (impact group) and "count".
+          - "grouped_counts": A list of documents with keys "_id" (impact
+            group) and "count".
     """
     pipeline = [
         # 1. Get the newest classification and filter annotations for source "vep"
@@ -930,8 +974,9 @@ async def count_variants_by_impact_group() -> dict:
 
 @router.get("/variants/effect-group-count", tags=["Aggregations"])
 async def count_variants_by_effect_group() -> dict:
-    """
-    Aggregate variants into effect groups based on the newest VEP annotation's effect and impact values,
+    """Aggregate variants into effect groups.
+
+    Groups are based on the newest VEP annotation's effect and impact values,
     as well as the newest classification's verdict. The grouping logic is:
       - If effect == "transcript_ablation" => "17qDel"
       - If effect == "transcript_amplification" => "17qDup"
@@ -944,7 +989,8 @@ async def count_variants_by_effect_group() -> dict:
     Returns:
         A dictionary with:
           - "total_count": The total number of variants processed.
-          - "grouped_counts": A list of documents with keys "_id" (effect group) and "count".
+          - "grouped_counts": A list of documents with keys "_id" (effect
+            group) and "count".
     """
     pipeline = [
         # 1. Extract the newest classification and filter annotations for VEP.
@@ -1115,9 +1161,10 @@ async def count_variants_by_effect_group() -> dict:
 
 @router.get("/individuals/phenotype-cohort-count", tags=["Aggregations"])
 async def phenotype_cohort_counts() -> dict:
-    """
-    For each individual (with at least one report), using the phenotypes from the newest report,
-    classify the individual as follows:
+    """Classify individuals based on phenotypes from their newest report.
+
+    For each individual (with at least one report), using the phenotypes from
+    the newest report, classify the individual as follows:
 
       - MODY: Has "Maturity-onset diabetes of the young" (described == "yes").
 
@@ -1126,7 +1173,8 @@ async def phenotype_cohort_counts() -> dict:
           • "Unilateral renal agenesis",
           • "Renal hypoplasia",
           • "Abnormal renal morphology"
-        OR has "Abnormality of the genital system" (described == "yes") AND also has any kidney-related phenotype.
+        OR has "Abnormality of the genital system" (described == "yes") AND
+        also has any kidney-related phenotype.
 
       - any_kidney: Defined as the presence (described == "yes") of any of:
           "Chronic kidney disease",
@@ -1179,7 +1227,8 @@ async def phenotype_cohort_counts() -> dict:
                 "phenotype_entries": {"$objectToArray": "$newest_report.phenotypes"}
             }
         },
-        # 4. Compute any_kidney flag (true if any kidney-related phenotype is present with described == "yes").
+        # 4. Compute any_kidney flag (true if any kidney-related phenotype is
+        # present with described == "yes").
         {
             "$set": {
                 "any_kidney": {
@@ -1196,17 +1245,23 @@ async def phenotype_cohort_counts() -> dict:
                                                     "$$p.v.name",
                                                     [
                                                         "Chronic kidney disease",
-                                                        "Stage 1 chronic kidney disease",
-                                                        "Stage 2 chronic kidney disease",
-                                                        "Stage 3 chronic kidney disease",
-                                                        "Stage 4 chronic kidney disease",
-                                                        "Stage 5 chronic kidney disease",
+                                                        "Stage 1 chronic kidney"
+                                                        " disease",
+                                                        "Stage 2 chronic kidney"
+                                                        " disease",
+                                                        "Stage 3 chronic kidney"
+                                                        " disease",
+                                                        "Stage 4 chronic kidney"
+                                                        " disease",
+                                                        "Stage 5 chronic kidney"
+                                                        " disease",
                                                         "Multicystic kidney dysplasia",
                                                         "Renal hypoplasia",
                                                         "Renal cyst",
-                                                        "Unilateral renal agenesis",
-                                                        "Abnormal renal morphology",
-                                                        "Renal cortical hyperechogenicity",
+                                                        "Unilateral renal" " agenesis",
+                                                        "Abnormal renal" " morphology",
+                                                        "Renal cortical"
+                                                        " hyperechogenicity",
                                                         "Multiple glomerular cysts",
                                                         "Oligomeganephronia",
                                                     ],
@@ -1228,7 +1283,8 @@ async def phenotype_cohort_counts() -> dict:
                 }
             }
         },
-        # 5. Compute MODY flag (true if "Maturity-onset diabetes of the young" is present with described == "yes").
+        # 5. Compute MODY flag (true if "Maturity-onset diabetes of the young"
+        # is present with described == "yes").
         {
             "$set": {
                 "MODY": {
@@ -1243,7 +1299,8 @@ async def phenotype_cohort_counts() -> dict:
                                             {
                                                 "$eq": [
                                                     "$$p.v.name",
-                                                    "Maturity-onset diabetes of the young",
+                                                    "Maturity-onset diabetes"
+                                                    " of the young",
                                                 ]
                                             },
                                             {
@@ -1263,8 +1320,10 @@ async def phenotype_cohort_counts() -> dict:
             }
         },
         # 6. Compute CAKUT flag:
-        #    Option A: One of these kidney-specific phenotypes is present with described == "yes".
-        #    Option B: "Abnormality of the genital system" is present (described == "yes") AND any_kidney is true.
+        #    Option A: One of these kidney-specific phenotypes is present with
+        #    described == "yes".
+        #    Option B: "Abnormality of the genital system" is present
+        #    (described == "yes") AND any_kidney is true.
         {
             "$set": {
                 "CAKUT": {
@@ -1282,10 +1341,13 @@ async def phenotype_cohort_counts() -> dict:
                                                         "$in": [
                                                             "$$p.v.name",
                                                             [
-                                                                "Multicystic kidney dysplasia",
-                                                                "Unilateral renal agenesis",
+                                                                "Multicystic kidney"
+                                                                " dysplasia",
+                                                                "Unilateral renal"
+                                                                " agenesis",
                                                                 "Renal hypoplasia",
-                                                                "Abnormal renal morphology",
+                                                                "Abnormal renal"
+                                                                " morphology",
                                                             ],
                                                         ]
                                                     },
@@ -1319,13 +1381,17 @@ async def phenotype_cohort_counts() -> dict:
                                                             {
                                                                 "$eq": [
                                                                     "$$p.v.name",
-                                                                    "Abnormality of the genital system",
+                                                                    "Abnormality of the"
+                                                                    " genital system",
                                                                 ]
                                                             },
                                                             {
                                                                 "$eq": [
                                                                     {
-                                                                        "$toLower": "$$p.v.described"
+                                                                        "$toLower": (
+                                                                            "$$p.v."
+                                                                            "described"
+                                                                        )
                                                                     },
                                                                     "yes",
                                                                 ]

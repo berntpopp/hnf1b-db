@@ -2,16 +2,16 @@
 import time
 from typing import Any, Dict, Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from bson import ObjectId
-from app.models import Variant
+
 from app.database import db
 from app.utils import (
-    parse_sort,
     build_pagination_meta,
-    parse_filter_json,
     parse_deep_object_filters,
+    parse_filter_json,
+    parse_sort,
 )
 
 router = APIRouter()
@@ -24,7 +24,10 @@ async def get_variants(
     page_size: int = Query(10, ge=1, description="Number of variants per page"),
     sort: Optional[str] = Query(
         None,
-        description="Sort field (e.g. 'variant_id' for ascending or '-variant_id' for descending order)",
+        description=(
+            "Sort field (e.g. 'variant_id' for ascending or '-variant_id' "
+            "for descending order)"
+        ),
     ),
     filter_query: Optional[str] = Query(
         None,
@@ -46,9 +49,9 @@ async def get_variants(
     ),
 ) -> Dict[str, Any]:
     """
-    Retrieve a paginated list of variants, optionally filtered by a JSON filter
-    and/or a free-text search query.
+    Retrieve a paginated list of variants.
 
+    Variants can be filtered by a JSON filter and/or a free-text search query.
     The filter parameter should be provided as a JSON string.
     Additionally, if a search query `q` is provided, the endpoint will search across:
       - variant_id
@@ -56,7 +59,8 @@ async def get_variants(
       - hg38, hg38_INFO
       - variant_type
       - classifications.verdict, classifications.criteria
-      - annotations.c_dot, annotations.p_dot, annotations.impact, annotations.variant_class
+      - annotations.c_dot, annotations.p_dot, annotations.impact,
+        annotations.variant_class
 
     Example:
       /variants?sort=-variant_id&page=1&page_size=10&filter={"status": "active"}&q=SNV
@@ -67,7 +71,8 @@ async def get_variants(
     raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
 
-    # If a search query 'q' is provided, build a search filter for predefined variant fields.
+    # If a search query 'q' is provided, build a search filter for predefined
+    # variant fields.
     if q:
         search_fields = [
             "variant_id",
@@ -108,7 +113,8 @@ async def get_variants(
     end_time = time.perf_counter()  # End timing
     execution_time = end_time - start_time
 
-    # Prepare extra query parameters (including sort, filter, and search query) for pagination links.
+    # Prepare extra query parameters (including sort, filter, and search query)
+    # for pagination links.
     extra_params: Dict[str, Any] = {}
     if sort:
         extra_params["sort"] = sort

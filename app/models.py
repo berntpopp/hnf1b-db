@@ -1,11 +1,13 @@
 # File: app/models.py
 from __future__ import annotations
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+
 import math
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import pandas as pd  # Used for consistent date parsing
 from bson import ObjectId as BsonObjectId  # Provided by PyMongo
+from pydantic import BaseModel, Field, field_validator
 
 
 # ------------------------------------------------------------------------------

@@ -1,11 +1,11 @@
 # File: app/endpoints/search.py
-import time
 import re
+import time
 from typing import Any, Dict, Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from bson import ObjectId
 
 from app.database import db
 
@@ -13,8 +13,8 @@ router = APIRouter()
 
 
 def get_nested_value(doc: dict, field: str) -> Any:
-    """
-    Retrieve a nested value from a document using dot notation.
+    """Retrieve a nested value from a document using dot notation.
+
     If the value is encountered within a list, returns a list of values.
     """
     parts = field.split(".")
@@ -52,20 +52,23 @@ async def search_documents(
         True,
         description=(
             "If true, only return minimal info for each matching document: "
-            "the _id, the identifier field (individual_id, variant_id, or publication_id), "
+            "the _id, the identifier field (individual_id, variant_id, or "
+            "publication_id), "
             "and a dictionary of matched field values."
         ),
     ),
 ) -> Dict[str, Any]:
-    """
-    Performs a case-insensitive search against a predefined set of fields in the
-    individuals, variants, and publications collections.
+    """Perform a case-insensitive search across collections.
+
+    Searches against a predefined set of fields in the individuals, variants,
+    and publications collections.
 
     If the `collection` parameter is specified, only that collection is searched.
 
     When `reduce_doc` is true, each matching document is reduced to include only:
       - _id (as a string)
-      - The collection-specific identifier (individual_id, variant_id, or publication_id)
+      - The collection-specific identifier (individual_id, variant_id, or
+        publication_id)
       - A "matched" dictionary containing only the fields that matched the query.
 
     Example:
@@ -79,7 +82,10 @@ async def search_documents(
         if collection not in allowed_collections:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid collection. Allowed values are: {', '.join(allowed_collections)}",
+                detail=(
+                    f"Invalid collection. Allowed values are: "
+                    f"{', '.join(allowed_collections)}"
+                ),
             )
         collections_to_search = [collection]
     else:
