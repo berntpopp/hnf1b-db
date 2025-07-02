@@ -10,11 +10,11 @@ router = APIRouter()
 async def _aggregate_with_total(collection, group_field: str) -> dict:
     """
     Helper function to perform an aggregation that returns both grouped counts and the total document count.
-    
+
     Args:
         collection: The Motor collection (e.g. db.individuals).
         group_field: The field to group by (e.g. "Sex" for individuals).
-        
+
     Returns:
         A dictionary with:
           - "total_count": The total number of documents.
@@ -25,11 +25,9 @@ async def _aggregate_with_total(collection, group_field: str) -> dict:
             "$facet": {
                 "grouped_counts": [
                     {"$group": {"_id": f"${group_field}", "count": {"$sum": 1}}},
-                    {"$sort": {"_id": 1}}
+                    {"$sort": {"_id": 1}},
                 ],
-                "total_count": [
-                    {"$count": "total"}
-                ]
+                "total_count": [{"$count": "total"}],
             }
         }
     ]
@@ -47,11 +45,11 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
     Helper function that aggregates a collection by a given field while summing the number
     of individuals carrying each variant. Each document is assumed to have an 'individual_ids'
     array; its size is computed and summed.
-    
+
     Args:
         collection: The Motor collection (e.g. db.variants).
         group_field: The field to group by (e.g. "variant_type").
-        
+
     Returns:
         A dictionary with:
           - "total_count": Sum of all individual counts across the collection.
@@ -61,7 +59,7 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
         {
             "$project": {
                 group_field: 1,
-                "individual_count": {"$size": {"$ifNull": ["$individual_ids", []]}}
+                "individual_count": {"$size": {"$ifNull": ["$individual_ids", []]}},
             }
         },
         {
@@ -70,21 +68,16 @@ async def _aggregate_individual_counts(collection, group_field: str) -> dict:
                     {
                         "$group": {
                             "_id": f"${group_field}",
-                            "count": {"$sum": "$individual_count"}
+                            "count": {"$sum": "$individual_count"},
                         }
                     },
-                    {"$sort": {"_id": 1}}
+                    {"$sort": {"_id": 1}},
                 ],
                 "total_count": [
-                    {
-                        "$group": {
-                            "_id": None,
-                            "total": {"$sum": "$individual_count"}
-                        }
-                    }
-                ]
+                    {"$group": {"_id": None, "total": {"$sum": "$individual_count"}}}
+                ],
             }
-        }
+        },
     ]
     result = await collection.aggregate(pipeline).to_list(length=1)
     if result:
@@ -99,11 +92,11 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
     """
     Helper function to aggregate the Individuals collection by a specified field extracted
     from the newest (most recent) report in each individual's reports array.
-    
+
     Args:
         collection: The Motor collection (e.g. db.individuals).
         report_field: The field within the newest report to group by (e.g. "age_onset", "cohort", or "family_history").
-        
+
     Returns:
         A dictionary with:
           - "total_count": The total number of individuals (with at least one report).
@@ -112,51 +105,71 @@ async def _aggregate_latest_report_field(collection, report_field: str) -> dict:
               - "count": The number of individuals with that value in their newest report.
     """
     pipeline = [
-        { "$match": { "reports": { "$exists": True, "$ne": [] } } },
-        { "$set": {
-              "latest_report": {
-                  "$reduce": {
-                      "input": "$reports",
-                      "initialValue": {"report_date": datetime(1970, 1, 1)},
-                      "in": {
-                          "$cond": [
-                              { "$gt": ["$$this.report_date", "$$value.report_date"] },
-                              "$$this",
-                              "$$value"
-                          ]
-                      }
-                  }
-              }
-          }
-        }
-    ]
-    if report_field == "age_onset":
-        pipeline.append({
+        {"$match": {"reports": {"$exists": True, "$ne": []}}},
+        {
             "$set": {
-                "latest_report.age_onset": {
-                    "$cond": [
-                        { "$eq": [ { "$toLower": "$latest_report.age_onset" }, "prenatal" ] },
-                        "prenatal",
-                        { "$cond": [
-                            { "$eq": [ { "$toLower": "$latest_report.age_onset" }, "not reported" ] },
-                            "not reported",
-                            "postnatal"
-                        ] }
-                    ]
+                "latest_report": {
+                    "$reduce": {
+                        "input": "$reports",
+                        "initialValue": {"report_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.report_date", "$$value.report_date"]},
+                                "$$this",
+                                "$$value",
+                            ]
+                        },
+                    }
                 }
             }
-        })
-    pipeline.append({
-        "$facet": {
-            "grouped_counts": [
-                { "$group": { "_id": f"$latest_report.{report_field}", "count": { "$sum": 1 } } },
-                { "$sort": { "_id": 1 } }
-            ],
-            "total_count": [
-                { "$count": "total" }
-            ]
+        },
+    ]
+    if report_field == "age_onset":
+        pipeline.append(
+            {
+                "$set": {
+                    "latest_report.age_onset": {
+                        "$cond": [
+                            {
+                                "$eq": [
+                                    {"$toLower": "$latest_report.age_onset"},
+                                    "prenatal",
+                                ]
+                            },
+                            "prenatal",
+                            {
+                                "$cond": [
+                                    {
+                                        "$eq": [
+                                            {"$toLower": "$latest_report.age_onset"},
+                                            "not reported",
+                                        ]
+                                    },
+                                    "not reported",
+                                    "postnatal",
+                                ]
+                            },
+                        ]
+                    }
+                }
+            }
+        )
+    pipeline.append(
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {
+                        "$group": {
+                            "_id": f"$latest_report.{report_field}",
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"_id": 1}},
+                ],
+                "total_count": [{"$count": "total"}],
+            }
         }
-    })
+    )
     result = await collection.aggregate(pipeline).to_list(length=1)
     if result:
         grouped_counts = result[0].get("grouped_counts", [])
@@ -170,11 +183,11 @@ async def _aggregate_variant_field(collection, field_name: str) -> dict:
     """
     Helper function to aggregate the Individuals collection by a specified field
     contained within the embedded 'variant' object.
-    
+
     Args:
         collection: The Motor collection (e.g. db.individuals).
         field_name: The field inside the variant object to group by (e.g. "detection_method" or "segregation").
-        
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals that have a non-empty variant.
@@ -183,17 +196,17 @@ async def _aggregate_variant_field(collection, field_name: str) -> dict:
               - "count": The number of individuals with that value.
     """
     pipeline = [
-        { "$match": { "variant": { "$exists": True, "$ne": {} } } },
-        { "$project": { "target": f"$variant.{field_name}" } },
-        { "$facet": {
-            "grouped_counts": [
-                { "$group": { "_id": "$target", "count": { "$sum": 1 } } },
-                { "$sort": { "_id": 1 } }
-            ],
-            "total_count": [
-                { "$count": "total" }
-            ]
-        } }
+        {"$match": {"variant": {"$exists": True, "$ne": {}}}},
+        {"$project": {"target": f"$variant.{field_name}"}},
+        {
+            "$facet": {
+                "grouped_counts": [
+                    {"$group": {"_id": "$target", "count": {"$sum": 1}}},
+                    {"$sort": {"_id": 1}},
+                ],
+                "total_count": [{"$count": "total"}],
+            }
+        },
     ]
     result = await collection.aggregate(pipeline).to_list(length=1)
     if result:
@@ -208,7 +221,7 @@ async def _aggregate_variant_field(collection, field_name: str) -> dict:
 async def count_individuals_by_sex() -> dict:
     """
     Count individuals grouped by their 'Sex' field, along with the total number of individuals.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals.
@@ -222,7 +235,7 @@ async def count_variants_by_type() -> dict:
     """
     Count variants grouped by their type (stored in 'variant_type'),
     along with the total number of variants.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of variants.
@@ -236,7 +249,7 @@ async def count_publications_by_type() -> dict:
     """
     Count publications grouped by their 'publication_type' field,
     along with the total number of publications.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of publications.
@@ -249,9 +262,9 @@ async def count_publications_by_type() -> dict:
 async def count_variants_by_newest_verdict() -> dict:
     """
     Count variants grouped by the 'verdict' field of the newest (most recent) classification object.
-    
+
     The newest classification is determined by the maximum 'classification_date' within the 'classifications' array.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of variant documents.
@@ -266,11 +279,16 @@ async def count_variants_by_newest_verdict() -> dict:
                         "initialValue": {"classification_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.classification_date",
+                                        "$$value.classification_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 }
             }
@@ -281,16 +299,14 @@ async def count_variants_by_newest_verdict() -> dict:
                     {
                         "$group": {
                             "_id": "$latest_classification.verdict",
-                            "count": {"$sum": 1}
+                            "count": {"$sum": 1},
                         }
                     },
-                    {"$sort": {"_id": 1}}
+                    {"$sort": {"_id": 1}},
                 ],
-                "total_count": [
-                    {"$count": "total"}
-                ]
+                "total_count": [{"$count": "total"}],
             }
-        }
+        },
     ]
     result = await db.variants.aggregate(pipeline).to_list(length=1)
     if result:
@@ -305,10 +321,10 @@ async def count_variants_by_newest_verdict() -> dict:
 async def count_individuals_by_variant_type() -> dict:
     """
     For each variant type, sum the total number of individuals carrying that variant.
-    
+
     Each variant document contains an 'individual_ids' array.
     This endpoint projects the size of that array, groups by 'variant_type', and sums the sizes.
-    
+
     Returns:
         A dictionary with:
           - "total_count": The overall sum of individuals (summed across all variants).
@@ -323,11 +339,11 @@ async def count_individuals_by_variant_type() -> dict:
 async def count_individuals_by_age_onset() -> dict:
     """
     Aggregate individuals by the 'age_onset' field of their newest report.
-    
+
     For each individual, the newest report is selected based on the maximum 'report_date'.
     Then, if the age_onset value (case-insensitive) is "prenatal" or "not reported", that value is preserved.
     Any other value (e.g. "8y", "7m", "postnatal") is normalized to "postnatal".
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals with at least one report.
@@ -342,10 +358,10 @@ async def count_individuals_by_age_onset() -> dict:
 async def count_individuals_by_cohort() -> dict:
     """
     Aggregate individuals by the 'cohort' field of their newest report.
-    
+
     For each individual, the newest report is selected based on the maximum 'report_date'.
     Then, individuals are grouped by the value of 'cohort' in that report.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals with at least one report.
@@ -360,10 +376,10 @@ async def count_individuals_by_cohort() -> dict:
 async def count_individuals_by_family_history() -> dict:
     """
     Aggregate individuals by the 'family_history' field of their newest report.
-    
+
     For each individual, the newest report is selected based on the maximum 'report_date'.
     Then, individuals are grouped by the value of 'family_history' in that report.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals with at least one report.
@@ -378,9 +394,9 @@ async def count_individuals_by_family_history() -> dict:
 async def count_individuals_by_detection_method() -> dict:
     """
     Aggregate individuals by the 'detection_method' field found in their variant object.
-    
+
     Only individuals with a non-empty variant object are considered.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals with variant data.
@@ -395,9 +411,9 @@ async def count_individuals_by_detection_method() -> dict:
 async def count_individuals_by_segregation() -> dict:
     """
     Aggregate individuals by the 'segregation' field found in their variant object.
-    
+
     Only individuals with a non-empty variant object are considered.
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of individuals with variant data.
@@ -412,13 +428,13 @@ async def count_individuals_by_segregation() -> dict:
 async def count_phenotypes_by_described() -> dict:
     """
     Aggregate the phenotypes from the newest report (review) of each individual.
-    
+
     The pipeline converts the 'phenotypes' object in the newest report into an array,
     unwinds it, and then groups by phenotype_id and name.
     For each phenotype, counts for each 'described' category ("yes", "no", and "not reported")
     are accumulated and then grouped into a sub-object.
     Finally, the results are sorted in descending order by the "yes" count.
-    
+
     Returns:
         A dictionary with a key "results" containing a list of documents.
         Each document has:
@@ -430,74 +446,75 @@ async def count_phenotypes_by_described() -> dict:
               - "not reported": Count of individuals with described "not reported".
     """
     pipeline = [
-        { "$match": { "reports": { "$exists": True, "$ne": [] } } },
-        { "$set": {
-              "latest_report": {
-                  "$reduce": {
-                      "input": "$reports",
-                      "initialValue": { "report_date": datetime(1970, 1, 1) },
-                      "in": {
-                          "$cond": [
-                              { "$gt": ["$$this.report_date", "$$value.report_date"] },
-                              "$$this",
-                              "$$value"
-                          ]
-                      }
-                  }
-              }
-          }
+        {"$match": {"reports": {"$exists": True, "$ne": []}}},
+        {
+            "$set": {
+                "latest_report": {
+                    "$reduce": {
+                        "input": "$reports",
+                        "initialValue": {"report_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.report_date", "$$value.report_date"]},
+                                "$$this",
+                                "$$value",
+                            ]
+                        },
+                    }
+                }
+            }
         },
-        { "$project": {
-              "phenotypes": { "$objectToArray": "$latest_report.phenotypes" }
-          }
+        {"$project": {"phenotypes": {"$objectToArray": "$latest_report.phenotypes"}}},
+        {"$unwind": "$phenotypes"},
+        {
+            "$group": {
+                "_id": {
+                    "phenotype_id": "$phenotypes.v.phenotype_id",
+                    "name": "$phenotypes.v.name",
+                },
+                "yes": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": [{"$toLower": "$phenotypes.v.described"}, "yes"]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "no": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": [{"$toLower": "$phenotypes.v.described"}, "no"]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "not_reported": {
+                    "$sum": {
+                        "$cond": [
+                            {
+                                "$eq": [
+                                    {"$toLower": "$phenotypes.v.described"},
+                                    "not reported",
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    }
+                },
+            }
         },
-        { "$unwind": "$phenotypes" },
-        { "$group": {
-              "_id": {
-                  "phenotype_id": "$phenotypes.v.phenotype_id",
-                  "name": "$phenotypes.v.name"
-              },
-              "yes": {
-                  "$sum": {
-                      "$cond": [
-                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "yes" ] },
-                          1,
-                          0
-                      ]
-                  }
-              },
-              "no": {
-                  "$sum": {
-                      "$cond": [
-                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "no" ] },
-                          1,
-                          0
-                      ]
-                  }
-              },
-              "not_reported": {
-                  "$sum": {
-                      "$cond": [
-                          { "$eq": [ { "$toLower": "$phenotypes.v.described" }, "not reported" ] },
-                          1,
-                          0
-                      ]
-                  }
-              }
-          }
+        {
+            "$project": {
+                "_id": 0,
+                "phenotype_id": "$_id.phenotype_id",
+                "name": "$_id.name",
+                "counts": {"yes": "$yes", "no": "$no", "not reported": "$not_reported"},
+            }
         },
-        { "$project": {
-              "_id": 0,
-              "phenotype_id": "$_id.phenotype_id",
-              "name": "$_id.name",
-              "counts": {
-                  "yes": "$yes",
-                  "no": "$no",
-                  "not reported": "$not_reported"
-              }
-          }
-        },
-        { "$sort": { "counts.yes": -1 } }
+        {"$sort": {"counts.yes": -1}},
     ]
     results = await db.individuals.aggregate(pipeline).to_list(length=None)
     return {"results": results}
@@ -507,66 +524,99 @@ async def count_phenotypes_by_described() -> dict:
 async def cumulative_publications() -> dict:
     """
     Aggregate the publications collection to compute cumulative counts in one-month intervals.
-    
+
     Two facets are returned:
       - overall: Cumulative count of all publications over time.
       - byType: Cumulative count over time grouped by publication_type.
-    
+
     Each facet uses $dateTrunc to group publication_date into month intervals, and
     $setWindowFields to compute a running total.
-    
+
     Returns:
         A dictionary with keys:
           - "overall": List of documents with monthDate, monthlyCount, and cumulativeCount.
           - "byType": List of documents with monthDate, publication_type, monthlyCount, and cumulativeCount.
     """
     overall_pipeline = [
-        { "$set": { "monthDate": { "$dateTrunc": { "date": "$publication_date", "unit": "month" } } } },
-        { "$group": { "_id": "$monthDate", "monthlyCount": { "$sum": 1 } } },
-        { "$sort": { "_id": 1 } },
-        { "$setWindowFields": {
-            "sortBy": { "_id": 1 },
-            "output": {
-                "cumulativeCount": {
-                    "$sum": "$monthlyCount",
-                    "window": { "documents": [ "unbounded", "current" ] }
+        {
+            "$set": {
+                "monthDate": {
+                    "$dateTrunc": {"date": "$publication_date", "unit": "month"}
                 }
             }
-        } },
-        { "$project": { "_id": 0, "monthDate": "$_id", "monthlyCount": 1, "cumulativeCount": 1 } }
+        },
+        {"$group": {"_id": "$monthDate", "monthlyCount": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+        {
+            "$setWindowFields": {
+                "sortBy": {"_id": 1},
+                "output": {
+                    "cumulativeCount": {
+                        "$sum": "$monthlyCount",
+                        "window": {"documents": ["unbounded", "current"]},
+                    }
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "monthDate": "$_id",
+                "monthlyCount": 1,
+                "cumulativeCount": 1,
+            }
+        },
     ]
 
     by_type_pipeline = [
-        { "$set": { "monthDate": { "$dateTrunc": { "date": "$publication_date", "unit": "month" } } } },
-        { "$group": {
-            "_id": { "monthDate": "$monthDate", "publication_type": "$publication_type" },
-            "monthlyCount": { "$sum": 1 }
-        } },
-        { "$set": {
-            "monthDate": "$_id.monthDate",
-            "publication_type": "$_id.publication_type"
-        } },
-        { "$sort": { "monthDate": 1 } },
-        { "$setWindowFields": {
-            "partitionBy": "$publication_type",
-            "sortBy": { "monthDate": 1 },
-            "output": {
-                "cumulativeCount": {
-                    "$sum": "$monthlyCount",
-                    "window": { "documents": [ "unbounded", "current" ] }
+        {
+            "$set": {
+                "monthDate": {
+                    "$dateTrunc": {"date": "$publication_date", "unit": "month"}
                 }
             }
-        } },
-        { "$project": { "_id": 0, "monthDate": 1, "publication_type": 1, "monthlyCount": 1, "cumulativeCount": 1 } }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "monthDate": "$monthDate",
+                    "publication_type": "$publication_type",
+                },
+                "monthlyCount": {"$sum": 1},
+            }
+        },
+        {
+            "$set": {
+                "monthDate": "$_id.monthDate",
+                "publication_type": "$_id.publication_type",
+            }
+        },
+        {"$sort": {"monthDate": 1}},
+        {
+            "$setWindowFields": {
+                "partitionBy": "$publication_type",
+                "sortBy": {"monthDate": 1},
+                "output": {
+                    "cumulativeCount": {
+                        "$sum": "$monthlyCount",
+                        "window": {"documents": ["unbounded", "current"]},
+                    }
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "monthDate": 1,
+                "publication_type": 1,
+                "monthlyCount": 1,
+                "cumulativeCount": 1,
+            }
+        },
     ]
 
     facet_pipeline = [
-        {
-            "$facet": {
-                "overall": overall_pipeline,
-                "byType": by_type_pipeline
-            }
-        }
+        {"$facet": {"overall": overall_pipeline, "byType": by_type_pipeline}}
     ]
     result = await db.publications.aggregate(facet_pipeline).to_list(length=1)
     return result[0] if result else {"overall": [], "byType": []}
@@ -589,11 +639,7 @@ async def get_variant_small_variants() -> dict:
     """
     pipeline = [
         # 1. Filter for variants with type SNV or indel.
-        {
-            "$match": {
-                "variant_type": {"$in": ["SNV", "indel"]}
-            }
-        },
+        {"$match": {"variant_type": {"$in": ["SNV", "indel"]}}},
         # 2. Determine the newest classification and filter annotations for source "vep".
         {
             "$set": {
@@ -603,20 +649,25 @@ async def get_variant_small_variants() -> dict:
                         "initialValue": {"classification_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.classification_date",
+                                        "$$value.classification_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 },
                 "vep_annotations": {
                     "$filter": {
                         "input": "$annotations",
                         "as": "annotation",
-                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                        "cond": {"$eq": ["$$annotation.source", "vep"]},
                     }
-                }
+                },
             }
         },
         # 3. Determine the newest annotation among those with source "vep".
@@ -628,11 +679,16 @@ async def get_variant_small_variants() -> dict:
                         "initialValue": {"annotation_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.annotation_date",
+                                        "$$value.annotation_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 }
             }
@@ -648,25 +704,26 @@ async def get_variant_small_variants() -> dict:
                 "p_dot": "$latest_vep_annotation.p_dot",
                 "protein_position": "$latest_vep_annotation.protein_position",
                 "individual_count": {"$size": {"$ifNull": ["$individual_ids", []]}},
-                "cadd_score": "$latest_vep_annotation.cadd_phred"
+                "cadd_score": "$latest_vep_annotation.cadd_phred",
             }
-        }
+        },
     ]
     results = await db.variants.aggregate(pipeline).to_list(length=None)
     return {"small_variants": results}
+
 
 @router.get("/summary", tags=["Aggregations"])
 async def get_summary_stats() -> dict:
     """
     Retrieve summary statistics for main collections.
-    
+
     For Individuals:
       - Count the total number of individuals.
       - Sum the total number of reports across all individuals.
-    
+
     For Variants and Publications:
       - Count the total number of documents.
-    
+
     Returns:
         A dictionary with:
             {
@@ -684,17 +741,8 @@ async def get_summary_stats() -> dict:
     # Compute total number of reports across all individuals.
     # For each document, if "reports" is missing, treat it as an empty list.
     pipeline = [
-        {
-            "$project": {
-                "report_count": {"$size": {"$ifNull": ["$reports", []]}}
-            }
-        },
-        {
-            "$group": {
-                "_id": None,
-                "total_reports": {"$sum": "$report_count"}
-            }
-        }
+        {"$project": {"report_count": {"$size": {"$ifNull": ["$reports", []]}}}},
+        {"$group": {"_id": None, "total_reports": {"$sum": "$report_count"}}},
     ]
     reports_result = await db.individuals.aggregate(pipeline).to_list(length=1)
     total_reports = reports_result[0]["total_reports"] if reports_result else 0
@@ -718,7 +766,7 @@ async def count_variants_by_impact_group() -> dict:
       - If impact == "MODIFIER" and verdict == "LP/P" => "T"
       - If impact is null and verdict == "LP/P" => "T"
       - Else => "other"
-    
+
     Returns:
         A dictionary with:
           - "total_count": Total number of variants processed.
@@ -734,20 +782,25 @@ async def count_variants_by_impact_group() -> dict:
                         "initialValue": {"classification_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.classification_date",
+                                        "$$value.classification_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 },
                 "vep_annotations": {
                     "$filter": {
                         "input": "$annotations",
                         "as": "annotation",
-                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                        "cond": {"$eq": ["$$annotation.source", "vep"]},
                     }
-                }
+                },
             }
         },
         # 2. Get the newest VEP annotation based on annotation_date
@@ -759,11 +812,16 @@ async def count_variants_by_impact_group() -> dict:
                         "initialValue": {"annotation_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.annotation_date",
+                                        "$$value.annotation_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 }
             }
@@ -775,42 +833,76 @@ async def count_variants_by_impact_group() -> dict:
                     "$switch": {
                         "branches": [
                             {
-                                "case": {"$eq": ["$latest_vep_annotation.impact", "MODERATE"]},
-                                "then": "nT"
+                                "case": {
+                                    "$eq": ["$latest_vep_annotation.impact", "MODERATE"]
+                                },
+                                "then": "nT",
                             },
                             {
-                                "case": {"$eq": ["$latest_vep_annotation.impact", "HIGH"]},
-                                "then": "T"
+                                "case": {
+                                    "$eq": ["$latest_vep_annotation.impact", "HIGH"]
+                                },
+                                "then": "T",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        {"$eq": ["$latest_vep_annotation.impact", "LOW"]},
-                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                        {
+                                            "$eq": [
+                                                "$latest_vep_annotation.impact",
+                                                "LOW",
+                                            ]
+                                        },
+                                        {
+                                            "$eq": [
+                                                "$latest_classification.verdict",
+                                                "LP/P",
+                                            ]
+                                        },
                                     ]
                                 },
-                                "then": "T"
+                                "then": "T",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        {"$eq": ["$latest_vep_annotation.impact", "MODIFIER"]},
-                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                        {
+                                            "$eq": [
+                                                "$latest_vep_annotation.impact",
+                                                "MODIFIER",
+                                            ]
+                                        },
+                                        {
+                                            "$eq": [
+                                                "$latest_classification.verdict",
+                                                "LP/P",
+                                            ]
+                                        },
                                     ]
                                 },
-                                "then": "T"
+                                "then": "T",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        {"$eq": ["$latest_vep_annotation.impact", None]},
-                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                        {
+                                            "$eq": [
+                                                "$latest_vep_annotation.impact",
+                                                None,
+                                            ]
+                                        },
+                                        {
+                                            "$eq": [
+                                                "$latest_classification.verdict",
+                                                "LP/P",
+                                            ]
+                                        },
                                     ]
                                 },
-                                "then": "T"
-                            }
+                                "then": "T",
+                            },
                         ],
-                        "default": "other"
+                        "default": "other",
                     }
                 }
             }
@@ -820,13 +912,11 @@ async def count_variants_by_impact_group() -> dict:
             "$facet": {
                 "grouped_counts": [
                     {"$group": {"_id": "$impact_groups", "count": {"$sum": 1}}},
-                    {"$sort": {"_id": 1}}
+                    {"$sort": {"_id": 1}},
                 ],
-                "total_count": [
-                    {"$count": "total"}
-                ]
+                "total_count": [{"$count": "total"}],
             }
-        }
+        },
     ]
 
     result = await db.variants.aggregate(pipeline).to_list(length=1)
@@ -850,7 +940,7 @@ async def count_variants_by_effect_group() -> dict:
       - If impact == "LOW" and verdict == "LP/P" => "T"
       - If effect is in the list of severe effects => "T"
       - Else => "other"
-      
+
     Returns:
         A dictionary with:
           - "total_count": The total number of variants processed.
@@ -866,20 +956,25 @@ async def count_variants_by_effect_group() -> dict:
                         "initialValue": {"classification_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.classification_date", "$$value.classification_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.classification_date",
+                                        "$$value.classification_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 },
                 "vep_annotations": {
                     "$filter": {
                         "input": "$annotations",
                         "as": "annotation",
-                        "cond": {"$eq": ["$$annotation.source", "vep"]}
+                        "cond": {"$eq": ["$$annotation.source", "vep"]},
                     }
-                }
+                },
             }
         },
         # 2. Reduce the VEP annotations to the one with the most recent annotation_date.
@@ -891,11 +986,16 @@ async def count_variants_by_effect_group() -> dict:
                         "initialValue": {"annotation_date": datetime(1970, 1, 1)},
                         "in": {
                             "$cond": [
-                                {"$gt": ["$$this.annotation_date", "$$value.annotation_date"]},
+                                {
+                                    "$gt": [
+                                        "$$this.annotation_date",
+                                        "$$value.annotation_date",
+                                    ]
+                                },
                                 "$$this",
-                                "$$value"
+                                "$$value",
                             ]
-                        }
+                        },
                     }
                 }
             }
@@ -907,34 +1007,66 @@ async def count_variants_by_effect_group() -> dict:
                     "$switch": {
                         "branches": [
                             {
-                                "case": {"$eq": ["$latest_vep_annotation.effect", "transcript_ablation"]},
-                                "then": "17qDel"
+                                "case": {
+                                    "$eq": [
+                                        "$latest_vep_annotation.effect",
+                                        "transcript_ablation",
+                                    ]
+                                },
+                                "then": "17qDel",
                             },
                             {
-                                "case": {"$eq": ["$latest_vep_annotation.effect", "transcript_amplification"]},
-                                "then": "17qDup"
+                                "case": {
+                                    "$eq": [
+                                        "$latest_vep_annotation.effect",
+                                        "transcript_amplification",
+                                    ]
+                                },
+                                "then": "17qDup",
                             },
                             {
-                                "case": {"$eq": ["$latest_vep_annotation.impact", "MODERATE"]},
-                                "then": "nT"
+                                "case": {
+                                    "$eq": ["$latest_vep_annotation.impact", "MODERATE"]
+                                },
+                                "then": "nT",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        {"$eq": ["$latest_vep_annotation.impact", None]},
-                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                        {
+                                            "$eq": [
+                                                "$latest_vep_annotation.impact",
+                                                None,
+                                            ]
+                                        },
+                                        {
+                                            "$eq": [
+                                                "$latest_classification.verdict",
+                                                "LP/P",
+                                            ]
+                                        },
                                     ]
                                 },
-                                "then": "T"
+                                "then": "T",
                             },
                             {
                                 "case": {
                                     "$and": [
-                                        {"$eq": ["$latest_vep_annotation.impact", "LOW"]},
-                                        {"$eq": ["$latest_classification.verdict", "LP/P"]}
+                                        {
+                                            "$eq": [
+                                                "$latest_vep_annotation.impact",
+                                                "LOW",
+                                            ]
+                                        },
+                                        {
+                                            "$eq": [
+                                                "$latest_classification.verdict",
+                                                "LP/P",
+                                            ]
+                                        },
                                     ]
                                 },
-                                "then": "T"
+                                "then": "T",
                             },
                             {
                                 "case": {
@@ -948,14 +1080,14 @@ async def count_variants_by_effect_group() -> dict:
                                             "splice_donor_variant",
                                             "splice_acceptor_variant",
                                             "splice_donor_5th_base_variant",
-                                            "coding_sequence_variant"
-                                        ]
+                                            "coding_sequence_variant",
+                                        ],
                                     ]
                                 },
-                                "then": "T"
-                            }
+                                "then": "T",
+                            },
                         ],
-                        "default": "other"
+                        "default": "other",
                     }
                 }
             }
@@ -965,13 +1097,11 @@ async def count_variants_by_effect_group() -> dict:
             "$facet": {
                 "grouped_counts": [
                     {"$group": {"_id": "$effect_groups", "count": {"$sum": 1}}},
-                    {"$sort": {"_id": 1}}
+                    {"$sort": {"_id": 1}},
                 ],
-                "total_count": [
-                    {"$count": "total"}
-                ]
+                "total_count": [{"$count": "total"}],
             }
-        }
+        },
     ]
 
     result = await db.variants.aggregate(pipeline).to_list(length=1)
@@ -988,16 +1118,16 @@ async def phenotype_cohort_counts() -> dict:
     """
     For each individual (with at least one report), using the phenotypes from the newest report,
     classify the individual as follows:
-    
+
       - MODY: Has "Maturity-onset diabetes of the young" (described == "yes").
-      
+
       - CAKUT: Has any of these kidney-related phenotypes (described == "yes"):
           • "Multicystic kidney dysplasia",
           • "Unilateral renal agenesis",
           • "Renal hypoplasia",
           • "Abnormal renal morphology"
         OR has "Abnormality of the genital system" (described == "yes") AND also has any kidney-related phenotype.
-      
+
       - any_kidney: Defined as the presence (described == "yes") of any of:
           "Chronic kidney disease",
           "Stage 1 chronic kidney disease",
@@ -1013,199 +1143,242 @@ async def phenotype_cohort_counts() -> dict:
           "Renal cortical hyperechogenicity",
           "Multiple glomerular cysts",
           "Oligomeganephronia"
-      
+
     Then, define mutually exclusive groups:
       - MODY_only: MODY true and CAKUT false.
       - CAKUT_only: CAKUT true and MODY false.
       - CAKUT_MODY: Both CAKUT and MODY are true.
       - Other: Neither MODY nor CAKUT.
-      
+
     Finally, return cohort-level counts for each group.
     """
     pipeline = [
         # 1. Consider only individuals with at least one report.
         {"$match": {"reports": {"$exists": True, "$ne": []}}},
-        
         # 2. Select the newest report based on report_date.
-        {"$set": {
-            "newest_report": {
-                "$reduce": {
-                    "input": "$reports",
-                    "initialValue": {"report_date": datetime(1970, 1, 1)},
-                    "in": {
-                        "$cond": [
-                            {"$gt": ["$$this.report_date", "$$value.report_date"]},
-                            "$$this",
-                            "$$value"
-                        ]
+        {
+            "$set": {
+                "newest_report": {
+                    "$reduce": {
+                        "input": "$reports",
+                        "initialValue": {"report_date": datetime(1970, 1, 1)},
+                        "in": {
+                            "$cond": [
+                                {"$gt": ["$$this.report_date", "$$value.report_date"]},
+                                "$$this",
+                                "$$value",
+                            ]
+                        },
                     }
                 }
             }
-        }},
-        
+        },
         # 3. Convert the newest report's phenotypes object to an array.
-        {"$set": {
-            "phenotype_entries": {"$objectToArray": "$newest_report.phenotypes"}
-        }},
-        
+        {
+            "$set": {
+                "phenotype_entries": {"$objectToArray": "$newest_report.phenotypes"}
+            }
+        },
         # 4. Compute any_kidney flag (true if any kidney-related phenotype is present with described == "yes").
-        {"$set": {
-            "any_kidney": {
-                "$gt": [
-                    {"$size": {
-                        "$filter": {
-                            "input": "$phenotype_entries",
-                            "as": "p",
-                            "cond": {
-                                "$and": [
-                                    {"$in": ["$$p.v.name", [
-                                        "Chronic kidney disease",
-                                        "Stage 1 chronic kidney disease",
-                                        "Stage 2 chronic kidney disease",
-                                        "Stage 3 chronic kidney disease",
-                                        "Stage 4 chronic kidney disease",
-                                        "Stage 5 chronic kidney disease",
-                                        "Multicystic kidney dysplasia",
-                                        "Renal hypoplasia",
-                                        "Renal cyst",
-                                        "Unilateral renal agenesis",
-                                        "Abnormal renal morphology",
-                                        "Renal cortical hyperechogenicity",
-                                        "Multiple glomerular cysts",
-                                        "Oligomeganephronia"
-                                    ]]},
-                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
-                                ]
-                            }
-                        }
-                    }},
-                    0
-                ]
-            }
-        }},
-        
-        # 5. Compute MODY flag (true if "Maturity-onset diabetes of the young" is present with described == "yes").
-        {"$set": {
-            "MODY": {
-                "$gt": [
-                    {"$size": {
-                        "$filter": {
-                            "input": "$phenotype_entries",
-                            "as": "p",
-                            "cond": {
-                                "$and": [
-                                    {"$eq": ["$$p.v.name", "Maturity-onset diabetes of the young"]},
-                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
-                                ]
-                            }
-                        }
-                    }},
-                    0
-                ]
-            }
-        }},
-        
-        # 6. Compute CAKUT flag:
-        #    Option A: One of these kidney-specific phenotypes is present with described == "yes".
-        #    Option B: "Abnormality of the genital system" is present (described == "yes") AND any_kidney is true.
-        {"$set": {
-            "CAKUT": {
-                "$or": [
-                    {
-                        "$gt": [
-                            {"$size": {
+        {
+            "$set": {
+                "any_kidney": {
+                    "$gt": [
+                        {
+                            "$size": {
                                 "$filter": {
                                     "input": "$phenotype_entries",
                                     "as": "p",
                                     "cond": {
                                         "$and": [
-                                            {"$in": ["$$p.v.name", [
-                                                "Multicystic kidney dysplasia",
-                                                "Unilateral renal agenesis",
-                                                "Renal hypoplasia",
-                                                "Abnormal renal morphology"
-                                            ]]},
-                                            {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                            {
+                                                "$in": [
+                                                    "$$p.v.name",
+                                                    [
+                                                        "Chronic kidney disease",
+                                                        "Stage 1 chronic kidney disease",
+                                                        "Stage 2 chronic kidney disease",
+                                                        "Stage 3 chronic kidney disease",
+                                                        "Stage 4 chronic kidney disease",
+                                                        "Stage 5 chronic kidney disease",
+                                                        "Multicystic kidney dysplasia",
+                                                        "Renal hypoplasia",
+                                                        "Renal cyst",
+                                                        "Unilateral renal agenesis",
+                                                        "Abnormal renal morphology",
+                                                        "Renal cortical hyperechogenicity",
+                                                        "Multiple glomerular cysts",
+                                                        "Oligomeganephronia",
+                                                    ],
+                                                ]
+                                            },
+                                            {
+                                                "$eq": [
+                                                    {"$toLower": "$$p.v.described"},
+                                                    "yes",
+                                                ]
+                                            },
                                         ]
-                                    }
+                                    },
                                 }
-                            }},
-                            0
-                        ]
-                    },
-                    {
-                        "$and": [
-                            {
-                                "$gt": [
-                                    {"$size": {
+                            }
+                        },
+                        0,
+                    ]
+                }
+            }
+        },
+        # 5. Compute MODY flag (true if "Maturity-onset diabetes of the young" is present with described == "yes").
+        {
+            "$set": {
+                "MODY": {
+                    "$gt": [
+                        {
+                            "$size": {
+                                "$filter": {
+                                    "input": "$phenotype_entries",
+                                    "as": "p",
+                                    "cond": {
+                                        "$and": [
+                                            {
+                                                "$eq": [
+                                                    "$$p.v.name",
+                                                    "Maturity-onset diabetes of the young",
+                                                ]
+                                            },
+                                            {
+                                                "$eq": [
+                                                    {"$toLower": "$$p.v.described"},
+                                                    "yes",
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                }
+                            }
+                        },
+                        0,
+                    ]
+                }
+            }
+        },
+        # 6. Compute CAKUT flag:
+        #    Option A: One of these kidney-specific phenotypes is present with described == "yes".
+        #    Option B: "Abnormality of the genital system" is present (described == "yes") AND any_kidney is true.
+        {
+            "$set": {
+                "CAKUT": {
+                    "$or": [
+                        {
+                            "$gt": [
+                                {
+                                    "$size": {
                                         "$filter": {
                                             "input": "$phenotype_entries",
                                             "as": "p",
                                             "cond": {
                                                 "$and": [
-                                                    {"$eq": ["$$p.v.name", "Abnormality of the genital system"]},
-                                                    {"$eq": [{"$toLower": "$$p.v.described"}, "yes"]}
+                                                    {
+                                                        "$in": [
+                                                            "$$p.v.name",
+                                                            [
+                                                                "Multicystic kidney dysplasia",
+                                                                "Unilateral renal agenesis",
+                                                                "Renal hypoplasia",
+                                                                "Abnormal renal morphology",
+                                                            ],
+                                                        ]
+                                                    },
+                                                    {
+                                                        "$eq": [
+                                                            {
+                                                                "$toLower": "$$p.v.described"
+                                                            },
+                                                            "yes",
+                                                        ]
+                                                    },
                                                 ]
-                                            }
+                                            },
                                         }
-                                    }},
-                                    0
-                                ]
-                            },
-                            "$any_kidney"
-                        ]
-                    }
-                ]
+                                    }
+                                },
+                                0,
+                            ]
+                        },
+                        {
+                            "$and": [
+                                {
+                                    "$gt": [
+                                        {
+                                            "$size": {
+                                                "$filter": {
+                                                    "input": "$phenotype_entries",
+                                                    "as": "p",
+                                                    "cond": {
+                                                        "$and": [
+                                                            {
+                                                                "$eq": [
+                                                                    "$$p.v.name",
+                                                                    "Abnormality of the genital system",
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$eq": [
+                                                                    {
+                                                                        "$toLower": "$$p.v.described"
+                                                                    },
+                                                                    "yes",
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                }
+                                            }
+                                        },
+                                        0,
+                                    ]
+                                },
+                                "$any_kidney",
+                            ]
+                        },
+                    ]
+                }
             }
-        }},
-        
+        },
         # 7. Define mutually exclusive flags.
-        {"$set": {
-            "MODY_only": {
-                "$and": [
-                    "$MODY",
-                    {"$eq": ["$CAKUT", False]}
-                ]
-            },
-            "CAKUT_only": {
-                "$and": [
-                    "$CAKUT",
-                    {"$eq": ["$MODY", False]}
-                ]
-            },
-            "CAKUT_MODY": {
-                "$and": [
-                    "$CAKUT",
-                    "$MODY"
-                ]
-            },
-            "Other": {
-                "$and": [
-                    {"$eq": ["$MODY", False]},
-                    {"$eq": ["$CAKUT", False]}
-                ]
+        {
+            "$set": {
+                "MODY_only": {"$and": ["$MODY", {"$eq": ["$CAKUT", False]}]},
+                "CAKUT_only": {"$and": ["$CAKUT", {"$eq": ["$MODY", False]}]},
+                "CAKUT_MODY": {"$and": ["$CAKUT", "$MODY"]},
+                "Other": {
+                    "$and": [{"$eq": ["$MODY", False]}, {"$eq": ["$CAKUT", False]}]
+                },
             }
-        }},
-        
+        },
         # 8. Group across all individuals to compute cohort-level counts.
-        {"$group": {
-            "_id": None,
-            "total_count": {"$sum": 1},
-            "MODY_only_count": {"$sum": {"$cond": ["$MODY_only", 1, 0]}},
-            "CAKUT_only_count": {"$sum": {"$cond": ["$CAKUT_only", 1, 0]}},
-            "CAKUT_MODY_count": {"$sum": {"$cond": ["$CAKUT_MODY", 1, 0]}},
-            "Other_count": {"$sum": {"$cond": ["$Other", 1, 0]}}
-        }},
-        {"$project": {
-            "_id": 0,
-            "total_count": 1,
-            "MODY_only_count": 1,
-            "CAKUT_only_count": 1,
-            "CAKUT_MODY_count": 1,
-            "Other_count": 1
-        }}
+        {
+            "$group": {
+                "_id": None,
+                "total_count": {"$sum": 1},
+                "MODY_only_count": {"$sum": {"$cond": ["$MODY_only", 1, 0]}},
+                "CAKUT_only_count": {"$sum": {"$cond": ["$CAKUT_only", 1, 0]}},
+                "CAKUT_MODY_count": {"$sum": {"$cond": ["$CAKUT_MODY", 1, 0]}},
+                "Other_count": {"$sum": {"$cond": ["$Other", 1, 0]}},
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "total_count": 1,
+                "MODY_only_count": 1,
+                "CAKUT_only_count": 1,
+                "CAKUT_MODY_count": 1,
+                "Other_count": 1,
+            }
+        },
     ]
-    
+
     results = await db.individuals.aggregate(pipeline).to_list(length=1)
     if results:
         return results[0]
@@ -1214,5 +1387,5 @@ async def phenotype_cohort_counts() -> dict:
         "MODY_only_count": 0,
         "CAKUT_only_count": 0,
         "CAKUT_MODY_count": 0,
-        "Other_count": 0
+        "Other_count": 0,
     }

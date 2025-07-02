@@ -15,11 +15,8 @@ from app.utils import (
 
 router = APIRouter()
 
-@router.get(
-    "/",
-    response_model=Dict[str, Any],
-    summary="Get Individuals"
-)
+
+@router.get("/", response_model=Dict[str, Any], summary="Get Individuals")
 async def get_individuals(
     request: Request,
     page: int = Query(1, ge=1, description="Current page number"),
@@ -73,10 +70,17 @@ async def get_individuals(
     # If a search query 'q' is provided, build a search filter for predefined fields.
     if q:
         search_fields = [
-            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier",
-            "family_history", "age_onset", "cohort"
+            "individual_id",
+            "Sex",
+            "individual_DOI",
+            "IndividualIdentifier",
+            "family_history",
+            "age_onset",
+            "cohort",
         ]
-        search_filter = {"$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]}
+        search_filter = {
+            "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]
+        }
         filters = {"$and": [filters, search_filter]} if filters else search_filter
 
     # Determine the sort option (default to ascending by "individual_id").
@@ -112,9 +116,12 @@ async def get_individuals(
 
     # Build pagination metadata, including execution time in milliseconds.
     meta = build_pagination_meta(
-        base_url, page, page_size, total,
+        base_url,
+        page,
+        page_size,
+        total,
         query_params=extra_params,
-        execution_time=execution_time
+        execution_time=execution_time,
     )
 
     # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.

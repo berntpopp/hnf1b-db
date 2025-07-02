@@ -1,8 +1,6 @@
 import json
 import re
 import urllib.parse
-import math
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException
@@ -15,14 +13,14 @@ _FILTER_REGEX = re.compile(r"filter\[(\w+)(?:\]\[(\w+)\])?\]")
 def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Parses query parameters that follow JSON:API filter syntax.
-    
+
     Supported examples:
       - filter[price]=100             -> { "price": "100" }
       - filter[price][gt]=100         -> { "price": { "$gt": "100" } }
       - filter[price][lt]=200         -> { "price": { "$lt": "200" } }
       - filter[status]=active         -> { "status": "active" }
       - filter[category][in]=A,B,C    -> { "category": { "$in": ["A", "B", "C"] } }
-    
+
     Note: Conversion (e.g. to int or datetime) should be handled in your model or later.
     """
     filters: Dict[str, Any] = {}
@@ -44,8 +42,7 @@ def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
                     mongo_op = op_map.get(operator)
                     if not mongo_op:
                         raise HTTPException(
-                            status_code=400,
-                            detail=f"Unsupported operator: {operator}"
+                            status_code=400, detail=f"Unsupported operator: {operator}"
                         )
                     if mongo_op == "$in":
                         filters[field] = {mongo_op: value.split(",")}
@@ -59,7 +56,7 @@ def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
 def parse_filter_json(filter_json: Optional[str]) -> Dict[str, Any]:
     """
     Parses a JSON string provided as the filter parameter.
-    
+
     Example:
        '{"Sex": "male", "individual_id": {"gt": "ind0930"}}'
     """
@@ -68,16 +65,18 @@ def parse_filter_json(filter_json: Optional[str]) -> Dict[str, Any]:
     try:
         return json.loads(filter_json)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail="Invalid JSON in filter parameter") from e
+        raise HTTPException(
+            status_code=400, detail="Invalid JSON in filter parameter"
+        ) from e
 
 
 def parse_deep_object_filters(filter_obj: Dict[str, Any]) -> Dict[str, Any]:
     """
     Converts a filter dictionary into a MongoDB filter.
-    
+
     Supported operators (lowercase):
       - gt, gte, lt, lte, ne, in
-      
+
     Example:
       { "age": {"gt": "30"}, "Sex": "male" }
     becomes:
@@ -110,7 +109,7 @@ def parse_deep_object_filters(filter_obj: Dict[str, Any]) -> Dict[str, Any]:
 def parse_sort(sort: Optional[str]) -> Optional[Tuple[str, int]]:
     """
     Parse the sort query parameter.
-    
+
     Accepts:
       - sort=trade_date_time        -> ("trade_date_time", ASCENDING)
       - sort=-price                 -> ("price", DESCENDING)
@@ -132,7 +131,7 @@ def build_pagination_meta(
 ) -> Dict[str, Any]:
     """
     Returns a metadata dictionary following JSON:API conventions.
-    
+
     Contains:
       - total: total number of documents.
       - total_pages: total number of pages.

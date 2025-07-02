@@ -17,7 +17,7 @@ def get_nested_value(doc: dict, field: str) -> Any:
     Retrieve a nested value from a document using dot notation.
     If the value is encountered within a list, returns a list of values.
     """
-    parts = field.split('.')
+    parts = field.split(".")
     current = doc
     for part in parts:
         if isinstance(current, list):
@@ -62,7 +62,7 @@ async def search_documents(
     individuals, variants, and publications collections.
 
     If the `collection` parameter is specified, only that collection is searched.
-    
+
     When `reduce_doc` is true, each matching document is reduced to include only:
       - _id (as a string)
       - The collection-specific identifier (individual_id, variant_id, or publication_id)
@@ -89,8 +89,13 @@ async def search_documents(
     # For nested fields, use dot notation (e.g., "classifications.verdict").
     search_fields = {
         "individuals": [
-            "individual_id", "Sex", "individual_DOI", "IndividualIdentifier",
-            "family_history", "age_onset", "cohort"
+            "individual_id",
+            "Sex",
+            "individual_DOI",
+            "IndividualIdentifier",
+            "family_history",
+            "age_onset",
+            "cohort",
         ],
         "variants": [
             "variant_id",
@@ -116,7 +121,7 @@ async def search_documents(
             "abstract",
             "DOI",
             "PMID",
-            "journal"
+            "journal",
         ],
     }
 
@@ -132,7 +137,10 @@ async def search_documents(
     for coll in collections_to_search:
         # Build a filter that matches if any of the specified fields match the regex.
         filter_query = {
-            "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields.get(coll, [])]
+            "$or": [
+                {field: {"$regex": q, "$options": "i"}}
+                for field in search_fields.get(coll, [])
+            ]
         }
         cursor = db[coll].find(filter_query)
         documents = await cursor.to_list(length=None)
@@ -151,7 +159,9 @@ async def search_documents(
                         continue
                     # If the value is a list, collect all matching string elements.
                     if isinstance(value, list):
-                        matches = [v for v in value if isinstance(v, str) and pattern.search(v)]
+                        matches = [
+                            v for v in value if isinstance(v, str) and pattern.search(v)
+                        ]
                         if matches:
                             matched[field] = matches
                     elif isinstance(value, str):

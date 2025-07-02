@@ -1,15 +1,17 @@
 import asyncio
-import math
 import re
 import io
 import gzip
 import pandas as pd
 from app.database import db
-from app.config import settings
-from app.models import User, Individual, Publication, Report, Variant, Protein, Gene, Exon
+from app.models import (
+    User,
+    Individual,
+    Publication,
+)
 
 # NEW: Import Entrez from BioPython for PubMed queries.
-from Bio import Entrez, SeqIO  # Existing: for other functions
+from Bio import Entrez
 import requests
 
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
@@ -17,13 +19,14 @@ Entrez.email = "your_email@example.com"  # Replace with your actual email addres
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
 
 # GIDs for each sheet:
-GID_REVIEWERS = "1321366018"      # Reviewers sheet
-GID_INDIVIDUALS = "0"             # Individuals sheet (contains both individual and report data)
-GID_PUBLICATIONS = "1670256162"   # Publications sheet
+GID_REVIEWERS = "1321366018"  # Reviewers sheet
+GID_INDIVIDUALS = "0"  # Individuals sheet (contains both individual and report data)
+GID_PUBLICATIONS = "1670256162"  # Publications sheet
 
 # GIDs for additional mapping sheets:
-PHENOTYPE_GID = "1119329208"       # Phenotype sheet
-MODIFIER_GID = "1741928801"        # Modifier sheet
+PHENOTYPE_GID = "1119329208"  # Phenotype sheet
+MODIFIER_GID = "1741928801"  # Modifier sheet
+
 
 # ----------------------------------------------------------------------
 def format_individual_id(value):
@@ -35,6 +38,7 @@ def format_individual_id(value):
         pass
     return value
 
+
 def format_report_id(value):
     """Format a report id as 'rep' followed by a 4-digit zero-padded number."""
     try:
@@ -43,6 +47,7 @@ def format_report_id(value):
     except Exception:
         pass
     return value
+
 
 def format_variant_id(value):
     """Format a variant id as 'var' followed by a 4-digit zero-padded number."""
@@ -53,6 +58,7 @@ def format_variant_id(value):
         pass
     return value
 
+
 def format_publication_id(value):
     """Format a publication id as 'pub' followed by a 4-digit zero-padded number."""
     try:
@@ -62,6 +68,7 @@ def format_publication_id(value):
         pass
     return value
 
+
 # ----------------------------------------------------------------------
 def none_if_nan(v):
     if pd.isna(v):
@@ -70,24 +77,30 @@ def none_if_nan(v):
         return None
     return v
 
+
 # ----------------------------------------------------------------------
 def parse_date(value):
     """Convert a date-like value to a Python datetime object using Pandas."""
     try:
         if value is None:
             return None
-        dt = pd.to_datetime(value, errors='coerce')
+        dt = pd.to_datetime(value, errors="coerce")
         if pd.isnull(dt):
             return None
         return dt.to_pydatetime()
     except Exception:
         return None
 
+
 # ----------------------------------------------------------------------
 def csv_url(spreadsheet_id: str, gid: str) -> str:
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    url = (
+        f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/"
+        f"export?format=csv&gid={gid}"
+    )
     print(f"[csv_url] Built URL: {url}")
     return url
+
 
 # ----------------------------------------------------------------------
 def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -95,12 +108,14 @@ def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [col.strip() for col in df.columns if isinstance(col, str)]
     return df
 
+
 # ----------------------------------------------------------------------
 def read_vep_file(filepath):
     """
-    Read a VEP file that contains multiple header lines starting with "##" and one header line starting with "#".
-    Skips lines beginning with "##" and removes the leading '#' from the header line.
-    Renames the uploaded variation column to "var_id" and filters for Feature == "NM_000458.4".
+    Read a VEP file that contains multiple header lines starting with "##" and one
+    header line starting with "#". Skips lines beginning with "##" and removes the
+    leading '#' from the header line. Renames the uploaded variation column to "var_id"
+    and filters for Feature == "NM_000458.4".
     """
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -117,20 +132,26 @@ def read_vep_file(filepath):
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
     for col in df.columns:
-        if col.startswith("Uploaded_variation") or col.startswith("#Uploaded_variation"):
+        if col.startswith("Uploaded_variation") or col.startswith(
+            "#Uploaded_variation"
+        ):
             df.rename(columns={col: "var_id"}, inplace=True)
             break
     if "Feature" in df.columns:
         df = df[df["Feature"] == "NM_000458.4"]
-    print(f"[DEBUG] Read VEP file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
+    print(
+        f"[DEBUG] Read VEP file '{filepath}' with {df.shape[0]} rows and "
+        f"columns: {df.columns.tolist()}"
+    )
     return df
+
 
 # ----------------------------------------------------------------------
 def read_vcf_file(filepath):
     """
-    Read a VCF file by skipping header lines starting with "##" and removing the leading '#' from the header.
-    Computes a 'vcf_hg38' field by concatenating CHROM, POS, REF, and ALT.
-    Renames the ID column to 'var_id'.
+    Read a VCF file by skipping header lines starting with "##" and removing the
+    leading '#' from the header. Computes a 'vcf_hg38' field by concatenating
+    CHROM, POS, REF, and ALT. Renames the ID column to 'var_id'.
     """
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -146,17 +167,26 @@ def read_vcf_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
-    df["vcf_hg38"] = df["CHROM"].astype(str) + "-" + df["POS"].astype(str) + "-" + df["REF"] + "-" + df["ALT"]
+    df["vcf_hg38"] = (
+        df["CHROM"].astype(str)
+        + "-"
+        + df["POS"].astype(str)
+        + "-"
+        + df["REF"]
+        + "-"
+        + df["ALT"]
+    )
     df = df[["ID", "vcf_hg38"]].rename(columns={"ID": "var_id"})
     print(f"[DEBUG] Read VCF file '{filepath}' with {df.shape[0]} rows")
     return df
 
+
 # ----------------------------------------------------------------------
 def read_cadd_file(filepath):
     """
-    Read a gzipped CADD file that contains header lines starting with "##" and one header line starting with "#".
-    Skips lines beginning with "##" and removes the leading '#' from the header line.
-    Computes a 'vcf_hg38' field using the CADD columns.
+    Read a gzipped CADD file that contains header lines starting with "##" and one
+    header line starting with "#". Skips lines beginning with "##" and removes the
+    leading '#' from the header line. Computes a 'vcf_hg38' field using the CADD columns.
     """
     with gzip.open(filepath, "rt", encoding="utf-8") as f:
         lines = f.readlines()
@@ -172,11 +202,24 @@ def read_cadd_file(filepath):
             data_lines.append(line)
     csv_data = io.StringIO("".join(data_lines))
     df = pd.read_csv(csv_data, sep="\t", dtype=str)
-    df["vcf_hg38"] = "chr" + df["Chrom"].astype(str) + "-" + df["Pos"].astype(str) + "-" + df["Ref"] + "-" + df["Alt"]
-    print(f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and columns: {df.columns.tolist()}")
+    df["vcf_hg38"] = (
+        "chr"
+        + df["Chrom"].astype(str)
+        + "-"
+        + df["Pos"].astype(str)
+        + "-"
+        + df["Ref"]
+        + "-"
+        + df["Alt"]
+    )
+    print(
+        f"[DEBUG] Read CADD file '{filepath}' with {df.shape[0]} rows and "
+        f"columns: {df.columns.tolist()}"
+    )
     print("[DEBUG] First 10 rows of CADD data:")
     print(df.head(10).to_string())
     return df
+
 
 # ----------------------------------------------------------------------
 def parse_vep_extra(df):
@@ -189,16 +232,27 @@ def parse_vep_extra(df):
     if "CADD_PHRED" in df.columns:
         df = df.drop(columns=["CADD_PHRED"])
     df["Extra"] = df["Extra"].fillna("")
-    # Explode only if Extra is non-empty; otherwise keep the row so other annotation columns are preserved.
-    df_exploded = df[df["Extra"] != ""].assign(Extra=df["Extra"].str.split(";")).explode("Extra")
+    # Explode only if Extra is non-empty; otherwise keep the row so other
+    # annotation columns are preserved.
+    df_exploded = (
+        df[df["Extra"] != ""].assign(Extra=df["Extra"].str.split(";")).explode("Extra")
+    )
     df_exploded["Extra"] = df_exploded["Extra"].str.strip()
     df_exploded = df_exploded[df_exploded["Extra"] != ""]
     if not df_exploded.empty:
-        df_exploded[["key", "value"]] = df_exploded["Extra"].str.split("=", n=1, expand=True)
-        df_exploded = df_exploded.assign(value=df_exploded["value"].str.split(",")).explode("value")
+        df_exploded[["key", "value"]] = df_exploded["Extra"].str.split(
+            "=", n=1, expand=True
+        )
+        df_exploded = df_exploded.assign(
+            value=df_exploded["value"].str.split(",")
+        ).explode("value")
         df_exploded["value"] = df_exploded["value"].str.strip()
-        index_cols = [col for col in df_exploded.columns if col not in ["key", "value", "Extra"]]
-        df_pivot = df_exploded.pivot_table(index=index_cols, columns="key", values="value", aggfunc="max").reset_index()
+        index_cols = [
+            col for col in df_exploded.columns if col not in ["key", "value", "Extra"]
+        ]
+        df_pivot = df_exploded.pivot_table(
+            index=index_cols, columns="key", values="value", aggfunc="max"
+        ).reset_index()
     else:
         # If no Extra info exists (e.g. for CNVs), return the original dataframe.
         df_pivot = df.copy()
@@ -208,6 +262,7 @@ def parse_vep_extra(df):
         df_pivot["HGVSp"] = df_pivot["HGVSp"].str.split(":").str[1]
     print("[DEBUG] Columns after parsing Extra:", list(df_pivot.columns))
     return df_pivot
+
 
 # ----------------------------------------------------------------------
 async def load_phenotype_mappings():
@@ -219,15 +274,19 @@ async def load_phenotype_mappings():
     df = pd.read_csv(url)
     df = normalize_dataframe_columns(df)
     mapping = {}
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         key = str(row["phenotype_category"]).strip().lower()
         mapping[key] = {
             "phenotype_id": row["phenotype_id"],
             "name": row["phenotype_name"],
-            "group": row.get("phenotype_group", "").strip()
+            "group": row.get("phenotype_group", "").strip(),
         }
-    print(f"[load_phenotype_mappings] Loaded mapping for {len(mapping)} phenotype categories.")
+    print(
+        f"[load_phenotype_mappings] Loaded mapping for {len(mapping)} "
+        f"phenotype categories."
+    )
     return mapping
+
 
 # ----------------------------------------------------------------------
 async def load_modifier_mappings():
@@ -235,13 +294,13 @@ async def load_modifier_mappings():
     df = pd.read_csv(url)
     df = normalize_dataframe_columns(df)
     mapping = {}
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         key = str(row["modifier_name"]).strip().lower()
         mapping[key] = {
             "modifier_id": row["modifier_id"],
             "name": row["modifier_name"].strip(),
             "description": row.get("modifier_description", "").strip(),
-            "synonyms": row.get("modifier_synonyms", "").strip()
+            "synonyms": row.get("modifier_synonyms", "").strip(),
         }
         if pd.notna(row.get("modifier_synonyms")):
             synonyms = row["modifier_synonyms"].split(",")
@@ -250,10 +309,11 @@ async def load_modifier_mappings():
                     "modifier_id": row["modifier_id"],
                     "name": row["modifier_name"].strip(),
                     "description": row.get("modifier_description", "").strip(),
-                    "synonyms": row.get("modifier_synonyms", "").strip()
+                    "synonyms": row.get("modifier_synonyms", "").strip(),
                 }
     print(f"[load_modifier_mappings] Loaded mapping for {len(mapping)} modifier keys.")
     return mapping
+
 
 # ----------------------------------------------------------------------
 def get_pubmed_info(pmid: str) -> dict:
@@ -291,6 +351,7 @@ def get_pubmed_info(pmid: str) -> dict:
         raw_month = pub_date.get("Month", "01")
         day = pub_date.get("Day", "01")
         import calendar
+
         try:
             if raw_month.isalpha():
                 month_num = list(calendar.month_abbr).index(raw_month.capitalize())
@@ -329,11 +390,13 @@ def get_pubmed_info(pmid: str) -> dict:
                     "lastname": author.get("LastName", ""),
                     "firstname": author.get("ForeName", ""),
                     "initials": author.get("Initials", ""),
-                    "affiliations": []
+                    "affiliations": [],
                 }
                 if "AffiliationInfo" in author:
                     for aff in author["AffiliationInfo"]:
-                        author_obj["affiliations"].append(str(aff.get("Affiliation", "")).strip())
+                        author_obj["affiliations"].append(
+                            str(aff.get("Affiliation", "")).strip()
+                        )
                 authors.append(author_obj)
         return {
             "pmid": pmid_val,
@@ -348,11 +411,12 @@ def get_pubmed_info(pmid: str) -> dict:
             "keywords": all_keywords,
             "authors": authors,
             "publication_date": publication_date,
-            "medical_specialty": []
+            "medical_specialty": [],
         }
     except Exception as e:
         print(f"Error retrieving PubMed info for PMID {pmid}: {e}")
         return {}
+
 
 # ----------------------------------------------------------------------
 def update_publication_with_pubmed(pub: dict) -> dict:
@@ -378,6 +442,7 @@ def update_publication_with_pubmed(pub: dict) -> dict:
             pub["medical_specialty"] = pubmed_info.get("medical_specialty", [])
     return pub
 
+
 # ----------------------------------------------------------------------
 async def import_users():
     print("[import_users] Starting import of reviewers/users.")
@@ -385,12 +450,23 @@ async def import_users():
     reviewers_df = pd.read_csv(url)
     reviewers_df = reviewers_df.dropna(how="all")
     reviewers_df = normalize_dataframe_columns(reviewers_df)
-    expected_columns = ['user_id', 'user_name', 'password', 'email',
-                        'user_role', 'first_name', 'family_name', 'orcid', 'abbreviation']
+    expected_columns = [
+        "user_id",
+        "user_name",
+        "password",
+        "email",
+        "user_role",
+        "first_name",
+        "family_name",
+        "orcid",
+        "abbreviation",
+    ]
     missing = [col for col in expected_columns if col not in reviewers_df.columns]
     if missing:
-        raise KeyError(f"[import_users] Missing expected columns in Reviewers sheet: {missing}")
-    users_df = reviewers_df[expected_columns].sort_values('user_id')
+        raise KeyError(
+            f"[import_users] Missing expected columns in Reviewers sheet: {missing}"
+        )
+    users_df = reviewers_df[expected_columns].sort_values("user_id")
     validated_users = []
     for idx, row in users_df.iterrows():
         try:
@@ -398,11 +474,14 @@ async def import_users():
             validated_users.append(user.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             print(f"[import_users] Validation error in row {idx}: {e}")
-    print(f"[import_users] Inserting {len(validated_users)} valid users into database...")
+    print(
+        f"[import_users] Inserting {len(validated_users)} valid users into database..."
+    )
     await db.users.delete_many({})
     if validated_users:
         await db.users.insert_many(validated_users)
     print(f"[import_users] Imported {len(validated_users)} users.")
+
 
 # ----------------------------------------------------------------------
 async def import_publications():
@@ -411,11 +490,13 @@ async def import_publications():
     publications_df = pd.read_csv(url)
     publications_df = publications_df.dropna(how="all")
     publications_df = normalize_dataframe_columns(publications_df)
-    
+
     # Ensure the publication_id is formatted as a padded identifier.
     if "publication_id" in publications_df.columns:
-        publications_df["publication_id"] = publications_df["publication_id"].apply(format_publication_id)
-    
+        publications_df["publication_id"] = publications_df["publication_id"].apply(
+            format_publication_id
+        )
+
     if "Comment" in publications_df.columns:
         publications_df.rename(columns={"Comment": "comment"}, inplace=True)
     if "comment" in publications_df.columns:
@@ -425,12 +506,16 @@ async def import_publications():
             lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
         )
     if "medical_specialty" in publications_df.columns:
-        publications_df["medical_specialty"] = publications_df["medical_specialty"].apply(
+        publications_df["medical_specialty"] = publications_df[
+            "medical_specialty"
+        ].apply(
             lambda x: [s.strip() for s in x.split(",")] if isinstance(x, str) else []
         )
     if "publication_date" in publications_df.columns:
-        publications_df["publication_date"] = pd.to_datetime(publications_df["publication_date"], errors='coerce').dt.to_pydatetime()
-    
+        publications_df["publication_date"] = pd.to_datetime(
+            publications_df["publication_date"], errors="coerce"
+        ).dt.to_pydatetime()
+
     user_docs = await db.users.find({}, {"abbreviation": 1}).to_list(length=None)
     reviewer_mapping = {}
     for user_doc in user_docs:
@@ -454,11 +539,15 @@ async def import_publications():
             validated_publications.append(pub_dict)
         except Exception as e:
             print(f"[import_publications] Validation error in row {idx}: {e}")
-    print(f"[import_publications] Inserting {len(validated_publications)} valid publications into database...")
+    print(
+        f"[import_publications] Inserting {len(validated_publications)} valid "
+        f"publications into database..."
+    )
     await db.publications.delete_many({})
     if validated_publications:
         await db.publications.insert_many(validated_publications)
     print(f"[import_publications] Imported {len(validated_publications)} publications.")
+
 
 # ----------------------------------------------------------------------
 async def import_individuals_with_reports():
@@ -469,7 +558,13 @@ async def import_individuals_with_reports():
     df = normalize_dataframe_columns(df)
     print(f"[import_individuals] Normalized columns: {df.columns.tolist()}")
 
-    base_cols = ['individual_id', 'DupCheck', 'IndividualIdentifier', 'Problematic', 'Sex']
+    base_cols = [
+        "individual_id",
+        "DupCheck",
+        "IndividualIdentifier",
+        "Problematic",
+        "Sex",
+    ]
     if "Publication" in df.columns:
         base_cols.append("Publication")
     if "ReviewDate" in df.columns:
@@ -479,12 +574,20 @@ async def import_individuals_with_reports():
 
     df["individual_id"] = df["individual_id"].apply(format_individual_id)
 
-    pub_docs = await db.publications.find({}, {"publication_alias": 1, "publication_date": 1}).to_list(length=None)
+    pub_docs = await db.publications.find(
+        {}, {"publication_alias": 1, "publication_date": 1}
+    ).to_list(length=None)
     publication_mapping = {
-        doc["publication_alias"].strip().lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
-        for doc in pub_docs if "publication_alias" in doc
+        doc["publication_alias"]
+        .strip()
+        .lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
+        for doc in pub_docs
+        if "publication_alias" in doc
     }
-    print(f"[import_individuals] Loaded publication mapping for {len(publication_mapping)} publications.")
+    print(
+        f"[import_individuals] Loaded publication mapping for "
+        f"{len(publication_mapping)} publications."
+    )
 
     user_docs = await db.users.find({}, {"email": 1}).to_list(length=None)
     user_mapping = {}
@@ -497,75 +600,180 @@ async def import_individuals_with_reports():
     modifier_mapping = await load_modifier_mappings()
 
     phenotype_cols = [
-        'RenalInsufficancy', 'Hyperechogenicity', 'RenalCysts', 'MulticysticDysplasticKidney',
-        'KidneyBiopsy', 'RenalHypoplasia', 'SolitaryKidney', 'UrinaryTractMalformation',
-        'GenitalTractAbnormality', 'AntenatalRenalAbnormalities', 'Hypomagnesemia',
-        'Hypokalemia', 'Hyperuricemia', 'Gout', 'MODY', 'PancreaticHypoplasia',
-        'ExocrinePancreaticInsufficiency', 'Hyperparathyroidism', 'NeurodevelopmentalDisorder',
-        'MentalDisease', 'Seizures', 'BrainAbnormality', 'PrematureBirth',
-        'CongenitalCardiacAnomalies', 'EyeAbnormality', 'ShortStature',
-        'MusculoskeletalFeatures', 'DysmorphicFeatures', 'ElevatedHepaticTransaminase',
-        'AbnormalLiverPhysiology'
+        "RenalInsufficancy",
+        "Hyperechogenicity",
+        "RenalCysts",
+        "MulticysticDysplasticKidney",
+        "KidneyBiopsy",
+        "RenalHypoplasia",
+        "SolitaryKidney",
+        "UrinaryTractMalformation",
+        "GenitalTractAbnormality",
+        "AntenatalRenalAbnormalities",
+        "Hypomagnesemia",
+        "Hypokalemia",
+        "Hyperuricemia",
+        "Gout",
+        "MODY",
+        "PancreaticHypoplasia",
+        "ExocrinePancreaticInsufficiency",
+        "Hyperparathyroidism",
+        "NeurodevelopmentalDisorder",
+        "MentalDisease",
+        "Seizures",
+        "BrainAbnormality",
+        "PrematureBirth",
+        "CongenitalCardiacAnomalies",
+        "EyeAbnormality",
+        "ShortStature",
+        "MusculoskeletalFeatures",
+        "DysmorphicFeatures",
+        "ElevatedHepaticTransaminase",
+        "AbnormalLiverPhysiology",
     ]
 
     # --- Special logic for RenalInsufficancy ---
     renal_mapping = {
-        "chronic kidney disease, not specified": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"},
-        "stage 1 chronic kidney disease": {"phenotype_id": "HP:0012623", "name": "Stage 1 chronic kidney disease", "group": "Kidney"},
-        "stage 2 chronic kidney disease": {"phenotype_id": "HP:0012624", "name": "Stage 2 chronic kidney disease", "group": "Kidney"},
-        "stage 3 chronic kidney disease": {"phenotype_id": "HP:0012625", "name": "Stage 3 chronic kidney disease", "group": "Kidney"},
-        "stage 4 chronic kidney disease": {"phenotype_id": "HP:0012626", "name": "Stage 4 chronic kidney disease", "group": "Kidney"},
-        "stage 5 chronic kidney disease": {"phenotype_id": "HP:0003774", "name": "Stage 5 chronic kidney disease", "group": "Kidney"},
-        "no": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"},
-        "not reported": {"phenotype_id": "HP:0012622", "name": "chronic kidney disease, not specified", "group": "Kidney"}
+        "chronic kidney disease, not specified": {
+            "phenotype_id": "HP:0012622",
+            "name": "chronic kidney disease, not specified",
+            "group": "Kidney",
+        },
+        "stage 1 chronic kidney disease": {
+            "phenotype_id": "HP:0012623",
+            "name": "Stage 1 chronic kidney disease",
+            "group": "Kidney",
+        },
+        "stage 2 chronic kidney disease": {
+            "phenotype_id": "HP:0012624",
+            "name": "Stage 2 chronic kidney disease",
+            "group": "Kidney",
+        },
+        "stage 3 chronic kidney disease": {
+            "phenotype_id": "HP:0012625",
+            "name": "Stage 3 chronic kidney disease",
+            "group": "Kidney",
+        },
+        "stage 4 chronic kidney disease": {
+            "phenotype_id": "HP:0012626",
+            "name": "Stage 4 chronic kidney disease",
+            "group": "Kidney",
+        },
+        "stage 5 chronic kidney disease": {
+            "phenotype_id": "HP:0003774",
+            "name": "Stage 5 chronic kidney disease",
+            "group": "Kidney",
+        },
+        "no": {
+            "phenotype_id": "HP:0012622",
+            "name": "chronic kidney disease, not specified",
+            "group": "Kidney",
+        },
+        "not reported": {
+            "phenotype_id": "HP:0012622",
+            "name": "chronic kidney disease, not specified",
+            "group": "Kidney",
+        },
     }
     # --- End special logic ---
 
     # --- Special logic for KidneyBiopsy ---
     kidneybiopsy_mapping = {
         "not reported": {
-            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "not reported"},
-            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "not reported"}
+            "HP:0100611": {
+                "phenotype_id": "HP:0100611",
+                "name": "Multiple glomerular cysts",
+                "group": "Kidney",
+                "described": "not reported",
+            },
+            "ORPHA:2260": {
+                "phenotype_id": "ORPHA:2260",
+                "name": "Oligomeganephronia",
+                "group": "Kidney",
+                "described": "not reported",
+            },
         },
         "no": {
-            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "no"},
-            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "no"}
+            "HP:0100611": {
+                "phenotype_id": "HP:0100611",
+                "name": "Multiple glomerular cysts",
+                "group": "Kidney",
+                "described": "no",
+            },
+            "ORPHA:2260": {
+                "phenotype_id": "ORPHA:2260",
+                "name": "Oligomeganephronia",
+                "group": "Kidney",
+                "described": "no",
+            },
         },
         "multiple glomerular cysts": {
-            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "yes"},
-            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "no"}
+            "HP:0100611": {
+                "phenotype_id": "HP:0100611",
+                "name": "Multiple glomerular cysts",
+                "group": "Kidney",
+                "described": "yes",
+            },
+            "ORPHA:2260": {
+                "phenotype_id": "ORPHA:2260",
+                "name": "Oligomeganephronia",
+                "group": "Kidney",
+                "described": "no",
+            },
         },
         "oligomeganephronia": {
-            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "no"},
-            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "yes"}
+            "HP:0100611": {
+                "phenotype_id": "HP:0100611",
+                "name": "Multiple glomerular cysts",
+                "group": "Kidney",
+                "described": "no",
+            },
+            "ORPHA:2260": {
+                "phenotype_id": "ORPHA:2260",
+                "name": "Oligomeganephronia",
+                "group": "Kidney",
+                "described": "yes",
+            },
         },
         "oligomeganephronia and multiple glomerular cysts": {
-            "HP:0100611": {"phenotype_id": "HP:0100611", "name": "Multiple glomerular cysts", "group": "Kidney", "described": "yes"},
-            "ORPHA:2260": {"phenotype_id": "ORPHA:2260", "name": "Oligomeganephronia", "group": "Kidney", "described": "yes"}
-        }
+            "HP:0100611": {
+                "phenotype_id": "HP:0100611",
+                "name": "Multiple glomerular cysts",
+                "group": "Kidney",
+                "described": "yes",
+            },
+            "ORPHA:2260": {
+                "phenotype_id": "ORPHA:2260",
+                "name": "Oligomeganephronia",
+                "group": "Kidney",
+                "described": "yes",
+            },
+        },
     }
     # --- End special logic ---
 
-    grouped = df.groupby('individual_id')
+    grouped = df.groupby("individual_id")
     validated_individuals = []
 
     for indiv_id, group in grouped:
         base_data = group.iloc[0][base_cols].to_dict()
-        base_publication_alias = base_data.pop('Publication', None)
-        base_review_date = base_data.pop('ReviewDate', None)
-        base_comment = base_data.pop('Comment', None)
+        base_publication_alias = base_data.pop("Publication", None)
+        base_review_date = base_data.pop("ReviewDate", None)
+        base_data.pop("Comment", None)  # Remove comment from base data
 
         reports = []
-        for idx, row in group.iterrows():
-            if pd.notna(row.get('report_id')):
-                report_id_formatted = format_report_id(row['report_id'])
-                report_data = {'report_id': report_id_formatted}
+        for _, row in group.iterrows():
+            if pd.notna(row.get("report_id")):
+                report_id_formatted = format_report_id(row["report_id"])
+                report_data = {"report_id": report_id_formatted}
 
-                review_by_email = row.get('ReviewBy')
+                review_by_email = row.get("ReviewBy")
                 if pd.notna(review_by_email):
-                    report_data['reviewed_by'] = user_mapping.get(review_by_email.strip().lower())
+                    report_data["reviewed_by"] = user_mapping.get(
+                        review_by_email.strip().lower()
+                    )
                 else:
-                    report_data['reviewed_by'] = None
+                    report_data["reviewed_by"] = None
 
                 # Build up the phenotypes
                 phenotypes_obj = {}
@@ -587,7 +795,7 @@ async def import_individuals_with_reports():
                                     "name": std_info["name"],
                                     "group": std_info.get("group", ""),
                                     "modifier": None,
-                                    "described": described
+                                    "described": described,
                                 }
                                 phenotypes_obj[std_info["phenotype_id"]] = entry
                             else:
@@ -597,20 +805,25 @@ async def import_individuals_with_reports():
                                     "name": std_info["name"],
                                     "group": std_info.get("group", ""),
                                     "modifier": None,
-                                    "described": described
+                                    "described": described,
                                 }
                                 phenotypes_obj[std_info["phenotype_id"]] = entry_stage
-                                extra = renal_mapping["chronic kidney disease, not specified"]
+                                extra = renal_mapping[
+                                    "chronic kidney disease, not specified"
+                                ]
                                 entry_extra = {
                                     "phenotype_id": extra["phenotype_id"],
                                     "name": extra["name"],
                                     "group": extra.get("group", ""),
                                     "modifier": None,
-                                    "described": "yes"
+                                    "described": "yes",
                                 }
                                 phenotypes_obj[extra["phenotype_id"]] = entry_extra
                         else:
-                            print(f"[import_individuals] Warning: no matching renal phenotype for '{reported_val}'")
+                            print(
+                                f"[import_individuals] Warning: no matching renal "
+                                f"phenotype for '{reported_val}'"
+                            )
                             std_info = {"phenotype_id": "UNKNOWN", "name": reported_val}
                             described = "yes"
                             modifier_obj = None
@@ -619,7 +832,7 @@ async def import_individuals_with_reports():
                                 "name": std_info["name"],
                                 "group": "",
                                 "modifier": modifier_obj,
-                                "described": described
+                                "described": described,
                             }
                     elif pheno_key == "kidneybiopsy":
                         if lower_val == "":
@@ -629,16 +842,21 @@ async def import_individuals_with_reports():
                             phenotypes_obj["HP:0100611"] = mapping_vals["HP:0100611"]
                             phenotypes_obj["ORPHA:2260"] = mapping_vals["ORPHA:2260"]
                         else:
-                            print(f"[import_individuals] Warning: no matching KidneyBiopsy phenotype for '{reported_val}'")
+                            print(
+                                f"[import_individuals] Warning: no matching "
+                                f"KidneyBiopsy phenotype for '{reported_val}'"
+                            )
                             phenotypes_obj["UNKNOWN"] = {
                                 "phenotype_id": "UNKNOWN",
                                 "name": reported_val,
                                 "group": "",
                                 "modifier": None,
-                                "described": "yes"
+                                "described": "yes",
                             }
                     else:
-                        std_info = phenotype_mapping.get(pheno_key, {"phenotype_id": col, "name": col, "group": ""})
+                        std_info = phenotype_mapping.get(
+                            pheno_key, {"phenotype_id": col, "name": col, "group": ""}
+                        )
                         if lower_val in ["yes", "no", "not reported"]:
                             described = lower_val
                             modifier_obj = None
@@ -648,26 +866,33 @@ async def import_individuals_with_reports():
                                 "unilateral left": "left",
                                 "unilateral right": "right",
                                 "unilateral unspecified": "unilateral",
-                                "bilateral": "bilateral"
+                                "bilateral": "bilateral",
                             }
-                            if pheno_key in ["congenitalcardiacanomalies", "antenatalrenalabnormalities"]:
+                            if pheno_key in [
+                                "congenitalcardiacanomalies",
+                                "antenatalrenalabnormalities",
+                            ]:
                                 modifier_key = "congenital onset"
                             else:
-                                modifier_key = manual_modifier_map.get(lower_val, lower_val)
+                                modifier_key = manual_modifier_map.get(
+                                    lower_val, lower_val
+                                )
                             modifier_obj = modifier_mapping.get(modifier_key)
                         phenotypes_obj[std_info["phenotype_id"]] = {
                             "phenotype_id": std_info["phenotype_id"],
                             "name": std_info["name"],
                             "group": std_info.get("group", ""),
                             "modifier": modifier_obj,
-                            "described": described
+                            "described": described,
                         }
 
-                report_data['phenotypes'] = phenotypes_obj
+                report_data["phenotypes"] = phenotypes_obj
 
                 # Publication linking
-                review_date_val = parse_date(row.get('ReviewDate')) or parse_date(base_review_date)
-                pub_alias = row.get('Publication')
+                review_date_val = parse_date(row.get("ReviewDate")) or parse_date(
+                    base_review_date
+                )
+                pub_alias = row.get("Publication")
                 if not pd.notna(pub_alias) and base_publication_alias:
                     pub_alias = base_publication_alias
                 if pd.notna(pub_alias):
@@ -680,7 +905,10 @@ async def import_individuals_with_reports():
                         else:
                             report_data["report_date"] = review_date_val
                     else:
-                        print(f"[import_individuals] Warning: Publication alias '{pub_alias}' not found for individual {indiv_id}.")
+                        print(
+                            f"[import_individuals] Warning: Publication alias "
+                            f"'{pub_alias}' not found for individual {indiv_id}."
+                        )
                         report_data["report_date"] = review_date_val
                 else:
                     report_data["report_date"] = review_date_val
@@ -695,18 +923,29 @@ async def import_individuals_with_reports():
 
                 reports.append(report_data)
 
-        base_data['reports'] = reports
+        base_data["reports"] = reports
         try:
             indiv = Individual(**base_data)
-            validated_individuals.append(indiv.model_dump(by_alias=True, exclude_none=True))
+            validated_individuals.append(
+                indiv.model_dump(by_alias=True, exclude_none=True)
+            )
         except Exception as e:
-            print(f"[import_individuals] Validation error for individual {indiv_id}: {e}")
+            print(
+                f"[import_individuals] Validation error for individual {indiv_id}: {e}"
+            )
 
-    print(f"[import_individuals] Inserting {len(validated_individuals)} valid individuals with embedded reports into database...")
+    print(
+        f"[import_individuals] Inserting {len(validated_individuals)} valid "
+        f"individuals with embedded reports into database..."
+    )
     await db.individuals.delete_many({})
     if validated_individuals:
         await db.individuals.insert_many(validated_individuals)
-    print(f"[import_individuals] Imported {len(validated_individuals)} individuals with embedded reports.")
+    print(
+        f"[import_individuals] Imported {len(validated_individuals)} individuals "
+        f"with embedded reports."
+    )
+
 
 # ----------------------------------------------------------------------
 async def import_variants():
@@ -720,25 +959,35 @@ async def import_variants():
     try:
         vcf_small = read_vcf_file("data/HNF1B_all_small.vcf")
         vcf_large = read_vcf_file("data/HNF1B_all_large.vcf")
-        print(f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, VCF large rows: {vcf_large.shape[0]}")
-        
+        print(
+            f"[DEBUG] VCF small rows: {vcf_small.shape[0]}, VCF large rows: {vcf_large.shape[0]}"
+        )
+
         vep_small = read_vep_file("data/HNF1B_all_small.vep.txt")
         vep_large = read_vep_file("data/HNF1B_all_large.vep.txt")
-        print(f"[DEBUG] VEP small rows: {vep_small.shape[0]}, VEP large rows: {vep_large.shape[0]}")
-        
+        print(
+            f"[DEBUG] VEP small rows: {vep_small.shape[0]}, VEP large rows: {vep_large.shape[0]}"
+        )
+
         vep_small_ann = pd.merge(vep_small, vcf_small, on="var_id", how="left")
         vep_large_ann = pd.merge(vep_large, vcf_large, on="var_id", how="left")
-        print(f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; large shape: {vep_large_ann.shape}")
-        
+        print(
+            f"[DEBUG] Joined VEP-VCF small shape: {vep_small_ann.shape}; large shape: {vep_large_ann.shape}"
+        )
+
         vep_combined = pd.concat([vep_small_ann, vep_large_ann], ignore_index=True)
         print(f"[DEBUG] Combined VEP data shape: {vep_combined.shape}")
         print("[DEBUG] First 10 rows of combined VEP/VCF data:")
         print(vep_combined.head(10).to_string())
-        
-        cadd = read_cadd_file("data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz")
+
+        cadd = read_cadd_file(
+            "data/GRCh38-v1.6_8e57eaf4ea2378c16be97802d446e98e.tsv.gz"
+        )
         print(f"[DEBUG] CADD data shape: {cadd.shape}")
-        
-        vep_annot = pd.merge(vep_combined, cadd[["vcf_hg38", "PHRED"]], on="vcf_hg38", how="left")
+
+        vep_annot = pd.merge(
+            vep_combined, cadd[["vcf_hg38", "PHRED"]], on="vcf_hg38", how="left"
+        )
         vep_annot.rename(columns={"PHRED": "CADD_PHRED_v16"}, inplace=True)
         print(f"[DEBUG] Merged VEP/CADD data shape: {vep_annot.shape}")
         print(f"[DEBUG] Columns after merging CADD: {list(vep_annot.columns)}")
@@ -749,9 +998,9 @@ async def import_variants():
         vep_parsed = parse_vep_extra(vep_annot)
         print(f"[DEBUG] Parsed VEP extra data shape: {vep_parsed.shape}")
         print(f"[DEBUG] Columns after parsing Extra: {list(vep_parsed.columns)}")
-        
+
         default_date = pd.to_datetime("2022-10-07").to_pydatetime()
-        
+
         annotation_map = {}
         for _, row in vep_parsed.iterrows():
             vcf_key = row.get("vcf_hg38")
@@ -768,12 +1017,27 @@ async def import_variants():
                     "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
                     "ClinVar": none_if_nan(row.get("ClinVar")),
                     "ClinVar_CLNSIG": none_if_nan(row.get("ClinVar_CLNSIG")),
-                    "cadd_phred": float(row["CADD_PHRED_v16"]) if pd.notna(row.get("CADD_PHRED_v16")) else None,
+                    "cadd_phred": (
+                        float(row["CADD_PHRED_v16"])
+                        if pd.notna(row.get("CADD_PHRED_v16"))
+                        else None
+                    ),
                     "source": "vep",
-                    "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else None) or default_date
+                    "annotation_date": (
+                        parse_date(row.get("Uploaded_date"))
+                        if (
+                            "Uploaded_date" in row
+                            and pd.notna(row.get("Uploaded_date"))
+                        )
+                        else None
+                    )
+                    or default_date,
                 }
                 annotation_map[vcf_key] = annotation_obj
-        print(f"[import_variants] Built annotation_map with {len(annotation_map)} entries. Example keys: {list(annotation_map.keys())[:5]}")
+        print(
+            f"[import_variants] Built annotation_map with {len(annotation_map)} "
+            f"entries. Example keys: {list(annotation_map.keys())[:5]}"
+        )
 
         # For CNVs (variants with <DEL> or <DUP>), try to grab any available annotation from vep_annot
         cnv_annotation_map = {}
@@ -791,9 +1055,20 @@ async def import_variants():
                         "SpliceAI_pred": none_if_nan(row.get("SpliceAI_pred")),
                         "ClinVar": none_if_nan(row.get("ClinVar")),
                         "ClinVar_CLNSIG": none_if_nan(row.get("ClinVar_CLNSIG")),
-                        "cadd_phred": float(row["CADD_PHRED_v16"]) if pd.notna(row.get("CADD_PHRED_v16")) else None,
+                        "cadd_phred": (
+                            float(row["CADD_PHRED_v16"])
+                            if pd.notna(row.get("CADD_PHRED_v16"))
+                            else None
+                        ),
                         "source": "vep",
-                        "annotation_date": (parse_date(row.get("Uploaded_date")) if ("Uploaded_date" in row and pd.notna(row.get("Uploaded_date"))) else default_date)
+                        "annotation_date": (
+                            parse_date(row.get("Uploaded_date"))
+                            if (
+                                "Uploaded_date" in row
+                                and pd.notna(row.get("Uploaded_date"))
+                            )
+                            else default_date
+                        ),
                     }
                     cnv_annotation_map[vcf_key] = annotation_obj
 
@@ -802,58 +1077,68 @@ async def import_variants():
         annotation_map = {}
         cnv_annotation_map = {}
 
-    variant_key_cols = ['VariantType', 'hg19_INFO', 'hg19', 'hg38_INFO', 'hg38']
+    variant_key_cols = ["VariantType", "hg19_INFO", "hg19", "hg38_INFO", "hg38"]
     unique_variants = {}
     individual_variant_info = {}
 
     classification_cols = [
-        'verdict_classification', 'criteria_classification',
-        'comment_classification', 'system_classification', 'date_classification'
+        "verdict_classification",
+        "criteria_classification",
+        "comment_classification",
+        "system_classification",
+        "date_classification",
     ]
 
-    pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(length=None)
+    pub_docs = await db.publications.find({}, {"publication_alias": 1}).to_list(
+        length=None
+    )
     publication_mapping = {
-         doc["publication_alias"].strip().lower(): doc["_id"]
-         for doc in pub_docs if "publication_alias" in doc
+        doc["publication_alias"].strip().lower(): doc["_id"]
+        for doc in pub_docs
+        if "publication_alias" in doc
     }
 
-    for idx, row in df.iterrows():
-        if pd.notna(row.get('VariantType')):
+    for _, row in df.iterrows():
+        if pd.notna(row.get("VariantType")):
             key_parts = []
             for col in variant_key_cols:
                 val = none_if_nan(row.get(col))
                 key_parts.append(str(val).strip() if val is not None else "")
             variant_key = "|".join(key_parts)
 
-            sp_indiv_id = format_individual_id(row['individual_id'])
-            det_method = none_if_nan(row.get('DetecionMethod') or row.get('DetectionMethod'))
-            seg = none_if_nan(row.get('Segregation'))
+            sp_indiv_id = format_individual_id(row["individual_id"])
+            det_method = none_if_nan(
+                row.get("DetecionMethod") or row.get("DetectionMethod")
+            )
+            seg = none_if_nan(row.get("Segregation"))
 
             individual_variant_info[sp_indiv_id] = {
                 "detection_method": det_method,
-                "segregation": seg
+                "segregation": seg,
             }
 
             classification = {}
-            if any(col in row and pd.notna(row.get(col)) for col in classification_cols):
+            if any(
+                col in row and pd.notna(row.get(col)) for col in classification_cols
+            ):
                 classification = {
-                    'verdict': none_if_nan(row.get('verdict_classification')),
-                    'criteria': none_if_nan(row.get('criteria_classification')),
-                    'comment': none_if_nan(row.get('comment_classification')),
-                    'system': none_if_nan(row.get('system_classification')),
-                    'classification_date': parse_date(row.get('date_classification'))
+                    "verdict": none_if_nan(row.get("verdict_classification")),
+                    "criteria": none_if_nan(row.get("criteria_classification")),
+                    "comment": none_if_nan(row.get("comment_classification")),
+                    "system": none_if_nan(row.get("system_classification")),
+                    "classification_date": parse_date(row.get("date_classification")),
                 }
 
             variant_data = {
-                'variant_type': row.get('VariantType'),
-                'hg19_INFO': none_if_nan(row.get('hg19_INFO')),
-                'hg19': none_if_nan(row.get('hg19')),
-                'hg38_INFO': none_if_nan(row.get('hg38_INFO')),
-                'hg38': none_if_nan(row.get('hg38'))
+                "variant_type": row.get("VariantType"),
+                "hg19_INFO": none_if_nan(row.get("hg19_INFO")),
+                "hg19": none_if_nan(row.get("hg19")),
+                "hg38_INFO": none_if_nan(row.get("hg38_INFO")),
+                "hg38": none_if_nan(row.get("hg38")),
             }
 
             annotation = {}
-            varsome_val = none_if_nan(row.get('Varsome'))
+            varsome_val = none_if_nan(row.get("Varsome"))
             if pd.notna(varsome_val):
                 varsome_str = str(varsome_val)
                 pattern = r"^[^(]+\(([^)]+)\):([^ ]+)\s+(\(p\..+\))"
@@ -871,14 +1156,14 @@ async def import_variants():
                     "c_dot": c_dot,
                     "p_dot": p_dot,
                     "source": "varsome",
-                    "annotation_date": parse_date(row.get('date_classification'))
+                    "annotation_date": parse_date(row.get("date_classification")),
                 }
 
             reported_entry = {}
-            vr = none_if_nan(row.get('VariantReported'))
+            vr = none_if_nan(row.get("VariantReported"))
             if vr:
                 reported_entry["variant_reported"] = vr
-                pub_val = none_if_nan(row.get('Publication'))
+                pub_val = none_if_nan(row.get("Publication"))
                 if pub_val:
                     pub_obj_id = publication_mapping.get(str(pub_val).strip().lower())
                     reported_entry["publication_ref"] = pub_obj_id
@@ -886,8 +1171,8 @@ async def import_variants():
                     reported_entry["publication_ref"] = None
 
             if variant_key in unique_variants:
-                if sp_indiv_id not in unique_variants[variant_key]['individual_ids']:
-                    unique_variants[variant_key]['individual_ids'].append(sp_indiv_id)
+                if sp_indiv_id not in unique_variants[variant_key]["individual_ids"]:
+                    unique_variants[variant_key]["individual_ids"].append(sp_indiv_id)
                 if reported_entry and "variant_reported" in reported_entry:
                     rep_arr = unique_variants[variant_key].setdefault("reported", [])
                     if reported_entry not in rep_arr:
@@ -897,16 +1182,28 @@ async def import_variants():
                     if annotation not in ann_arr:
                         ann_arr.append(annotation)
                 if classification and any(classification.values()):
-                    cls_arr = unique_variants[variant_key].setdefault("classifications", [])
+                    cls_arr = unique_variants[variant_key].setdefault(
+                        "classifications", []
+                    )
                     if classification not in cls_arr:
                         cls_arr.append(classification)
             else:
                 unique_variants[variant_key] = {
                     "variant_data": variant_data,
                     "individual_ids": [sp_indiv_id],
-                    "reported": [reported_entry] if reported_entry and "variant_reported" in reported_entry else [],
-                    "annotations": [annotation] if annotation and any(annotation.values()) else [],
-                    "classifications": [classification] if classification and any(classification.values()) else []
+                    "reported": (
+                        [reported_entry]
+                        if reported_entry and "variant_reported" in reported_entry
+                        else []
+                    ),
+                    "annotations": (
+                        [annotation] if annotation and any(annotation.values()) else []
+                    ),
+                    "classifications": (
+                        [classification]
+                        if classification and any(classification.values())
+                        else []
+                    ),
                 }
 
     print(f"[import_variants] Found {len(unique_variants)} unique variants.")
@@ -921,39 +1218,46 @@ async def import_variants():
     variant_id_counter = 1
     for key, info in unique_variants.items():
         variant_doc = info["variant_data"]
-        variant_doc['variant_id'] = format_variant_id(variant_id_counter)
+        variant_doc["variant_id"] = format_variant_id(variant_id_counter)
         objid_list = []
         for spid in info["individual_ids"]:
             if spid in spid_to_objid:
                 objid_list.append(spid_to_objid[spid])
-        variant_doc['individual_ids'] = objid_list
-        variant_doc['classifications'] = info.get('classifications', [])
-        variant_doc['annotations'] = info.get('annotations', [])
-        variant_doc['reported'] = info.get('reported', [])
+        variant_doc["individual_ids"] = objid_list
+        variant_doc["classifications"] = info.get("classifications", [])
+        variant_doc["annotations"] = info.get("annotations", [])
+        variant_doc["reported"] = info.get("reported", [])
 
         vcf_key = variant_doc.get("hg38")
         print(f"[DEBUG] Processing variant with hg38: {vcf_key}")
         if vcf_key:
             if vcf_key in annotation_map:
                 print(f"[DEBUG] Found VEP/CADD annotation for hg38: {vcf_key}")
-                variant_doc['annotations'].append(annotation_map[vcf_key])
-            elif (("<DEL>" in vcf_key) or ("<DUP>" in vcf_key)) and vcf_key in cnv_annotation_map:
+                variant_doc["annotations"].append(annotation_map[vcf_key])
+            elif (
+                ("<DEL>" in vcf_key) or ("<DUP>" in vcf_key)
+            ) and vcf_key in cnv_annotation_map:
                 print(f"[DEBUG] Found CNV annotation for hg38: {vcf_key}")
-                variant_doc['annotations'].append(cnv_annotation_map[vcf_key])
+                variant_doc["annotations"].append(cnv_annotation_map[vcf_key])
             else:
                 print(f"[DEBUG] No VEP/CADD annotation found for hg38: {vcf_key}")
 
         variant_docs_to_insert.append(variant_doc)
         variant_id_counter += 1
 
-    print(f"[import_variants] Inserting {len(variant_docs_to_insert)} unique variants into database...")
+    print(
+        f"[import_variants] Inserting {len(variant_docs_to_insert)} unique "
+        f"variants into database..."
+    )
     await db.variants.delete_many({})
     inserted_result = await db.variants.insert_many(variant_docs_to_insert)
     inserted_ids = inserted_result.inserted_ids
     variant_key_to_objid = {}
     for i, key in enumerate(unique_variants.keys()):
         variant_key_to_objid[key] = inserted_ids[i]
-    print(f"[import_variants] Inserted {len(variant_docs_to_insert)} unique variants into database.")
+    print(
+        f"[import_variants] Inserted {len(variant_docs_to_insert)} unique variants into database."
+    )
 
     print("[import_variants] Updating individuals with variant references...")
     async for indiv_doc in db.individuals.find({}):
@@ -968,21 +1272,22 @@ async def import_variants():
             variant_ref = {
                 "variant_ref": found_variant_objid,
                 "detection_method": det_seg.get("detection_method"),
-                "segregation": det_seg.get("segregation")
+                "segregation": det_seg.get("segregation"),
             }
             await db.individuals.update_one(
-                {"_id": indiv_doc["_id"]},
-                {"$set": {"variant": variant_ref}}
+                {"_id": indiv_doc["_id"]}, {"$set": {"variant": variant_ref}}
             )
     print("[import_variants] Updated individuals with variant references.")
+
 
 # ----------------------------------------------------------------------
 async def import_proteins():
     """
     Import the protein structure and domains for the HNF1B gene from the domains sheet.
-    Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA'/'nan' with empty values,
-    splits the "position" field into start_position and end_position, groups rows by FeatureKey,
-    and constructs a Protein document which is inserted into the 'proteins' collection.
+    Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA'/'nan' with empty
+    values, splits the "position" field into start_position and end_position, groups rows
+    by FeatureKey, and constructs a Protein document which is inserted into the
+    'proteins' collection.
     """
     gid_proteins = "810380453"
     url = csv_url(SPREADSHEET_ID, gid_proteins)
@@ -991,12 +1296,23 @@ async def import_proteins():
     df = normalize_dataframe_columns(df)
 
     expected_columns = [
-        "gene", "transcript", "protein", "FeatureKey", "position",
-        "start", "length", "description", "description_short", "source", "height"
+        "gene",
+        "transcript",
+        "protein",
+        "FeatureKey",
+        "position",
+        "start",
+        "length",
+        "description",
+        "description_short",
+        "source",
+        "height",
     ]
     missing = [col for col in expected_columns if col not in df.columns]
     if missing:
-        raise KeyError(f"[import_proteins] Missing expected columns in proteins sheet: {missing}")
+        raise KeyError(
+            f"[import_proteins] Missing expected columns in proteins sheet: {missing}"
+        )
 
     def sanitize_value(val: any) -> str:
         s = str(val).strip() if val is not None else ""
@@ -1056,7 +1372,7 @@ async def import_proteins():
             "description": sanitize_value(row["description"]),
             "description_short": sanitize_value(row["description_short"]),
             "source": sanitize_value(row["source"]),
-            "height": height_val
+            "height": height_val,
         }
         features[feature_key].append(feature_obj)
 
@@ -1064,20 +1380,24 @@ async def import_proteins():
         "gene": gene_val,
         "transcript": transcript_val,
         "protein": protein_val,
-        "features": features
+        "features": features,
     }
     print(f"[import_proteins] Prepared protein document for gene '{gene_val}':")
     print(protein_doc)
 
-    print(f"[import_proteins] Inserting protein document into the 'proteins' collection...")
+    print(
+        "[import_proteins] Inserting protein document into the 'proteins' collection..."
+    )
     await db.proteins.delete_many({})
     await db.proteins.insert_one(protein_doc)
     print(f"[import_proteins] Successfully imported protein document for '{gene_val}'.")
 
+
 # ----------------------------------------------------------------------
 def fetch_gene_data(symbol: str, server_url: str) -> dict:
     """
-    Fetch the expanded gene record for the given symbol from the specified Ensembl server.
+    Fetch the expanded gene record for the given symbol from the specified
+    Ensembl server.
     """
     url = f"{server_url}/lookup/symbol/homo_sapiens/{symbol}?expand=1"
     headers = {"Content-Type": "application/json"}
@@ -1086,6 +1406,7 @@ def fetch_gene_data(symbol: str, server_url: str) -> dict:
     data = response.json()
     return data
 
+
 # ----------------------------------------------------------------------
 def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
     """
@@ -1093,7 +1414,7 @@ def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
     return its id along with a list of its exons. Each exon is formatted as a dict with
     keys: exon_number, start, and stop.
     """
-    canonical_transcript_id = gene_data.get("canonical_transcript")
+    # canonical_transcript_id = gene_data.get("canonical_transcript")  # Not used
     transcripts = gene_data.get("Transcript", [])
     canonical_exons = []
     transcript_id = None
@@ -1110,12 +1431,11 @@ def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
     formatted_exons = []
     canonical_exons.sort(key=lambda x: x.get("start", 0))
     for idx, exon in enumerate(canonical_exons, start=1):
-        formatted_exons.append({
-            "exon_number": idx,
-            "start": exon.get("start"),
-            "stop": exon.get("end")
-        })
+        formatted_exons.append(
+            {"exon_number": idx, "start": exon.get("start"), "stop": exon.get("end")}
+        )
     return transcript_id, formatted_exons
+
 
 # ----------------------------------------------------------------------
 def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
@@ -1132,20 +1452,21 @@ def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
     server_hg38 = "https://rest.ensembl.org"
     gene_data_hg38 = fetch_gene_data(symbol, server_hg38)
     transcript_hg38, exons_hg38 = extract_canonical_transcript_exons(gene_data_hg38)
-    
+
     server_hg19 = "https://grch37.rest.ensembl.org"
     gene_data_hg19 = fetch_gene_data(symbol, server_hg19)
     _, exons_hg19 = extract_canonical_transcript_exons(gene_data_hg19)
-    
+
     gene_document = {
         "gene_symbol": gene_data_hg38.get("display_name", symbol),
         "ensembl_gene_id": gene_data_hg38.get("id"),
         "transcript": transcript_hg38,
         "exons": exons_hg38,
         "hg38": {"exons": exons_hg38},
-        "hg19": {"exons": exons_hg19}
+        "hg19": {"exons": exons_hg19},
     }
     return gene_document
+
 
 # ----------------------------------------------------------------------
 async def import_genes():
@@ -1165,6 +1486,7 @@ async def import_genes():
     await db.genes.delete_many({})
     await db.genes.insert_one(gene_document)
     print("[import_genes] Successfully imported gene structure.")
+
 
 # ----------------------------------------------------------------------
 async def main():
@@ -1194,6 +1516,7 @@ async def main():
     except Exception as e:
         print(f"[main] Error during import_genes: {e}")
     print("[main] Migration process complete.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

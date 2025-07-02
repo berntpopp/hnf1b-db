@@ -16,18 +16,15 @@ from app.utils import (
 
 router = APIRouter()
 
-@router.get(
-    "/",
-    response_model=Dict[str, Any],
-    summary="Get Variants"
-)
+
+@router.get("/", response_model=Dict[str, Any], summary="Get Variants")
 async def get_variants(
     request: Request,
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of variants per page"),
     sort: Optional[str] = Query(
         None,
-        description="Sort field (e.g. 'variant_id' for ascending or '-variant_id' for descending order)"
+        description="Sort field (e.g. 'variant_id' for ascending or '-variant_id' for descending order)",
     ),
     filter_query: Optional[str] = Query(
         None,
@@ -35,7 +32,7 @@ async def get_variants(
         description=(
             "Filtering criteria as a JSON string. Example: "
             '{"status": "active", "variant_id": {"gt": "var1000"}}'
-        )
+        ),
     ),
     q: Optional[str] = Query(
         None,
@@ -45,8 +42,8 @@ async def get_variants(
             "classifications.verdict, classifications.criteria, "
             "annotations.c_dot, annotations.p_dot, annotations.impact, "
             "annotations.variant_class"
-        )
-    )
+        ),
+    ),
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of variants, optionally filtered by a JSON filter
@@ -74,13 +71,21 @@ async def get_variants(
     if q:
         search_fields = [
             "variant_id",
-            "hg19", "hg19_INFO",
-            "hg38", "hg38_INFO",
+            "hg19",
+            "hg19_INFO",
+            "hg38",
+            "hg38_INFO",
             "variant_type",
-            "classifications.verdict", "classifications.criteria",
-            "annotations.c_dot", "annotations.p_dot", "annotations.impact", "annotations.variant_class",
+            "classifications.verdict",
+            "classifications.criteria",
+            "annotations.c_dot",
+            "annotations.p_dot",
+            "annotations.impact",
+            "annotations.variant_class",
         ]
-        search_filter = {"$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]}
+        search_filter = {
+            "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]
+        }
         filters = {"$and": [filters, search_filter]} if filters else search_filter
 
     # Determine the sort option (default to ascending by "variant_id").
@@ -114,14 +119,16 @@ async def get_variants(
 
     # Build pagination metadata including execution time (in ms).
     meta = build_pagination_meta(
-        base_url, page, page_size, total,
+        base_url,
+        page,
+        page_size,
+        total,
         query_params=extra_params,
-        execution_time=execution_time
+        execution_time=execution_time,
     )
 
     # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
     response_data = jsonable_encoder(
-        {"data": variants, "meta": meta},
-        custom_encoder={ObjectId: lambda o: str(o)}
+        {"data": variants, "meta": meta}, custom_encoder={ObjectId: lambda o: str(o)}
     )
     return response_data

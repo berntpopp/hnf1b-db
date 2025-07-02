@@ -16,18 +16,15 @@ from app.utils import (
 
 router = APIRouter()
 
-@router.get(
-    "/",
-    response_model=Dict[str, Any],
-    summary="Get Publications"
-)
+
+@router.get("/", response_model=Dict[str, Any], summary="Get Publications")
 async def get_publications(
     request: Request,
     page: int = Query(1, ge=1, description="Current page number"),
     page_size: int = Query(10, ge=1, description="Number of publications per page"),
     sort: Optional[str] = Query(
         None,
-        description="Sort field (e.g. 'publication_id' for ascending or '-publication_id' for descending order)"
+        description="Sort field (e.g. 'publication_id' for ascending or '-publication_id' for descending order)",
     ),
     filter_query: Optional[str] = Query(
         None,
@@ -35,15 +32,15 @@ async def get_publications(
         description=(
             "Filtering criteria as a JSON string. Example: "
             '{"status": "active", "publication_date": {"gt": "2021-01-01"}}'
-        )
+        ),
     ),
     q: Optional[str] = Query(
         None,
         description=(
             "Search query to search across predefined fields: "
             "publication_id, publication_type, title, abstract, DOI, PMID, journal"
-        )
-    )
+        ),
+    ),
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of publications, optionally filtered by a JSON filter
@@ -67,14 +64,21 @@ async def get_publications(
     # Parse the JSON filter (if provided) into a MongoDB filter.
     raw_filter = parse_filter_json(filter_query)
     filters = parse_deep_object_filters(raw_filter)
-    
+
     # If a search query 'q' is provided, build a search filter for predefined publication fields.
     if q:
         search_fields = [
-            "publication_id", "publication_type", "title", 
-            "abstract", "DOI", "PMID", "journal"
+            "publication_id",
+            "publication_type",
+            "title",
+            "abstract",
+            "DOI",
+            "PMID",
+            "journal",
         ]
-        search_filter = {"$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]}
+        search_filter = {
+            "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]
+        }
         filters = {"$and": [filters, search_filter]} if filters else search_filter
 
     # Determine sort option (default to ascending by "publication_id").
@@ -108,12 +112,17 @@ async def get_publications(
 
     # Build pagination metadata including execution time (in ms).
     meta = build_pagination_meta(
-        base_url, page, page_size, total, query_params=extra_params, execution_time=exec_time
+        base_url,
+        page,
+        page_size,
+        total,
+        query_params=extra_params,
+        execution_time=exec_time,
     )
 
     # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
     response_data = jsonable_encoder(
         {"data": publications, "meta": meta},
-        custom_encoder={ObjectId: lambda o: str(o)}
+        custom_encoder={ObjectId: lambda o: str(o)},
     )
     return response_data

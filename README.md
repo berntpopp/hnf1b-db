@@ -1,3 +1,50 @@
+# HNF1B-API
+
+A FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease.
+
+## Getting Started
+
+### Prerequisites
+- Python 3.8+
+- MongoDB
+- pip
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd hnf1b-api
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+
+# Optional: Install development dependencies for linting and testing
+pip install -r requirements-dev.txt
+```
+
+3. Create a `.env` file in the root directory with the following variables:
+```
+MONGODB_URI=mongodb://localhost:27017
+DATABASE_NAME=hnf1b_db
+JWT_SECRET=your-secret-key-here
+```
+
+### Running the API
+
+Start the development server with auto-reload:
+```bash
+python -m uvicorn app.main:app --reload
+```
+
+The API will be available at `http://localhost:8000`
+
+API documentation is available at:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
 ## 1. Schema Design Plan
 
 ### Collections and Their Purpose

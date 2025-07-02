@@ -10,6 +10,7 @@ from app.utils import parse_filters, parse_sort, build_pagination_meta
 
 router = APIRouter()
 
+
 @router.get("/", response_model=Dict[str, Any], summary="Get Genes")
 async def get_genes(
     request: Request,
@@ -19,8 +20,8 @@ async def get_genes(
         None,
         description=(
             "Sort field (e.g. 'gene_symbol' for ascending or '-gene_symbol' for descending order)"
-        )
-    )
+        ),
+    ),
 ) -> Dict[str, Any]:
     """
     Retrieve a paginated list of genes.
@@ -34,10 +35,10 @@ async def get_genes(
     # Build filters from query parameters.
     query_params = dict(request.query_params)
     filters = parse_filters(query_params)
-    
+
     # Determine the sort option (default is ascending by "gene_symbol").
     sort_option = parse_sort(sort) if sort else ("gene_symbol", 1)
-    
+
     collection = db.genes
     total = await collection.count_documents(filters)
     skip_count = (page - 1) * page_size
@@ -63,12 +64,16 @@ async def get_genes(
 
     # Build pagination metadata including execution time.
     meta = build_pagination_meta(
-        base_url, page, page_size, total, query_params=extra_params, execution_time=exec_time
+        base_url,
+        page,
+        page_size,
+        total,
+        query_params=extra_params,
+        execution_time=exec_time,
     )
 
     # Convert the result to JSON-friendly data (e.g., convert ObjectId to str).
     response_data = jsonable_encoder(
-        {"data": genes, "meta": meta},
-        custom_encoder={ObjectId: lambda o: str(o)}
+        {"data": genes, "meta": meta}, custom_encoder={ObjectId: lambda o: str(o)}
     )
     return response_data

@@ -7,6 +7,7 @@ import math
 import pandas as pd  # Used for consistent date parsing
 from bson import ObjectId as BsonObjectId  # Provided by PyMongo
 
+
 # ------------------------------------------------------------------------------
 # Utility function: Convert NA (or NaN) values to None.
 def none_if_nan(v):
@@ -19,18 +20,20 @@ def none_if_nan(v):
         return None
     return v
 
+
 # ------------------------------------------------------------------------------
 # Helper function for parsing dates using Pandas (returns a datetime)
 def parse_date_value(value) -> Optional[datetime]:
     try:
         if value is None:
             return None
-        dt = pd.to_datetime(value, errors='coerce')
+        dt = pd.to_datetime(value, errors="coerce")
         if pd.isnull(dt):
             return None
         return dt.to_pydatetime()
     except Exception:
         return None
+
 
 # ------------------------------------------------------------------------------
 # Custom type for MongoDB ObjectId.
@@ -51,6 +54,7 @@ class PyObjectId(str):
     def __get_pydantic_json_schema__(cls, core_schema, handler):
         return {"type": "string"}
 
+
 # ------------------------------------------------------------------------------
 # User model
 class User(BaseModel):
@@ -69,33 +73,35 @@ class User(BaseModel):
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
+
 
 # ------------------------------------------------------------------------------
 # Phenotype sub-model for reports
 class Phenotype(BaseModel):
     phenotype_id: str
     name: str
-    modifier: Optional[Dict[str, Optional[str]]] = None  
-    described: str  
+    modifier: Optional[Dict[str, Optional[str]]] = None
+    described: str
 
     model_config = {"extra": "allow"}
+
 
 # ------------------------------------------------------------------------------
 # Report model (to be embedded in an Individual)
 class Report(BaseModel):
     report_id: str  # Changed from int to str
-    reviewed_by: Optional[PyObjectId] = None  
+    reviewed_by: Optional[PyObjectId] = None
     phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
-    publication_ref: Optional[PyObjectId] = None  
+    publication_ref: Optional[PyObjectId] = None
     review_date: Optional[datetime] = None
     comment: Optional[str] = None
     family_history: Optional[str] = None
     age_reported: Optional[str] = None
     age_onset: Optional[str] = None
     cohort: Optional[str] = None
-    report_date: Optional[datetime] = None  
+    report_date: Optional[datetime] = None
 
     model_config = {"extra": "allow"}
 
@@ -130,34 +136,36 @@ class Report(BaseModel):
             return f"rep{int(v):04d}"
         return v
 
+
 # ------------------------------------------------------------------------------
 # IndividualVariant model
 class IndividualVariant(BaseModel):
-    variant_ref: PyObjectId  
+    variant_ref: PyObjectId
     detection_method: Optional[str] = None
     segregation: Optional[str] = None
 
     model_config = {"extra": "allow"}
 
+
 # ------------------------------------------------------------------------------
 # Individual model
 class Individual(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    individual_id: str  
+    individual_id: str
     Sex: Optional[str] = None
     individual_DOI: Optional[str] = None
     DupCheck: Optional[str] = None
     IndividualIdentifier: Optional[str] = None
     Problematic: str = ""
     reports: List[Report] = Field(default_factory=list)
-    variant: Optional[IndividualVariant] = None  
+    variant: Optional[IndividualVariant] = None
 
     model_config = {
         "from_attributes": True,
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
 
     @field_validator("Problematic", mode="before")
@@ -173,6 +181,7 @@ class Individual(BaseModel):
             return f"ind{int(v):04d}"
         return v
 
+
 # ------------------------------------------------------------------------------
 # VariantClassifications model
 class VariantClassifications(BaseModel):
@@ -180,7 +189,7 @@ class VariantClassifications(BaseModel):
     criteria: Optional[str] = None
     comment: Optional[str] = None
     system: Optional[str] = None
-    classification_date: Optional[datetime] = None  
+    classification_date: Optional[datetime] = None
 
     model_config = {"extra": "allow"}
 
@@ -189,14 +198,15 @@ class VariantClassifications(BaseModel):
     def parse_classification_date(cls, v):
         return parse_date_value(v)
 
+
 # ------------------------------------------------------------------------------
 # VariantAnnotation model
 class VariantAnnotation(BaseModel):
     transcript: Optional[str] = None
     c_dot: Optional[str] = None
     p_dot: Optional[str] = None
-    source: Optional[str] = None  
-    annotation_date: Optional[datetime] = None  
+    source: Optional[str] = None
+    annotation_date: Optional[datetime] = None
 
     model_config = {"extra": "allow"}
 
@@ -204,6 +214,7 @@ class VariantAnnotation(BaseModel):
     @classmethod
     def parse_annotation_date(cls, v):
         return parse_date_value(v)
+
 
 # ------------------------------------------------------------------------------
 # ReportedEntry model
@@ -213,11 +224,12 @@ class ReportedEntry(BaseModel):
 
     model_config = {"extra": "allow"}
 
+
 # ------------------------------------------------------------------------------
 # Variant model
 class Variant(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    variant_id: str  
+    variant_id: str
     individual_ids: List[PyObjectId] = Field(default_factory=list)
     classifications: List[VariantClassifications] = Field(default_factory=list)
     annotations: List[VariantAnnotation] = Field(default_factory=list)
@@ -228,7 +240,7 @@ class Variant(BaseModel):
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
 
     @field_validator("annotations", mode="before")
@@ -243,6 +255,7 @@ class Variant(BaseModel):
             return f"var{int(v):04d}"
         return v
 
+
 # ------------------------------------------------------------------------------
 # Author model
 class Author(BaseModel):
@@ -253,6 +266,7 @@ class Author(BaseModel):
 
     model_config = {"extra": "allow"}
 
+
 # ------------------------------------------------------------------------------
 # Publication model with padded publication_id (e.g. "pub0001")
 class Publication(BaseModel):
@@ -260,7 +274,9 @@ class Publication(BaseModel):
     publication_id: str  # Now a padded identifier.
     publication_alias: str
     publication_type: Optional[str] = None
-    publication_entry_date: Optional[datetime] = Field(default_factory=lambda: datetime(2021, 11, 1))
+    publication_entry_date: Optional[datetime] = Field(
+        default_factory=lambda: datetime(2021, 11, 1)
+    )
     PMID: Optional[int] = None
     DOI: Optional[str] = None
     PDF: Optional[str] = None
@@ -274,14 +290,14 @@ class Publication(BaseModel):
     authors: List[Author] = Field(default_factory=list)
     update_date: Optional[datetime] = Field(default_factory=datetime.now)
     comment: Optional[str] = None
-    assignee: Optional[PyObjectId] = None  
+    assignee: Optional[PyObjectId] = None
 
     model_config = {
         "from_attributes": True,
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
 
     @field_validator("publication_id", mode="before")
@@ -322,19 +338,21 @@ class Publication(BaseModel):
     def parse_publication_date(cls, v):
         return parse_date_value(v)
 
+
 # ------------------------------------------------------------------------------
 # New ProteinFeature model – used for holding domain/structure information.
 class ProteinFeature(BaseModel):
-    start_position: Optional[int] = None  
-    end_position: Optional[int] = None    
-    start: Optional[int] = None           
-    length: Optional[int] = None          
+    start_position: Optional[int] = None
+    end_position: Optional[int] = None
+    start: Optional[int] = None
+    length: Optional[int] = None
     description: Optional[str] = ""
     description_short: Optional[str] = ""
     source: Optional[str] = ""
     height: Optional[int] = None
 
     model_config = {"extra": "allow"}
+
 
 # ------------------------------------------------------------------------------
 # New Protein model – represents the protein structure and domains.
@@ -349,25 +367,27 @@ class Protein(BaseModel):
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
+
 
 # ------------------------------------------------------------------------------
 # New Exon model for gene structure.
 class Exon(BaseModel):
-    exon_number: Optional[int] = None  
-    start: Optional[int] = None         
-    stop: Optional[int] = None          
+    exon_number: Optional[int] = None
+    start: Optional[int] = None
+    stop: Optional[int] = None
 
     model_config = {"extra": "allow"}
+
 
 # ------------------------------------------------------------------------------
 # New Gene model – represents the genomic structure of the HNF1B gene.
 class Gene(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    gene_symbol: str         
-    ensembl_gene_id: str       
-    transcript: str          
+    gene_symbol: str
+    ensembl_gene_id: str
+    transcript: str
     exons: List[Exon] = Field(default_factory=list)
     hg38: Dict[str, Any] = Field(default_factory=dict)
     hg19: Dict[str, Any] = Field(default_factory=dict)
@@ -376,8 +396,9 @@ class Gene(BaseModel):
         "populate_by_name": True,
         "arbitrary_types_allowed": True,
         "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow"
+        "extra": "allow",
     }
+
 
 # ------------------------------------------------------------------------------
 # Update forward references for self-referencing embedded models.

@@ -2,10 +2,14 @@
 from fastapi import Query
 from typing import Dict, Any, Optional
 
+
 def parse_filter(
     filter: Optional[str] = Query(
         None,
-        description="Comma separated list of filters to apply. Format: field:value,field2:value2"
+        description=(
+            "Comma separated list of filters to apply. "
+            "Format: field:value,field2:value2"
+        ),
     )
 ) -> Dict[str, Any]:
     """
@@ -15,9 +19,9 @@ def parse_filter(
     """
     filters = {}
     if filter:
-        parts = filter.split(',')
+        parts = filter.split(",")
         for part in parts:
-            if ':' in part:
-                key, value = part.split(':', 1)
+            if ":" in part:
+                key, value = part.split(":", 1)
                 filters[key.strip()] = value.strip()
     return filters
