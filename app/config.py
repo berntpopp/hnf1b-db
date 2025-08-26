@@ -3,9 +3,14 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    MONGODB_URI: str
-    DATABASE_NAME: str
+    # PostgreSQL Database Configuration
+    DATABASE_URL: str
+
+    # Authentication
     JWT_SECRET: str
+
+    # Development Settings
+    DEBUG: bool = False
 
     class Config:
         env_file = ".env"

@@ -12,18 +12,26 @@ HNF1B-API is a FastAPI-based REST API for managing clinical and genetic data for
 ```bash
 make help          # Show all available commands
 make dev           # Install all dependencies
-make server        # Start development server
+
+# Development workflow (PostgreSQL required):
+make hybrid-up     # Start PostgreSQL and Redis containers
+make server        # Start development server (after hybrid-up)
+make hybrid-down   # Stop containers when done
+
 make test          # Run tests
 make check         # Run all checks (lint + typecheck + tests)
 ```
 
 ### Development Server
 ```bash
-# Start development server with auto-reload
-uv run python -m uvicorn app.main:app --reload
+# IMPORTANT: Start database services first!
+make hybrid-up     # Start PostgreSQL and Redis containers
 
-# Alternative method (use uv run for proper module resolution)
-uv run python -m app.main
+# Then start the development server
+make server        # Start FastAPI with auto-reload
+
+# Alternative direct method (after hybrid-up)
+uv run python -m uvicorn app.main:app --reload
 ```
 
 ### Environment Setup
@@ -35,15 +43,14 @@ uv sync
 uv sync --group dev --group test
 
 # Create .env file with required variables:
-# MONGODB_URI=mongodb://localhost:27017
-# DATABASE_NAME=hnf1b_db
+# DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
 # JWT_SECRET=your-secret-key
 ```
 
-### Data Migration
+### Data Import
 ```bash
-# Import data from spreadsheets to MongoDB
-uv run python migrate_from_sheets.py
+# Import data from Google Sheets to PostgreSQL
+make import-data
 ```
 
 ### Code Quality Tools
@@ -89,7 +96,7 @@ The API is organized into 8 main endpoint groups, each handling a specific domai
 
 ### Database Schema
 
-MongoDB collections with their relationships:
+PostgreSQL tables with their relationships:
 
 1. **users** - System users/reviewers
    - Referenced by: reports (reviewed_by)
@@ -113,7 +120,7 @@ MongoDB collections with their relationships:
 
 2. **Data Validation**: Pydantic models in `app/models.py` ensure consistency between API and database
 
-3. **Database Access**: Async MongoDB operations using Motor driver through `app/database.py`
+3. **Database Access**: Async PostgreSQL operations using SQLAlchemy through `app/database.py`
 
 4. **CORS**: Configured for all origins (development mode)
 
@@ -133,13 +140,12 @@ The project handles specialized genomic data formats:
    - Use `uv run <command>` to execute scripts in the managed environment
 
 2. **Environment variables required**:
-   - `MONGODB_URI` - MongoDB connection string
-   - `DATABASE_NAME` - Database name
+   - `DATABASE_URL` - PostgreSQL connection string
    - `JWT_SECRET` - Secret for JWT token signing
 
 3. **Data validation**: The migration script and API share Pydantic models for consistency
 
-4. **Async operations**: All database operations use async/await patterns with Motor
+4. **Async operations**: All database operations use async/await patterns with SQLAlchemy
 
 5. **File locations**: 
    - Data files in `/data` directory (VCF, VEP, and reference genome files)

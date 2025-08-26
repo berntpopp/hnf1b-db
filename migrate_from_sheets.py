@@ -109,8 +109,7 @@ def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ----------------------------------------------------------------------
 def read_vep_file(filepath):
-    """
-    Read a VEP file that contains multiple header lines starting with "##" and one.
+    """Read a VEP file that contains multiple header lines starting with "##" and one.
 
     Skips lines beginning with "##" and removes the leading '#' from the header line.
     Renames the uploaded variation column to "var_id" and filters for
@@ -147,8 +146,7 @@ def read_vep_file(filepath):
 
 # ----------------------------------------------------------------------
 def read_vcf_file(filepath):
-    """
-    Read a VCF file by skipping header lines starting with "##" and removing the '#'.
+    """Read a VCF file by skipping header lines starting with "##" and removing the '#'.
 
     Computes a 'vcf_hg38' field by concatenating CHROM, POS, REF, and ALT.
     Renames the ID column to 'var_id'.
@@ -183,8 +181,7 @@ def read_vcf_file(filepath):
 
 # ----------------------------------------------------------------------
 def read_cadd_file(filepath):
-    """
-    Read a gzipped CADD file that contains header lines starting with "##" and one.
+    """Read a gzipped CADD file that contains header lines starting with "##" and one.
 
     Skips lines beginning with "##" and removes the leading '#' from the header line.
     Computes a 'vcf_hg38' field using the CADD columns.
@@ -224,8 +221,7 @@ def read_cadd_file(filepath):
 
 # ----------------------------------------------------------------------
 def parse_vep_extra(df):
-    """
-    Parse the 'Extra' column of a VEP DataFrame to extract additional annotations.
+    """Parse the 'Extra' column of a VEP DataFrame to extract additional annotations.
 
     First, drop the 'CADD_PHRED' column (if present) to avoid duplicate columns.
     Note: For CNVs the Extra column may be empty, so rows without Extra will be dropped.
@@ -268,8 +264,7 @@ def parse_vep_extra(df):
 
 # ----------------------------------------------------------------------
 async def load_phenotype_mappings():
-    """
-    Load the phenotype mapping from the phenotype sheet.
+    """Load the phenotype mapping from the phenotype sheet.
 
     Now each mapping includes the phenotype group (from the 'phenotype_group' column).
     """
@@ -581,9 +576,10 @@ async def import_individuals_with_reports():
         {}, {"publication_alias": 1, "publication_date": 1}
     ).to_list(length=None)
     publication_mapping = {
-        doc["publication_alias"]
-        .strip()
-        .lower(): {"_id": doc["_id"], "publication_date": doc.get("publication_date")}
+        doc["publication_alias"].strip().lower(): {
+            "_id": doc["_id"],
+            "publication_date": doc.get("publication_date"),
+        }
         for doc in pub_docs
         if "publication_alias" in doc
     }
@@ -1290,8 +1286,7 @@ async def import_variants():
 
 # ----------------------------------------------------------------------
 async def import_proteins():
-    """
-    Import the protein structure and domains for the HNF1B gene from the domains sheet.
+    """Import the protein structure and domains for the HNF1B gene from the domains sheet.
 
     Reads the CSV from Google Sheets (GID '810380453'), replaces 'NA'/'nan' with empty
     values, splits the "position" field into start_position and end_position, groups
@@ -1404,8 +1399,7 @@ async def import_proteins():
 
 # ----------------------------------------------------------------------
 def fetch_gene_data(symbol: str, server_url: str) -> dict:
-    """
-    Fetch the expanded gene record for the given symbol from the specified server.
+    """Fetch the expanded gene record for the given symbol from the specified server.
 
     Uses the Ensembl REST API to fetch gene data.
     """
@@ -1419,8 +1413,7 @@ def fetch_gene_data(symbol: str, server_url: str) -> dict:
 
 # ----------------------------------------------------------------------
 def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
-    """
-    Extract canonical transcript and exons from gene data.
+    """Extract canonical transcript and exons from gene data.
 
     Given a gene record (from the lookup endpoint), find the canonical transcript and
     return its id along with a list of its exons. Each exon is formatted as a dict with
@@ -1451,8 +1444,7 @@ def extract_canonical_transcript_exons(gene_data: dict) -> (str, list):
 
 # ----------------------------------------------------------------------
 def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
-    """
-    Fetch gene structure for the given gene symbol from both GRCh38 and GRCh37.
+    """Fetch gene structure for the given gene symbol from both GRCh38 and GRCh37.
 
     Returns a gene document that includes:
       - gene_symbol (display_name)
@@ -1483,8 +1475,7 @@ def fetch_gene_structure_from_symbol(symbol: str = "HNF1B") -> dict:
 
 # ----------------------------------------------------------------------
 async def import_genes():
-    """
-    Import the genomic structure for the HNF1B gene using the Ensembl lookup endpoint.
+    """Import the genomic structure for the HNF1B gene using the Ensembl lookup endpoint.
 
     The function fetches gene data for both GRCh38 and GRCh37 (hg19) and builds a gene
     document that includes exon coordinates from the canonical transcript. The document

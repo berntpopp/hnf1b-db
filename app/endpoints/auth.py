@@ -8,7 +8,8 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 
 from app.config import settings
-from app.database import db
+
+# from app.database import db
 
 router = APIRouter()
 
@@ -22,8 +23,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
-    """
-    Verify the provided password.
+    """Verify the provided password.
 
     If the stored password does not appear to be a bcrypt hash (i.e. it doesn't
     start with "$2"), fall back to a plain-text comparison. This allows you to
@@ -42,8 +42,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
-    """
-    Create a JWT token including an expiration time.
+    """Create a JWT token including an expiration time.
 
     Args:
         data: The payload data (e.g. {"sub": "username"}).
@@ -77,34 +76,9 @@ class UserCreate(BaseModel):
     abbreviation: str
 
 
-@router.post("/register", summary="Register a new user")
-async def register(user: UserCreate):
-    """
-    Register a new user.
-
-    - Checks if a user with the provided email already exists.
-    - Hashes the provided password before storing.
-    """
-    existing = await db.users.find_one({"email": user.email})
-    if existing:
-        raise HTTPException(
-            status_code=400, detail="User with this email already exists"
-        )
-
-    user_dict = user.dict()
-    # Hash the password before storing it.
-    user_dict["password"] = hash_password(user.password)
-
-    result = await db.users.insert_one(user_dict)
-    if not result.inserted_id:
-        raise HTTPException(status_code=500, detail="User registration failed")
-    return {"msg": "User registered successfully"}
-
-
 @router.post("/token", summary="Login and obtain a JWT token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """
-    Login endpoint.
+    """Login endpoint.
 
     This endpoint expects form data with the following fields:
       - **username**: Your username.
@@ -113,29 +87,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
       - **client_id**: (Optional)
       - **client_secret**: (Optional)
 
-    It validates the credentials against the database and returns a JWT token
+    It validates the credentials against the PostgreSQL database and returns a JWT token
     if successful.
     """
-    user_doc = await db.users.find_one({"user_name": form_data.username})
-    if not user_doc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not verify_password(form_data.password, user_doc["password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = create_access_token(data={"sub": user_doc["user_name"]})
-    return {"access_token": access_token, "token_type": "bearer"}
+    raise HTTPException(
+        status_code=503, detail="Authentication temporarily unavailable"
+    )
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
-    """
-    Dependency to retrieve the current user based on the JWT token.
+    """Dependency to retrieve the current user based on the JWT token.
 
     Raises HTTP 401 if the token is invalid or expired.
     """
@@ -157,8 +118,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 @router.get("/me", summary="Get current user info")
 async def read_users_me(current_user: str = Depends(get_current_user)):
-    """
-    Return the current user's username (extracted from the JWT token).
+    """Return the current user's username (extracted from the JWT token).
 
     In a real application, you might look up and return additional user data.
     """

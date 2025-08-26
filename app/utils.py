@@ -1,64 +1,18 @@
+# app/utils.py
+"""Utility functions for FastAPI endpoints with PostgreSQL support."""
+
 import json
-import re
 import urllib.parse
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException
-from pymongo import ASCENDING, DESCENDING
-
-# Pre-compile the regex pattern used for filter parsing.
-_FILTER_REGEX = re.compile(r"filter\[(\w+)(?:\]\[(\w+)\])?\]")
-
-
-def parse_filters(query_params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Parses query parameters that follow JSON:API filter syntax.
-
-    Supported examples:
-      - filter[price]=100             -> { "price": "100" }
-      - filter[price][gt]=100         -> { "price": { "$gt": "100" } }
-      - filter[price][lt]=200         -> { "price": { "$lt": "200" } }
-      - filter[status]=active         -> { "status": "active" }
-      - filter[category][in]=A,B,C    -> { "category": { "$in": ["A", "B", "C"] } }
-
-    Note: Conversion (e.g. to int or datetime) should be handled in your model or later.
-    """
-    filters: Dict[str, Any] = {}
-    op_map = {
-        "gt": "$gt",
-        "gte": "$gte",
-        "lt": "$lt",
-        "lte": "$lte",
-        "ne": "$ne",
-        "in": "$in",
-    }
-    for key, value in query_params.items():
-        if key.startswith("filter[") and key.endswith("]"):
-            match = _FILTER_REGEX.fullmatch(key)
-            if match:
-                field = match.group(1)
-                operator = match.group(2)
-                if operator:
-                    mongo_op = op_map.get(operator)
-                    if not mongo_op:
-                        raise HTTPException(
-                            status_code=400, detail=f"Unsupported operator: {operator}"
-                        )
-                    if mongo_op == "$in":
-                        filters[field] = {mongo_op: value.split(",")}
-                    else:
-                        filters.setdefault(field, {})[mongo_op] = value
-                else:
-                    filters[field] = value
-    return filters
+from fastapi import HTTPException, Request
 
 
 def parse_filter_json(filter_json: Optional[str]) -> Dict[str, Any]:
-    """
-    Parses a JSON string provided as the filter parameter.
+    """Parses a JSON string provided as the filter parameter.
 
     Example:
-       '{"Sex": "male", "individual_id": {"gt": "ind0930"}}'
+       '{"sex": "male", "individual_id": {"gt": "ind0930"}}'
     """
     if not filter_json:
         return {}
@@ -71,54 +25,101 @@ def parse_filter_json(filter_json: Optional[str]) -> Dict[str, Any]:
 
 
 def parse_deep_object_filters(filter_obj: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Converts a filter dictionary into a MongoDB filter.
+    """Converts a filter dictionary into a format suitable for repository queries.
 
     Supported operators (lowercase):
-      - gt, gte, lt, lte, ne, in
+      - gt, gte, lt, lte, ne, in, eq
 
     Example:
-      { "age": {"gt": "30"}, "Sex": "male" }
+      { "age": {"gt": "30"}, "sex": "male" }
     becomes:
-      { "age": {"$gt": "30"}, "Sex": "male" }
+      { "age": {"gt": "30"}, "sex": "male" }
+
+    Note: The actual SQL filtering is handled by the repository layer.
     """
     filters = {}
-    op_map = {
-        "gt": "$gt",
-        "gte": "$gte",
-        "lt": "$lt",
-        "lte": "$lte",
-        "ne": "$ne",
-        "in": "$in",
-    }
+    supported_operators = ["gt", "gte", "lt", "lte", "ne", "in", "eq"]
+
     for field, value in filter_obj.items():
         if isinstance(value, dict):
+            # Handle operator-based filters
             sub_filter = {}
             for op, v in value.items():
-                if op in op_map:
+                if op in supported_operators:
                     if op == "in" and isinstance(v, str):
-                        sub_filter[op_map[op]] = v.split(",")
+                        sub_filter[op] = v.split(",")
                     else:
-                        sub_filter[op_map[op]] = v
+                        sub_filter[op] = v
+                else:
+                    raise HTTPException(
+                        status_code=400, detail=f"Unsupported filter operator: {op}"
+                    )
             filters[field] = sub_filter
         else:
+            # Simple equality filter
             filters[field] = value
+
     return filters
 
 
-def parse_sort(sort: Optional[str]) -> Optional[Tuple[str, int]]:
-    """
-    Parse the sort query parameter.
+def build_repository_filters(
+    filter_obj: Dict[str, Any], field_mapping: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
+    """Convert API filter format to repository filter format.
 
-    Accepts:
-      - sort=trade_date_time        -> ("trade_date_time", ASCENDING)
-      - sort=-price                 -> ("price", DESCENDING)
+    Args:
+        filter_obj: Parsed filter dictionary
+        field_mapping: Optional mapping of API field names to model field names
+
+    Returns:
+        Dictionary suitable for repository filtering
     """
-    if not sort:
-        return None
-    if sort.startswith("-"):
-        return (sort[1:], DESCENDING)
-    return (sort, ASCENDING)
+    filters = {}
+    field_mapping = field_mapping or {}
+
+    for field, value in filter_obj.items():
+        # Map API field names to model field names if needed
+        model_field = field_mapping.get(field, field)
+
+        if isinstance(value, dict):
+            # Handle complex filters (operators)
+            # For now, we'll extract simple equality for the repositories
+            # More complex filtering logic can be added to repositories as needed
+            if "eq" in value:
+                filters[model_field] = value["eq"]
+            elif len(value) == 1:
+                # Single operator - for simplicity, use the value directly
+                # Repository layer can handle more complex logic
+                op, val = next(iter(value.items()))
+                if op == "in":
+                    # Handle 'in' operator by checking the first value for now
+                    # Full 'in' support would need repository enhancements
+                    filters[model_field] = val[0] if val else None
+                else:
+                    filters[model_field] = val
+        else:
+            filters[model_field] = value
+
+    return filters
+
+
+def build_search_fields(
+    search_term: str,
+    default_fields: List[str],
+    field_mapping: Optional[Dict[str, str]] = None,
+) -> List[str]:
+    """Build list of search fields, mapping API fields to model fields.
+
+    Args:
+        search_term: The search term
+        default_fields: Default fields to search in
+        field_mapping: Optional mapping of API field names to model field names
+
+    Returns:
+        List of model field names to search
+    """
+    field_mapping = field_mapping or {}
+    return [field_mapping.get(field, field) for field in default_fields]
 
 
 def build_pagination_meta(
@@ -129,8 +130,7 @@ def build_pagination_meta(
     query_params: Optional[Dict[str, Any]] = None,
     execution_time: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """
-    Returns a metadata dictionary following JSON:API conventions.
+    """Returns a metadata dictionary following JSON:API conventions.
 
     Contains:
       - total: total number of documents.
@@ -162,3 +162,105 @@ def build_pagination_meta(
     if execution_time is not None:
         meta["execution_time_ms"] = round(execution_time * 1000, 2)
     return meta
+
+
+def build_base_url(request: Request) -> str:
+    """Extract base URL from request (without query parameters).
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        Base URL string
+    """
+    return str(request.url).split("?")[0]
+
+
+def model_to_dict(
+    model_instance, exclude_fields: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Convert SQLAlchemy model instance to dictionary for JSON serialization.
+
+    Args:
+        model_instance: SQLAlchemy model instance
+        exclude_fields: Fields to exclude from the dictionary
+
+    Returns:
+        Dictionary representation of the model
+    """
+    exclude_fields = exclude_fields or []
+
+    result = {}
+    for column in model_instance.__table__.columns:
+        field_name = column.name
+        if field_name not in exclude_fields:
+            value = getattr(model_instance, field_name)
+            # Handle UUID and datetime serialization
+            if hasattr(value, "__str__"):
+                result[field_name] = str(value) if value else None
+            else:
+                result[field_name] = value
+
+    return result
+
+
+def apply_field_mapping(
+    data: Dict[str, Any], field_mapping: Dict[str, str], reverse: bool = False
+) -> Dict[str, Any]:
+    """Apply field name mapping to data dictionary.
+
+    Args:
+        data: Data dictionary
+        field_mapping: Mapping from source to target field names
+        reverse: If True, reverse the mapping direction
+
+    Returns:
+        Dictionary with mapped field names
+    """
+    if reverse:
+        # Reverse the mapping
+        mapping = {v: k for k, v in field_mapping.items()}
+    else:
+        mapping = field_mapping
+
+    result = {}
+    for key, value in data.items():
+        new_key = mapping.get(key, key)
+        result[new_key] = value
+
+    return result
+
+
+# Field mappings for maintaining API compatibility
+INDIVIDUAL_FIELD_MAPPING = {
+    "Sex": "sex",
+    "individual_DOI": "individual_doi",
+    "DupCheck": "dup_check",
+    "IndividualIdentifier": "individual_identifier",
+    "Problematic": "problematic",
+}
+
+PUBLICATION_FIELD_MAPPING = {
+    "PMID": "pmid",
+    "DOI": "doi",
+    "PDF": "pdf",
+}
+
+VARIANT_FIELD_MAPPING = {
+    "reported": "reported_entries",
+}
+
+
+# Temporary stub functions for backward compatibility during migration
+def parse_filters(query_params):
+    """Temporary stub function for backward compatibility."""
+    return {}
+
+
+def parse_sort(sort_param):
+    """Temporary stub function for backward compatibility."""
+    if not sort_param:
+        return None
+    if sort_param.startswith("-"):
+        return (sort_param[1:], -1)  # Descending
+    return (sort_param, 1)  # Ascending

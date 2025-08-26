@@ -1,7 +1,12 @@
-# File: app/main.py
+# app/main.py
+"""FastAPI application for HNF1B-API with PostgreSQL database."""
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import close_db, init_db
 from app.endpoints import (
     aggregations,
     auth,
@@ -13,6 +18,17 @@ from app.endpoints import (
     variants,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown."""
+    # Startup
+    await init_db()
+    yield
+    # Shutdown
+    await close_db()
+
+
 app = FastAPI(
     title="HNF1B-db API",
     description=(
@@ -20,6 +36,7 @@ app = FastAPI(
         "individuals, publications, variants, aggregations, proteins, and genes."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

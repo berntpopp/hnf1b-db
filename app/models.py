@@ -1,407 +1,484 @@
-# File: app/models.py
+# app/models.py
+"""SQLAlchemy models for PostgreSQL database."""
+
 from __future__ import annotations
 
-import math
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import pandas as pd  # Used for consistent date parsing
-from bson import ObjectId as BsonObjectId  # Provided by PyMongo
-from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
 
 
 # ------------------------------------------------------------------------------
-# Utility function: Convert NA (or NaN) values to None.
-def none_if_nan(v):
-    try:
-        if isinstance(v, float) and math.isnan(v):
-            return None
-    except Exception:
-        pass
-    if isinstance(v, str) and v.strip().upper() == "NA":
-        return None
-    return v
+# User model - System users/reviewers
+class User(Base):
+    __tablename__ = "users"
 
-
-# ------------------------------------------------------------------------------
-# Helper function for parsing dates using Pandas (returns a datetime)
-def parse_date_value(value) -> Optional[datetime]:
-    try:
-        if value is None:
-            return None
-        dt = pd.to_datetime(value, errors="coerce")
-        if pd.isnull(dt):
-            return None
-        return dt.to_pydatetime()
-    except Exception:
-        return None
-
-
-# ------------------------------------------------------------------------------
-# Custom type for MongoDB ObjectId.
-class PyObjectId(str):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v, info=None):
-        if isinstance(v, BsonObjectId):
-            return str(v)
-        if isinstance(v, str):
-            return v
-        raise TypeError("Invalid type for ObjectId")
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        return {"type": "string"}
-
-
-# ------------------------------------------------------------------------------
-# User model
-class User(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    user_id: int
-    user_name: str
-    password: str
-    email: str
-    user_role: str
-    first_name: str
-    family_name: str
-    orcid: Optional[str] = None
-
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
-
-
-# ------------------------------------------------------------------------------
-# Phenotype sub-model for reports
-class Phenotype(BaseModel):
-    phenotype_id: str
-    name: str
-    modifier: Optional[Dict[str, Optional[str]]] = None
-    described: str
-
-    model_config = {"extra": "allow"}
-
-
-# ------------------------------------------------------------------------------
-# Report model (to be embedded in an Individual)
-class Report(BaseModel):
-    report_id: str  # Changed from int to str
-    reviewed_by: Optional[PyObjectId] = None
-    phenotypes: Dict[str, Phenotype] = Field(default_factory=dict)
-    publication_ref: Optional[PyObjectId] = None
-    review_date: Optional[datetime] = None
-    comment: Optional[str] = None
-    family_history: Optional[str] = None
-    age_reported: Optional[str] = None
-    age_onset: Optional[str] = None
-    cohort: Optional[str] = None
-    report_date: Optional[datetime] = None
-
-    model_config = {"extra": "allow"}
-
-    @field_validator("review_date", mode="before")
-    @classmethod
-    def parse_review_date(cls, v):
-        if not v:
-            return None
-        if isinstance(v, str):
-            try:
-                return datetime.strptime(v.strip(), "%m/%d/%Y %H:%M:%S")
-            except Exception as e:
-                raise ValueError(f"Could not parse review_date: {v}") from e
-        return v
-
-    @field_validator("report_date", mode="before")
-    @classmethod
-    def parse_report_date(cls, v):
-        if not v:
-            return None
-        if isinstance(v, str):
-            try:
-                return parse_date_value(v)
-            except Exception as e:
-                raise ValueError(f"Could not parse report_date: {v}") from e
-        return v
-
-    @field_validator("report_id", mode="before")
-    @classmethod
-    def format_report_id(cls, v):
-        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
-            return f"rep{int(v):04d}"
-        return v
-
-
-# ------------------------------------------------------------------------------
-# IndividualVariant model
-class IndividualVariant(BaseModel):
-    variant_ref: PyObjectId
-    detection_method: Optional[str] = None
-    segregation: Optional[str] = None
-
-    model_config = {"extra": "allow"}
-
-
-# ------------------------------------------------------------------------------
-# Individual model
-class Individual(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    individual_id: str
-    Sex: Optional[str] = None
-    individual_DOI: Optional[str] = None
-    DupCheck: Optional[str] = None
-    IndividualIdentifier: Optional[str] = None
-    Problematic: str = ""
-    reports: List[Report] = Field(default_factory=list)
-    variant: Optional[IndividualVariant] = None
-
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
-
-    @field_validator("Problematic", mode="before")
-    @classmethod
-    def validate_problematic(cls, v):
-        val = none_if_nan(v)
-        return val if val is not None else ""
-
-    @field_validator("individual_id", mode="before")
-    @classmethod
-    def format_individual_id(cls, v):
-        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
-            return f"ind{int(v):04d}"
-        return v
-
-
-# ------------------------------------------------------------------------------
-# VariantClassifications model
-class VariantClassifications(BaseModel):
-    verdict: Optional[str] = None
-    criteria: Optional[str] = None
-    comment: Optional[str] = None
-    system: Optional[str] = None
-    classification_date: Optional[datetime] = None
-
-    model_config = {"extra": "allow"}
-
-    @field_validator("classification_date", mode="before")
-    @classmethod
-    def parse_classification_date(cls, v):
-        return parse_date_value(v)
-
-
-# ------------------------------------------------------------------------------
-# VariantAnnotation model
-class VariantAnnotation(BaseModel):
-    transcript: Optional[str] = None
-    c_dot: Optional[str] = None
-    p_dot: Optional[str] = None
-    source: Optional[str] = None
-    annotation_date: Optional[datetime] = None
-
-    model_config = {"extra": "allow"}
-
-    @field_validator("annotation_date", mode="before")
-    @classmethod
-    def parse_annotation_date(cls, v):
-        return parse_date_value(v)
-
-
-# ------------------------------------------------------------------------------
-# ReportedEntry model
-class ReportedEntry(BaseModel):
-    variant_reported: str
-    publication_ref: Optional[PyObjectId] = None
-
-    model_config = {"extra": "allow"}
-
-
-# ------------------------------------------------------------------------------
-# Variant model
-class Variant(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    variant_id: str
-    individual_ids: List[PyObjectId] = Field(default_factory=list)
-    classifications: List[VariantClassifications] = Field(default_factory=list)
-    annotations: List[VariantAnnotation] = Field(default_factory=list)
-    reported: List[ReportedEntry] = Field(default_factory=list)
-
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
-
-    @field_validator("annotations", mode="before")
-    @classmethod
-    def validate_annotations(cls, v):
-        return v
-
-    @field_validator("variant_id", mode="before")
-    @classmethod
-    def format_variant_id(cls, v):
-        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
-            return f"var{int(v):04d}"
-        return v
-
-
-# ------------------------------------------------------------------------------
-# Author model
-class Author(BaseModel):
-    lastname: Optional[str] = None
-    firstname: Optional[str] = None
-    initials: Optional[str] = None
-    affiliations: List[str] = Field(default_factory=list)
-
-    model_config = {"extra": "allow"}
-
-
-# ------------------------------------------------------------------------------
-# Publication model with padded publication_id (e.g. "pub0001")
-class Publication(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    publication_id: str  # Now a padded identifier.
-    publication_alias: str
-    publication_type: Optional[str] = None
-    publication_entry_date: Optional[datetime] = Field(
-        default_factory=lambda: datetime(2021, 11, 1)
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    PMID: Optional[int] = None
-    DOI: Optional[str] = None
-    PDF: Optional[str] = None
-    title: Optional[str] = None
-    abstract: Optional[str] = None
-    publication_date: Optional[datetime] = None
-    journal_abbreviation: Optional[str] = None
-    journal: Optional[str] = None
-    keywords: Optional[List[str]] = Field(default_factory=list)
-    medical_specialty: Optional[List[str]] = Field(default_factory=list)
-    authors: List[Author] = Field(default_factory=list)
-    update_date: Optional[datetime] = Field(default_factory=datetime.now)
-    comment: Optional[str] = None
-    assignee: Optional[PyObjectId] = None
 
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
+    # Core user fields
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    user_name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    password: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    user_role: Mapped[str] = mapped_column(String(50))
+    first_name: Mapped[str] = mapped_column(String(100))
+    family_name: Mapped[str] = mapped_column(String(100))
+    orcid: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    @field_validator("publication_id", mode="before")
-    @classmethod
-    def validate_publication_id(cls, v):
-        # If the value is a dict with $numberInt, extract the integer.
-        if isinstance(v, dict) and "$numberInt" in v:
-            v = int(v["$numberInt"])
-        if isinstance(v, (int, float)):
-            return f"pub{int(v):04d}"
-        if isinstance(v, str) and v.isdigit():
-            return f"pub{int(v):04d}"
-        return v
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
-    @field_validator("PMID", mode="before")
-    @classmethod
-    def validate_pmid(cls, v):
-        v = none_if_nan(v)
-        if v is None:
-            return None
-        try:
-            return int(v)
-        except Exception:
-            return None
-
-    @field_validator("DOI", mode="before")
-    @classmethod
-    def validate_doi(cls, v):
-        return none_if_nan(v)
-
-    @field_validator("PDF", mode="before")
-    @classmethod
-    def validate_pdf(cls, v):
-        return none_if_nan(v)
-
-    @field_validator("publication_date", mode="before")
-    @classmethod
-    def parse_publication_date(cls, v):
-        return parse_date_value(v)
+    # Relationships
+    reviewed_reports: Mapped[List["Report"]] = relationship(
+        "Report", back_populates="reviewer"
+    )
+    assigned_publications: Mapped[List["Publication"]] = relationship(
+        "Publication", back_populates="assignee"
+    )
 
 
 # ------------------------------------------------------------------------------
-# New ProteinFeature model – used for holding domain/structure information.
-class ProteinFeature(BaseModel):
-    start_position: Optional[int] = None
-    end_position: Optional[int] = None
-    start: Optional[int] = None
-    length: Optional[int] = None
-    description: Optional[str] = ""
-    description_short: Optional[str] = ""
-    source: Optional[str] = ""
-    height: Optional[int] = None
+# Individual model - Patient demographics
+class Individual(Base):
+    __tablename__ = "individuals"
 
-    model_config = {"extra": "allow"}
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
 
+    # Core individual fields
+    individual_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    sex: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    individual_doi: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    dup_check: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    individual_identifier: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    problematic: Mapped[str] = mapped_column(String(500), default="")
 
-# ------------------------------------------------------------------------------
-# New Protein model – represents the protein structure and domains.
-class Protein(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    gene: str
-    transcript: str
-    protein: str
-    features: Dict[str, List[ProteinFeature]] = Field(default_factory=dict)
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
-
-# ------------------------------------------------------------------------------
-# New Exon model for gene structure.
-class Exon(BaseModel):
-    exon_number: Optional[int] = None
-    start: Optional[int] = None
-    stop: Optional[int] = None
-
-    model_config = {"extra": "allow"}
+    # Relationships
+    reports: Mapped[List["Report"]] = relationship(
+        "Report", back_populates="individual", cascade="all, delete-orphan"
+    )
+    variants: Mapped[List["Variant"]] = relationship(
+        "Variant", secondary="individual_variants", back_populates="individuals"
+    )
 
 
 # ------------------------------------------------------------------------------
-# New Gene model – represents the genomic structure of the HNF1B gene.
-class Gene(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    gene_symbol: str
-    ensembl_gene_id: str
-    transcript: str
-    exons: List[Exon] = Field(default_factory=list)
-    hg38: Dict[str, Any] = Field(default_factory=dict)
-    hg19: Dict[str, Any] = Field(default_factory=dict)
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "json_encoders": {PyObjectId: lambda v: str(v)},
-        "extra": "allow",
-    }
+# Report model - Clinical presentations (separated from Individual for normalization)
+class Report(Base):
+    __tablename__ = "reports"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign keys
+    individual_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("individuals.id", ondelete="CASCADE")
+    )
+    reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    publication_ref: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("publications.id"), nullable=True
+    )
+
+    # Core report fields
+    report_id: Mapped[str] = mapped_column(String(20), index=True)
+    phenotypes: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, default=dict
+    )  # Store phenotypes as JSONB
+    review_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    report_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    family_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    age_reported: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    age_onset: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    cohort: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    individual: Mapped["Individual"] = relationship(
+        "Individual", back_populates="reports"
+    )
+    reviewer: Mapped[Optional["User"]] = relationship(
+        "User", back_populates="reviewed_reports"
+    )
+    publication: Mapped[Optional["Publication"]] = relationship("Publication")
 
 
 # ------------------------------------------------------------------------------
-# Update forward references for self-referencing embedded models.
-Individual.update_forward_refs()
+# Individual-Variant association table (many-to-many)
+class IndividualVariant(Base):
+    __tablename__ = "individual_variants"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign keys
+    individual_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("individuals.id", ondelete="CASCADE")
+    )
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("variants.id", ondelete="CASCADE")
+    )
+
+    # Association-specific fields
+    detection_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    segregation: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_current: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )  # For variant versioning
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ------------------------------------------------------------------------------
+# Variant model - Genetic variants
+class Variant(Base):
+    __tablename__ = "variants"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Core variant fields
+    variant_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    is_current: Mapped[bool] = mapped_column(
+        Boolean, default=True, index=True
+    )  # For versioning
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    individuals: Mapped[List["Individual"]] = relationship(
+        "Individual", secondary="individual_variants", back_populates="variants"
+    )
+    classifications: Mapped[List["VariantClassification"]] = relationship(
+        "VariantClassification", back_populates="variant", cascade="all, delete-orphan"
+    )
+    annotations: Mapped[List["VariantAnnotation"]] = relationship(
+        "VariantAnnotation", back_populates="variant", cascade="all, delete-orphan"
+    )
+    reported_entries: Mapped[List["ReportedEntry"]] = relationship(
+        "ReportedEntry", back_populates="variant", cascade="all, delete-orphan"
+    )
+
+
+# ------------------------------------------------------------------------------
+# VariantClassification model - Variant classifications
+class VariantClassification(Base):
+    __tablename__ = "variant_classifications"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign key
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("variants.id", ondelete="CASCADE")
+    )
+
+    # Classification fields
+    verdict: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    system: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    classification_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    variant: Mapped["Variant"] = relationship(
+        "Variant", back_populates="classifications"
+    )
+
+
+# ------------------------------------------------------------------------------
+# VariantAnnotation model - Variant annotations
+class VariantAnnotation(Base):
+    __tablename__ = "variant_annotations"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign key
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("variants.id", ondelete="CASCADE")
+    )
+
+    # Annotation fields
+    transcript: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    c_dot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    p_dot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    annotation_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    variant: Mapped["Variant"] = relationship("Variant", back_populates="annotations")
+
+
+# ------------------------------------------------------------------------------
+# ReportedEntry model - Reported variant entries
+class ReportedEntry(Base):
+    __tablename__ = "reported_entries"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign keys
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("variants.id", ondelete="CASCADE")
+    )
+    publication_ref: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("publications.id"), nullable=True
+    )
+
+    # Reported entry fields
+    variant_reported: Mapped[str] = mapped_column(Text)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    variant: Mapped["Variant"] = relationship(
+        "Variant", back_populates="reported_entries"
+    )
+    publication: Mapped[Optional["Publication"]] = relationship("Publication")
+
+
+# ------------------------------------------------------------------------------
+# Publication model - Research papers
+class Publication(Base):
+    __tablename__ = "publications"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign key
+    assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
+    # Core publication fields
+    publication_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    publication_alias: Mapped[str] = mapped_column(String(100))
+    publication_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    publication_entry_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime(2021, 11, 1)
+    )
+
+    # External identifiers
+    pmid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    doi: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    pdf: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # Publication metadata
+    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    abstract: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    publication_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    journal_abbreviation: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    journal: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    keywords: Mapped[List[str]] = mapped_column(JSONB, default=list)
+    medical_specialty: Mapped[List[str]] = mapped_column(JSONB, default=list)
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    assignee: Mapped[Optional["User"]] = relationship(
+        "User", back_populates="assigned_publications"
+    )
+    authors: Mapped[List["Author"]] = relationship(
+        "Author", back_populates="publication", cascade="all, delete-orphan"
+    )
+
+
+# ------------------------------------------------------------------------------
+# Author model - Publication authors
+class Author(Base):
+    __tablename__ = "authors"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Foreign key
+    publication_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("publications.id", ondelete="CASCADE")
+    )
+
+    # Author fields
+    lastname: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    firstname: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    initials: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    affiliations: Mapped[List[str]] = mapped_column(JSONB, default=list)
+    author_order: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # For maintaining author order
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    publication: Mapped["Publication"] = relationship(
+        "Publication", back_populates="authors"
+    )
+
+
+# ------------------------------------------------------------------------------
+# Protein model - Protein structure data
+class Protein(Base):
+    __tablename__ = "proteins"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Core protein fields
+    gene: Mapped[str] = mapped_column(String(50), index=True)
+    transcript: Mapped[str] = mapped_column(String(50))
+    protein: Mapped[str] = mapped_column(String(50), index=True)
+    features: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, default=dict
+    )  # Store complex feature data as JSONB
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ------------------------------------------------------------------------------
+# Gene model - Gene structure data
+class Gene(Base):
+    __tablename__ = "genes"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Core gene fields
+    gene_symbol: Mapped[str] = mapped_column(String(50), index=True)
+    ensembl_gene_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    transcript: Mapped[str] = mapped_column(String(50))
+    exons: Mapped[List[Dict[str, Any]]] = mapped_column(
+        JSONB, default=list
+    )  # Store exon data as JSONB
+    hg38: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, default=dict
+    )  # Genomic coordinates
+    hg19: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, default=dict
+    )  # Legacy coordinates
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

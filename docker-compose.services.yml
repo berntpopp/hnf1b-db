@@ -1,0 +1,77 @@
+# ======================
+# HNF1B API - Supporting Services Only
+# ======================
+# This configuration runs only PostgreSQL and Redis for hybrid development
+# where FastAPI runs locally for faster iteration and debugging.
+#
+# Usage:
+#   docker-compose -f docker-compose.services.yml up -d
+#   make hybrid-up
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database (development version with exposed port)
+  postgres:
+    image: postgres:15-alpine
+    container_name: hnf1b_db
+    environment:
+      POSTGRES_DB: hnf1b_db
+      POSTGRES_USER: hnf1b_user
+      POSTGRES_PASSWORD: hnf1b_pass
+      POSTGRES_HOST_AUTH_METHOD: trust
+      # Optimizations for external connections
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: pg_stat_statements
+    ports:
+      # Expose on non-standard port to avoid conflicts with local PostgreSQL
+      - "5433:5432"
+    volumes:
+      # Use dedicated data volume for persistence
+      - postgres_data:/var/lib/postgresql/data
+      # Initialization scripts if needed
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - hnf1b_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hnf1b_user -d hnf1b_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Restart policy for stability
+    restart: unless-stopped
+
+  # Redis Cache (development version with exposed port)
+  redis:
+    image: redis:7-alpine
+    container_name: hnf1b_cache
+    ports:
+      # Expose on non-standard port to avoid conflicts with local Redis
+      - "6380:6379"
+    volumes:
+      # Use dedicated data volume for persistence
+      - redis_data:/data
+    networks:
+      - hnf1b_network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    # Restart policy for stability  
+    restart: unless-stopped
+
+# Use dedicated volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Use dedicated network for service isolation
+networks:
+  hnf1b_network:
+    driver: bridge
+    name: hnf1b_network

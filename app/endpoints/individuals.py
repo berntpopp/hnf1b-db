@@ -1,34 +1,37 @@
-# File: app/endpoints/individuals.py
+# app/endpoints/individuals.py
+"""Individuals endpoint - migrated to use PostgreSQL."""
+
 import time
 from typing import Any, Dict, Optional
 
-from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.encoders import jsonable_encoder
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.database import db
+from app.dependencies import (
+    get_individual_repository,
+    get_report_repository,
+    parse_pagination,
+    parse_sort_order,
+)
+from app.repositories import IndividualRepository, ReportRepository
+from app.schemas import IndividualResponse, PaginatedResponse
 from app.utils import (
+    INDIVIDUAL_FIELD_MAPPING,
+    build_base_url,
     build_pagination_meta,
+    build_repository_filters,
+    build_search_fields,
     parse_deep_object_filters,
     parse_filter_json,
-    parse_sort,
 )
 
 router = APIRouter()
 
 
-@router.get("/", response_model=Dict[str, Any], summary="Get Individuals")
+@router.get("/", response_model=PaginatedResponse, summary="Get Individuals")
 async def get_individuals(
     request: Request,
-    page: int = Query(1, ge=1, description="Current page number"),
-    page_size: int = Query(10, ge=1, description="Number of individuals per page"),
-    sort: Optional[str] = Query(
-        None,
-        description=(
-            "Sort field (e.g. 'individual_id' for ascending or '-individual_id' "
-            "for descending order)"
-        ),
-    ),
+    skip_limit: tuple[int, int] = Depends(parse_pagination),
+    sort_info: tuple[Optional[str], bool] = Depends(parse_sort_order),
     filter_query: Optional[str] = Query(
         None,
         alias="filter",
@@ -45,6 +48,7 @@ async def get_individuals(
             "family_history, age_onset, cohort"
         ),
     ),
+    individual_repo: IndividualRepository = Depends(get_individual_repository),
 ) -> Dict[str, Any]:
     """Retrieve a paginated list of individuals.
 
@@ -54,72 +58,101 @@ async def get_individuals(
     Additionally, if a search query `q` is provided, the endpoint will search
     across:
       - individual_id
-      - Sex
-      - individual_DOI
-      - IndividualIdentifier
-      - family_history
-      - age_onset
-      - cohort
+      - Sex (mapped to sex)
+      - individual_DOI (mapped to individual_doi)
+      - IndividualIdentifier (mapped to individual_identifier)
+      - family_history (searches in related reports)
+      - age_onset (searches in related reports)
+      - cohort (searches in related reports)
 
     Example:
       /individuals?sort=-individual_id&page=1&page_size=10&filter={"Sex":
       "male"}&q=ind0930
     """
-    start_time = time.perf_counter()  # Start measuring execution time
+    start_time = time.perf_counter()
+    skip, limit = skip_limit
+    sort_field, sort_desc = sort_info
 
-    # Parse and convert the JSON filter (if provided) into a MongoDB filter.
+    # Parse and convert the JSON filter (if provided)
     raw_filter = parse_filter_json(filter_query)
-    filters = parse_deep_object_filters(raw_filter)
+    parsed_filters = parse_deep_object_filters(raw_filter)
 
-    # If a search query 'q' is provided, build a search filter for predefined fields.
+    # Apply field mapping to convert API field names to model field names
+    repository_filters = build_repository_filters(
+        parsed_filters, INDIVIDUAL_FIELD_MAPPING
+    )
+
+    # Handle search query
+    search_fields = None
     if q:
-        search_fields = [
+        # Map API field names to model field names for search
+        api_search_fields = [
             "individual_id",
             "Sex",
             "individual_DOI",
             "IndividualIdentifier",
-            "family_history",
-            "age_onset",
-            "cohort",
         ]
-        search_filter = {
-            "$or": [{field: {"$regex": q, "$options": "i"}} for field in search_fields]
-        }
-        filters = {"$and": [filters, search_filter]} if filters else search_filter
+        search_fields = build_search_fields(
+            q, api_search_fields, INDIVIDUAL_FIELD_MAPPING
+        )
 
-    # Determine the sort option (default to ascending by "individual_id").
-    sort_option = parse_sort(sort) if sort else ("individual_id", 1)
+        # Note: family_history, age_onset, and cohort are in reports table
+        # For now, we'll search only in individual fields
+        # Complex cross-table search can be implemented later in the repository
 
-    collection = db.individuals
-    total = await collection.count_documents(filters)
-    skip_count = (page - 1) * page_size
-
-    cursor = collection.find(filters)
-    if sort_option:
-        cursor = cursor.sort(*sort_option)
-    cursor = cursor.skip(skip_count).limit(page_size)
-    individuals = await cursor.to_list(length=page_size)
+    # Query individuals
+    try:
+        individuals, total = await individual_repo.get_multi(
+            skip=skip,
+            limit=limit,
+            filters=repository_filters,
+            search=q,
+            search_fields=search_fields,
+            order_by=sort_field,
+            order_desc=sort_desc,
+            load_relationships=[],  # Don't load relationships for list view
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     if not individuals:
         raise HTTPException(status_code=404, detail="No individuals found")
 
-    # Build the base URL (without query parameters)
-    base_url = str(request.url).split("?")[0]
+    # Convert SQLAlchemy models to response format
+    response_data = []
+    for individual in individuals:
+        # Convert model to dict and apply reverse field mapping for API compatibility
+        individual_dict = {
+            "id": str(individual.id),
+            "individual_id": individual.individual_id,
+            "Sex": individual.sex,
+            "individual_DOI": individual.individual_doi,
+            "DupCheck": individual.dup_check,
+            "IndividualIdentifier": individual.individual_identifier,
+            "Problematic": individual.problematic,
+            "created_at": individual.created_at,
+            "updated_at": individual.updated_at,
+        }
+        response_data.append(individual_dict)
 
-    # Include current query parameters (e.g., sort, filter, and search query)
-    # in pagination links.
+    # Build pagination metadata
+    base_url = build_base_url(request)
+    page = (skip // limit) + 1
+    page_size = limit
+
+    # Include current query parameters in pagination links
     extra_params: Dict[str, Any] = {}
-    if sort:
-        extra_params["sort"] = sort
+    if sort_field:
+        sort_param = f"-{sort_field}" if sort_desc else sort_field
+        extra_params["sort"] = sort_param
     if filter_query:
         extra_params["filter"] = filter_query
     if q:
         extra_params["q"] = q
 
-    end_time = time.perf_counter()  # End timing
+    end_time = time.perf_counter()
     execution_time = end_time - start_time
 
-    # Build pagination metadata, including execution time in milliseconds.
     meta = build_pagination_meta(
         base_url,
         page,
@@ -129,9 +162,175 @@ async def get_individuals(
         execution_time=execution_time,
     )
 
-    # Convert MongoDB documents (with ObjectId values) to JSON-friendly data.
-    response_data = jsonable_encoder(
-        {"data": individuals, "meta": meta},
-        custom_encoder={ObjectId: lambda o: str(o)},
-    )
-    return response_data
+    return {"data": response_data, "meta": meta}
+
+
+@router.get(
+    "/{individual_id}",
+    response_model=IndividualResponse,
+    summary="Get Individual by ID",
+)
+async def get_individual(
+    individual_id: str,
+    include_reports: bool = Query(False, description="Include associated reports"),
+    include_variants: bool = Query(False, description="Include associated variants"),
+    individual_repo: IndividualRepository = Depends(get_individual_repository),
+) -> Dict[str, Any]:
+    """Get a specific individual by their individual_id (e.g., 'ind0001')."""
+    try:
+        # Determine what relationships to load
+        load_relationships = []
+        if include_reports:
+            load_relationships.append("reports")
+        if include_variants:
+            load_relationships.append("variants")
+
+        individual = await individual_repo.get_by_individual_id(
+            individual_id, include_reports=bool(load_relationships)
+        )
+
+        if not individual:
+            raise HTTPException(
+                status_code=404, detail=f"Individual {individual_id} not found"
+            )
+
+        # Convert to response format with field mapping
+        response_data = {
+            "id": str(individual.id),
+            "individual_id": individual.individual_id,
+            "Sex": individual.sex,
+            "individual_DOI": individual.individual_doi,
+            "DupCheck": individual.dup_check,
+            "IndividualIdentifier": individual.individual_identifier,
+            "Problematic": individual.problematic,
+            "created_at": individual.created_at,
+            "updated_at": individual.updated_at,
+        }
+
+        # Add relationships if requested
+        if include_reports and individual.reports:
+            response_data["reports"] = [
+                {
+                    "id": str(report.id),
+                    "report_id": report.report_id,
+                    "phenotypes": report.phenotypes,
+                    "review_date": report.review_date,
+                    "report_date": report.report_date,
+                    "comment": report.comment,
+                    "family_history": report.family_history,
+                    "age_reported": report.age_reported,
+                    "age_onset": report.age_onset,
+                    "cohort": report.cohort,
+                }
+                for report in individual.reports
+            ]
+
+        if include_variants and individual.variants:
+            response_data["variants"] = [
+                {
+                    "id": str(variant.id),
+                    "variant_id": variant.variant_id,
+                    "is_current": variant.is_current,
+                }
+                for variant in individual.variants
+            ]
+
+        return response_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.get("/{individual_id}/reports", summary="Get Reports for Individual")
+async def get_individual_reports(
+    individual_id: str,
+    report_repo: ReportRepository = Depends(get_report_repository),
+    individual_repo: IndividualRepository = Depends(get_individual_repository),
+) -> Dict[str, Any]:
+    """Get all reports for a specific individual."""
+    try:
+        # First verify the individual exists
+        individual = await individual_repo.get_by_individual_id(individual_id)
+        if not individual:
+            raise HTTPException(
+                status_code=404, detail=f"Individual {individual_id} not found"
+            )
+
+        # Get reports for this individual
+        reports = await report_repo.get_by_individual_id(individual.id)
+
+        response_data = [
+            {
+                "id": str(report.id),
+                "report_id": report.report_id,
+                "phenotypes": report.phenotypes,
+                "review_date": report.review_date,
+                "report_date": report.report_date,
+                "comment": report.comment,
+                "family_history": report.family_history,
+                "age_reported": report.age_reported,
+                "age_onset": report.age_onset,
+                "cohort": report.cohort,
+                "reviewed_by": str(report.reviewed_by) if report.reviewed_by else None,
+                "publication_ref": str(report.publication_ref)
+                if report.publication_ref
+                else None,
+            }
+            for report in reports
+        ]
+
+        return {
+            "data": response_data,
+            "individual_id": individual_id,
+            "total": len(response_data),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.get("/{individual_id}/variants", summary="Get Variants for Individual")
+async def get_individual_variants(
+    individual_id: str,
+    individual_repo: IndividualRepository = Depends(get_individual_repository),
+) -> Dict[str, Any]:
+    """Get all variants for a specific individual."""
+    try:
+        # Get individual with variants
+        individual = await individual_repo.get_by_individual_id(individual_id)
+        if not individual:
+            raise HTTPException(
+                status_code=404, detail=f"Individual {individual_id} not found"
+            )
+
+        # Load variants for this individual
+        individual_with_variants = await individual_repo.get_with_variants(
+            individual.id
+        )
+        variants = individual_with_variants.variants if individual_with_variants else []
+
+        response_data = [
+            {
+                "id": str(variant.id),
+                "variant_id": variant.variant_id,
+                "is_current": variant.is_current,
+                "created_at": variant.created_at,
+                "updated_at": variant.updated_at,
+            }
+            for variant in variants
+        ]
+
+        return {
+            "data": response_data,
+            "individual_id": individual_id,
+            "total": len(response_data),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
