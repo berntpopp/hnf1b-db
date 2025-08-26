@@ -65,6 +65,12 @@ uv run mypy app/
 
 # Run tests
 uv run pytest
+
+# Run single test file
+uv run pytest tests/test_specific_file.py
+
+# Run specific test
+uv run pytest tests/test_file.py::test_function_name
 ```
 
 ## Architecture Overview
@@ -136,6 +142,7 @@ The project handles specialized genomic data formats:
 4. **Async operations**: All database operations use async/await patterns with Motor
 
 5. **File locations**: 
-   - Data files in `/data` directory
+   - Data files in `/data` directory (VCF, VEP, and reference genome files)
    - API code in `/app` directory with modular endpoint organization
    - Dependencies managed in `pyproject.toml` and `uv.lock`
+   - Migration script at root level: `migrate_from_sheets.py`
