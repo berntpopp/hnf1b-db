@@ -1354,7 +1354,9 @@ async def phenotype_cohort_counts() -> dict:
                                                     {
                                                         "$eq": [
                                                             {
-                                                                "$toLower": "$$p.v.described"
+                                                                "$toLower": (
+                                                                    "$$p.v.described"
+                                                                )
                                                             },
                                                             "yes",
                                                         ]

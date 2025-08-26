@@ -8,19 +8,31 @@ HNF1B-API is a FastAPI-based REST API for managing clinical and genetic data for
 
 ## Essential Commands
 
+### Quick Start with Make
+```bash
+make help          # Show all available commands
+make dev           # Install all dependencies
+make server        # Start development server
+make test          # Run tests
+make check         # Run all checks (lint + typecheck + tests)
+```
+
 ### Development Server
 ```bash
 # Start development server with auto-reload
-python -m uvicorn app.main:app --reload
+uv run python -m uvicorn app.main:app --reload
 
-# Alternative method
-python app/main.py
+# Alternative method (use uv run for proper module resolution)
+uv run python -m app.main
 ```
 
 ### Environment Setup
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install/sync dependencies
+uv sync
+
+# Install with development dependencies
+uv sync --group dev --group test
 
 # Create .env file with required variables:
 # MONGODB_URI=mongodb://localhost:27017
@@ -31,25 +43,28 @@ pip install -r requirements.txt
 ### Data Migration
 ```bash
 # Import data from spreadsheets to MongoDB
-python migrate_from_sheets.py
+uv run python migrate_from_sheets.py
 ```
 
 ### Code Quality Tools
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
+# Install development dependencies (automatically included with sync)
+uv sync --group dev --group test
 
 # Format code with Black
-black .
+uv run black .
 
 # Sort imports with isort
-isort .
+uv run isort .
 
 # Run linting with flake8
-flake8 .
+uv run flake8 .
 
 # Run type checking with mypy
-mypy app/
+uv run mypy app/
+
+# Run tests
+uv run pytest
 ```
 
 ## Architecture Overview
@@ -107,7 +122,9 @@ The project handles specialized genomic data formats:
 
 ### Development Considerations
 
-1. **No test suite currently exists** - Consider adding pytest for testing
+1. **Dependency management**: Uses uv for fast dependency resolution and environment management
+   - Run `uv sync` to install dependencies
+   - Use `uv run <command>` to execute scripts in the managed environment
 
 2. **Environment variables required**:
    - `MONGODB_URI` - MongoDB connection string
@@ -121,3 +138,4 @@ The project handles specialized genomic data formats:
 5. **File locations**: 
    - Data files in `/data` directory
    - API code in `/app` directory with modular endpoint organization
+   - Dependencies managed in `pyproject.toml` and `uv.lock`

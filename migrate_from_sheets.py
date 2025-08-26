@@ -10,11 +10,7 @@ import requests
 from Bio import Entrez
 
 from app.database import db
-from app.models import (
-    Individual,
-    Publication,
-    User,
-)
+from app.models import Individual, Publication, User
 
 Entrez.email = "your_email@example.com"  # Replace with your actual email address
 
