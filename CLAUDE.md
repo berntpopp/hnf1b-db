@@ -58,26 +58,27 @@ make import-data
 # Install development dependencies (automatically included with sync)
 uv sync --group dev --group test
 
-# Format code with Black
-uv run black .
+# Format and fix code with ruff (replaces black, isort, flake8)
+make format
 
-# Sort imports with isort
-uv run isort .
-
-# Run linting with flake8
-uv run flake8 .
+# Run linting with ruff
+make lint
 
 # Run type checking with mypy
-uv run mypy app/
+make typecheck
+
+# Run all quality checks (lint + typecheck + test)
+make check
 
 # Run tests
-uv run pytest
+make test
 
-# Run single test file
-uv run pytest tests/test_specific_file.py
-
-# Run specific test
-uv run pytest tests/test_file.py::test_function_name
+# Alternative: Run tools directly
+uv run ruff format .        # Format code
+uv run ruff check .         # Lint code
+uv run ruff check --fix .   # Lint and auto-fix issues
+uv run mypy app/            # Type checking
+uv run pytest              # Run tests
 ```
 
 ## Architecture Overview
