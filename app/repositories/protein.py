@@ -14,6 +14,7 @@ class ProteinRepository(BaseRepository[Protein]):
     """Repository for Protein model with feature search capabilities."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Protein, session)
 
     async def get_by_gene(self, gene: str) -> List[Protein]:

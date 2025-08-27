@@ -120,6 +120,7 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Close database connections.
+
     This should be called on application shutdown.
     """
     logger.info("Closing database connections...")

@@ -26,6 +26,7 @@ class BaseRepository(Generic[ModelType]):
     """
 
     def __init__(self, model: Type[ModelType], session: AsyncSession):
+        """Initialize repository with model and session."""
         self.model = model
         self.session = session
 

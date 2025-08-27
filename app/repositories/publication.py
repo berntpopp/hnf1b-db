@@ -17,6 +17,7 @@ class PublicationRepository(BaseRepository[Publication]):
     """Repository for Publication model with author handling capabilities."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Publication, session)
 
     async def get_by_publication_id(self, publication_id: str) -> Optional[Publication]:

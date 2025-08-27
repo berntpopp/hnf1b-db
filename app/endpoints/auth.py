@@ -65,6 +65,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 # Pydantic model for new user registration.
 class UserCreate(BaseModel):
+    """Pydantic model for new user registration."""
     user_id: int
     user_name: str
     password: str

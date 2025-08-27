@@ -3,7 +3,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import Integer, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Gene
@@ -14,6 +14,7 @@ class GeneRepository(BaseRepository[Gene]):
     """Repository for Gene model with genomic coordinate search capabilities."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Gene, session)
 
     async def get_by_gene_symbol(self, gene_symbol: str) -> Optional[Gene]:
@@ -262,6 +263,3 @@ class GeneRepository(BaseRepository[Gene]):
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
-
-
-from sqlalchemy import Integer

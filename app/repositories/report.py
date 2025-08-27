@@ -17,6 +17,7 @@ class ReportRepository(BaseRepository[Report]):
     """Repository for Report model with phenotype search capabilities."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Report, session)
 
     async def get_by_report_id(

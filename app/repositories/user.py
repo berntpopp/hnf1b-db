@@ -14,6 +14,7 @@ class UserRepository(BaseRepository[User]):
     """Repository for User model with authentication-specific methods."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(User, session)
 
     async def get_by_username(self, username: str) -> Optional[User]:

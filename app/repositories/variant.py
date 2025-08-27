@@ -2,7 +2,7 @@
 """Variant repository for handling genetic variant database operations."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -17,6 +17,7 @@ class VariantRepository(BaseRepository[Variant]):
     """Repository for Variant model with classification and annotation methods."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Variant, session)
 
     async def get_by_variant_id(
@@ -371,5 +372,3 @@ class VariantRepository(BaseRepository[Variant]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-
-from datetime import timedelta

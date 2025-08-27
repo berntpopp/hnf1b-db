@@ -15,6 +15,7 @@ class IndividualRepository(BaseRepository[Individual]):
     """Repository for Individual model with report loading capabilities."""
 
     def __init__(self, session: AsyncSession):
+        """Initialize repository."""
         super().__init__(Individual, session)
 
     async def get_by_individual_id(
