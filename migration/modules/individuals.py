@@ -386,25 +386,29 @@ async def import_individuals(
             updated_count = 0
             report_count = 0
 
-            for _, row in df.iterrows():
+            # Group by individual_id like the original script
+            grouped = df.groupby("individual_id")
+            
+            for indiv_id, group in grouped:
                 try:
-                    individual_id = format_individual_id(row["individual_id"])
-
-                    # Process individual data with proper null handling
+                    individual_id = format_individual_id(indiv_id)
+                    
+                    # Get base individual data from first row of group
+                    base_row = group.iloc[0]
                     individual_data = {
                         "individual_id": individual_id,
-                        "sex": none_if_nan(row.get("Sex", "")).lower()
-                        if none_if_nan(row.get("Sex", ""))
+                        "sex": none_if_nan(base_row.get("Sex", "")).lower()
+                        if none_if_nan(base_row.get("Sex", ""))
                         else None,
-                        "dup_check": none_if_nan(row.get("DupCheck", "")) or "",
+                        "dup_check": none_if_nan(base_row.get("DupCheck", "")) or "",
                         "individual_identifier": none_if_nan(
-                            row.get("IndividualIdentifier", "")
+                            base_row.get("IndividualIdentifier", "")
                         )
                         or "",
-                        "problematic": none_if_nan(row.get("Problematic", "")) or "",
+                        "problematic": none_if_nan(base_row.get("Problematic", "")) or "",
                     }
 
-                    # Create or update individual
+                    # Create or update individual (only once per individual_id)
                     existing = (
                         await individual_repo.get_by_individual_id(individual_id)
                         if skip_duplicates
@@ -426,24 +430,30 @@ async def import_individuals(
                         )
                         existing = individual
 
-                    # Process clinical report with phenotypes
-                    report_data = await process_individual_report(
-                        row,
-                        existing.id,
-                        user_mapping,
-                        publication_mapping,
-                        phenotype_mapping,
-                        modifier_mapping,
-                    )
+                    # Process ALL reports for this individual (multiple rows)
+                    for _, row in group.iterrows():
+                        # Only create report if there's a valid report_id
+                        if pd.notna(row.get("report_id")):
+                            report_data = await process_individual_report(
+                                row,
+                                existing.id,
+                                user_mapping,
+                                publication_mapping,
+                                phenotype_mapping,
+                                modifier_mapping,
+                            )
 
-                    if report_data:
-                        report_obj = Report(**report_data)
-                        db_session.add(report_obj)
-                        report_count += 1
+                            if report_data:
+                                report_obj = Report(**report_data)
+                                db_session.add(report_obj)
+                                report_count += 1
+                                print(
+                                    f"[import_individuals] Created report {report_data['report_id']} for {individual_id}"
+                                )
 
                 except Exception as e:
                     print(
-                        f"[import_individuals] Error processing row {individual_id}: {e}"
+                        f"[import_individuals] Error processing individual {individual_id}: {e}"
                     )
                     continue
 
@@ -469,8 +479,8 @@ async def process_individual_report(
 ):
     """Process clinical report data for an individual."""
     try:
-        # Generate report ID
-        report_id = format_report_id(row.get("individual_id", ""))
+        # Generate report ID from the actual report_id column
+        report_id = format_report_id(row.get("report_id", ""))
 
         # Process publication reference
         publication_ref = None
