@@ -53,20 +53,20 @@ class UserRepository(BaseRepository[User]):
     async def authenticate(self, username: str, password: str) -> Optional[User]:
         """Authenticate user by username and password.
 
-        Note: This is a basic implementation. In production, you should use
-        proper password hashing (e.g., bcrypt) instead of plain text comparison.
+        Supports both plain text passwords (for migration) and bcrypt hashed passwords.
+        Plain text passwords are identified by not starting with "$2" (bcrypt prefix).
 
         Args:
             username: The username
-            password: The password (should be hashed)
+            password: The plain text password to verify
 
         Returns:
             User instance if authentication successful, None otherwise
         """
+        from app.endpoints.auth import verify_password
+
         user = await self.get_by_username(username)
-        if (
-            user and user.password == password
-        ):  # Replace with proper password verification
+        if user and verify_password(password, user.password):
             return user
         return None
 

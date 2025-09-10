@@ -8,8 +8,8 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 
 from app.config import settings
-
-# from app.database import db
+from app.dependencies import get_user_repository
+from app.repositories import UserRepository
 
 router = APIRouter()
 
@@ -63,7 +63,27 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
-# Pydantic model for new user registration.
+# Pydantic models for authentication
+class Token(BaseModel):
+    """Response model for successful authentication."""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+
+
+class UserResponse(BaseModel):
+    """User information response model."""
+    user_id: int
+    user_name: str
+    email: str
+    user_role: str
+    first_name: str
+    family_name: str
+    orcid: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class UserCreate(BaseModel):
     """Pydantic model for new user registration."""
     user_id: int
@@ -77,50 +97,95 @@ class UserCreate(BaseModel):
     abbreviation: str
 
 
-@router.post("/token", summary="Login and obtain a JWT token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Login endpoint.
+@router.post("/token", response_model=Token, summary="Login and obtain a JWT token")
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    user_repo: UserRepository = Depends(get_user_repository),
+):
+    """Authenticate user and return JWT token.
 
-    This endpoint expects form data with the following fields:
-      - **username**: Your username.
-      - **password**: Your plain text password.
-      - **scope**: (Optional) Space-separated scopes.
-      - **client_id**: (Optional)
-      - **client_secret**: (Optional)
+    This endpoint follows the OAuth2 password flow specification:
+      - **username**: Your username (user_name field)
+      - **password**: Your plain text password
+      - **scope**: (Optional) Space-separated scopes (currently ignored)
+      - **client_id**: (Optional, currently ignored)
+      - **client_secret**: (Optional, currently ignored)
 
-    It validates the credentials against the PostgreSQL database and returns a JWT token
-    if successful.
+    Returns:
+        Token: JWT access token with expiration information
+
+    Raises:
+        HTTPException: 401 if credentials are invalid
     """
-    raise HTTPException(
-        status_code=503, detail="Authentication temporarily unavailable"
+    # Authenticate user against PostgreSQL database
+    user = await user_repo.authenticate(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create JWT token with user information
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.user_name, "user_id": user.user_id, "role": user.user_role},
+        expires_delta=access_token_expires,
+    )
+
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    """Dependency to retrieve the current user based on the JWT token.
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> UserResponse:
+    """Dependency to retrieve the current user from JWT token.
 
-    Raises HTTP 401 if the token is invalid or expired.
+    Args:
+        token: JWT token from Authorization header
+        user_repo: User repository for database operations
+
+    Returns:
+        UserResponse: Current user information
+
+    Raises:
+        HTTPException: 401 if token is invalid, expired, or user not found
     """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: no subject",
-            )
+            raise credentials_exception
     except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-        )
-    return username
+        raise credentials_exception
+
+    # Verify user still exists in database
+    user = await user_repo.get_by_username(username)
+    if user is None:
+        raise credentials_exception
+
+    return UserResponse.model_validate(user)
 
 
-@router.get("/me", summary="Get current user info")
-async def read_users_me(current_user: str = Depends(get_current_user)):
-    """Return the current user's username (extracted from the JWT token).
+@router.get("/me", response_model=UserResponse, summary="Get current user info")
+async def read_users_me(current_user: UserResponse = Depends(get_current_user)):
+    """Return the current user's information from JWT token.
 
-    In a real application, you might look up and return additional user data.
+    This endpoint requires a valid JWT token in the Authorization header.
+    Returns complete user profile information.
+
+    Returns:
+        UserResponse: Current authenticated user's profile data
     """
-    return {"user": current_user}
+    return current_user
