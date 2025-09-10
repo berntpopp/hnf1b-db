@@ -215,7 +215,8 @@ async def process_phenotypes(
                     phenotypes_obj[extra["phenotype_id"]] = entry_extra
             else:
                 print(
-                    f"[process_phenotypes] Warning: no matching renal phenotype for '{reported_val}'"
+                    f"[process_phenotypes] Warning: no matching renal "
+                    f"phenotype for '{reported_val}'"
                 )
                 std_info = {"phenotype_id": "UNKNOWN", "name": reported_val}
                 described = "yes"
@@ -237,7 +238,8 @@ async def process_phenotypes(
                 phenotypes_obj["ORPHA:2260"] = mapping_vals["ORPHA:2260"]
             else:
                 print(
-                    f"[process_phenotypes] Warning: no matching KidneyBiopsy phenotype for '{reported_val}'"
+                    f"[process_phenotypes] Warning: no matching KidneyBiopsy "
+                    f"phenotype for '{reported_val}'"
                 )
                 phenotypes_obj["UNKNOWN"] = {
                     "phenotype_id": "UNKNOWN",

@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Application settings configuration."""
+
     # PostgreSQL Database Configuration
     DATABASE_URL: str
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
 
     class Config:
         """Pydantic configuration."""
+
         env_file = ".env"
 
 

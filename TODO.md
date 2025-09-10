@@ -203,7 +203,7 @@ This document breaks down the comprehensive migration plan from `refactor.md` in
 
 ### PostgreSQL-Native Sheets Import
 - [x] **4.1.1** Create PostgreSQL import system
-  - [x] `migrate_from_sheets.py` - main import script
+  - [x] `migration/migrate.py` - main import orchestrator script
   - [x] `migration/modules/` - modular import system
   - [x] Google Sheets integration functional
   - [x] PubMed enrichment with Bio.Entrez working

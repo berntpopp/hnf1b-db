@@ -1,6 +1,5 @@
 """Protein structure import module."""
 
-
 import pandas as pd
 
 from app.database import get_db

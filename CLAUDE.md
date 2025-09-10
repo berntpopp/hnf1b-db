@@ -49,9 +49,23 @@ uv sync --group dev --group test
 
 ### Data Import
 ```bash
-# Import data from Google Sheets to PostgreSQL
+# Import all data from Google Sheets to PostgreSQL
 make import-data
+
+# Import limited test data (faster for development/testing)  
+make import-data-test
 ```
+
+**Prerequisites:**
+1. Database running: `make hybrid-up`
+2. Schema applied: `make db-upgrade`
+3. Environment configured: Valid `.env` file
+
+**Migration System:**
+- Uses modular PostgreSQL migration in `/migration/` directory
+- Main script: `migration/migrate.py` 
+- Supports test mode with `--test` flag for limited data import
+- Processes data from Google Sheets + genomic files in `/data/` directory
 
 ### Code Quality Tools
 ```bash
@@ -152,4 +166,4 @@ The project handles specialized genomic data formats:
    - Data files in `/data` directory (VCF, VEP, and reference genome files)
    - API code in `/app` directory with modular endpoint organization
    - Dependencies managed in `pyproject.toml` and `uv.lock`
-   - Migration script at root level: `migrate_from_sheets.py`
+   - Migration system in `/migration/` directory with modular PostgreSQL-native scripts

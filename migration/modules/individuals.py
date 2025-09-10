@@ -388,11 +388,11 @@ async def import_individuals(
 
             # Group by individual_id like the original script
             grouped = df.groupby("individual_id")
-            
+
             for indiv_id, group in grouped:
                 try:
                     individual_id = format_individual_id(indiv_id)
-                    
+
                     # Get base individual data from first row of group
                     base_row = group.iloc[0]
                     individual_data = {
@@ -405,7 +405,8 @@ async def import_individuals(
                             base_row.get("IndividualIdentifier", "")
                         )
                         or "",
-                        "problematic": none_if_nan(base_row.get("Problematic", "")) or "",
+                        "problematic": none_if_nan(base_row.get("Problematic", ""))
+                        or "",
                     }
 
                     # Create or update individual (only once per individual_id)
@@ -459,7 +460,9 @@ async def import_individuals(
 
             await db_session.commit()
             print(
-                f"[import_individuals] Successfully processed {created_count} new + {updated_count} updated individuals with {report_count} reports"
+                f"[import_individuals] Successfully processed {created_count} "
+                f"new + {updated_count} updated individuals with {report_count} "
+                f"reports"
             )
             break
 
@@ -507,7 +510,8 @@ async def process_individual_report(
             "publication_ref": publication_ref,
             "phenotypes": phenotypes,
             "comment": none_if_nan(row.get("Comment", "")),
-            "age_reported": None,  # These would need to be extracted from additional columns
+            "age_reported": None,  # These would need to be extracted
+            # from additional columns
             "age_onset": None,
             "cohort": None,
             "family_history": None,

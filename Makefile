@@ -47,7 +47,10 @@ db-reset:  ## Reset database (drop and recreate all tables)
 
 # Data Import Commands  
 import-data:  ## Import data from Google Sheets to PostgreSQL
-	uv run python import_from_sheets.py
+	uv run python migration/migrate.py
+
+import-data-test:  ## Import limited test data from Google Sheets
+	uv run python migration/migrate.py --test
 
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 

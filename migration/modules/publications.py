@@ -92,37 +92,44 @@ async def import_publications(
                     )
                     if existing:
                         print(
-                            f"[import_publications] Skipping existing publication: "\n                            f"{pub_data['publication_id']}"
+                            f"[import_publications] Skipping existing publication: "
+                            f"{pub_data['publication_id']}"
                         )
                         continue
 
-                # Enrich with PubMed data if PMID exists (but only for limited imports to save time)
+                # Enrich with PubMed data if PMID exists
+                # (but only for limited imports to save time)
                 if pub_data["pmid"] and (not limit or limit <= 20):
                     print(
-                        f"[import_publications] Enriching publication {pub_data['publication_id']} with PubMed data..."
+                        f"[import_publications] Enriching publication "
+                        f"{pub_data['publication_id']} with PubMed data..."
                     )
                     pub_data = update_publication_with_pubmed(pub_data)
 
                 await pub_repo.create(**pub_data)
                 created_count += 1
                 print(
-                    f"[import_publications] Created publication: {pub_data['publication_id']}"
+                    f"[import_publications] Created publication: "
+                    f"{pub_data['publication_id']}"
                 )
 
             except Exception as e:
                 if "duplicate key" in str(e) and skip_duplicates:
                     print(
-                        f"[import_publications] Skipping duplicate publication: {pub_data['publication_id']}"
+                        f"[import_publications] Skipping duplicate publication: "
+                        f"{pub_data['publication_id']}"
                     )
                     await db_session.rollback()
                 else:
                     print(
-                        f"[import_publications] Error creating publication {pub_data.get('publication_id')}: {e}"
+                        f"[import_publications] Error creating publication "
+                        f"{pub_data.get('publication_id')}: {e}"
                     )
                     await db_session.rollback()
 
         await db_session.commit()
         print(
-            f"[import_publications] Successfully imported {created_count} new publications"
+            f"[import_publications] Successfully imported {created_count} new "
+            f"publications"
         )
         break

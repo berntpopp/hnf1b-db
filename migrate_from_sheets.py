@@ -1,3 +1,27 @@
+"""DEPRECATED: This script was designed for MongoDB and is incompatible with PostgreSQL.
+
+Use the new PostgreSQL migration system instead:
+    make import-data      # Full import
+    make import-data-test # Test import
+
+The new system is located in /migration/ directory.
+"""
+
+import sys
+
+print("=" * 80)
+print("⚠️  DEPRECATED SCRIPT - DO NOT USE")
+print("=" * 80)
+print("This script was designed for MongoDB and is incompatible with PostgreSQL.")
+print("")
+print("Use the new PostgreSQL migration system instead:")
+print("  make import-data      # Full import")
+print("  make import-data-test # Test import")
+print("")
+print("The new system is located in /migration/ directory.")
+print("=" * 80)
+sys.exit(1)
+
 import asyncio
 import gzip
 import io

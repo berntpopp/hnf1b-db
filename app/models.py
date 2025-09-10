@@ -18,6 +18,7 @@ from app.database import Base
 # User model - System users/reviewers
 class User(Base):
     """System users/reviewers model."""
+
     __tablename__ = "users"
 
     # Primary key
@@ -56,6 +57,7 @@ class User(Base):
 # Individual model - Patient demographics
 class Individual(Base):
     """Patient demographics model."""
+
     __tablename__ = "individuals"
 
     # Primary key
@@ -94,6 +96,7 @@ class Individual(Base):
 # Report model - Clinical presentations (separated from Individual for normalization)
 class Report(Base):
     """Clinical presentations model."""
+
     __tablename__ = "reports"
 
     # Primary key
@@ -151,6 +154,7 @@ class Report(Base):
 # Individual-Variant association table (many-to-many)
 class IndividualVariant(Base):
     """Individual-Variant association model."""
+
     __tablename__ = "individual_variants"
 
     # Primary key
@@ -186,6 +190,7 @@ class IndividualVariant(Base):
 # Variant model - Genetic variants
 class Variant(Base):
     """Genetic variants model."""
+
     __tablename__ = "variants"
 
     # Primary key
@@ -233,6 +238,7 @@ class Variant(Base):
 # VariantClassification model - Variant classifications
 class VariantClassification(Base):
     """Variant classifications model."""
+
     __tablename__ = "variant_classifications"
 
     # Primary key
@@ -272,6 +278,7 @@ class VariantClassification(Base):
 # VariantAnnotation model - Variant annotations
 class VariantAnnotation(Base):
     """Variant annotations model."""
+
     __tablename__ = "variant_annotations"
 
     # Primary key
@@ -312,6 +319,7 @@ class VariantAnnotation(Base):
 # ReportedEntry model - Reported variant entries
 class ReportedEntry(Base):
     """Reported variant entries model."""
+
     __tablename__ = "reported_entries"
 
     # Primary key
@@ -349,6 +357,7 @@ class ReportedEntry(Base):
 # Publication model - Research papers
 class Publication(Base):
     """Research papers model."""
+
     __tablename__ = "publications"
 
     # Primary key
@@ -409,6 +418,7 @@ class Publication(Base):
 # Author model - Publication authors
 class Author(Base):
     """Publication authors model."""
+
     __tablename__ = "authors"
 
     # Primary key
@@ -448,6 +458,7 @@ class Author(Base):
 # Protein model - Protein structure data
 class Protein(Base):
     """Protein structure and domains model."""
+
     __tablename__ = "proteins"
 
     # Primary key
@@ -476,6 +487,7 @@ class Protein(Base):
 # Gene model - Gene structure data
 class Gene(Base):
     """Gene structure model."""
+
     __tablename__ = "genes"
 
     # Primary key

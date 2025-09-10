@@ -24,6 +24,7 @@ class BaseSchema(BaseModel):
 # User schemas
 class UserBase(BaseSchema):
     """Base schema for user data."""
+
     user_id: int
     user_name: str
     email: str
@@ -35,11 +36,13 @@ class UserBase(BaseSchema):
 
 class UserCreate(UserBase):
     """Schema for user creation."""
+
     password: str
 
 
 class UserResponse(UserBase):
     """Schema for user response."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -48,6 +51,7 @@ class UserResponse(UserBase):
 # Individual schemas
 class IndividualBase(BaseSchema):
     """Base schema for individual data."""
+
     individual_id: str
     sex: Optional[str] = Field(None, alias="Sex")
     individual_doi: Optional[str] = Field(None, alias="individual_DOI")
@@ -58,11 +62,13 @@ class IndividualBase(BaseSchema):
 
 class IndividualCreate(IndividualBase):
     """Schema for individual creation."""
+
     pass
 
 
 class IndividualResponse(IndividualBase):
     """Schema for individual response."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -75,6 +81,7 @@ class IndividualResponse(IndividualBase):
 # Report schemas
 class ReportBase(BaseSchema):
     """Base schema for report data."""
+
     report_id: str
     phenotypes: Dict[str, Any] = Field(default_factory=dict)
     review_date: Optional[datetime] = None
@@ -88,6 +95,7 @@ class ReportBase(BaseSchema):
 
 class ReportCreate(ReportBase):
     """Schema for report creation."""
+
     individual_id: uuid.UUID
     reviewed_by: Optional[uuid.UUID] = None
     publication_ref: Optional[uuid.UUID] = None
@@ -95,6 +103,7 @@ class ReportCreate(ReportBase):
 
 class ReportResponse(ReportBase):
     """Schema for report response."""
+
     id: uuid.UUID
     individual_id: uuid.UUID
     reviewed_by: Optional[uuid.UUID] = None
@@ -111,6 +120,7 @@ class ReportResponse(ReportBase):
 # Variant schemas
 class VariantClassificationSchema(BaseSchema):
     """Schema for variant classification data."""
+
     id: uuid.UUID
     verdict: Optional[str] = None
     criteria: Optional[str] = None
@@ -121,6 +131,7 @@ class VariantClassificationSchema(BaseSchema):
 
 class VariantAnnotationSchema(BaseSchema):
     """Schema for variant annotation data."""
+
     id: uuid.UUID
     transcript: Optional[str] = None
     c_dot: Optional[str] = None
@@ -137,17 +148,20 @@ class ReportedEntrySchema(BaseSchema):
 
 class VariantBase(BaseSchema):
     """Base schema for variant data."""
+
     variant_id: str
     is_current: bool = True
 
 
 class VariantCreate(VariantBase):
     """Schema for variant creation."""
+
     pass
 
 
 class VariantResponse(VariantBase):
     """Schema for variant response."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -172,6 +186,7 @@ class AuthorSchema(BaseSchema):
 
 class PublicationBase(BaseSchema):
     """Base schema for publication data."""
+
     publication_id: str
     publication_alias: str
     publication_type: Optional[str] = None
@@ -193,12 +208,14 @@ class PublicationBase(BaseSchema):
 
 class PublicationCreate(PublicationBase):
     """Schema for publication creation."""
+
     assignee_id: Optional[uuid.UUID] = None
     authors: List[AuthorSchema] = []
 
 
 class PublicationResponse(PublicationBase):
     """Schema for publication response."""
+
     id: uuid.UUID
     assignee_id: Optional[uuid.UUID] = Field(None, alias="assignee")
     created_at: datetime
@@ -214,6 +231,7 @@ class PublicationResponse(PublicationBase):
 # Protein schemas
 class ProteinBase(BaseSchema):
     """Base schema for protein data."""
+
     gene: str
     transcript: str
     protein: str
@@ -222,11 +240,13 @@ class ProteinBase(BaseSchema):
 
 class ProteinCreate(ProteinBase):
     """Schema for protein creation."""
+
     pass
 
 
 class ProteinResponse(ProteinBase):
     """Schema for protein response."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -235,6 +255,7 @@ class ProteinResponse(ProteinBase):
 # Gene schemas
 class GeneBase(BaseSchema):
     """Base schema for gene data."""
+
     gene_symbol: str
     ensembl_gene_id: str
     transcript: str
@@ -245,11 +266,13 @@ class GeneBase(BaseSchema):
 
 class GeneCreate(GeneBase):
     """Schema for gene creation."""
+
     pass
 
 
 class GeneResponse(GeneBase):
     """Schema for gene response."""
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime

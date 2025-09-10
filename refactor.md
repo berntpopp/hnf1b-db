@@ -308,7 +308,7 @@ make hybrid-up
 make server
 
 # Import data from Google Sheets
-uv run python import_from_sheets.py
+uv run python migration/migrate.py
 
 # Database migrations
 make db-migrate MESSAGE="description"

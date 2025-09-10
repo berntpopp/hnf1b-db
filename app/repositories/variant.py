@@ -371,4 +371,3 @@ class VariantRepository(BaseRepository[Variant]):
 
         result = await self.session.execute(query)
         return list(result.scalars().all())
-

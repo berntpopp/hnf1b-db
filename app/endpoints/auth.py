@@ -66,6 +66,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 # Pydantic models for authentication
 class Token(BaseModel):
     """Response model for successful authentication."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int = ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
@@ -73,6 +74,7 @@ class Token(BaseModel):
 
 class UserResponse(BaseModel):
     """User information response model."""
+
     user_id: int
     user_name: str
     email: str
@@ -86,6 +88,7 @@ class UserResponse(BaseModel):
 
 class UserCreate(BaseModel):
     """Pydantic model for new user registration."""
+
     user_id: int
     user_name: str
     password: str
