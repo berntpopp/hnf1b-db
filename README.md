@@ -4,14 +4,21 @@ A FastAPI-based REST API for managing clinical and genetic data for individuals 
 
 ## Quick Start
 
+**Prerequisites:** Python 3.10+, Docker, uv package manager ([install guide](#1-install-uv-package-manager))
+
 ```bash
-# Install dependencies
+# 1. Install dependencies
 make dev
 
-# Start PostgreSQL and Redis containers
-make hybrid-up
+# 2. Configure environment  
+cp .env.example .env
+# Edit .env with your database settings
 
-# Start development server
+# 3. Start services and database
+make hybrid-up      # Start PostgreSQL and Redis containers
+make db-upgrade     # Apply database schema
+
+# 4. Start development server
 make server
 
 # API available at http://localhost:8000
@@ -174,8 +181,134 @@ Migration completed successfully!
 ============================================================
 ```
 
-## Requirements
+## Installation & Setup
 
-- Python 3.8+
-- Docker (for PostgreSQL/Redis containers)
-- uv package manager
+### Prerequisites
+
+- **Python 3.10+** (required for modern type hints)
+- **Docker & Docker Compose** (for PostgreSQL/Redis services)
+- **uv package manager** (for dependency management)
+
+### 1. Install uv Package Manager
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows:**
+```bash
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Alternative (with pip):**
+```bash
+pip install uv
+```
+
+### 2. Clone and Setup Project
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd hnf1b-api
+
+# Install all dependencies (including dev and test groups)
+make dev
+# OR manually:
+uv sync --group dev --group test
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your settings (see Environment Configuration below)
+```
+
+### 3. Environment Configuration
+
+Create/edit `.env` file with required variables:
+
+```bash
+# PostgreSQL Database (matches docker-compose.services.yml)
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
+
+# JWT Authentication
+JWT_SECRET=your-secret-key-change-this-in-production
+
+# Development Settings
+DEBUG=true
+```
+
+### 4. Start Services & Database
+
+```bash
+# Start PostgreSQL and Redis containers
+make hybrid-up
+
+# Apply database schema
+make db-upgrade
+
+# Verify services are running
+docker ps
+```
+
+### 5. Run the Application
+
+```bash
+# Start development server
+make server
+
+# API will be available at:
+# - http://localhost:8000 (API)  
+# - http://localhost:8000/docs (API documentation)
+```
+
+## Alternative Installation (without uv)
+
+If you prefer using pip/virtualenv:
+
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate (Linux/macOS)
+source .venv/bin/activate
+# Activate (Windows)  
+.venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements-dev.txt  # Includes dev and test dependencies
+
+# Follow steps 3-5 above, but replace 'make' commands:
+python -m uvicorn app.main:app --reload  # instead of 'make server'
+python migration/migrate.py --test       # instead of 'make import-data-test'
+```
+
+### Dependency Files Available
+
+- `requirements.txt` - Core runtime dependencies only
+- `requirements-dev.txt` - All dependencies including dev tools and tests
+- `pyproject.toml` - Modern Python project configuration (preferred with uv)
+
+## Troubleshooting
+
+### uv Issues
+- **"uv not found"**: Ensure uv is in your PATH, restart terminal
+- **Permission errors**: On Linux/macOS, ensure `~/.local/bin` is in PATH
+- **Python version**: uv requires Python 3.8+, project needs 3.10+
+
+### Database Issues  
+- **Connection refused**: Ensure `make hybrid-up` completed successfully
+- **Schema errors**: Run `make db-upgrade` to apply migrations
+- **Port conflicts**: Check if port 5433 is available (`lsof -i :5433`)
+
+### Docker Issues
+- **Services won't start**: Check Docker is running and ports 5433, 6379 available
+- **Permission errors**: Ensure user is in docker group (Linux)
+
+### Alternative Database Setup
+If Docker isn't available, install PostgreSQL locally:
+
+```bash
+# Update DATABASE_URL in .env to match your local setup
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_db
+```
