@@ -25,6 +25,13 @@ dependencies = [
     # Scientific dependencies (for sheets import)
     "biopython>=1.84",
     "requests>=2.31.0",
+    
+    # Phenopackets and ontology dependencies
+    "phenopackets>=2.0.0",  # GA4GH Phenopackets schema
+    "protobuf>=4.25.0",  # For phenopackets serialization
+    "jsonschema>=4.20.0",  # For phenopacket validation
+    "pronto>=2.5.0",  # For parsing OBO ontologies (HPO, MONDO)
+    "jsonpath-ng>=1.6.0",  # For complex JSON queries
 ]
 
 
@@ -37,6 +44,15 @@ test = [
     "pytest==7.4.4",
     "pytest-asyncio==0.21.1",
     "pytest-cov==4.1.0",
+]
+migration = [
+    "tqdm>=4.66.0",  # Progress bars for migration
+    "rich>=13.7.0",  # Rich console output
+    "deepdiff>=6.7.0",  # For comparing data structures
+]
+phenopackets = [
+    "ga4gh.vrs>=2.0.0",  # Variation Representation Specification
+    "oaklib>=0.5.0",  # Ontology Access Kit (optional)
 ]
 
 [tool.mypy]
