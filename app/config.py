@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     # PostgreSQL Database Configuration
     DATABASE_URL: str
+    OLD_DATABASE_URL: str | None = None  # Optional, for migration purposes
 
     # Authentication
     JWT_SECRET: str
