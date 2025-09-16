@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HNF1B-API is a FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease. It provides endpoints for managing patients, genetic variants, clinical reports, and related publications.
+HNF1B-API is a GA4GH Phenopackets v2 compliant REST API for managing clinical and genetic data for individuals with HNF1B disease. The API has been completely restructured to use the international standard Phenopackets format for clinical and genomic data exchange.
 
 ## Essential Commands
 
@@ -27,11 +27,10 @@ make check         # Run all checks (lint + typecheck + tests)
 # IMPORTANT: Start database services first!
 make hybrid-up     # Start PostgreSQL and Redis containers
 
-# Then start the development server
-make server        # Start FastAPI with auto-reload
+# Then start the development server (new Phenopackets v2 API)
+uv run python -m uvicorn app.main_v2:app --reload
 
-# Alternative direct method (after hybrid-up)
-uv run python -m uvicorn app.main:app --reload
+# Database: hnf1b_phenopackets (864 phenopackets migrated from original data)
 ```
 
 ### Environment Setup
@@ -97,49 +96,48 @@ uv run pytest              # Run tests
 
 ## Architecture Overview
 
-### API Structure
-The API is organized into 8 main endpoint groups, each handling a specific domain:
+### API Structure (Phenopackets v2)
+The API has been completely restructured to use GA4GH Phenopackets v2 format:
 
-- **`/api/auth`** - JWT authentication (login, token management)
-- **`/api/individuals`** - Patient demographic data
-- **`/api/variants`** - Genetic variant information with classifications
-- **`/api/publications`** - Publication metadata and references
-- **`/api/proteins`** - Protein-related data
-- **`/api/genes`** - Gene information
-- **`/api/search`** - Cross-collection search functionality
-- **`/api/aggregations`** - Data aggregation endpoints (statistics, summaries)
+**Main Endpoints:**
+- **`/api/v2/phenopackets/`** - Core phenopacket CRUD operations
+- **`/api/v2/phenopackets/search`** - Advanced search across phenopackets
+- **`/api/v2/phenopackets/aggregate/*`** - Aggregation and statistics
+- **`/api/v2/clinical/*`** - Clinical feature-specific queries
+  - `/clinical/renal-insufficiency` - Kidney disease cases
+  - `/clinical/genital-abnormalities` - Genital tract abnormalities
+  - `/clinical/diabetes` - Diabetes cases
+  - `/clinical/hypomagnesemia` - Hypomagnesemia cases
 
-### Database Schema
+### Database Schema (Phenopackets v2)
 
-PostgreSQL tables with their relationships:
+PostgreSQL tables using JSONB storage for phenopackets:
 
-1. **users** - System users/reviewers
-   - Referenced by: reports (reviewed_by)
+1. **phenopackets** - Main table storing complete phenopacket documents
+   - JSONB column with full GA4GH Phenopackets v2 structure
+   - Generated columns: subject_id, subject_sex for fast queries
+   - Comprehensive GIN indexes for JSONB queries
+   - 864 phenopackets migrated from original data
 
-2. **individuals** - Patient demographics
-   - Referenced by: reports, variants
+2. **families** - Family relationships (GA4GH Family messages)
 
-3. **reports** - Clinical presentations with phenotypes
-   - References: individuals (individual_id), users (reviewed_by)
-   - Embeds: phenotypes array
+3. **cohorts** - Population study cohorts
 
-4. **variants** - Genetic variants with annotations and classifications
-   - References: individuals (individual_id)
-   - Uses `is_current` flag for versioning
+4. **resources** - Ontology resources (HPO, MONDO, LOINC, etc.)
 
-5. **publications** - Research papers and references
+5. **phenopacket_audit** - Change tracking and audit trail
 
 ### Key Design Patterns
 
-1. **Authentication**: JWT-based with dependency injection via `app/dependencies.py`
+1. **Phenopackets Standard**: Full GA4GH Phenopackets v2 compliance for data exchange
 
-2. **Data Validation**: Pydantic models in `app/models.py` ensure consistency between API and database
+2. **JSONB Storage**: Document-oriented approach with PostgreSQL JSONB for flexibility
 
-3. **Database Access**: Async PostgreSQL operations using SQLAlchemy through `app/database.py`
+3. **Data Validation**: Phenopacket validation in `app/phenopackets/validator.py`
 
-4. **CORS**: Configured for all origins (development mode)
+4. **Database Access**: Async PostgreSQL operations with SQLAlchemy + asyncpg
 
-5. **Variant Versioning**: Multiple variant records per individual with `is_current` flag
+5. **Ontology Integration**: HPO terms for phenotypes, MONDO for diseases, LOINC for labs
 
 ### Data File Formats
 
@@ -162,8 +160,16 @@ The project handles specialized genomic data formats:
 
 4. **Async operations**: All database operations use async/await patterns with SQLAlchemy
 
-5. **File locations**: 
+5. **File locations**:
    - Data files in `/data` directory (VCF, VEP, and reference genome files)
-   - API code in `/app` directory with modular endpoint organization
+   - Phenopackets API in `/app/main_v2.py` and `/app/phenopackets/` directory
+   - Migration scripts in `/migration/` directory (phenopackets_migration.py)
    - Dependencies managed in `pyproject.toml` and `uv.lock`
-   - Migration system in `/migration/` directory with modular PostgreSQL-native scripts
+
+6. **Migration Status**:
+   - ✅ Complete: 864 individuals migrated to phenopackets format
+   - ✅ Database: hnf1b_phenopackets with full JSONB schema
+   - ✅ API: New v2 endpoints fully operational
+   - 96% of phenopackets have phenotypic features
+   - 49% have genetic variants
+   - 100% have disease diagnoses
