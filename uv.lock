@@ -788,9 +788,11 @@ phenopackets = [
     { name = "oaklib" },
 ]
 test = [
+    { name = "ga4gh-vrs" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -833,9 +835,11 @@ phenopackets = [
     { name = "oaklib", specifier = ">=0.5.0" },
 ]
 test = [
+    { name = "ga4gh-vrs", specifier = ">=2.1.3" },
     { name = "pytest", specifier = "==7.4.4" },
     { name = "pytest-asyncio", specifier = "==0.21.1" },
     { name = "pytest-cov", specifier = "==4.1.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [[package]]

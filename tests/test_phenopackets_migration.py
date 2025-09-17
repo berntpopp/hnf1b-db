@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketValidator
-from migration.phenopackets_migration import PhenopacketsMigration
+from migration.phenopackets_migration import PhenopacketsMigrationFixed as PhenopacketsMigration
 
 
 class TestPhenopacketsMigration:
