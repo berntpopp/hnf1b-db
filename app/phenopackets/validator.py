@@ -411,7 +411,7 @@ class PhenopacketSanitizer:
         # Ensure ID is uppercase for standard ontologies
         if "id" in term and isinstance(term["id"], str):
             parts = term["id"].split(":")
-            if len(parts) == 2 and parts[0] in ["HP", "MONDO", "OMIM", "LOINC"]:
+            if len(parts) == 2 and parts[0].upper() in ["HP", "MONDO", "OMIM", "LOINC"]:
                 term["id"] = f"{parts[0].upper()}:{parts[1]}"
 
         return term
