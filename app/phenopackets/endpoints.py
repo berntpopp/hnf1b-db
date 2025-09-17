@@ -16,6 +16,7 @@ from app.phenopackets.models import (
     PhenopacketUpdate,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
+from app.auth import require_auth
 
 router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets"])
 
@@ -246,6 +247,7 @@ async def get_measurements(
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
     db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_auth),
 ):
     """Create a new phenopacket."""
     # Sanitize the phenopacket
@@ -271,7 +273,7 @@ async def create_phenopacket(
         phenopacket=sanitized,
         subject_id=sanitized["subject"]["id"],
         subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-        created_by=phenopacket_data.created_by or "API User",
+        created_by=phenopacket_data.created_by or current_user.username,
     )
 
     db.add(new_phenopacket)
@@ -294,6 +296,7 @@ async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_auth),
 ):
     """Update an existing phenopacket."""
     result = await db.execute(
@@ -316,7 +319,7 @@ async def update_phenopacket(
     existing.phenopacket = sanitized
     existing.subject_id = sanitized["subject"]["id"]
     existing.subject_sex = sanitized["subject"].get("sex", "UNKNOWN_SEX")
-    existing.updated_by = phenopacket_data.updated_by or "API User"
+    existing.updated_by = phenopacket_data.updated_by or current_user.username
 
     await db.commit()
     await db.refresh(existing)
@@ -336,6 +339,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_auth),
 ):
     """Delete a phenopacket."""
     result = await db.execute(
