@@ -724,15 +724,13 @@ class DirectSheetsToPhenopackets:
                         "sex", "UNKNOWN_SEX"
                     )
 
-                    # Insert phenopacket
+                    # Insert phenopacket (subject_id and subject_sex are generated columns)
                     query = text("""
                         INSERT INTO phenopackets
-                        (phenopacket_id, phenopacket, subject_id, subject_sex, created_by, schema_version)
-                        VALUES (:phenopacket_id, :phenopacket, :subject_id, :subject_sex, :created_by, :schema_version)
+                        (phenopacket_id, phenopacket, created_by, schema_version)
+                        VALUES (:phenopacket_id, :phenopacket, :created_by, :schema_version)
                         ON CONFLICT (phenopacket_id) DO UPDATE
                         SET phenopacket = EXCLUDED.phenopacket,
-                            subject_id = EXCLUDED.subject_id,
-                            subject_sex = EXCLUDED.subject_sex,
                             updated_at = CURRENT_TIMESTAMP
                     """)
 
@@ -741,8 +739,6 @@ class DirectSheetsToPhenopackets:
                         {
                             "phenopacket_id": phenopacket["id"],
                             "phenopacket": json.dumps(phenopacket),
-                            "subject_id": subject_id,
-                            "subject_sex": subject_sex,
                             "created_by": "direct_sheets_migration",
                             "schema_version": "2.0.0",
                         },
