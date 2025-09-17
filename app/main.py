@@ -45,6 +45,14 @@ app.add_middleware(
 app.include_router(endpoints.router)
 app.include_router(clinical_endpoints.router)
 
+# Add authentication endpoints
+from app import auth_endpoints
+app.include_router(auth_endpoints.router)
+
+# Add HPO proxy endpoints
+from app import hpo_proxy
+app.include_router(hpo_proxy.router)
+
 
 # Root endpoint
 @app.get("/")
