@@ -63,7 +63,7 @@ uv run python migration/phenopackets_migration.py
 
 ```bash
 # Start the new API
-uv run python -m uvicorn app.main_v2:app --reload
+uv run python -m uvicorn app.main:app --reload
 
 # API will be available at http://localhost:8000
 # Documentation at http://localhost:8000/api/v2/docs
@@ -204,7 +204,7 @@ uv run python -m uvicorn app.main:app --reload
 ### API Endpoints
 - `app/phenopackets/endpoints.py` - Core phenopacket endpoints
 - `app/phenopackets/clinical_endpoints.py` - Clinical feature queries
-- `app/main_v2.py` - New API application
+- `app/main.py` - New Phenopackets v2 API application
 
 ### Configuration
 - `.env.phenopackets` - Environment configuration template

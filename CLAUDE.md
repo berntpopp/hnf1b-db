@@ -28,7 +28,7 @@ make check         # Run all checks (lint + typecheck + tests)
 make hybrid-up     # Start PostgreSQL and Redis containers
 
 # Then start the development server (new Phenopackets v2 API)
-uv run python -m uvicorn app.main_v2:app --reload
+uv run python -m uvicorn app.main:app --reload
 
 # Database: hnf1b_phenopackets (864 phenopackets migrated from original data)
 ```
@@ -162,7 +162,7 @@ The project handles specialized genomic data formats:
 
 5. **File locations**:
    - Data files in `/data` directory (VCF, VEP, and reference genome files)
-   - Phenopackets API in `/app/main_v2.py` and `/app/phenopackets/` directory
+   - Phenopackets API in `/app/main.py` and `/app/phenopackets/` directory
    - Migration scripts in `/migration/` directory (phenopackets_migration.py)
    - Dependencies managed in `pyproject.toml` and `uv.lock`
 
