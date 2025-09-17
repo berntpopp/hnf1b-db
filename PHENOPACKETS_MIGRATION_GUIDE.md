@@ -253,21 +253,90 @@ uv run python -m uvicorn app.main:app --reload
    - Check JSONB indexes are created
    - Consider increasing connection pool size
 
+## API Authentication & Frontend Integration
+
+### Authentication System
+
+The API now includes JWT-based authentication for data modification:
+
+#### Login Endpoint
+```bash
+POST /api/v2/auth/login
+{
+  "username": "researcher",
+  "password": "research123"
+}
+```
+
+**Demo Credentials:**
+- Admin: `admin` / `admin123`
+- Researcher: `researcher` / `research123`
+
+#### Protected Endpoints
+- `POST /api/v2/phenopackets/` - Create new phenopacket (requires auth)
+- `PUT /api/v2/phenopackets/{id}` - Update phenopacket (requires auth)
+- `DELETE /api/v2/phenopackets/{id}` - Delete phenopacket (requires auth)
+- `GET` endpoints remain public for data browsing
+
+### HPO Term Integration
+
+New HPO proxy endpoints for frontend integration:
+
+#### Search HPO Terms
+```bash
+GET /api/v2/hpo/search?q=kidney&max_results=10
+GET /api/v2/hpo/autocomplete?q=ren&limit=5
+GET /api/v2/hpo/common-terms?category=renal
+GET /api/v2/hpo/validate?term_ids=HP:0012622,HP:0000107
+```
+
+These endpoints proxy to the OLS API, handling CORS issues automatically.
+
+### Frontend Integration Example
+
+```javascript
+// 1. Login
+const { data } = await axios.post('/api/v2/auth/login', {
+  username: 'researcher',
+  password: 'research123'
+});
+axios.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
+
+// 2. Search HPO terms
+const terms = await axios.get('/api/v2/hpo/autocomplete?q=kidney');
+
+// 3. Create new patient
+await axios.post('/api/v2/phenopackets/', {
+  phenopacket: {
+    id: "phenopacket:HNF1B:NEW001",
+    subject: { id: "NEW001", sex: "FEMALE" },
+    phenotypicFeatures: [
+      { type: { id: "HP:0012622", label: "Chronic kidney disease" }}
+    ],
+    meta_data: {
+      created: new Date().toISOString(),
+      created_by: "researcher"
+    }
+  }
+});
+```
+
 ## Next Steps
 
-1. **Ontology Integration**
-   - Download latest HPO and MONDO files
-   - Set up ontology service for term validation
+1. **Frontend Development**
+   - Implement login component
+   - Add HPO term selector with autocomplete
+   - Create phenopacket builder form
 
 2. **Enhanced Features**
    - Implement phenopacket comparison
    - Add export formats (JSON, TSV, FHIR)
-   - Build phenopacket builder UI
+   - Add bulk import capabilities
 
 3. **Production Deployment**
-   - Configure proper CORS settings
-   - Set up monitoring and logging
-   - Implement rate limiting
+   - Replace demo users with proper user management
+   - Configure secure JWT secrets
+   - Implement token refresh mechanism
 
 ## Support
 

@@ -48,14 +48,19 @@ make hybrid-down   # Stop containers
 
 ## API Endpoints
 
-- `/api/auth` - JWT authentication
+### Phenopackets v2 API (Current)
+- `/api/v2/phenopackets` - GA4GH Phenopackets CRUD operations
+- `/api/v2/clinical` - Clinical feature-specific queries
+- `/api/v2/auth` - JWT authentication
+- `/api/v2/hpo` - HPO term search and validation
+- `/api/v2/docs` - Interactive API documentation
+
+### Legacy Endpoints (Being phased out)
 - `/api/individuals` - Patient demographics
-- `/api/variants` - Genetic variants with classifications
+- `/api/variants` - Genetic variants
 - `/api/publications` - Publication metadata
-- `/api/proteins` - Protein data
-- `/api/genes` - Gene information
 - `/api/search` - Cross-collection search
-- `/api/aggregations` - Data statistics and summaries
+- `/api/aggregations` - Data statistics
 
 ## Environment Setup
 
@@ -312,3 +317,58 @@ If Docker isn't available, install PostgreSQL locally:
 # Update DATABASE_URL in .env to match your local setup
 DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_db
 ```
+
+## Frontend Integration
+
+### Authentication
+The API uses JWT authentication for data modification. Demo credentials are available for testing:
+
+```javascript
+// Login to get JWT token
+const response = await axios.post('/api/v2/auth/login', {
+  username: 'researcher',  // or 'admin'
+  password: 'research123'   // or 'admin123'
+});
+axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+```
+
+### HPO Term Search
+The API provides HPO term search endpoints for phenotype selection:
+
+```javascript
+// Search HPO terms for autocomplete
+await axios.get('/api/v2/hpo/autocomplete?q=kidney&limit=10');
+
+// Get common HNF1B-related terms
+await axios.get('/api/v2/hpo/common-terms?category=renal');
+
+// Validate HPO term IDs
+await axios.get('/api/v2/hpo/validate?term_ids=HP:0012622,HP:0000107');
+```
+
+### Creating New Patients
+With authentication, you can add new patients using the Phenopackets format:
+
+```javascript
+await axios.post('/api/v2/phenopackets/', {
+  phenopacket: {
+    id: "phenopacket:HNF1B:NEW001",
+    subject: { id: "NEW001", sex: "FEMALE" },
+    phenotypicFeatures: [
+      { type: { id: "HP:0012622", label: "Chronic kidney disease" }}
+    ],
+    meta_data: {
+      created: new Date().toISOString(),
+      created_by: "researcher"
+    }
+  }
+});
+```
+
+### API Documentation
+- Interactive API docs: http://localhost:8000/api/v2/docs
+- Phenopackets endpoints: `/api/v2/phenopackets/`
+- HPO proxy endpoints: `/api/v2/hpo/`
+- Authentication: `/api/v2/auth/`
+
+For detailed migration information, see [PHENOPACKETS_MIGRATION_GUIDE.md](PHENOPACKETS_MIGRATION_GUIDE.md)
