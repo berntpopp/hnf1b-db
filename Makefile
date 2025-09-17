@@ -45,12 +45,22 @@ db-reset:  ## Reset database (drop and recreate all tables)
 	uv run alembic downgrade base
 	uv run alembic upgrade head
 
-# Data Import Commands  
+# Data Import Commands
 import-data:  ## Import data from Google Sheets to PostgreSQL
 	uv run python migration/migrate.py
 
 import-data-test:  ## Import limited test data from Google Sheets
 	uv run python migration/migrate.py --test
+
+# Phenopackets Migration Commands
+phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format
+	uv run python migration/direct_sheets_to_phenopackets.py
+
+phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
+	uv run python migration/direct_sheets_to_phenopackets.py --test
+
+phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
+	uv run python migration/direct_sheets_to_phenopackets.py --test --dry-run
 
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 
