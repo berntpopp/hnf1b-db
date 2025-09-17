@@ -8,30 +8,28 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.116.1",
     "pandas>=2.3.2",
-    "passlib>=1.7.4",
+    "passlib[bcrypt]>=1.7.4",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
     "uvicorn[standard]>=0.35.0",
-    
     # PostgreSQL and database dependencies
     "sqlalchemy[asyncio]>=2.0.25",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
     "psycopg2-binary>=2.9.9",
-    
     # Scientific dependencies (for sheets import)
     "biopython>=1.84",
     "requests>=2.31.0",
-    
     # Phenopackets and ontology dependencies
-    "phenopackets>=2.0.0",  # GA4GH Phenopackets schema
-    "protobuf>=4.25.0",  # For phenopackets serialization
-    "jsonschema>=4.20.0",  # For phenopacket validation
-    "pronto>=2.5.0",  # For parsing OBO ontologies (HPO, MONDO)
-    "jsonpath-ng>=1.6.0",  # For complex JSON queries
+    "phenopackets>=2.0.0", # GA4GH Phenopackets schema
+    "protobuf>=4.25.0", # For phenopackets serialization
+    "jsonschema>=4.20.0", # For phenopacket validation
+    "pronto>=2.5.0", # For parsing OBO ontologies (HPO, MONDO)
+    "jsonpath-ng>=1.6.0", # For complex JSON queries
+    "httpx>=0.28.1",
 ]
 
 
