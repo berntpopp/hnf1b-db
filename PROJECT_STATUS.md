@@ -11,23 +11,16 @@ The HNF1B-DB API has been fully migrated to use GA4GH Phenopackets v2 standard f
 
 ### Data Migration System
 
-Two migration approaches are available:
-
-1. **Direct Google Sheets → Phenopackets** (Recommended)
-   ```bash
-   make phenopackets-migrate       # Full migration
-   make phenopackets-migrate-test  # Test with 20 individuals
-   make phenopackets-migrate-dry   # Dry run with JSON output
-   ```
-   - Script: `/migration/direct_sheets_to_phenopackets.py`
-   - Directly converts Google Sheets data to GA4GH Phenopackets v2
-   - No intermediate normalization required
-
-2. **Legacy Two-Step Migration** (Alternative)
-   ```bash
-   make import-data      # Google Sheets → PostgreSQL normalized tables
-   # Then run phenopackets_migration.py to convert to phenopackets
-   ```
+**Direct Google Sheets → Phenopackets Migration**
+```bash
+make phenopackets-migrate       # Full migration
+make phenopackets-migrate-test  # Test with 20 individuals
+make phenopackets-migrate-dry   # Dry run with JSON output
+```
+- Script: `/migration/direct_sheets_to_phenopackets.py`
+- Directly converts Google Sheets data to GA4GH Phenopackets v2
+- No intermediate normalization required
+- Proper HPO term mappings and variant prioritization (Varsome format preferred)
 
 ### API Endpoints
 
@@ -45,8 +38,8 @@ The API is fully phenopackets v2 compliant:
 
 #### Migration System
 - `/migration/direct_sheets_to_phenopackets.py` - Direct migration script
-- `/migration/phenopackets_schema.sql` - Database schema
 - `/PHENOPACKETS_DATA_MAPPING.md` - Complete data mapping documentation
+- `/PHENOPACKETS_MIGRATION_GUIDE.md` - Migration guide and instructions
 
 #### API System
 - `/app/main.py` - FastAPI application entry point
@@ -92,7 +85,8 @@ make hybrid-down   # Stop containers
 The following deprecated/outdated files have been removed:
 - `migrate_from_sheets.py` - Old MongoDB migration script
 - `deprecated_backup/` - Legacy backup directory
-- `phenopackets_migration_backup.py` - Backup migration file
+- `phenopackets_migration.py` - Old two-step migration (removed, replaced by direct migration)
+- `run_phenopackets_migration.sh` - Old migration runner (removed)
 - Various `.md` files for old refactoring plans
 - Redundant `.env` files
 

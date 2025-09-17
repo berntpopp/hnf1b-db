@@ -2,352 +2,200 @@
 
 ## Overview
 
-This guide documents the complete restructuring of HNF1B-API from a normalized PostgreSQL database to a GA4GH Phenopackets v2 compliant system.
+This guide documents the direct migration process from Google Sheets data to GA4GH Phenopackets v2 format.
 
 ## Migration Summary
 
-### What Changed
+### Direct Migration Approach
 
-1. **Database Structure**: Replaced 13+ normalized tables with 4 phenopacket-centric tables
-2. **Data Model**: Adopted GA4GH Phenopackets v2 as the core data model
-3. **API Design**: New RESTful endpoints centered around phenopackets
-4. **Query Capabilities**: Enhanced clinical feature queries using JSONB
+The new migration system transforms data directly from Google Sheets into standardized Phenopackets format, bypassing intermediate database normalization for improved efficiency and data integrity.
 
 ### New Architecture
 
 ```
-Google Sheets → Phenopackets Builder → PostgreSQL JSONB → Phenopackets API v2
+Google Sheets (CSV) → Direct Phenopackets Builder → PostgreSQL JSONB Storage
 ```
 
 ## Quick Start
 
 ### 1. Prerequisites
 
-- PostgreSQL 15+ (for JSONB features)
+- PostgreSQL 15+ with JSONB support
 - Python 3.10+
 - UV package manager
+- Valid Google Sheets URLs
+- Environment variables configured in `.env`
 
 ### 2. Installation
 
 ```bash
 # Install dependencies
-uv sync --all-groups
+uv sync
 
-# Set up environment
-cp .env.phenopackets .env
-# Edit .env with your database credentials
+# Start database services
+make hybrid-up
+
+# Verify environment
+cat .env  # Ensure DATABASE_URL points to hnf1b_phenopackets database
 ```
 
-### 3. Database Setup
+### 3. Run Direct Migration
 
 ```bash
-# Create new phenopackets database
-createdb hnf1b_phenopackets
+# Full migration - all individuals from Google Sheets
+make phenopackets-migrate
 
-# Apply schema
-psql postgresql://user:pass@localhost/hnf1b_phenopackets < migration/phenopackets_schema.sql
+# Test migration - 20 individuals only
+make phenopackets-migrate-test
+
+# Dry run - outputs to JSON file without database changes
+make phenopackets-migrate-dry
 ```
 
-### 4. Run Migration
+## Migration Process Details
 
-```bash
-# Full migration with backup
-chmod +x migration/run_phenopackets_migration.sh
-./migration/run_phenopackets_migration.sh
+### Data Sources
 
-# Or run Python migration directly
-uv run python migration/phenopackets_migration.py
-```
+The migration reads directly from Google Sheets:
+- **Individuals Sheet**: Core patient demographics and clinical data
+- **Variants Data**: Genetic variant information (prioritizes Varsome format)
+- **Clinical Features**: Mapped to HPO terms
+- **Disease Diagnoses**: Mapped to MONDO ontology
 
-### 5. Start API
+### Key Mappings
 
-```bash
-# Start the new API
-uv run python -m uvicorn app.main:app --reload
+#### Subject Information
+- `individual_id` → `subject.id` (primary identifier)
+- `IndividualIdentifier` → `subject.alternateIds`
+- `Sex` → `subject.sex` (MALE/FEMALE/UNKNOWN)
+- `AgeReported` → `subject.timeAtLastEncounter.age`
 
-# API will be available at http://localhost:8000
-# Documentation at http://localhost:8000/api/v2/docs
-```
-
-## New API Endpoints
-
-### Core Phenopacket Operations
-
-- `GET /api/v2/phenopackets` - List all phenopackets
-- `GET /api/v2/phenopackets/{id}` - Get specific phenopacket
-- `POST /api/v2/phenopackets` - Create phenopacket
-- `PUT /api/v2/phenopackets/{id}` - Update phenopacket
-- `DELETE /api/v2/phenopackets/{id}` - Delete phenopacket
-- `POST /api/v2/phenopackets/search` - Advanced search
-
-### Clinical Feature Queries
-
-- `GET /api/v2/clinical/renal-insufficiency` - Kidney disease cases
-- `GET /api/v2/clinical/genital-abnormalities` - Genital tract abnormalities
-- `GET /api/v2/clinical/diabetes` - Diabetes cases
-- `GET /api/v2/clinical/hypomagnesemia` - Hypomagnesemia cases
-- `GET /api/v2/clinical/pancreatic-abnormalities` - Pancreatic abnormalities
-- `GET /api/v2/clinical/liver-abnormalities` - Liver abnormalities
-- `GET /api/v2/clinical/kidney-morphology` - Kidney morphological features
-- `GET /api/v2/clinical/multisystem-involvement` - Multi-system cases
-
-### Aggregation Endpoints
-
-- `GET /api/v2/phenopackets/aggregate/by-feature` - Aggregate by phenotypic features
-- `GET /api/v2/phenopackets/aggregate/by-disease` - Aggregate by disease
-- `GET /api/v2/phenopackets/aggregate/kidney-stages` - Kidney disease stage distribution
-- `GET /api/v2/phenopackets/aggregate/sex-distribution` - Sex distribution
-- `GET /api/v2/phenopackets/aggregate/variant-pathogenicity` - Variant classifications
-
-## Data Structure
-
-### Phenopacket Format
-
-```json
-{
-  "id": "phenopacket:HNF1B:IND001",
-  "subject": {
-    "id": "IND001",
-    "sex": "FEMALE",
-    "timeAtLastEncounter": {
-      "age": {"iso8601duration": "P25Y"}
-    }
-  },
-  "phenotypicFeatures": [
-    {
-      "type": {
-        "id": "HP:0012622",
-        "label": "Chronic kidney disease"
-      },
-      "modifiers": [{
-        "id": "HP:0012625",
-        "label": "Stage 3 chronic kidney disease"
-      }]
-    }
-  ],
-  "diseases": [
-    {
-      "term": {
-        "id": "MONDO:0018874",
-        "label": "HNF1B-related autosomal dominant tubulointerstitial kidney disease"
-      }
-    }
-  ],
-  "interpretations": [
-    {
-      "id": "interpretation-001",
-      "progressStatus": "COMPLETED",
-      "diagnosis": {
-        "disease": {"id": "OMIM:137920", "label": "HNF1B-related disease"},
-        "genomicInterpretations": [...]
-      }
-    }
-  ],
-  "metaData": {
-    "created": "2024-01-01T00:00:00Z",
-    "createdBy": "HNF1B-API",
-    "resources": [...],
-    "phenopacketSchemaVersion": "2.0.0"
-  }
-}
-```
-
-## Testing
-
-### Run Tests
-
-```bash
-# Run migration tests
-uv run pytest tests/test_phenopackets_migration.py -v
-
-# Test API endpoints
-uv run pytest tests/test_phenopackets_api.py -v
-```
-
-### Validation
-
-```bash
-# Check migration status
-psql -d hnf1b_phenopackets -c "SELECT COUNT(*) FROM phenopackets;"
-
-# Validate phenopackets
-uv run python -c "
-from app.phenopackets.validator import PhenopacketValidator
-validator = PhenopacketValidator()
-# Test validation
-"
-```
-
-## Rollback Procedure
-
-If you need to rollback to the previous version:
-
-```bash
-# Restore from backup
-psql postgresql://user:pass@localhost/hnf1b_db < backups/hnf1b_backup_[timestamp].sql
-
-# Switch back to old API
-uv run python -m uvicorn app.main:app --reload
-```
-
-## Key Files
-
-### Schema and Models
-- `migration/phenopackets_schema.sql` - Database schema
-- `app/phenopackets/models.py` - SQLAlchemy models and Pydantic schemas
-- `app/phenopackets/validator.py` - Validation utilities
-
-### Migration
-- `migration/phenopackets_migration.py` - Main migration script
-- `migration/run_phenopackets_migration.sh` - Migration runner with backup
-
-### API Endpoints
-- `app/phenopackets/endpoints.py` - Core phenopacket endpoints
-- `app/phenopackets/clinical_endpoints.py` - Clinical feature queries
-- `app/main.py` - New Phenopackets v2 API application
-
-### Configuration
-- `.env.phenopackets` - Environment configuration template
-- `pyproject.toml` - Dependencies (already updated)
-
-## Ontology Mappings
-
-### Phenotype Mappings (HPO)
-- Renal insufficiency → HP:0012622
+#### Clinical Features (HPO Terms)
+- Renal manifestations → HP:0012622-HP:0012626 (CKD stages)
+- Diabetes → HP:0000819 (Diabetes mellitus)
 - Hypomagnesemia → HP:0002917
-- Genital abnormality → HP:0000078
-- Pancreatic abnormality → HP:0001732
-- Liver abnormality → HP:0001392
+- Liver abnormalities → HP:0031865 (Abnormal liver physiology)
+- Brain abnormalities → HP:0012443 (Abnormality of brain morphology)
+- Mental/behavioral → HP:0000708 (Behavioral abnormality)
 
-### Disease Mappings (MONDO)
-- HNF1B disease → MONDO:0018874
-- Type 1 diabetes → MONDO:0005147
-- Type 2 diabetes → MONDO:0005148
-- MODY → MONDO:0015967
+#### Variant Information
+Priority order:
+1. Varsome column (GA4GH compliant format)
+2. hg38 column (genomic coordinates)
+3. Other variant columns
 
-## Performance Considerations
+### Manual Migration
 
-### Indexes
-- JSONB GIN indexes for fast queries
-- Specific indexes for common search patterns
-- Full-text search capabilities
+For custom configurations:
 
-### Query Optimization
-- Use PostgreSQL native JSONB operators
-- Materialized views for complex aggregations
-- Batch operations for bulk updates
+```bash
+# Direct execution
+uv run python migration/direct_sheets_to_phenopackets.py
+
+# With options
+uv run python migration/direct_sheets_to_phenopackets.py --test  # 20 individuals
+uv run python migration/direct_sheets_to_phenopackets.py --dry-run  # JSON output only
+```
+
+## Configuration
+
+### Google Sheets URLs
+
+Update URLs in `migration/direct_sheets_to_phenopackets.py`:
+
+```python
+INDIVIDUALS_SHEET_URL = "your_sheet_url_here"
+```
+
+### Database Connection
+
+Set in `.env` file:
+```
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
+```
+
+## Validation
+
+### Check Migration Results
+
+```bash
+# Connect to database
+psql -U hnf1b_user -d hnf1b_phenopackets -h localhost -p 5433
+
+# Count phenopackets
+SELECT COUNT(*) FROM phenopackets;
+
+# Verify data structure
+SELECT
+    phenopacket_id,
+    phenopacket->>'id' as id,
+    phenopacket->'subject'->>'id' as subject_id,
+    jsonb_array_length(phenopacket->'phenotypicFeatures') as features_count
+FROM phenopackets
+LIMIT 5;
+```
+
+### API Verification
+
+```bash
+# Start API server
+make server
+
+# Test endpoints
+curl http://localhost:8000/api/v2/phenopackets
+curl http://localhost:8000/api/v2/phenopackets/aggregate/phenotypes
+curl http://localhost:8000/api/v2/clinical/renal-insufficiency
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Migration fails with connection error**
-   - Check DATABASE_URL and OLD_DATABASE_URL in .env
-   - Ensure PostgreSQL is running
+1. **Database connection failed**
+   - Verify PostgreSQL is running: `docker ps`
+   - Check DATABASE_URL in `.env`
+   - Ensure database exists: `make hybrid-up`
 
-2. **Validation errors during migration**
-   - Check validation_errors.json for details
-   - Review phenotype mappings
+2. **Google Sheets access error**
+   - Verify sheet URLs are public or accessible
+   - Check internet connectivity
+   - Ensure CSV export is enabled
 
-3. **API performance issues**
-   - Check JSONB indexes are created
-   - Consider increasing connection pool size
+3. **Invalid data mappings**
+   - Review PHENOPACKETS_DATA_MAPPING.md
+   - Check HPO term validity
+   - Verify variant format
 
-## API Authentication & Frontend Integration
+## Files and Structure
 
-### Authentication System
+### Key Files
 
-The API now includes JWT-based authentication for data modification:
+- `migration/direct_sheets_to_phenopackets.py` - Direct migration script
+- `PHENOPACKETS_DATA_MAPPING.md` - Detailed field mappings
+- `app/phenopackets/models.py` - Phenopacket data models
+- `app/phenopackets/validator.py` - Validation logic
+- `Makefile` - Migration commands
 
-#### Login Endpoint
-```bash
-POST /api/v2/auth/login
-{
-  "username": "researcher",
-  "password": "research123"
-}
-```
+### Database Schema
 
-**Demo Credentials:**
-- Admin: `admin` / `admin123`
-- Researcher: `researcher` / `research123`
+Primary table: `phenopackets`
+- `id`: UUID primary key
+- `phenopacket_id`: Unique phenopacket identifier
+- `phenopacket`: JSONB containing full phenopacket
+- `subject_id`: Extracted for indexing
+- `created_at`, `updated_at`: Timestamps
 
-#### Protected Endpoints
-- `POST /api/v2/phenopackets/` - Create new phenopacket (requires auth)
-- `PUT /api/v2/phenopackets/{id}` - Update phenopacket (requires auth)
-- `DELETE /api/v2/phenopackets/{id}` - Delete phenopacket (requires auth)
-- `GET` endpoints remain public for data browsing
+## Migration Statistics
 
-### HPO Term Integration
-
-New HPO proxy endpoints for frontend integration:
-
-#### Search HPO Terms
-```bash
-GET /api/v2/hpo/search?q=kidney&max_results=10
-GET /api/v2/hpo/autocomplete?q=ren&limit=5
-GET /api/v2/hpo/common-terms?category=renal
-GET /api/v2/hpo/validate?term_ids=HP:0012622,HP:0000107
-```
-
-These endpoints proxy to the OLS API, handling CORS issues automatically.
-
-### Frontend Integration Example
-
-```javascript
-// 1. Login
-const { data } = await axios.post('/api/v2/auth/login', {
-  username: 'researcher',
-  password: 'research123'
-});
-axios.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
-
-// 2. Search HPO terms
-const terms = await axios.get('/api/v2/hpo/autocomplete?q=kidney');
-
-// 3. Create new patient
-await axios.post('/api/v2/phenopackets/', {
-  phenopacket: {
-    id: "phenopacket:HNF1B:NEW001",
-    subject: { id: "NEW001", sex: "FEMALE" },
-    phenotypicFeatures: [
-      { type: { id: "HP:0012622", label: "Chronic kidney disease" }}
-    ],
-    meta_data: {
-      created: new Date().toISOString(),
-      created_by: "researcher"
-    }
-  }
-});
-```
-
-## Next Steps
-
-1. **Frontend Development**
-   - Implement login component
-   - Add HPO term selector with autocomplete
-   - Create phenopacket builder form
-
-2. **Enhanced Features**
-   - Implement phenopacket comparison
-   - Add export formats (JSON, TSV, FHIR)
-   - Add bulk import capabilities
-
-3. **Production Deployment**
-   - Replace demo users with proper user management
-   - Configure secure JWT secrets
-   - Implement token refresh mechanism
+Expected results from full migration:
+- ~864 phenopackets created
+- 96% with phenotypic features
+- 49% with genetic variants
+- 100% with disease diagnoses
 
 ## Support
 
 For issues or questions:
-1. Check the validation report: `migration_report_[timestamp].txt`
-2. Review logs in the console output
-3. Consult the GA4GH Phenopackets documentation
-
-## References
-
-- [GA4GH Phenopackets v2 Specification](https://phenopacket-schema.readthedocs.io/)
-- [Human Phenotype Ontology](https://hpo.jax.org/)
-- [Mondo Disease Ontology](https://mondo.monarchinitiative.org/)
-- [PostgreSQL JSONB Documentation](https://www.postgresql.org/docs/current/datatype-json.html)
+- Check logs: `uv run python migration/direct_sheets_to_phenopackets.py --verbose`
+- Review mappings: See PHENOPACKETS_DATA_MAPPING.md
+- API documentation: http://localhost:8000/api/v2/docs

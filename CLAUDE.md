@@ -46,25 +46,29 @@ uv sync --group dev --group test
 # JWT_SECRET=your-secret-key
 ```
 
-### Data Import
+### Data Import (Phenopackets Direct Migration)
 ```bash
-# Import all data from Google Sheets to PostgreSQL
-make import-data
+# Import all data directly from Google Sheets to Phenopackets format
+make phenopackets-migrate
 
-# Import limited test data (faster for development/testing)  
-make import-data-test
+# Import limited test data (20 individuals for testing)
+make phenopackets-migrate-test
+
+# Dry run - outputs to JSON file without database changes
+make phenopackets-migrate-dry
 ```
 
 **Prerequisites:**
 1. Database running: `make hybrid-up`
-2. Schema applied: `make db-upgrade`
-3. Environment configured: Valid `.env` file
+2. Environment configured: Valid `.env` file with `DATABASE_URL`
+3. Google Sheets URLs configured in migration script
 
-**Migration System:**
-- Uses modular PostgreSQL migration in `/migration/` directory
-- Main script: `migration/migrate.py` 
-- Supports test mode with `--test` flag for limited data import
-- Processes data from Google Sheets + genomic files in `/data/` directory
+**New Direct Migration System:**
+- Direct conversion from Google Sheets to GA4GH Phenopackets v2
+- Main script: `migration/direct_sheets_to_phenopackets.py`
+- Bypasses intermediate PostgreSQL normalization step
+- Supports test mode (20 individuals) and dry run mode
+- Properly maps HPO terms, MONDO diseases, and variant data
 
 ### Code Quality Tools
 ```bash
@@ -163,7 +167,7 @@ The project handles specialized genomic data formats:
 5. **File locations**:
    - Data files in `/data` directory (VCF, VEP, and reference genome files)
    - Phenopackets API in `/app/main.py` and `/app/phenopackets/` directory
-   - Migration scripts in `/migration/` directory (phenopackets_migration.py)
+   - Direct migration script: `/migration/direct_sheets_to_phenopackets.py`
    - Dependencies managed in `pyproject.toml` and `uv.lock`
 
 6. **Migration Status**:
