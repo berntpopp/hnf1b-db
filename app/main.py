@@ -1,66 +1,134 @@
-# app/main.py
-"""FastAPI application for HNF1B-API with PostgreSQL database."""
+"""HNF1B Phenopackets API v2 - Complete replacement with GA4GH Phenopackets."""
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import close_db, init_db
-from app.endpoints import (
-    aggregations,
-    auth,
-    genes,
-    individuals,
-    proteins,
-    publications,
-    search,
-    variants,
-)
+from app.config import settings
+from app.database import engine
+from app.phenopackets import clinical_endpoints, endpoints
+from app.phenopackets.models import Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle application startup and shutdown."""
-    # Startup
-    await init_db()
+    """Application lifespan manager."""
+    # Create tables on startup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    # Shutdown
-    await close_db()
+    # Cleanup on shutdown
+    await engine.dispose()
 
 
+# Create FastAPI application
 app = FastAPI(
-    title="HNF1B-db API",
-    description=(
-        "The API powering the HNF1B-db website, including endpoints for "
-        "individuals, publications, variants, aggregations, proteins, and genes."
-    ),
-    version="0.1.0",
+    title="HNF1B Phenopackets API",
+    description="GA4GH Phenopackets v2 compliant API for HNF1B disease data",
+    version="2.0.0",
     lifespan=lifespan,
+    docs_url="/api/v2/docs",
+    redoc_url="/api/v2/redoc",
 )
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(individuals.router, prefix="/api/individuals", tags=["Individuals"])
-app.include_router(
-    publications.router, prefix="/api/publications", tags=["Publications"]
-)
-app.include_router(variants.router, prefix="/api/variants", tags=["Variants"])
-app.include_router(proteins.router, prefix="/api/proteins", tags=["Proteins"])
-app.include_router(genes.router, prefix="/api/genes", tags=["Genes"])
-app.include_router(search.router, prefix="/api/search", tags=["Search"])
-app.include_router(
-    aggregations.router, prefix="/api/aggregations", tags=["Aggregations"]
-)
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+# Include routers
+app.include_router(endpoints.router)
+app.include_router(clinical_endpoints.router)
+
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "HNF1B Phenopackets API",
+        "version": "2.0.0",
+        "description": "GA4GH Phenopackets v2 compliant API",
+        "documentation": "/api/v2/docs",
+        "endpoints": {
+            "phenopackets": "/api/v2/phenopackets",
+            "clinical": "/api/v2/clinical",
+        },
+        "standards": {
+            "phenopackets": "GA4GH Phenopackets v2.0",
+            "ontologies": {
+                "HPO": "Human Phenotype Ontology",
+                "MONDO": "Mondo Disease Ontology",
+                "LOINC": "Logical Observation Identifiers Names and Codes",
+            },
+        },
+    }
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "phenopackets_schema": "2.0.0",
+    }
+
+
+# API information endpoint
+@app.get("/api/v2/info")
+async def api_info():
+    """Get API information and capabilities."""
+    return {
+        "version": "2.0.0",
+        "phenopackets_version": "2.0.0",
+        "capabilities": {
+            "search": True,
+            "aggregation": True,
+            "clinical_queries": True,
+            "variant_interpretation": True,
+            "audit_log": True,
+        },
+        "supported_ontologies": [
+            {"id": "hpo", "name": "Human Phenotype Ontology", "version": "2024-01-01"},
+            {"id": "mondo", "name": "Mondo Disease Ontology", "version": "2024-01-01"},
+            {"id": "loinc", "name": "LOINC", "version": "2.76"},
+            {"id": "omim", "name": "OMIM", "version": "2024-01-01"},
+            {"id": "ncit", "name": "NCI Thesaurus", "version": "24.01"},
+        ],
+        "endpoints": [
+            {
+                "path": "/api/v2/phenopackets",
+                "description": "Core phenopacket CRUD operations",
+            },
+            {
+                "path": "/api/v2/phenopackets/search",
+                "description": "Advanced phenopacket search",
+            },
+            {
+                "path": "/api/v2/phenopackets/aggregate",
+                "description": "Data aggregation endpoints",
+            },
+            {
+                "path": "/api/v2/clinical",
+                "description": "Clinical feature-specific queries",
+            },
+        ],
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
