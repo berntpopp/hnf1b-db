@@ -1,17 +1,15 @@
 """Test suite for phenopackets migration."""
 
-import asyncio
-import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketValidator
-from migration.phenopackets_migration import PhenopacketsMigrationFixed as PhenopacketsMigration
+from migration.phenopackets_migration import (
+    PhenopacketsMigrationFixed as PhenopacketsMigration,
+)
 
 
 @pytest.mark.asyncio
@@ -24,7 +22,9 @@ class TestPhenopacketsMigration:
         engine = create_async_engine(
             "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_test"
         )
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async_session = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
         async with async_session() as session:
             yield session
         await engine.dispose()
@@ -193,7 +193,7 @@ class TestPhenopacketsMigration:
         """Test phenopacket validation."""
         mock_source = "postgresql+asyncpg://test:test@localhost/test_source"
         mock_target = "postgresql+asyncpg://test:test@localhost/test_target"
-        migration = PhenopacketsMigration(mock_source, mock_target)
+        PhenopacketsMigration(mock_source, mock_target)
         validator = PhenopacketValidator()
 
         # Create a minimal valid phenopacket
@@ -242,7 +242,9 @@ class TestPhenopacketsMigration:
 
         assert migration._parse_age_to_iso8601(25) == {"iso8601duration": "P25Y"}
         assert migration._parse_age_to_iso8601("30") == {"iso8601duration": "P30Y"}
-        assert migration._parse_age_to_iso8601("15 years") == {"iso8601duration": "P15Y"}
+        assert migration._parse_age_to_iso8601("15 years") == {
+            "iso8601duration": "P15Y"
+        }
         assert migration._parse_age_to_iso8601(None) == {"iso8601duration": "P0Y"}
 
     def test_pathogenicity_mapping(self):

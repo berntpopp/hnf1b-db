@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script for the hybrid ontology service."""
 
-import asyncio
-import json
 import os
 from pathlib import Path
 
@@ -121,7 +119,7 @@ def test_hybrid_ontology_service():
     # Check cache directory
     cache_dir = Path(".ontology_cache")
     if cache_dir.exists():
-        print(f"\n8. Cache Status:")
+        print("\n8. Cache Status:")
         print("-" * 40)
         cache_files = list(cache_dir.glob("*.json"))
         print(f"  Cache directory: {cache_dir}")
@@ -149,8 +147,9 @@ def test_performance():
     print("\n\nPerformance Test")
     print("=" * 50)
 
-    from app.services.ontology_service import ontology_service
     import time
+
+    from app.services.ontology_service import ontology_service
 
     test_terms = [
         "HP:0012622",

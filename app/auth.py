@@ -5,7 +5,7 @@ from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
@@ -23,17 +23,20 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 class TokenData(BaseModel):
     """Token data model."""
+
     username: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     """User login model."""
+
     username: str
     password: str
 
 
 class Token(BaseModel):
     """Token response model."""
+
     access_token: str
     token_type: str
 
@@ -79,7 +82,9 @@ def decode_token(token: str) -> dict:
         )
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     """Get the current authenticated user from JWT token."""
     token = credentials.credentials
     payload = decode_token(token)

@@ -73,7 +73,10 @@ class HPOAPIClient(OntologyAPIClient):
                     label=details.get("name", ""),
                     description=details.get("definition", ""),
                     synonyms=details.get("synonyms", []),
-                    parents=[p["ontologyId"] for p in data.get("relations", {}).get("parents", [])],
+                    parents=[
+                        p["ontologyId"]
+                        for p in data.get("relations", {}).get("parents", [])
+                    ],
                     source=OntologySource.HPO_API,
                     fetched_at=datetime.now(),
                 )
@@ -113,7 +116,9 @@ class OLSAPIClient(OntologyAPIClient):
                 return OntologyTerm(
                     id=term_id,
                     label=data.get("label", ""),
-                    description=data.get("description", [""])[0] if data.get("description") else "",
+                    description=data.get("description", [""])[0]
+                    if data.get("description")
+                    else "",
                     synonyms=data.get("synonyms", []),
                     source=OntologySource.OLS_API,
                     fetched_at=datetime.now(),
@@ -269,12 +274,11 @@ class FileCache:
 
 
 class HybridOntologyService:
-    """
-    Hybrid ontology service that:
+    """Hybrid ontology service that:
     1. Checks local cache first
     2. Falls back to APIs if enabled
     3. Falls back to hardcoded mappings
-    4. Caches API responses
+    4. Caches API responses.
     """
 
     def __init__(self):
@@ -300,13 +304,12 @@ class HybridOntologyService:
 
     @lru_cache(maxsize=1000)
     def get_term(self, term_id: str) -> OntologyTerm:
-        """
-        Get ontology term with fallback strategy:
+        """Get ontology term with fallback strategy:
         1. Memory cache
         2. File cache
         3. APIs (if enabled)
         4. Local hardcoded mappings
-        5. Unknown term placeholder
+        5. Unknown term placeholder.
         """
         # 1. Check memory cache
         if term_id in self._memory_cache:
@@ -366,9 +369,7 @@ class HybridOntologyService:
     def validate_term(self, term_id: str) -> bool:
         """Check if a term exists and is valid."""
         term = self.get_term(term_id)
-        return not (
-            term.label.startswith("Unknown term:") or term.is_obsolete
-        )
+        return not (term.label.startswith("Unknown term:") or term.is_obsolete)
 
     def get_term_label(self, term_id: str) -> str:
         """Get just the label for a term."""

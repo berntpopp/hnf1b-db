@@ -1,11 +1,8 @@
 """Authentication endpoints."""
 
 from datetime import timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -16,7 +13,6 @@ from app.auth import (
     get_password_hash,
     verify_password,
 )
-from app.database import get_db
 
 router = APIRouter(prefix="/api/v2/auth", tags=["authentication"])
 
@@ -27,13 +23,13 @@ DEMO_USERS = {
     "admin": {
         "username": "admin",
         "hashed_password": get_password_hash("admin123"),
-        "role": "admin"
+        "role": "admin",
     },
     "researcher": {
         "username": "researcher",
         "hashed_password": get_password_hash("research123"),
-        "role": "researcher"
-    }
+        "role": "researcher",
+    },
 }
 
 
@@ -54,14 +50,14 @@ async def login(user_data: UserLogin):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["username"], "role": user["role"]},
-        expires_delta=access_token_expires
+        expires_delta=access_token_expires,
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me")
-async def get_current_user_info(current_user = Depends(get_current_user)):
+async def get_current_user_info(current_user=Depends(get_current_user)):
     """Get current user information."""
     return {"username": current_user.username}
 

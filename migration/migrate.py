@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Main migration orchestrator script for importing all data from Google Sheets
-to PostgreSQL."""
+to PostgreSQL.
+"""
 
 import asyncio
 import os

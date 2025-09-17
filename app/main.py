@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.database import engine
 from app.phenopackets import clinical_endpoints, endpoints
 from app.phenopackets.models import Base
@@ -47,10 +46,12 @@ app.include_router(clinical_endpoints.router)
 
 # Add authentication endpoints
 from app import auth_endpoints
+
 app.include_router(auth_endpoints.router)
 
 # Add HPO proxy endpoints
 from app import hpo_proxy
+
 app.include_router(hpo_proxy.router)
 
 

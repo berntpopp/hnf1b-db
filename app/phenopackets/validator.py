@@ -1,10 +1,8 @@
 """Phenopacket validation utilities."""
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import jsonschema
-from jsonschema import Draft7Validator, ValidationError
+from jsonschema import Draft7Validator
 
 
 class PhenopacketValidator:
@@ -152,7 +150,13 @@ class PhenopacketValidator:
                         "id": {"type": "string"},
                         "progress_status": {
                             "type": "string",
-                            "enum": ["UNKNOWN", "IN_PROGRESS", "COMPLETED", "SOLVED", "UNSOLVED"],
+                            "enum": [
+                                "UNKNOWN",
+                                "IN_PROGRESS",
+                                "COMPLETED",
+                                "SOLVED",
+                                "UNSOLVED",
+                            ],
                         },
                         "diagnosis": {
                             "type": "object",
@@ -160,7 +164,9 @@ class PhenopacketValidator:
                                 "disease": {"$ref": "#/definitions/ontology_class"},
                                 "genomic_interpretations": {
                                     "type": "array",
-                                    "items": {"$ref": "#/definitions/genomic_interpretation"},
+                                    "items": {
+                                        "$ref": "#/definitions/genomic_interpretation"
+                                    },
                                 },
                             },
                         },
@@ -195,7 +201,9 @@ class PhenopacketValidator:
                                         "label": {"type": "string"},
                                         "gene_context": {"type": "object"},
                                         "molecule_context": {"type": "string"},
-                                        "allelic_state": {"$ref": "#/definitions/ontology_class"},
+                                        "allelic_state": {
+                                            "$ref": "#/definitions/ontology_class"
+                                        },
                                     },
                                 },
                             },
@@ -211,12 +219,16 @@ class PhenopacketValidator:
                         "therapeutic_regimen": {"$ref": "#/definitions/ontology_class"},
                         "treatment_target": {"$ref": "#/definitions/ontology_class"},
                         "treatment_intent": {"$ref": "#/definitions/ontology_class"},
-                        "response_to_treatment": {"$ref": "#/definitions/ontology_class"},
+                        "response_to_treatment": {
+                            "$ref": "#/definitions/ontology_class"
+                        },
                         "adverse_events": {
                             "type": "array",
                             "items": {"$ref": "#/definitions/ontology_class"},
                         },
-                        "treatment_termination_reason": {"$ref": "#/definitions/ontology_class"},
+                        "treatment_termination_reason": {
+                            "$ref": "#/definitions/ontology_class"
+                        },
                     },
                 },
                 "treatment": {
@@ -224,8 +236,13 @@ class PhenopacketValidator:
                     "required": ["agent"],
                     "properties": {
                         "agent": {"$ref": "#/definitions/ontology_class"},
-                        "route_of_administration": {"$ref": "#/definitions/ontology_class"},
-                        "dose_intervals": {"type": "array", "items": {"type": "object"}},
+                        "route_of_administration": {
+                            "$ref": "#/definitions/ontology_class"
+                        },
+                        "dose_intervals": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                        },
                         "drug_type": {"type": "string"},
                     },
                 },
@@ -373,6 +390,7 @@ class PhenopacketSanitizer:
         Returns:
             Sanitized phenopacket
         """
+
         # Remove null values recursively
         def remove_nulls(obj):
             if isinstance(obj, dict):

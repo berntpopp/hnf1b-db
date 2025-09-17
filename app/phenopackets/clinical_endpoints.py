@@ -1,6 +1,6 @@
 """Clinical feature-specific query endpoints for phenopackets."""
 
-from typing import Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
@@ -13,8 +13,12 @@ router = APIRouter(prefix="/api/v2/clinical", tags=["clinical-features"])
 
 @router.get("/renal-insufficiency")
 async def get_renal_insufficiency_cases(
-    stage: Optional[str] = Query(None, description="Filter by CKD stage (e.g., '3', '4', '5')"),
-    include_transplant: Optional[bool] = Query(None, description="Include transplant cases"),
+    stage: Optional[str] = Query(
+        None, description="Filter by CKD stage (e.g., '3', '4', '5')"
+    ),
+    include_transplant: Optional[bool] = Query(
+        None, description="Include transplant cases"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all cases with renal insufficiency, optionally filtered by stage."""
@@ -27,12 +31,12 @@ async def get_renal_insufficiency_cases(
         feature->'type'->>'label' as feature_label,
         feature->'onset'->'age'->>'iso8601duration' as onset_age,
         jsonb_agg(DISTINCT modifier->>'label') as modifiers
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
         LEFT JOIN LATERAL jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier ON true
-    WHERE 
-        feature->'type'->>'id' IN ('HP:0012622', 'HP:0012623', 'HP:0012624', 
+    WHERE
+        feature->'type'->>'id' IN ('HP:0012622', 'HP:0012623', 'HP:0012624',
                                    'HP:0012625', 'HP:0012626', 'HP:0003774')
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
     """
@@ -56,9 +60,9 @@ async def get_renal_insufficiency_cases(
         base_query += " AND " + " AND ".join(conditions)
 
     base_query += """
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket, feature
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -81,23 +85,25 @@ async def get_renal_insufficiency_cases(
 
 @router.get("/genital-abnormalities")
 async def get_genital_abnormalities(
-    sex_filter: Optional[str] = Query(None, enum=["FEMALE", "MALE"], description="Filter by sex"),
+    sex_filter: Optional[str] = Query(
+        None, enum=["FEMALE", "MALE"], description="Filter by sex"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all cases with genital tract abnormalities."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
         feature->'type'->>'label' as abnormality_type,
         jsonb_agg(DISTINCT modifier->>'label') as specific_abnormalities
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
         LEFT JOIN LATERAL jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier ON true
-    WHERE 
-        feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079', 'HP:0000080', 
+    WHERE
+        feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079', 'HP:0000080',
                                    'HP:0000119', 'HP:0000062', 'HP:0000008')
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
     """
@@ -106,9 +112,9 @@ async def get_genital_abnormalities(
         query += f" AND p.phenopacket->'subject'->>'sex' = '{sex_filter}'"
 
     query += """
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket, feature
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -134,12 +140,14 @@ async def get_diabetes_cases(
         enum=["Type 1", "Type 2", "MODY"],
         description="Filter by diabetes type",
     ),
-    with_complications: Optional[bool] = Query(None, description="Only cases with complications"),
+    with_complications: Optional[bool] = Query(
+        None, description="Only cases with complications"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all cases with diabetes."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
@@ -151,11 +159,11 @@ async def get_diabetes_cases(
             FROM jsonb_array_elements(p.phenopacket->'medicalActions') as action
             WHERE action->'treatmentTarget'->>'id' LIKE '%diabetes%'
         ) as treatments
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'diseases') as disease
         LEFT JOIN LATERAL jsonb_array_elements(COALESCE(disease->'diseaseStage', '[]'::jsonb)) as stage ON true
-    WHERE 
+    WHERE
         (disease->'term'->>'label' ILIKE '%diabetes%'
          OR disease->'term'->>'id' IN ('MONDO:0005147', 'MONDO:0005148', 'MONDO:0015967'))
     """
@@ -178,9 +186,9 @@ async def get_diabetes_cases(
         """
 
     query += """
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket, disease
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -203,12 +211,14 @@ async def get_diabetes_cases(
 
 @router.get("/hypomagnesemia")
 async def get_hypomagnesemia_cases(
-    with_measurements: Optional[bool] = Query(None, description="Only cases with measurements"),
+    with_measurements: Optional[bool] = Query(
+        None, description="Only cases with measurements"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all cases with hypomagnesemia."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
@@ -224,10 +234,10 @@ async def get_hypomagnesemia_cases(
             WHERE m->'assay'->>'id' = 'LOINC:2601-3'
                OR m->'interpretation'->>'id' = 'HP:0002917'
         ) as magnesium_measurements
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE 
+    WHERE
         feature->'type'->>'id' = 'HP:0002917'
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
     """
@@ -241,7 +251,7 @@ async def get_hypomagnesemia_cases(
         """
 
     query += """
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -262,12 +272,14 @@ async def get_hypomagnesemia_cases(
 
 @router.get("/pancreatic-abnormalities")
 async def get_pancreatic_abnormalities(
-    include_diabetes: Optional[bool] = Query(True, description="Include cases with diabetes"),
+    include_diabetes: Optional[bool] = Query(
+        True, description="Include cases with diabetes"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all cases with pancreatic abnormalities."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
@@ -280,11 +292,11 @@ async def get_pancreatic_abnormalities(
             SELECT 1 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as f
             WHERE f->'type'->>'id' = 'HP:0001738'
         ) as has_exocrine_insufficiency
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE 
-        feature->'type'->>'id' IN ('HP:0001732', 'HP:0001733', 'HP:0001738', 
+    WHERE
+        feature->'type'->>'id' IN ('HP:0001732', 'HP:0001733', 'HP:0001738',
                                    'HP:0001735', 'HP:0001744', 'HP:0100027')
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
     """
@@ -298,9 +310,9 @@ async def get_pancreatic_abnormalities(
         """
 
     query += """
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -326,7 +338,7 @@ async def get_liver_abnormalities(
 ):
     """Get all cases with liver abnormalities."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
@@ -334,20 +346,20 @@ async def get_liver_abnormalities(
         (
             SELECT jsonb_agg(DISTINCT m->'assay'->>'label')
             FROM jsonb_array_elements(p.phenopacket->'measurements') as m
-            WHERE m->'assay'->>'id' IN ('LOINC:1742-6', 'LOINC:1920-8', 
+            WHERE m->'assay'->>'id' IN ('LOINC:1742-6', 'LOINC:1920-8',
                                         'LOINC:6768-6', 'LOINC:1975-2')
         ) as liver_function_tests
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE 
-        feature->'type'->>'id' IN ('HP:0001392', 'HP:0001394', 'HP:0001395', 
+    WHERE
+        feature->'type'->>'id' IN ('HP:0001392', 'HP:0001394', 'HP:0001395',
                                    'HP:0001396', 'HP:0001397', 'HP:0001399',
                                    'HP:0002240', 'HP:0001410')
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -376,7 +388,7 @@ async def get_kidney_morphology(
 ):
     """Get cases with kidney morphological abnormalities."""
     query = """
-    SELECT 
+    SELECT
         p.phenopacket_id,
         p.phenopacket->'subject'->>'id' as subject_id,
         p.phenopacket->'subject'->>'sex' as sex,
@@ -385,10 +397,10 @@ async def get_kidney_morphology(
             'id', feature->'type'->>'id',
             'excluded', COALESCE((feature->>'excluded')::boolean, false)
         )) as morphology_features
-    FROM 
+    FROM
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE 
+    WHERE
         feature->'type'->>'id' IN (
             'HP:0100611',  -- Multiple glomerular cysts
             'HP:0004719',  -- Oligomeganephronia
@@ -411,9 +423,9 @@ async def get_kidney_morphology(
             query += f" AND feature->'type'->>'id' IN ('{ids}')"
 
     query += """
-    GROUP BY 
+    GROUP BY
         p.phenopacket_id, p.phenopacket
-    ORDER BY 
+    ORDER BY
         p.phenopacket_id
     """
 
@@ -433,20 +445,22 @@ async def get_kidney_morphology(
 
 @router.get("/multisystem-involvement")
 async def get_multisystem_involvement(
-    min_systems: int = Query(2, ge=2, le=10, description="Minimum number of systems involved"),
+    min_systems: int = Query(
+        2, ge=2, le=10, description="Minimum number of systems involved"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get cases with multiple system involvement."""
     query = f"""
     WITH system_involvement AS (
-        SELECT 
+        SELECT
             p.phenopacket_id,
             p.phenopacket->'subject'->>'id' as subject_id,
             p.phenopacket->'subject'->>'sex' as sex,
-            COUNT(DISTINCT 
-                CASE 
+            COUNT(DISTINCT
+                CASE
                     WHEN feature->'type'->>'id' LIKE 'HP:00126%' THEN 'renal'
-                    WHEN feature->'type'->>'id' LIKE 'HP:00000%' AND 
+                    WHEN feature->'type'->>'id' LIKE 'HP:00000%' AND
                          feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079') THEN 'genital'
                     WHEN feature->'type'->>'id' IN ('HP:0001732', 'HP:0001738') THEN 'pancreatic'
                     WHEN feature->'type'->>'id' LIKE 'HP:00013%' THEN 'liver'
@@ -454,8 +468,8 @@ async def get_multisystem_involvement(
                     WHEN disease->'term'->>'label' ILIKE '%diabetes%' THEN 'endocrine'
                 END
             ) as system_count,
-            jsonb_agg(DISTINCT 
-                CASE 
+            jsonb_agg(DISTINCT
+                CASE
                     WHEN feature->'type'->>'id' LIKE 'HP:00126%' THEN 'renal'
                     WHEN feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079') THEN 'genital'
                     WHEN feature->'type'->>'id' IN ('HP:0001732', 'HP:0001738') THEN 'pancreatic'
@@ -463,12 +477,12 @@ async def get_multisystem_involvement(
                     WHEN feature->'type'->>'id' = 'HP:0002917' THEN 'metabolic'
                 END
             ) FILTER (WHERE feature IS NOT NULL) as affected_systems
-        FROM 
+        FROM
             phenopackets p
-            LEFT JOIN LATERAL jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature 
+            LEFT JOIN LATERAL jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
                 ON NOT COALESCE((feature->>'excluded')::boolean, false)
             LEFT JOIN LATERAL jsonb_array_elements(p.phenopacket->'diseases') as disease ON true
-        GROUP BY 
+        GROUP BY
             p.phenopacket_id, p.phenopacket
     )
     SELECT * FROM system_involvement

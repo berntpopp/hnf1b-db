@@ -1,10 +1,11 @@
 """HPO Proxy endpoints to handle CORS and caching for frontend."""
 
+import logging
+from typing import Any, Dict, List, Optional
+
 import httpx
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ search_cache: Dict[str, Any] = {}
 
 class HPOTerm(BaseModel):
     """HPO term model."""
+
     id: str
     name: str
     definition: Optional[str] = None
@@ -34,8 +36,7 @@ async def search_hpo_terms(
     q: str = Query(..., min_length=2, description="Search query"),
     max_results: int = Query(20, ge=1, le=100, description="Maximum results"),
 ):
-    """
-    Proxy search requests to HPO JAX API.
+    """Proxy search requests to HPO JAX API.
 
     This endpoint forwards search queries to the official HPO API
     and returns results, handling any CORS issues that might arise
@@ -64,8 +65,8 @@ async def search_hpo_terms(
                     "ontology": "hp",
                     "rows": max_results,
                     "local": "true",
-                    "fieldList": "id,label,description,synonym"
-                }
+                    "fieldList": "id,label,description,synonym",
+                },
             )
             response.raise_for_status()
             data = response.json()
@@ -77,12 +78,16 @@ async def search_hpo_terms(
                     # Only include actual HPO terms (starting with HP)
                     obo_id = doc.get("obo_id", "")
                     if obo_id.startswith("HP:"):
-                        terms.append({
-                            "id": obo_id,
-                            "name": doc.get("label", ""),
-                            "definition": doc.get("description", [""])[0] if doc.get("description") else "",
-                            "synonyms": doc.get("synonym", [])
-                        })
+                        terms.append(
+                            {
+                                "id": obo_id,
+                                "name": doc.get("label", ""),
+                                "definition": doc.get("description", [""])[0]
+                                if doc.get("description")
+                                else "",
+                                "synonyms": doc.get("synonym", []),
+                            }
+                        )
                 data = {"terms": terms}
 
             # Cache the result (optional)
@@ -100,7 +105,7 @@ async def search_hpo_terms(
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
-            detail=f"HPO API error: {e.response.text}"
+            detail=f"HPO API error: {e.response.text}",
         )
     except Exception as e:
         logger.error(f"Error proxying HPO search: {e}")
@@ -109,8 +114,7 @@ async def search_hpo_terms(
 
 @router.get("/term/{term_id}")
 async def get_hpo_term(term_id: str):
-    """
-    Get details for a specific HPO term.
+    """Get details for a specific HPO term.
 
     Args:
         term_id: HPO term ID (e.g., "HP:0001234" or "HP_0001234")
@@ -126,7 +130,9 @@ async def get_hpo_term(term_id: str):
             # Using OLS API to get term details
             response = await client.get(
                 f"{OLS_API_BASE}/ontologies/hp/terms",
-                params={"iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"}
+                params={
+                    "iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"
+                },
             )
             response.raise_for_status()
             return response.json()
@@ -136,7 +142,7 @@ async def get_hpo_term(term_id: str):
             raise HTTPException(status_code=404, detail=f"HPO term {term_id} not found")
         raise HTTPException(
             status_code=e.response.status_code,
-            detail=f"HPO API error: {e.response.text}"
+            detail=f"HPO API error: {e.response.text}",
         )
     except Exception as e:
         logger.error(f"Error fetching HPO term {term_id}: {e}")
@@ -148,8 +154,7 @@ async def autocomplete_hpo_terms(
     q: str = Query(..., min_length=2, description="Partial term to complete"),
     limit: int = Query(10, ge=1, le=50, description="Maximum suggestions"),
 ):
-    """
-    Autocomplete endpoint optimized for frontend typeahead/dropdown.
+    """Autocomplete endpoint optimized for frontend typeahead/dropdown.
 
     Returns a simplified list of terms suitable for dropdown displays.
 
@@ -164,12 +169,7 @@ async def autocomplete_hpo_terms(
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
                 f"{OLS_API_BASE}/search",
-                params={
-                    "q": q,
-                    "ontology": "hp",
-                    "rows": limit,
-                    "local": "true"
-                }
+                params={"q": q, "ontology": "hp", "rows": limit, "local": "true"},
             )
             response.raise_for_status()
             data = response.json()
@@ -180,11 +180,17 @@ async def autocomplete_hpo_terms(
                 for doc in data["response"]["docs"]:
                     obo_id = doc.get("obo_id", "")
                     if obo_id.startswith("HP:"):
-                        results.append({
-                            "id": obo_id,
-                            "label": doc.get("label", ""),
-                            "definition": (doc.get("description", [""])[0][:200] if doc.get("description") else "")
-                        })
+                        results.append(
+                            {
+                                "id": obo_id,
+                                "label": doc.get("label", ""),
+                                "definition": (
+                                    doc.get("description", [""])[0][:200]
+                                    if doc.get("description")
+                                    else ""
+                                ),
+                            }
+                        )
                 return results
             return []
 
@@ -196,10 +202,11 @@ async def autocomplete_hpo_terms(
 
 @router.get("/common-terms")
 async def get_common_hpo_terms(
-    category: Optional[str] = Query(None, description="Category filter: renal, metabolic, developmental")
+    category: Optional[str] = Query(
+        None, description="Category filter: renal, metabolic, developmental"
+    ),
 ):
-    """
-    Get commonly used HPO terms for HNF1B-related conditions.
+    """Get commonly used HPO terms for HNF1B-related conditions.
 
     This endpoint returns a curated list of frequently used HPO terms
     to help users quickly select relevant phenotypes.
@@ -246,10 +253,9 @@ async def get_common_hpo_terms(
 
 @router.get("/validate")
 async def validate_hpo_terms(
-    term_ids: str = Query(..., description="Comma-separated list of HPO term IDs")
+    term_ids: str = Query(..., description="Comma-separated list of HPO term IDs"),
 ):
-    """
-    Validate a list of HPO term IDs.
+    """Validate a list of HPO term IDs.
 
     Useful for validating user input before submission.
 
@@ -266,15 +272,17 @@ async def validate_hpo_terms(
         for term_id in ids:
             try:
                 # Using OLS API to get term details
-            response = await client.get(
-                f"{OLS_API_BASE}/ontologies/hp/terms",
-                params={"iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"}
-            )
+                response = await client.get(
+                    f"{OLS_API_BASE}/ontologies/hp/terms",
+                    params={
+                        "iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"
+                    },
+                )
                 if response.status_code == 200:
                     term_data = response.json()
                     results[term_id] = {
                         "valid": True,
-                        "name": term_data.get("name", "Unknown")
+                        "name": term_data.get("name", "Unknown"),
                     }
                 else:
                     results[term_id] = {"valid": False, "error": "Term not found"}

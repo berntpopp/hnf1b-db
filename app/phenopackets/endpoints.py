@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_auth
 from app.database import get_db
 from app.phenopackets.models import (
     AggregationResult,
@@ -16,7 +17,6 @@ from app.phenopackets.models import (
     PhenopacketUpdate,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
-from app.auth import require_auth
 
 router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets"])
 
@@ -29,7 +29,9 @@ async def list_phenopackets(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     sex: Optional[str] = Query(None, description="Filter by sex"),
-    has_variants: Optional[bool] = Query(None, description="Filter by variant presence"),
+    has_variants: Optional[bool] = Query(
+        None, description="Filter by variant presence"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """List all phenopackets with optional filtering."""
@@ -247,7 +249,7 @@ async def get_measurements(
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_auth),
+    current_user=Depends(require_auth),
 ):
     """Create a new phenopacket."""
     # Sanitize the phenopacket
@@ -264,7 +266,8 @@ async def create_phenopacket(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
-            status_code=409, detail=f"Phenopacket with ID {sanitized['id']} already exists"
+            status_code=409,
+            detail=f"Phenopacket with ID {sanitized['id']} already exists",
         )
 
     # Create new phenopacket
@@ -296,7 +299,7 @@ async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_auth),
+    current_user=Depends(require_auth),
 ):
     """Update an existing phenopacket."""
     result = await db.execute(
@@ -339,7 +342,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_auth),
+    current_user=Depends(require_auth),
 ):
     """Delete a phenopacket."""
     result = await db.execute(
@@ -363,19 +366,19 @@ async def aggregate_by_feature(
 ):
     """Aggregate phenopackets by phenotypic features."""
     query = """
-    SELECT 
+    SELECT
         feature->'type'->>'id' as hpo_id,
         feature->'type'->>'label' as label,
         COUNT(*) as count
-    FROM 
+    FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
-    WHERE 
+    WHERE
         NOT COALESCE((feature->>'excluded')::boolean, false)
-    GROUP BY 
+    GROUP BY
         feature->'type'->>'id',
         feature->'type'->>'label'
-    ORDER BY 
+    ORDER BY
         count DESC
     """
 
@@ -401,17 +404,17 @@ async def aggregate_by_disease(
 ):
     """Aggregate phenopackets by disease."""
     query = """
-    SELECT 
+    SELECT
         disease->'term'->>'id' as disease_id,
         disease->'term'->>'label' as label,
         COUNT(*) as count
-    FROM 
+    FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'diseases') as disease
-    GROUP BY 
+    GROUP BY
         disease->'term'->>'id',
         disease->'term'->>'label'
-    ORDER BY 
+    ORDER BY
         count DESC
     """
 
@@ -437,19 +440,19 @@ async def aggregate_kidney_stages(
 ):
     """Get distribution of kidney disease stages."""
     query = """
-    SELECT 
+    SELECT
         modifier->>'label' as stage,
         COUNT(*) as count
-    FROM 
+    FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
         jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
-    WHERE 
+    WHERE
         feature->'type'->>'id' = 'HP:0012622'
         AND modifier->>'label' LIKE '%Stage%'
-    GROUP BY 
+    GROUP BY
         modifier->>'label'
-    ORDER BY 
+    ORDER BY
         stage
     """
 
@@ -474,14 +477,14 @@ async def aggregate_sex_distribution(
 ):
     """Get sex distribution of subjects."""
     query = """
-    SELECT 
+    SELECT
         subject_sex as sex,
         COUNT(*) as count
-    FROM 
+    FROM
         phenopackets
-    GROUP BY 
+    GROUP BY
         subject_sex
-    ORDER BY 
+    ORDER BY
         count DESC
     """
 
@@ -506,16 +509,16 @@ async def aggregate_variant_pathogenicity(
 ):
     """Get distribution of variant pathogenicity classifications."""
     query = """
-    SELECT 
+    SELECT
         gi->>'interpretationStatus' as classification,
         COUNT(*) as count
-    FROM 
+    FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'interpretations') as interp,
         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-    GROUP BY 
+    GROUP BY
         gi->>'interpretationStatus'
-    ORDER BY 
+    ORDER BY
         count DESC
     """
 

@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -23,7 +23,9 @@ from tqdm import tqdm
 # Load environment variables
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Google Sheets configuration
@@ -61,73 +63,132 @@ class DirectSheetsToPhenopackets:
         return {
             # Kidney phenotypes
             "renalinsufficancy": {"id": "HP:0000083", "label": "Renal insufficiency"},
-            "chronic kidney disease": {"id": "HP:0012622", "label": "Chronic kidney disease"},
-            "stage 1 chronic kidney disease": {"id": "HP:0012623", "label": "Stage 1 chronic kidney disease"},
-            "stage 2 chronic kidney disease": {"id": "HP:0012624", "label": "Stage 2 chronic kidney disease"},
-            "stage 3 chronic kidney disease": {"id": "HP:0012625", "label": "Stage 3 chronic kidney disease"},
-            "stage 4 chronic kidney disease": {"id": "HP:0012626", "label": "Stage 4 chronic kidney disease"},
-            "stage 5 chronic kidney disease": {"id": "HP:0003774", "label": "Stage 5 chronic kidney disease"},
+            "chronic kidney disease": {
+                "id": "HP:0012622",
+                "label": "Chronic kidney disease",
+            },
+            "stage 1 chronic kidney disease": {
+                "id": "HP:0012623",
+                "label": "Stage 1 chronic kidney disease",
+            },
+            "stage 2 chronic kidney disease": {
+                "id": "HP:0012624",
+                "label": "Stage 2 chronic kidney disease",
+            },
+            "stage 3 chronic kidney disease": {
+                "id": "HP:0012625",
+                "label": "Stage 3 chronic kidney disease",
+            },
+            "stage 4 chronic kidney disease": {
+                "id": "HP:0012626",
+                "label": "Stage 4 chronic kidney disease",
+            },
+            "stage 5 chronic kidney disease": {
+                "id": "HP:0003774",
+                "label": "Stage 5 chronic kidney disease",
+            },
             "renalcysts": {"id": "HP:0000107", "label": "Renal cyst"},
             "renalhypoplasia": {"id": "HP:0000089", "label": "Renal hypoplasia"},
-            "solitarykidney": {"id": "HP:0004729", "label": "Solitary functioning kidney"},
-            "multicysticdysplastickidney": {"id": "HP:0000003", "label": "Multicystic kidney dysplasia"},
-            "hyperechogenicity": {"id": "HP:0010935", "label": "Increased echogenicity of kidneys"},
-            "urinarytractmalformation": {"id": "HP:0000079", "label": "Abnormality of the urinary system"},
-            "antenatalrenalabnormalities": {"id": "HP:0010945", "label": "Fetal renal anomaly"},
-            "multiple glomerular cysts": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
+            "solitarykidney": {
+                "id": "HP:0004729",
+                "label": "Solitary functioning kidney",
+            },
+            "multicysticdysplastickidney": {
+                "id": "HP:0000003",
+                "label": "Multicystic kidney dysplasia",
+            },
+            "hyperechogenicity": {
+                "id": "HP:0010935",
+                "label": "Increased echogenicity of kidneys",
+            },
+            "urinarytractmalformation": {
+                "id": "HP:0000079",
+                "label": "Abnormality of the urinary system",
+            },
+            "antenatalrenalabnormalities": {
+                "id": "HP:0010945",
+                "label": "Fetal renal anomaly",
+            },
+            "multiple glomerular cysts": {
+                "id": "HP:0100611",
+                "label": "Multiple glomerular cysts",
+            },
             "oligomeganephronia": {"id": "HP:0004719", "label": "Oligomeganephronia"},
-
             # Metabolic phenotypes
             "hypomagnesemia": {"id": "HP:0002917", "label": "Hypomagnesemia"},
             "hyperuricemia": {"id": "HP:0002149", "label": "Hyperuricemia"},
             "gout": {"id": "HP:0001997", "label": "Gout"},
             "hypokalemia": {"id": "HP:0002900", "label": "Hypokalemia"},
             "hyperparathyroidism": {"id": "HP:0000843", "label": "Hyperparathyroidism"},
-
             # Diabetes/Pancreas
-            "mody": {"id": "HP:0004904", "label": "Maturity-onset diabetes of the young"},
-            "pancreatichypoplasia": {"id": "HP:0100575", "label": "Pancreatic hypoplasia"},
-            "exocrinepancreaticinsufficiency": {"id": "HP:0001738", "label": "Exocrine pancreatic insufficiency"},
-
+            "mody": {
+                "id": "HP:0004904",
+                "label": "Maturity-onset diabetes of the young",
+            },
+            "pancreatichypoplasia": {
+                "id": "HP:0100575",
+                "label": "Pancreatic hypoplasia",
+            },
+            "exocrinepancreaticinsufficiency": {
+                "id": "HP:0001738",
+                "label": "Exocrine pancreatic insufficiency",
+            },
             # Liver
-            "abnormalliverphysiology": {"id": "HP:0031865", "label": "Abnormal liver physiology"},  # More suitable term
-            "elevatedhepatictransaminase": {"id": "HP:0002910", "label": "Elevated hepatic transaminase"},
-
+            "abnormalliverphysiology": {
+                "id": "HP:0031865",
+                "label": "Abnormal liver physiology",
+            },  # More suitable term
+            "elevatedhepatictransaminase": {
+                "id": "HP:0002910",
+                "label": "Elevated hepatic transaminase",
+            },
             # Genital
-            "genitaltractabnormality": {"id": "HP:0000078", "label": "Abnormality of the genital system"},
-
+            "genitaltractabnormality": {
+                "id": "HP:0000078",
+                "label": "Abnormality of the genital system",
+            },
             # Developmental
-            "neurodevelopmentaldisorder": {"id": "HP:0012759", "label": "Neurodevelopmental abnormality"},
-            "mentaldisease": {"id": "HP:0000708", "label": "Behavioral abnormality"},  # More general term
-            "dysmorphicfeatures": {"id": "HP:0001999", "label": "Abnormal facial shape"},
+            "neurodevelopmentaldisorder": {
+                "id": "HP:0012759",
+                "label": "Neurodevelopmental abnormality",
+            },
+            "mentaldisease": {
+                "id": "HP:0000708",
+                "label": "Behavioral abnormality",
+            },  # More general term
+            "dysmorphicfeatures": {
+                "id": "HP:0001999",
+                "label": "Abnormal facial shape",
+            },
             "shortstature": {"id": "HP:0004322", "label": "Short stature"},
             "prematurebirth": {"id": "HP:0001622", "label": "Premature birth"},
-
             # Neurological
-            "brainabnormality": {"id": "HP:0012443", "label": "Abnormality of brain morphology"},  # More inclusive term
+            "brainabnormality": {
+                "id": "HP:0012443",
+                "label": "Abnormality of brain morphology",
+            },  # More inclusive term
             "seizures": {"id": "HP:0001250", "label": "Seizures"},
-
             # Other systems
             "eyeabnormality": {"id": "HP:0000478", "label": "Abnormality of the eye"},
-            "congenitalcardiacanomalies": {"id": "HP:0001627", "label": "Abnormal heart morphology"},
-            "musculoskeletalfeatures": {"id": "HP:0033127", "label": "Abnormality of the musculoskeletal system"},
+            "congenitalcardiacanomalies": {
+                "id": "HP:0001627",
+                "label": "Abnormal heart morphology",
+            },
+            "musculoskeletalfeatures": {
+                "id": "HP:0033127",
+                "label": "Abnormality of the musculoskeletal system",
+            },
         }
 
     def _init_mondo_mappings(self) -> Dict[str, Dict[str, str]]:
         """Initialize MONDO disease mappings."""
         return {
-            "hnf1b": {
-                "id": "MONDO:0018874",
-                "label": "HNF1B-related disorder"
-            },
+            "hnf1b": {"id": "MONDO:0018874", "label": "HNF1B-related disorder"},
             "mody5": {
                 "id": "MONDO:0010953",
-                "label": "Maturity-onset diabetes of the young type 5"
+                "label": "Maturity-onset diabetes of the young type 5",
             },
-            "rcad": {
-                "id": "ORPHA:93111",
-                "label": "Renal cysts and diabetes syndrome"
-            }
+            "rcad": {"id": "ORPHA:93111", "label": "Renal cysts and diabetes syndrome"},
         }
 
     def _csv_url(self, spreadsheet_id: str, gid: str) -> str:
@@ -141,16 +202,20 @@ class DirectSheetsToPhenopackets:
         # Load individuals sheet (contains phenotypes and variants data)
         url = self._csv_url(SPREADSHEET_ID, GID_INDIVIDUALS)
         self.individuals_df = pd.read_csv(url)
-        self.individuals_df = self.individuals_df.dropna(how='all')
+        self.individuals_df = self.individuals_df.dropna(how="all")
         logger.info(f"Loaded {len(self.individuals_df)} rows from individuals sheet")
-        logger.info(f"Columns: {list(self.individuals_df.columns)[:10]}...")  # Log first 10 columns
+        logger.info(
+            f"Columns: {list(self.individuals_df.columns)[:10]}..."
+        )  # Log first 10 columns
 
         # Load publications (optional)
         try:
             url = self._csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
             self.publications_df = pd.read_csv(url)
-            self.publications_df = self.publications_df.dropna(how='all')
-            logger.info(f"Loaded {len(self.publications_df)} rows from publications sheet")
+            self.publications_df = self.publications_df.dropna(how="all")
+            logger.info(
+                f"Loaded {len(self.publications_df)} rows from publications sheet"
+            )
         except Exception as e:
             logger.warning(f"Could not load publications sheet: {e}")
             self.publications_df = pd.DataFrame()
@@ -159,7 +224,7 @@ class DirectSheetsToPhenopackets:
         try:
             url = self._csv_url(SPREADSHEET_ID, GID_REVIEWERS)
             self.reviewers_df = pd.read_csv(url)
-            self.reviewers_df = self.reviewers_df.dropna(how='all')
+            self.reviewers_df = self.reviewers_df.dropna(how="all")
             logger.info(f"Loaded {len(self.reviewers_df)} rows from reviewers sheet")
         except Exception as e:
             logger.warning(f"Could not load reviewers sheet: {e}")
@@ -199,7 +264,7 @@ class DirectSheetsToPhenopackets:
             if isinstance(age_str, (int, float)):
                 years = int(age_str)
             else:
-                match = re.search(r'(\d+)', str(age_str))
+                match = re.search(r"(\d+)", str(age_str))
                 if match:
                     years = int(match.group(1))
                 else:
@@ -229,11 +294,8 @@ class DirectSheetsToPhenopackets:
                         excluded = True
 
                     phenotype = {
-                        "type": {
-                            "id": hpo_info["id"],
-                            "label": hpo_info["label"]
-                        },
-                        "excluded": excluded
+                        "type": {"id": hpo_info["id"], "label": hpo_info["label"]},
+                        "excluded": excluded,
                     }
 
                     # Add modifier if applicable (for bilateral/unilateral features)
@@ -242,7 +304,7 @@ class DirectSheetsToPhenopackets:
                             "bilateral": {"id": "HP:0012832", "label": "Bilateral"},
                             "unilateral": {"id": "HP:0012833", "label": "Unilateral"},
                             "left": {"id": "HP:0012835", "label": "Left"},
-                            "right": {"id": "HP:0012834", "label": "Right"}
+                            "right": {"id": "HP:0012834", "label": "Right"},
                         }
                         if value.lower() in modifier_map:
                             phenotype["modifiers"] = [modifier_map[value.lower()]]
@@ -256,12 +318,12 @@ class DirectSheetsToPhenopackets:
         interpretations = []
 
         # Get all variant-related columns
-        varsome = self._safe_value(row.get('Varsome'))
-        variant_reported = self._safe_value(row.get('VariantReported'))
-        hg38 = self._safe_value(row.get('hg38'))
-        verdict = self._safe_value(row.get('verdict_classification'))
-        variant_type = self._safe_value(row.get('VariantType'))
-        segregation = self._safe_value(row.get('Segregation'))
+        varsome = self._safe_value(row.get("Varsome"))
+        variant_reported = self._safe_value(row.get("VariantReported"))
+        hg38 = self._safe_value(row.get("hg38"))
+        verdict = self._safe_value(row.get("verdict_classification"))
+        variant_type = self._safe_value(row.get("VariantType"))
+        segregation = self._safe_value(row.get("Segregation"))
 
         # Initialize variant components
         c_dot = None
@@ -274,31 +336,31 @@ class DirectSheetsToPhenopackets:
             import re
 
             # Extract transcript
-            transcript_match = re.search(r'NM_\d+\.\d+', varsome)
+            transcript_match = re.search(r"NM_\d+\.\d+", varsome)
             if transcript_match:
                 transcript = transcript_match.group()
 
             # Extract c.dot notation
-            c_dot_match = re.search(r'c\.[^\s\)]+', varsome)
+            c_dot_match = re.search(r"c\.[^\s\)]+", varsome)
             if c_dot_match:
                 c_dot = c_dot_match.group()
 
             # Extract p.dot notation
-            p_dot_match = re.search(r'p\.[^\)]+', varsome)
+            p_dot_match = re.search(r"p\.[^\)]+", varsome)
             if p_dot_match:
                 p_dot = p_dot_match.group()
 
         # PRIORITY 2: Parse VariantReported if Varsome didn't provide everything
         if variant_reported and (not c_dot or not p_dot):
-            if ',' in variant_reported:
-                parts = variant_reported.split(',')
+            if "," in variant_reported:
+                parts = variant_reported.split(",")
                 for part in parts:
                     part = part.strip()
-                    if not c_dot and part.startswith('c.'):
+                    if not c_dot and part.startswith("c."):
                         c_dot = part
-                    elif not p_dot and part.startswith('p.'):
+                    elif not p_dot and part.startswith("p."):
                         p_dot = part
-            elif not c_dot and variant_reported.startswith('c.'):
+            elif not c_dot and variant_reported.startswith("c."):
                 c_dot = variant_reported
 
         # Only create interpretation if we have meaningful variant data
@@ -312,26 +374,26 @@ class DirectSheetsToPhenopackets:
             molecular_consequence = None
             if variant_type:
                 type_lower = variant_type.lower()
-                if 'snv' in type_lower or 'snp' in type_lower:
+                if "snv" in type_lower or "snp" in type_lower:
                     molecular_consequence = {"id": "SO:0001483", "label": "SNV"}
-                elif 'delet' in type_lower:
+                elif "delet" in type_lower:
                     molecular_consequence = {"id": "SO:0000159", "label": "deletion"}
-                elif 'dup' in type_lower:
+                elif "dup" in type_lower:
                     molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
-                elif 'indel' in type_lower:
+                elif "indel" in type_lower:
                     molecular_consequence = {"id": "SO:1000032", "label": "indel"}
-            elif hg38 and '<DEL>' in hg38:
+            elif hg38 and "<DEL>" in hg38:
                 molecular_consequence = {"id": "SO:0000159", "label": "deletion"}
-            elif hg38 and '<DUP>' in hg38:
+            elif hg38 and "<DUP>" in hg38:
                 molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
             elif c_dot:
-                if 'del' in c_dot:
+                if "del" in c_dot:
                     molecular_consequence = {"id": "SO:0000159", "label": "deletion"}
-                elif 'dup' in c_dot:
+                elif "dup" in c_dot:
                     molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
-                elif 'ins' in c_dot:
+                elif "ins" in c_dot:
                     molecular_consequence = {"id": "SO:0000667", "label": "insertion"}
-                elif '>' in c_dot:
+                elif ">" in c_dot:
                     molecular_consequence = {"id": "SO:0001483", "label": "SNV"}
 
             # Create unique interpretation ID
@@ -342,72 +404,81 @@ class DirectSheetsToPhenopackets:
                 "progressStatus": "COMPLETED",
                 "diagnosis": {
                     "disease": self.mondo_mappings["hnf1b"],
-                    "genomicInterpretations": [{
-                        "subjectOrBiosampleId": row.get("IndividualIdentifier", row.get("individual_id", "unknown")),
-                        "interpretationStatus": "UNCERTAIN_SIGNIFICANCE",
-                        "variantInterpretation": {
-                            "variationDescriptor": {
-                                "id": f"var:HNF1B:{c_dot if c_dot else hg38 if hg38 else 'unknown'}",
-                                "label": variant_label,
-                                "geneContext": {
-                                    "valueId": "HGNC:5024",
-                                    "symbol": "HNF1B"
-                                },
-                                "expressions": [],
-                                "moleculeContext": "genomic"
-                            }
+                    "genomicInterpretations": [
+                        {
+                            "subjectOrBiosampleId": row.get(
+                                "IndividualIdentifier",
+                                row.get("individual_id", "unknown"),
+                            ),
+                            "interpretationStatus": "UNCERTAIN_SIGNIFICANCE",
+                            "variantInterpretation": {
+                                "variationDescriptor": {
+                                    "id": f"var:HNF1B:{c_dot if c_dot else hg38 if hg38 else 'unknown'}",
+                                    "label": variant_label,
+                                    "geneContext": {
+                                        "valueId": "HGNC:5024",
+                                        "symbol": "HNF1B",
+                                    },
+                                    "expressions": [],
+                                    "moleculeContext": "genomic",
+                                }
+                            },
                         }
-                    }]
-                }
+                    ],
+                },
             }
 
             # Add molecular consequence if determined
             if molecular_consequence:
-                interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]["variationDescriptor"]["molecularConsequences"] = [molecular_consequence]
+                interpretation["diagnosis"]["genomicInterpretations"][0][
+                    "variantInterpretation"
+                ]["variationDescriptor"]["molecularConsequences"] = [
+                    molecular_consequence
+                ]
 
             # Add allelicState based on segregation
             if segregation:
                 seg_lower = segregation.lower()
-                if 'de novo' in seg_lower:
-                    interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]["variationDescriptor"]["allelicState"] = {
+                if "de novo" in seg_lower:
+                    interpretation["diagnosis"]["genomicInterpretations"][0][
+                        "variantInterpretation"
+                    ]["variationDescriptor"]["allelicState"] = {
                         "id": "GENO:0000135",
-                        "label": "heterozygous"
+                        "label": "heterozygous",
                     }
-                elif 'inherited' in seg_lower:
-                    interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]["variationDescriptor"]["allelicState"] = {
+                elif "inherited" in seg_lower:
+                    interpretation["diagnosis"]["genomicInterpretations"][0][
+                        "variantInterpretation"
+                    ]["variationDescriptor"]["allelicState"] = {
                         "id": "GENO:0000135",
-                        "label": "heterozygous"
+                        "label": "heterozygous",
                     }
 
             # Add HGVS expressions
-            expressions = interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]["variationDescriptor"]["expressions"]
+            expressions = interpretation["diagnosis"]["genomicInterpretations"][0][
+                "variantInterpretation"
+            ]["variationDescriptor"]["expressions"]
 
             # Add c. notation with proper transcript
             if c_dot:
                 if transcript:
-                    expressions.append({
-                        "syntax": "hgvs.c",
-                        "value": f"{transcript}:{c_dot}"
-                    })
+                    expressions.append(
+                        {"syntax": "hgvs.c", "value": f"{transcript}:{c_dot}"}
+                    )
                 else:
-                    expressions.append({
-                        "syntax": "hgvs.c",
-                        "value": f"NM_000458.4:{c_dot}"
-                    })
+                    expressions.append(
+                        {"syntax": "hgvs.c", "value": f"NM_000458.4:{c_dot}"}
+                    )
 
             # Add p. notation if available
             if p_dot:
-                expressions.append({
-                    "syntax": "hgvs.p",
-                    "value": f"NP_000449.3:{p_dot}"
-                })
+                expressions.append(
+                    {"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"}
+                )
 
             # Add genomic position if available
             if hg38:
-                expressions.append({
-                    "syntax": "hgvs.g",
-                    "value": hg38
-                })
+                expressions.append({"syntax": "hgvs.g", "value": hg38})
 
             # Map pathogenicity if available
             if verdict:
@@ -416,19 +487,23 @@ class DirectSheetsToPhenopackets:
                     "likely pathogenic": "LIKELY_PATHOGENIC",
                     "uncertain significance": "UNCERTAIN_SIGNIFICANCE",
                     "likely benign": "LIKELY_BENIGN",
-                    "benign": "BENIGN"
+                    "benign": "BENIGN",
                 }
                 verdict_lower = verdict.lower()
                 for key, value in path_map.items():
                     if key in verdict_lower:
-                        interpretation["diagnosis"]["genomicInterpretations"][0]["interpretationStatus"] = value
+                        interpretation["diagnosis"]["genomicInterpretations"][0][
+                            "interpretationStatus"
+                        ] = value
                         break
 
             interpretations.append(interpretation)
 
         return interpretations
 
-    def build_phenopacket(self, individual_id: str, rows: pd.DataFrame) -> Dict[str, Any]:
+    def build_phenopacket(
+        self, individual_id: str, rows: pd.DataFrame
+    ) -> Dict[str, Any]:
         """Build a complete phenopacket from individual data rows."""
         # Get first row for basic demographics
         first_row = rows.iloc[0]
@@ -441,7 +516,7 @@ class DirectSheetsToPhenopackets:
         # Build subject
         subject = {
             "id": individual_id,  # Use individual_id as primary ID
-            "sex": self._map_sex(self._safe_value(first_row.get("Sex")))
+            "sex": self._map_sex(self._safe_value(first_row.get("Sex"))),
         }
 
         # Add IndividualIdentifier as alternateIds if it exists
@@ -481,22 +556,28 @@ class DirectSheetsToPhenopackets:
             disease_onset = {"age": age_onset}
         else:
             # Default to congenital onset for HNF1B
-            disease_onset = {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
+            disease_onset = {
+                "ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}
+            }
 
-        diseases = [{
-            "term": self.mondo_mappings["hnf1b"],
-            "onset": disease_onset
-        }]
+        diseases = [{"term": self.mondo_mappings["hnf1b"], "onset": disease_onset}]
 
         # Check for MODY in phenotypes
-        mody_col = next((col for col in first_row.index if 'mody' in col.lower()), None)
+        mody_col = next((col for col in first_row.index if "mody" in col.lower()), None)
         if mody_col:
             mody_val = self._safe_value(first_row[mody_col])
             if mody_val and mody_val.lower() not in ["no", "not reported", ""]:
-                diseases.append({
-                    "term": self.mondo_mappings["mody5"],
-                    "onset": {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
-                })
+                diseases.append(
+                    {
+                        "term": self.mondo_mappings["mody5"],
+                        "onset": {
+                            "ontologyClass": {
+                                "id": "HP:0003577",
+                                "label": "Congenital onset",
+                            }
+                        },
+                    }
+                )
 
         # Build metadata
         metadata = {
@@ -509,7 +590,7 @@ class DirectSheetsToPhenopackets:
                     "url": "http://purl.obolibrary.org/obo/hp.owl",
                     "version": "2024-01-16",
                     "namespacePrefix": "HP",
-                    "iriPrefix": "http://purl.obolibrary.org/obo/HP_"
+                    "iriPrefix": "http://purl.obolibrary.org/obo/HP_",
                 },
                 {
                     "id": "mondo",
@@ -517,21 +598,25 @@ class DirectSheetsToPhenopackets:
                     "url": "http://purl.obolibrary.org/obo/mondo.owl",
                     "version": "2024-01-03",
                     "namespacePrefix": "MONDO",
-                    "iriPrefix": "http://purl.obolibrary.org/obo/MONDO_"
-                }
+                    "iriPrefix": "http://purl.obolibrary.org/obo/MONDO_",
+                },
             ],
-            "phenopacketSchemaVersion": "2.0.0"
+            "phenopacketSchemaVersion": "2.0.0",
         }
 
         # Add publication references if available
-        pub_col = next((col for col in first_row.index if 'publication' in col.lower()), None)
+        pub_col = next(
+            (col for col in first_row.index if "publication" in col.lower()), None
+        )
         if pub_col:
             pub_val = self._safe_value(first_row[pub_col])
             if pub_val:
-                metadata["externalReferences"] = [{
-                    "id": f"PUB:{pub_val}",
-                    "description": f"Publication reference: {pub_val}"
-                }]
+                metadata["externalReferences"] = [
+                    {
+                        "id": f"PUB:{pub_val}",
+                        "description": f"Publication reference: {pub_val}",
+                    }
+                ]
 
         # Build complete phenopacket
         phenopacket = {
@@ -539,7 +624,7 @@ class DirectSheetsToPhenopackets:
             "subject": subject,
             "phenotypicFeatures": all_phenotypes,
             "diseases": diseases,
-            "metaData": metadata
+            "metaData": metadata,
         }
 
         # Add interpretations if present
@@ -551,32 +636,46 @@ class DirectSheetsToPhenopackets:
     def _clean_empty_fields(self, obj: Any) -> Any:
         """Recursively remove empty fields from object."""
         if isinstance(obj, dict):
-            return {k: self._clean_empty_fields(v) for k, v in obj.items()
-                   if v is not None and (not isinstance(v, (list, dict)) or v)}
+            return {
+                k: self._clean_empty_fields(v)
+                for k, v in obj.items()
+                if v is not None and (not isinstance(v, (list, dict)) or v)
+            }
         elif isinstance(obj, list):
             cleaned = [self._clean_empty_fields(item) for item in obj]
             return [item for item in cleaned if item is not None]
         else:
             return obj
 
-    async def migrate(self, limit: Optional[int] = None, test_mode: bool = False, dry_run: bool = False) -> None:
+    async def migrate(
+        self,
+        limit: Optional[int] = None,
+        test_mode: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         """Execute the complete migration."""
         try:
             # Load all data from Google Sheets
             await self.load_google_sheets()
 
             # Normalize column names
-            self.individuals_df.columns = [col.strip() for col in self.individuals_df.columns]
+            self.individuals_df.columns = [
+                col.strip() for col in self.individuals_df.columns
+            ]
 
             # Group rows by individual_id (correct column name from logs)
-            individual_groups = self.individuals_df.groupby('individual_id', dropna=False)
+            individual_groups = self.individuals_df.groupby(
+                "individual_id", dropna=False
+            )
 
             phenopackets = []
             individual_count = 0
 
             logger.info(f"Processing {len(individual_groups)} individuals...")
 
-            for individual_id, group_df in tqdm(individual_groups, desc="Building phenopackets"):
+            for individual_id, group_df in tqdm(
+                individual_groups, desc="Building phenopackets"
+            ):
                 if pd.isna(individual_id) or str(individual_id).strip() == "":
                     continue
 
@@ -598,7 +697,7 @@ class DirectSheetsToPhenopackets:
             if dry_run:
                 # Save to JSON file for inspection
                 output_file = f"phenopackets_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     json.dump(phenopackets, f, indent=2)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
@@ -621,7 +720,9 @@ class DirectSheetsToPhenopackets:
                 try:
                     # Extract individual ID for generated columns
                     subject_id = phenopacket.get("subject", {}).get("id", "unknown")
-                    subject_sex = phenopacket.get("subject", {}).get("sex", "UNKNOWN_SEX")
+                    subject_sex = phenopacket.get("subject", {}).get(
+                        "sex", "UNKNOWN_SEX"
+                    )
 
                     # Insert phenopacket
                     query = text("""
@@ -635,19 +736,24 @@ class DirectSheetsToPhenopackets:
                             updated_at = CURRENT_TIMESTAMP
                     """)
 
-                    await session.execute(query, {
-                        "phenopacket_id": phenopacket["id"],
-                        "phenopacket": json.dumps(phenopacket),
-                        "subject_id": subject_id,
-                        "subject_sex": subject_sex,
-                        "created_by": "direct_sheets_migration",
-                        "schema_version": "2.0.0"
-                    })
+                    await session.execute(
+                        query,
+                        {
+                            "phenopacket_id": phenopacket["id"],
+                            "phenopacket": json.dumps(phenopacket),
+                            "subject_id": subject_id,
+                            "subject_sex": subject_sex,
+                            "created_by": "direct_sheets_migration",
+                            "schema_version": "2.0.0",
+                        },
+                    )
 
                     stored_count += 1
 
                 except Exception as e:
-                    logger.error(f"Error storing phenopacket {phenopacket.get('id')}: {e}")
+                    logger.error(
+                        f"Error storing phenopacket {phenopacket.get('id')}: {e}"
+                    )
                     continue
 
             await session.commit()
@@ -665,15 +771,21 @@ class DirectSheetsToPhenopackets:
             sex = p.get("subject", {}).get("sex", "UNKNOWN")
             sex_distribution[sex] = sex_distribution.get(sex, 0) + 1
 
-        logger.info("\n" + "="*60)
+        logger.info("\n" + "=" * 60)
         logger.info("MIGRATION SUMMARY")
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info(f"Total phenopackets created: {total}")
-        logger.info(f"With phenotypic features: {with_phenotypes} ({with_phenotypes*100//total if total else 0}%)")
-        logger.info(f"With genetic variants: {with_variants} ({with_variants*100//total if total else 0}%)")
-        logger.info(f"With disease diagnoses: {with_diseases} ({with_diseases*100//total if total else 0}%)")
+        logger.info(
+            f"With phenotypic features: {with_phenotypes} ({with_phenotypes*100//total if total else 0}%)"
+        )
+        logger.info(
+            f"With genetic variants: {with_variants} ({with_variants*100//total if total else 0}%)"
+        )
+        logger.info(
+            f"With disease diagnoses: {with_diseases} ({with_diseases*100//total if total else 0}%)"
+        )
         logger.info(f"Sex distribution: {sex_distribution}")
-        logger.info("="*60)
+        logger.info("=" * 60)
 
 
 async def main():
@@ -681,11 +793,12 @@ async def main():
     # Get database URL from environment
     target_db = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets"
+        "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets",
     )
 
     # Parse command line arguments
     import sys
+
     test_mode = "--test" in sys.argv
     dry_run = "--dry-run" in sys.argv
     limit = None
