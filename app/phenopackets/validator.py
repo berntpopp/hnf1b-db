@@ -1,11 +1,10 @@
 """Phenopacket validation utilities with comprehensive variant format validation."""
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
-import httpx
-import asyncio
 from difflib import get_close_matches
+from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
 from jsonschema import Draft7Validator
 
 
@@ -385,7 +384,9 @@ class PhenopacketValidator:
         ]
         return status in valid_statuses
 
-    async def validate_variant_with_vep(self, hgvs_notation: str) -> Tuple[bool, Optional[Dict], List[str]]:
+    async def validate_variant_with_vep(
+        self, hgvs_notation: str
+    ) -> Tuple[bool, Optional[Dict], List[str]]:
         """Validate variant using Ensembl VEP API.
 
         Args:
@@ -400,9 +401,7 @@ class PhenopacketValidator:
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    vep_url,
-                    headers={"Content-Type": "application/json"},
-                    timeout=10.0
+                    vep_url, headers={"Content-Type": "application/json"}, timeout=10.0
                 )
 
                 if response.status_code == 200:
@@ -415,7 +414,7 @@ class PhenopacketValidator:
                 else:
                     return False, None, ["VEP service temporarily unavailable"]
 
-        except Exception as e:
+        except Exception:
             # Fallback to regex validation if VEP is unavailable
             return self._fallback_validation(hgvs_notation), None, []
 
@@ -443,43 +442,62 @@ class PhenopacketValidator:
         # Check for common mistakes
         if "c." in invalid_notation or "p." in invalid_notation:
             if not invalid_notation.startswith("NM_"):
-                suggestions.append("Did you mean to include a transcript? Try: NM_000458.4:" + invalid_notation)
+                suggestions.append(
+                    "Did you mean to include a transcript? Try: NM_000458.4:"
+                    + invalid_notation
+                )
 
             # Check for missing dot after c or p
-            if re.match(r'^c\d+', invalid_notation) or re.match(r'^p[A-Z]', invalid_notation):
-                suggestions.append(f"Missing dot notation. Did you mean: {invalid_notation[0]}.{invalid_notation[1:]}?")
+            if re.match(r"^c\d+", invalid_notation) or re.match(
+                r"^p[A-Z]", invalid_notation
+            ):
+                suggestions.append(
+                    f"Missing dot notation. Did you mean: {invalid_notation[0]}.{invalid_notation[1:]}?"
+                )
 
         # Check for VCF-like format that needs conversion
-        if re.match(r'^\d+[-:]\d+[-:][ATCG]+[-:][ATCG]+$', invalid_notation):
-            parts = re.split(r'[-:]', invalid_notation)
+        if re.match(r"^\d+[-:]\d+[-:][ATCG]+[-:][ATCG]+$", invalid_notation):
+            parts = re.split(r"[-:]", invalid_notation)
             if len(parts) >= 4:
-                suggestions.append(f"For VCF format, use: chr17-{parts[0]}-{parts[2]}-{parts[3]}")
-                suggestions.append(f"For HGVS genomic, use: NC_000017.11:g.{parts[0]}{parts[2]}>{parts[3]}")
+                suggestions.append(
+                    f"For VCF format, use: chr17-{parts[0]}-{parts[2]}-{parts[3]}"
+                )
+                suggestions.append(
+                    f"For HGVS genomic, use: NC_000017.11:g.{parts[0]}{parts[2]}>{parts[3]}"
+                )
 
         # Check for CNV notation issues
         if "del" in invalid_notation.lower() or "dup" in invalid_notation.lower():
             if ":" not in invalid_notation:
-                suggestions.append("For CNVs, use format: 17:start-end:DEL or 17:start-end:DUP")
+                suggestions.append(
+                    "For CNVs, use format: 17:start-end:DEL or 17:start-end:DUP"
+                )
 
         # Find similar valid patterns
-        close_matches = get_close_matches(invalid_notation, common_patterns, n=3, cutoff=0.6)
+        close_matches = get_close_matches(
+            invalid_notation, common_patterns, n=3, cutoff=0.6
+        )
         if close_matches:
             suggestions.append(f"Similar valid formats: {', '.join(close_matches)}")
 
         # General help
         if not suggestions:
-            suggestions.append("Valid formats: NM_000458.4:c.123A>G, chr17:g.36459258A>G, 17:start-end:DEL")
+            suggestions.append(
+                "Valid formats: NM_000458.4:c.123A>G, chr17:g.36459258A>G, 17:start-end:DEL"
+            )
 
         return suggestions
 
     def _fallback_validation(self, notation: str) -> bool:
         """Fallback validation using regex when VEP is unavailable."""
         # Try all validation patterns
-        return (self._validate_hgvs_c(notation) or
-                self._validate_hgvs_p(notation) or
-                self._validate_hgvs_g(notation) or
-                self._validate_vcf(notation) or
-                self._is_ga4gh_cnv_notation(notation))
+        return (
+            self._validate_hgvs_c(notation)
+            or self._validate_hgvs_p(notation)
+            or self._validate_hgvs_g(notation)
+            or self._validate_vcf(notation)
+            or self._is_ga4gh_cnv_notation(notation)
+        )
 
     def validate_variant_formats(self, variant_descriptor: Dict[str, Any]) -> List[str]:
         """Validate variant formats in a variation descriptor.
@@ -493,54 +511,56 @@ class PhenopacketValidator:
         errors = []
 
         # Check for required variant identification
-        if not variant_descriptor.get('id'):
+        if not variant_descriptor.get("id"):
             errors.append("Variant descriptor missing 'id' field")
 
         # Validate expressions if present
-        expressions = variant_descriptor.get('expressions', [])
+        expressions = variant_descriptor.get("expressions", [])
         for expr in expressions:
-            syntax = expr.get('syntax', '')
-            value = expr.get('value', '')
+            syntax = expr.get("syntax", "")
+            value = expr.get("value", "")
 
-            if syntax == 'hgvs.c':
+            if syntax == "hgvs.c":
                 if not self._validate_hgvs_c(value):
                     suggestions = self._get_notation_suggestions(value)
                     error_msg = f"Invalid HGVS c. notation: {value}"
                     if suggestions:
                         error_msg += f" | Suggestions: {'; '.join(suggestions)}"
                     errors.append(error_msg)
-            elif syntax == 'hgvs.p':
+            elif syntax == "hgvs.p":
                 if not self._validate_hgvs_p(value):
                     suggestions = self._get_notation_suggestions(value)
                     error_msg = f"Invalid HGVS p. notation: {value}"
                     if suggestions:
                         error_msg += f" | Suggestions: {'; '.join(suggestions)}"
                     errors.append(error_msg)
-            elif syntax == 'hgvs.g':
+            elif syntax == "hgvs.g":
                 if not self._validate_hgvs_g(value):
                     suggestions = self._get_notation_suggestions(value)
                     error_msg = f"Invalid HGVS g. notation: {value}"
                     if suggestions:
                         error_msg += f" | Suggestions: {'; '.join(suggestions)}"
                     errors.append(error_msg)
-            elif syntax == 'vcf':
+            elif syntax == "vcf":
                 if not self._validate_vcf(value):
                     errors.append(f"Invalid VCF format: {value}")
-            elif syntax == 'spdi':
+            elif syntax == "spdi":
                 if not self._validate_spdi(value):
                     errors.append(f"Invalid SPDI format: {value}")
 
         # Validate VRS allele if present
-        if 'vrsAllele' in variant_descriptor:
-            vrs_errors = self._validate_vrs_allele(variant_descriptor['vrsAllele'])
+        if "vrsAllele" in variant_descriptor:
+            vrs_errors = self._validate_vrs_allele(variant_descriptor["vrsAllele"])
             errors.extend(vrs_errors)
 
         # Validate structural variants (CNVs)
-        if 'structuralType' in variant_descriptor:
+        if "structuralType" in variant_descriptor:
             # Check for GA4GH CNV notation in expressions
             has_valid_cnv = False
             for expr in expressions:
-                if expr.get('syntax') == 'iscn' or self._is_ga4gh_cnv_notation(expr.get('value', '')):
+                if expr.get("syntax") == "iscn" or self._is_ga4gh_cnv_notation(
+                    expr.get("value", "")
+                ):
                     has_valid_cnv = True
                     break
             if not has_valid_cnv:
@@ -555,11 +575,11 @@ class PhenopacketValidator:
         """
         # More comprehensive pattern for c. notation
         patterns = [
-            r'^(NM_\d+\.\d+:)?c\.([+\-*]?\d+[+\-]?\d*)([ATCG]>[ATCG])$',  # Substitution
-            r'^(NM_\d+\.\d+:)?c\.\d+(_\d+)?del([ATCG]+)?$',  # Deletion
-            r'^(NM_\d+\.\d+:)?c\.\d+(_\d+)?dup([ATCG]+)?$',  # Duplication
-            r'^(NM_\d+\.\d+:)?c\.\d+(_\d+)?ins([ATCG]+)$',  # Insertion
-            r'^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$',  # Intronic
+            r"^(NM_\d+\.\d+:)?c\.([+\-*]?\d+[+\-]?\d*)([ATCG]>[ATCG])$",  # Substitution
+            r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?del([ATCG]+)?$",  # Deletion
+            r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?dup([ATCG]+)?$",  # Duplication
+            r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?ins([ATCG]+)$",  # Insertion
+            r"^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$",  # Intronic
         ]
         return any(bool(re.match(pattern, value)) for pattern in patterns)
 
@@ -569,7 +589,7 @@ class PhenopacketValidator:
         Examples: NP_000449.3:p.Arg181*, p.Val123Phe
         """
         # Pattern for p. notation
-        pattern = r'^(NP_\d+\.\d+:)?p\.([A-Z][a-z]{2}\d+[A-Z][a-z]{2}|[A-Z][a-z]{2}\d+\*|[A-Z][a-z]{2}\d+[A-Z][a-z]{2}fs|\?)$'
+        pattern = r"^(NP_\d+\.\d+:)?p\.([A-Z][a-z]{2}\d+[A-Z][a-z]{2}|[A-Z][a-z]{2}\d+\*|[A-Z][a-z]{2}\d+[A-Z][a-z]{2}fs|\?)$"
         return bool(re.match(pattern, value))
 
     def _validate_hgvs_g(self, value: str) -> bool:
@@ -578,7 +598,7 @@ class PhenopacketValidator:
         Examples: NC_000017.11:g.36459258A>G
         """
         # Pattern for g. notation with reference sequence
-        pattern = r'^NC_\d+\.\d+:g\.\d+[ATCG]>[ATCG]$'
+        pattern = r"^NC_\d+\.\d+:g\.\d+[ATCG]>[ATCG]$"
         return bool(re.match(pattern, value))
 
     def _validate_vcf(self, value: str) -> bool:
@@ -587,7 +607,7 @@ class PhenopacketValidator:
         Examples: chr17-36459258-A-G, 17-36459258-A-G
         """
         # Pattern for VCF: chr-pos-ref-alt or with special alleles
-        pattern = r'^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ATCG]+-([ATCG]+|<[A-Z]+>)$'
+        pattern = r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ATCG]+-([ATCG]+|<[A-Z]+>)$"
         return bool(re.match(pattern, value, re.IGNORECASE))
 
     def _validate_spdi(self, value: str) -> bool:
@@ -596,7 +616,7 @@ class PhenopacketValidator:
         Examples: NC_000017.11:36459257:A:G
         """
         # Pattern for SPDI: sequence:position:deletion:insertion
-        pattern = r'^NC_\d+\.\d+:\d+:[ATCG]*:[ATCG]+$'
+        pattern = r"^NC_\d+\.\d+:\d+:[ATCG]*:[ATCG]+$"
         return bool(re.match(pattern, value))
 
     def _is_ga4gh_cnv_notation(self, value: str) -> bool:
@@ -604,7 +624,7 @@ class PhenopacketValidator:
 
         Examples: 17:36459258-37832869:DEL, 17:36459258-37832869:DUP
         """
-        pattern = r'^([1-9]|1[0-9]|2[0-2]|X|Y):\d+-\d+:(DEL|DUP|INS|INV)$'
+        pattern = r"^([1-9]|1[0-9]|2[0-2]|X|Y):\d+-\d+:(DEL|DUP|INS|INV)$"
         return bool(re.match(pattern, value))
 
     def _validate_vrs_allele(self, vrs_allele: Dict[str, Any]) -> List[str]:
@@ -612,26 +632,33 @@ class PhenopacketValidator:
         errors = []
 
         # Check required VRS fields
-        if vrs_allele.get('type') != 'Allele':
+        if vrs_allele.get("type") != "Allele":
             errors.append("VRS allele must have type 'Allele'")
 
         # Validate location
-        location = vrs_allele.get('location', {})
+        location = vrs_allele.get("location", {})
         if not location:
             errors.append("VRS allele missing 'location' field")
-        elif location.get('type') != 'SequenceLocation':
+        elif location.get("type") != "SequenceLocation":
             errors.append("VRS location must have type 'SequenceLocation'")
 
         # Validate state
-        state = vrs_allele.get('state', {})
+        state = vrs_allele.get("state", {})
         if not state:
             errors.append("VRS allele missing 'state' field")
-        elif state.get('type') not in ['LiteralSequenceExpression', 'ReferenceLengthExpression']:
-            errors.append("VRS state must be LiteralSequenceExpression or ReferenceLengthExpression")
+        elif state.get("type") not in [
+            "LiteralSequenceExpression",
+            "ReferenceLengthExpression",
+        ]:
+            errors.append(
+                "VRS state must be LiteralSequenceExpression or ReferenceLengthExpression"
+            )
 
         return errors
 
-    def validate_variants_in_phenopacket(self, phenopacket: Dict[str, Any]) -> List[str]:
+    def validate_variants_in_phenopacket(
+        self, phenopacket: Dict[str, Any]
+    ) -> List[str]:
         """Validate all variants in a phenopacket.
 
         Args:
@@ -643,15 +670,21 @@ class PhenopacketValidator:
         all_errors = []
 
         # Check variants in interpretations
-        for interpretation in phenopacket.get('interpretations', []):
-            genomic_interps = interpretation.get('diagnosis', {}).get('genomicInterpretations', [])
+        for interpretation in phenopacket.get("interpretations", []):
+            genomic_interps = interpretation.get("diagnosis", {}).get(
+                "genomicInterpretations", []
+            )
             for gi in genomic_interps:
-                variant_descriptor = gi.get('variantInterpretation', {}).get('variationDescriptor', {})
+                variant_descriptor = gi.get("variantInterpretation", {}).get(
+                    "variationDescriptor", {}
+                )
                 if variant_descriptor:
                     errors = self.validate_variant_formats(variant_descriptor)
                     if errors:
-                        subject_id = gi.get('subjectOrBiosampleId', 'unknown')
-                        all_errors.extend([f"Subject {subject_id}: {e}" for e in errors])
+                        subject_id = gi.get("subjectOrBiosampleId", "unknown")
+                        all_errors.extend(
+                            [f"Subject {subject_id}: {e}" for e in errors]
+                        )
 
         return all_errors
 

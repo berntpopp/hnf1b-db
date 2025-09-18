@@ -31,7 +31,7 @@ def test_phenopackets():
 
     # Test that phenopackets module is importable
     try:
-        import phenopackets
+        import phenopackets  # noqa: F401
 
         print("✓ phenopackets module is installed")
     except ImportError as e:

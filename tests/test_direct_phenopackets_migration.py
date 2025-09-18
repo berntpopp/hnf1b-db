@@ -1,6 +1,5 @@
 """Test suite for direct phenopackets migration from Google Sheets."""
 
-import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -36,7 +35,7 @@ class TestDirectPhenopacketsMigration:
             "individual_id": "IND001",
             "IndividualIdentifier": "HNF1B-001",
             "Sex": "Male",
-            "AgeReported": "45"
+            "AgeReported": "45",
         }
 
         subject = migration._build_subject(row)
@@ -66,7 +65,7 @@ class TestDirectPhenopacketsMigration:
         row = {
             "Varsome": "NM_000458.3:c.523C>T",
             "hg38": "chr17:36046434C>T",
-            "VariantInterpretation": "Pathogenic"
+            "VariantInterpretation": "Pathogenic",
         }
 
         variant = migration._extract_variant_from_row(row)
@@ -82,7 +81,7 @@ class TestDirectPhenopacketsMigration:
             "RenalInsufficiency": "1",
             "Diabetes": "1",
             "Hypomagnesemia": "0",
-            "MentalDisease": "1"
+            "MentalDisease": "1",
         }
 
         features = migration._extract_phenotypes(row)
@@ -99,7 +98,7 @@ class TestDirectPhenopacketsMigration:
         # Hypomagnesemia should not be included (value is 0)
         assert "HP:0002917" not in feature_ids
 
-    @patch('pandas.read_csv')
+    @patch("pandas.read_csv")
     def test_dry_run_mode(self, mock_read_csv, migration):
         """Test dry run mode outputs to JSON."""
         # Mock CSV data
@@ -113,8 +112,8 @@ class TestDirectPhenopacketsMigration:
         migration.dry_run = True
 
         # In dry run, should create JSON file instead of database insert
-        with patch('builtins.open', create=True) as mock_open:
-            with patch('json.dump') as mock_json_dump:
+        with patch("builtins.open", create=True):
+            with patch("json.dump") as mock_json_dump:
                 migration.migrate()
 
                 # Should write to JSON file
@@ -151,7 +150,7 @@ class TestDirectPhenopacketsMigration:
             "Sex": "Male",
             "AgeReported": "45",
             "RenalInsufficiency": "1",
-            "Diabetes": "1"
+            "Diabetes": "1",
         }
 
         phenopacket = migration._create_phenopacket(row, 1)

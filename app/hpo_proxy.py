@@ -100,16 +100,16 @@ async def search_hpo_terms(
 
             return data
 
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="HPO API request timed out")
+    except httpx.TimeoutException as e:
+        raise HTTPException(status_code=504, detail="HPO API request timed out") from e
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"HPO API error: {e.response.text}",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Error proxying HPO search: {e}")
-        raise HTTPException(status_code=500, detail="Error searching HPO terms")
+        raise HTTPException(status_code=500, detail="Error searching HPO terms") from e
 
 
 @router.get("/term/{term_id}")
@@ -139,14 +139,14 @@ async def get_hpo_term(term_id: str):
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"HPO term {term_id} not found")
+            raise HTTPException(status_code=404, detail=f"HPO term {term_id} not found") from e
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"HPO API error: {e.response.text}",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Error fetching HPO term {term_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching HPO term")
+        raise HTTPException(status_code=500, detail="Error fetching HPO term") from e
 
 
 @router.get("/autocomplete")

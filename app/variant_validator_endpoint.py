@@ -2,7 +2,8 @@
 
 import re
 from typing import Dict, List, Optional
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.phenopackets.validator import PhenopacketValidator
@@ -13,12 +14,14 @@ validator = PhenopacketValidator()
 
 class VariantValidationRequest(BaseModel):
     """Request model for variant validation."""
+
     notation: str
     notation_type: Optional[str] = None  # hgvs.c, hgvs.p, vcf, cnv, etc.
 
 
 class VariantValidationResponse(BaseModel):
     """Response model for variant validation."""
+
     is_valid: bool
     notation: str
     notation_type: Optional[str]
@@ -30,8 +33,7 @@ class VariantValidationResponse(BaseModel):
 
 @router.post("/validate", response_model=VariantValidationResponse)
 async def validate_variant(request: VariantValidationRequest):
-    """
-    Validate variant notation and provide suggestions.
+    """Validate variant notation and provide suggestions.
 
     This endpoint:
     1. Validates variant format (HGVS, VCF, CNV, etc.)
@@ -39,12 +41,13 @@ async def validate_variant(request: VariantValidationRequest):
     3. Provides helpful suggestions for invalid formats
     4. Returns standardized formats when possible
     """
-
     notation = request.notation.strip()
 
     # Try VEP validation first for HGVS notations
     if ":" in notation and any(x in notation for x in ["c.", "p.", "g."]):
-        is_valid, vep_data, suggestions = await validator.validate_variant_with_vep(notation)
+        is_valid, vep_data, suggestions = await validator.validate_variant_with_vep(
+            notation
+        )
 
         if is_valid and vep_data:
             # Extract standardized formats from VEP response
@@ -54,7 +57,7 @@ async def validate_variant(request: VariantValidationRequest):
                 "hgvs_g": vep_data.get("hgvsg"),
                 "consequence": vep_data.get("most_severe_consequence"),
                 "gene": vep_data.get("gene_symbol", "HNF1B"),
-                "transcript": vep_data.get("transcript_id")
+                "transcript": vep_data.get("transcript_id"),
             }
 
             return VariantValidationResponse(
@@ -64,7 +67,7 @@ async def validate_variant(request: VariantValidationRequest):
                 errors=[],
                 suggestions=[],
                 vep_annotation=vep_data,
-                standardized_formats=standardized
+                standardized_formats=standardized,
             )
 
     # Fallback to regex validation
@@ -109,18 +112,16 @@ async def validate_variant(request: VariantValidationRequest):
         errors=errors,
         suggestions=suggestions,
         vep_annotation=None,
-        standardized_formats=None
+        standardized_formats=None,
     )
 
 
 @router.get("/suggest/{partial_notation}")
 async def suggest_notation(partial_notation: str):
-    """
-    Get autocomplete suggestions for partial variant notation.
+    """Get autocomplete suggestions for partial variant notation.
 
     Useful for frontend autocomplete as user types.
     """
-
     # Common HNF1B variants for autocomplete
     common_variants = [
         "NM_000458.4:c.544+1G>A",
@@ -153,7 +154,7 @@ async def suggest_notation(partial_notation: str):
 
     return {
         "query": partial_notation,
-        "suggestions": suggestions[:10]  # Limit to 10 suggestions
+        "suggestions": suggestions[:10],  # Limit to 10 suggestions
     }
 
 
@@ -165,9 +166,9 @@ def _detect_notation_type(notation: str) -> str:
         return "hgvs.p"
     elif ":g." in notation:
         return "hgvs.g"
-    elif re.match(r'^(chr)?[\dXY]+-\d+-[ATCG]+-[ATCG]+', notation):
+    elif re.match(r"^(chr)?[\dXY]+-\d+-[ATCG]+-[ATCG]+", notation):
         return "vcf"
-    elif re.match(r'^[\dXY]+:\d+-\d+:(DEL|DUP|INS|INV)', notation):
+    elif re.match(r"^[\dXY]+:\d+-\d+:(DEL|DUP|INS|INV)", notation):
         return "cnv"
     else:
         return "unknown"

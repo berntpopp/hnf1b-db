@@ -41,15 +41,32 @@ class VRSBuilder:
 
     # Reference sequence accessions for chromosomes (GRCh38/hg38)
     REFSEQ_ACCESSIONS = {
-        "1": "NC_000001.11", "2": "NC_000002.12", "3": "NC_000003.12",
-        "4": "NC_000004.12", "5": "NC_000005.10", "6": "NC_000006.12",
-        "7": "NC_000007.14", "8": "NC_000008.11", "9": "NC_000009.12",
-        "10": "NC_000010.11", "11": "NC_000011.10", "12": "NC_000012.12",
-        "13": "NC_000013.11", "14": "NC_000014.9", "15": "NC_000015.10",
-        "16": "NC_000016.10", "17": "NC_000017.11", "18": "NC_000018.10",
-        "19": "NC_000019.10", "20": "NC_000020.11", "21": "NC_000021.9",
-        "22": "NC_000022.11", "X": "NC_000023.11", "Y": "NC_000024.10",
-        "M": "NC_012920.1", "MT": "NC_012920.1"
+        "1": "NC_000001.11",
+        "2": "NC_000002.12",
+        "3": "NC_000003.12",
+        "4": "NC_000004.12",
+        "5": "NC_000005.10",
+        "6": "NC_000006.12",
+        "7": "NC_000007.14",
+        "8": "NC_000008.11",
+        "9": "NC_000009.12",
+        "10": "NC_000010.11",
+        "11": "NC_000011.10",
+        "12": "NC_000012.12",
+        "13": "NC_000013.11",
+        "14": "NC_000014.9",
+        "15": "NC_000015.10",
+        "16": "NC_000016.10",
+        "17": "NC_000017.11",
+        "18": "NC_000018.10",
+        "19": "NC_000019.10",
+        "20": "NC_000020.11",
+        "21": "NC_000021.9",
+        "22": "NC_000022.11",
+        "X": "NC_000023.11",
+        "Y": "NC_000024.10",
+        "M": "NC_012920.1",
+        "MT": "NC_012920.1",
     }
 
     @staticmethod
@@ -66,32 +83,38 @@ class VRSBuilder:
             return None
 
         # Parse VCF format: chr17-37744882-C-T or chr17:37744882:C:T
-        parts = vcf_string.replace(':', '-').split('-')
+        parts = vcf_string.replace(":", "-").split("-")
         if len(parts) < 4:
             return None
 
         try:
-            chromosome = parts[0].replace('chr', '')
+            chromosome = parts[0].replace("chr", "")
             position = int(parts[1])
             ref_allele = parts[2]
             alt_allele = parts[3]
 
             # Skip structural variants
-            if ref_allele.startswith('<') or alt_allele.startswith('<'):
+            if ref_allele.startswith("<") or alt_allele.startswith("<"):
                 return None
 
             return {
-                'chromosome': chromosome,
-                'position': position,
-                'ref': ref_allele,
-                'alt': alt_allele
+                "chromosome": chromosome,
+                "position": position,
+                "ref": ref_allele,
+                "alt": alt_allele,
             }
         except (ValueError, IndexError):
             return None
 
     @classmethod
-    def create_vrs_allele(cls, chromosome: str, position: int,
-                         ref: str, alt: str, assembly: str = "GRCh38") -> Dict[str, Any]:
+    def create_vrs_allele(
+        cls,
+        chromosome: str,
+        position: int,
+        ref: str,
+        alt: str,
+        assembly: str = "GRCh38",
+    ) -> Dict[str, Any]:
         """Create a GA4GH VRS 2.0 Allele structure.
 
         VRS 2.0 Allele structure includes:
@@ -132,25 +155,16 @@ class VRSBuilder:
                     # Alternative: use refseq directly
                     "other_identifiers": [
                         f"refseq:{refseq_id}",
-                        f"GRCh38:chr{chromosome}"
-                    ]
+                        f"GRCh38:chr{chromosome}",
+                    ],
                 },
                 "interval": {
                     "type": "SequenceInterval",
-                    "start": {
-                        "type": "Number",
-                        "value": start
-                    },
-                    "end": {
-                        "type": "Number",
-                        "value": end
-                    }
-                }
+                    "start": {"type": "Number", "value": start},
+                    "end": {"type": "Number", "value": end},
+                },
             },
-            "state": {
-                "type": "LiteralSequenceExpression",
-                "sequence": alt
-            }
+            "state": {"type": "LiteralSequenceExpression", "sequence": alt},
         }
 
         # Generate VRS 2.0 compliant identifier
@@ -164,19 +178,17 @@ class VRSBuilder:
         vrs_allele["expressions"] = [
             {
                 "syntax": "hgvs.g",
-                "value": cls.create_hgvs_g_notation(chromosome, position, ref, alt)
+                "value": cls.create_hgvs_g_notation(chromosome, position, ref, alt),
             },
-            {
-                "syntax": "spdi",
-                "value": f"{refseq_id}:{start}:{len(ref)}:{alt}"
-            }
+            {"syntax": "spdi", "value": f"{refseq_id}:{start}:{len(ref)}:{alt}"},
         ]
 
         return vrs_allele
 
     @classmethod
-    def create_hgvs_g_notation(cls, chromosome: str, position: int,
-                               ref: str, alt: str) -> str:
+    def create_hgvs_g_notation(
+        cls, chromosome: str, position: int, ref: str, alt: str
+    ) -> str:
         """Create proper HGVS.g notation.
 
         Args:
@@ -221,9 +233,14 @@ class VRSBuilder:
             return f"{refseq_id}:g.{position}_{position + len(ref) - 1}delins{alt}"
 
     @classmethod
-    def create_vrs_snv_variant(cls, hg38: str, c_dot: str = None,
-                              p_dot: str = None, transcript: str = None,
-                              variant_reported: str = None) -> Dict[str, Any]:
+    def create_vrs_snv_variant(
+        cls,
+        hg38: str,
+        c_dot: str = None,
+        p_dot: str = None,
+        transcript: str = None,
+        variant_reported: str = None,
+    ) -> Dict[str, Any]:
         """Create a VRS 2.0 compliant variant descriptor for SNVs/Indels.
 
         Args:
@@ -243,10 +260,10 @@ class VRSBuilder:
 
         # Create VRS 2.0 Allele
         vrs_allele = cls.create_vrs_allele(
-            vrs_components['chromosome'],
-            vrs_components['position'],
-            vrs_components['ref'],
-            vrs_components['alt']
+            vrs_components["chromosome"],
+            vrs_components["position"],
+            vrs_components["ref"],
+            vrs_components["alt"],
         )
 
         # Build variant descriptor for phenopacket
@@ -257,13 +274,10 @@ class VRSBuilder:
         variant_descriptor = {
             "id": vrs_allele["id"],  # Use VRS identifier
             "label": label,
-            "geneContext": {
-                "valueId": "HGNC:5024",
-                "symbol": "HNF1B"
-            },
+            "geneContext": {"valueId": "HGNC:5024", "symbol": "HNF1B"},
             "expressions": [],
             "vrsAllele": vrs_allele,  # Embed full VRS structure
-            "moleculeContext": "genomic"
+            "moleculeContext": "genomic",
         }
 
         # Add original publication description if available
@@ -282,28 +296,20 @@ class VRSBuilder:
         # Add HGVS.c if available
         if c_dot:
             if transcript:
-                expressions.append({
-                    "syntax": "hgvs.c",
-                    "value": f"{transcript}:{c_dot}"
-                })
+                expressions.append(
+                    {"syntax": "hgvs.c", "value": f"{transcript}:{c_dot}"}
+                )
             else:
-                expressions.append({
-                    "syntax": "hgvs.c",
-                    "value": f"NM_000458.4:{c_dot}"
-                })
+                expressions.append(
+                    {"syntax": "hgvs.c", "value": f"NM_000458.4:{c_dot}"}
+                )
 
         # Add HGVS.p if available
         if p_dot:
-            expressions.append({
-                "syntax": "hgvs.p",
-                "value": f"NP_000449.3:{p_dot}"
-            })
+            expressions.append({"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"})
 
         # Add VCF notation
-        expressions.append({
-            "syntax": "vcf",
-            "value": hg38
-        })
+        expressions.append({"syntax": "vcf", "value": hg38})
 
         # Add SPDI notation from VRS
         for expr in vrs_allele.get("expressions", []):
@@ -328,7 +334,9 @@ class CNVParser:
     }
 
     @staticmethod
-    def parse_hg38_coordinates(hg38: str, hg38_info: str) -> Optional[Tuple[str, int, int, str]]:
+    def parse_hg38_coordinates(
+        hg38: str, hg38_info: str
+    ) -> Optional[Tuple[str, int, int, str]]:
         """Parse hg38 coordinates from VCF-style notation.
 
         Args:
@@ -343,38 +351,42 @@ class CNVParser:
 
         try:
             # Parse chromosome and start position from hg38 field
-            parts = hg38.replace(':', '-').split('-')
+            parts = hg38.replace(":", "-").split("-")
             if len(parts) < 4:
                 return None
 
-            chromosome = parts[0].replace('chr', '')  # Remove 'chr' prefix
+            chromosome = parts[0].replace("chr", "")  # Remove 'chr' prefix
             start = int(parts[1])
 
             # Parse END position and variant type from hg38_INFO
-            end_match = re.search(r'END=(\d+)', hg38_info)
+            end_match = re.search(r"END=(\d+)", hg38_info)
             if not end_match:
                 return None
             end = int(end_match.group(1))
 
             # Determine variant type
             variant_type = None
-            if 'SVTYPE=DEL' in hg38_info or '<DEL>' in hg38:
-                variant_type = 'DEL'
-            elif 'SVTYPE=DUP' in hg38_info or '<DUP>' in hg38:
-                variant_type = 'DUP'
-            elif 'SVTYPE=INV' in hg38_info:
-                variant_type = 'INV'
-            elif 'SVTYPE=INS' in hg38_info:
-                variant_type = 'INS'
+            if "SVTYPE=DEL" in hg38_info or "<DEL>" in hg38:
+                variant_type = "DEL"
+            elif "SVTYPE=DUP" in hg38_info or "<DUP>" in hg38:
+                variant_type = "DUP"
+            elif "SVTYPE=INV" in hg38_info:
+                variant_type = "INV"
+            elif "SVTYPE=INS" in hg38_info:
+                variant_type = "INS"
 
             return (chromosome, start, end, variant_type)
 
         except (ValueError, IndexError) as e:
-            logger.warning(f"Failed to parse coordinates from hg38='{hg38}', hg38_info='{hg38_info}': {e}")
+            logger.warning(
+                f"Failed to parse coordinates from hg38='{hg38}', hg38_info='{hg38_info}': {e}"
+            )
             return None
 
     @staticmethod
-    def create_ga4gh_cnv_notation(chromosome: str, start: int, end: int, variant_type: str) -> str:
+    def create_ga4gh_cnv_notation(
+        chromosome: str, start: int, end: int, variant_type: str
+    ) -> str:
         """Create GA4GH compliant CNV notation.
 
         Args:
@@ -389,7 +401,9 @@ class CNVParser:
         return f"{chromosome}:{start}-{end}:{variant_type}"
 
     @staticmethod
-    def create_iscn_notation(chromosome: str, start: int, end: int, variant_type: str) -> Optional[str]:
+    def create_iscn_notation(
+        chromosome: str, start: int, end: int, variant_type: str
+    ) -> Optional[str]:
         """Create ISCN notation.
 
         Args:
@@ -402,9 +416,9 @@ class CNVParser:
             ISCN notation string or None
         """
         # Simplified ISCN notation for common CNVs
-        if variant_type == 'DEL':
+        if variant_type == "DEL":
             return f"del({chromosome})(q12)"  # HNF1B is at 17q12
-        elif variant_type == 'DUP':
+        elif variant_type == "DUP":
             return f"dup({chromosome})(q12)"
         return None
 
@@ -418,16 +432,20 @@ class CNVParser:
         Returns:
             dbVar ID string or None
         """
-        if variant_type == 'DEL':
+        if variant_type == "DEL":
             return CNVParser.DBVAR_MAPPINGS.get("deletion")
-        elif variant_type == 'DUP':
+        elif variant_type == "DUP":
             return CNVParser.DBVAR_MAPPINGS.get("duplication")
         return None
 
     @classmethod
-    def create_phenopacket_cnv_variant(cls, hg38: str, hg38_info: str,
-                                      variant_type_str: str = None,
-                                      variant_reported: str = None) -> Dict[str, Any]:
+    def create_phenopacket_cnv_variant(
+        cls,
+        hg38: str,
+        hg38_info: str,
+        variant_type_str: str = None,
+        variant_reported: str = None,
+    ) -> Dict[str, Any]:
         """Create a complete phenopacket CNV variant representation.
 
         Args:
@@ -447,7 +465,9 @@ class CNVParser:
         chromosome, start, end, variant_type = coords
 
         # Create various notations
-        ga4gh_notation = cls.create_ga4gh_cnv_notation(chromosome, start, end, variant_type)
+        ga4gh_notation = cls.create_ga4gh_cnv_notation(
+            chromosome, start, end, variant_type
+        )
         iscn_notation = cls.create_iscn_notation(chromosome, start, end, variant_type)
         dbvar_id = cls.get_dbvar_id(variant_type)
 
@@ -461,14 +481,15 @@ class CNVParser:
             "label": f"HNF1B {variant_type} ({size_mb}Mb)",
             "structuralType": {
                 "id": f"SO:{'0000159' if variant_type == 'DEL' else '1000035' if variant_type == 'DUP' else '0000667'}",
-                "label": "deletion" if variant_type == "DEL" else "duplication" if variant_type == "DUP" else "insertion"
+                "label": "deletion"
+                if variant_type == "DEL"
+                else "duplication"
+                if variant_type == "DUP"
+                else "insertion",
             },
-            "geneContext": {
-                "valueId": "HGNC:5024",
-                "symbol": "HNF1B"
-            },
+            "geneContext": {"valueId": "HGNC:5024", "symbol": "HNF1B"},
             "expressions": [],
-            "extensions": []
+            "extensions": [],
         }
 
         # Add original publication description if available
@@ -479,56 +500,48 @@ class CNVParser:
         expressions = variant_descriptor["expressions"]
 
         # GA4GH CNV notation (primary)
-        expressions.append({
-            "syntax": "ga4gh",
-            "value": ga4gh_notation
-        })
+        expressions.append({"syntax": "ga4gh", "value": ga4gh_notation})
 
         # Add VCF-style notation
-        expressions.append({
-            "syntax": "vcf",
-            "value": hg38
-        })
+        expressions.append({"syntax": "vcf", "value": hg38})
 
         # Add ISCN notation if available
         if iscn_notation:
-            expressions.append({
-                "syntax": "iscn",
-                "value": iscn_notation
-            })
+            expressions.append({"syntax": "iscn", "value": iscn_notation})
 
         # Add human-readable description if provided
         if variant_reported:
-            expressions.append({
-                "syntax": "text",
-                "value": variant_reported
-            })
+            expressions.append({"syntax": "text", "value": variant_reported})
 
         # Add extensions with detailed information
         extensions = variant_descriptor["extensions"]
 
         # Add dbVar reference if available
         if dbvar_id:
-            extensions.append({
-                "name": "external_reference",
-                "value": {
-                    "id": dbvar_id,
-                    "reference": "dbVar",
-                    "description": "Database of Genomic Structural Variation"
+            extensions.append(
+                {
+                    "name": "external_reference",
+                    "value": {
+                        "id": dbvar_id,
+                        "reference": "dbVar",
+                        "description": "Database of Genomic Structural Variation",
+                    },
                 }
-            })
+            )
 
         # Add precise coordinates
-        extensions.append({
-            "name": "coordinates",
-            "value": {
-                "assembly": "GRCh38/hg38",
-                "chromosome": chromosome,
-                "start": start,
-                "end": end,
-                "length": size
+        extensions.append(
+            {
+                "name": "coordinates",
+                "value": {
+                    "assembly": "GRCh38/hg38",
+                    "chromosome": chromosome,
+                    "start": start,
+                    "end": end,
+                    "length": size,
+                },
             }
-        })
+        )
 
         # Check for explicit zygosity/copy number information in the variant description
         if variant_reported:
@@ -536,61 +549,66 @@ class CNVParser:
 
             # Check for explicit zygosity mentions
             if "homozygous" in reported_lower:
-                extensions.append({
-                    "name": "zygosity",
-                    "value": "homozygous"
-                })
+                extensions.append({"name": "zygosity", "value": "homozygous"})
                 # For homozygous deletion: 0 copies, homozygous duplication: 4 copies
-                if variant_type == 'DEL':
-                    extensions.append({
-                        "name": "copy_number",
-                        "value": {
-                            "absolute_copy_number": 0,
-                            "relative_copy_number": -2,
-                            "evidence": "Explicitly stated as homozygous"
+                if variant_type == "DEL":
+                    extensions.append(
+                        {
+                            "name": "copy_number",
+                            "value": {
+                                "absolute_copy_number": 0,
+                                "relative_copy_number": -2,
+                                "evidence": "Explicitly stated as homozygous",
+                            },
                         }
-                    })
+                    )
             elif "heterozygous" in reported_lower:
-                extensions.append({
-                    "name": "zygosity",
-                    "value": "heterozygous"
-                })
+                extensions.append({"name": "zygosity", "value": "heterozygous"})
                 # For heterozygous deletion: 1 copy, heterozygous duplication: 3 copies
-                if variant_type == 'DEL':
-                    extensions.append({
-                        "name": "copy_number",
-                        "value": {
-                            "absolute_copy_number": 1,
-                            "relative_copy_number": -1,
-                            "evidence": "Explicitly stated as heterozygous"
+                if variant_type == "DEL":
+                    extensions.append(
+                        {
+                            "name": "copy_number",
+                            "value": {
+                                "absolute_copy_number": 1,
+                                "relative_copy_number": -1,
+                                "evidence": "Explicitly stated as heterozygous",
+                            },
                         }
-                    })
-                elif variant_type == 'DUP':
-                    extensions.append({
-                        "name": "copy_number",
-                        "value": {
-                            "absolute_copy_number": 3,
-                            "relative_copy_number": 1,
-                            "evidence": "Explicitly stated as heterozygous"
+                    )
+                elif variant_type == "DUP":
+                    extensions.append(
+                        {
+                            "name": "copy_number",
+                            "value": {
+                                "absolute_copy_number": 3,
+                                "relative_copy_number": 1,
+                                "evidence": "Explicitly stated as heterozygous",
+                            },
                         }
-                    })
+                    )
             # Check for explicit copy number mentions (e.g., "CN=0", "0 copies", "single copy")
-            cn_match = re.search(r'CN[=:]?\s*(\d+)|(\d+)\s*cop(y|ies)', reported_lower)
+            cn_match = re.search(r"CN[=:]?\s*(\d+)|(\d+)\s*cop(y|ies)", reported_lower)
             if cn_match:
                 copy_num = int(cn_match.group(1) or cn_match.group(2))
-                extensions.append({
-                    "name": "copy_number",
-                    "value": {
-                        "absolute_copy_number": copy_num,
-                        "relative_copy_number": copy_num - 2,  # Assuming normal is 2 copies
-                        "evidence": f"Extracted from description: {cn_match.group(0)}"
+                extensions.append(
+                    {
+                        "name": "copy_number",
+                        "value": {
+                            "absolute_copy_number": copy_num,
+                            "relative_copy_number": copy_num
+                            - 2,  # Assuming normal is 2 copies
+                            "evidence": f"Extracted from description: {cn_match.group(0)}",
+                        },
                     }
-                })
+                )
 
         return variant_descriptor
 
     @classmethod
-    def parse_variant_for_phenopacket(cls, row_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def parse_variant_for_phenopacket(
+        cls, row_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Parse variant data from a spreadsheet row for phenopacket inclusion.
 
         Args:
@@ -599,17 +617,19 @@ class CNVParser:
         Returns:
             Phenopacket-ready variant interpretation or None
         """
-        hg38 = row_data.get('hg38')
-        hg38_info = row_data.get('hg38_INFO')
-        variant_type = row_data.get('VariantType')
-        variant_reported = row_data.get('VariantReported')
+        hg38 = row_data.get("hg38")
+        hg38_info = row_data.get("hg38_INFO")
+        variant_type = row_data.get("VariantType")
+        variant_reported = row_data.get("VariantReported")
 
         # Check if this is a CNV
         if not variant_type:
             return None
 
         variant_type_lower = variant_type.lower()
-        is_cnv = any(term in variant_type_lower for term in ['delet', 'dup', 'cnv', 'copy'])
+        is_cnv = any(
+            term in variant_type_lower for term in ["delet", "dup", "cnv", "copy"]
+        )
 
         if not is_cnv or not hg38 or not hg38_info:
             return None
@@ -626,20 +646,19 @@ class CNVParser:
         interpretation = {
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                "disease": {
-                    "id": "MONDO:0018874",
-                    "label": "HNF1B-related disorder"
-                },
+                "disease": {"id": "MONDO:0018874", "label": "HNF1B-related disorder"},
                 "genomicInterpretations": [
                     {
-                        "subjectOrBiosampleId": row_data.get('IndividualIdentifier', 'unknown'),
+                        "subjectOrBiosampleId": row_data.get(
+                            "IndividualIdentifier", "unknown"
+                        ),
                         "interpretationStatus": "PATHOGENIC",  # CNVs are usually pathogenic
                         "variantInterpretation": {
                             "variationDescriptor": variant_descriptor
-                        }
+                        },
                     }
-                ]
-            }
+                ],
+            },
         }
 
         return interpretation
@@ -830,7 +849,9 @@ class DirectSheetsToPhenopackets:
             url = self._csv_url(SPREADSHEET_ID, GID_PHENOTYPES)
             self.phenotypes_df = pd.read_csv(url)
             self.phenotypes_df = self.phenotypes_df.dropna(how="all")
-            logger.info(f"Loaded {len(self.phenotypes_df)} phenotypes from phenotypes sheet")
+            logger.info(
+                f"Loaded {len(self.phenotypes_df)} phenotypes from phenotypes sheet"
+            )
             self._build_hpo_mappings()
         except Exception as e:
             logger.error(f"Could not load phenotypes sheet: {e}")
@@ -867,16 +888,16 @@ class DirectSheetsToPhenopackets:
 
         self.hpo_mappings = {}
         for _, row in self.phenotypes_df.iterrows():
-            category = row.get('phenotype_category')
-            hpo_id = row.get('phenotype_id')
-            hpo_label = row.get('phenotype_name')
+            category = row.get("phenotype_category")
+            hpo_id = row.get("phenotype_id")
+            hpo_label = row.get("phenotype_name")
 
             if pd.notna(category) and pd.notna(hpo_id):
                 # Normalize the category name to match column names in individuals sheet
                 normalized_category = self._normalize_column_name(category)
                 self.hpo_mappings[normalized_category] = {
                     "id": hpo_id,
-                    "label": hpo_label if pd.notna(hpo_label) else category
+                    "label": hpo_label if pd.notna(hpo_label) else category,
                 }
 
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
@@ -923,7 +944,7 @@ class DirectSheetsToPhenopackets:
                     return None
 
             return {"iso8601duration": f"P{years}Y"}
-        except:
+        except (ValueError, TypeError, AttributeError):
             return None
 
     def _parse_review_date(self, date_str: Any) -> Optional[str]:
@@ -934,8 +955,8 @@ class DirectSheetsToPhenopackets:
         try:
             # Parse format like "3/20/2021 12:27:42"
             dt = pd.to_datetime(date_str)
-            return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-        except:
+            return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (ValueError, TypeError, AttributeError):
             return None
 
     def _extract_phenotypes(self, row: pd.Series) -> List[Dict[str, Any]]:
@@ -943,10 +964,10 @@ class DirectSheetsToPhenopackets:
         phenotypes = []
 
         # Get timestamp from ReviewDate for this observation
-        review_timestamp = self._parse_review_date(row.get('ReviewDate'))
+        review_timestamp = self._parse_review_date(row.get("ReviewDate"))
 
         # Get age at onset if available
-        age_onset = self._parse_age(row.get('AgeOnset'))
+        age_onset = self._parse_age(row.get("AgeOnset"))
 
         # Normalize column names
         normalized_cols = {self._normalize_column_name(col): col for col in row.index}
@@ -964,32 +985,65 @@ class DirectSheetsToPhenopackets:
                         # Map specific kidney biopsy findings to their HPO/ORPHA terms
                         if "oligomeganephronia" in value_lower:
                             phenotype = {
-                                "type": {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
+                                "type": {
+                                    "id": "ORPHA:2260",
+                                    "label": "Oligomeganephronia",
+                                },
                                 "excluded": False,
                             }
                             # Add evidence with recordedAt for tracking
-                            if row.get('Publication') or review_timestamp:
-                                evidence_item = {"evidenceCode": {"id": "ECO:0000033", "label": "author statement"}, "reference": {}}
-                                if row.get('Publication'):
-                                    evidence_item["reference"]["id"] = str(row.get('Publication'))
-                                    evidence_item["reference"]["description"] = f"Publication: {row.get('Publication')}"
+                            if row.get("Publication") or review_timestamp:
+                                evidence_item = {
+                                    "evidenceCode": {
+                                        "id": "ECO:0000033",
+                                        "label": "author statement",
+                                    },
+                                    "reference": {},
+                                }
+                                if row.get("Publication"):
+                                    evidence_item["reference"]["id"] = str(
+                                        row.get("Publication")
+                                    )
+                                    evidence_item["reference"]["description"] = (
+                                        f"Publication: {row.get('Publication')}"
+                                    )
                                 if review_timestamp:
-                                    evidence_item["reference"]["recordedAt"] = review_timestamp
+                                    evidence_item["reference"]["recordedAt"] = (
+                                        review_timestamp
+                                    )
                                 phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
-                        if "multiple glomerular cysts" in value_lower or "glomerular cyst" in value_lower:
+                        if (
+                            "multiple glomerular cysts" in value_lower
+                            or "glomerular cyst" in value_lower
+                        ):
                             phenotype = {
-                                "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
+                                "type": {
+                                    "id": "HP:0100611",
+                                    "label": "Multiple glomerular cysts",
+                                },
                                 "excluded": False,
                             }
                             # Add evidence with recordedAt for tracking
-                            if row.get('Publication') or review_timestamp:
-                                evidence_item = {"evidenceCode": {"id": "ECO:0000033", "label": "author statement"}, "reference": {}}
-                                if row.get('Publication'):
-                                    evidence_item["reference"]["id"] = str(row.get('Publication'))
-                                    evidence_item["reference"]["description"] = f"Publication: {row.get('Publication')}"
+                            if row.get("Publication") or review_timestamp:
+                                evidence_item = {
+                                    "evidenceCode": {
+                                        "id": "ECO:0000033",
+                                        "label": "author statement",
+                                    },
+                                    "reference": {},
+                                }
+                                if row.get("Publication"):
+                                    evidence_item["reference"]["id"] = str(
+                                        row.get("Publication")
+                                    )
+                                    evidence_item["reference"]["description"] = (
+                                        f"Publication: {row.get('Publication')}"
+                                    )
                                 if review_timestamp:
-                                    evidence_item["reference"]["recordedAt"] = review_timestamp
+                                    evidence_item["reference"]["recordedAt"] = (
+                                        review_timestamp
+                                    )
                                 phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
                         continue  # Skip the generic kidney biopsy mapping
@@ -1010,16 +1064,16 @@ class DirectSheetsToPhenopackets:
 
                     # Add evidence with ReviewDate timestamp (when data was added)
                     evidence = []
-                    if row.get('Publication'):
+                    if row.get("Publication"):
                         evidence_item = {
                             "evidenceCode": {
                                 "id": "ECO:0000033",
-                                "label": "author statement"
+                                "label": "author statement",
                             },
                             "reference": {
-                                "id": str(row.get('Publication')),
-                                "description": f"Publication: {row.get('Publication')}"
-                            }
+                                "id": str(row.get("Publication")),
+                                "description": f"Publication: {row.get('Publication')}",
+                            },
                         }
                         # Add ReviewDate to show when this was recorded
                         if review_timestamp:
@@ -1027,16 +1081,18 @@ class DirectSheetsToPhenopackets:
                         evidence.append(evidence_item)
                     elif review_timestamp:
                         # Even without publication, record when this was added
-                        evidence.append({
-                            "evidenceCode": {
-                                "id": "ECO:0000033",
-                                "label": "author statement"
-                            },
-                            "reference": {
-                                "description": "Clinical observation",
-                                "recordedAt": review_timestamp
+                        evidence.append(
+                            {
+                                "evidenceCode": {
+                                    "id": "ECO:0000033",
+                                    "label": "author statement",
+                                },
+                                "reference": {
+                                    "description": "Clinical observation",
+                                    "recordedAt": review_timestamp,
+                                },
                             }
-                        })
+                        )
 
                     if evidence:
                         phenotype["evidence"] = evidence
@@ -1074,17 +1130,21 @@ class DirectSheetsToPhenopackets:
         is_cnv = False
         if variant_type:
             type_lower = variant_type.lower()
-            is_cnv = any(term in type_lower for term in ['delet', 'dup', 'cnv', 'copy'])
+            is_cnv = any(term in type_lower for term in ["delet", "dup", "cnv", "copy"])
 
         # Handle CNVs using the new parser
         if is_cnv and hg38 and hg38_info:
-            cnv_interpretation = CNVParser.parse_variant_for_phenopacket({
-                'hg38': hg38,
-                'hg38_INFO': hg38_info,
-                'VariantType': variant_type,
-                'VariantReported': variant_reported,
-                'IndividualIdentifier': row.get("IndividualIdentifier", row.get("individual_id", "unknown"))
-            })
+            cnv_interpretation = CNVParser.parse_variant_for_phenopacket(
+                {
+                    "hg38": hg38,
+                    "hg38_INFO": hg38_info,
+                    "VariantType": variant_type,
+                    "VariantReported": variant_reported,
+                    "IndividualIdentifier": row.get(
+                        "IndividualIdentifier", row.get("individual_id", "unknown")
+                    ),
+                }
+            )
 
             if cnv_interpretation:
                 # Add segregation information if available
@@ -1095,7 +1155,7 @@ class DirectSheetsToPhenopackets:
                             "variantInterpretation"
                         ]["variationDescriptor"]["allelicState"] = {
                             "id": "GENO:0000135",
-                            "label": "heterozygous"
+                            "label": "heterozygous",
                         }
 
                 # Add pathogenicity classification if available
@@ -1122,20 +1182,27 @@ class DirectSheetsToPhenopackets:
                 # Add classification criteria if available
                 if criteria:
                     # Determine if this is ClinGen CNV or ACMG criteria
-                    guidelines = "ClinGen CNV" if any(char.isdigit() and char in "1234" for char in criteria[:2]) else "ACMG"
+                    guidelines = (
+                        "ClinGen CNV"
+                        if any(
+                            char.isdigit() and char in "1234" for char in criteria[:2]
+                        )
+                        else "ACMG"
+                    )
 
                     # Add as extension to variantInterpretation
-                    var_interp = cnv_interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]
+                    var_interp = cnv_interpretation["diagnosis"][
+                        "genomicInterpretations"
+                    ][0]["variantInterpretation"]
                     if "extensions" not in var_interp:
                         var_interp["extensions"] = []
 
-                    var_interp["extensions"].append({
-                        "name": "classification_criteria",
-                        "value": {
-                            "guidelines": guidelines,
-                            "criteria": criteria
+                    var_interp["extensions"].append(
+                        {
+                            "name": "classification_criteria",
+                            "value": {"guidelines": guidelines, "criteria": criteria},
                         }
-                    })
+                    )
 
                 interpretations.append(cnv_interpretation)
                 return interpretations  # Return early for CNVs
@@ -1183,7 +1250,7 @@ class DirectSheetsToPhenopackets:
         if c_dot or hg38 or varsome:
             # Try to create VRS 2.0 compliant variant if we have genomic coordinates
             variant_descriptor = None
-            if hg38 and not (hg38.startswith('<') or '<' in hg38):
+            if hg38 and not (hg38.startswith("<") or "<" in hg38):
                 # Try VRS format for SNVs/Indels (not structural variants)
                 variant_descriptor = VRSBuilder.create_vrs_snv_variant(
                     hg38, c_dot, p_dot, transcript, variant_reported
@@ -1322,20 +1389,25 @@ class DirectSheetsToPhenopackets:
             # Add classification criteria if available
             if criteria:
                 # Determine if this is ClinGen CNV or ACMG criteria
-                guidelines = "ClinGen CNV" if any(char.isdigit() and char in "1234" for char in criteria[:2]) else "ACMG"
+                guidelines = (
+                    "ClinGen CNV"
+                    if any(char.isdigit() and char in "1234" for char in criteria[:2])
+                    else "ACMG"
+                )
 
                 # Add as extension to variantInterpretation
-                var_interp = interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]
+                var_interp = interpretation["diagnosis"]["genomicInterpretations"][0][
+                    "variantInterpretation"
+                ]
                 if "extensions" not in var_interp:
                     var_interp["extensions"] = []
 
-                var_interp["extensions"].append({
-                    "name": "classification_criteria",
-                    "value": {
-                        "guidelines": guidelines,
-                        "criteria": criteria
+                var_interp["extensions"].append(
+                    {
+                        "name": "classification_criteria",
+                        "value": {"guidelines": guidelines, "criteria": criteria},
                     }
-                })
+                )
 
             interpretations.append(interpretation)
 
@@ -1448,16 +1520,18 @@ class DirectSheetsToPhenopackets:
         if len(rows) > 1:
             updates = []
             for _, row in rows.iterrows():
-                timestamp = self._parse_review_date(row.get('ReviewDate'))
+                timestamp = self._parse_review_date(row.get("ReviewDate"))
                 if timestamp:
-                    updates.append({
-                        "timestamp": timestamp,
-                        "updatedBy": f"Publication: {row.get('Publication', 'Unknown')}",
-                        "comment": f"Data from {row.get('Publication', 'Unknown source')}"
-                    })
+                    updates.append(
+                        {
+                            "timestamp": timestamp,
+                            "updatedBy": f"Publication: {row.get('Publication', 'Unknown')}",
+                            "comment": f"Data from {row.get('Publication', 'Unknown source')}",
+                        }
+                    )
             if updates:
                 # Sort updates by timestamp
-                updates.sort(key=lambda x: x['timestamp'])
+                updates.sort(key=lambda x: x["timestamp"])
                 metadata["updates"] = updates
 
         # Add publication references if available
@@ -1575,10 +1649,8 @@ class DirectSheetsToPhenopackets:
             for phenopacket in tqdm(phenopackets, desc="Storing phenopackets"):
                 try:
                     # Extract individual ID for generated columns
-                    subject_id = phenopacket.get("subject", {}).get("id", "unknown")
-                    subject_sex = phenopacket.get("subject", {}).get(
-                        "sex", "UNKNOWN_SEX"
-                    )
+                    phenopacket.get("subject", {}).get("id", "unknown")
+                    phenopacket.get("subject", {}).get("sex", "UNKNOWN_SEX")
 
                     # Insert phenopacket (subject_id and subject_sex are generated columns)
                     query = text("""

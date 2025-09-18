@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Test script to verify CNV parser handles deletions correctly."""
 
-import sys
-import json
-from migration.direct_sheets_to_phenopackets import CNVParser
 import pandas as pd
+
+from migration.direct_sheets_to_phenopackets import CNVParser
 
 
 def test_cnv_parser():
     """Test the CNV parser with real data from Google Sheets."""
-
     print("Testing CNV Parser with real deletion data\n")
     print("=" * 60)
 
@@ -20,22 +18,22 @@ def test_cnv_parser():
             "hg38": "chr17-36459258-T-<DEL>",
             "hg38_INFO": "IMPRECISE;SVTYPE=DEL;END=37832869;SVLEN=-1373610",
             "VariantType": "Deletion",
-            "VariantReported": "1.5 Mb deletion including HNF1β"
+            "VariantReported": "1.5 Mb deletion including HNF1β",
         },
         {
             "name": "Case 2: Larger deletion",
             "hg38": "chr17-36466613-T-<DEL>",
             "hg38_INFO": "IMPRECISE;SVTYPE=DEL;END=39698363;SVLEN=-3231750",
             "VariantType": "Deletion",
-            "VariantReported": "1.5Mb deletion within chromosome 17q12 (34,822,460-36,375,192, GRCh37/hg19)"
+            "VariantReported": "1.5Mb deletion within chromosome 17q12 (34,822,460-36,375,192, GRCh37/hg19)",
         },
         {
             "name": "Case 3: Duplication",
             "hg38": "chr17-36459258-T-<DUP>",
             "hg38_INFO": "IMPRECISE;SVTYPE=DUP;END=37832869;SVLEN=1373610",
             "VariantType": "Duplication",
-            "VariantReported": "17q12 duplication"
-        }
+            "VariantReported": "17q12 duplication",
+        },
     ]
 
     for i, test_case in enumerate(test_cases, 1):
@@ -44,18 +42,19 @@ def test_cnv_parser():
 
         # Parse coordinates
         coords = CNVParser.parse_hg38_coordinates(
-            test_case["hg38"],
-            test_case["hg38_INFO"]
+            test_case["hg38"], test_case["hg38_INFO"]
         )
 
         if coords:
             chromosome, start, end, variant_type = coords
-            print(f"✓ Parsed coordinates:")
+            print("✓ Parsed coordinates:")
             print(f"  Chromosome: {chromosome}")
             print(f"  Start: {start:,}")
             print(f"  End: {end:,}")
             print(f"  Type: {variant_type}")
-            print(f"  Size: {(end - start + 1):,} bp ({round((end - start + 1) / 1_000_000, 2)} Mb)")
+            print(
+                f"  Size: {(end - start + 1):,} bp ({round((end - start + 1) / 1_000_000, 2)} Mb)"
+            )
 
             # Create GA4GH notation
             ga4gh_notation = CNVParser.create_ga4gh_cnv_notation(
@@ -73,26 +72,34 @@ def test_cnv_parser():
                 test_case["hg38"],
                 test_case["hg38_INFO"],
                 test_case["VariantType"],
-                test_case["VariantReported"]
+                test_case["VariantReported"],
             )
 
             if variant:
-                print(f"\n✓ Phenopacket variant created:")
+                print("\n✓ Phenopacket variant created:")
                 print(f"  ID: {variant['id']}")
                 print(f"  Label: {variant['label']}")
                 print(f"  Structural Type: {variant['structuralType']['label']}")
                 print(f"  Expressions: {len(variant['expressions'])} formats")
-                for expr in variant['expressions']:
-                    print(f"    - {expr['syntax']}: {expr['value'][:50]}..." if len(expr['value']) > 50 else f"    - {expr['syntax']}: {expr['value']}")
+                for expr in variant["expressions"]:
+                    print(
+                        f"    - {expr['syntax']}: {expr['value'][:50]}..."
+                        if len(expr["value"]) > 50
+                        else f"    - {expr['syntax']}: {expr['value']}"
+                    )
 
-                if variant.get('extensions'):
+                if variant.get("extensions"):
                     print(f"  Extensions: {len(variant['extensions'])} items")
-                    for ext in variant['extensions']:
-                        if ext['name'] == 'coordinates':
-                            print(f"    - Coordinates: chr{ext['value']['chromosome']}:{ext['value']['start']}-{ext['value']['end']}")
-                        elif ext['name'] == 'copy_number':
-                            print(f"    - Copy number: {ext['value']['absolute_copy_number']}")
-                        elif ext['name'] == 'external_reference':
+                    for ext in variant["extensions"]:
+                        if ext["name"] == "coordinates":
+                            print(
+                                f"    - Coordinates: chr{ext['value']['chromosome']}:{ext['value']['start']}-{ext['value']['end']}"
+                            )
+                        elif ext["name"] == "copy_number":
+                            print(
+                                f"    - Copy number: {ext['value']['absolute_copy_number']}"
+                            )
+                        elif ext["name"] == "external_reference":
                             print(f"    - External ref: {ext['value']['id']}")
         else:
             print("✗ Failed to parse coordinates")
@@ -100,7 +107,6 @@ def test_cnv_parser():
 
 def test_google_sheets_integration():
     """Test with actual data from Google Sheets."""
-
     print("\n\n" + "=" * 60)
     print("Testing with actual Google Sheets data")
     print("=" * 60)
@@ -115,7 +121,9 @@ def test_google_sheets_integration():
         df = pd.read_csv(url)
 
         # Filter for deletions and duplications
-        cnv_df = df[df['VariantType'].str.contains('delet|dup', case=False, na=False)].head(5)
+        cnv_df = df[
+            df["VariantType"].str.contains("delet|dup", case=False, na=False)
+        ].head(5)
 
         print(f"Found {len(cnv_df)} CNVs to test\n")
 
@@ -134,11 +142,13 @@ def test_google_sheets_integration():
                 coords = CNVParser.parse_hg38_coordinates(str(hg38), str(hg38_info))
                 if coords:
                     chromosome, start, end, var_type = coords
-                    ga4gh = CNVParser.create_ga4gh_cnv_notation(chromosome, start, end, var_type)
+                    ga4gh = CNVParser.create_ga4gh_cnv_notation(
+                        chromosome, start, end, var_type
+                    )
                     print(f"  ✓ GA4GH notation: {ga4gh}")
                     success_count += 1
                 else:
-                    print(f"  ✗ Failed to parse")
+                    print("  ✗ Failed to parse")
 
         print(f"\n\nSummary: Successfully parsed {success_count}/{len(cnv_df)} CNVs")
 
