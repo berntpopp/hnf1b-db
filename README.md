@@ -72,7 +72,7 @@ JWT_SECRET=your-secret-key
 
 ## Data Import
 
-The project includes a comprehensive PostgreSQL migration system that imports data from Google Sheets and processes genomic annotation files. This system handles the complete data pipeline for the HNF1B clinical database.
+The project includes a direct Google Sheets to GA4GH Phenopackets v2 migration system that imports clinical and genetic data directly into the international standard format.
 
 ### Prerequisites
 
@@ -80,25 +80,26 @@ The project includes a comprehensive PostgreSQL migration system that imports da
 # 1. Start database services
 make hybrid-up     # Start PostgreSQL and Redis containers
 
-# 2. Apply database schema
-make db-upgrade    # Apply all database migrations
-
-# 3. Verify environment
-# Ensure .env file exists with valid DATABASE_URL and JWT_SECRET
+# 2. Verify environment
+# Ensure .env file exists with valid DATABASE_URL pointing to hnf1b_phenopackets database
 ```
 
 ### Import Commands
 
 ```bash
-# Full production import (processes all ~900+ individuals)
-make import-data
+# Full production import (processes all 864 individuals)
+make phenopackets-migrate
 
-# Limited test import (processes ~20 individuals, faster for development)
-make import-data-test
+# Limited test import (processes 20 individuals, faster for development)
+make phenopackets-migrate-test
+
+# Dry run - outputs to JSON file without database changes
+make phenopackets-migrate-dry
 
 # Alternative: Run directly with Python
-uv run python migration/migrate.py          # Full import
-uv run python migration/migrate.py --test   # Test import
+uv run python migration/direct_sheets_to_phenopackets.py          # Full import
+uv run python migration/direct_sheets_to_phenopackets.py --test   # Test import
+uv run python migration/direct_sheets_to_phenopackets.py --dry-run # Dry run
 ```
 
 ### Data Sources
@@ -120,70 +121,53 @@ The migration system processes data from multiple sources:
 
 ### Migration System Architecture
 
-Located in `/migration/` directory with modular design:
+The direct migration system is located in `/migration/` directory:
 
 ```
 migration/
-├── migrate.py              # Main orchestrator script
-└── modules/
-    ├── users.py           # Import user/reviewer data
-    ├── publications.py    # Import publications with PubMed enrichment
-    ├── individuals.py     # Import patients and clinical reports
-    ├── variants.py        # Import genetic variants with classifications
-    ├── proteins.py        # Import protein structure data
-    ├── genes.py           # Import gene structure from Ensembl API
-    └── genomics.py        # Process VCF/VEP/CADD files
+├── direct_sheets_to_phenopackets.py  # Direct Google Sheets to Phenopackets v2 migration
+└── (legacy modules - no longer used)
 ```
 
 ### Features
 
-- **PostgreSQL native**: Uses SQLAlchemy with async/await patterns
-- **Duplicate handling**: Skips existing records to prevent re-import conflicts
-- **Test mode**: Processes limited dataset for faster development cycles
-- **Error resilience**: Continues processing despite individual record failures
-- **Progress tracking**: Detailed logging of import progress and statistics
-- **Data validation**: Uses Pydantic models for consistent data validation
+- **Direct conversion**: Google Sheets data directly to GA4GH Phenopackets v2 format
+- **Deduplication**: Automatically consolidates multiple rows per individual
+- **Test mode**: Processes limited dataset (20 individuals) for faster development
+- **Dry run mode**: Outputs to JSON file for inspection without database changes
+- **HPO mapping**: Automatic mapping of clinical terms to Human Phenotype Ontology
+- **MONDO diseases**: Proper disease classification using MONDO ontology
+- **Variant handling**: Prioritizes Varsome format, falls back to other formats
 
 ### Import Process
 
-The migration runs in 6 phases:
+The direct migration:
 
-1. **Users**: Import reviewer/user accounts
-2. **Publications**: Import and enrich publication metadata via PubMed API
-3. **Individuals**: Import patient demographics and clinical phenotype reports
-4. **Proteins**: Import HNF1B protein structure and domain information
-5. **Genes**: Import HNF1B gene structure from Ensembl API
-6. **Variants**: Import genetic variants with annotations from genomic files
+1. **Loads Google Sheets data**: Fetches clinical and genetic data
+2. **Groups by individual**: Consolidates 939 rows into 864 unique individuals
+3. **Builds Phenopackets**: Creates GA4GH v2 compliant phenopackets
+4. **Maps ontologies**: HPO terms for phenotypes, MONDO for diseases
+5. **Stores in database**: Saves as JSONB documents in PostgreSQL
 
 ### Typical Output
 
 ```
-============================================================
-Starting PostgreSQL Migration from Google Sheets
-*** TEST MODE - Limited data import ***
-============================================================
+Loading data from Google Sheets...
+Loaded 939 rows for 864 unique individuals
+Processing 864 individuals...
+Building phenopackets: 100%|████████████| 864/864 [00:15<00:00, 55.23it/s]
+Built 864 phenopackets
 
---- Phase 1: Importing Users ---
-[import_users] Successfully imported 8 users
+Storing phenopackets: 100%|████████████| 864/864 [00:30<00:00, 28.80it/s]
+Successfully stored 864 phenopackets
 
---- Phase 2: Importing Publications ---
-[import_publications] Successfully imported 10 publications
+Migration Summary:
+- Total phenopackets: 864
+- With phenotypic features: 828 (95.8%)
+- With genetic variants: 864 (100.0%)
+- Average features per phenopacket: 3.8
 
---- Phase 3: Importing Individuals ---
-[import_individuals] Successfully processed 17 individuals with 20 reports
-
---- Phase 4: Importing Proteins ---
-[import_proteins] Successfully created protein structure
-
---- Phase 5: Importing Genes ---
-[import_genes] Successfully created gene structure  
-
---- Phase 6: Importing Variants ---
-[import_variants] Successfully imported 200 variants
-
-============================================================
 Migration completed successfully!
-============================================================
 ```
 
 ## Installation & Setup
@@ -285,7 +269,7 @@ pip install -r requirements-dev.txt  # Includes dev and test dependencies
 
 # Follow steps 3-5 above, but replace 'make' commands:
 python -m uvicorn app.main:app --reload  # instead of 'make server'
-python migration/migrate.py --test       # instead of 'make import-data-test'
+python migration/direct_sheets_to_phenopackets.py --test  # instead of 'make phenopackets-migrate-test'
 ```
 
 ### Dependency Files Available

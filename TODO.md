@@ -4,7 +4,7 @@
 **Project Stage**: Ready for Frontend Integration
 **Migration**: Complete - 864 individuals migrated to GA4GH Phenopackets v2 format
 **API**: Fully operational with phenopackets endpoints
-**Database**: PostgreSQL with JSONB storage (1,728 phenopackets loaded)
+**Database**: PostgreSQL with JSONB storage (864 phenopackets loaded)
 
 ## ✅ Completed Tasks
 
@@ -22,7 +22,7 @@
 
 ### Data Migration Results
 - [x] Successfully migrated 864 individuals
-- [x] 95% have phenotypic features (average 6.5 per phenopacket)
+- [x] 95.8% have phenotypic features (average 3.8 per phenopacket)
 - [x] 100% have genetic variants (Varsome format prioritized)
 - [x] 100% have disease diagnoses (MONDO ontology)
 - [x] Proper HPO term mappings implemented
@@ -165,11 +165,11 @@ make docker-run          # Run containerized app
 ## 📊 Current Statistics
 
 ### Database
-- **Total Phenopackets**: 1,728
+- **Total Phenopackets**: 864
 - **Unique Individuals**: 864
-- **With Phenotypic Features**: 1,658 (95.9%)
-- **With Genetic Variants**: 1,291 (74.7%)
-- **Average Features per Phenopacket**: 6.5
+- **With Phenotypic Features**: 828 (95.8%)
+- **With Genetic Variants**: 864 (100%)
+- **Average Features per Phenopacket**: 3.8
 
 ### API Performance (Development)
 - **Average Response Time**: <100ms for list endpoints
