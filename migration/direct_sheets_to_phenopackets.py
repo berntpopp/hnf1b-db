@@ -942,6 +942,7 @@ class DirectSheetsToPhenopackets:
         verdict = self._safe_value(row.get("verdict_classification"))
         variant_type = self._safe_value(row.get("VariantType"))
         segregation = self._safe_value(row.get("Segregation"))
+        criteria = self._safe_value(row.get("criteria_classification"))
 
         # Check if this is a CNV (deletion/duplication)
         is_cnv = False
@@ -991,6 +992,24 @@ class DirectSheetsToPhenopackets:
                     cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
                         "interpretationStatus"
                     ] = status
+
+                # Add classification criteria if available
+                if criteria:
+                    # Determine if this is ClinGen CNV or ACMG criteria
+                    guidelines = "ClinGen CNV" if any(char.isdigit() and char in "1234" for char in criteria[:2]) else "ACMG"
+
+                    # Add as extension to variantInterpretation
+                    var_interp = cnv_interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]
+                    if "extensions" not in var_interp:
+                        var_interp["extensions"] = []
+
+                    var_interp["extensions"].append({
+                        "name": "classification_criteria",
+                        "value": {
+                            "guidelines": guidelines,
+                            "criteria": criteria
+                        }
+                    })
 
                 interpretations.append(cnv_interpretation)
                 return interpretations  # Return early for CNVs
@@ -1173,6 +1192,24 @@ class DirectSheetsToPhenopackets:
                             "interpretationStatus"
                         ] = value
                         break
+
+            # Add classification criteria if available
+            if criteria:
+                # Determine if this is ClinGen CNV or ACMG criteria
+                guidelines = "ClinGen CNV" if any(char.isdigit() and char in "1234" for char in criteria[:2]) else "ACMG"
+
+                # Add as extension to variantInterpretation
+                var_interp = interpretation["diagnosis"]["genomicInterpretations"][0]["variantInterpretation"]
+                if "extensions" not in var_interp:
+                    var_interp["extensions"] = []
+
+                var_interp["extensions"].append({
+                    "name": "classification_criteria",
+                    "value": {
+                        "guidelines": guidelines,
+                        "criteria": criteria
+                    }
+                })
 
             interpretations.append(interpretation)
 
