@@ -54,6 +54,11 @@ from app import hpo_proxy
 
 app.include_router(hpo_proxy.router)
 
+# Add variant validation endpoints
+from app import variant_validator_endpoint
+
+app.include_router(variant_validator_endpoint.router)
+
 
 # Root endpoint
 @app.get("/")

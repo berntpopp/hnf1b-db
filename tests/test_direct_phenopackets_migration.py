@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from migration.direct_sheets_to_phenopackets import DirectPhenopacketMigration
+from migration.direct_sheets_to_phenopackets import DirectSheetsToPhenopackets
 
 
 class TestDirectPhenopacketsMigration:
@@ -14,7 +14,9 @@ class TestDirectPhenopacketsMigration:
     @pytest.fixture
     def migration(self):
         """Create migration instance."""
-        return DirectPhenopacketMigration(test_mode=True)
+        # Use test database URL
+        test_db_url = "postgresql+asyncpg://test:test@localhost/test_db"
+        return DirectSheetsToPhenopackets(test_db_url)
 
     def test_hpo_mapping_initialization(self, migration):
         """Test that HPO mappings are properly initialized."""
