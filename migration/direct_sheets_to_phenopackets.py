@@ -648,7 +648,7 @@ class CNVParser:
 # Google Sheets configuration
 SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
 GID_INDIVIDUALS = "0"
-GID_PHENOTYPES = "934433647"
+GID_PHENOTYPES = "1119329208"  # Correct GID for Phenotype sheet with HPO mappings
 GID_MODIFIERS = "1350764936"
 GID_PUBLICATIONS = "1670256162"
 GID_REVIEWERS = "1321366018"
@@ -671,8 +671,8 @@ class DirectSheetsToPhenopackets:
         self.publications_df = None
         self.reviewers_df = None
 
-        # Mappings
-        self.hpo_mappings = self._init_hpo_mappings()
+        # Mappings - will be loaded from Phenotype sheet
+        self.hpo_mappings = {}
         self.mondo_mappings = self._init_mondo_mappings()
 
     def _init_hpo_mappings(self) -> Dict[str, Dict[str, str]]:
@@ -825,6 +825,18 @@ class DirectSheetsToPhenopackets:
             f"Columns: {list(self.individuals_df.columns)[:10]}..."
         )  # Log first 10 columns
 
+        # Load phenotypes sheet with predetermined HPO mappings
+        try:
+            url = self._csv_url(SPREADSHEET_ID, GID_PHENOTYPES)
+            self.phenotypes_df = pd.read_csv(url)
+            self.phenotypes_df = self.phenotypes_df.dropna(how="all")
+            logger.info(f"Loaded {len(self.phenotypes_df)} phenotypes from phenotypes sheet")
+            self._build_hpo_mappings()
+        except Exception as e:
+            logger.error(f"Could not load phenotypes sheet: {e}")
+            # Fall back to hardcoded mappings if sheet fails
+            self.hpo_mappings = self._init_hpo_mappings()
+
         # Load publications (optional)
         try:
             url = self._csv_url(SPREADSHEET_ID, GID_PUBLICATIONS)
@@ -846,6 +858,29 @@ class DirectSheetsToPhenopackets:
         except Exception as e:
             logger.warning(f"Could not load reviewers sheet: {e}")
             self.reviewers_df = pd.DataFrame()
+
+    def _build_hpo_mappings(self) -> None:
+        """Build HPO mappings from Phenotype sheet."""
+        if self.phenotypes_df is None:
+            self.hpo_mappings = self._init_hpo_mappings()
+            return
+
+        self.hpo_mappings = {}
+        for _, row in self.phenotypes_df.iterrows():
+            category = row.get('phenotype_category')
+            hpo_id = row.get('phenotype_id')
+            hpo_label = row.get('phenotype_name')
+
+            if pd.notna(category) and pd.notna(hpo_id):
+                # Normalize the category name to match column names in individuals sheet
+                normalized_category = self._normalize_column_name(category)
+                self.hpo_mappings[normalized_category] = {
+                    "id": hpo_id,
+                    "label": hpo_label if pd.notna(hpo_label) else category
+                }
+
+        logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
+        logger.info(f"Phenotype categories: {list(self.hpo_mappings.keys())[:10]}...")
 
     def _normalize_column_name(self, name: str) -> str:
         """Normalize column names to lowercase without spaces."""
@@ -905,6 +940,24 @@ class DirectSheetsToPhenopackets:
                 value = self._safe_value(row[original_col])
 
                 if value and value.lower() not in ["no", "not reported", "unknown", ""]:
+                    # Special handling for KidneyBiopsy which contains specific diagnoses
+                    if pheno_key == "kidneybiopsy":
+                        value_lower = value.lower()
+                        # Map specific kidney biopsy findings to their HPO/ORPHA terms
+                        if "oligomeganephronia" in value_lower:
+                            phenotype = {
+                                "type": {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
+                                "excluded": False,
+                            }
+                            phenotypes.append(phenotype)
+                        if "multiple glomerular cysts" in value_lower or "glomerular cyst" in value_lower:
+                            phenotype = {
+                                "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
+                                "excluded": False,
+                            }
+                            phenotypes.append(phenotype)
+                        continue  # Skip the generic kidney biopsy mapping
+
                     # Determine if phenotype is present
                     excluded = False
                     if value.lower() in ["absent", "negative", "none"]:
