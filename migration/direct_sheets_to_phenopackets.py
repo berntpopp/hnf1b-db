@@ -222,7 +222,8 @@ class VRSBuilder:
 
     @classmethod
     def create_vrs_snv_variant(cls, hg38: str, c_dot: str = None,
-                              p_dot: str = None, transcript: str = None) -> Dict[str, Any]:
+                              p_dot: str = None, transcript: str = None,
+                              variant_reported: str = None) -> Dict[str, Any]:
         """Create a VRS 2.0 compliant variant descriptor for SNVs/Indels.
 
         Args:
@@ -230,6 +231,7 @@ class VRSBuilder:
             c_dot: HGVS c. notation
             p_dot: HGVS p. notation
             transcript: Transcript ID
+            variant_reported: Original variant description from publication
 
         Returns:
             Phenopacket-ready variant descriptor with VRS 2.0 structure
@@ -248,9 +250,13 @@ class VRSBuilder:
         )
 
         # Build variant descriptor for phenopacket
+        label = f"HNF1B:{c_dot if c_dot else 'variant'}"
+        if p_dot:
+            label += f" ({p_dot})"
+
         variant_descriptor = {
             "id": vrs_allele["id"],  # Use VRS identifier
-            "label": f"HNF1B:{c_dot if c_dot else 'variant'}",
+            "label": label,
             "geneContext": {
                 "valueId": "HGNC:5024",
                 "symbol": "HNF1B"
@@ -259,6 +265,10 @@ class VRSBuilder:
             "vrsAllele": vrs_allele,  # Embed full VRS structure
             "moleculeContext": "genomic"
         }
+
+        # Add original publication description if available
+        if variant_reported:
+            variant_descriptor["description"] = variant_reported
 
         # Add HGVS expressions
         expressions = variant_descriptor["expressions"]
@@ -460,6 +470,10 @@ class CNVParser:
             "expressions": [],
             "extensions": []
         }
+
+        # Add original publication description if available
+        if variant_reported:
+            variant_descriptor["description"] = variant_reported
 
         # Add expressions in various formats
         expressions = variant_descriptor["expressions"]
@@ -1027,7 +1041,7 @@ class DirectSheetsToPhenopackets:
             if hg38 and not (hg38.startswith('<') or '<' in hg38):
                 # Try VRS format for SNVs/Indels (not structural variants)
                 variant_descriptor = VRSBuilder.create_vrs_snv_variant(
-                    hg38, c_dot, p_dot, transcript
+                    hg38, c_dot, p_dot, transcript, variant_reported
                 )
 
             # Fallback to original format if VRS creation fails
@@ -1047,6 +1061,10 @@ class DirectSheetsToPhenopackets:
                     "expressions": [],
                     "moleculeContext": "genomic",
                 }
+
+                # Add original publication description if available
+                if variant_reported:
+                    variant_descriptor["description"] = variant_reported
 
             # Determine variant type and add molecular consequence
             molecular_consequence = None
