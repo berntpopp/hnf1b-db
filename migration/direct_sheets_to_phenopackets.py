@@ -926,9 +926,27 @@ class DirectSheetsToPhenopackets:
         except:
             return None
 
+    def _parse_review_date(self, date_str: Any) -> Optional[str]:
+        """Parse ReviewDate to ISO8601 timestamp."""
+        if pd.isna(date_str):
+            return None
+
+        try:
+            # Parse format like "3/20/2021 12:27:42"
+            dt = pd.to_datetime(date_str)
+            return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        except:
+            return None
+
     def _extract_phenotypes(self, row: pd.Series) -> List[Dict[str, Any]]:
-        """Extract phenotypic features from a row."""
+        """Extract phenotypic features from a row with temporal information."""
         phenotypes = []
+
+        # Get timestamp from ReviewDate for this observation
+        review_timestamp = self._parse_review_date(row.get('ReviewDate'))
+
+        # Get age at onset if available
+        age_onset = self._parse_age(row.get('AgeOnset'))
 
         # Normalize column names
         normalized_cols = {self._normalize_column_name(col): col for col in row.index}
@@ -949,12 +967,30 @@ class DirectSheetsToPhenopackets:
                                 "type": {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
                                 "excluded": False,
                             }
+                            # Add evidence with recordedAt for tracking
+                            if row.get('Publication') or review_timestamp:
+                                evidence_item = {"evidenceCode": {"id": "ECO:0000033", "label": "author statement"}, "reference": {}}
+                                if row.get('Publication'):
+                                    evidence_item["reference"]["id"] = str(row.get('Publication'))
+                                    evidence_item["reference"]["description"] = f"Publication: {row.get('Publication')}"
+                                if review_timestamp:
+                                    evidence_item["reference"]["recordedAt"] = review_timestamp
+                                phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
                         if "multiple glomerular cysts" in value_lower or "glomerular cyst" in value_lower:
                             phenotype = {
                                 "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
                                 "excluded": False,
                             }
+                            # Add evidence with recordedAt for tracking
+                            if row.get('Publication') or review_timestamp:
+                                evidence_item = {"evidenceCode": {"id": "ECO:0000033", "label": "author statement"}, "reference": {}}
+                                if row.get('Publication'):
+                                    evidence_item["reference"]["id"] = str(row.get('Publication'))
+                                    evidence_item["reference"]["description"] = f"Publication: {row.get('Publication')}"
+                                if review_timestamp:
+                                    evidence_item["reference"]["recordedAt"] = review_timestamp
+                                phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
                         continue  # Skip the generic kidney biopsy mapping
 
@@ -967,6 +1003,43 @@ class DirectSheetsToPhenopackets:
                         "type": {"id": hpo_info["id"], "label": hpo_info["label"]},
                         "excluded": excluded,
                     }
+
+                    # Add age of onset ONLY if explicitly provided in AgeOnset column
+                    if age_onset and not excluded:
+                        phenotype["onset"] = age_onset
+
+                    # Add evidence with ReviewDate timestamp (when data was added)
+                    evidence = []
+                    if row.get('Publication'):
+                        evidence_item = {
+                            "evidenceCode": {
+                                "id": "ECO:0000033",
+                                "label": "author statement"
+                            },
+                            "reference": {
+                                "id": str(row.get('Publication')),
+                                "description": f"Publication: {row.get('Publication')}"
+                            }
+                        }
+                        # Add ReviewDate to show when this was recorded
+                        if review_timestamp:
+                            evidence_item["reference"]["recordedAt"] = review_timestamp
+                        evidence.append(evidence_item)
+                    elif review_timestamp:
+                        # Even without publication, record when this was added
+                        evidence.append({
+                            "evidenceCode": {
+                                "id": "ECO:0000033",
+                                "label": "author statement"
+                            },
+                            "reference": {
+                                "description": "Clinical observation",
+                                "recordedAt": review_timestamp
+                            }
+                        })
+
+                    if evidence:
+                        phenotype["evidence"] = evidence
 
                     # Add modifier if applicable (for bilateral/unilateral features)
                     if value.lower() in ["bilateral", "unilateral", "left", "right"]:
@@ -1370,6 +1443,22 @@ class DirectSheetsToPhenopackets:
             ],
             "phenopacketSchemaVersion": "2.0.0",
         }
+
+        # Add update history if there are multiple entries for this individual
+        if len(rows) > 1:
+            updates = []
+            for _, row in rows.iterrows():
+                timestamp = self._parse_review_date(row.get('ReviewDate'))
+                if timestamp:
+                    updates.append({
+                        "timestamp": timestamp,
+                        "updatedBy": f"Publication: {row.get('Publication', 'Unknown')}",
+                        "comment": f"Data from {row.get('Publication', 'Unknown source')}"
+                    })
+            if updates:
+                # Sort updates by timestamp
+                updates.sort(key=lambda x: x['timestamp'])
+                metadata["updates"] = updates
 
         # Add publication references if available
         pub_col = next(
