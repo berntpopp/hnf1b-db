@@ -1126,6 +1126,10 @@ class DirectSheetsToPhenopackets:
         segregation = self._safe_value(row.get("Segregation"))
         criteria = self._safe_value(row.get("criteria_classification"))
 
+        # Get publication and timestamp information for variant provenance
+        publication = self._safe_value(row.get("Publication"))
+        review_timestamp = self._parse_review_date(row.get("ReviewDate"))
+
         # Check if this is a CNV (deletion/duplication)
         is_cnv = False
         if variant_type:
@@ -1147,6 +1151,18 @@ class DirectSheetsToPhenopackets:
             )
 
             if cnv_interpretation:
+                # Add publication-specific subject ID to preserve source tracking
+                individual_id = row.get("IndividualIdentifier", row.get("individual_id", "unknown"))
+                if publication:
+                    # Update subjectOrBiosampleId to track publication source
+                    cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
+                        "subjectOrBiosampleId"
+                    ] = f"{individual_id}_{publication}"
+                else:
+                    cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
+                        "subjectOrBiosampleId"
+                    ] = individual_id
+
                 # Add segregation information if available
                 if segregation:
                     seg_lower = segregation.lower()
@@ -1311,6 +1327,10 @@ class DirectSheetsToPhenopackets:
             # Create unique interpretation ID
             interpretation_id = f"interpretation-{len(interpretations)+1:03d}"
 
+            # Add publication-specific subject ID to preserve source tracking
+            individual_id = row.get("IndividualIdentifier", row.get("individual_id", "unknown"))
+            subject_biosample_id = f"{individual_id}_{publication}" if publication else individual_id
+
             interpretation = {
                 "id": interpretation_id,
                 "progressStatus": "COMPLETED",
@@ -1318,10 +1338,7 @@ class DirectSheetsToPhenopackets:
                     "disease": self.mondo_mappings["hnf1b"],
                     "genomicInterpretations": [
                         {
-                            "subjectOrBiosampleId": row.get(
-                                "IndividualIdentifier",
-                                row.get("individual_id", "unknown"),
-                            ),
+                            "subjectOrBiosampleId": subject_biosample_id,
                             "interpretationStatus": "UNCERTAIN_SIGNIFICANCE",
                             "variantInterpretation": {
                                 "variationDescriptor": variant_descriptor
@@ -1444,22 +1461,93 @@ class DirectSheetsToPhenopackets:
         age_onset = self._parse_age(first_row.get("AgeOnset"))
 
         # Extract phenotypic features from all rows
-        all_phenotypes = []
-        seen_phenotypes = set()
+        # Use a dictionary to accumulate evidence from multiple publications for the same phenotype
+        phenotype_dict = {}  # Maps phenotype_id to phenotype with accumulated evidence
 
         for _, row in rows.iterrows():
             phenotypes = self._extract_phenotypes(row)
             for pheno in phenotypes:
                 pheno_id = pheno["type"]["id"]
-                if pheno_id not in seen_phenotypes:
-                    all_phenotypes.append(pheno)
-                    seen_phenotypes.add(pheno_id)
+
+                if pheno_id not in phenotype_dict:
+                    # First occurrence of this phenotype
+                    phenotype_dict[pheno_id] = pheno
+                else:
+                    # Phenotype already exists - merge evidence if different publication
+                    existing_pheno = phenotype_dict[pheno_id]
+
+                    # Get evidence from new phenotype
+                    new_evidence = pheno.get("evidence", [])
+                    if new_evidence:
+                        # Get existing evidence or create empty list
+                        if "evidence" not in existing_pheno:
+                            existing_pheno["evidence"] = []
+
+                        # Add new evidence if it's from a different publication
+                        for new_ev in new_evidence:
+                            # Check if this evidence is from a different source
+                            is_duplicate = False
+                            for existing_ev in existing_pheno["evidence"]:
+                                if (existing_ev.get("reference", {}).get("id") ==
+                                    new_ev.get("reference", {}).get("id") and
+                                    existing_ev.get("reference", {}).get("recordedAt") ==
+                                    new_ev.get("reference", {}).get("recordedAt")):
+                                    is_duplicate = True
+                                    break
+
+                            if not is_duplicate:
+                                existing_pheno["evidence"].append(new_ev)
+
+        # Convert dictionary back to list
+        all_phenotypes = list(phenotype_dict.values())
 
         # Extract variants/interpretations from all rows
-        all_interpretations = []
+        # Use a dictionary to group identical variants and track all their publication sources
+        variant_dict = {}  # Key: variant ID, Value: interpretation with accumulated sources
+
         for _, row in rows.iterrows():
             interpretations = self._extract_variants(row)
-            all_interpretations.extend(interpretations)
+            for interp in interpretations:
+                # Get the variant ID for deduplication
+                genomic_interps = interp.get("diagnosis", {}).get("genomicInterpretations", [])
+                if not genomic_interps:
+                    continue
+
+                variant_desc = genomic_interps[0].get("variantInterpretation", {}).get("variationDescriptor", {})
+                variant_id = variant_desc.get("id")
+
+                if not variant_id:
+                    # No ID, can't deduplicate, add as-is
+                    variant_dict[f"unique_{len(variant_dict)}"] = interp
+                    continue
+
+                if variant_id not in variant_dict:
+                    # First occurrence of this variant
+                    variant_dict[variant_id] = interp
+                else:
+                    # Variant already exists - merge the publication sources
+                    existing_interp = variant_dict[variant_id]
+                    existing_genomic = existing_interp["diagnosis"]["genomicInterpretations"][0]
+                    new_genomic = genomic_interps[0]
+
+                    # Combine subjectOrBiosampleIds if they're different
+                    existing_subject = existing_genomic.get("subjectOrBiosampleId", "")
+                    new_subject = new_genomic.get("subjectOrBiosampleId", "")
+
+                    if new_subject and new_subject != existing_subject:
+                        # Parse out the publication parts
+                        subjects = []
+                        if existing_subject:
+                            subjects.append(existing_subject)
+                        if new_subject not in subjects:
+                            subjects.append(new_subject)
+
+                        # Create combined subject ID showing all sources
+                        combined_subject = " | ".join(subjects)
+                        existing_genomic["subjectOrBiosampleId"] = combined_subject
+
+        # Convert back to list
+        all_interpretations = list(variant_dict.values())
 
         # Build diseases list
         disease_onset = None
