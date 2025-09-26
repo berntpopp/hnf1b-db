@@ -1003,25 +1003,87 @@ class DirectSheetsToPhenopackets:
         else:
             return "UNKNOWN_SEX"
 
-    def _parse_age(self, age_str: Any) -> Optional[Dict[str, str]]:
-        """Parse age to ISO8601 duration format."""
+    def _parse_age(self, age_str: Any) -> Optional[Dict[str, Any]]:
+        """Parse age to ISO8601 duration format or HPO onset term."""
         if pd.isna(age_str):
             return None
 
-        try:
-            # Try to extract number from string
-            if isinstance(age_str, (int, float)):
-                years = int(age_str)
-            else:
-                match = re.search(r"(\d+)", str(age_str))
-                if match:
-                    years = int(match.group(1))
-                else:
-                    return None
+        age_str = str(age_str).strip().lower()
 
-            return {"iso8601duration": f"P{years}Y"}
+        # Handle special onset terms
+        if age_str in ['prenatal', 'pre-natal', 'antenatal']:
+            return {
+                "ontologyClass": {
+                    "id": "HP:0034199",
+                    "label": "Prenatal onset"
+                }
+            }
+        elif age_str in ['congenital', 'birth', 'at birth', 'newborn', 'neonatal']:
+            return {
+                "ontologyClass": {
+                    "id": "HP:0003577",
+                    "label": "Congenital onset"
+                }
+            }
+        elif age_str in ['infantile', 'infant', 'infancy']:
+            return {
+                "ontologyClass": {
+                    "id": "HP:0003593",
+                    "label": "Infantile onset"
+                }
+            }
+        elif age_str in ['childhood', 'child']:
+            return {
+                "ontologyClass": {
+                    "id": "HP:0011463",
+                    "label": "Childhood onset"
+                }
+            }
+        elif age_str in ['adult', 'adulthood']:
+            return {
+                "ontologyClass": {
+                    "id": "HP:0003581",
+                    "label": "Adult onset"
+                }
+            }
+
+        # Parse numeric ages (e.g., "1y9m", "2y", "6m", "3d")
+        try:
+            # Pattern for years, months, days
+            pattern = r'(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?'
+            match = re.match(pattern, age_str)
+
+            if match and any(match.groups()):
+                years = int(match.group(1)) if match.group(1) else 0
+                months = int(match.group(2)) if match.group(2) else 0
+                days = int(match.group(3)) if match.group(3) else 0
+
+                # Build ISO8601 duration
+                duration_parts = []
+                if years > 0:
+                    duration_parts.append(f"{years}Y")
+                if months > 0:
+                    duration_parts.append(f"{months}M")
+                if days > 0:
+                    duration_parts.append(f"{days}D")
+
+                if duration_parts:
+                    return {"iso8601duration": "P" + "".join(duration_parts)}
+
+            # Try simple number (assume years)
+            if age_str.isdigit():
+                return {"iso8601duration": f"P{age_str}Y"}
+
+            # Try extracting first number
+            match = re.search(r"(\d+)", age_str)
+            if match:
+                years = int(match.group(1))
+                return {"iso8601duration": f"P{years}Y"}
+
         except (ValueError, TypeError, AttributeError):
-            return None
+            pass
+
+        return None
 
     def _parse_review_date(self, date_str: Any) -> Optional[str]:
         """Parse ReviewDate to ISO8601 timestamp."""
@@ -1635,8 +1697,11 @@ class DirectSheetsToPhenopackets:
         # Build diseases list
         disease_onset = None
         if age_onset:
-            # Use actual age of onset if available
-            disease_onset = {"age": age_onset}
+            # Use the parsed age onset (could be HPO term or age)
+            if "ontologyClass" in age_onset:
+                disease_onset = age_onset
+            else:
+                disease_onset = {"age": age_onset}
         else:
             # Default to congenital onset for HNF1B
             disease_onset = {
