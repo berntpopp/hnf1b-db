@@ -107,10 +107,10 @@ uv run python migration/direct_sheets_to_phenopackets.py --dry-run # Dry run
 The migration system processes data from multiple sources:
 
 1. **Google Sheets**: Clinical and genetic data from configured spreadsheet
-   - User/reviewer information
-   - Publication metadata with PubMed enrichment
    - Individual demographics and clinical reports
-   - Variant classifications and annotations
+   - Publication metadata with PMID and DOI identifiers
+   - Variant classifications with original and standardized nomenclature
+   - Temporal data with complex age formats (e.g., "1y9m", "prenatal")
 
 2. **Genomic Files** (in `/data/` directory):
    - `HNF1B_all_small.vcf` - Small genetic variants (182 variants)
@@ -136,8 +136,13 @@ migration/
 - **Test mode**: Processes limited dataset (20 individuals) for faster development
 - **Dry run mode**: Outputs to JSON file for inspection without database changes
 - **HPO mapping**: Automatic mapping of clinical terms to Human Phenotype Ontology
+  - Special onset terms mapped to HPO (prenatal → HP:0034199, congenital → HP:0003577)
 - **MONDO diseases**: Proper disease classification using MONDO ontology
 - **Variant handling**: Prioritizes Varsome format, falls back to other formats
+  - Preserves original notation alongside standardized HGVS nomenclature
+- **Age parsing**: Handles complex formats (1y9m → P1Y9M ISO 8601 duration)
+- **Publication references**: PMID and DOI identifiers with proper GA4GH ExternalReference format
+- **Evidence tracking**: Complete provenance with timestamps and publication attribution
 
 ### Import Process
 
@@ -153,21 +158,24 @@ The direct migration:
 
 ```
 Loading data from Google Sheets...
-Loaded 939 rows for 864 unique individuals
+Loaded 939 rows from individuals sheet
+Loaded 160 rows from publications sheet
+Created publication map with 320 entries
 Processing 864 individuals...
-Building phenopackets: 100%|████████████| 864/864 [00:15<00:00, 55.23it/s]
+Building phenopackets: 100%|████████████| 864/864 [00:01<00:00, 681.39it/s]
 Built 864 phenopackets
-
-Storing phenopackets: 100%|████████████| 864/864 [00:30<00:00, 28.80it/s]
+Storing phenopackets: 100%|████████████| 864/864 [00:02<00:00, 327.69it/s]
 Successfully stored 864 phenopackets
 
-Migration Summary:
-- Total phenopackets: 864
-- With phenotypic features: 828 (95.8%)
-- With genetic variants: 864 (100.0%)
-- Average features per phenopacket: 3.8
-
-Migration completed successfully!
+============================================================
+MIGRATION SUMMARY
+============================================================
+Total phenopackets created: 864
+With phenotypic features: 830 (96%)
+With genetic variants: 864 (100%)
+With disease diagnoses: 864 (100%)
+Sex distribution: {'UNKNOWN_SEX': 187, 'FEMALE': 329, 'MALE': 348}
+============================================================
 ```
 
 ## Installation & Setup
