@@ -36,7 +36,7 @@ async def validate_variant(request: VariantValidationRequest):
     """Validate variant notation and provide suggestions.
 
     This endpoint:
-    1. Validates variant format (HGVS, VCF, CNV, etc.)
+    1. Validates variant format (HGVS, VCF, CNV, and others)
     2. Queries VEP for additional validation and annotation
     3. Provides helpful suggestions for invalid formats
     4. Returns standardized formats when possible

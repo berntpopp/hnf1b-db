@@ -467,7 +467,8 @@ class PhenopacketValidator:
                 )
 
         # Check for CNV notation issues
-        if "del" in invalid_notation.lower() or "dup" in invalid_notation.lower():
+        notation_lower = invalid_notation.lower()
+        if re.search(r'\b(del|dup|deletion|duplication)\b', notation_lower):
             if ":" not in invalid_notation:
                 suggestions.append(
                     "For CNVs, use format: 17:start-end:DEL or 17:start-end:DUP"

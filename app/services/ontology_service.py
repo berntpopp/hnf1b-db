@@ -93,7 +93,7 @@ class OLSAPIClient(OntologyAPIClient):
     BASE_URL = "https://www.ebi.ac.uk/ols4/api"
 
     def get_term(self, term_id: str) -> Optional[OntologyTerm]:
-        """Fetch term from OLS API (supports HPO, MONDO, etc.)."""
+        """Fetch term from OLS API (supports HPO, MONDO, and others)."""
         try:
             # Determine ontology from prefix
             if term_id.startswith("HP:"):

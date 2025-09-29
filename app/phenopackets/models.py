@@ -144,7 +144,7 @@ class OntologyClass(BaseModel):
 
 
 class TimeElement(BaseModel):
-    """Time element for onset, age, etc."""
+    """Time element for onset, age, and other temporal data."""
 
     age: Optional[Dict[str, str]] = None  # iso8601duration
     age_range: Optional[Dict[str, Any]] = None
