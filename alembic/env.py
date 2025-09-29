@@ -18,10 +18,19 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import your models' metadata here for 'autogenerate' support
-# This will be updated once we create the SQLAlchemy models
+# Import Base from database module and all Phenopackets v2 models
 try:
-    # Import Base and all models to ensure metadata is complete
-    from app.models import Base
+    # Import Base from database module
+    from app.database import Base
+
+    # Import all Phenopackets v2 models to ensure metadata is complete
+    from app.phenopackets.models import (
+        Phenopacket,
+        Family,
+        Cohort,
+        Resource,
+        PhenopacketAudit
+    )
 
     target_metadata = Base.metadata
 except ImportError:
@@ -30,7 +39,7 @@ except ImportError:
 
 # Get database URL from environment variable
 database_url = os.getenv(
-    "DATABASE_URL", "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db"
+    "DATABASE_URL", "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets"
 )
 
 # Override the sqlalchemy.url from config with environment variable

@@ -8,15 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import auth_endpoints, hpo_proxy, variant_validator_endpoint
 from app.database import engine
 from app.phenopackets import clinical_endpoints, endpoints
-from app.phenopackets.models import Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Create tables on startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Application lifespan manager.
+
+    Database schema is now managed by Alembic migrations.
+    Run 'uv run alembic upgrade head' to initialize/update the database schema.
+    """
+    # Application startup - no table creation needed (handled by Alembic)
     yield
     # Cleanup on shutdown
     await engine.dispose()
