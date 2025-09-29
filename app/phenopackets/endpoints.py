@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_auth
@@ -122,7 +122,9 @@ async def search_phenopackets(
             base_query = base_query.where(
                 func.jsonb_path_exists(
                     Phenopacket.phenopacket,
-                    f'$.interpretations[*].diagnosis.genomicInterpretations[*].variantInterpretation.variationDescriptor.label ? (@ like_regex "{variant}")',
+                    f'$.interpretations[*].diagnosis.genomicInterpretations[*]'
+                    f'.variantInterpretation.variationDescriptor.label ? '
+                    f'(@ like_regex "{variant}")',
                 )
             )
 
@@ -139,11 +141,60 @@ async def search_phenopackets(
     if search_query.sex:
         base_query = base_query.where(Phenopacket.subject_sex == search_query.sex)
 
-    # Filter by age range
+    # Filter by age range using ISO8601 duration parsing
     if search_query.min_age is not None or search_query.max_age is not None:
-        # This requires extracting age from ISO8601 duration
-        # Simplified for now - would need proper parsing in production
-        pass
+        age_conditions = []
+
+        # Extract age from ISO8601 duration in the JSON path
+        # Age location: phenopacket.subject.timeAtLastEncounter.age.iso8601duration
+        age_extraction = text(r"""
+            (
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P(\d+)Y'
+                    ))[1]::int,
+                    0
+                ) +
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P\d*Y?(\d+)M'
+                    ))[1]::float / 12,
+                    0
+                ) +
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P\d*Y?\d*M?(\d+)D'
+                    ))[1]::float / 365.25,
+                    0
+                )
+            )
+        """)
+
+        if search_query.min_age is not None:
+            # Age must be >= minimum age
+            age_conditions.append(
+                text(f"""
+                    phenopacket->'subject'->'timeAtLastEncounter'->
+                    'age'->>'iso8601duration' IS NOT NULL
+                    AND {age_extraction.text} >= :min_age
+                """).bindparams(min_age=search_query.min_age)
+            )
+
+        if search_query.max_age is not None:
+            # Age must be <= maximum age
+            age_conditions.append(
+                text(f"""
+                    phenopacket->'subject'->'timeAtLastEncounter'->
+                    'age'->>'iso8601duration' IS NOT NULL
+                    AND {age_extraction.text} <= :max_age
+                """).bindparams(max_age=search_query.max_age)
+            )
+
+        if age_conditions:
+            base_query = base_query.where(and_(*age_conditions))
 
     result = await db.execute(base_query)
     phenopackets = result.scalars().all()
