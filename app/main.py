@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import auth_endpoints, hpo_proxy, variant_validator_endpoint
+from app.config import settings
 from app.database import engine
 from app.phenopackets import clinical_endpoints, endpoints
 
@@ -33,13 +34,13 @@ app = FastAPI(
     redoc_url="/api/v2/redoc",
 )
 
-# Configure CORS
+# Configure CORS with environment-based settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=settings.get_cors_origins_list(),  # Environment-specific origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Specific methods
+    allow_headers=["Authorization", "Content-Type"],  # Specific headers
 )
 
 # Include routers
