@@ -77,6 +77,7 @@ def test_vrs():
     # Create a simple sequence location with valid refget accession (32 char hash)
     location = models.SequenceLocation(
         sequenceReference=models.SequenceReference(
+            # NOTE: This is a test value and not a real refget identifier for an actual sequence reference.
             refgetAccession="SQ.F-LrLMe1SRpfUZHkQmvkVKFEGaoDeHul"
         ),
         start=100,

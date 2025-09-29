@@ -10,6 +10,8 @@ import json
 import logging
 import os
 import re
+import hashlib
+import base64
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +22,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
+
+# GA4GH VRS imports for proper digest computation
+try:
+    from ga4gh.vrs import models as vrs_models
+    from ga4gh.core import ga4gh_identify, ga4gh_serialize
+    VRS_AVAILABLE = True
+except ImportError:
+    VRS_AVAILABLE = False
+    logging.warning("ga4gh.vrs not available - using placeholder digest computation")
 
 # Load environment variables
 load_dotenv()
@@ -107,6 +118,26 @@ class VRSBuilder:
         except (ValueError, IndexError):
             return None
 
+    @staticmethod
+    def create_placeholder_refget(refseq_id: str) -> str:
+        """Create a format-compliant RefGet accession placeholder.
+
+        Note: This creates a deterministic placeholder that follows the RefGet format
+        but is not a real sequence digest. Real RefGet IDs require access to actual
+        sequence data to compute SHA512t24u digests.
+
+        Args:
+            refseq_id: RefSeq accession (e.g., 'NC_000017.11')
+
+        Returns:
+            Format-compliant RefGet accession (e.g., 'SQ.xxx...')
+        """
+        # Create a deterministic hash from RefSeq ID
+        hash_obj = hashlib.sha256(refseq_id.encode())
+        # Take first 24 bytes and encode as base64url without padding
+        digest = base64.urlsafe_b64encode(hash_obj.digest()[:24]).decode('ascii').rstrip('=')
+        return f'SQ.{digest}'
+
     @classmethod
     def create_vrs_allele(
         cls,
@@ -170,10 +201,48 @@ class VRSBuilder:
 
         # Generate VRS 2.0 compliant identifier
         # Format: ga4gh:VA.{digest} where digest is computed from normalized VRS JSON
-        # For now, using a placeholder computation
-        identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
-        vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
-        vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
+        if VRS_AVAILABLE:
+            try:
+                # Create proper VRS models for digest computation
+                # Create format-compliant RefGet placeholder (real RefGet requires actual sequence)
+                refget_accession = cls.create_placeholder_refget(refseq_id)
+
+                vrs_location = vrs_models.SequenceLocation(
+                    sequenceReference=vrs_models.SequenceReference(
+                        refgetAccession=refget_accession
+                    ),
+                    start=start,
+                    end=end
+                )
+
+                # Create VRS Allele model
+                vrs_obj = vrs_models.Allele(
+                    location=vrs_location,
+                    state=vrs_models.LiteralSequenceExpression(sequence=alt)
+                )
+
+                # Compute digest using GA4GH core functions
+                digest = ga4gh_identify(vrs_obj)
+
+                # Extract just the digest part (after the "ga4gh:VA." prefix)
+                if digest.startswith("ga4gh:VA."):
+                    vrs_allele["digest"] = digest[9:]  # Remove "ga4gh:VA." prefix
+                else:
+                    vrs_allele["digest"] = digest
+
+                vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
+
+            except Exception as e:
+                # Fallback to placeholder if VRS computation fails
+                logging.warning(f"VRS digest computation failed: {e}. Using placeholder.")
+                identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
+                vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
+                vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
+        else:
+            # Fallback to placeholder digest when ga4gh.vrs is not available
+            identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
+            vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
+            vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
 
         # Add expressions for alternative representations
         vrs_allele["expressions"] = [
@@ -826,7 +895,7 @@ class DirectSheetsToPhenopackets:
         Returns:
             ExternalReference dict with PMID/DOI if available, None otherwise
         """
-        if not publication_id or not hasattr(self, 'publication_map'):
+        if not publication_id or not getattr(self, 'publication_map', None):
             return None
 
         pub_data = self.publication_map.get(str(publication_id))

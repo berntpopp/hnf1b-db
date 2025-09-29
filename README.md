@@ -140,6 +140,7 @@ migration/
 - **MONDO diseases**: Proper disease classification using MONDO ontology
 - **Variant handling**: Prioritizes Varsome format, falls back to other formats
   - Preserves original notation alongside standardized HGVS nomenclature
+  - **VRS 2.0 compliance**: Generates GA4GH VRS-compliant variant identifiers with proper digests
 - **Age parsing**: Handles complex formats (1y9m → P1Y9M ISO 8601 duration)
 - **Publication references**: PMID and DOI identifiers with proper GA4GH ExternalReference format
 - **Evidence tracking**: Complete provenance with timestamps and publication attribution

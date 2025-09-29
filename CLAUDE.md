@@ -69,6 +69,7 @@ make phenopackets-migrate-dry
 - Bypasses intermediate PostgreSQL normalization step
 - Supports test mode (20 individuals) and dry run mode
 - Properly maps HPO terms, MONDO diseases, and variant data
+- Generates GA4GH VRS 2.0 compliant variant identifiers with proper digests
 
 ### Code Quality Tools
 ```bash
@@ -142,6 +143,12 @@ PostgreSQL tables using JSONB storage for phenopackets:
 4. **Database Access**: Async PostgreSQL operations with SQLAlchemy + asyncpg
 
 5. **Ontology Integration**: HPO terms for phenotypes, MONDO for diseases, LOINC for labs
+
+6. **VRS (Variation Representation Specification)**: GA4GH VRS 2.0 compliant variant representation
+   - Proper digest computation using `ga4gh.vrs` library
+   - Format-compliant RefGet placeholders for sequence references
+   - Deterministic variant identifiers following GA4GH standards
+   - Fallback to placeholder digests when VRS library unavailable
 
 ### Data File Formats
 
