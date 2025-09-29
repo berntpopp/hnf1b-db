@@ -139,7 +139,9 @@ async def get_hpo_term(term_id: str):
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"HPO term {term_id} not found") from e
+            raise HTTPException(
+                status_code=404, detail=f"HPO term {term_id} not found"
+            ) from e
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"HPO API error: {e.response.text}",

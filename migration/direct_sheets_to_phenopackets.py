@@ -6,12 +6,12 @@ eliminating the intermediate PostgreSQL normalization step.
 """
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import os
 import re
-import hashlib
-import base64
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,8 +25,9 @@ from tqdm import tqdm
 
 # GA4GH VRS imports for proper digest computation
 try:
-    from ga4gh.vrs import models as vrs_models
     from ga4gh.core import ga4gh_identify, ga4gh_serialize
+    from ga4gh.vrs import models as vrs_models
+
     VRS_AVAILABLE = True
 except ImportError:
     VRS_AVAILABLE = False
@@ -140,8 +141,10 @@ class VRSBuilder:
         # MUST truncate to 24 bytes: GA4GH RefGet spec requires exactly 32 chars after 'SQ.'
         # 24 bytes -> base64 = 32 chars; full 32 bytes would give 43 chars (invalid)
         # This matches the SHA512t24u truncation used in real RefGet (though with SHA256 here)
-        digest = base64.urlsafe_b64encode(hash_obj.digest()[:24]).decode('ascii').rstrip('=')
-        return f'SQ.{digest}'
+        digest = (
+            base64.urlsafe_b64encode(hash_obj.digest()[:24]).decode("ascii").rstrip("=")
+        )
+        return f"SQ.{digest}"
 
     @classmethod
     def create_vrs_allele(
@@ -217,13 +220,13 @@ class VRSBuilder:
                         refgetAccession=refget_accession
                     ),
                     start=start,
-                    end=end
+                    end=end,
                 )
 
                 # Create VRS Allele model
                 vrs_obj = vrs_models.Allele(
                     location=vrs_location,
-                    state=vrs_models.LiteralSequenceExpression(sequence=alt)
+                    state=vrs_models.LiteralSequenceExpression(sequence=alt),
                 )
 
                 # Compute digest using GA4GH core functions
@@ -239,7 +242,9 @@ class VRSBuilder:
 
             except Exception as e:
                 # Fallback to placeholder if VRS computation fails
-                logging.warning(f"VRS digest computation failed: {e}. Using placeholder.")
+                logging.warning(
+                    f"VRS digest computation failed: {e}. Using placeholder."
+                )
                 identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
                 vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
                 vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
@@ -706,7 +711,7 @@ class CNVParser:
         is_cnv = bool(
             re.search(
                 r"\b(deletion|duplication|del|dup|cnv|copy number variation|copy number change|copy number loss|copy number gain)\b",
-                variant_type_lower
+                variant_type_lower,
             )
         )
 
@@ -895,7 +900,9 @@ class DirectSheetsToPhenopackets:
             },
         }
 
-    def _create_publication_reference(self, publication_id: str) -> Optional[Dict[str, Any]]:
+    def _create_publication_reference(
+        self, publication_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Create an ExternalReference for a publication with PMID and DOI.
 
         Args:
@@ -904,7 +911,7 @@ class DirectSheetsToPhenopackets:
         Returns:
             ExternalReference dict with PMID/DOI if available, None otherwise
         """
-        if not publication_id or not getattr(self, 'publication_map', None):
+        if not publication_id or not getattr(self, "publication_map", None):
             return None
 
         pub_data = self.publication_map.get(str(publication_id))
@@ -914,34 +921,40 @@ class DirectSheetsToPhenopackets:
             return None
 
         # Convert Series to dict if needed (when pub_data is a pandas Series)
-        if hasattr(pub_data, 'to_dict'):
+        if hasattr(pub_data, "to_dict"):
             pub_data = pub_data.to_dict()
 
         # Build proper ExternalReference with PMID/DOI
         external_ref = {}
 
         # Check for PMID
-        pmid = pub_data.get('PMID')
+        pmid = pub_data.get("PMID")
         if pmid and pd.notna(pmid):
             # Clean PMID (remove any prefixes and handle float)
-            pmid_clean = str(int(float(pmid))) if isinstance(pmid, (float, np.floating)) else str(pmid)
-            pmid_clean = pmid_clean.replace('PMID:', '').strip()
+            pmid_clean = (
+                str(int(float(pmid)))
+                if isinstance(pmid, (float, np.floating))
+                else str(pmid)
+            )
+            pmid_clean = pmid_clean.replace("PMID:", "").strip()
             if pmid_clean.isdigit():
                 external_ref["id"] = f"PMID:{pmid_clean}"
-                external_ref["reference"] = f"https://pubmed.ncbi.nlm.nih.gov/{pmid_clean}"
+                external_ref["reference"] = (
+                    f"https://pubmed.ncbi.nlm.nih.gov/{pmid_clean}"
+                )
 
         # Check for DOI
-        doi = pub_data.get('DOI')
+        doi = pub_data.get("DOI")
         if doi and pd.notna(doi) and not external_ref.get("id"):
             # Use DOI if PMID is not available
             doi_clean = str(doi).strip()
-            if doi_clean.startswith('10.'):
+            if doi_clean.startswith("10."):
                 external_ref["id"] = f"DOI:{doi_clean}"
                 external_ref["reference"] = f"https://doi.org/{doi_clean}"
         elif doi and pd.notna(doi) and external_ref.get("id"):
             # If we have both PMID and DOI, add DOI to description (minimal format)
             doi_clean = str(doi).strip()
-            if doi_clean.startswith('10.'):
+            if doi_clean.startswith("10."):
                 external_ref["description"] = f"DOI:{doi_clean}"
 
         # If we still don't have a proper PMID or DOI, check for special cases
@@ -950,7 +963,7 @@ class DirectSheetsToPhenopackets:
             if publication_id == "our_report":
                 return {
                     "id": "INTERNAL:our_report",
-                    "description": "Unpublished internal case series"
+                    "description": "Unpublished internal case series",
                 }
             # For other cases without PMID/DOI, return None
             return None
@@ -1012,13 +1025,15 @@ class DirectSheetsToPhenopackets:
             if not self.publications_df.empty:
                 for _, pub_row in self.publications_df.iterrows():
                     # Map by both publication_id and publication_alias
-                    pub_id = pub_row.get('publication_id')
-                    pub_alias = pub_row.get('publication_alias')
+                    pub_id = pub_row.get("publication_id")
+                    pub_alias = pub_row.get("publication_alias")
                     if pub_id:
                         self.publication_map[str(pub_id)] = pub_row
                     if pub_alias:
                         self.publication_map[str(pub_alias)] = pub_row
-            logger.info(f"Created publication map with {len(self.publication_map)} entries")
+            logger.info(
+                f"Created publication map with {len(self.publication_map)} entries"
+            )
         except Exception as e:
             logger.warning(f"Could not load publications sheet: {e}")
             self.publications_df = pd.DataFrame()
@@ -1082,7 +1097,9 @@ class DirectSheetsToPhenopackets:
             return "UNKNOWN_SEX"
 
     @staticmethod
-    def _build_iso8601_duration(years: int = 0, months: int = 0, days: int = 0) -> Optional[str]:
+    def _build_iso8601_duration(
+        years: int = 0, months: int = 0, days: int = 0
+    ) -> Optional[str]:
         """Build ISO8601 duration string from components.
 
         Args:
@@ -1114,46 +1131,21 @@ class DirectSheetsToPhenopackets:
         age_str = str(age_str).strip().lower()
 
         # Handle special onset terms
-        if age_str in ['prenatal', 'pre-natal', 'antenatal']:
-            return {
-                "ontologyClass": {
-                    "id": "HP:0034199",
-                    "label": "Prenatal onset"
-                }
-            }
-        elif age_str in ['congenital', 'birth', 'at birth', 'newborn', 'neonatal']:
-            return {
-                "ontologyClass": {
-                    "id": "HP:0003577",
-                    "label": "Congenital onset"
-                }
-            }
-        elif age_str in ['infantile', 'infant', 'infancy']:
-            return {
-                "ontologyClass": {
-                    "id": "HP:0003593",
-                    "label": "Infantile onset"
-                }
-            }
-        elif age_str in ['childhood', 'child']:
-            return {
-                "ontologyClass": {
-                    "id": "HP:0011463",
-                    "label": "Childhood onset"
-                }
-            }
-        elif age_str in ['adult', 'adulthood']:
-            return {
-                "ontologyClass": {
-                    "id": "HP:0003581",
-                    "label": "Adult onset"
-                }
-            }
+        if age_str in ["prenatal", "pre-natal", "antenatal"]:
+            return {"ontologyClass": {"id": "HP:0034199", "label": "Prenatal onset"}}
+        elif age_str in ["congenital", "birth", "at birth", "newborn", "neonatal"]:
+            return {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
+        elif age_str in ["infantile", "infant", "infancy"]:
+            return {"ontologyClass": {"id": "HP:0003593", "label": "Infantile onset"}}
+        elif age_str in ["childhood", "child"]:
+            return {"ontologyClass": {"id": "HP:0011463", "label": "Childhood onset"}}
+        elif age_str in ["adult", "adulthood"]:
+            return {"ontologyClass": {"id": "HP:0003581", "label": "Adult onset"}}
 
         # Parse numeric ages (e.g., "1y9m", "2y", "6m", "3d")
         try:
             # Pattern for years, months, days
-            pattern = r'(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?'
+            pattern = r"(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?"
             match = re.match(pattern, age_str)
 
             if match and any(match.groups()):
@@ -1238,19 +1230,27 @@ class DirectSheetsToPhenopackets:
                                     },
                                 }
                                 if row.get("Publication"):
-                                    pub_ref = self._create_publication_reference(str(row.get("Publication")))
+                                    pub_ref = self._create_publication_reference(
+                                        str(row.get("Publication"))
+                                    )
                                     if pub_ref:
                                         evidence_item["reference"] = pub_ref
                                         # Add recordedAt timestamp to track when this was recorded
                                         if review_timestamp:
-                                            evidence_item["reference"]["recordedAt"] = review_timestamp
+                                            evidence_item["reference"]["recordedAt"] = (
+                                                review_timestamp
+                                            )
                                     else:
                                         # This should not happen if publication map is loaded correctly
                                         evidence_item["reference"] = {}
                                         if review_timestamp:
-                                            evidence_item["reference"]["recordedAt"] = review_timestamp
+                                            evidence_item["reference"]["recordedAt"] = (
+                                                review_timestamp
+                                            )
                                 elif review_timestamp:
-                                    evidence_item["reference"] = {"recordedAt": review_timestamp}
+                                    evidence_item["reference"] = {
+                                        "recordedAt": review_timestamp
+                                    }
                                 phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
                         if (
@@ -1273,19 +1273,27 @@ class DirectSheetsToPhenopackets:
                                     },
                                 }
                                 if row.get("Publication"):
-                                    pub_ref = self._create_publication_reference(str(row.get("Publication")))
+                                    pub_ref = self._create_publication_reference(
+                                        str(row.get("Publication"))
+                                    )
                                     if pub_ref:
                                         evidence_item["reference"] = pub_ref
                                         # Add recordedAt timestamp to track when this was recorded
                                         if review_timestamp:
-                                            evidence_item["reference"]["recordedAt"] = review_timestamp
+                                            evidence_item["reference"]["recordedAt"] = (
+                                                review_timestamp
+                                            )
                                     else:
                                         # This should not happen if publication map is loaded correctly
                                         evidence_item["reference"] = {}
                                         if review_timestamp:
-                                            evidence_item["reference"]["recordedAt"] = review_timestamp
+                                            evidence_item["reference"]["recordedAt"] = (
+                                                review_timestamp
+                                            )
                                 elif review_timestamp:
-                                    evidence_item["reference"] = {"recordedAt": review_timestamp}
+                                    evidence_item["reference"] = {
+                                        "recordedAt": review_timestamp
+                                    }
                                 phenotype["evidence"] = [evidence_item]
                             phenotypes.append(phenotype)
                         continue  # Skip the generic kidney biopsy mapping
@@ -1313,7 +1321,9 @@ class DirectSheetsToPhenopackets:
                                 "label": "author statement",
                             },
                         }
-                        pub_ref = self._create_publication_reference(str(row.get("Publication")))
+                        pub_ref = self._create_publication_reference(
+                            str(row.get("Publication"))
+                        )
                         if pub_ref:
                             evidence_item["reference"] = pub_ref
                         else:
@@ -1397,7 +1407,9 @@ class DirectSheetsToPhenopackets:
 
             if cnv_interpretation:
                 # Add publication-specific subject ID to preserve source tracking
-                individual_id = row.get("IndividualIdentifier", row.get("individual_id", "unknown"))
+                individual_id = row.get(
+                    "IndividualIdentifier", row.get("individual_id", "unknown")
+                )
                 if publication:
                     # Update subjectOrBiosampleId to track publication source
                     cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
@@ -1573,8 +1585,12 @@ class DirectSheetsToPhenopackets:
             interpretation_id = f"interpretation-{len(interpretations)+1:03d}"
 
             # Add publication-specific subject ID to preserve source tracking
-            individual_id = row.get("IndividualIdentifier", row.get("individual_id", "unknown"))
-            subject_biosample_id = f"{individual_id}_{publication}" if publication else individual_id
+            individual_id = row.get(
+                "IndividualIdentifier", row.get("individual_id", "unknown")
+            )
+            subject_biosample_id = (
+                f"{individual_id}_{publication}" if publication else individual_id
+            )
 
             interpretation = {
                 "id": interpretation_id,
@@ -1733,10 +1749,13 @@ class DirectSheetsToPhenopackets:
                             # Check if this evidence is from a different source
                             is_duplicate = False
                             for existing_ev in existing_pheno["evidence"]:
-                                if (existing_ev.get("reference", {}).get("id") ==
-                                    new_ev.get("reference", {}).get("id") and
-                                    existing_ev.get("reference", {}).get("recordedAt") ==
-                                    new_ev.get("reference", {}).get("recordedAt")):
+                                if existing_ev.get("reference", {}).get(
+                                    "id"
+                                ) == new_ev.get("reference", {}).get(
+                                    "id"
+                                ) and existing_ev.get("reference", {}).get(
+                                    "recordedAt"
+                                ) == new_ev.get("reference", {}).get("recordedAt"):
                                     is_duplicate = True
                                     break
 
@@ -1754,11 +1773,17 @@ class DirectSheetsToPhenopackets:
             interpretations = self._extract_variants(row)
             for interp in interpretations:
                 # Get the variant ID for deduplication
-                genomic_interps = interp.get("diagnosis", {}).get("genomicInterpretations", [])
+                genomic_interps = interp.get("diagnosis", {}).get(
+                    "genomicInterpretations", []
+                )
                 if not genomic_interps:
                     continue
 
-                variant_desc = genomic_interps[0].get("variantInterpretation", {}).get("variationDescriptor", {})
+                variant_desc = (
+                    genomic_interps[0]
+                    .get("variantInterpretation", {})
+                    .get("variationDescriptor", {})
+                )
                 variant_id = variant_desc.get("id")
 
                 if not variant_id:
@@ -1772,7 +1797,9 @@ class DirectSheetsToPhenopackets:
                 else:
                     # Variant already exists - merge the publication sources
                     existing_interp = variant_dict[variant_id]
-                    existing_genomic = existing_interp["diagnosis"]["genomicInterpretations"][0]
+                    existing_genomic = existing_interp["diagnosis"][
+                        "genomicInterpretations"
+                    ][0]
                     new_genomic = genomic_interps[0]
 
                     # Combine subjectOrBiosampleIds if they're different
@@ -1876,7 +1903,7 @@ class DirectSheetsToPhenopackets:
 
         # Collect all unique publication IDs from all rows
         for _, row in rows.iterrows():
-            pub_val = row.get('Publication')
+            pub_val = row.get("Publication")
             if pub_val and pd.notna(pub_val):
                 pub_ids.add(str(pub_val))
 

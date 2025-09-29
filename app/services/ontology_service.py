@@ -113,7 +113,7 @@ class OLSAPIClient(OntologyAPIClient):
             # See: https://www.ebi.ac.uk/ols4/help/api (search for "double encoding" or "terms/{iri}")
             # This is because the IRI itself contains reserved URL characters and must be encoded twice
             # for correct resolution by the OLS backend.
-            encoded_iri = quote(quote(iri, safe=''), safe='')
+            encoded_iri = quote(quote(iri, safe=""), safe="")
             url = f"{self.BASE_URL}/ontologies/{ontology}/terms/{encoded_iri}"
 
             response = self.session.get(url, timeout=self.timeout)
