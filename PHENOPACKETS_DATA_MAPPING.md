@@ -106,6 +106,13 @@ This document describes the exact mapping between Google Sheets columns and GA4G
               "expressions": [
                 // HGVS expressions
               ],
+              "vrsAllele": {
+                // GA4GH VRS 2.0 compliant variant representation
+                "id": "ga4gh:VA.{digest}",
+                "type": "Allele",
+                "location": {...},
+                "state": {...}
+              },
               "moleculeContext": "genomic",
               "allelicState": {...}  // If segregation data available
             }
@@ -183,6 +190,26 @@ This document describes the exact mapping between Google Sheets columns and GA4G
 - `ReviewBy` → Could be added to submittedBy
 - `ReviewDate` → Could be used for review metadata
 - `Comment` → Could be stored in custom metadata field
+
+## GA4GH VRS Integration
+
+All variants are represented using GA4GH VRS 2.0 standard:
+
+1. **VRS Allele Structure**:
+   - Unique identifier: `ga4gh:VA.{digest}` using proper GA4GH digest algorithm
+   - SequenceLocation with RefGet accessions (format-compliant placeholders)
+   - LiteralSequenceExpression for alternate alleles
+   - Computed using `ga4gh.vrs` library when available
+
+2. **Digest Computation**:
+   - Primary: GA4GH standard SHA-512 truncated digest via `ga4gh.core`
+   - Fallback: Deterministic placeholder for backward compatibility
+   - RefGet accessions follow `SQ.{32-char-hash}` format
+
+3. **Benefits**:
+   - Interoperability with other GA4GH-compliant systems
+   - Deterministic variant identification
+   - Standards-compliant data exchange
 
 ## Variant Type Detection
 

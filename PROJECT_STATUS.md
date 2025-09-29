@@ -54,6 +54,7 @@ Key mapping decisions:
 - `AgeReported` → `timeAtLastEncounter`
 - `AgeOnset` → `disease.onset`
 - Varsome column prioritized for variant data (GA4GH compliant)
+- **NEW**: GA4GH VRS 2.0 compliant variant identifiers with proper digests
 
 HPO Terms (updated for accuracy):
 - Mental Disease → HP:0000708 (Behavioral abnormality)
@@ -95,6 +96,7 @@ The following deprecated/outdated files have been removed:
 ✅ **Completed**:
 - Full phenopackets v2 data model implementation
 - Direct Google Sheets to Phenopackets migration
+- GA4GH VRS 2.0 compliant variant representation with proper digests
 - API endpoints using phenopackets structure
 - JWT authentication system
 - Comprehensive data mapping documentation
