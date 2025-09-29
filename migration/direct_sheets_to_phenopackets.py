@@ -1082,6 +1082,13 @@ class DirectSheetsToPhenopackets:
             return None
         return str(value).strip()
 
+    def _is_valid_id(self, value: Any) -> bool:
+        """Check if an ID value is valid (not NaN, empty, or whitespace)."""
+        if pd.isna(value):
+            return False
+        str_value = str(value).strip()
+        return str_value != "" and str_value != "NaN"
+
     def _map_sex(self, sex: Optional[str]) -> str:
         """Map sex to phenopacket format."""
         if not sex:
@@ -1972,7 +1979,7 @@ class DirectSheetsToPhenopackets:
             for individual_id, group_df in tqdm(
                 individual_groups, desc="Building phenopackets"
             ):
-                if pd.isna(individual_id) or str(individual_id).strip() == "":
+                if not self._is_valid_id(individual_id):
                     continue
 
                 if limit and individual_count >= limit:
