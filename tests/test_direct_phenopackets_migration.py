@@ -93,7 +93,7 @@ class TestDirectPhenopacketsMigration:
         feature_ids = [f["type"]["id"] for f in features]
         assert "HP:0000083" in feature_ids  # Renal insufficiency
         assert "HP:0000819" in feature_ids  # Diabetes
-        assert "HP:0000708" in feature_ids  # "MentalDisease" is mapped to the general HPO term "Behavioral abnormality" (HP:0000708), not a more specific term like "Schizophrenia"
+        assert "HP:0000708" in feature_ids  # Mental disease maps to behavioral abnormality
 
         # Hypomagnesemia should not be included (value is 0)
         assert "HP:0002917" not in feature_ids
