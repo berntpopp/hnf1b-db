@@ -109,7 +109,10 @@ class OLSAPIClient(OntologyAPIClient):
             iri_id = term_id.replace(":", "_")
             # Construct the full IRI and properly encode it
             iri = f"http://purl.obolibrary.org/obo/{iri_id}"
-            # Double encode the IRI as required by OLS API (encodes the already-encoded URL parameter)
+            # The OLS API requires the IRI parameter to be double URL encoded when used in the path.
+            # See: https://www.ebi.ac.uk/ols4/help/api (search for "double encoding" or "terms/{iri}")
+            # This is because the IRI itself contains reserved URL characters and must be encoded twice
+            # for correct resolution by the OLS backend.
             encoded_iri = quote(quote(iri, safe=''), safe='')
             url = f"{self.BASE_URL}/ontologies/{ontology}/terms/{encoded_iri}"
 
