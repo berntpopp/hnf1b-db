@@ -7,6 +7,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import requests
 from pydantic import BaseModel
@@ -104,9 +105,13 @@ class OLSAPIClient(OntologyAPIClient):
             else:
                 return None
 
-            # OLS uses underscore instead of colon
+            # OLS uses underscore instead of colon in the term ID part
             iri_id = term_id.replace(":", "_")
-            url = f"{self.BASE_URL}/ontologies/{ontology}/terms/http%253A%252F%252Fpurl.obolibrary.org%252Fobo%252F{iri_id}"
+            # Construct the full IRI and properly encode it
+            iri = f"http://purl.obolibrary.org/obo/{iri_id}"
+            # Double encode the IRI as required by OLS API (encodes the already-encoded URL parameter)
+            encoded_iri = quote(quote(iri, safe=''), safe='')
+            url = f"{self.BASE_URL}/ontologies/{ontology}/terms/{encoded_iri}"
 
             response = self.session.get(url, timeout=self.timeout)
 
