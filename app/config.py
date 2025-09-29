@@ -10,11 +10,11 @@ class Settings(BaseSettings):
     """Application settings configuration."""
 
     # PostgreSQL Database Configuration
-    DATABASE_URL: str
+    DATABASE_URL: str = ""  # Required, will be loaded from environment
     OLD_DATABASE_URL: str | None = None  # Optional, for migration purposes
 
     # Authentication
-    JWT_SECRET: str
+    JWT_SECRET: str = ""  # Required, will be loaded from environment
 
     # CORS Configuration
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"

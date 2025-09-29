@@ -436,14 +436,14 @@ async def aggregate_by_feature(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)
+    total = sum(row.count for row in rows)  # type: ignore
 
     return [
         AggregationResult(
-            label=row.label or row.hpo_id,
-            count=row.count,
-            percentage=(row.count / total * 100) if total > 0 else 0,
-            details={"hpo_id": row.hpo_id},
+            label=row.label or row.hpo_id,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"hpo_id": row.hpo_id},  # type: ignore
         )
         for row in rows
     ]
@@ -472,14 +472,14 @@ async def aggregate_by_disease(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)
+    total = sum(row.count for row in rows)  # type: ignore
 
     return [
         AggregationResult(
-            label=row.label or row.disease_id,
-            count=row.count,
-            percentage=(row.count / total * 100) if total > 0 else 0,
-            details={"disease_id": row.disease_id},
+            label=row.label or row.disease_id,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"disease_id": row.disease_id},  # type: ignore
         )
         for row in rows
     ]
@@ -510,13 +510,13 @@ async def aggregate_kidney_stages(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)
+    total = sum(row.count for row in rows)  # type: ignore
 
     return [
         AggregationResult(
-            label=row.stage,
-            count=row.count,
-            percentage=(row.count / total * 100) if total > 0 else 0,
+            label=row.stage,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
         )
         for row in rows
     ]
@@ -542,13 +542,13 @@ async def aggregate_sex_distribution(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)
+    total = sum(row.count for row in rows)  # type: ignore
 
     return [
         AggregationResult(
-            label=row.sex,
-            count=row.count,
-            percentage=(row.count / total * 100) if total > 0 else 0,
+            label=row.sex,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
         )
         for row in rows
     ]
@@ -576,13 +576,13 @@ async def aggregate_variant_pathogenicity(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)
+    total = sum(row.count for row in rows)  # type: ignore
 
     return [
         AggregationResult(
-            label=row.classification,
-            count=row.count,
-            percentage=(row.count / total * 100) if total > 0 else 0,
+            label=row.classification,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
         )
         for row in rows
     ]
