@@ -32,8 +32,8 @@ try:
 except ImportError:
     VRS_AVAILABLE = False
     logging.warning(
-        "ga4gh.vrs not available - install with: 'uv pip install ga4gh.vrs' or 'pip install ga4gh.vrs'. "
-        "Using placeholder digest computation."
+        "ga4gh.vrs not available - variant digests will use placeholder values instead of proper GA4GH computation. "
+        "Install with 'uv pip install ga4gh.vrs' for production use."
     )
 
 # Load environment variables
