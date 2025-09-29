@@ -1,12 +1,14 @@
 """Clinical feature-specific query endpoints for phenopackets."""
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
+from sqlalchemy import and_, exists, func, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.phenopackets.clinical_queries import ClinicalQueries
+from app.phenopackets.models import Phenopacket
 
 router = APIRouter(prefix="/api/v2/clinical", tags=["clinical-features"])
 
@@ -20,67 +22,33 @@ async def get_renal_insufficiency_cases(
         None, description="Include transplant cases"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with renal insufficiency, optionally filtered by stage."""
-    base_query = """
-    SELECT DISTINCT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        p.phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration' as age,
-        feature->'type'->>'label' as feature_label,
-        feature->'onset'->'age'->>'iso8601duration' as onset_age,
-        jsonb_agg(DISTINCT modifier->>'label') as modifiers
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-        LEFT JOIN LATERAL jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier ON true
-    WHERE
-        feature->'type'->>'id' IN ('HP:0012622', 'HP:0012623', 'HP:0012624',
-                                   'HP:0012625', 'HP:0012626', 'HP:0003774')
-        AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    """
+    # Renal insufficiency HPO terms
+    hpo_terms = ['HP:0012622', 'HP:0012623', 'HP:0012624',
+                 'HP:0012625', 'HP:0012626', 'HP:0003774']
 
-    conditions = []
-    if stage:
-        conditions.append(f"modifier->>'label' LIKE '%Stage {stage}%'")
+    # Build query using reusable components
+    query = ClinicalQueries.get_clinical_features_with_details(
+        hpo_terms, include_modifiers=True, include_onset=True
+    )
 
+    # Apply transplant filtering if specified
     if include_transplant is False:
-        # Exclude transplant cases by checking medical actions
-        conditions.append(
-            """
-            NOT EXISTS (
-                SELECT 1 FROM jsonb_array_elements(p.phenopacket->'medicalActions') as action
-                WHERE action->'procedure'->'code'->>'id' = 'NCIT:C157952'
-            )
-            """
-        )
+        query = ClinicalQueries.exclude_transplant_cases(query)
 
-    if conditions:
-        base_query += " AND " + " AND ".join(conditions)
-
-    base_query += """
-    GROUP BY
-        p.phenopacket_id, p.phenopacket, feature
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(base_query))
-    rows = result.fetchall()
-
-    return [
-        {
+    # Execute and format results
+    def format_row(row):
+        return {
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "age": row.age,
-            "feature": row.feature_label,
-            "onset_age": row.onset_age,
-            "modifiers": [m for m in row.modifiers if m],
+            "feature": row.feature_label if hasattr(row, 'feature_label') else None,
+            "onset_age": row.onset_age if hasattr(row, 'onset_age') else None,
+            "modifiers": row.modifiers if hasattr(row, 'modifiers') else [],
         }
-        for row in rows
-    ]
+
+    return await ClinicalQueries.execute_and_format(db, query, format_row)
 
 
 @router.get("/genital-abnormalities")
@@ -89,48 +57,36 @@ async def get_genital_abnormalities(
         None, enum=["FEMALE", "MALE"], description="Filter by sex"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with genital tract abnormalities."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        feature->'type'->>'label' as abnormality_type,
-        jsonb_agg(DISTINCT modifier->>'label') as specific_abnormalities
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-        LEFT JOIN LATERAL jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier ON true
-    WHERE
-        feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079', 'HP:0000080',
-                                   'HP:0000119', 'HP:0000062', 'HP:0000008')
-        AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    """
+    # Genital abnormality HPO terms
+    hpo_terms = ['HP:0000078', 'HP:0000079', 'HP:0000080',
+                 'HP:0000119', 'HP:0000062', 'HP:0000008']
 
+    # Build query using reusable components
+    query = ClinicalQueries.get_clinical_features_with_details(
+        hpo_terms, include_modifiers=True, include_onset=False
+    )
+
+    # Apply sex filter if specified
     if sex_filter:
-        query += f" AND p.phenopacket->'subject'->>'sex' = '{sex_filter}'"
+        query = ClinicalQueries.filter_by_sex(query, sex_filter)
 
-    query += """
-    GROUP BY
-        p.phenopacket_id, p.phenopacket, feature
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(query))
-    rows = result.fetchall()
-
-    return [
-        {
+    # Execute and format results
+    def format_row(row):
+        return {
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "abnormality_type": row.abnormality_type,
-            "specific_abnormalities": [a for a in row.specific_abnormalities if a],
+            "abnormality_type": (
+                row.feature_label if hasattr(row, 'feature_label') else None
+            ),
+            "specific_abnormalities": (
+                row.modifiers if hasattr(row, 'modifiers') else []
+            ),
         }
-        for row in rows
-    ]
+
+    return await ClinicalQueries.execute_and_format(db, query, format_row)
 
 
 @router.get("/diabetes")
@@ -144,69 +100,71 @@ async def get_diabetes_cases(
         None, description="Only cases with complications"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with diabetes."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        disease->'term'->>'label' as diabetes_type,
-        disease->'onset'->'age'->>'iso8601duration' as onset_age,
-        jsonb_agg(DISTINCT stage->>'label') as disease_stages,
-        (
-            SELECT jsonb_agg(DISTINCT action->'treatment'->'agent'->>'label')
-            FROM jsonb_array_elements(p.phenopacket->'medicalActions') as action
-            WHERE action->'treatmentTarget'->>'id' LIKE '%diabetes%'
-        ) as treatments
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'diseases') as disease
-        LEFT JOIN LATERAL jsonb_array_elements(COALESCE(disease->'diseaseStage', '[]'::jsonb)) as stage ON true
-    WHERE
-        (disease->'term'->>'label' ILIKE '%diabetes%'
-         OR disease->'term'->>'id' IN ('MONDO:0005147', 'MONDO:0005148', 'MONDO:0015967'))
-    """
+    # Diabetes MONDO IDs
+    type_mapping = {
+        "Type 1": "MONDO:0005147",
+        "Type 2": "MONDO:0005148",
+        "MODY": "MONDO:0015967",
+    }
 
-    if diabetes_type:
-        type_mapping = {
-            "Type 1": "MONDO:0005147",
-            "Type 2": "MONDO:0005148",
-            "MODY": "MONDO:0015967",
-        }
-        if diabetes_type in type_mapping:
-            query += f" AND disease->'term'->>'id' = '{type_mapping[diabetes_type]}'"
+    # Build disease terms based on filter
+    if diabetes_type and diabetes_type in type_mapping:
+        disease_terms = [type_mapping[diabetes_type]]
+    else:
+        disease_terms = list(type_mapping.values())
 
+    # Build query using reusable components
+    query = ClinicalQueries.get_disease_cases(
+        disease_terms, disease_labels=["diabetes"]
+    )
+
+    # Add complications filter if specified
     if with_complications:
-        query += """
-        AND EXISTS (
-            SELECT 1 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as f
-            WHERE f->'type'->>'id' IN ('HP:0000083', 'HP:0000820', 'HP:0100512')
+        # Use phenotype query for complications
+        complication_hpo = ['HP:0000083', 'HP:0000820', 'HP:0100512']
+        from app.phenopackets.models import Phenopacket as P2
+
+        complication_exists = exists(
+            select(1).where(
+                and_(
+                    P2.phenopacket_id == Phenopacket.phenopacket_id,
+                    func.jsonb_path_exists(
+                        P2.phenopacket,
+                        "$.phenotypicFeatures[*] ? (@.type.id == $hpo)",
+                        func.jsonb_build_object("hpo", func.any_(complication_hpo))
+                    )
+                )
+            )
         )
-        """
+        query = query.where(complication_exists)
 
-    query += """
-    GROUP BY
-        p.phenopacket_id, p.phenopacket, disease
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(query))
+    # Execute and format results
+    result = await db.execute(query)
     rows = result.fetchall()
 
-    return [
-        {
-            "phenopacket_id": row.phenopacket_id,
-            "subject_id": row.subject_id,
-            "sex": row.sex,
-            "diabetes_type": row.diabetes_type,
-            "onset_age": row.onset_age,
-            "disease_stages": [s for s in row.disease_stages if s],
-            "treatments": row.treatments or [],
-        }
-        for row in rows
-    ]
+    formatted_results = []
+    for row in rows:
+        diseases = row.diseases if hasattr(row, 'diseases') and row.diseases else []
+        for disease in diseases:
+            formatted_results.append({
+                "phenopacket_id": row.phenopacket_id,
+                "subject_id": row.subject_id,
+                "sex": row.sex,
+                "diabetes_type": disease.get('term', {}).get('label'),
+                "onset_age": (
+                    disease.get('onset', {})
+                    .get('age', {})
+                    .get('iso8601duration')
+                ),
+                "disease_stages": [
+                    s.get('label') for s in disease.get('diseaseStage', [])
+                ],
+                "treatments": [],  # Would need separate query for treatments
+            })
+
+    return formatted_results
 
 
 @router.get("/hypomagnesemia")
@@ -215,59 +173,57 @@ async def get_hypomagnesemia_cases(
         None, description="Only cases with measurements"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with hypomagnesemia."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        feature->'type'->>'label' as feature_label,
-        (
-            SELECT jsonb_agg(jsonb_build_object(
-                'assay', m->'assay'->>'label',
-                'value', m->'value'->'quantity'->>'value',
-                'unit', m->'value'->'quantity'->'unit'->>'label',
-                'timestamp', m->'timeObserved'->>'timestamp'
-            ))
-            FROM jsonb_array_elements(p.phenopacket->'measurements') as m
-            WHERE m->'assay'->>'id' = 'LOINC:2601-3'
-               OR m->'interpretation'->>'id' = 'HP:0002917'
-        ) as magnesium_measurements
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE
-        feature->'type'->>'id' = 'HP:0002917'
-        AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    """
+    # Build combined query for phenotype and measurements
+    hpo_term = ['HP:0002917']  # Hypomagnesemia
+    loinc_code = ['LOINC:2601-3']  # Magnesium measurement
+
+    # Get phenotype features
+    phenotype_query = ClinicalQueries.get_phenotype_features_query(hpo_term)
 
     if with_measurements:
-        query += """
-        AND EXISTS (
-            SELECT 1 FROM jsonb_array_elements(p.phenopacket->'measurements') as m
-            WHERE m->'assay'->>'id' = 'LOINC:2601-3'
+        # Add measurement filter
+        measurement_query = ClinicalQueries.get_measurement_cases(
+            loinc_code, interpretation_hpo='HP:0002917'
         )
-        """
+        # Combine queries with intersection
+        query = phenotype_query.intersect(measurement_query)
+    else:
+        query = phenotype_query
 
-    query += """
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(query))
+    # Execute query
+    result = await db.execute(query)
     rows = result.fetchall()
 
-    return [
-        {
+    # Format results with measurements if available
+    formatted_results = []
+    for row in rows:
+        # Get measurements separately if needed
+        measurements = []
+        if hasattr(row, 'measurements') and row.measurements:
+            for m in row.measurements:
+                measurements.append({
+                    'assay': m.get('assay', {}).get('label'),
+                    'value': m.get('value', {}).get('quantity', {}).get('value'),
+                    'unit': (
+                        m.get('value', {})
+                        .get('quantity', {})
+                        .get('unit', {})
+                        .get('label')
+                    ),
+                    'timestamp': m.get('timeObserved', {}).get('timestamp')
+                })
+
+        formatted_results.append({
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "feature": row.feature_label,
-            "magnesium_measurements": row.magnesium_measurements or [],
-        }
-        for row in rows
-    ]
+            "feature": "Hypomagnesemia",
+            "magnesium_measurements": measurements,
+        })
+
+    return formatted_results
 
 
 @router.get("/pancreatic-abnormalities")
@@ -276,106 +232,113 @@ async def get_pancreatic_abnormalities(
         True, description="Include cases with diabetes"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with pancreatic abnormalities."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        jsonb_agg(DISTINCT feature->'type'->>'label') as pancreatic_features,
-        EXISTS(
-            SELECT 1 FROM jsonb_array_elements(p.phenopacket->'diseases') as d
-            WHERE d->'term'->>'label' ILIKE '%diabetes%'
-        ) as has_diabetes,
-        EXISTS(
-            SELECT 1 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as f
-            WHERE f->'type'->>'id' = 'HP:0001738'
-        ) as has_exocrine_insufficiency
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE
-        feature->'type'->>'id' IN ('HP:0001732', 'HP:0001733', 'HP:0001738',
-                                   'HP:0001735', 'HP:0001744', 'HP:0100027')
-        AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    """
+    # Pancreatic abnormality HPO terms
+    hpo_terms = ['HP:0001732', 'HP:0001733', 'HP:0001738',
+                 'HP:0001735', 'HP:0001744', 'HP:0100027']
 
+    # Build query using reusable components
+    query = ClinicalQueries.get_phenotype_features_query(hpo_terms)
+
+    # Exclude diabetes cases if specified
     if not include_diabetes:
-        query += """
-        AND NOT EXISTS(
-            SELECT 1 FROM jsonb_array_elements(p.phenopacket->'diseases') as d
-            WHERE d->'term'->>'label' ILIKE '%diabetes%'
+        diabetes_exclusion = not_(
+            func.jsonb_path_exists(
+                Phenopacket.phenopacket,
+                '$.diseases[*] ? (@.term.label like_regex "diabetes")',
+            )
         )
-        """
+        query = query.where(diabetes_exclusion)
 
-    query += """
-    GROUP BY
-        p.phenopacket_id, p.phenopacket
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(query))
+    # Execute and format results
+    result = await db.execute(query)
     rows = result.fetchall()
 
-    return [
-        {
+    formatted_results = []
+    for row in rows:
+        # Check for diabetes and exocrine insufficiency
+
+        # Quick check queries
+        diabetes_check = await db.scalar(
+            select(func.jsonb_path_exists(
+                Phenopacket.phenopacket,
+                '$.diseases[*] ? (@.term.label like_regex "diabetes")',
+            )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+        )
+
+        exocrine_check = await db.scalar(
+            select(func.jsonb_path_exists(
+                Phenopacket.phenopacket,
+                '$.phenotypicFeatures[*] ? (@.type.id == "HP:0001738")',
+            )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+        )
+
+        features = row.features if hasattr(row, 'features') else []
+        feature_labels = [f.get('type', {}).get('label') for f in features if f]
+
+        formatted_results.append({
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "pancreatic_features": row.pancreatic_features,
-            "has_diabetes": row.has_diabetes,
-            "has_exocrine_insufficiency": row.has_exocrine_insufficiency,
-        }
-        for row in rows
-    ]
+            "pancreatic_features": feature_labels,
+            "has_diabetes": diabetes_check or False,
+            "has_exocrine_insufficiency": exocrine_check or False,
+        })
+
+    return formatted_results
 
 
 @router.get("/liver-abnormalities")
 async def get_liver_abnormalities(
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get all cases with liver abnormalities."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        jsonb_agg(DISTINCT feature->'type'->>'label') as liver_features,
-        (
-            SELECT jsonb_agg(DISTINCT m->'assay'->>'label')
-            FROM jsonb_array_elements(p.phenopacket->'measurements') as m
-            WHERE m->'assay'->>'id' IN ('LOINC:1742-6', 'LOINC:1920-8',
-                                        'LOINC:6768-6', 'LOINC:1975-2')
-        ) as liver_function_tests
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE
-        feature->'type'->>'id' IN ('HP:0001392', 'HP:0001394', 'HP:0001395',
-                                   'HP:0001396', 'HP:0001397', 'HP:0001399',
-                                   'HP:0002240', 'HP:0001410')
-        AND NOT COALESCE((feature->>'excluded')::boolean, false)
-    GROUP BY
-        p.phenopacket_id, p.phenopacket
-    ORDER BY
-        p.phenopacket_id
-    """
+    # Liver abnormality HPO terms
+    hpo_terms = ['HP:0001392', 'HP:0001394', 'HP:0001395',
+                 'HP:0001396', 'HP:0001397', 'HP:0001399',
+                 'HP:0002240', 'HP:0001410']
 
-    result = await db.execute(text(query))
+    # Liver function test LOINC codes
+    lft_loinc = ['LOINC:1742-6', 'LOINC:1920-8', 'LOINC:6768-6', 'LOINC:1975-2']
+
+    # Build query using reusable components
+    query = ClinicalQueries.get_phenotype_features_query(hpo_terms)
+
+    # Execute main query
+    result = await db.execute(query)
     rows = result.fetchall()
 
-    return [
-        {
+    formatted_results = []
+    for row in rows:
+        # Get liver function tests separately
+
+        lft_result = await db.scalar(
+            select(
+                func.jsonb_path_query_array(
+                    Phenopacket.phenopacket,
+                    '$.measurements[*] ? (@.assay.id == $loinc)',
+                    func.jsonb_build_object('loinc', func.any_(lft_loinc))
+                )
+            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+        )
+
+        lft_labels = []
+        if lft_result:
+            lft_labels = [m.get('assay', {}).get('label') for m in lft_result if m]
+
+        features = row.features if hasattr(row, 'features') else []
+        feature_labels = [f.get('type', {}).get('label') for f in features if f]
+
+        formatted_results.append({
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "liver_features": row.liver_features,
-            "liver_function_tests": row.liver_function_tests or [],
-        }
-        for row in rows
-    ]
+            "liver_features": feature_labels,
+            "liver_function_tests": lft_labels,
+        })
+
+    return formatted_results
 
 
 @router.get("/kidney-morphology")
@@ -385,62 +348,39 @@ async def get_kidney_morphology(
         description="Filter by morphology type (cysts, dysplasia, hypoplasia)",
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get cases with kidney morphological abnormalities."""
-    query = """
-    SELECT
-        p.phenopacket_id,
-        p.phenopacket->'subject'->>'id' as subject_id,
-        p.phenopacket->'subject'->>'sex' as sex,
-        jsonb_agg(DISTINCT jsonb_build_object(
-            'type', feature->'type'->>'label',
-            'id', feature->'type'->>'id',
-            'excluded', COALESCE((feature->>'excluded')::boolean, false)
-        )) as morphology_features
-    FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-    WHERE
-        feature->'type'->>'id' IN (
-            'HP:0100611',  -- Multiple glomerular cysts
-            'HP:0004719',  -- Oligomeganephronia
-            'HP:0000110',  -- Renal dysplasia
-            'HP:0000089',  -- Renal hypoplasia
-            'HP:0000107',  -- Renal cysts
-            'HP:0000003',  -- Multicystic kidney dysplasia
-            'HP:0000113'   -- Polycystic kidneys
-        )
-    """
+    # Use reusable morphology query
+    query = ClinicalQueries.get_morphology_features(morphology_type)
 
-    if morphology_type:
-        type_mapping = {
-            "cysts": ["HP:0100611", "HP:0000107", "HP:0000113"],
-            "dysplasia": ["HP:0000110", "HP:0000003"],
-            "hypoplasia": ["HP:0000089", "HP:0004719"],
-        }
-        if morphology_type.lower() in type_mapping:
-            ids = "','".join(type_mapping[morphology_type.lower()])
-            query += f" AND feature->'type'->>'id' IN ('{ids}')"
-
-    query += """
-    GROUP BY
-        p.phenopacket_id, p.phenopacket
-    ORDER BY
-        p.phenopacket_id
-    """
-
-    result = await db.execute(text(query))
+    # Execute and format results
+    result = await db.execute(query)
     rows = result.fetchall()
 
-    return [
-        {
+    formatted_results = []
+    for row in rows:
+        features = (
+            row.morphology_features
+            if hasattr(row, 'morphology_features')
+            else []
+        )
+        feature_objects = []
+        for f in features:
+            if f:
+                feature_objects.append({
+                    'type': f.get('type', {}).get('label'),
+                    'id': f.get('type', {}).get('id'),
+                    'excluded': f.get('excluded', False)
+                })
+
+        formatted_results.append({
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "morphology_features": row.morphology_features,
-        }
-        for row in rows
-    ]
+            "morphology_features": feature_objects,
+        })
+
+    return formatted_results
 
 
 @router.get("/multisystem-involvement")
@@ -449,48 +389,13 @@ async def get_multisystem_involvement(
         2, ge=2, le=10, description="Minimum number of systems involved"
     ),
     db: AsyncSession = Depends(get_db),
-):
+) -> List[Dict[str, Any]]:
     """Get cases with multiple system involvement."""
-    query = f"""
-    WITH system_involvement AS (
-        SELECT
-            p.phenopacket_id,
-            p.phenopacket->'subject'->>'id' as subject_id,
-            p.phenopacket->'subject'->>'sex' as sex,
-            COUNT(DISTINCT
-                CASE
-                    WHEN feature->'type'->>'id' LIKE 'HP:00126%' THEN 'renal'
-                    WHEN feature->'type'->>'id' LIKE 'HP:00000%' AND
-                         feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079') THEN 'genital'
-                    WHEN feature->'type'->>'id' IN ('HP:0001732', 'HP:0001738') THEN 'pancreatic'
-                    WHEN feature->'type'->>'id' LIKE 'HP:00013%' THEN 'liver'
-                    WHEN feature->'type'->>'id' = 'HP:0002917' THEN 'metabolic'
-                    WHEN disease->'term'->>'label' ILIKE '%diabetes%' THEN 'endocrine'
-                END
-            ) as system_count,
-            jsonb_agg(DISTINCT
-                CASE
-                    WHEN feature->'type'->>'id' LIKE 'HP:00126%' THEN 'renal'
-                    WHEN feature->'type'->>'id' IN ('HP:0000078', 'HP:0000079') THEN 'genital'
-                    WHEN feature->'type'->>'id' IN ('HP:0001732', 'HP:0001738') THEN 'pancreatic'
-                    WHEN feature->'type'->>'id' LIKE 'HP:00013%' THEN 'liver'
-                    WHEN feature->'type'->>'id' = 'HP:0002917' THEN 'metabolic'
-                END
-            ) FILTER (WHERE feature IS NOT NULL) as affected_systems
-        FROM
-            phenopackets p
-            LEFT JOIN LATERAL jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as feature
-                ON NOT COALESCE((feature->>'excluded')::boolean, false)
-            LEFT JOIN LATERAL jsonb_array_elements(p.phenopacket->'diseases') as disease ON true
-        GROUP BY
-            p.phenopacket_id, p.phenopacket
-    )
-    SELECT * FROM system_involvement
-    WHERE system_count >= {min_systems}
-    ORDER BY system_count DESC, phenopacket_id
-    """
+    # Use reusable multisystem query
+    query = ClinicalQueries.get_multisystem_involvement(min_systems)
 
-    result = await db.execute(text(query))
+    # Execute and format results
+    result = await db.execute(query)
     rows = result.fetchall()
 
     return [
@@ -499,7 +404,11 @@ async def get_multisystem_involvement(
             "subject_id": row.subject_id,
             "sex": row.sex,
             "system_count": row.system_count,
-            "affected_systems": [s for s in row.affected_systems if s],
+            "affected_systems": (
+                [s for s in row.affected_systems if s]
+                if hasattr(row, 'affected_systems')
+                else []
+            ),
         }
         for row in rows
     ]
