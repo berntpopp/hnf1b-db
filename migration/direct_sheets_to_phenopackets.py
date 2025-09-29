@@ -1074,6 +1074,31 @@ class DirectSheetsToPhenopackets:
         else:
             return "UNKNOWN_SEX"
 
+    @staticmethod
+    def _build_iso8601_duration(years: int = 0, months: int = 0, days: int = 0) -> Optional[str]:
+        """Build ISO8601 duration string from components.
+
+        Args:
+            years: Number of years
+            months: Number of months
+            days: Number of days
+
+        Returns:
+            ISO8601 duration string (e.g., "P1Y2M3D") or None if all values are 0
+        """
+        if not any([years, months, days]):
+            return None
+
+        duration_parts = []
+        if years > 0:
+            duration_parts.append(f"{years}Y")
+        if months > 0:
+            duration_parts.append(f"{months}M")
+        if days > 0:
+            duration_parts.append(f"{days}D")
+
+        return "P" + "".join(duration_parts)
+
     def _parse_age(self, age_str: Any) -> Optional[Dict[str, Any]]:
         """Parse age to ISO8601 duration format or HPO onset term."""
         if pd.isna(age_str):
@@ -1129,27 +1154,24 @@ class DirectSheetsToPhenopackets:
                 months = int(match.group(2)) if match.group(2) else 0
                 days = int(match.group(3)) if match.group(3) else 0
 
-                # Build ISO8601 duration
-                duration_parts = []
-                if years > 0:
-                    duration_parts.append(f"{years}Y")
-                if months > 0:
-                    duration_parts.append(f"{months}M")
-                if days > 0:
-                    duration_parts.append(f"{days}D")
-
-                if duration_parts:
-                    return {"iso8601duration": "P" + "".join(duration_parts)}
+                # Build ISO8601 duration using helper method
+                duration = self._build_iso8601_duration(years, months, days)
+                if duration:
+                    return {"iso8601duration": duration}
 
             # Try simple number (assume years)
             if age_str.isdigit():
-                return {"iso8601duration": f"P{age_str}Y"}
+                duration = self._build_iso8601_duration(years=int(age_str))
+                if duration:
+                    return {"iso8601duration": duration}
 
             # Try extracting first number
             match = re.search(r"(\d+)", age_str)
             if match:
                 years = int(match.group(1))
-                return {"iso8601duration": f"P{years}Y"}
+                duration = self._build_iso8601_duration(years=years)
+                if duration:
+                    return {"iso8601duration": duration}
 
         except (ValueError, TypeError, AttributeError):
             pass
