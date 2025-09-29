@@ -16,7 +16,7 @@ class VariantValidationRequest(BaseModel):
     """Request model for variant validation."""
 
     notation: str
-    notation_type: Optional[str] = None  # hgvs.c, hgvs.p, vcf, cnv, etc.
+    notation_type: Optional[str] = None  # hgvs.c, hgvs.p, vcf, cnv, and others
 
 
 class VariantValidationResponse(BaseModel):
