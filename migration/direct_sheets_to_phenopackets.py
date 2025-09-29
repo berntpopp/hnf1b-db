@@ -134,7 +134,9 @@ class VRSBuilder:
         """
         # Create a deterministic hash from RefSeq ID
         hash_obj = hashlib.sha256(refseq_id.encode())
-        # Take first 24 bytes and encode as base64url without padding
+        # MUST truncate to 24 bytes: GA4GH RefGet spec requires exactly 32 chars after 'SQ.'
+        # 24 bytes -> base64 = 32 chars; full 32 bytes would give 43 chars (invalid)
+        # This matches the SHA512t24u truncation used in real RefGet (though with SHA256 here)
         digest = base64.urlsafe_b64encode(hash_obj.digest()[:24]).decode('ascii').rstrip('=')
         return f'SQ.{digest}'
 
