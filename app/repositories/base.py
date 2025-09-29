@@ -249,7 +249,7 @@ class BaseRepository(Generic[ModelType]):
                 query = query.where(and_(*conditions))
 
         result = await self.session.execute(query)
-        return result.scalar()
+        return result.scalar() or 0
 
     def _build_query(
         self,
