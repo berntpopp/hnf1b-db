@@ -92,6 +92,29 @@ class OLSAPIClient(OntologyAPIClient):
 
     BASE_URL = "https://www.ebi.ac.uk/ols4/api"
 
+    @staticmethod
+    def _encode_iri_for_ols(term_id: str) -> str:
+        """Encode a term ID into a double-encoded IRI for OLS API.
+
+        The OLS API requires IRIs to be double URL encoded when used in the path.
+        This is because the IRI itself contains reserved URL characters and must
+        be encoded twice for correct resolution by the OLS backend.
+
+        See: https://www.ebi.ac.uk/ols4/help/api (search for "double encoding")
+
+        Args:
+            term_id: Ontology term ID (e.g., "HP:0001234", "MONDO:0005147")
+
+        Returns:
+            Double URL-encoded IRI string
+        """
+        # OLS uses underscore instead of colon in the term ID part
+        iri_id = term_id.replace(":", "_")
+        # Construct the full IRI
+        iri = f"http://purl.obolibrary.org/obo/{iri_id}"
+        # Double encode for OLS API requirements
+        return quote(quote(iri, safe=""), safe="")
+
     def get_term(self, term_id: str) -> Optional[OntologyTerm]:
         """Fetch term from OLS API (supports HPO, MONDO, and others)."""
         try:
@@ -105,15 +128,8 @@ class OLSAPIClient(OntologyAPIClient):
             else:
                 return None
 
-            # OLS uses underscore instead of colon in the term ID part
-            iri_id = term_id.replace(":", "_")
-            # Construct the full IRI and properly encode it
-            iri = f"http://purl.obolibrary.org/obo/{iri_id}"
-            # The OLS API requires the IRI parameter to be double URL encoded when used in the path.
-            # See: https://www.ebi.ac.uk/ols4/help/api (search for "double encoding" or "terms/{iri}")
-            # This is because the IRI itself contains reserved URL characters and must be encoded twice
-            # for correct resolution by the OLS backend.
-            encoded_iri = quote(quote(iri, safe=""), safe="")
+            # Encode IRI for OLS API
+            encoded_iri = self._encode_iri_for_ols(term_id)
             url = f"{self.BASE_URL}/ontologies/{ontology}/terms/{encoded_iri}"
 
             response = self.session.get(url, timeout=self.timeout)
