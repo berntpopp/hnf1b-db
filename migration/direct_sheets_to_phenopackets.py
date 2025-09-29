@@ -30,7 +30,10 @@ try:
     VRS_AVAILABLE = True
 except ImportError:
     VRS_AVAILABLE = False
-    logging.warning("ga4gh.vrs not available - using placeholder digest computation")
+    logging.warning(
+        "ga4gh.vrs not available - install with: 'uv pip install ga4gh.vrs' or 'pip install ga4gh.vrs'. "
+        "Using placeholder digest computation."
+    )
 
 # Load environment variables
 load_dotenv()
