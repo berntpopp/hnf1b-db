@@ -133,14 +133,19 @@ class VariantRepository(BaseRepository[Variant]):
                 selectinload(Variant.individuals),
             ).distinct()
 
-            # Get total count
+            # Get total count with optimized query
             from sqlalchemy import func
 
-            count_query = select(func.count(Variant.id.distinct())).select_from(
-                query.subquery()
-            )
+            # Optimized count query: join only necessary tables, apply filters, count distinct Variant.id
+            count_query = select(func.count(func.distinct(Variant.id))).join(Variant.classifications)
+            count_query = count_query.where(VariantClassification.verdict == classification_verdict)
+            if include_current_only:
+                count_query = count_query.where(Variant.is_current.is_(True))
+            if search_term:
+                count_query = count_query.where(Variant.variant_id.ilike(f"%{search_term}%"))
+
             count_result = await self.session.execute(count_query)
-            total = count_result.scalar()
+            total = count_result.scalar() or 0
 
             # Apply pagination and ordering
             query = query.order_by(Variant.created_at.desc()).offset(skip).limit(limit)
