@@ -702,8 +702,12 @@ class CNVParser:
             return None
 
         variant_type_lower = variant_type.lower()
-        is_cnv = any(
-            term in variant_type_lower for term in ["delet", "dup", "cnv", "copy"]
+        # Use regex to match canonical CNV terms as whole words, case-insensitive
+        is_cnv = bool(
+            re.search(
+                r"\b(deletion|duplication|del|dup|cnv|copy number variation|copy number change|copy number loss|copy number gain)\b",
+                variant_type_lower
+            )
         )
 
         if not is_cnv or not hg38 or not hg38_info:
