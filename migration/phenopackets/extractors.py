@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
+from migration.phenopackets.evidence_builder import EvidenceBuilder
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.vrs.cnv_parser import CNVParser
@@ -36,6 +37,7 @@ class PhenotypeExtractor:
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
         self.age_parser = AgeParser()
+        self.evidence_builder = EvidenceBuilder(publication_mapper)
 
     def _normalize_column_name(self, name: str) -> str:
         """Normalize column names to lowercase without spaces."""
@@ -88,8 +90,11 @@ class PhenotypeExtractor:
                     if age_onset and not excluded:
                         phenotype["onset"] = age_onset
 
-                    # Add evidence
-                    evidence = self._create_evidence(row, review_timestamp)
+                    # Add evidence (using EvidenceBuilder to eliminate duplication)
+                    evidence = self.evidence_builder.build_evidence(
+                        publication_id=row.get("Publication"),
+                        review_timestamp=review_timestamp,
+                    )
                     if evidence:
                         phenotype["evidence"] = evidence
 
@@ -124,7 +129,10 @@ class PhenotypeExtractor:
                 "type": {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
                 "excluded": False,
             }
-            evidence = self._create_evidence(row, review_timestamp)
+            evidence = self.evidence_builder.build_evidence(
+                publication_id=row.get("Publication"),
+                review_timestamp=review_timestamp,
+            )
             if evidence:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
@@ -134,49 +142,13 @@ class PhenotypeExtractor:
                 "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
                 "excluded": False,
             }
-            evidence = self._create_evidence(row, review_timestamp)
+            evidence = self.evidence_builder.build_evidence(
+                publication_id=row.get("Publication"),
+                review_timestamp=review_timestamp,
+            )
             if evidence:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
-
-    def _create_evidence(
-        self, row: pd.Series, review_timestamp: Optional[str]
-    ) -> List[Dict[str, Any]]:
-        """Create evidence list for a phenotype."""
-        evidence = []
-
-        if row.get("Publication"):
-            evidence_item = {
-                "evidenceCode": {"id": "ECO:0000033", "label": "author statement"},
-            }
-
-            if self.publication_mapper:
-                pub_ref = self.publication_mapper.create_publication_reference(
-                    str(row.get("Publication"))
-                )
-                if pub_ref:
-                    evidence_item["reference"] = pub_ref
-                    if review_timestamp:
-                        evidence_item["reference"]["recordedAt"] = review_timestamp
-                elif review_timestamp:
-                    evidence_item["reference"] = {"recordedAt": review_timestamp}
-            elif review_timestamp:
-                evidence_item["reference"] = {"recordedAt": review_timestamp}
-
-            evidence.append(evidence_item)
-        elif review_timestamp:
-            evidence.append(
-                {
-                    "evidenceCode": {"id": "ECO:0000033", "label": "author statement"},
-                    "reference": {
-                        "description": "Clinical observation",
-                        "recordedAt": review_timestamp,
-                    },
-                }
-            )
-
-        return evidence
-
 
 class VariantExtractor:
     """Extracts variants from spreadsheet rows."""

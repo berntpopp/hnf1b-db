@@ -72,7 +72,8 @@ make phenopackets-migrate-dry
   - `phenopackets/hpo_mapper.py` - HPO term mapping (189 lines)
   - `phenopackets/age_parser.py` - Age/temporal parsing (118 lines)
   - `phenopackets/publication_mapper.py` - Publication references (109 lines)
-  - `phenopackets/extractors.py` - Phenotype/variant extraction (488 lines)
+  - `phenopackets/evidence_builder.py` - Evidence building (DRY principle, 94 lines)
+  - `phenopackets/extractors.py` - Phenotype/variant extraction (459 lines)
   - `phenopackets/builder_simple.py` - Phenopacket assembly (322 lines)
   - `data_sources/google_sheets.py` - Data loading (72 lines)
   - `database/storage.py` - Database operations (77 lines)
@@ -109,6 +110,32 @@ uv run ruff check --fix .   # Lint and auto-fix issues
 uv run mypy app/            # Type checking
 uv run pytest              # Run tests
 ```
+
+### Code Quality Guidelines
+
+**DRY Principle (Don't Repeat Yourself):**
+- Before adding new code, check for similar patterns that can be extracted into reusable functions/classes
+- If copying code blocks (>10 lines), consider extracting to a shared utility
+- Use grep to find potential duplication: `grep -r "pattern" --include="*.py"`
+
+**YAGNI Principle (You Aren't Gonna Need It):**
+- Don't write code for future "what if" scenarios
+- Remove unused code, imports, and modules immediately
+- Only implement what's required for current use cases
+- Unused code becomes technical debt
+
+**Dead Code Detection:**
+- Regularly check for unused imports: `uv run ruff check --select F401`
+- Search for unused modules/classes: `grep -r "from path.to.module" app/ tests/`
+- Remove directories/files with no active imports
+- Clean up commented-out code blocks during reviews
+
+**Code Review Checklist:**
+- [ ] No code duplication (DRY principle followed)
+- [ ] No unused imports or dead code (YAGNI principle)
+- [ ] All modules under 500 lines (Single Responsibility)
+- [ ] Tests pass: `make check`
+- [ ] Documentation updated if needed
 
 ## Architecture Overview
 
