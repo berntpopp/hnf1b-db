@@ -22,6 +22,7 @@ from migration.data_sources.google_sheets import GoogleSheetsLoader
 from migration.database.storage import PhenopacketStorage
 from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
+from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 
 # Load environment variables
@@ -47,18 +48,24 @@ class DirectSheetsToPhenopackets:
     """Direct migration from Google Sheets to Phenopackets format.
 
     Orchestrates the migration process using modular components.
+    Follows Dependency Inversion Principle by injecting OntologyMapper abstraction.
     """
 
-    def __init__(self, target_db_url: str):
+    def __init__(
+        self, target_db_url: str, ontology_mapper: Optional[OntologyMapper] = None
+    ):
         """Initialize migration with target database.
 
         Args:
             target_db_url: Database connection URL
+            ontology_mapper: Optional ontology mapper (defaults to HPOMapper if not provided).
+                            Allows dependency injection for testing and flexibility.
         """
         # Initialize components
         self.sheets_loader = GoogleSheetsLoader(SPREADSHEET_ID, GID_CONFIG)
         self.storage = PhenopacketStorage(target_db_url)
-        self.hpo_mapper = HPOMapper()
+        # Use provided mapper or default to HPOMapper (concrete implementation)
+        self.ontology_mapper = ontology_mapper if ontology_mapper else HPOMapper()
         self.publication_mapper = None
         self.phenopacket_builder = None
 
@@ -81,7 +88,9 @@ class DirectSheetsToPhenopackets:
         # Load phenotypes sheet for HPO mappings
         self.phenotypes_df = self.sheets_loader.load_sheet("phenotypes")
         if self.phenotypes_df is not None:
-            self.hpo_mapper.build_from_dataframe(self.phenotypes_df)
+            # Build HPO mappings from dataframe if ontology_mapper is HPOMapper
+            if isinstance(self.ontology_mapper, HPOMapper):
+                self.ontology_mapper.build_from_dataframe(self.phenotypes_df)
         else:
             logger.warning("Using default HPO mappings")
 
@@ -92,9 +101,9 @@ class DirectSheetsToPhenopackets:
         else:
             logger.warning("No publication data loaded")
 
-        # Initialize phenopacket builder with mappers
+        # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(
-            self.hpo_mapper, self.publication_mapper
+            self.ontology_mapper, self.publication_mapper
         )
 
     def _is_valid_id(self, value: Any) -> bool:

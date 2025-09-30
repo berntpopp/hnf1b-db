@@ -1,4 +1,7 @@
-"""Extractors for phenotypes and variants from spreadsheet data."""
+"""Extractors for phenotypes and variants from spreadsheet data.
+
+Follows Dependency Inversion Principle by depending on OntologyMapper abstraction.
+"""
 
 import re
 from typing import Any, Dict, List, Optional
@@ -6,35 +9,37 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
-from migration.phenopackets.hpo_mapper import HPOMapper
+from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.vrs.cnv_parser import CNVParser
 from migration.vrs.vrs_builder import VRSBuilder
 
 
 class PhenotypeExtractor:
-    """Extracts phenotypic features from spreadsheet rows."""
+    """Extracts phenotypic features from spreadsheet rows.
+
+    Depends on OntologyMapper abstraction following Dependency Inversion Principle.
+    This allows for easy testing with mock mappers and flexibility to swap implementations.
+    """
 
     def __init__(
         self,
-        hpo_mapper: HPOMapper,
+        ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
     ):
         """Initialize phenotype extractor.
 
         Args:
-            hpo_mapper: HPO term mapper
+            ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
         """
-        self.hpo_mapper = hpo_mapper
+        self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
         self.age_parser = AgeParser()
 
     def _normalize_column_name(self, name: str) -> str:
         """Normalize column names to lowercase without spaces."""
-        if pd.isna(name):
-            return ""
-        return str(name).strip().lower().replace(" ", "").replace("_", "")
+        return self.ontology_mapper.normalize_key(name)
 
     def _safe_value(self, value: Any) -> Optional[str]:
         """Safely convert value to string, handling NaN."""
@@ -56,7 +61,7 @@ class PhenotypeExtractor:
         normalized_cols = {self._normalize_column_name(col): col for col in row.index}
 
         # Process each phenotype column
-        for pheno_key, hpo_info in self.hpo_mapper.get_all_mappings().items():
+        for pheno_key, hpo_info in self.ontology_mapper.get_all_mappings().items():
             if pheno_key in normalized_cols:
                 original_col = normalized_cols[pheno_key]
                 value = self._safe_value(row[original_col])

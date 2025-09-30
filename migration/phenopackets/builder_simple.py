@@ -1,4 +1,7 @@
-"""Simplified phenopacket builder using extractors."""
+"""Simplified phenopacket builder using extractors.
+
+Follows Dependency Inversion Principle by depending on OntologyMapper abstraction.
+"""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -7,31 +10,37 @@ import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.extractors import PhenotypeExtractor, VariantExtractor
-from migration.phenopackets.hpo_mapper import HPOMapper
+from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 
 
 class PhenopacketBuilder:
-    """Builder for GA4GH Phenopackets v2 from spreadsheet data."""
+    """Builder for GA4GH Phenopackets v2 from spreadsheet data.
+
+    Depends on OntologyMapper abstraction following Dependency Inversion Principle.
+    High-level module depends on abstraction, not concrete implementation.
+    """
 
     def __init__(
         self,
-        hpo_mapper: HPOMapper,
+        ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
     ):
         """Initialize phenopacket builder.
 
         Args:
-            hpo_mapper: HPO term mapper
+            ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
         """
-        self.hpo_mapper = hpo_mapper
+        self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
         self.age_parser = AgeParser()
         self.mondo_mappings = self._init_mondo_mappings()
 
-        # Initialize extractors
-        self.phenotype_extractor = PhenotypeExtractor(hpo_mapper, publication_mapper)
+        # Initialize extractors with injected dependencies
+        self.phenotype_extractor = PhenotypeExtractor(
+            ontology_mapper, publication_mapper
+        )
         self.variant_extractor = VariantExtractor(self.mondo_mappings)
 
     def _init_mondo_mappings(self) -> Dict[str, Dict[str, str]]:

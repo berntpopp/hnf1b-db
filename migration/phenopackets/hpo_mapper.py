@@ -1,19 +1,29 @@
 """HPO term mapping for phenotypic features."""
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
+
+from migration.phenopackets.ontology_mapper import OntologyMapper
 
 logger = logging.getLogger(__name__)
 
 
-class HPOMapper:
-    """Maps phenotype categories to HPO terms."""
+class HPOMapper(OntologyMapper):
+    """Maps phenotype categories to HPO terms.
 
-    def __init__(self):
-        """Initialize with default HPO mappings."""
-        self.hpo_mappings = self._init_default_hpo_mappings()
+    Implements OntologyMapper interface following Dependency Inversion Principle.
+    High-level modules depend on this abstraction, not this concrete implementation.
+    """
+
+    def __init__(self, mappings: Optional[Dict[str, Dict[str, str]]] = None):
+        """Initialize with default or provided HPO mappings.
+
+        Args:
+            mappings: Optional pre-configured mappings. If None, uses defaults.
+        """
+        self.hpo_mappings = mappings if mappings else self._init_default_hpo_mappings()
 
     def _init_default_hpo_mappings(self) -> Dict[str, Dict[str, str]]:
         """Initialize default HPO term mappings for phenotypes."""
@@ -164,13 +174,27 @@ class HPOMapper:
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
         logger.info(f"Phenotype categories: {list(self.hpo_mappings.keys())[:10]}...")
 
-    def _normalize_column_name(self, name: str) -> str:
-        """Normalize column names to lowercase without spaces."""
-        if pd.isna(name):
-            return ""
-        return str(name).strip().lower().replace(" ", "").replace("_", "")
+    def normalize_key(self, key: str) -> str:
+        """Normalize a phenotype key for lookup.
 
-    def get_hpo_term(self, phenotype_key: str) -> Dict[str, str]:
+        Args:
+            key: Raw phenotype key
+
+        Returns:
+            Normalized key (lowercase, no spaces or underscores)
+        """
+        if pd.isna(key):
+            return ""
+        return str(key).strip().lower().replace(" ", "").replace("_", "")
+
+    def _normalize_column_name(self, name: str) -> str:
+        """Normalize column names to lowercase without spaces.
+
+        Deprecated: Use normalize_key() instead (part of OntologyMapper interface).
+        """
+        return self.normalize_key(name)
+
+    def get_hpo_term(self, phenotype_key: str) -> Optional[Dict[str, str]]:
         """Get HPO term for a phenotype key.
 
         Args:
