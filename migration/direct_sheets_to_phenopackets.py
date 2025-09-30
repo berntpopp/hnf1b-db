@@ -2028,8 +2028,8 @@ class DirectSheetsToPhenopackets:
                     # Insert phenopacket (subject_id and subject_sex are generated columns)
                     query = text("""
                         INSERT INTO phenopackets
-                        (phenopacket_id, phenopacket, created_by, schema_version)
-                        VALUES (:phenopacket_id, :phenopacket, :created_by, :schema_version)
+                        (id, phenopacket_id, version, phenopacket, created_by, schema_version)
+                        VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket, :created_by, :schema_version)
                         ON CONFLICT (phenopacket_id) DO UPDATE
                         SET phenopacket = EXCLUDED.phenopacket,
                             updated_at = CURRENT_TIMESTAMP
@@ -2039,6 +2039,7 @@ class DirectSheetsToPhenopackets:
                         query,
                         {
                             "phenopacket_id": phenopacket["id"],
+                            "version": "2.0",  # Added version field
                             "phenopacket": json.dumps(phenopacket),
                             "created_by": "direct_sheets_migration",
                             "schema_version": "2.0.0",
