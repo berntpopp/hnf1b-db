@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, exists, func, not_, select
+from sqlalchemy import and_, exists, func, not_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -263,14 +263,14 @@ async def get_pancreatic_abnormalities(
         diabetes_check = await db.scalar(
             select(func.jsonb_path_exists(
                 Phenopacket.phenopacket,
-                '$.diseases[*] ? (@.term.label like_regex "diabetes")',
+                text('$.diseases[*] ? (@.term.label like_regex "diabetes")'::jsonpath'),
             )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         exocrine_check = await db.scalar(
             select(func.jsonb_path_exists(
                 Phenopacket.phenopacket,
-                '$.phenotypicFeatures[*] ? (@.type.id == "HP:0001738")',
+                text('$.phenotypicFeatures[*] ? (@.type.id == "HP:0001738")'::jsonpath'),
             )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 

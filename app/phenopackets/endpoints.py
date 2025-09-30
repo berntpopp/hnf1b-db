@@ -122,8 +122,8 @@ async def search_phenopackets(
             base_query = base_query.where(
                 func.jsonb_path_exists(
                     Phenopacket.phenopacket,
-                    f'$.interpretations[*].diagnosis.genomicInterpretations[*]'
-                    f'.variantInterpretation.variationDescriptor.label ? '
+                    f"$.interpretations[*].diagnosis.genomicInterpretations[*]"
+                    f".variantInterpretation.variationDescriptor.label ? "
                     f'(@ like_regex "{variant}")',
                 )
             )
@@ -139,7 +139,11 @@ async def search_phenopackets(
 
     # Filter by sex
     if search_query.sex:
-        base_query = base_query.where(Phenopacket.subject_sex == search_query.sex)
+        # Use the JSON field directly since subject_sex column might not be populated
+        base_query = base_query.where(
+            func.jsonb_extract_path_text(Phenopacket.phenopacket, "subject", "sex")
+            == search_query.sex
+        )
 
     # Filter by age range using ISO8601 duration parsing
     if search_query.min_age is not None or search_query.max_age is not None:
