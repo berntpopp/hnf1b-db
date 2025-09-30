@@ -63,13 +63,24 @@ make phenopackets-migrate-dry
 2. Environment configured: Valid `.env` file with `DATABASE_URL`
 3. Google Sheets URLs configured in migration script
 
-**New Direct Migration System:**
+**Modular Migration System:**
 - Direct conversion from Google Sheets to GA4GH Phenopackets v2
-- Main script: `migration/direct_sheets_to_phenopackets.py`
+- Main orchestrator: `migration/direct_sheets_to_phenopackets.py` (253 lines)
+- Modular architecture with focused components:
+  - `vrs/vrs_builder.py` - VRS 2.0 variant representation (375 lines)
+  - `vrs/cnv_parser.py` - CNV parsing logic (350 lines)
+  - `phenopackets/hpo_mapper.py` - HPO term mapping (189 lines)
+  - `phenopackets/age_parser.py` - Age/temporal parsing (118 lines)
+  - `phenopackets/publication_mapper.py` - Publication references (109 lines)
+  - `phenopackets/extractors.py` - Phenotype/variant extraction (488 lines)
+  - `phenopackets/builder_simple.py` - Phenopacket assembly (322 lines)
+  - `data_sources/google_sheets.py` - Data loading (72 lines)
+  - `database/storage.py` - Database operations (77 lines)
 - Bypasses intermediate PostgreSQL normalization step
 - Supports test mode (20 individuals) and dry run mode
 - Properly maps HPO terms, MONDO diseases, and variant data
 - Generates GA4GH VRS 2.0 compliant variant identifiers with proper digests
+- Each module follows Single Responsibility Principle (no file exceeds 500 lines)
 
 ### Code Quality Tools
 ```bash
