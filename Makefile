@@ -47,13 +47,13 @@ db-reset:  ## Reset database (drop and recreate all tables)
 
 # Phenopackets Migration Commands (Primary method for data import)
 phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format
-	uv run python migration/direct_sheets_to_phenopackets.py
+	uv run python -m migration.direct_sheets_to_phenopackets
 
 phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
-	uv run python migration/direct_sheets_to_phenopackets.py --test
+	uv run python -m migration.direct_sheets_to_phenopackets --test
 
 phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
-	uv run python migration/direct_sheets_to_phenopackets.py --test --dry-run
+	uv run python -m migration.direct_sheets_to_phenopackets --test --dry-run
 
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 

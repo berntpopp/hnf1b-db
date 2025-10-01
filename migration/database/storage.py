@@ -40,13 +40,19 @@ class PhenopacketStorage:
 
             for phenopacket in tqdm(phenopackets, desc="Storing phenopackets"):
                 try:
-                    # Insert phenopacket (subject_id and subject_sex are generated columns)
+                    # Extract subject_id and subject_sex from phenopacket
+                    subject_id = phenopacket.get("subject", {}).get("id")
+                    subject_sex = phenopacket.get("subject", {}).get("sex")
+
+                    # Insert phenopacket with extracted subject data
                     query = text("""
                         INSERT INTO phenopackets
-                        (id, phenopacket_id, version, phenopacket, created_by, schema_version)
-                        VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket, :created_by, :schema_version)
+                        (id, phenopacket_id, version, phenopacket, subject_id, subject_sex, created_by, schema_version)
+                        VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket, :subject_id, :subject_sex, :created_by, :schema_version)
                         ON CONFLICT (phenopacket_id) DO UPDATE
                         SET phenopacket = EXCLUDED.phenopacket,
+                            subject_id = EXCLUDED.subject_id,
+                            subject_sex = EXCLUDED.subject_sex,
                             updated_at = CURRENT_TIMESTAMP
                     """)
 
@@ -56,6 +62,8 @@ class PhenopacketStorage:
                             "phenopacket_id": phenopacket["id"],
                             "version": "2.0",
                             "phenopacket": json.dumps(phenopacket),
+                            "subject_id": subject_id,
+                            "subject_sex": subject_sex,
                             "created_by": "direct_sheets_migration",
                             "schema_version": "2.0.0",
                         },

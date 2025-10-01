@@ -8,15 +8,13 @@
 #   docker-compose -f docker-compose.services.yml up -d
 #   make hybrid-up
 
-version: '3.8'
-
 services:
   # PostgreSQL Database (development version with exposed port)
   postgres:
     image: postgres:15-alpine
     container_name: hnf1b_db
     environment:
-      POSTGRES_DB: hnf1b_db
+      POSTGRES_DB: hnf1b_phenopackets
       POSTGRES_USER: hnf1b_user
       POSTGRES_PASSWORD: hnf1b_pass
       POSTGRES_HOST_AUTH_METHOD: trust
@@ -33,7 +31,7 @@ services:
     networks:
       - hnf1b_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hnf1b_user -d hnf1b_db"]
+      test: ["CMD-SHELL", "pg_isready -U hnf1b_user -d hnf1b_phenopackets"]
       interval: 10s
       timeout: 5s
       retries: 5

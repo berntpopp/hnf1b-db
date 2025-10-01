@@ -263,14 +263,14 @@ async def get_pancreatic_abnormalities(
         diabetes_check = await db.scalar(
             select(func.jsonb_path_exists(
                 Phenopacket.phenopacket,
-                text('$.diseases[*] ? (@.term.label like_regex "diabetes")'::jsonpath'),
+                text("'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"),
             )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         exocrine_check = await db.scalar(
             select(func.jsonb_path_exists(
                 Phenopacket.phenopacket,
-                text('$.phenotypicFeatures[*] ? (@.type.id == "HP:0001738")'::jsonpath'),
+                text("'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"),
             )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
