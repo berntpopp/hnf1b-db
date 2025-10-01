@@ -25,7 +25,7 @@ class TestDirectPhenopacketsMigration:
     def test_hpo_mapping_initialization(self, hpo_mapper):
         """Test that HPO mappings are properly initialized."""
         # Check key mappings exist (note: uses hpo_mappings attribute)
-        assert "renalinsufficancy" in hpo_mapper.hpo_mappings  # Note typo in original
+        assert "renalinsufficiency" in hpo_mapper.hpo_mappings
         assert "mody" in hpo_mapper.hpo_mappings  # Diabetes is mapped as "mody"
         assert "hypomagnesemia" in hpo_mapper.hpo_mappings
 

@@ -15,7 +15,7 @@ except ImportError:
     VRS_AVAILABLE = False
     logging.warning(
         "ga4gh.vrs not available - variant digests will use placeholder values instead of proper GA4GH computation. "
-        "Install with 'uv pip install ga4gh.vrs' for production use."
+        "Install with 'pip install ga4gh.vrs' for production use."
     )
 
 
@@ -116,6 +116,7 @@ class VRSBuilder:
         truncated = sha512_digest[:24]
         # Base64url encode, remove padding
         digest = base64.urlsafe_b64encode(truncated).decode("ascii").rstrip("=")
+        # Return with 'SQ.' prefix - GA4GH RefGet standard prefix for sequence identifiers
         return f"SQ.{digest}"
 
     @staticmethod

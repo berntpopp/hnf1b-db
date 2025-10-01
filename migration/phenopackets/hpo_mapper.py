@@ -29,7 +29,7 @@ class HPOMapper(OntologyMapper):
         """Initialize default HPO term mappings for phenotypes."""
         return {
             # Kidney phenotypes
-            "renalinsufficancy": {"id": "HP:0000083", "label": "Renal insufficiency"},
+            "renalinsufficiency": {"id": "HP:0000083", "label": "Renal insufficiency"},
             "chronic kidney disease": {
                 "id": "HP:0012622",
                 "label": "Chronic kidney disease",

@@ -317,7 +317,6 @@ class HybridOntologyService:
         # In-memory cache for performance
         self._memory_cache = {}
 
-    @lru_cache(maxsize=1000)
     def get_term(self, term_id: str) -> OntologyTerm:
         """Get ontology term with fallback strategy:
         1. Memory cache
