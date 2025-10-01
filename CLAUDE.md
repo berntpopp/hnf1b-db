@@ -64,8 +64,11 @@ openssl rand -hex 32  # Copy output to .env
 # Import all data directly from Google Sheets to Phenopackets format
 make phenopackets-migrate
 
-# Import limited test data (20 individuals for testing)
+# Import limited test data (20 individuals by default)
 make phenopackets-migrate-test
+
+# Custom test limit (e.g., 50 individuals)
+TEST_MODE_LIMIT=50 make phenopackets-migrate-test
 
 # Dry run - outputs to JSON file without database changes
 make phenopackets-migrate-dry

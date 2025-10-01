@@ -248,8 +248,16 @@ async def main():
     limit = None
 
     if test_mode:
-        limit = 20
-        logger.info("Running in TEST MODE - limiting to 20 individuals")
+        # Configurable test limit via environment variable or default
+        try:
+            limit = int(os.getenv("TEST_MODE_LIMIT", "20"))
+        except ValueError:
+            logger.warning(
+                f"Invalid TEST_MODE_LIMIT value: {os.getenv('TEST_MODE_LIMIT')}. "
+                "Using default of 20."
+            )
+            limit = 20
+        logger.info(f"Running in TEST MODE - limiting to {limit} individuals")
 
     if dry_run:
         logger.info("Running in DRY RUN MODE - will output to JSON file")
