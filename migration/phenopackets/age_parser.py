@@ -66,7 +66,7 @@ class AgeParser:
         # Parse numeric ages (e.g., "1y9m", "2y", "6m", "3d")
         try:
             # Pattern for years, months, days
-            pattern = r"(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?"
+            pattern = r"^(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?$"
             match = re.match(pattern, age_str)
 
             if match and any(match.groups()):

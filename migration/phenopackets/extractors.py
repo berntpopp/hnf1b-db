@@ -193,7 +193,6 @@ class VariantExtractor:
             if cnv_interp:
                 self._add_classification_info(cnv_interp, verdict, criteria, segregation)
                 interpretations.append(cnv_interp)
-                return interpretations
 
         # Handle SNVs and other variants
         c_dot, p_dot, transcript = self._parse_variant_notation(
