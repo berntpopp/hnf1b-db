@@ -181,7 +181,7 @@ class VRSBuilder:
                 "sequenceReference": {
                     # VRS 2.0 uses refget or sequence accessions
                     "type": "SequenceReference",
-                    "refgetAccession": f"SQ.{refseq_id}",
+                    "refgetAccession": cls.create_placeholder_refget(refseq_id),
                     # Alternative: use refseq directly
                     "other_identifiers": [
                         f"refseq:{refseq_id}",
