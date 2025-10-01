@@ -137,6 +137,95 @@ uv run pytest              # Run tests
 - [ ] Tests pass: `make check`
 - [ ] Documentation updated if needed
 
+## Testing & CI/CD
+
+### Why Testing is Critical
+
+Recent issues (see #20) were caused by:
+1. **No CI/CD** - Tests not run automatically on commits
+2. **Stale tests** - Tests referenced methods deleted during refactoring
+3. **No pre-commit hooks** - No validation before commits
+4. **Non-deterministic code** - Used `hash()` instead of `hashlib.sha256()`
+
+### CI/CD Setup (GitHub Actions)
+
+**Status:** ✅ Configured in `.github/workflows/ci.yml`
+
+Runs automatically on push/PR to check:
+- Linting, type checking, tests with coverage
+- Detects `abs(hash(` usage (non-deterministic)
+- Detects broken imports (e.g., `migration.modules`)
+
+### Pre-commit Hooks
+
+**Installation:**
+```bash
+uv pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+```
+
+**What it checks:**
+- Code formatting & linting (ruff)
+- Type checking (mypy)
+- No large files, private keys, broken imports
+- **Prevents non-deterministic hash() usage**
+- Runs pytest on pre-push
+
+### Test-Before-Refactor Protocol
+
+**ALWAYS follow this sequence:**
+```bash
+# 1. Verify tests pass BEFORE refactoring
+make test
+
+# 2. Make changes
+# ... edit code ...
+
+# 3. Run tests IMMEDIATELY after
+make test
+
+# 4. Update tests if API changed
+# ... fix tests ...
+
+# 5. Only commit when tests pass
+git add . && git commit
+```
+
+### Testing Rules
+
+**Rule 1: Tests use PUBLIC APIs only**
+- ❌ `migration._build_subject(row)` - private method may not exist
+- ✅ `builder.build_phenopacket(id, rows)` - public API guaranteed
+
+**Rule 2: Deterministic code only**
+- ❌ `abs(hash(data))` - randomized per Python instance
+- ✅ `hashlib.sha256(data.encode()).digest()` - deterministic
+
+**Rule 3: Fix broken tests immediately**
+- Don't commit failing tests
+- Update tests when refactoring APIs
+- Remove tests for deleted functionality
+
+### Common Test Commands
+
+```bash
+# Run all tests
+make test
+
+# Run specific test file
+uv run pytest tests/test_migration.py -v
+
+# Run with coverage
+uv run pytest --cov=app --cov=migration
+
+# Check for broken imports
+rg "from migration.modules" --type py
+
+# Detect non-deterministic hash
+rg "abs\(hash\(" --type py
+```
+
 ## Architecture Overview
 
 ### API Structure (Phenopackets v2)

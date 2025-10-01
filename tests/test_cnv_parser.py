@@ -3,7 +3,7 @@
 
 import pandas as pd
 
-from migration.direct_sheets_to_phenopackets import CNVParser
+from migration.vrs.cnv_parser import CNVParser
 
 
 def test_cnv_parser():

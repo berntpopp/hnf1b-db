@@ -118,6 +118,23 @@ class VRSBuilder:
         digest = base64.urlsafe_b64encode(truncated).decode("ascii").rstrip("=")
         return f"SQ.{digest}"
 
+    @staticmethod
+    def _create_deterministic_digest(identifier_string: str) -> str:
+        """Create deterministic variant digest using SHA256.
+
+        GA4GH VRS-compatible digest that produces consistent IDs across runs.
+        Uses SHA256 hashing instead of Python's randomized hash() function.
+
+        Args:
+            identifier_string: Unique identifier string for the variant
+
+        Returns:
+            Base64url-encoded digest string without padding
+        """
+        sha256 = hashlib.sha256(identifier_string.encode()).digest()
+        # Take first 12 bytes for VRS-like digest length
+        return base64.urlsafe_b64encode(sha256[:12]).decode("ascii").rstrip("=")
+
     @classmethod
     def create_vrs_allele(
         cls,
@@ -218,12 +235,12 @@ class VRSBuilder:
                     f"VRS digest computation failed: {e}. Using placeholder."
                 )
                 identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
-                vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
+                vrs_allele["digest"] = cls._create_deterministic_digest(identifier_string)
                 vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
         else:
             # Fallback to placeholder digest when ga4gh.vrs is not available
             identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
-            vrs_allele["digest"] = f"{abs(hash(identifier_string)) % (10**12):012d}"
+            vrs_allele["digest"] = cls._create_deterministic_digest(identifier_string)
             vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
 
         # Add expressions for alternative representations

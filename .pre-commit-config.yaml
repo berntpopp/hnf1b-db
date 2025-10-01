@@ -1,0 +1,57 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [ --fix ]
+      # Run the formatter
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: [--no-strict-optional, --ignore-missing-imports]
+        files: ^(app|migration)/
+
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: pytest-check
+        entry: uv run pytest tests/ -v
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: check-test-imports
+        name: check-test-imports
+        entry: bash -c 'grep -r "from migration.modules" tests/ app/ && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      - id: detect-non-deterministic-hash
+        name: detect-non-deterministic-hash
+        entry: bash -c 'grep -r "abs(hash(" --include="*.py" . && echo "Found non-deterministic hash() usage!" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true

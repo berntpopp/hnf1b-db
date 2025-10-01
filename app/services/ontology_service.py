@@ -12,8 +12,8 @@ from urllib.parse import quote
 import requests
 from pydantic import BaseModel
 
-# Import existing hardcoded mappings
-from migration.modules.phenotypes import KIDNEY_BIOPSY_MAPPING, RENAL_MAPPING
+# Import HPO mappings from new modular structure
+from migration.phenopackets.hpo_mapper import HPOMapper
 
 
 class OntologySource(Enum):
@@ -189,28 +189,19 @@ class LocalMappingsProvider:
         self.mappings = self._build_mappings()
 
     def _build_mappings(self) -> Dict[str, OntologyTerm]:
-        """Build mappings from existing hardcoded data."""
+        """Build mappings from HPOMapper."""
         mappings = {}
 
-        # Add renal mappings
-        for key, value in RENAL_MAPPING.items():
-            term_id = value["phenotype_id"]
+        # Get HPO mappings from the new modular structure
+        hpo_mapper = HPOMapper()
+        for category, hpo_info in hpo_mapper.hpo_mappings.items():
+            term_id = hpo_info["id"]
             if term_id not in mappings:
                 mappings[term_id] = OntologyTerm(
                     id=term_id,
-                    label=value["name"],
+                    label=hpo_info["label"],
                     source=OntologySource.LOCAL_HARDCODED,
                 )
-
-        # Add kidney biopsy mappings
-        for category_mappings in KIDNEY_BIOPSY_MAPPING.values():
-            for term_id, details in category_mappings.items():
-                if term_id not in mappings:
-                    mappings[term_id] = OntologyTerm(
-                        id=details["phenotype_id"],
-                        label=details["name"],
-                        source=OntologySource.LOCAL_HARDCODED,
-                    )
 
         # Add additional common HNF1B-related terms
         additional_terms = {
