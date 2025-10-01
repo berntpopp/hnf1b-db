@@ -41,10 +41,23 @@ uv sync
 # Install with development dependencies
 uv sync --group dev --group test
 
-# Create .env file with required variables:
+# Create .env file with REQUIRED variables:
+# Copy from template
+cp .env.example .env
+
+# Generate secure JWT_SECRET (REQUIRED)
+openssl rand -hex 32  # Copy output to .env
+# Or: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Edit .env and set:
 # DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
-# JWT_SECRET=your-secret-key
+# JWT_SECRET=<paste-generated-secret-here>
 ```
+
+**⚠️ Security: JWT_SECRET is REQUIRED**
+- Application will **exit on startup** if JWT_SECRET is empty
+- Never commit .env file (in .gitignore)
+- Use different secrets for dev/staging/production
 
 ### Data Import (Phenopackets Direct Migration)
 ```bash
