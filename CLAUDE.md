@@ -17,11 +17,11 @@ hnf1b-db-api/
 │   ├── migration/       # Data migration scripts
 │   ├── tests/           # Test suite
 │   ├── alembic/         # Database migrations
+│   ├── examples/        # Example scripts
 │   ├── pyproject.toml   # Python dependencies
 │   ├── Makefile         # Backend commands
 │   └── .env             # Environment config (not in git)
 ├── docs/                # Documentation
-├── examples/            # Example scripts
 ├── Makefile             # Root commands (calls backend/)
 └── docker-compose.services.yml  # Services
 ```

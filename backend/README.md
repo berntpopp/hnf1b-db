@@ -16,6 +16,7 @@ backend/
 │   └── database/      # Database storage
 ├── tests/             # Test suite
 ├── alembic/           # Database migrations
+├── examples/          # Example scripts
 └── pyproject.toml     # Python dependencies
 ```
 

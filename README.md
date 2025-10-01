@@ -11,9 +11,9 @@ hnf1b-db-api/
 │   ├── migration/       # Data migration scripts
 │   ├── tests/           # Test suite
 │   ├── alembic/         # Database migrations
+│   ├── examples/        # Example scripts
 │   └── pyproject.toml   # Python dependencies
 ├── docs/                # Documentation
-├── examples/            # Example scripts
 └── docker-compose.services.yml  # PostgreSQL & Redis services
 ```
 

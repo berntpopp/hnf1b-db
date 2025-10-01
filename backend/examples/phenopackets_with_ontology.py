@@ -1,12 +1,6 @@
 #!/usr/bin/env python3
 """Example of using the hybrid ontology service with phenopackets."""
 
-import sys
-from pathlib import Path
-
-# Add backend directory to path
-sys.path.append(str(Path(__file__).parent.parent / "backend"))
-
 from datetime import datetime
 from typing import Any, Dict
 
