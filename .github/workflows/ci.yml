@@ -50,6 +50,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        cd backend
         uv sync --group dev --group test
 
     # Linting removed - use pre-commit hooks locally instead
@@ -57,6 +58,7 @@ jobs:
 
     - name: Run type checking (mypy)
       run: |
+        cd backend
         uv run mypy app/ migration/
       continue-on-error: true  # Don't fail build on type errors initially
 
@@ -65,12 +67,13 @@ jobs:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
       run: |
+        cd backend
         uv run pytest tests/ -v --cov=app --cov=migration --cov-report=xml --cov-report=term
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
-        file: ./coverage.xml
+        file: ./backend/coverage.xml
         fail_ci_if_error: false
 
   # Linting jobs removed - these are style checks, not functional tests

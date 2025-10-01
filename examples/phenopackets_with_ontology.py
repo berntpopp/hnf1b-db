@@ -4,7 +4,8 @@
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add backend directory to path
+sys.path.append(str(Path(__file__).parent.parent / "backend"))
 
 from datetime import datetime
 from typing import Any, Dict

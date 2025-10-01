@@ -6,57 +6,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 HNF1B-API is a GA4GH Phenopackets v2 compliant REST API for managing clinical and genetic data for individuals with HNF1B disease. The API has been completely restructured to use the international standard Phenopackets format for clinical and genomic data exchange.
 
+## Project Structure
+
+**ALL backend code is in the `backend/` directory:**
+
+```
+hnf1b-db-api/
+├── backend/              # ALL backend code
+│   ├── app/             # FastAPI application
+│   ├── migration/       # Data migration scripts
+│   ├── tests/           # Test suite
+│   ├── alembic/         # Database migrations
+│   ├── pyproject.toml   # Python dependencies
+│   ├── Makefile         # Backend commands
+│   └── .env             # Environment config (not in git)
+├── docs/                # Documentation
+├── examples/            # Example scripts
+├── Makefile             # Root commands (calls backend/)
+└── docker-compose.services.yml  # Services
+```
+
+**IMPORTANT:**
+- All Python code is in `backend/`
+- Root Makefile runs commands with `cd backend && ...`
+- Environment file is `backend/.env`
+
 ## Essential Commands
 
-### Quick Start with Make
+### Quick Start with Make (from project root)
 ```bash
 make help          # Show all available commands
 make dev           # Install all dependencies
 
-# Development workflow (PostgreSQL required):
-make hybrid-up     # Start PostgreSQL and Redis containers
-make server        # Start development server (after hybrid-up)
-make hybrid-down   # Stop containers when done
+# Development workflow:
+make hybrid-up     # Start PostgreSQL and Redis
+make server        # Start development server
+make hybrid-down   # Stop containers
 
 make test          # Run tests
-make check         # Run all checks (lint + typecheck + tests)
+make check         # Run all checks
 ```
 
 ### Development Server
 ```bash
 # IMPORTANT: Start database services first!
-make hybrid-up     # Start PostgreSQL and Redis containers
+make hybrid-up     # Start PostgreSQL and Redis (from root)
 
-# Then start the development server (new Phenopackets v2 API)
-uv run python -m uvicorn app.main:app --reload
+# Then start the development server
+make server        # From root
 
-# Database: hnf1b_phenopackets (864 phenopackets migrated from original data)
+# Database: hnf1b_phenopackets (864 phenopackets)
 ```
 
 ### Environment Setup
 ```bash
-# Install/sync dependencies
-uv sync
+# Install dependencies (from root)
+make dev
 
-# Install with development dependencies
-uv sync --group dev --group test
-
-# Create .env file with REQUIRED variables:
-# Copy from template
-cp .env.example .env
+# Create backend/.env file with REQUIRED variables:
+cp backend/.env.example backend/.env
 
 # Generate secure JWT_SECRET (REQUIRED)
-openssl rand -hex 32  # Copy output to .env
-# Or: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+openssl rand -hex 32  # Copy output to backend/.env
 
-# Edit .env and set:
+# Edit backend/.env and set:
 # DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
 # JWT_SECRET=<paste-generated-secret-here>
 ```
 
 **⚠️ Security: JWT_SECRET is REQUIRED**
 - Application will **exit on startup** if JWT_SECRET is empty
-- Never commit .env file (in .gitignore)
+- Never commit backend/.env file (in .gitignore)
 - Use different secrets for dev/staging/production
 
 ### Data Import (Phenopackets Direct Migration)
@@ -76,23 +96,23 @@ make phenopackets-migrate-dry
 
 **Prerequisites:**
 1. Database running: `make hybrid-up`
-2. Environment configured: Valid `.env` file with `DATABASE_URL`
+2. Environment configured: Valid `backend/.env` file with `DATABASE_URL`
 3. Google Sheets URLs configured in migration script
 
-**Modular Migration System:**
+**Modular Migration System (in backend/migration/):**
 - Direct conversion from Google Sheets to GA4GH Phenopackets v2
-- Main orchestrator: `migration/direct_sheets_to_phenopackets.py` (253 lines)
+- Main orchestrator: `backend/migration/direct_sheets_to_phenopackets.py`
 - Modular architecture with focused components:
-  - `vrs/vrs_builder.py` - VRS 2.0 variant representation (375 lines)
-  - `vrs/cnv_parser.py` - CNV parsing logic (350 lines)
-  - `phenopackets/hpo_mapper.py` - HPO term mapping (189 lines)
-  - `phenopackets/age_parser.py` - Age/temporal parsing (118 lines)
-  - `phenopackets/publication_mapper.py` - Publication references (109 lines)
-  - `phenopackets/evidence_builder.py` - Evidence building (DRY principle, 94 lines)
-  - `phenopackets/extractors.py` - Phenotype/variant extraction (459 lines)
-  - `phenopackets/builder_simple.py` - Phenopacket assembly (322 lines)
-  - `data_sources/google_sheets.py` - Data loading (72 lines)
-  - `database/storage.py` - Database operations (77 lines)
+  - `vrs/vrs_builder.py` - VRS 2.0 variant representation
+  - `vrs/cnv_parser.py` - CNV parsing logic
+  - `phenopackets/hpo_mapper.py` - HPO term mapping
+  - `phenopackets/age_parser.py` - Age/temporal parsing
+  - `phenopackets/publication_mapper.py` - Publication references
+  - `phenopackets/evidence_builder.py` - Evidence building
+  - `phenopackets/extractors.py` - Phenotype/variant extraction
+  - `phenopackets/builder_simple.py` - Phenopacket assembly
+  - `data_sources/google_sheets.py` - Data loading
+  - `database/storage.py` - Database operations
 - Bypasses intermediate PostgreSQL normalization step
 - Supports test mode (20 individuals) and dry run mode
 - Properly maps HPO terms, MONDO diseases, and variant data
@@ -244,8 +264,10 @@ rg "abs\(hash\(" --type py
 
 ## Architecture Overview
 
+**Code Location:** All backend code is in `backend/` directory
+
 ### API Structure (Phenopackets v2)
-The API has been completely restructured to use GA4GH Phenopackets v2 format:
+The API (in `backend/app/`) uses GA4GH Phenopackets v2 format:
 
 **Main Endpoints:**
 - **`/api/v2/phenopackets/`** - Core phenopacket CRUD operations
@@ -302,23 +324,24 @@ The project handles specialized genomic data formats:
 
 ### Development Considerations
 
-1. **Dependency management**: Uses uv for fast dependency resolution and environment management
-   - Run `uv sync` to install dependencies
-   - Use `uv run <command>` to execute scripts in the managed environment
+1. **Dependency management**: Uses uv for fast dependency resolution
+   - Run `make dev` (from root) or `cd backend && uv sync`
+   - Use `uv run <command>` from backend/ directory
 
-2. **Environment variables required**:
+2. **Environment variables required** (in `backend/.env`):
    - `DATABASE_URL` - PostgreSQL connection string
-   - `JWT_SECRET` - Secret for JWT token signing
+   - `JWT_SECRET` - Secret for JWT token signing (REQUIRED)
 
-3. **Data validation**: The migration script and API share Pydantic models for consistency
+3. **Data validation**: Migration and API share Pydantic models for consistency
 
-4. **Async operations**: All database operations use async/await patterns with SQLAlchemy
+4. **Async operations**: All database operations use async/await with SQLAlchemy
 
 5. **File locations**:
-   - Data files in `/data` directory (VCF, VEP, and reference genome files)
-   - Phenopackets API in `/app/main.py` and `/app/phenopackets/` directory
-   - Direct migration script: `/migration/direct_sheets_to_phenopackets.py`
-   - Dependencies managed in `pyproject.toml` and `uv.lock`
+   - **Backend code**: `backend/` directory (app, migration, tests, alembic)
+   - Data files in `/data` directory (VCF, VEP, reference genome files)
+   - Phenopackets API: `backend/app/main.py` and `backend/app/phenopackets/`
+   - Migration script: `backend/migration/direct_sheets_to_phenopackets.py`
+   - Dependencies: `backend/pyproject.toml` and `backend/uv.lock`
 
 6. **Migration Status**:
    - ✅ Complete: 864 individuals migrated to phenopackets format

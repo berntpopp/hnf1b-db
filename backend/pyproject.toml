@@ -1,0 +1,99 @@
+[project]
+name = "hnf1b-api"
+version = "0.1.0"
+description = "FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease"
+requires-python = ">=3.10"
+dependencies = [
+    # Core FastAPI dependencies
+    "email-validator>=2.3.0",
+    "fastapi>=0.116.1",
+    "pandas>=2.3.2",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=3.2.0,<4.0.0",  # Pin to version 3.x for passlib compatibility
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "pyjwt>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "python-multipart>=0.0.20",
+    "uvicorn[standard]>=0.35.0",
+    # PostgreSQL and database dependencies
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+    "psycopg2-binary>=2.9.9",
+    # Scientific dependencies (for sheets import)
+    "biopython>=1.84",
+    "requests>=2.31.0",
+    # Phenopackets and ontology dependencies
+    "phenopackets>=2.0.0", # GA4GH Phenopackets schema
+    "protobuf>=4.25.0", # For phenopackets serialization
+    "jsonschema>=4.20.0", # For phenopacket validation
+    "pronto>=2.5.0", # For parsing OBO ontologies (HPO, MONDO)
+    "jsonpath-ng>=1.6.0", # For complex JSON queries
+    "httpx>=0.28.1",
+]
+
+
+[dependency-groups]
+dev = [
+    "ruff==0.6.8",
+    "mypy==1.8.0",
+    "types-jsonschema>=4.25.1.20250822",
+]
+test = [
+    "ga4gh-vrs>=2.1.3",
+    "pytest==7.4.4",
+    "pytest-asyncio==0.21.1",
+    "pytest-cov==4.1.0",
+    "tqdm>=4.67.1",
+]
+migration = [
+    "tqdm>=4.66.0",  # Progress bars for migration
+    "rich>=13.7.0",  # Rich console output
+    "deepdiff>=6.7.0",  # For comparing data structures
+]
+phenopackets = [
+    "ga4gh.vrs>=2.0.0",  # Variation Representation Specification
+    "oaklib>=0.5.0",  # Ontology Access Kit (optional)
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true  
+disallow_untyped_defs = false
+no_implicit_optional = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["pandas.*", "passlib.*", "biopython.*", "Bio.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "D",  # pydocstyle
+]
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D203",  # 1 blank line required before class docstring
+    "D213",  # Multi-line docstring summary should start at the second line
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+# Configuration compatible with black formatting
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

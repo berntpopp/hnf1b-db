@@ -2,17 +2,32 @@
 
 A FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease.
 
+## Project Structure
+
+```
+hnf1b-db-api/
+├── backend/              # Backend code (FastAPI app + migration scripts)
+│   ├── app/             # FastAPI application
+│   ├── migration/       # Data migration scripts
+│   ├── tests/           # Test suite
+│   ├── alembic/         # Database migrations
+│   └── pyproject.toml   # Python dependencies
+├── docs/                # Documentation
+├── examples/            # Example scripts
+└── docker-compose.services.yml  # PostgreSQL & Redis services
+```
+
 ## Quick Start
 
 **Prerequisites:** Python 3.10+, Docker, uv package manager ([install guide](#1-install-uv-package-manager))
 
 ```bash
-# 1. Install dependencies
+# 1. Install dependencies (from root directory)
 make dev
 
-# 2. Configure environment  
-cp .env.example .env
-# Edit .env with your database settings
+# 2. Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env with your database settings
 
 # 3. Start services and database
 make hybrid-up      # Start PostgreSQL and Redis containers
@@ -27,6 +42,8 @@ make server
 
 ## Development Commands
 
+All commands are run from the **project root** directory:
+
 ```bash
 make help          # Show all available commands
 make check         # Run all checks (lint + typecheck + tests)
@@ -36,6 +53,8 @@ make lint          # Lint code with ruff
 make typecheck     # Type check with mypy
 make hybrid-down   # Stop containers
 ```
+
+You can also run commands directly from the `backend/` directory using its Makefile.
 
 ## Tech Stack
 
@@ -64,10 +83,17 @@ make hybrid-down   # Stop containers
 
 ## Environment Setup
 
-Create `.env` file:
+Create `.env` file in the `backend/` directory:
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with your settings
+```
+
+Required variables:
 ```
 DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
-JWT_SECRET=your-secret-key
+JWT_SECRET=your-secret-key  # Generate with: openssl rand -hex 32
 ```
 
 ## Data Import
@@ -121,12 +147,15 @@ The migration system processes data from multiple sources:
 
 ### Migration System Architecture
 
-The direct migration system is located in `/migration/` directory:
+The direct migration system is located in `backend/migration/` directory:
 
 ```
-migration/
-├── direct_sheets_to_phenopackets.py  # Direct Google Sheets to Phenopackets v2 migration
-└── (legacy modules - no longer used)
+backend/migration/
+├── direct_sheets_to_phenopackets.py  # Main migration orchestrator
+├── phenopackets/     # Phenopacket builders and mappers
+├── vrs/              # VRS variant representation
+├── data_sources/     # Data source loaders
+└── database/         # Database storage operations
 ```
 
 ### Features
@@ -211,25 +240,26 @@ pip install uv
 git clone <repository-url>
 cd hnf1b-api
 
-# Install all dependencies (including dev and test groups)
+# Install all dependencies (from root directory)
 make dev
-# OR manually:
-uv sync --group dev --group test
 
 # Create environment file
-cp .env.example .env
-# Edit .env with your settings (see Environment Configuration below)
+cp backend/.env.example backend/.env
+# Edit backend/.env with your settings (see Environment Configuration below)
 ```
 
 ### 3. Environment Configuration
 
-Create/edit `.env` file with required variables:
+Create/edit `backend/.env` file with required variables:
 
 ```bash
+# Copy template
+cp backend/.env.example backend/.env
+
 # PostgreSQL Database (matches docker-compose.services.yml)
 DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
 
-# JWT Authentication
+# JWT Authentication (REQUIRED - generate with: openssl rand -hex 32)
 JWT_SECRET=your-secret-key-change-this-in-production
 
 # Development Settings
