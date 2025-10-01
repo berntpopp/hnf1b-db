@@ -62,7 +62,8 @@ class CNVParser:
 
         except (ValueError, IndexError) as e:
             logger.warning(
-                f"Failed to parse coordinates from hg38='{hg38}', hg38_info='{hg38_info}': {e}"
+                f"Failed to parse coordinates from hg38='{hg38}', "
+                f"hg38_info='{hg38_info}': {e}"
             )
             return None
 
@@ -163,7 +164,13 @@ class CNVParser:
             "id": f"var:HNF1B:{ga4gh_notation}",
             "label": f"HNF1B {variant_type} ({size_mb}Mb)",
             "structuralType": {
-                "id": f"SO:{'0000159' if variant_type == 'DEL' else '1000035' if variant_type == 'DUP' else '0000667'}",
+                "id": (
+                    "SO:0000159"
+                    if variant_type == "DEL"
+                    else "SO:1000035"
+                    if variant_type == "DUP"
+                    else "SO:0000667"
+                ),
                 "label": "deletion"
                 if variant_type == "DEL"
                 else "duplication"
@@ -270,7 +277,8 @@ class CNVParser:
                             },
                         }
                     )
-            # Check for explicit copy number mentions (e.g., "CN=0", "0 copies", "single copy")
+            # Check for explicit copy number mentions
+            # (e.g., "CN=0", "0 copies", "single copy")
             cn_match = re.search(r"CN[=:]?\s*(\d+)|(\d+)\s*cop(y|ies)", reported_lower)
             if cn_match:
                 copy_num = int(cn_match.group(1) or cn_match.group(2))
@@ -279,9 +287,10 @@ class CNVParser:
                         "name": "copy_number",
                         "value": {
                             "absolute_copy_number": copy_num,
-                            "relative_copy_number": copy_num
-                            - 2,  # Assuming normal is 2 copies
-                            "evidence": f"Extracted from description: {cn_match.group(0)}",
+                            "relative_copy_number": copy_num - 2,  # Normal is 2 copies
+                            "evidence": (
+                                f"Extracted from description: {cn_match.group(0)}"
+                            ),
                         },
                     }
                 )
@@ -311,12 +320,11 @@ class CNVParser:
 
         variant_type_lower = variant_type.lower()
         # Use regex to match canonical CNV terms as whole words, case-insensitive
-        is_cnv = bool(
-            re.search(
-                r"\b(deletion|duplication|del|dup|cnv|copy number variation|copy number change|copy number loss|copy number gain)\b",
-                variant_type_lower,
-            )
+        cnv_pattern = (
+            r"\b(deletion|duplication|del|dup|cnv|copy number variation|"
+            r"copy number change|copy number loss|copy number gain)\b"
         )
+        is_cnv = bool(re.search(cnv_pattern, variant_type_lower))
 
         if not is_cnv or not hg38 or not hg38_info:
             return None
@@ -339,7 +347,8 @@ class CNVParser:
                         "subjectOrBiosampleId": row_data.get(
                             "IndividualIdentifier", "unknown"
                         ),
-                        "interpretationStatus": "PATHOGENIC",  # CNVs are usually pathogenic
+                        # CNVs are usually pathogenic
+                        "interpretationStatus": "PATHOGENIC",
                         "variantInterpretation": {
                             "variationDescriptor": variant_descriptor
                         },
