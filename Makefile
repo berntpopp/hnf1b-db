@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format typecheck server clean
+.PHONY: help install dev test lint format typecheck server clean hybrid-up hybrid-down db-migrate db-upgrade db-reset
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -13,12 +13,12 @@ dev:  ## Install dependencies including dev and test groups
 test:  ## Run tests
 	uv run pytest
 
-lint:  ## Run linting (flake8)
-	uv run flake8 .
+lint:  ## Run linting (ruff)
+	uv run ruff check .
 
-format:  ## Format code (black and isort)
-	uv run black .
-	uv run isort .
+format:  ## Format code (ruff)
+	uv run ruff format .
+	uv run ruff check --fix .
 
 typecheck:  ## Run type checking (mypy)
 	uv run mypy app/
@@ -26,8 +26,34 @@ typecheck:  ## Run type checking (mypy)
 server:  ## Start development server
 	uv run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-migrate:  ## Run data migration
-	uv run python migrate_from_sheets.py
+# Hybrid Development Commands
+hybrid-up:  ## Start PostgreSQL and Redis services in Docker
+	docker-compose -f docker-compose.services.yml up -d
+	@echo "Services started. Use 'make server' to start the FastAPI development server."
+
+hybrid-down:  ## Stop PostgreSQL and Redis services
+	docker-compose -f docker-compose.services.yml down
+
+# Database Migration Commands
+db-migrate:  ## Create new Alembic migration (usage: make db-migrate MESSAGE="description")
+	uv run alembic revision --autogenerate -m "$(MESSAGE)"
+
+db-upgrade:  ## Apply pending database migrations
+	uv run alembic upgrade head
+
+db-reset:  ## Reset database (drop and recreate all tables)
+	uv run alembic downgrade base
+	uv run alembic upgrade head
+
+# Phenopackets Migration Commands (Primary method for data import)
+phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format
+	uv run python -m migration.direct_sheets_to_phenopackets
+
+phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
+	uv run python -m migration.direct_sheets_to_phenopackets --test
+
+phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
+	uv run python -m migration.direct_sheets_to_phenopackets --test --dry-run
 
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 

@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, refactor--* ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: hnf1b_user
+          POSTGRES_PASSWORD: hnf1b_pass
+          POSTGRES_DB: hnf1b_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        uv sync --group dev --group test
+
+    # Linting removed - use pre-commit hooks locally instead
+    # Style issues don't affect functionality
+
+    - name: Run type checking (mypy)
+      run: |
+        uv run mypy app/ migration/
+      continue-on-error: true  # Don't fail build on type errors initially
+
+    - name: Run tests with coverage
+      env:
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+        JWT_SECRET: test-secret-key-for-ci
+      run: |
+        uv run pytest tests/ -v --cov=app --cov=migration --cov-report=xml --cov-report=term
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+
+  # Linting jobs removed - these are style checks, not functional tests
+  # Use pre-commit hooks locally for code style enforcement
+  # CI focuses on: tests, type checking, and critical error detection

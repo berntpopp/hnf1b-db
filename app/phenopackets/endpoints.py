@@ -1,0 +1,592 @@
+"""Phenopacket-centric API endpoints."""
+
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import require_auth
+from app.database import get_db
+from app.phenopackets.models import (
+    AggregationResult,
+    Phenopacket,
+    PhenopacketCreate,
+    PhenopacketResponse,
+    PhenopacketSearchQuery,
+    PhenopacketUpdate,
+)
+from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
+
+router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets"])
+
+validator = PhenopacketValidator()
+sanitizer = PhenopacketSanitizer()
+
+
+@router.get("/", response_model=List[PhenopacketResponse])
+async def list_phenopackets(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    sex: Optional[str] = Query(None, description="Filter by sex"),
+    has_variants: Optional[bool] = Query(
+        None, description="Filter by variant presence"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all phenopackets with optional filtering."""
+    query = select(Phenopacket)
+
+    if sex:
+        query = query.where(Phenopacket.subject_sex == sex)
+
+    if has_variants is not None:
+        if has_variants:
+            query = query.where(
+                func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]) > 0
+            )
+        else:
+            query = query.where(
+                func.coalesce(
+                    func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]),
+                    0,
+                )
+                == 0
+            )
+
+    query = query.offset(skip).limit(limit).order_by(Phenopacket.created_at.desc())
+
+    result = await db.execute(query)
+    phenopackets = result.scalars().all()
+
+    return [
+        PhenopacketResponse(
+            id=str(pp.id),
+            phenopacket_id=pp.phenopacket_id,
+            version=pp.version,
+            phenopacket=pp.phenopacket,
+            created_at=pp.created_at,
+            updated_at=pp.updated_at,
+            schema_version=pp.schema_version,
+        )
+        for pp in phenopackets
+    ]
+
+
+@router.get("/{phenopacket_id}", response_model=Dict)
+async def get_phenopacket(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single phenopacket by ID."""
+    result = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    )
+    phenopacket = result.scalar_one_or_none()
+
+    if not phenopacket:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    return phenopacket.phenopacket
+
+
+@router.post("/search", response_model=List[PhenopacketResponse])
+async def search_phenopackets(
+    search_query: PhenopacketSearchQuery,
+    db: AsyncSession = Depends(get_db),
+):
+    """Advanced search across phenopackets."""
+    base_query = select(Phenopacket)
+
+    # Search by phenotypes (HPO terms)
+    if search_query.phenotypes:
+        for hpo_term in search_query.phenotypes:
+            base_query = base_query.where(
+                Phenopacket.phenopacket["phenotypicFeatures"].contains(
+                    [{"type": {"id": hpo_term}}]
+                )
+            )
+
+    # Search by diseases (MONDO terms)
+    if search_query.diseases:
+        for disease_term in search_query.diseases:
+            base_query = base_query.where(
+                Phenopacket.phenopacket["diseases"].contains(
+                    [{"term": {"id": disease_term}}]
+                )
+            )
+
+    # Search by variants
+    if search_query.variants:
+        for variant in search_query.variants:
+            base_query = base_query.where(
+                func.jsonb_path_exists(
+                    Phenopacket.phenopacket,
+                    f"$.interpretations[*].diagnosis.genomicInterpretations[*]"
+                    f".variantInterpretation.variationDescriptor.label ? "
+                    f'(@ like_regex "{variant}")',
+                )
+            )
+
+    # Search by measurements
+    if search_query.measurements:
+        for measurement in search_query.measurements:
+            base_query = base_query.where(
+                Phenopacket.phenopacket["measurements"].contains(
+                    [{"assay": {"id": measurement.get("loinc_code")}}]
+                )
+            )
+
+    # Filter by sex
+    if search_query.sex:
+        # Use the JSON field directly since subject_sex column might not be populated
+        base_query = base_query.where(
+            func.jsonb_extract_path_text(Phenopacket.phenopacket, "subject", "sex")
+            == search_query.sex
+        )
+
+    # Filter by age range using ISO8601 duration parsing
+    if search_query.min_age is not None or search_query.max_age is not None:
+        age_conditions = []
+
+        # Extract age from ISO8601 duration in the JSON path
+        # Age location: phenopacket.subject.timeAtLastEncounter.age.iso8601duration
+        age_extraction = text(r"""
+            (
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P(\d+)Y'
+                    ))[1]::int,
+                    0
+                ) +
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P\d*Y?(\d+)M'
+                    ))[1]::float / 12,
+                    0
+                ) +
+                COALESCE(
+                    (regexp_match(
+                        phenopacket->'subject'->'timeAtLastEncounter'->'age'->>'iso8601duration',
+                        'P\d*Y?\d*M?(\d+)D'
+                    ))[1]::float / 365.25,
+                    0
+                )
+            )
+        """)
+
+        if search_query.min_age is not None:
+            # Age must be >= minimum age
+            age_conditions.append(
+                text(f"""
+                    phenopacket->'subject'->'timeAtLastEncounter'->
+                    'age'->>'iso8601duration' IS NOT NULL
+                    AND {age_extraction.text} >= :min_age
+                """).bindparams(min_age=search_query.min_age)
+            )
+
+        if search_query.max_age is not None:
+            # Age must be <= maximum age
+            age_conditions.append(
+                text(f"""
+                    phenopacket->'subject'->'timeAtLastEncounter'->
+                    'age'->>'iso8601duration' IS NOT NULL
+                    AND {age_extraction.text} <= :max_age
+                """).bindparams(max_age=search_query.max_age)
+            )
+
+        if age_conditions:
+            base_query = base_query.where(and_(*age_conditions))
+
+    result = await db.execute(base_query)
+    phenopackets = result.scalars().all()
+
+    return [
+        PhenopacketResponse(
+            id=str(pp.id),
+            phenopacket_id=pp.phenopacket_id,
+            version=pp.version,
+            phenopacket=pp.phenopacket,
+            created_at=pp.created_at,
+            updated_at=pp.updated_at,
+            schema_version=pp.schema_version,
+        )
+        for pp in phenopackets
+    ]
+
+
+@router.get("/{phenopacket_id}/features", response_model=List[Dict])
+async def get_phenotypic_features(
+    phenopacket_id: str,
+    group: Optional[str] = Query(None, description="Filter by feature group"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get phenotypic features from a phenopacket."""
+    result = await db.execute(
+        select(Phenopacket.phenopacket["phenotypicFeatures"]).where(
+            Phenopacket.phenopacket_id == phenopacket_id
+        )
+    )
+    features = result.scalar_one_or_none()
+
+    if features is None:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    # Filter by group if specified
+    if group:
+        # This would require a mapping of HPO terms to groups
+        # For now, return all features
+        pass
+
+    return features if features else []
+
+
+@router.get("/{phenopacket_id}/variants", response_model=List[Dict])
+async def get_variants(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get variants/interpretations from a phenopacket."""
+    result = await db.execute(
+        select(Phenopacket.phenopacket["interpretations"]).where(
+            Phenopacket.phenopacket_id == phenopacket_id
+        )
+    )
+    interpretations = result.scalar_one_or_none()
+
+    if interpretations is None:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    return interpretations if interpretations else []
+
+
+@router.get("/{phenopacket_id}/diseases", response_model=List[Dict])
+async def get_diseases(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get diseases from a phenopacket."""
+    result = await db.execute(
+        select(Phenopacket.phenopacket["diseases"]).where(
+            Phenopacket.phenopacket_id == phenopacket_id
+        )
+    )
+    diseases = result.scalar_one_or_none()
+
+    if diseases is None:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    return diseases if diseases else []
+
+
+@router.get("/{phenopacket_id}/measurements", response_model=List[Dict])
+async def get_measurements(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get measurements from a phenopacket."""
+    result = await db.execute(
+        select(Phenopacket.phenopacket["measurements"]).where(
+            Phenopacket.phenopacket_id == phenopacket_id
+        )
+    )
+    measurements = result.scalar_one_or_none()
+
+    if measurements is None:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    return measurements if measurements else []
+
+
+@router.post("/", response_model=PhenopacketResponse)
+async def create_phenopacket(
+    phenopacket_data: PhenopacketCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_auth),
+):
+    """Create a new phenopacket."""
+    # Sanitize the phenopacket
+    sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
+
+    # Validate phenopacket structure
+    errors = validator.validate(sanitized)
+    if errors:
+        raise HTTPException(status_code=400, detail={"validation_errors": errors})
+
+    # Check for duplicate ID
+    existing = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == sanitized["id"])
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Phenopacket with ID {sanitized['id']} already exists",
+        )
+
+    # Create new phenopacket
+    new_phenopacket = Phenopacket(
+        phenopacket_id=sanitized["id"],
+        phenopacket=sanitized,
+        subject_id=sanitized["subject"]["id"],
+        subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
+        created_by=phenopacket_data.created_by or current_user.username,
+    )
+
+    db.add(new_phenopacket)
+    await db.commit()
+    await db.refresh(new_phenopacket)
+
+    return PhenopacketResponse(
+        id=str(new_phenopacket.id),
+        phenopacket_id=new_phenopacket.phenopacket_id,
+        version=new_phenopacket.version,
+        phenopacket=new_phenopacket.phenopacket,
+        created_at=new_phenopacket.created_at,
+        updated_at=new_phenopacket.updated_at,
+        schema_version=new_phenopacket.schema_version,
+    )
+
+
+@router.put("/{phenopacket_id}", response_model=PhenopacketResponse)
+async def update_phenopacket(
+    phenopacket_id: str,
+    phenopacket_data: PhenopacketUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_auth),
+):
+    """Update an existing phenopacket."""
+    result = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    )
+    existing = result.scalar_one_or_none()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    # Sanitize the updated phenopacket
+    sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
+
+    # Validate updated phenopacket
+    errors = validator.validate(sanitized)
+    if errors:
+        raise HTTPException(status_code=400, detail={"validation_errors": errors})
+
+    # Update the phenopacket
+    existing.phenopacket = sanitized
+    existing.subject_id = sanitized["subject"]["id"]
+    existing.subject_sex = sanitized["subject"].get("sex", "UNKNOWN_SEX")
+    existing.updated_by = phenopacket_data.updated_by or current_user.username
+
+    await db.commit()
+    await db.refresh(existing)
+
+    return PhenopacketResponse(
+        id=str(existing.id),
+        phenopacket_id=existing.phenopacket_id,
+        version=existing.version,
+        phenopacket=existing.phenopacket,
+        created_at=existing.created_at,
+        updated_at=existing.updated_at,
+        schema_version=existing.schema_version,
+    )
+
+
+@router.delete("/{phenopacket_id}")
+async def delete_phenopacket(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_auth),
+):
+    """Delete a phenopacket."""
+    result = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    )
+    phenopacket = result.scalar_one_or_none()
+
+    if not phenopacket:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    await db.delete(phenopacket)
+    await db.commit()
+
+    return {"message": f"Phenopacket {phenopacket_id} deleted successfully"}
+
+
+# Aggregation endpoints
+@router.get("/aggregate/by-feature", response_model=List[AggregationResult])
+async def aggregate_by_feature(
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate phenopackets by phenotypic features."""
+    query = """
+    SELECT
+        feature->'type'->>'id' as hpo_id,
+        feature->'type'->>'label' as label,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
+    WHERE
+        NOT COALESCE((feature->>'excluded')::boolean, false)
+    GROUP BY
+        feature->'type'->>'id',
+        feature->'type'->>'label'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.label or row.hpo_id,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"hpo_id": row.hpo_id},  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/by-disease", response_model=List[AggregationResult])
+async def aggregate_by_disease(
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate phenopackets by disease."""
+    query = """
+    SELECT
+        disease->'term'->>'id' as disease_id,
+        disease->'term'->>'label' as label,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'diseases') as disease
+    GROUP BY
+        disease->'term'->>'id',
+        disease->'term'->>'label'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.label or row.disease_id,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"disease_id": row.disease_id},  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/kidney-stages", response_model=List[AggregationResult])
+async def aggregate_kidney_stages(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distribution of kidney disease stages."""
+    query = """
+    SELECT
+        modifier->>'label' as stage,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
+        jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
+    WHERE
+        feature->'type'->>'id' = 'HP:0012622'
+        AND modifier->>'label' LIKE '%Stage%'
+    GROUP BY
+        modifier->>'label'
+    ORDER BY
+        stage
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.stage,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/sex-distribution", response_model=List[AggregationResult])
+async def aggregate_sex_distribution(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get sex distribution of subjects."""
+    query = """
+    SELECT
+        subject_sex as sex,
+        COUNT(*) as count
+    FROM
+        phenopackets
+    GROUP BY
+        subject_sex
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.sex,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/variant-pathogenicity", response_model=List[AggregationResult])
+async def aggregate_variant_pathogenicity(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distribution of variant pathogenicity classifications."""
+    query = """
+    SELECT
+        gi->>'interpretationStatus' as classification,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'interpretations') as interp,
+        jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+    GROUP BY
+        gi->>'interpretationStatus'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.classification,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+        )
+        for row in rows
+    ]

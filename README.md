@@ -2,306 +2,366 @@
 
 A FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease.
 
-## Getting Started
+## Quick Start
+
+**Prerequisites:** Python 3.10+, Docker, uv package manager ([install guide](#1-install-uv-package-manager))
+
+```bash
+# 1. Install dependencies
+make dev
+
+# 2. Configure environment  
+cp .env.example .env
+# Edit .env with your database settings
+
+# 3. Start services and database
+make hybrid-up      # Start PostgreSQL and Redis containers
+make db-upgrade     # Apply database schema
+
+# 4. Start development server
+make server
+
+# API available at http://localhost:8000
+# Docs at http://localhost:8000/docs
+```
+
+## Development Commands
+
+```bash
+make help          # Show all available commands
+make check         # Run all checks (lint + typecheck + tests)
+make test          # Run tests
+make format        # Format code with ruff
+make lint          # Lint code with ruff
+make typecheck     # Type check with mypy
+make hybrid-down   # Stop containers
+```
+
+## Tech Stack
+
+- **API**: FastAPI with async/await
+- **Database**: PostgreSQL with SQLAlchemy
+- **Cache**: Redis
+- **Auth**: JWT tokens
+- **Tools**: uv (dependencies), ruff (linting/formatting), mypy (types)
+- **Development**: Docker containers for services
+
+## API Endpoints
+
+### Phenopackets v2 API (Current)
+- `/api/v2/phenopackets` - GA4GH Phenopackets CRUD operations
+- `/api/v2/clinical` - Clinical feature-specific queries
+- `/api/v2/auth` - JWT authentication
+- `/api/v2/hpo` - HPO term search and validation
+- `/api/v2/docs` - Interactive API documentation
+
+### Legacy Endpoints (Being phased out)
+- `/api/individuals` - Patient demographics
+- `/api/variants` - Genetic variants
+- `/api/publications` - Publication metadata
+- `/api/search` - Cross-collection search
+- `/api/aggregations` - Data statistics
+
+## Environment Setup
+
+Create `.env` file:
+```
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
+JWT_SECRET=your-secret-key
+```
+
+## Data Import
+
+The project includes a direct Google Sheets to GA4GH Phenopackets v2 migration system that imports clinical and genetic data directly into the international standard format.
 
 ### Prerequisites
-- Python 3.8+
-- MongoDB
-- pip
 
-### Installation
-
-1. Clone the repository:
 ```bash
+# 1. Start database services
+make hybrid-up     # Start PostgreSQL and Redis containers
+
+# 2. Verify environment
+# Ensure .env file exists with valid DATABASE_URL pointing to hnf1b_phenopackets database
+```
+
+### Import Commands
+
+```bash
+# Full production import (processes all 864 individuals)
+make phenopackets-migrate
+
+# Limited test import (processes 20 individuals, faster for development)
+make phenopackets-migrate-test
+
+# Dry run - outputs to JSON file without database changes
+make phenopackets-migrate-dry
+
+# Alternative: Run directly with Python
+uv run python migration/direct_sheets_to_phenopackets.py          # Full import
+uv run python migration/direct_sheets_to_phenopackets.py --test   # Test import
+uv run python migration/direct_sheets_to_phenopackets.py --dry-run # Dry run
+```
+
+### Data Sources
+
+The migration system processes data from multiple sources:
+
+1. **Google Sheets**: Clinical and genetic data from configured spreadsheet
+   - Individual demographics and clinical reports
+   - Publication metadata with PMID and DOI identifiers
+   - Variant classifications with original and standardized nomenclature
+   - Temporal data with complex age formats (e.g., "1y9m", "prenatal")
+
+2. **Genomic Files** (in `/data/` directory):
+   - `HNF1B_all_small.vcf` - Small genetic variants (182 variants)
+   - `HNF1B_all_large.vcf` - Large structural variants (19 variants)  
+   - `HNF1B_all_small.vep.txt` - VEP annotations for small variants (303 annotations)
+   - `HNF1B_all_large.vep.txt` - VEP annotations for large variants (53,855 annotations)
+   - `GRCh38-v1.6_*.tsv.gz` - CADD pathogenicity scores
+
+### Migration System Architecture
+
+The direct migration system is located in `/migration/` directory:
+
+```
+migration/
+├── direct_sheets_to_phenopackets.py  # Direct Google Sheets to Phenopackets v2 migration
+└── (legacy modules - no longer used)
+```
+
+### Features
+
+- **Direct conversion**: Google Sheets data directly to GA4GH Phenopackets v2 format
+- **Deduplication**: Automatically consolidates multiple rows per individual
+- **Test mode**: Processes limited dataset (20 individuals) for faster development
+- **Dry run mode**: Outputs to JSON file for inspection without database changes
+- **HPO mapping**: Automatic mapping of clinical terms to Human Phenotype Ontology
+  - Special onset terms mapped to HPO (prenatal → HP:0034199, congenital → HP:0003577)
+- **MONDO diseases**: Proper disease classification using MONDO ontology
+- **Variant handling**: Prioritizes Varsome format, falls back to other formats
+  - Preserves original notation alongside standardized HGVS nomenclature
+  - **VRS 2.0 compliance**: Generates GA4GH VRS-compliant variant identifiers with proper digests
+- **Age parsing**: Handles complex formats (1y9m → P1Y9M ISO 8601 duration)
+- **Publication references**: PMID and DOI identifiers with proper GA4GH ExternalReference format
+- **Evidence tracking**: Complete provenance with timestamps and publication attribution
+
+### Import Process
+
+The direct migration:
+
+1. **Loads Google Sheets data**: Fetches clinical and genetic data
+2. **Groups by individual**: Consolidates 939 rows into 864 unique individuals
+3. **Builds Phenopackets**: Creates GA4GH v2 compliant phenopackets
+4. **Maps ontologies**: HPO terms for phenotypes, MONDO for diseases
+5. **Stores in database**: Saves as JSONB documents in PostgreSQL
+
+### Typical Output
+
+```
+Loading data from Google Sheets...
+Loaded 939 rows from individuals sheet
+Loaded 160 rows from publications sheet
+Created publication map with 320 entries
+Processing 864 individuals...
+Building phenopackets: 100%|████████████| 864/864 [00:01<00:00, 681.39it/s]
+Built 864 phenopackets
+Storing phenopackets: 100%|████████████| 864/864 [00:02<00:00, 327.69it/s]
+Successfully stored 864 phenopackets
+
+============================================================
+MIGRATION SUMMARY
+============================================================
+Total phenopackets created: 864
+With phenotypic features: 830 (96%)
+With genetic variants: 864 (100%)
+With disease diagnoses: 864 (100%)
+Sex distribution: {'UNKNOWN_SEX': 187, 'FEMALE': 329, 'MALE': 348}
+============================================================
+```
+
+## Installation & Setup
+
+### Prerequisites
+
+- **Python 3.10+** (required for modern type hints)
+- **Docker & Docker Compose** (for PostgreSQL/Redis services)
+- **uv package manager** (for dependency management)
+
+### 1. Install uv Package Manager
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows:**
+```bash
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Alternative (with pip):**
+```bash
+pip install uv
+```
+
+### 2. Clone and Setup Project
+
+```bash
+# Clone repository
 git clone <repository-url>
 cd hnf1b-api
+
+# Install all dependencies (including dev and test groups)
+make dev
+# OR manually:
+uv sync --group dev --group test
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your settings (see Environment Configuration below)
 ```
 
-2. Install dependencies:
+### 3. Environment Configuration
+
+Create/edit `.env` file with required variables:
+
 ```bash
-pip install -r requirements.txt
+# PostgreSQL Database (matches docker-compose.services.yml)
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
 
-# Optional: Install development dependencies for linting and testing
-pip install -r requirements-dev.txt
+# JWT Authentication
+JWT_SECRET=your-secret-key-change-this-in-production
+
+# Development Settings
+DEBUG=true
 ```
 
-3. Create a `.env` file in the root directory with the following variables:
-```
-MONGODB_URI=mongodb://localhost:27017
-DATABASE_NAME=hnf1b_db
-JWT_SECRET=your-secret-key-here
-```
+### 4. Start Services & Database
 
-### Running the API
-
-Start the development server with auto-reload:
 ```bash
-python -m uvicorn app.main:app --reload
+# Start PostgreSQL and Redis containers
+make hybrid-up
+
+# Apply database schema
+make db-upgrade
+
+# Verify services are running
+docker ps
 ```
 
-The API will be available at `http://localhost:8000`
+### 5. Run the Application
 
-API documentation is available at:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+```bash
+# Start development server
+make server
 
-## 1. Schema Design Plan
-
-### Collections and Their Purpose
-
-- **Users**  
-  This collection stores information about reviewers (the users who enter/review reports).  
-  **Fields:**  
-  - `_id` (MongoDB ObjectId)  
-  - `user_id` (numeric ID from the sheet)  
-  - `user_name`, `password`, `email`, `user_role`  
-  - `first_name`, `family_name`, `orcid` (optional)
-
-- **Individuals**  
-  Each document represents an individual with HNF1B disease and contains basic demographic information.  
-  **Fields:**  
-  - `_id` (MongoDB ObjectId)  
-  - `individual_id` (numeric identifier)  
-  - `Sex`  
-  - `age_reported` (or you could use separate fields for birth date, age at report, etc.)  
-  - `cohort` (for example, “born” vs. “fetus”)  
-  - *Relationships:* You might later add an array of report IDs (or simply reference reports by individual_id)
-
-- **Reports**  
-  Each report captures a clinical presentation submitted at a given time for an individual. There can be multiple reports per individual.  
-  **Fields:**  
-  - `_id` (MongoDB ObjectId)  
-  - `report_id` (numeric)  
-  - `individual_id` (reference to an Individual)  
-  - `report_date` and `report_review_date`  
-  - `reviewed_by` (user id reference, e.g. the reviewer who entered the report)  
-  - `phenotypes`: an array of phenotype sub‑documents  
-    - Each phenotype sub‑document might include a `phenotype_id`, a name, and additional attributes (for example, a “modifier” such as “unilateral”/“bilateral” and a flag to indicate if the phenotype is “described”)
-
-- **Variants**  
-  Although an individual may have multiple variant records over time, one variant is marked as current. Also, each variant record includes both classification and annotation data.  
-  **Fields:**  
-  - `_id` (MongoDB ObjectId)  
-  - `variant_id` (numeric)  
-  - `individual_id` (reference to an Individual)  
-  - `is_current`: Boolean (indicates which variant is currently valid)  
-  - **Classifications:**  
-    - `verdict_classification`  
-    - `criteria_classification`  
-    - `comment_classification`  
-    - `system_classification`  
-    - `date_classification`  
-  - **Annotations:**  
-    - `variant_type` (e.g. SNV, CNV)  
-    - `variant_reported`  
-    - `ID` (an identifier from a variant database)  
-    - `hg19_INFO`, `hg19`  
-    - `hg38_INFO`, `hg38`  
-    - `varsome`  
-    - `detection_method` (note the corrected spelling)  
-    - `segregation`
-
-- **Publications**  
-  This collection stores publication metadata (often pulled from PubMed).  
-  **Fields:**  
-  - `_id` (MongoDB ObjectId)  
-  - `publication_id` (numeric)  
-  - `publication_alias` (the alias from the sheets)  
-  - `publication_type`  
-  - `publication_entry_date`  
-  - `PMID`, `DOI`  
-  - `PDF`, and possibly a `PDF_drive_link`  
-  - Other optional fields such as `title`, `abstract`, `journal`, etc.
-
-### Data Modeling Decisions
-
-- **Reference vs. Embedded Documents:**  
-  In our design, we use separate collections for each domain. For example, reports refer to an individual by its identifier. This gives us flexibility (especially if the number of reports per individual is large).  
-  For phenotypes in a report, if the number is moderate, we can embed them as sub‑documents within the report document.
-
-- **Versioning of Variants:**  
-  Since an individual may have several variant records (but only one is “current”), we store each variant in the Variants collection and add a Boolean field (e.g. `is_current`) to mark the current one.  
-  Alternatively, you might embed an array of annotation/classification “versions” within a variant document. The proposed design here uses a flat collection with a flag.
-
-- **Validation and Migration:**  
-  Our import/migration script (written in Python) now validates and cleans data (using Pydantic models with custom validators) before inserting it into MongoDB. This same model is used by our API so that we maintain consistency between the imported data and the API’s expectations.
-
----
-
-## 2. README Snippet (Schema Overview)
-
-Below is a sample README section you could include in your repository to describe the database schema:
-
----
-
-# HNF1B-db Database Schema
-
-This database is designed to store clinical and genetic data for individuals with HNF1B disease. The data model is organized into several collections, each corresponding to a key domain of the application.
-
-## Collections
-
-### 1. **users**
-
-Stores reviewer/user data.
-
-**Document Example:**
-```json
-{
-  "_id": "ObjectId(...)",
-  "user_id": 1,
-  "user_name": "johannes",
-  "password": "hashedpassword",
-  "email": "Johannes.Muench@medizin.uni-leipzig.de",
-  "user_role": "Administrator",
-  "first_name": "Johannes",
-  "family_name": "Münch",
-  "orcid": "0000-0003-1779-1876"
-}
+# API will be available at:
+# - http://localhost:8000 (API)  
+# - http://localhost:8000/docs (API documentation)
 ```
 
-### 2. **individuals**
+## Alternative Installation (without uv)
 
-Stores basic demographic information for each individual with HNF1B disease.
+If you prefer using pip/virtualenv:
 
-**Document Example:**
-```json
-{
-  "_id": "ObjectId(...)",
-  "individual_id": 101,
-  "Sex": "male",
-  "individual_DOI": "optional external identifier"
-}
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate (Linux/macOS)
+source .venv/bin/activate
+# Activate (Windows)  
+.venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements-dev.txt  # Includes dev and test dependencies
+
+# Follow steps 3-5 above, but replace 'make' commands:
+python -m uvicorn app.main:app --reload  # instead of 'make server'
+python migration/direct_sheets_to_phenopackets.py --test  # instead of 'make phenopackets-migrate-test'
 ```
 
-### 3. **reports**
+### Dependency Files Available
 
-Stores clinical reports for individuals. An individual may have multiple reports over time. Each report records when it was entered/reviewed, by whom, and includes a list of phenotypes.
+- `requirements.txt` - Core runtime dependencies only
+- `requirements-dev.txt` - All dependencies including dev tools and tests
+- `pyproject.toml` - Modern Python project configuration (preferred with uv)
 
-**Document Example:**
-```json
-{
-  "_id": "ObjectId(...)",
-  "report_id": 501,
-  "individual_id": 101,
-  "report_date": "2021-11-01T00:00:00Z",
-  "report_review_date": "2021-11-05T00:00:00Z",
-  "reviewed_by": 1,  // Reference to a user
-  "phenotypes": [
-    {
-      "phenotype_id": "HP:0012622",
-      "name": "Renal Insufficiency",
-      "modifier": "severe",
-      "described": true
-    },
-    {
-      "phenotype_id": "HP:0100611",
-      "name": "Kidney Biopsy",
-      "modifier": null,
-      "described": false
+## Troubleshooting
+
+### uv Issues
+- **"uv not found"**: Ensure uv is in your PATH, restart terminal
+- **Permission errors**: On Linux/macOS, ensure `~/.local/bin` is in PATH
+- **Python version**: uv requires Python 3.8+, project needs 3.10+
+
+### Database Issues  
+- **Connection refused**: Ensure `make hybrid-up` completed successfully
+- **Schema errors**: Run `make db-upgrade` to apply migrations
+- **Port conflicts**: Check if port 5433 is available (`lsof -i :5433`)
+
+### Docker Issues
+- **Services won't start**: Check Docker is running and ports 5433, 6379 available
+- **Permission errors**: Ensure user is in docker group (Linux)
+
+### Alternative Database Setup
+If Docker isn't available, install PostgreSQL locally:
+
+```bash
+# Update DATABASE_URL in .env to match your local setup
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_db
+```
+
+## Frontend Integration
+
+### Authentication
+The API uses JWT authentication for data modification. Demo credentials are available for testing:
+
+```javascript
+// Login to get JWT token
+const response = await axios.post('/api/v2/auth/login', {
+  username: 'researcher',  // or 'admin'
+  password: 'research123'   // or 'admin123'
+});
+axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+```
+
+### HPO Term Search
+The API provides HPO term search endpoints for phenotype selection:
+
+```javascript
+// Search HPO terms for autocomplete
+await axios.get('/api/v2/hpo/autocomplete?q=kidney&limit=10');
+
+// Get common HNF1B-related terms
+await axios.get('/api/v2/hpo/common-terms?category=renal');
+
+// Validate HPO term IDs
+await axios.get('/api/v2/hpo/validate?term_ids=HP:0012622,HP:0000107');
+```
+
+### Creating New Patients
+With authentication, you can add new patients using the Phenopackets format:
+
+```javascript
+await axios.post('/api/v2/phenopackets/', {
+  phenopacket: {
+    id: "phenopacket:HNF1B:NEW001",
+    subject: { id: "NEW001", sex: "FEMALE" },
+    phenotypicFeatures: [
+      { type: { id: "HP:0012622", label: "Chronic kidney disease" }}
+    ],
+    meta_data: {
+      created: new Date().toISOString(),
+      created_by: "researcher"
     }
-  ]
-}
-```
-
-### 4. **variants**
-
-Stores genetic variant information for individuals. An individual may have several variant records over time, but one is marked as the current (or valid) variant. Each variant includes both annotation and classification data.
-
-**Document Example:**
-```json
-{
-  "_id": "ObjectId(...)",
-  "variant_id": 3001,
-  "individual_id": 101,
-  "is_current": true,
-  "classifications": {
-    "verdict": "Pathogenic",
-    "criteria": "1A, 2A, 3A, 4Cx6(0.9)",
-    "comment": "Functional evidence provided",
-    "system": "ACMG guidelines",
-    "classification_date": "2022-06-06T00:00:00Z"
-  },
-  "annotations": {
-    "variant_type": "Deletion",
-    "variant_reported": "17q12 deletion",
-    "ID": "dbVar:nssv1184554",
-    "hg19_INFO": "IMPRECISE;SVTYPE=DEL;END=36192489",
-    "hg19": "chr17-34815071-T-<DEL>",
-    "hg38_INFO": "IMPRECISE;SVTYPE=DEL;END=37832869",
-    "hg38": "chr17-36459258-T-<DEL>",
-    "varsome": "HNF1B(NM_000458.4):c.406C>G (p.Gln136Glu)",
-    "detection_method": "MLPA",
-    "segregation": "de novo"
   }
-}
+});
 ```
 
-### 5. **publications**
+### API Documentation
+- Interactive API docs: http://localhost:8000/api/v2/docs
+- Phenopackets endpoints: `/api/v2/phenopackets/`
+- HPO proxy endpoints: `/api/v2/hpo/`
+- Authentication: `/api/v2/auth/`
 
-Stores publication metadata that may be linked to reports or used to extract phenotype data.
-
-**Document Example:**
-```json
-{
-  "_id": "ObjectId(...)",
-  "publication_id": 19,
-  "publication_alias": "pub018",
-  "publication_type": "research",
-  "publication_entry_date": "2021-11-01T00:00:00Z",
-  "PMID": "15509593",
-  "DOI": "10.1093/hmg/ddh338",
-  "PDF": "barbacci2004.pdf",
-  "PDF_drive_link": "https://drive.google.com/...",
-  "Assigne": "JF",
-  "IndividualsReviewed": 10,
-  "Comment": null,
-  "title": null,
-  "abstract": null,
-  "journal": null,
-  "update_date": null
-}
-```
-
-## Relationships Diagram
-
-Below is a simplified diagram (using text/ASCII art) of the relationships between collections:
-
-```
-          +-----------+
-          |   users   |
-          +-----+-----+
-                |
-                | reviewed_by (user_id)
-                v
-        +---------------+
-        |    reports    |<-----------------+
-        +------+--------+                  |
-               |                          |
-               | individual_id            |
-               v                          |
-+------------------------+                |
-|     individuals        |                |
-+------------------------+                |
-               ^                          |
-               | (has one or more reports)|
-               +--------------------------+
-               
-        +-------------------------+
-        |       variants          |
-        +-------------------------+
-        | individual_id (ref)     |
-        | is_current: Boolean     |
-        | annotations/classifs    |
-        +-------------------------+
-        
-        +-------------------------+
-        |     publications        |
-        +-------------------------+
-        | publication_alias       |
-        | PMID, DOI, etc.         |
-        +-------------------------+
-```
-
-> **Note:** In the MongoDB design, relationships are maintained via reference fields (for example, the `individual_id` in reports and variants). You can choose to embed data (such as phenotypes in a report) if the number is small and you wish to optimize for read performance.  
->  
-> The migration script (written in Python) now uses the same Pydantic models as the API, so that every record is validated and cleaned before insertion.
+For detailed migration information, see [PHENOPACKETS_MIGRATION_GUIDE.md](PHENOPACKETS_MIGRATION_GUIDE.md)
