@@ -112,7 +112,7 @@ class VRSBuilder:
         """
         # Create a deterministic hash from RefSeq ID using SHA512t24u (GA4GH RefGet spec)
         sha512_digest = hashlib.sha512(refseq_id.encode()).digest()
-        # Truncate to first 24 bytes (192 bits) as per GA4GH RefGet specification
+        # Truncate to first 24 bytes (24 × 8 = 192 bits) per GA4GH RefGet specification
         truncated = sha512_digest[:24]
         # Base64url encode, remove padding
         digest = base64.urlsafe_b64encode(truncated).decode("ascii").rstrip("=")

@@ -103,8 +103,9 @@ CREATE INDEX IF NOT EXISTS idx_phenopacket_text_search ON phenopackets
     USING GIN (to_tsvector('english', phenopacket::text));
 
 -- Specific indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_phenopacket_hpo_terms ON phenopackets 
-    USING GIN ((phenopacket->'phenotypicFeatures' @> '[{"type": {}}]'::jsonb));
+-- Index on HPO term IDs for fast phenotype searches
+CREATE INDEX IF NOT EXISTS idx_phenopacket_hpo_terms ON phenopackets
+    USING GIN ((jsonb_path_query_array(phenopacket, '$.phenotypicFeatures[*].type.id')));
 
 CREATE INDEX IF NOT EXISTS idx_phenopacket_variant_labels ON phenopackets 
     USING GIN ((phenopacket->'interpretations' @> '[{"diagnosis": {"genomicInterpretations": []}}]'::jsonb));
