@@ -194,6 +194,9 @@ frontend/.env.*.local
 *.swo
 *~
 
+# Claude Code settings (local user preferences)
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
