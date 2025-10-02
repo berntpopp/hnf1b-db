@@ -306,7 +306,14 @@ async def create_phenopacket(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_auth),
 ):
-    """Create a new phenopacket."""
+    """Create a new phenopacket.
+
+    Returns:
+        201: Phenopacket created successfully
+        400: Validation error
+        409: Phenopacket with this ID already exists
+        500: Database error
+    """
     # Sanitize the phenopacket
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
 
@@ -315,17 +322,8 @@ async def create_phenopacket(
     if errors:
         raise HTTPException(status_code=400, detail={"validation_errors": errors})
 
-    # Check for duplicate ID
-    existing = await db.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id == sanitized["id"])
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409,
-            detail=f"Phenopacket with ID {sanitized['id']} already exists",
-        )
-
     # Create new phenopacket
+    # Database UNIQUE constraint will prevent duplicates atomically
     new_phenopacket = Phenopacket(
         phenopacket_id=sanitized["id"],
         phenopacket=sanitized,
@@ -342,13 +340,14 @@ async def create_phenopacket(
     except Exception as e:
         await db.rollback()
         # Check for integrity errors (duplicate keys, foreign key violations, etc.)
-        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+        error_str = str(e).lower()
+        if ("duplicate" in error_str or "unique" in error_str) and "phenopacket_id" in error_str:
             raise HTTPException(
                 status_code=409,
-                detail=f"Phenopacket with ID {sanitized['id']} already exists",
-            )
+                detail=f"Phenopacket with ID '{sanitized['id']}' already exists",
+            ) from e
         # Re-raise other database errors
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from e
 
     return PhenopacketResponse(
         id=str(new_phenopacket.id),
