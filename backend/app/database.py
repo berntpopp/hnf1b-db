@@ -59,19 +59,25 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for FastAPI to provide database sessions.
 
+    Important: This dependency does NOT auto-commit transactions.
+    Endpoints must explicitly call `await db.commit()` to persist changes.
+    If an exception occurs, the transaction will be automatically rolled back.
+
     Yields:
         AsyncSession: Database session for the request
 
     Example:
-        @app.get("/users")
-        async def get_users(db: AsyncSession = Depends(get_db)):
-            # Use db session here
-            pass
+        @app.post("/users")
+        async def create_user(user: User, db: AsyncSession = Depends(get_db)):
+            db.add(user)
+            await db.commit()  # Explicit commit required
+            await db.refresh(user)
+            return user
     """
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
+            # No auto-commit - endpoints must commit explicitly
         except Exception:
             await session.rollback()
             raise

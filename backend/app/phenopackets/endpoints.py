@@ -335,8 +335,20 @@ async def create_phenopacket(
     )
 
     db.add(new_phenopacket)
-    await db.commit()
-    await db.refresh(new_phenopacket)
+
+    try:
+        await db.commit()
+        await db.refresh(new_phenopacket)
+    except Exception as e:
+        await db.rollback()
+        # Check for integrity errors (duplicate keys, foreign key violations, etc.)
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Phenopacket with ID {sanitized['id']} already exists",
+            )
+        # Re-raise other database errors
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return PhenopacketResponse(
         id=str(new_phenopacket.id),
@@ -379,8 +391,12 @@ async def update_phenopacket(
     existing.subject_sex = sanitized["subject"].get("sex", "UNKNOWN_SEX")
     existing.updated_by = phenopacket_data.updated_by or current_user.username
 
-    await db.commit()
-    await db.refresh(existing)
+    try:
+        await db.commit()
+        await db.refresh(existing)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return PhenopacketResponse(
         id=str(existing.id),
@@ -409,7 +425,12 @@ async def delete_phenopacket(
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
     await db.delete(phenopacket)
-    await db.commit()
+
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {"message": f"Phenopacket {phenopacket_id} deleted successfully"}
 
