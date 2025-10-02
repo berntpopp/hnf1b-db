@@ -150,19 +150,20 @@ Industry best practices recommend separate `backend/` and `frontend/` folders fo
 
 ## API Endpoints
 
-### Phenopackets v2 API (Current)
-- `/api/v2/phenopackets` - GA4GH Phenopackets CRUD operations
-- `/api/v2/clinical` - Clinical feature-specific queries
-- `/api/v2/auth` - JWT authentication
-- `/api/v2/hpo` - HPO term search and validation
-- `/api/v2/docs` - Interactive API documentation
+All endpoints use the **GA4GH Phenopackets v2** standard format.
 
-### Legacy Endpoints (Being phased out)
-- `/api/individuals` - Patient demographics
-- `/api/variants` - Genetic variants
-- `/api/publications` - Publication metadata
-- `/api/search` - Cross-collection search
-- `/api/aggregations` - Data statistics
+### Core Endpoints
+- `/api/v2/phenopackets` - Phenopacket CRUD operations
+- `/api/v2/phenopackets/search` - Advanced search across phenopackets
+- `/api/v2/phenopackets/aggregate` - Data aggregation and statistics
+- `/api/v2/clinical` - Clinical feature-specific queries (renal, diabetes, etc.)
+
+### Support Endpoints
+- `/api/v2/auth` - JWT authentication (login/token management)
+- `/api/v2/hpo` - HPO term search, validation, and autocomplete
+- `/api/v2/docs` - Interactive OpenAPI documentation
+- `/api/v2/redoc` - Alternative API documentation
+- `/health` - Health check endpoint
 
 ## Environment Setup
 
@@ -175,7 +176,7 @@ cp .env.example .env
 
 Required variables:
 ```
-DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
 JWT_SECRET=your-secret-key  # Generate with: openssl rand -hex 32
 ```
 
@@ -321,7 +322,7 @@ pip install uv
 ```bash
 # Clone repository
 git clone <repository-url>
-cd hnf1b-api
+cd hnf1b-db
 
 # Install all dependencies (from root directory)
 make dev
@@ -340,7 +341,7 @@ Create/edit `backend/.env` file with required variables:
 cp backend/.env.example backend/.env
 
 # PostgreSQL Database (matches docker-compose.services.yml)
-DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
 
 # JWT Authentication (REQUIRED - generate with: openssl rand -hex 32)
 JWT_SECRET=your-secret-key-change-this-in-production
@@ -421,7 +422,7 @@ If Docker isn't available, install PostgreSQL locally:
 
 ```bash
 # Update DATABASE_URL in .env to match your local setup
-DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_db
+DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_phenopackets
 ```
 
 ## 🌐 Frontend Application

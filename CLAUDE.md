@@ -96,7 +96,7 @@ cp backend/.env.example backend/.env
 openssl rand -hex 32  # Copy output to backend/.env
 
 # Edit backend/.env and set:
-# DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_db
+# DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
 # JWT_SECRET=<paste-generated-secret-here>
 ```
 
