@@ -4,65 +4,91 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HNF1B-API is a GA4GH Phenopackets v2 compliant REST API for managing clinical and genetic data for individuals with HNF1B disease. The API has been completely restructured to use the international standard Phenopackets format for clinical and genomic data exchange.
+HNF1B Database is a full-stack monorepo for managing clinical and genetic data for individuals with HNF1B disease. The backend is a GA4GH Phenopackets v2 compliant REST API, and the frontend is a Vue.js application for data visualization and management.
 
 ## Project Structure
 
-**ALL backend code is in the `backend/` directory:**
+**Monorepo with backend and frontend:**
 
 ```
-hnf1b-db-api/
-├── backend/              # ALL backend code
+hnf1b-db/
+├── backend/              # FastAPI REST API
 │   ├── app/             # FastAPI application
 │   ├── migration/       # Data migration scripts
-│   ├── tests/           # Test suite
+│   ├── tests/           # Backend tests
 │   ├── alembic/         # Database migrations
-│   ├── examples/        # Example scripts
 │   ├── pyproject.toml   # Python dependencies
 │   ├── Makefile         # Backend commands
 │   └── .env             # Environment config (not in git)
-├── docs/                # Documentation
-├── Makefile             # Root commands (calls backend/)
-└── docker-compose.services.yml  # Services
+├── frontend/            # Vue.js application
+│   ├── src/            # Vue components & views
+│   ├── public/         # Static assets
+│   ├── package.json    # Node dependencies
+│   ├── vite.config.js  # Vite configuration
+│   ├── Makefile        # Frontend commands
+│   └── .env            # Frontend environment (not in git)
+├── docs/               # Shared documentation
+├── Makefile            # Unified root commands
+├── docker-compose.yml  # Full stack (development)
+└── docker-compose.services.yml  # Services only (hybrid mode)
 ```
 
 **IMPORTANT:**
-- All Python code is in `backend/`
-- Root Makefile runs commands with `cd backend && ...`
-- Environment file is `backend/.env`
+- **Backend code**: All Python code is in `backend/`
+- **Frontend code**: All Vue.js code is in `frontend/`
+- **Root Makefile**: Orchestrates both backend and frontend commands
+- **Component Makefiles**: Each component has its own Makefile for specific tasks
+- **Environment files**: `backend/.env` and `frontend/.env` (both in .gitignore)
 
 ## Essential Commands
 
 ### Quick Start with Make (from project root)
 ```bash
 make help          # Show all available commands
-make dev           # Install all dependencies
+make dev           # Install all dependencies (backend + frontend)
 
-# Development workflow:
+# Hybrid Development (Recommended):
 make hybrid-up     # Start PostgreSQL and Redis
-make server        # Start development server
-make hybrid-down   # Stop containers
+make backend       # Start backend server (Terminal 1)
+make frontend      # Start frontend dev server (Terminal 2)
+make hybrid-down   # Stop services
 
-make test          # Run tests
-make check         # Run all checks
+# Full Docker Development:
+make dev-up        # Start full stack in Docker
+make dev-down      # Stop all Docker services
+make dev-logs      # Show Docker logs
+
+# Testing & Quality:
+make test          # Run backend tests
+make check         # Run all checks (lint + typecheck + tests)
+make status        # Show system status
 ```
 
-### Development Server
+### Development Workflows
+
+**Hybrid Mode (Recommended)**:
 ```bash
-# IMPORTANT: Start database services first!
-make hybrid-up     # Start PostgreSQL and Redis (from root)
+# Services in Docker, apps run locally for hot reload
+make hybrid-up     # Start PostgreSQL + Redis
 
-# Then start the development server
-make server        # From root
+# Terminal 1: Backend (http://localhost:8000)
+make backend
 
-# Database: hnf1b_phenopackets (864 phenopackets)
+# Terminal 2: Frontend (http://localhost:5173)
+make frontend
+```
+
+**Full Docker Mode**:
+```bash
+# Everything in Docker
+make dev-up        # Frontend: http://localhost:3000
+                   # Backend: http://localhost:8000
 ```
 
 ### Environment Setup
-```bash
-# Install dependencies (from root)
-make dev
 
+**Backend Configuration:**
+```bash
 # Create backend/.env file with REQUIRED variables:
 cp backend/.env.example backend/.env
 
@@ -74,9 +100,18 @@ openssl rand -hex 32  # Copy output to backend/.env
 # JWT_SECRET=<paste-generated-secret-here>
 ```
 
+**Frontend Configuration:**
+```bash
+# Create frontend/.env file:
+cp frontend/.env.example frontend/.env
+
+# Edit frontend/.env and set:
+# VITE_API_URL=http://localhost:8000
+```
+
 **⚠️ Security: JWT_SECRET is REQUIRED**
 - Application will **exit on startup** if JWT_SECRET is empty
-- Never commit backend/.env file (in .gitignore)
+- Never commit .env files (both in .gitignore)
 - Use different secrets for dev/staging/production
 
 ### Data Import (Phenopackets Direct Migration)
@@ -264,6 +299,16 @@ rg "abs\(hash\(" --type py
 
 ## Architecture Overview
 
+### Monorepo Structure
+
+This is a **full-stack monorepo** with:
+- **Backend**: `backend/` - FastAPI REST API
+- **Frontend**: `frontend/` - Vue.js application
+- **Unified Commands**: Root `Makefile` orchestrates both
+- **Component Independence**: Each has its own `Makefile` for direct access
+
+### Backend Architecture (FastAPI)
+
 **Code Location:** All backend code is in `backend/` directory
 
 ### API Structure (Phenopackets v2)
@@ -322,31 +367,66 @@ The project handles specialized genomic data formats:
 - **VEP files** (.vep.txt) - Variant Effect Predictor annotations
 - **Reference genome data** (GRCh38) - TSV format with genomic coordinates
 
+### Frontend Architecture (Vue.js)
+
+**Code Location:** All frontend code is in `frontend/` directory
+
+**Technology Stack:**
+- **Framework**: Vue 3 with Composition API
+- **UI Library**: Vuetify 3 (Material Design)
+- **Build Tool**: Vite 6
+- **Router**: Vue Router 4 with lazy-loaded routes
+- **HTTP Client**: Axios with JSON:API interceptors
+- **Visualization**: D3.js for charts
+
+**Project Structure:**
+- `frontend/src/api/` - API service layer with centralized axios client
+- `frontend/src/components/` - Reusable components (analyses, tables)
+- `frontend/src/views/` - Page-level routed components
+- `frontend/src/router/` - Route definitions with dynamic imports
+- `frontend/src/utils/` - Authentication utilities
+
+**Key Features:**
+- HPO term autocomplete for phenotype selection
+- Interactive D3.js visualizations
+- Material Design responsive UI
+- JWT authentication flow
+- Real-time statistics dashboard
+
+See `frontend/CLAUDE.md` for detailed frontend architecture and patterns.
+
 ### Development Considerations
 
-1. **Dependency management**: Uses uv for fast dependency resolution
+1. **Backend Dependency Management**: Uses uv for fast dependency resolution
    - Run `make dev` (from root) or `cd backend && uv sync`
    - Use `uv run <command>` from backend/ directory
 
-2. **Environment variables required** (in `backend/.env`):
-   - `DATABASE_URL` - PostgreSQL connection string
-   - `JWT_SECRET` - Secret for JWT token signing (REQUIRED)
+2. **Frontend Dependency Management**: Uses npm
+   - Run `cd frontend && npm install`
+   - Use `npm run <command>` from frontend/ directory
 
-3. **Data validation**: Migration and API share Pydantic models for consistency
+3. **Environment Variables**:
+   - Backend (`backend/.env`): `DATABASE_URL`, `JWT_SECRET` (REQUIRED)
+   - Frontend (`frontend/.env`): `VITE_API_URL`
 
-4. **Async operations**: All database operations use async/await with SQLAlchemy
+4. **Data validation**: Backend migration and API share Pydantic models for consistency
 
-5. **File locations**:
-   - **Backend code**: `backend/` directory (app, migration, tests, alembic)
-   - Data files in `/data` directory (VCF, VEP, reference genome files)
-   - Phenopackets API: `backend/app/main.py` and `backend/app/phenopackets/`
-   - Migration script: `backend/migration/direct_sheets_to_phenopackets.py`
-   - Dependencies: `backend/pyproject.toml` and `backend/uv.lock`
+5. **Async operations**: All backend database operations use async/await with SQLAlchemy
 
-6. **Migration Status**:
+6. **API Integration**: Frontend uses Vite proxy to forward `/api` requests to backend
+
+7. **File Locations**:
+   - **Backend code**: `backend/` (app, migration, tests, alembic)
+   - **Frontend code**: `frontend/` (src, public, components)
+   - Data files: `/data` directory (VCF, VEP, reference genome files)
+   - Backend dependencies: `backend/pyproject.toml` and `backend/uv.lock`
+   - Frontend dependencies: `frontend/package.json` and `frontend/package-lock.json`
+
+8. **Migration Status**:
    - ✅ Complete: 864 individuals migrated to phenopackets format
    - ✅ Database: hnf1b_phenopackets with full JSONB schema
    - ✅ API: New v2 endpoints fully operational
+   - ✅ Frontend: Integrated with monorepo structure
    - 96% of phenopackets have phenotypic features
    - 49% have genetic variants
    - 100% have disease diagnoses

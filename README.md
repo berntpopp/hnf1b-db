@@ -1,69 +1,152 @@
-# HNF1B-API
+# HNF1B Database - Full Stack Monorepo
 
-A FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease.
+GA4GH Phenopackets v2 compliant database for HNF1B clinical and genetic data. A unified full-stack application with FastAPI backend and Vue.js frontend.
 
-## Project Structure
+## 🏗️ Project Structure
 
 ```
-hnf1b-db-api/
-├── backend/              # Backend code (FastAPI app + migration scripts)
+hnf1b-db/
+├── backend/              # FastAPI REST API
 │   ├── app/             # FastAPI application
 │   ├── migration/       # Data migration scripts
-│   ├── tests/           # Test suite
+│   ├── tests/           # Backend tests
 │   ├── alembic/         # Database migrations
-│   ├── examples/        # Example scripts
-│   └── pyproject.toml   # Python dependencies
-├── docs/                # Documentation
-└── docker-compose.services.yml  # PostgreSQL & Redis services
+│   ├── pyproject.toml   # Python dependencies
+│   └── Makefile         # Backend commands
+├── frontend/            # Vue.js application
+│   ├── src/            # Vue components & views
+│   ├── public/         # Static assets
+│   ├── package.json    # Node dependencies
+│   └── Makefile        # Frontend commands
+├── docs/               # Documentation
+├── docker-compose.yml  # Full stack (development)
+├── docker-compose.services.yml  # Services only (hybrid mode)
+└── Makefile            # Unified commands
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-**Prerequisites:** Python 3.10+, Docker, uv package manager ([install guide](#1-install-uv-package-manager))
+### Hybrid Development (Recommended)
+
+**Prerequisites:** Python 3.10+, Node.js 16+, Docker, uv package manager
 
 ```bash
-# 1. Install dependencies (from root directory)
-make dev
+# 1. Install dependencies
+make dev              # Install backend + frontend dependencies
 
 # 2. Configure environment
 cp backend/.env.example backend/.env
-# Edit backend/.env with your database settings
+# Edit backend/.env with database settings and JWT_SECRET
 
-# 3. Start services and database
-make hybrid-up      # Start PostgreSQL and Redis containers
-make db-upgrade     # Apply database schema
+# 3. Start services (PostgreSQL + Redis)
+make hybrid-up
 
-# 4. Start development server
-make server
+# 4. Start backend (Terminal 1)
+make backend          # http://localhost:8000
 
-# API available at http://localhost:8000
-# Docs at http://localhost:8000/docs
+# 5. Start frontend (Terminal 2)
+make frontend         # http://localhost:5173
 ```
 
-## Development Commands
+### Full Docker Mode
 
-All commands are run from the **project root** directory:
+```bash
+# Start everything in Docker
+make dev-up
+
+# Access:
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
+```
+
+## 📋 Development Commands
+
+Run from **project root**:
 
 ```bash
 make help          # Show all available commands
-make check         # Run all checks (lint + typecheck + tests)
+make status        # Show system status
+
+# Hybrid mode (recommended)
+make hybrid-up     # Start services (DB + Redis)
+make backend       # Run backend locally
+make frontend      # Run frontend locally
+make hybrid-down   # Stop services
+
+# Full Docker mode
+make dev-up        # Start full stack
+make dev-down      # Stop full stack
+make dev-logs      # Show logs
+
+# Backend
 make test          # Run tests
-make format        # Format code with ruff
-make lint          # Lint code with ruff
-make typecheck     # Type check with mypy
-make hybrid-down   # Stop containers
+make format        # Format code
+make lint          # Lint code
+make check         # Run all checks
+
+# Database
+make db-migrate    # Create migration
+make db-upgrade    # Apply migrations
+make phenopackets-migrate  # Import data
+
+# Cleanup
+make clean         # Clean backend cache
+make clean-all     # Stop all + clean data
 ```
 
-You can also run commands directly from the `backend/` directory using its Makefile.
+### Component-Specific Commands
 
-## Tech Stack
+**Backend** (from `backend/`):
+```bash
+cd backend
+make server        # Start dev server
+make test          # Run tests
+make check         # Lint + typecheck + test
+```
 
-- **API**: FastAPI with async/await
+**Frontend** (from `frontend/`):
+```bash
+cd frontend
+make dev           # Start dev server
+make build         # Build for production
+make lint          # Lint and fix code
+```
+
+## 🛠️ Tech Stack
+
+### Backend
+- **Framework**: FastAPI with async/await
 - **Database**: PostgreSQL with SQLAlchemy
 - **Cache**: Redis
 - **Auth**: JWT tokens
-- **Tools**: uv (dependencies), ruff (linting/formatting), mypy (types)
-- **Development**: Docker containers for services
+- **Tools**: uv (dependencies), ruff (linting/formatting), mypy (type checking)
+
+### Frontend
+- **Framework**: Vue 3 with Composition API
+- **UI**: Vuetify 3 (Material Design)
+- **Build**: Vite 6
+- **Router**: Vue Router 4
+- **HTTP**: Axios with JSON:API interceptors
+- **Visualization**: D3.js
+
+### Development
+- **Containerization**: Docker & Docker Compose
+- **Monorepo**: Hierarchical Makefiles for unified commands
+- **Standards**: GA4GH Phenopackets v2, VRS 2.0
+
+## 💡 Why Monorepo?
+
+This project uses a monorepo structure (backend + frontend in one repository) for:
+
+- **Single Source of Truth**: All code in one place, easier version control
+- **Simplified Development**: One `git clone`, one setup process
+- **Coordinated Releases**: Frontend/backend changes in single commit
+- **Shared Tooling**: Common CI/CD, linting, Docker orchestration
+- **Better Documentation**: Architecture docs alongside code
+- **Proven Pattern**: Follows successful [kidney-genetics-db](https://github.com/halbritter-lab/kidney-genetics-db) structure
+
+Industry best practices recommend separate `backend/` and `frontend/` folders for FastAPI + Vue.js monorepos.
 
 ## API Endpoints
 
@@ -341,57 +424,71 @@ If Docker isn't available, install PostgreSQL locally:
 DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/hnf1b_db
 ```
 
-## Frontend Integration
+## 🌐 Frontend Application
 
-### Authentication
-The API uses JWT authentication for data modification. Demo credentials are available for testing:
+The Vue.js frontend provides an interactive interface for browsing and managing HNF1B data.
 
-```javascript
-// Login to get JWT token
-const response = await axios.post('/api/v2/auth/login', {
-  username: 'researcher',  // or 'admin'
-  password: 'research123'   // or 'admin123'
-});
-axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+### Features
+- Browse individuals, variants, and publications
+- Interactive data visualizations (D3.js charts)
+- Advanced search across all collections
+- Aggregated statistics dashboard
+- Material Design UI (Vuetify 3)
+
+### Development Setup
+
+**Option 1: Hybrid Mode (Recommended)**
+```bash
+make hybrid-up     # Start services
+make frontend      # Start frontend dev server
+# Access: http://localhost:5173
 ```
 
-### HPO Term Search
-The API provides HPO term search endpoints for phenotype selection:
-
-```javascript
-// Search HPO terms for autocomplete
-await axios.get('/api/v2/hpo/autocomplete?q=kidney&limit=10');
-
-// Get common HNF1B-related terms
-await axios.get('/api/v2/hpo/common-terms?category=renal');
-
-// Validate HPO term IDs
-await axios.get('/api/v2/hpo/validate?term_ids=HP:0012622,HP:0000107');
+**Option 2: Standalone**
+```bash
+cd frontend
+npm install
+npm run dev
+# Access: http://localhost:5173
 ```
 
-### Creating New Patients
-With authentication, you can add new patients using the Phenopackets format:
-
-```javascript
-await axios.post('/api/v2/phenopackets/', {
-  phenopacket: {
-    id: "phenopacket:HNF1B:NEW001",
-    subject: { id: "NEW001", sex: "FEMALE" },
-    phenotypicFeatures: [
-      { type: { id: "HP:0012622", label: "Chronic kidney disease" }}
-    ],
-    meta_data: {
-      created: new Date().toISOString(),
-      created_by: "researcher"
-    }
-  }
-});
+**Option 3: Full Docker**
+```bash
+make dev-up
+# Access: http://localhost:3000
 ```
+
+### Configuration
+
+Create `frontend/.env`:
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+Configure API URL:
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+The Vite proxy forwards `/api` requests to the backend automatically.
+
+### API Integration
+
+The frontend includes:
+- JWT authentication flow
+- HPO term autocomplete for phenotype selection
+- Phenopackets v2 CRUD operations
+- Real-time statistics and aggregations
+
+See component documentation in `frontend/README.md` and `frontend/CLAUDE.md`.
 
 ### API Documentation
-- Interactive API docs: http://localhost:8000/api/v2/docs
+- Interactive API docs: http://localhost:8000/docs
 - Phenopackets endpoints: `/api/v2/phenopackets/`
 - HPO proxy endpoints: `/api/v2/hpo/`
 - Authentication: `/api/v2/auth/`
 
-For detailed migration information, see [PHENOPACKETS_MIGRATION_GUIDE.md](PHENOPACKETS_MIGRATION_GUIDE.md)
+For detailed information:
+- Backend details: [backend/README.md](backend/README.md)
+- Frontend details: [frontend/README.md](frontend/README.md)
+- Migration guide: [PHENOPACKETS_MIGRATION_GUIDE.md](PHENOPACKETS_MIGRATION_GUIDE.md)
