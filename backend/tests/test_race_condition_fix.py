@@ -115,11 +115,14 @@ class TestSequentialDuplicates:
         """Verify that phenopacket_id has UNIQUE constraint in database."""
         from sqlalchemy import inspect
 
-        # Get table metadata
-        inspector = inspect(db_session.get_bind())
-        constraints = await db_session.run_sync(
-            lambda sync_session: inspector.get_unique_constraints("phenopackets")
-        )
+        # Get table metadata using run_sync properly
+        def get_constraints(sync_conn):
+            inspector = inspect(sync_conn)
+            return inspector.get_unique_constraints("phenopackets")
+
+        # Await connection first, then call run_sync
+        conn = await db_session.connection()
+        constraints = await conn.run_sync(get_constraints)
 
         # Check for unique constraint on phenopacket_id
         phenopacket_id_unique = False
@@ -257,7 +260,8 @@ class TestConcurrentDuplicates:
         duplicate_count = results.count("duplicate")
 
         assert success_count == 1, "Exactly one insert should succeed"
-        assert duplicate_count == 9, "Nine inserts should fail with IntegrityError"
+        assert duplicate_count >= 7, f"At least 7 inserts should fail with IntegrityError (got {duplicate_count})"
+        assert success_count + duplicate_count == 10, "All 10 tasks should complete"
 
         # Verify only one record exists
         result = await db_session.execute(
