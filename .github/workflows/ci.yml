@@ -56,6 +56,7 @@ jobs:
     - name: Run database migrations
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+        JWT_SECRET: test-secret-key-for-ci
       run: |
         cd backend
         uv run alembic upgrade head
