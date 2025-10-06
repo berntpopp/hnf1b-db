@@ -260,35 +260,41 @@ async def validate_hpo_terms(
     """Validate a list of HPO term IDs.
 
     Useful for validating user input before submission.
+    Uses local ontology service for fast validation (no N+1 API calls).
 
     Args:
         term_ids: Comma-separated HPO term IDs (e.g., "HP:0001234,HP:0005678")
 
     Returns:
         Validation results for each term
+
+    Performance:
+        - Uses local ontology mappings (instant validation)
+        - Falls back to cached API results
+        - Avoids N+1 external API calls
     """
+    from app.services.ontology_service import ontology_service
+
     ids = [id.strip() for id in term_ids.split(",")]
     results = {}
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for term_id in ids:
-            try:
-                # Using OLS API to get term details
-                response = await client.get(
-                    f"{OLS_API_BASE}/ontologies/hp/terms",
-                    params={
-                        "iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"
-                    },
-                )
-                if response.status_code == 200:
-                    term_data = response.json()
-                    results[term_id] = {
-                        "valid": True,
-                        "name": term_data.get("name", "Unknown"),
-                    }
-                else:
-                    results[term_id] = {"valid": False, "error": "Term not found"}
-            except Exception as e:
-                results[term_id] = {"valid": False, "error": str(e)}
+    # Use local ontology service instead of N API calls
+    for term_id in ids:
+        try:
+            # get_term uses local mappings + cache (fast!)
+            term = ontology_service.get_term(term_id)
+            if term:
+                results[term_id] = {
+                    "valid": True,
+                    "name": term.label,
+                    "source": term.source.value,
+                }
+            else:
+                results[term_id] = {
+                    "valid": False,
+                    "error": "Term not found in local ontology or APIs"
+                }
+        except Exception as e:
+            results[term_id] = {"valid": False, "error": str(e)}
 
     return results
