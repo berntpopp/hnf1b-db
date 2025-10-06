@@ -53,6 +53,13 @@ jobs:
         cd backend
         uv sync --group dev --group test
 
+    - name: Run database migrations
+      env:
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+      run: |
+        cd backend
+        uv run alembic upgrade head
+
     # Linting removed - use pre-commit hooks locally instead
     # Style issues don't affect functionality
 
