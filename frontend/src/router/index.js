@@ -7,15 +7,25 @@ const routes = [
     component: () => import(/* webpackChunkName: "home" */ '../views/Home.vue'),
   },
   {
+    path: '/phenopackets',
+    name: 'Phenopackets',
+    component: () => import(/* webpackChunkName: "phenopackets" */ '../views/Phenopackets.vue'),
+  },
+  // TODO: Issue #32 - Implement detail page
+  // {
+  //   path: '/phenopackets/:phenopacket_id',
+  //   name: 'PagePhenopacket',
+  //   component: () =>
+  //     import(/* webpackChunkName: "page-phenopacket" */ '../views/PagePhenopacket.vue'),
+  // },
+  // Legacy redirects for backward compatibility
+  {
     path: '/individuals',
-    name: 'Individuals',
-    component: () => import(/* webpackChunkName: "individuals" */ '../views/Individuals.vue'),
+    redirect: '/phenopackets',
   },
   {
     path: '/individuals/:individual_id',
-    name: 'PageIndividual',
-    component: () =>
-      import(/* webpackChunkName: "page-individual" */ '../views/PageIndividual.vue'),
+    redirect: (to) => `/phenopackets/${to.params.individual_id}`,
   },
   {
     path: '/publications',

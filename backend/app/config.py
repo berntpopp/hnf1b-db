@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = Field(default="")  # Required, will be loaded from environment
 
     # CORS Configuration
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:8080"
 
     # Development Settings
     DEBUG: bool = False

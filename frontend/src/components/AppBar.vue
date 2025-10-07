@@ -31,9 +31,9 @@
           <v-toolbar-items>
             <v-btn
               text
-              to="/individuals"
+              to="/phenopackets"
             >
-              Individuals
+              Phenopackets
             </v-btn>
             <v-btn
               text
