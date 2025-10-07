@@ -236,63 +236,81 @@ export const getHypomagnesemiaCases = () => apiClient.get('/clinical/hypomagnese
 /* ==================== LEGACY COMPATIBILITY (DEPRECATED) ==================== */
 
 /**
+ * Helper to convert v1 pagination and warn about deprecation.
+ * @private
+ */
+function deprecatedPaginationWrapper(warningMsg, newFn, params) {
+  console.warn(warningMsg);
+  const { page = 1, page_size = 10, ...rest } = params || {};
+  const { skip, limit } = pageToSkipLimit(page, page_size);
+  return newFn({ skip, limit, ...rest });
+}
+
+/**
+ * Helper to warn about deprecation and call new function.
+ * @private
+ */
+function deprecatedWrapper(warningMsg, newFn, ...args) {
+  console.warn(warningMsg);
+  return newFn(...args);
+}
+
+/**
  * @deprecated Use getPhenopackets() instead.
  * Legacy compatibility wrapper for old API.
  */
-export const getIndividuals = (params) => {
-  console.warn('getIndividuals() is deprecated. Use getPhenopackets() instead.');
-  // Convert old page/page_size to skip/limit
-  const { page = 1, page_size = 10, ...rest } = params || {};
-  const { skip, limit } = pageToSkipLimit(page, page_size);
-  return getPhenopackets({ skip, limit, ...rest });
-};
+export const getIndividuals = (params) =>
+  deprecatedPaginationWrapper(
+    'getIndividuals() is deprecated. Use getPhenopackets() instead.',
+    getPhenopackets,
+    params
+  );
 
 /**
  * @deprecated Use getPhenopacketsWithVariants() with variant extraction.
  * Legacy compatibility wrapper for old API.
  */
-export const getVariants = (params) => {
-  console.warn('getVariants() is deprecated. Use getPhenopacketsWithVariants() instead.');
-  const { page = 1, page_size = 10, ...rest } = params || {};
-  const { skip, limit } = pageToSkipLimit(page, page_size);
-  return getPhenopacketsWithVariants({ skip, limit, ...rest });
-};
+export const getVariants = (params) =>
+  deprecatedPaginationWrapper(
+    'getVariants() is deprecated. Use getPhenopacketsWithVariants() instead.',
+    getPhenopacketsWithVariants,
+    params
+  );
 
 /**
  * @deprecated Publications are now stored in phenopacket.metaData.externalReferences.
  * Legacy compatibility wrapper for old API.
  */
-export const getPublications = (params) => {
-  console.warn(
-    'getPublications() is deprecated. Publications are in phenopacket.metaData.externalReferences.'
+export const getPublications = (params) =>
+  deprecatedPaginationWrapper(
+    'getPublications() is deprecated. Publications are in phenopacket.metaData.externalReferences.',
+    getPhenopackets,
+    params
   );
-  const { page = 1, page_size = 10, ...rest } = params || {};
-  const { skip, limit } = pageToSkipLimit(page, page_size);
-  return getPhenopackets({ skip, limit, ...rest });
-};
 
 /**
  * @deprecated Use getSexDistribution() instead.
  */
-export const getIndividualsSexCount = () => {
-  console.warn('getIndividualsSexCount() is deprecated. Use getSexDistribution() instead.');
-  return getSexDistribution();
-};
+export const getIndividualsSexCount = () =>
+  deprecatedWrapper(
+    'getIndividualsSexCount() is deprecated. Use getSexDistribution() instead.',
+    getSexDistribution
+  );
 
 /**
  * @deprecated Use searchPhenopackets() instead.
  */
-export const search = (query, collection, reduceDoc = false) => {
-  console.warn('search() is deprecated. Use searchPhenopackets() instead.');
-  return searchPhenopackets({ query, collection, reduce_doc: reduceDoc });
-};
+export const search = (query, collection, reduceDoc = false) =>
+  deprecatedWrapper(
+    'search() is deprecated. Use searchPhenopackets() instead.',
+    searchPhenopackets,
+    { query, collection, reduce_doc: reduceDoc }
+  );
 
 /**
  * @deprecated Use getSummaryStats() instead.
  */
-export const getSummary = () => {
-  console.warn('getSummary() is deprecated. Use getSummaryStats() instead.');
-  return getSummaryStats();
-};
+export const getSummary = () =>
+  deprecatedWrapper('getSummary() is deprecated. Use getSummaryStats() instead.', getSummaryStats);
 
 export default apiClient;
