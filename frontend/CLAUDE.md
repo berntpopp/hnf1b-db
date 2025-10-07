@@ -72,31 +72,48 @@ npm run format:check
 - `src/utils/` - Utility functions (authentication)
 - `src/assets/` - Static assets and mixins
 
-### Key API Endpoints
-Base URL: `http://localhost:8000/api`
+### API v2 Architecture (GA4GH Phenopackets)
 
-**Data Collections:**
-- `/individuals/` - Individual patient data
-- `/variants/` - Genetic variant information
-- `/publications/` - Related publications
-- `/proteins/` - Protein structure data
-- `/search/` - Global search across collections
+**Base URL**: `http://localhost:8000/api/v2` (configured via `VITE_API_URL` in `.env`)
 
-**Aggregation Endpoints:**
-- `/aggregations/summary` - Top-level statistics
-- `/aggregations/individuals/sex-count` - Sex distribution
-- `/aggregations/individuals/age-onset-count` - Age of onset distribution
-- `/aggregations/individuals/cohort-count` - Cohort distribution
-- `/aggregations/individuals/family-history-count` - Family history stats
-- `/aggregations/individuals/detection-method-count` - Detection methods
-- `/aggregations/individuals/segregation-count` - Segregation analysis
-- `/aggregations/individuals/phenotype-described-count` - Phenotype data
-- `/aggregations/variants/type-count` - Variant types
-- `/aggregations/variants/individual-count-by-type` - Individuals by variant type
-- `/aggregations/variants/newest-classification-verdict-count` - Classification verdicts
-- `/aggregations/variants/small_variants` - Small variant data for protein plot
-- `/aggregations/publications/type-count` - Publication types
-- `/aggregations/publications/cumulative-count` - Publications over time
+The API uses GA4GH Phenopackets v2 format with JSONB document storage. All data (individuals, variants, publications) is now stored in phenopacket documents.
+
+#### Core Phenopackets Endpoints
+- `GET /phenopackets/` - List phenopackets (supports `skip`, `limit`, `sex`, `has_variants` filters)
+- `GET /phenopackets/{id}` - Get single phenopacket
+- `GET /phenopackets/batch` - Batch fetch by IDs (prevents N+1 queries)
+- `POST /phenopackets/search` - Advanced search with filters
+
+#### Aggregation Endpoints
+- `GET /phenopackets/aggregate/summary` - Overall statistics
+- `GET /phenopackets/aggregate/sex-distribution` - Sex distribution
+- `GET /phenopackets/aggregate/by-feature` - HPO term frequencies
+- `GET /phenopackets/aggregate/by-disease` - Disease frequencies
+- `GET /phenopackets/aggregate/variant-pathogenicity` - Pathogenicity distribution
+- `GET /phenopackets/aggregate/kidney-stages` - Kidney disease stages
+
+#### Clinical Endpoints
+- `GET /clinical/renal-insufficiency` - Kidney disease cases
+- `GET /clinical/genital-abnormalities` - Genital abnormalities
+- `GET /clinical/diabetes` - Diabetes cases
+- `GET /clinical/hypomagnesemia` - Hypomagnesemia cases
+
+#### Authentication & Utilities
+- `POST /auth/login` - JWT authentication
+- `GET /auth/me` - Current user info
+- `GET /hpo/autocomplete` - HPO term search
+
+#### Pagination
+- **v2 uses offset-based**: `skip` and `limit` parameters
+- **Helper function**: `pageToSkipLimit(page, pageSize)` converts page-based to offset-based
+
+#### Data Structure
+Phenopackets contain:
+- `subject` - Individual demographics (sex, age)
+- `phenotypicFeatures[]` - HPO terms
+- `interpretations[].diagnosis.genomicInterpretations[]` - Variants with VRS 2.0 format
+- `diseases[]` - MONDO disease terms
+- `metaData.externalReferences[]` - Publications (PMIDs)
 
 ### Code Quality Tools
 
@@ -132,20 +149,27 @@ Prettier 3.5.0 with Vue-specific settings:
 
 ### Important Patterns
 1. **Dynamic Route Imports**: All routes use `() => import()` with webpack chunk names for code splitting
-2. **JSON:API Format**: Response interceptor automatically unwraps `response.data.data` and preserves `meta`
-3. **Search Implementation**: 
-   - Centralized search endpoint with optional collection filtering
-   - Support for reduced document responses
-   - Debounced search input in SearchCard component
-4. **API Client Pattern**: 
-   - Single axios instance with base configuration
-   - Consistent error handling
+2. **API Client Pattern**:
+   - Single axios instance with base configuration from `VITE_API_URL`
+   - JWT authentication via request interceptor (reads `access_token` from localStorage)
+   - 401 error handling via response interceptor (auto-redirects to `/login`)
+   - Direct response format (no JSON:API unwrapping)
    - 10-second timeout
+3. **Search Implementation**:
+   - POST endpoint with JSON body
+   - Supports HPO terms, diseases, sex, and text query filters
+   - Debounced search input in SearchCard component
+4. **Pagination**:
+   - Uses `skip`/`limit` (offset-based) instead of `page`/`page_size`
+   - Helper: `pageToSkipLimit(page, pageSize)` converts formats
 5. **Component Organization**:
    - Views handle routing and data fetching
    - Components are purely presentational
    - Charts use D3.js for custom visualizations
    - Tables implement sortable headers and pagination
+6. **Batch Operations**:
+   - Use `getPhenopacketsBatch()`, `getVariantsBatch()`, `getPhenotypicFeaturesBatch()` to prevent N+1 queries
+   - Pass comma-separated IDs for efficient data fetching
 
 ### Build Configuration (Vite)
 - **Plugins**: 
@@ -157,19 +181,56 @@ Prettier 3.5.0 with Vue-specific settings:
 
 ### Development Notes
 - **Testing**: No test framework is currently configured
-- **Authentication**: Basic auth utilities in place (src/utils/auth.js)
-- **Environment**: No environment files (.env) are used; API URL is hardcoded
+- **Authentication**: JWT-based auth with token stored in localStorage
+- **Environment**: Configure API URL via `.env` file (copy from `.env.example`)
 - **State Management**: No global state management (Vuex/Pinia) - components manage local state
 - **TypeScript**: Not configured - project uses plain JavaScript
 - **CSS**: Uses Vuetify's built-in styling system
-- **Performance**: 
+- **Performance**:
   - Route-level code splitting with dynamic imports
   - Lazy-loaded components for better initial load time
+  - Batch API endpoints to prevent N+1 queries
   - Animated statistics on home page for better UX
 
+### Testing the API Client
+
+**Prerequisites:**
+1. Start backend: `cd ../backend && make backend`
+2. Create `.env`: `cp .env.example .env` (should have `VITE_API_URL=http://localhost:8000/api/v2`)
+3. Start frontend: `npm run dev`
+
+**Quick Backend Test:**
+```bash
+# Test phenopackets endpoint
+curl "http://localhost:8000/api/v2/phenopackets/?skip=0&limit=5"
+
+# Test sex distribution
+curl "http://localhost:8000/api/v2/phenopackets/aggregate/sex-distribution"
+
+# Test authentication
+curl -X POST "http://localhost:8000/api/v2/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
+
+**Frontend Browser Console Test:**
+```javascript
+// Test pagination helper
+import { pageToSkipLimit, getPhenopackets } from '@/api';
+const { skip, limit } = pageToSkipLimit(2, 10);
+console.log(skip, limit); // Should be: 10, 10
+
+// Test API call
+const response = await getPhenopackets({ skip: 0, limit: 5 });
+console.log(response.data); // Should show 5 phenopackets
+```
+
 ### Recent Updates
+- **API v2 Migration**: Complete rewrite of API client for GA4GH Phenopackets v2 format
+- **Authentication**: Added JWT token interceptors for automatic auth header injection
+- **Pagination**: Migrated from page-based to offset-based (`skip`/`limit`)
+- **Batch Endpoints**: Added batch operations to prevent N+1 query problems
+- **Environment Config**: API URL now configurable via `VITE_API_URL` environment variable
+- **Legacy Compatibility**: Deprecated v1 functions remain for gradual migration
 - Migrated from legacy ESLint config to modern flat config format
-- Removed deprecated .eslintignore (now using ignores in config)
 - Enhanced linting rules for Vue 3 best practices
-- Added comprehensive npm scripts for linting and formatting
-- Improved code quality across all components

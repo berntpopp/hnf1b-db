@@ -4,10 +4,12 @@ Vue 3 application for the HNF1B clinical genetics database. Part of the HNF1B Da
 
 ## Features
 
-- Browse and search individuals, variants, and publications
-- Interactive data visualizations and charts
-- Aggregated statistics dashboard
+- Browse and search GA4GH Phenopackets v2 data
+- Interactive D3.js data visualizations
+- Clinical feature aggregations and statistics
+- HPO term autocomplete search
 - Responsive Material Design interface
+- JWT authentication
 
 ## Prerequisites
 
@@ -66,12 +68,12 @@ src/
 
 ## Technology Stack
 
-- **Vue 3** - Progressive JavaScript framework
-- **Vite** - Next generation frontend tooling
+- **Vue 3** - Progressive JavaScript framework with Composition API
+- **Vite 6** - Next generation frontend tooling
 - **Vuetify 3** - Material Design component framework
 - **Vue Router 4** - Official router for Vue.js
-- **Axios** - HTTP client for API requests
-- **Chart.js** - Data visualization library
+- **Axios** - HTTP client for API requests with JWT authentication
+- **D3.js** - Data visualization library
 
 ## API Configuration
 
@@ -83,13 +85,34 @@ Create a `.env` file in the frontend directory (copy from `.env.example`):
 cp .env.example .env
 ```
 
-Configure the backend API URL:
+Configure the backend API URL (v2 Phenopackets API):
 
 ```env
-VITE_API_URL=http://localhost:8000
+# Development
+VITE_API_URL=http://localhost:8000/api/v2
+
+# Production
+# VITE_API_URL=https://api.hnf1b.example.com/api/v2
 ```
 
-The Vite proxy (configured in `vite.config.js`) forwards `/api` requests to the backend.
+### API Structure
+
+The application uses the **GA4GH Phenopackets v2** API format:
+
+- **Base URL**: `http://localhost:8000/api/v2`
+- **Authentication**: JWT tokens (stored in `localStorage`)
+- **Pagination**: Offset-based (`skip` and `limit` parameters)
+- **Data Format**: Direct JSON responses (no JSON:API wrapper)
+
+**Key Endpoints:**
+- `GET /phenopackets/` - List phenopackets with filters
+- `GET /phenopackets/{id}` - Get single phenopacket
+- `POST /phenopackets/search` - Advanced search
+- `GET /phenopackets/aggregate/*` - Aggregations and statistics
+- `GET /clinical/*` - Clinical feature queries
+- `POST /auth/login` - JWT authentication
+
+See `src/api/index.js` for complete API client documentation.
 
 ## License
 
