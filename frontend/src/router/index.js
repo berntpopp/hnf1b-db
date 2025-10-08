@@ -11,13 +11,12 @@ const routes = [
     name: 'Phenopackets',
     component: () => import(/* webpackChunkName: "phenopackets" */ '../views/Phenopackets.vue'),
   },
-  // TODO: Issue #32 - Implement detail page
-  // {
-  //   path: '/phenopackets/:phenopacket_id',
-  //   name: 'PagePhenopacket',
-  //   component: () =>
-  //     import(/* webpackChunkName: "page-phenopacket" */ '../views/PagePhenopacket.vue'),
-  // },
+  {
+    path: '/phenopackets/:phenopacket_id',
+    name: 'PagePhenopacket',
+    component: () =>
+      import(/* webpackChunkName: "page-phenopacket" */ '../views/PagePhenopacket.vue'),
+  },
   // Legacy redirects for backward compatibility
   {
     path: '/individuals',
