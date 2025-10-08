@@ -430,3 +430,152 @@ See `frontend/CLAUDE.md` for detailed frontend architecture and patterns.
    - 96% of phenopackets have phenotypic features
    - 49% have genetic variants
    - 100% have disease diagnoses
+
+## Issue Management
+
+### Issue Naming Convention
+
+All GitHub issues MUST follow conventional commit message format:
+
+**Format:** `<type>(<scope>): <short description>`
+
+**Types:**
+- `feat:` - New feature (e.g., `feat(frontend): add phenopacket detail page`)
+- `fix:` - Bug fix (e.g., `fix(api): correct 404 on aggregation endpoints`)
+- `refactor:` - Code refactoring (e.g., `refactor(backend): extract variant parsing logic`)
+- `perf:` - Performance improvement (e.g., `perf(db): add JSONB GIN indexes`)
+- `docs:` - Documentation only (e.g., `docs: update API migration guide`)
+- `test:` - Adding/fixing tests (e.g., `test(migration): add phenopacket validation tests`)
+- `chore:` - Build/tooling changes (e.g., `chore: update CI/CD pipeline`)
+- `style:` - Code style/formatting (e.g., `style(frontend): apply ESLint fixes`)
+
+**Scope (optional):**
+- `frontend` - Vue.js frontend changes
+- `backend` - FastAPI backend changes
+- `api` - API endpoint changes
+- `db` - Database schema/migration changes
+- `migration` - Data migration scripts
+- `ci` - CI/CD pipeline changes
+
+**Examples:**
+- ✅ `feat(frontend): migrate individual detail page to phenopackets v2`
+- ✅ `fix(api): update aggregation endpoints for phenopacket format`
+- ✅ `refactor(backend): extract VRS variant builder to separate module`
+- ✅ `perf(db): optimize JSONB queries with generated columns`
+- ❌ `Update aggregation endpoints and dashboard visualizations` (missing type)
+- ❌ `Fix bug` (too vague, missing scope)
+
+### Issue Structure
+
+Issues should be **concise** on GitHub, with **detailed plans** in markdown files:
+
+**Directory Structure:**
+```
+docs/issues/
+├── issue-##-descriptive-name.md       # Detailed implementation plan
+└── github-issue-##-template.md        # Concise GitHub issue template
+```
+
+**Detailed Plan File** (`docs/issues/issue-##-descriptive-name.md`):
+- **Overview** - Problem statement and goals
+- **Why This Matters** - Current vs. new implementation with code examples
+- **Required Changes** - Step-by-step technical details
+- **Implementation Checklist** - Phased tasks with checkboxes
+- **Testing Verification** - Manual test steps and expected results
+- **Acceptance Criteria** - Definition of done
+- **Files Modified/Created** - Complete file list with line counts
+- **Dependencies** - Blocking/blocked issues
+- **Performance Impact** - Before/after metrics
+- **Timeline** - Estimated hours per phase
+- **Priority & Labels** - For GitHub organization
+
+**GitHub Issue Template** (`docs/issues/github-issue-##-template.md`):
+```markdown
+# <type>(<scope>): <short description>
+
+## Summary
+2-3 sentence description of the problem and solution.
+
+**Current:** What's broken/missing
+**Target:** What should work
+
+## Details
+See detailed implementation plan: [docs/issues/issue-##-descriptive-name.md](link)
+
+## Acceptance Criteria
+- [ ] High-level checkpoint 1
+- [ ] High-level checkpoint 2
+- [ ] ...
+(8-10 items maximum)
+
+## Dependencies
+- Issue #XX (description) - ✅ Required / ⚠️ Blocked
+
+## Priority
+**P1 (High)** / **P2 (Medium)** / **P3 (Low)** - Reason
+
+## Labels
+`label1`, `label2`, `label3`
+```
+
+### Creating New Issues
+
+**Workflow:**
+1. **Create detailed plan** in `docs/issues/issue-##-descriptive-name.md`
+2. **Create GitHub template** in `docs/issues/github-issue-##-template.md`
+3. **Copy template content** to GitHub issue
+4. **Apply labels and priority** in GitHub
+5. **Link related issues** in GitHub
+
+**Example:**
+```bash
+# 1. Create detailed plan
+docs/issues/issue-32-migrate-individual-detail-page.md
+
+# 2. Create GitHub template
+docs/issues/github-issue-32-template.md
+
+# 3. Copy to GitHub with proper title:
+# "feat(frontend): migrate individual detail page to phenopackets v2"
+```
+
+### Closing Issues
+
+When closing an issue, provide a **concise closing message**:
+
+**Format:**
+```markdown
+✅ Resolved in commit <hash>
+
+## Summary
+Brief description of what was implemented.
+
+## Changes
+- Key change 1
+- Key change 2
+- Key change 3
+
+## Verification
+- ✅ All acceptance criteria met
+- ✅ Tests passing
+- ✅ No console errors
+```
+
+**Example:**
+```markdown
+✅ Resolved in commit 3db7944
+
+## Summary
+Successfully migrated Individuals view to Phenopackets v2 format.
+
+## Changes
+- Renamed `Individuals.vue` → `Phenopackets.vue`
+- Updated API calls from `getIndividuals()` to `getPhenopackets()`
+- Implemented data transformation for JSONB structure
+- Updated routes: `/individuals` → `/phenopackets`
+
+## Verification
+- ✅ Table displays all 864 phenopackets
+- ✅ Pagination works with skip/limit model
+- ✅ No 404 errors, all API calls succeed
+```
