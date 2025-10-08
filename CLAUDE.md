@@ -106,13 +106,326 @@ openssl rand -hex 32  # Copy output to backend/.env
 cp frontend/.env.example frontend/.env
 
 # Edit frontend/.env and set:
-# VITE_API_URL=http://localhost:8000
+# VITE_API_URL=http://localhost:8000/api/v2
 ```
 
 **⚠️ Security: JWT_SECRET is REQUIRED**
 - Application will **exit on startup** if JWT_SECRET is empty
 - Never commit .env files (both in .gitignore)
 - Use different secrets for dev/staging/production
+
+---
+
+## Environment Configuration & Deployment
+
+### Overview
+
+Both backend and frontend use environment variables for configuration. This follows the [12-Factor App](https://12factor.net/config) methodology, allowing the same codebase to run in different environments (development, staging, production) with different configurations.
+
+### Frontend Environment Variables
+
+**Configuration File:** `frontend/.env`
+
+**Key Variables:**
+- `VITE_API_URL` - Backend API base URL (REQUIRED)
+
+**Setup:**
+```bash
+# 1. Copy example file
+cd frontend
+cp .env.example .env
+
+# 2. Edit .env file
+# For development (default):
+VITE_API_URL=http://localhost:8000/api/v2
+
+# For staging:
+VITE_API_URL=https://staging-api.hnf1b.example.com/api/v2
+
+# For production:
+VITE_API_URL=https://api.hnf1b.example.com/api/v2
+```
+
+**How It Works:**
+```javascript
+// frontend/src/api/index.js
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v2',
+  timeout: 10000,
+});
+```
+
+- If `VITE_API_URL` is set: Uses that value
+- If not set: Falls back to `http://localhost:8000/api/v2` (local development)
+
+**Important Notes:**
+- ⚠️ **Always include `/api/v2` suffix** in `VITE_API_URL`
+- ✅ Environment variables must start with `VITE_` to be exposed to frontend code
+- ✅ Variables are embedded at **build time** (not runtime)
+
+### Backend Environment Variables
+
+**Configuration File:** `backend/.env`
+
+**Key Variables:**
+- `DATABASE_URL` - PostgreSQL connection string (REQUIRED)
+- `JWT_SECRET` - Secret for JWT token signing (REQUIRED)
+- `ENVIRONMENT` - Runtime environment (dev/staging/prod)
+- `REDIS_URL` - Redis connection string (optional)
+
+**Setup:**
+```bash
+# 1. Copy example file
+cd backend
+cp .env.example .env
+
+# 2. Generate JWT secret
+openssl rand -hex 32
+
+# 3. Edit .env file
+DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
+JWT_SECRET=<paste-generated-secret-here>
+ENVIRONMENT=development
+```
+
+### Testing Environment Configuration
+
+#### Test 1: Default Fallback (No .env)
+
+**Purpose:** Verify application works without .env file (uses defaults)
+
+```bash
+# Remove .env file
+cd frontend
+rm .env
+
+# Start dev server
+npm run dev
+
+# Open browser console at http://localhost:5173
+console.log(import.meta.env.VITE_API_URL)
+// Output: undefined (uses fallback: http://localhost:8000/api/v2)
+
+# Navigate to /phenopackets
+# Should work correctly if backend is running on localhost:8000
+```
+
+**Expected Behavior:**
+- Frontend uses fallback URL: `http://localhost:8000/api/v2`
+- API calls succeed if backend is running locally
+- No errors in console
+
+#### Test 2: Development Configuration
+
+**Purpose:** Verify .env file is loaded correctly
+
+```bash
+# Create .env with development settings
+cd frontend
+cat > .env << EOF
+VITE_API_URL=http://localhost:8000/api/v2
+EOF
+
+# Start dev server
+npm run dev
+
+# Open browser console
+console.log(import.meta.env.VITE_API_URL)
+// Output: "http://localhost:8000/api/v2"
+```
+
+**Expected Behavior:**
+- Environment variable loaded correctly
+- API calls work
+- Can modify .env and restart to test different URLs
+
+#### Test 3: Production Build
+
+**Purpose:** Verify environment variables are embedded in production build
+
+```bash
+# Set production API URL
+cd frontend
+cat > .env << EOF
+VITE_API_URL=https://api.hnf1b.example.com/api/v2
+EOF
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Check network tab in browser DevTools
+# All API calls should go to https://api.hnf1b.example.com/api/v2
+```
+
+**Expected Behavior:**
+- Build completes successfully
+- API calls in preview use production URL
+- Environment variable is baked into bundle (not changeable after build)
+
+#### Test 4: Custom API URL
+
+**Purpose:** Test with different backend URL (e.g., remote development server)
+
+```bash
+# Point to remote backend
+cd frontend
+cat > .env << EOF
+VITE_API_URL=https://dev-backend.example.com/api/v2
+EOF
+
+# Start dev server
+npm run dev
+
+# Verify API calls go to remote server
+# Check Network tab in browser DevTools
+```
+
+### Deployment Checklist
+
+#### Development Deployment
+- [ ] Copy `.env.example` to `.env`
+- [ ] Set `VITE_API_URL=http://localhost:8000/api/v2`
+- [ ] Backend running on `localhost:8000`
+- [ ] Frontend runs on `localhost:5173`
+
+#### Staging Deployment
+- [ ] Set `VITE_API_URL=https://staging-api.hnf1b.example.com/api/v2`
+- [ ] Run `npm run build`
+- [ ] Verify API calls in preview (`npm run preview`)
+- [ ] Deploy `dist/` folder to staging server
+- [ ] Test all features work with staging backend
+
+#### Production Deployment
+- [ ] Set `VITE_API_URL=https://api.hnf1b.example.com/api/v2`
+- [ ] Run `npm run build`
+- [ ] Verify no hardcoded URLs in code (`grep -r "localhost:8000" src/`)
+- [ ] Verify `.env` file is in `.gitignore`
+- [ ] Deploy `dist/` folder to production server
+- [ ] Smoke test: Check home page loads and API calls work
+
+### Common Issues & Troubleshooting
+
+#### Issue: API calls return 404
+
+**Symptoms:**
+- Console shows `GET http://localhost:8000/phenopackets/ 404 Not Found`
+
+**Causes:**
+1. Missing `/api/v2` suffix in `VITE_API_URL`
+2. Backend not running
+3. Wrong API version
+
+**Solution:**
+```bash
+# Check .env file
+cat frontend/.env
+# Should show: VITE_API_URL=http://localhost:8000/api/v2
+#                                                       ^^^^^^^^ Must include this!
+
+# Verify backend is running
+curl http://localhost:8000/api/v2/phenopackets/
+```
+
+#### Issue: Environment variable not updating
+
+**Symptoms:**
+- Changed `.env` but API still uses old URL
+
+**Cause:**
+- Vite dev server doesn't hot-reload environment variables
+
+**Solution:**
+```bash
+# Must restart dev server after changing .env
+# Press Ctrl+C, then:
+npm run dev
+```
+
+#### Issue: Production build uses wrong URL
+
+**Symptoms:**
+- Built app calls `localhost:8000` instead of production URL
+
+**Cause:**
+- `.env` file had development URL during build
+
+**Solution:**
+```bash
+# Always set correct URL BEFORE building
+echo "VITE_API_URL=https://api.hnf1b.example.com/api/v2" > frontend/.env
+npm run build
+```
+
+#### Issue: CORS errors in production
+
+**Symptoms:**
+- `Access-Control-Allow-Origin` errors in browser console
+
+**Cause:**
+- Backend CORS configuration doesn't allow frontend domain
+
+**Solution:**
+```python
+# backend/app/main.py
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://hnf1b.example.com"],  # Add your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+### Security Best Practices
+
+1. **Never commit `.env` files**
+   - Both `backend/.env` and `frontend/.env` are in `.gitignore`
+   - Use `.env.example` as template for other developers
+
+2. **Use different secrets per environment**
+   - Development: Can use simple secrets
+   - Staging: Use strong secrets
+   - Production: Use cryptographically secure secrets
+
+3. **Rotate secrets regularly**
+   - Change `JWT_SECRET` periodically
+   - Invalidates all existing tokens (users must re-login)
+
+4. **Verify no sensitive data in code**
+   ```bash
+   # Search for hardcoded secrets
+   grep -r "jwt_secret\|password\|api_key" --exclude-dir=node_modules .
+   ```
+
+5. **Use environment-specific databases**
+   - Development: `hnf1b_dev`
+   - Staging: `hnf1b_staging`
+   - Production: `hnf1b_production`
+
+### CI/CD Environment Variables
+
+**For GitHub Actions / CI pipelines:**
+
+```yaml
+# .github/workflows/deploy.yml
+env:
+  VITE_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+
+steps:
+  - name: Build frontend
+    run: |
+      cd frontend
+      npm ci
+      npm run build
+```
+
+**Set secrets in GitHub repository settings:**
+- `PRODUCTION_API_URL` = `https://api.hnf1b.example.com/api/v2`
+
+---
 
 ### Data Import (Phenopackets Direct Migration)
 ```bash

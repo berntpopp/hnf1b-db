@@ -150,32 +150,45 @@ See: [docs/issues/issue-37-40-batch.md](../docs/issues/issue-37-40-batch.md)
 ## Issue #38
 
 ```markdown
-# feat(frontend): migrate home page statistics to v2 API
+# feat: migrate home page statistics to v2 API (backend + frontend)
 
 ## Summary
-Home page fetches stats from broken v1 endpoints. Needs migration to `/aggregate/summary`.
+Create `/aggregate/summary` endpoint and integrate with frontend home page. This is a full-stack task combining backend endpoint creation with frontend migration.
 
-**Current:** Home page shows 404 errors in console
-**Target:** Stats load from v2 API
+**Current:** No summary endpoint exists, Home.vue shows 404 errors
+**Target:** Backend provides statistics, frontend displays them
 
 ## Details
-See: [docs/issues/issue-38-migrate-home-stats.md](../docs/issues/issue-38-migrate-home-stats.md)
+See: [docs/issues/issue-38-migrate-home-stats.md](./issue-38-migrate-home-stats.md)
 
 ## Acceptance Criteria
+
+### Backend
+- [ ] Endpoint responds at `/api/v2/phenopackets/aggregate/summary`
+- [ ] Returns 6 statistics (total, with_variants, with_phenotypes, with_diseases, distinct_hpo, distinct_diseases)
+- [ ] Query completes in < 200ms
+- [ ] Unit tests pass
+
+### Frontend
 - [ ] Home page loads without errors
-- [ ] Stats show correct counts (individuals, variants, publications)
+- [ ] Stats show correct counts
 - [ ] Numbers animate smoothly
-- [ ] No console errors
+- [ ] No console 404 errors
+
+## Implementation Phases
+1. **Backend:** Create aggregation endpoint with 6 SQL queries
+2. **Frontend:** Update Home.vue to call new endpoint
+3. **Testing:** Backend unit tests + frontend integration test
 
 ## Dependencies
-- Issue #30 (API client)
-- **Backend:** Create `/aggregate/summary` endpoint
+- Issue #28 (JSONB indexes) - For performance
+- Issue #30 (API client) - Frontend API setup
 
 ## Priority
 **P1 (High)** - User-facing, easy win
 
 ## Labels
-`frontend`, `views`, `phenopackets`, `p1`
+`backend`, `frontend`, `api`, `aggregation`, `p1`, `fullstack`
 ```
 
 ---
