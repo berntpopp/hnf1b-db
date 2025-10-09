@@ -140,37 +140,41 @@ export default {
       ],
       categories: [
         {
-          label: 'Individuals',
+          label: 'Phenopackets',
           aggregations: [
-            { label: 'Count By Sex', value: 'getIndividualsSexCount' },
-            { label: 'Count By Variant Type', value: 'getIndividualsVariantTypeCount' },
-            { label: 'Count By Age Onset', value: 'getIndividualsAgeOnsetCount' },
-            { label: 'Count By Cohort', value: 'getIndividualsCohortCount' },
-            { label: 'Count By Family History', value: 'getIndividualsFamilyHistoryCount' },
-            { label: 'Count By Detection Method', value: 'getIndividualsDetectionMethodCount' },
-            { label: 'Count By Segregation', value: 'getIndividualsSegregationCount' },
+            { label: 'Sex Distribution', value: 'getSexDistribution' },
+            { label: 'Age of Onset', value: 'getAgeOfOnsetAggregation' },
+            { label: 'Kidney Disease Stages', value: 'getKidneyStages' },
+          ],
+        },
+        {
+          label: 'Phenotypic Features',
+          aggregations: [
+            { label: 'Top HPO Terms', value: 'getPhenotypicFeaturesAggregation' },
+          ],
+        },
+        {
+          label: 'Diseases',
+          aggregations: [
+            { label: 'Disease Frequency', value: 'getDiseaseAggregation' },
           ],
         },
         {
           label: 'Variants',
           aggregations: [
-            { label: 'Count By Type', value: 'getVariantsTypeCount' },
-            {
-              label: 'Count By Newest Classification Verdict',
-              value: 'getVariantsNewestClassificationVerdictCount',
-            },
+            { label: 'Pathogenicity Classification', value: 'getVariantPathogenicity' },
+            { label: 'Variant Types (SNV/CNV)', value: 'getVariantTypes' },
           ],
         },
         {
           label: 'Publications',
           aggregations: [
-            { label: 'Count By Type', value: 'getPublicationsTypeCount' },
-            // For time plot, data come from getPublicationsCumulativeCount.
+            { label: 'Publication Statistics', value: 'getPublicationsAggregation' },
           ],
         },
       ],
-      selectedCategory: 'Individuals',
-      selectedAggregation: 'getIndividualsSexCount',
+      selectedCategory: 'Phenopackets',
+      selectedAggregation: 'getSexDistribution',
     };
   },
   computed: {
@@ -276,16 +280,13 @@ export default {
         });
     },
     fetchProteinPlotData() {
-      // Fetch protein structure and small variants concurrently.
-      Promise.all([
-        API.getProteins(), // Ensure this endpoint exists and returns protein data.
-        API.getVariantsSmallVariants(), // Ensure this endpoint exists.
-      ])
-        .then(([proteinRes, variantsRes]) => {
-          // Use the first protein from the returned array.
-          const protein = proteinRes.data[0];
-          const variants = variantsRes.data.small_variants;
-          this.proteinPlotData = { protein, variants };
+      // Note: Protein structure data endpoint not yet implemented
+      // For now, only fetch small variants
+      API.getSmallVariants()
+        .then((response) => {
+          console.log('Small variants data:', response.data);
+          // TODO: When protein endpoint is available, fetch protein data too
+          this.proteinPlotData = { variants: response.data };
         })
         .catch((error) => {
           console.error('Error fetching protein plot data:', error);

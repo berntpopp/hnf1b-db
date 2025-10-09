@@ -43,23 +43,23 @@
                 class="ma-1"
                 variant="flat"
               >
-                {{ displayStats.variants }} distinct variants
+                {{ displayStats.variants }} genetic variants
                 <v-icon right>
                   mdi-dna
                 </v-icon>
               </v-chip>
-              from
+              with
               <v-chip
                 color="amber-lighten-3"
                 class="ma-1"
                 variant="flat"
               >
-                {{ displayStats.total_reports }} reports
+                {{ displayStats.total_reports }} phenotypes
                 <v-icon right>
-                  mdi-file-document-outline
+                  mdi-medical-bag
                 </v-icon>
               </v-chip>
-              in
+              from
               <v-chip
                 color="cyan-lighten-3"
                 class="ma-1"
@@ -86,7 +86,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import SearchCard from '@/components/SearchCard.vue';
-import { getSummary } from '@/api/index.js';
+import { getSummaryStats } from '@/api/index.js';
 
 /**
  * Home view component.
@@ -141,14 +141,19 @@ export default {
      */
     const fetchStats = async () => {
       try {
-        // Fetch summary stats from /api/aggregations/summary
-        const response = await getSummary();
+        // Fetch summary stats from /api/v2/phenopackets/aggregate/summary
+        const response = await getSummaryStats();
         const data = response.data || {};
         // Animate each statistic from 0 to its target value.
-        animateCount('individuals', data.individuals || 0);
-        animateCount('variants', data.variants || 0);
-        animateCount('total_reports', data.total_reports || 0);
-        animateCount('publications', data.publications || 0);
+        // Map API response fields to display fields:
+        // - total_phenopackets -> individuals
+        // - with_variants -> variants
+        // - distinct_hpo_terms -> total_reports (repurposed for HPO count)
+        // - distinct_publications -> publications
+        animateCount('individuals', data.total_phenopackets || 0);
+        animateCount('variants', data.with_variants || 0);
+        animateCount('total_reports', data.distinct_hpo_terms || 0);
+        animateCount('publications', data.distinct_publications || 0);
       } catch (error) {
         console.error('Error fetching summary stats:', error);
       }

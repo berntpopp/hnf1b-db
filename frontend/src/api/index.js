@@ -173,6 +173,32 @@ export const getVariantPathogenicity = () =>
  */
 export const getKidneyStages = () => apiClient.get('/phenopackets/aggregate/kidney-stages');
 
+/**
+ * Get variant type distribution (SNV, CNV, etc.).
+ * @returns {Promise} Axios promise with variant type counts
+ */
+export const getVariantTypes = () => apiClient.get('/phenopackets/aggregate/variant-types');
+
+/**
+ * Get publications aggregation with citation counts.
+ * @returns {Promise} Axios promise with publication statistics
+ */
+export const getPublicationsAggregation = () =>
+  apiClient.get('/phenopackets/aggregate/publications');
+
+/**
+ * Get age of onset distribution.
+ * @returns {Promise} Axios promise with age of onset data
+ */
+export const getAgeOfOnsetAggregation = () =>
+  apiClient.get('/phenopackets/aggregate/age-of-onset');
+
+/**
+ * Get small variants (SNVs) for protein plot visualization.
+ * @returns {Promise} Axios promise with small variants data
+ */
+export const getSmallVariants = () => apiClient.get('/phenopackets/variants/small-variants');
+
 /* ==================== AUTHENTICATION ENDPOINTS ==================== */
 
 /**

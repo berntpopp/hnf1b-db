@@ -431,6 +431,58 @@ async def get_measurements(
     return measurements if measurements else []
 
 
+@router.get("/variants/small-variants", response_model=List[Dict])
+async def get_small_variants(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all small variants (SNVs) across all phenopackets.
+
+    Useful for protein plot visualizations and variant analysis.
+    Returns variants filtered to exclude large CNVs.
+    """
+    query = """
+    SELECT DISTINCT
+        vd->>'id' as variant_id,
+        vd->>'label' as label,
+        vd->>'description' as description,
+        vd->'geneContext'->>'symbol' as gene_symbol,
+        vd->'structuralType'->>'label' as variant_type,
+        vd->'molecularConsequences'->0->>'label' as consequence,
+        gi->>'interpretationStatus' as pathogenicity,
+        phenopacket_id
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'interpretations') as interp,
+        jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+        LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
+    WHERE
+        gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+        AND (
+            vd->>'moleculeContext' = 'genomic'
+            OR vd->'structuralType'->>'label' NOT IN ('deletion', 'duplication', 'insertion')
+        )
+    ORDER BY
+        gene_symbol, variant_id
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    return [
+        {
+            "variant_id": row.variant_id,  # type: ignore
+            "label": row.label,  # type: ignore
+            "description": row.description,  # type: ignore
+            "gene_symbol": row.gene_symbol,  # type: ignore
+            "variant_type": row.variant_type,  # type: ignore
+            "consequence": row.consequence,  # type: ignore
+            "pathogenicity": row.pathogenicity,  # type: ignore
+            "phenopacket_id": row.phenopacket_id,  # type: ignore
+        }
+        for row in rows
+    ]
+
+
 @router.post("/", response_model=PhenopacketResponse)
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
@@ -741,3 +793,206 @@ async def aggregate_variant_pathogenicity(
         )
         for row in rows
     ]
+
+
+@router.get("/aggregate/variant-types", response_model=List[AggregationResult])
+async def aggregate_variant_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distribution of variant types (SNV, CNV, etc.)."""
+    query = """
+    SELECT
+        CASE
+            WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+            WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
+            ELSE 'OTHER'
+        END as variant_type,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'interpretations') as interp,
+        jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+        LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
+    WHERE
+        gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+    GROUP BY
+        variant_type
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.variant_type,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/publications", response_model=List[AggregationResult])
+async def aggregate_publications(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get publication statistics and references."""
+    query = """
+    SELECT
+        ext_ref->>'id' as pmid,
+        ext_ref->>'description' as description,
+        COUNT(DISTINCT phenopacket_id) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+    WHERE
+        ext_ref->>'id' LIKE 'PMID:%'
+    GROUP BY
+        ext_ref->>'id',
+        ext_ref->>'description'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.description or row.pmid,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"pmid": row.pmid},  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/age-of-onset", response_model=List[AggregationResult])
+async def aggregate_age_of_onset(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distribution of age of disease onset."""
+    query = """
+    SELECT
+        disease->'onset'->'ontologyClass'->>'label' as onset_label,
+        disease->'onset'->'ontologyClass'->>'id' as onset_id,
+        COUNT(*) as count
+    FROM
+        phenopackets,
+        jsonb_array_elements(phenopacket->'diseases') as disease
+    WHERE
+        disease->'onset'->'ontologyClass'->>'label' IS NOT NULL
+    GROUP BY
+        disease->'onset'->'ontologyClass'->>'label',
+        disease->'onset'->'ontologyClass'->>'id'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(row.count for row in rows)  # type: ignore
+
+    return [
+        AggregationResult(
+            label=row.onset_label,  # type: ignore
+            count=row.count,  # type: ignore
+            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            details={"hpo_id": row.onset_id},  # type: ignore
+        )
+        for row in rows
+    ]
+
+
+@router.get("/aggregate/summary", response_model=Dict[str, int])
+async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
+    """Get lightweight summary statistics for home page.
+
+    Returns:
+        Dictionary with counts:
+        - total_phenopackets: Total number of phenopackets
+        - with_variants: Phenopackets containing interpretations
+        - distinct_hpo_terms: Number of unique HPO terms used
+        - distinct_publications: Number of unique publication references
+        - male: Number of male subjects
+        - female: Number of female subjects
+        - unknown_sex: Number of subjects with unknown sex
+    """
+
+    # 1. Total phenopackets
+    total_result = await db.execute(select(func.count()).select_from(Phenopacket))
+    total_phenopackets = total_result.scalar()
+
+    # 2. With variants (interpretations exist)
+    with_variants_result = await db.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM phenopackets
+            WHERE jsonb_array_length(phenopacket->'interpretations') > 0
+        """)
+    )
+    with_variants = with_variants_result.scalar()
+
+    # 3. Distinct HPO terms
+    distinct_hpo_result = await db.execute(
+        text("""
+            SELECT COUNT(DISTINCT feature->'type'->>'id')
+            FROM phenopackets,
+                 jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
+            WHERE feature->'type'->>'id' IS NOT NULL
+        """)
+    )
+    distinct_hpo_terms = distinct_hpo_result.scalar() or 0
+
+    # 4. Distinct publications
+    distinct_publications_result = await db.execute(
+        text("""
+            SELECT COUNT(DISTINCT ext_ref->>'id')
+            FROM phenopackets,
+                 jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+            WHERE ext_ref->>'id' LIKE 'PMID:%'
+        """)
+    )
+    distinct_publications = distinct_publications_result.scalar() or 0
+
+    # 5. Sex distribution
+    sex_distribution_result = await db.execute(
+        text("""
+            SELECT
+                subject_sex,
+                COUNT(*) as count
+            FROM phenopackets
+            GROUP BY subject_sex
+        """)
+    )
+    sex_rows = sex_distribution_result.fetchall()
+
+    # Parse sex distribution
+    male = 0
+    female = 0
+    unknown_sex = 0
+    for row in sex_rows:
+        if row.subject_sex == "MALE":  # type: ignore
+            male = row.count  # type: ignore
+        elif row.subject_sex == "FEMALE":  # type: ignore
+            female = row.count  # type: ignore
+        else:
+            unknown_sex += row.count  # type: ignore
+
+    return {
+        "total_phenopackets": total_phenopackets,
+        "with_variants": with_variants,
+        "distinct_hpo_terms": distinct_hpo_terms,
+        "distinct_publications": distinct_publications,
+        "male": male,
+        "female": female,
+        "unknown_sex": unknown_sex,
+    }
