@@ -203,3 +203,9 @@ Thumbs.db
 
 # Docker
 *.log
+
+# MCP Playwright test artifacts
+.playwright-mcp/
+
+# Prevent root-level package-lock.json (frontend has its own)
+/package-lock.json
