@@ -12,15 +12,6 @@
               <v-tab value="Donut Chart">
                 Donut Chart
               </v-tab>
-              <v-tab value="Stacked Bar Chart">
-                Stacked Bar Chart
-              </v-tab>
-              <v-tab value="Time Plot">
-                Time Plot
-              </v-tab>
-              <v-tab value="Protein Plot">
-                Protein Plot
-              </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -59,27 +50,6 @@
                     v-bind="donutChartProps.props"
                   />
                 </v-tabs-window-item>
-                <!-- Stacked Bar Chart Tab -->
-                <v-tabs-window-item value="Stacked Bar Chart">
-                  <component
-                    :is="stackedBarChartProps.content"
-                    v-bind="stackedBarChartProps.props"
-                  />
-                </v-tabs-window-item>
-                <!-- Time Plot Tab -->
-                <v-tabs-window-item value="Time Plot">
-                  <component
-                    :is="timePlotProps.content"
-                    v-bind="timePlotProps.props"
-                  />
-                </v-tabs-window-item>
-                <!-- Protein Plot Tab -->
-                <v-tabs-window-item value="Protein Plot">
-                  <component
-                    :is="proteinPlotProps.content"
-                    v-bind="proteinPlotProps.props"
-                  />
-                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -92,50 +62,22 @@
 <script>
 import { markRaw } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
-import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
-import TimePlot from '@/components/analyses/TimePlot.vue';
-import ProteinLinearPlot from '@/components/analyses/ProteinLinearPlot.vue';
 import * as API from '@/api';
 
 export default {
   name: 'AggregationsDashboard',
   components: {
     DonutChart,
-    StackedBarChart,
-    TimePlot,
-    ProteinLinearPlot,
   },
   data() {
     return {
       tab: 'Donut Chart',
       chartData: {},
-      stackedBarData: {},
-      timePlotData: {},
-      proteinPlotData: {}, // Will hold protein and variant data for protein plot.
       items: [
         {
           tab: 'Donut Chart',
           content: markRaw(DonutChart),
           props: { exportable: true, width: 600, height: 500 },
-        },
-        {
-          tab: 'Stacked Bar Chart',
-          content: markRaw(StackedBarChart),
-          props: {
-            width: 1000,
-            height: 400,
-            margin: { top: 10, right: 30, bottom: 150, left: 100 },
-          },
-        },
-        {
-          tab: 'Time Plot',
-          content: markRaw(TimePlot),
-          props: { width: 900, height: 400, margin: { top: 20, right: 50, bottom: 50, left: 70 } },
-        },
-        {
-          tab: 'Protein Plot',
-          content: markRaw(ProteinLinearPlot),
-          props: { width: 900, height: 250 }, // adjust dimensions as desired.
         },
       ],
       categories: [
@@ -150,7 +92,7 @@ export default {
         {
           label: 'Phenotypic Features',
           aggregations: [
-            { label: 'Top HPO Terms', value: 'getPhenotypicFeaturesAggregation' },
+            { label: 'Top 20 HPO Terms', value: 'getPhenotypicFeaturesAggregation', params: { limit: 20 } },
           ],
         },
         {
@@ -184,24 +126,6 @@ export default {
         props: { ...this.items[0].props, chartData: this.chartData },
       };
     },
-    stackedBarChartProps() {
-      return {
-        content: this.items[1].content,
-        props: { ...this.items[1].props, chartData: this.stackedBarData },
-      };
-    },
-    timePlotProps() {
-      return {
-        content: this.items[2].content,
-        props: { ...this.items[2].props, chartData: this.timePlotData },
-      };
-    },
-    proteinPlotProps() {
-      return {
-        content: this.items[3].content,
-        props: { ...this.items[3].props, chartData: this.proteinPlotData },
-      };
-    },
     selectedAggregations() {
       const category = this.categories.find((cat) => cat.label === this.selectedCategory);
       return category ? category.aggregations : [];
@@ -220,37 +144,64 @@ export default {
       }
       this.fetchAggregationData();
     },
-    tab(newTab) {
-      if (newTab === 'Donut Chart') {
-        this.fetchAggregationData();
-      } else if (newTab === 'Stacked Bar Chart') {
-        this.fetchStackedBarData();
-      } else if (newTab === 'Time Plot') {
-        this.fetchTimePlotData();
-      } else if (newTab === 'Protein Plot') {
-        this.fetchProteinPlotData();
-      }
-    },
   },
   mounted() {
-    if (this.tab === 'Donut Chart') {
-      this.fetchAggregationData();
-    } else if (this.tab === 'Stacked Bar Chart') {
-      this.fetchStackedBarData();
-    } else if (this.tab === 'Time Plot') {
-      this.fetchTimePlotData();
-    } else if (this.tab === 'Protein Plot') {
-      this.fetchProteinPlotData();
-    }
+    this.fetchAggregationData();
   },
   methods: {
     fetchAggregationData() {
+      const category = this.categories.find((cat) => cat.label === this.selectedCategory);
+      const aggregation = category?.aggregations.find((agg) => agg.value === this.selectedAggregation);
       const funcName = this.selectedAggregation;
+      const params = aggregation?.params || {};
+
       if (API[funcName] && typeof API[funcName] === 'function') {
-        API[funcName]()
+        API[funcName](params)
           .then((response) => {
             console.log('Donut chart data:', response.data);
-            this.chartData = response.data;
+
+            // Transform v2 API format to DonutChart format
+            // v2 API: [{ label: "X", count: 10, percentage: 50 }, ...]
+            // DonutChart expects: { total_count: N, grouped_counts: [{ _id: "X", count: 10 }, ...] }
+            let data = response.data || [];
+            const totalCount = data.reduce((sum, item) => sum + item.count, 0);
+
+            let groupedCounts = [];
+
+            // Apply client-side limit if specified and add "Others" category
+            if (params.limit && data.length > params.limit) {
+              // Take top N items
+              const topItems = data.slice(0, params.limit);
+              const remainingItems = data.slice(params.limit);
+
+              // Sum up remaining items into "Others"
+              const othersCount = remainingItems.reduce((sum, item) => sum + item.count, 0);
+
+              // Build grouped counts
+              groupedCounts = topItems.map(item => ({
+                _id: item.label || 'Unknown',
+                count: item.count || 0
+              }));
+
+              // Add "Others" category if there are remaining items
+              if (othersCount > 0) {
+                groupedCounts.push({
+                  _id: 'Others',
+                  count: othersCount
+                });
+              }
+            } else {
+              // No limit, show all items
+              groupedCounts = data.map(item => ({
+                _id: item.label || 'Unknown',
+                count: item.count || 0
+              }));
+            }
+
+            this.chartData = {
+              total_count: totalCount,
+              grouped_counts: groupedCounts
+            };
           })
           .catch((error) => {
             console.error('Error fetching donut chart data:', error);
@@ -258,39 +209,6 @@ export default {
       } else {
         console.error('API function not found:', funcName);
       }
-    },
-    fetchStackedBarData() {
-      API.getPhenotypeDescribedCount()
-        .then((response) => {
-          console.log('Stacked bar chart data:', response.data);
-          this.stackedBarData = response.data;
-        })
-        .catch((error) => {
-          console.error('Error fetching stacked bar chart data:', error);
-        });
-    },
-    fetchTimePlotData() {
-      API.getPublicationsCumulativeCount()
-        .then((response) => {
-          console.log('Time plot data:', response.data);
-          this.timePlotData = response.data;
-        })
-        .catch((error) => {
-          console.error('Error fetching time plot data:', error);
-        });
-    },
-    fetchProteinPlotData() {
-      // Note: Protein structure data endpoint not yet implemented
-      // For now, only fetch small variants
-      API.getSmallVariants()
-        .then((response) => {
-          console.log('Small variants data:', response.data);
-          // TODO: When protein endpoint is available, fetch protein data too
-          this.proteinPlotData = { variants: response.data };
-        })
-        .catch((error) => {
-          console.error('Error fetching protein plot data:', error);
-        });
     },
     onCategoryChange() {
       // Handled by watcher.

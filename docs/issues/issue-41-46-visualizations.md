@@ -1,5 +1,14 @@
 # Issues #41-46 - Visualizations & Analysis
 
+**Note:** Three placeholder tabs were removed from AggregationsDashboard.vue in issue #33:
+- **Stacked Bar Chart** - Called non-existent `API.getPhenotypeDescribedCount()` (removed as YAGNI per issue #33)
+- **Time Plot** - Called non-existent `API.getPublicationsCumulativeCount()` (removed as YAGNI per issue #33)
+- **Protein Plot** - Called non-existent `API.getProteins()` and `API.getVariantsSmallVariants()` (backend endpoints not implemented)
+
+These visualizations should be reimplemented with proper v2 API endpoints in issues #41, #42, and the protein plot functionality below.
+
+---
+
 ## Issue #41: feat(frontend): add phenotype distribution stacked bar chart
 
 ### Overview

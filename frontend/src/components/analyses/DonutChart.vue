@@ -1,7 +1,11 @@
 <template>
   <div class="donut-chart-container">
-    <!-- The div where the chart will be rendered -->
-    <div ref="chart" />
+    <div class="chart-wrapper">
+      <!-- The div where the chart will be rendered -->
+      <div ref="chart" class="chart" />
+      <!-- Legend -->
+      <div ref="legend" class="legend" />
+    </div>
   </div>
 </template>
 
@@ -42,7 +46,10 @@ export default {
     /** Color scheme for the donut slices */
     colorScheme: {
       type: Array,
-      default: () => d3.schemeDark2,
+      default: () => [
+        ...d3.schemeCategory10,
+        ...d3.schemePaired,
+      ],
     },
     /**
      * If true, shows an export button that lets the user download the chart as PNG.
@@ -168,50 +175,6 @@ export default {
           tooltip.transition().duration(200).style('opacity', 0);
         });
 
-      // Helper function: compute the mid-angle of a slice.
-      const midAngle = (d) => d.startAngle + (d.endAngle - d.startAngle) / 2;
-
-      // Append labels for each slice.
-      // Each label shows the group name and its percentage (one decimal), then gets wrapped if too long.
-      const labels = svg
-        .selectAll('text.label')
-        .data(dataReady)
-        .enter()
-        .append('text')
-        .attr('class', 'label')
-        .attr('dy', '.35em')
-        .attr('fill', '#111')
-        .attr('transform', (d) => {
-          const pos = outerArc.centroid(d);
-          pos[0] = radius * (midAngle(d) < Math.PI ? 1 : -1);
-          return `translate(${pos})`;
-        })
-        .style('text-anchor', (d) => (midAngle(d) < Math.PI ? 'start' : 'end'))
-        .text((d) => {
-          const percentage = ((d.data[1] / totalValue) * 100).toFixed(1);
-          return `${d.data[0]} (${percentage}%)`;
-        });
-
-      // Call the wrap function on the labels with a maximum width of 100 pixels.
-      labels.call(wrap, 100);
-
-      // Append polylines connecting slices and labels.
-      svg
-        .selectAll('polyline')
-        .data(dataReady)
-        .enter()
-        .append('polyline')
-        .attr('stroke', 'black')
-        .style('fill', 'none')
-        .attr('stroke-width', 1)
-        .attr('points', (d) => {
-          const posA = arc.centroid(d); // Center of the slice.
-          const posB = outerArc.centroid(d); // Position on the outerArc.
-          const posC = outerArc.centroid(d); // Label position (adjusted).
-          posC[0] = radius * (midAngle(d) < Math.PI ? 1 : -1);
-          return [posA, posB, posC];
-        });
-
       // Append a central text element that shows the total count.
       svg
         .append('text')
@@ -220,6 +183,50 @@ export default {
         .attr('font-size', '40px')
         .attr('fill', '#5CB85C')
         .text(totalValue);
+
+      // Create legend
+      const legend = d3.select(this.$refs.legend);
+      legend.selectAll('*').remove();
+
+      const legendItems = legend
+        .selectAll('.legend-item')
+        .data(dataReady)
+        .enter()
+        .append('div')
+        .attr('class', 'legend-item')
+        .style('display', 'flex')
+        .style('align-items', 'center')
+        .style('margin-bottom', '8px')
+        .style('cursor', 'pointer')
+        .on('mouseover', function(event, d) {
+          // Highlight corresponding slice
+          svg.selectAll('path.slice')
+            .style('opacity', slice => slice === d ? 1 : 0.3);
+        })
+        .on('mouseout', function() {
+          // Reset all slices
+          svg.selectAll('path.slice').style('opacity', 0.7);
+        });
+
+      // Add color box
+      legendItems
+        .append('div')
+        .style('width', '16px')
+        .style('height', '16px')
+        .style('background-color', (d) => color(d.data[0]))
+        .style('margin-right', '8px')
+        .style('border', '1px solid #999')
+        .style('flex-shrink', '0');
+
+      // Add label
+      legendItems
+        .append('div')
+        .style('font-size', '14px')
+        .style('line-height', '1.2')
+        .html((d) => {
+          const percentage = ((d.data[1] / totalValue) * 100).toFixed(1);
+          return `<strong>${d.data[0]}</strong>: ${d.data[1]} (${percentage}%)`;
+        });
     },
   },
 };
@@ -270,8 +277,25 @@ function wrap(text, width) {
 .donut-chart-container {
   position: relative;
   width: 100%;
-  max-width: 600px;
   margin: auto;
+}
+
+.chart-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.chart {
+  flex-shrink: 0;
+}
+
+.legend {
+  flex: 1;
+  min-width: 250px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 10px;
 }
 
 /* Tooltip styling */
