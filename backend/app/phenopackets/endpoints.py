@@ -836,16 +836,22 @@ async def aggregate_variant_types(
     ]
 
 
-@router.get("/aggregate/publications", response_model=List[AggregationResult])
+@router.get("/aggregate/publications", response_model=List[Dict])
 async def aggregate_publications(
     db: AsyncSession = Depends(get_db),
 ):
-    """Get publication statistics and references."""
+    """Get publication statistics with detailed information.
+
+    Returns detailed publication data including PMID, URL, DOI, phenopacket count.
+    Suitable for publications table view.
+    """
     query = """
     SELECT
         ext_ref->>'id' as pmid,
+        ext_ref->>'reference' as url,
         ext_ref->>'description' as description,
-        COUNT(DISTINCT phenopacket_id) as count
+        COUNT(DISTINCT phenopacket_id) as phenopacket_count,
+        MIN(created_at) as first_added
     FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
@@ -853,23 +859,23 @@ async def aggregate_publications(
         ext_ref->>'id' LIKE 'PMID:%'
     GROUP BY
         ext_ref->>'id',
+        ext_ref->>'reference',
         ext_ref->>'description'
     ORDER BY
-        count DESC
+        phenopacket_count DESC, pmid
     """
 
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
-
     return [
-        AggregationResult(
-            label=row.description or row.pmid,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
-            details={"pmid": row.pmid},  # type: ignore
-        )
+        {
+            "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,  # type: ignore
+            "url": row.url,  # type: ignore
+            "doi": row.description.replace("DOI:", "") if row.description and row.description.startswith("DOI:") else None,  # type: ignore
+            "phenopacket_count": row.phenopacket_count,  # type: ignore
+            "first_added": row.first_added.isoformat() if row.first_added else None,  # type: ignore
+        }
         for row in rows
     ]
 
