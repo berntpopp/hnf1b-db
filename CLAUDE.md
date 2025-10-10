@@ -892,3 +892,229 @@ Successfully migrated Individuals view to Phenopackets v2 format.
 - ✅ Pagination works with skip/limit model
 - ✅ No 404 errors, all API calls succeed
 ```
+
+## Git Commit Messages
+
+### Conventional Commit Format
+
+All commits MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+**Format:** `<type>(<scope>): <short description>`
+
+**Examples:**
+```bash
+feat(frontend): add phenopacket detail view with HPO term display
+fix(api): correct pagination offset calculation in search endpoint
+refactor(migration): extract VRS variant builder to separate module
+perf(db): add GIN indexes for JSONB phenotype queries
+docs: update API migration guide with v2 endpoint examples
+test(backend): add integration tests for phenopacket CRUD operations
+chore(ci): update GitHub Actions workflow for uv dependency caching
+style(frontend): apply ESLint autofix for unused imports
+```
+
+### Commit Message Guidelines
+
+**When Claude Code Completes a Task:**
+
+After completing work on an issue or task, Claude will provide a suggested commit message in the terminal output. This message will:
+
+1. **Follow conventional commit format** with appropriate type and scope
+2. **Reference the issue number** if applicable
+3. **Describe what was changed** (not why - that's in the issue)
+4. **Be concise** - one-line summary, optional body for complex changes
+
+**Structure:**
+```
+<type>(<scope>): <imperative mood description> (#issue)
+
+Optional body with:
+- Additional context if needed
+- Breaking changes (BREAKING CHANGE: ...)
+- References to related commits or issues
+```
+
+### Commit Types Reference
+
+| Type | When to Use | Example |
+|------|-------------|---------|
+| `feat` | New feature or capability | `feat(api): add phenopacket search endpoint with HPO filters` |
+| `fix` | Bug fix | `fix(frontend): resolve table pagination reset on filter change` |
+| `refactor` | Code restructuring (no behavior change) | `refactor(migration): split monolithic builder into focused modules` |
+| `perf` | Performance improvement | `perf(db): optimize JSONB queries with generated columns` |
+| `docs` | Documentation only | `docs: add environment configuration guide` |
+| `test` | Adding or updating tests | `test(migration): add VRS digest validation tests` |
+| `chore` | Build, dependencies, tooling | `chore: update uv dependencies to latest versions` |
+| `style` | Code formatting (no logic change) | `style(backend): apply ruff formatting to migration modules` |
+| `build` | Build system or dependencies | `build(frontend): upgrade Vite to 6.0` |
+| `ci` | CI/CD pipeline changes | `ci: add pre-commit hooks for ruff and mypy` |
+| `revert` | Revert previous commit | `revert: revert "feat(api): add experimental caching layer"` |
+
+### Commit Scope Reference
+
+| Scope | Description | Example |
+|-------|-------------|---------|
+| `frontend` | Vue.js application changes | `feat(frontend): add HPO term autocomplete` |
+| `backend` | FastAPI application changes | `fix(backend): handle missing JWT token gracefully` |
+| `api` | API endpoint or contract changes | `feat(api): add aggregation endpoints for dashboard` |
+| `db` | Database schema or migrations | `feat(db): add phenopacket_audit table for change tracking` |
+| `migration` | Data migration scripts | `fix(migration): correct HPO term mapping for renal phenotypes` |
+| `ci` | CI/CD pipeline | `chore(ci): add test coverage reporting` |
+| `docs` | Documentation | `docs(api): document phenopacket search parameters` |
+
+### Multi-File Commit Strategy
+
+**Single Logical Change:**
+```bash
+# ✅ Good: One commit for related changes
+feat(frontend): migrate individuals view to phenopackets v2
+
+- Rename Individuals.vue → Phenopackets.vue
+- Update API calls to use v2 endpoints
+- Transform JSONB data for table display
+- Update router paths and navigation
+```
+
+**Multiple Independent Changes:**
+```bash
+# ❌ Bad: Multiple unrelated changes in one commit
+feat(frontend): add search and fix styling and update docs
+
+# ✅ Good: Separate commits for each logical change
+feat(frontend): add phenopacket search with HPO filters
+style(frontend): fix table header alignment in phenopackets view
+docs: update frontend architecture guide
+```
+
+### Breaking Changes
+
+If a commit introduces breaking changes, use `BREAKING CHANGE:` in the body:
+
+```bash
+feat(api): migrate all endpoints to v2 format
+
+BREAKING CHANGE: All API endpoints now require /api/v2/ prefix.
+Previous /api/v1/ endpoints are deprecated and will be removed in next release.
+Frontend must update VITE_API_URL to include /api/v2 suffix.
+```
+
+### Commit Message Template
+
+**Simple Change:**
+```bash
+<type>(<scope>): <description> (#issue-number)
+```
+
+**Complex Change with Body:**
+```bash
+<type>(<scope>): <description> (#issue-number)
+
+Additional context explaining:
+- Why the change was needed
+- What alternatives were considered
+- Any side effects or migration notes
+
+Refs: #related-issue-1, #related-issue-2
+```
+
+**Example Workflow:**
+
+```bash
+# After Claude completes work, terminal shows:
+
+---
+✅ Task completed successfully
+
+Suggested commit message:
+---
+feat(frontend): migrate publications view to phenopackets v2 API (#34)
+
+- Update getPhenopackets call to fetch publications
+- Extract publication data from JSONB structure
+- Update table columns for v2 schema
+- Fix PMID link formatting
+---
+
+# Review changes
+git status
+git diff
+
+# Stage changes
+git add frontend/src/views/Publications.vue
+
+# Commit with suggested message
+git commit -m "feat(frontend): migrate publications view to phenopackets v2 API (#34)
+
+- Update getPhenopackets call to fetch publications
+- Extract publication data from JSONB structure
+- Update table columns for v2 schema
+- Fix PMID link formatting"
+```
+
+### Automated Commit Message Validation
+
+**Pre-commit Hook (Optional):**
+
+```bash
+# .git/hooks/commit-msg
+#!/bin/sh
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Check conventional commit format
+if ! echo "$commit_msg" | grep -qE '^(feat|fix|refactor|perf|docs|test|chore|style|build|ci|revert)(\([a-z]+\))?: .+'; then
+    echo "❌ Error: Commit message must follow conventional commit format"
+    echo "Format: <type>(<scope>): <description>"
+    echo "Example: feat(frontend): add phenopacket search"
+    exit 1
+fi
+
+echo "✅ Commit message format valid"
+```
+
+### Best Practices
+
+1. **Use imperative mood**: "add feature" not "added feature"
+2. **Keep first line under 72 characters** for better git log readability
+3. **Reference issue numbers** when applicable
+4. **Be specific**: "fix login redirect loop" not "fix bug"
+5. **Explain why, not what**: Code shows what changed, commit explains why
+6. **One logical change per commit**: Makes reverts and cherry-picks easier
+7. **Review suggested message**: Claude's suggestion is a starting point - adjust as needed
+
+### Common Patterns
+
+**Feature Implementation:**
+```bash
+feat(frontend): add phenopacket detail page with clinical data sections (#32)
+```
+
+**Bug Fix:**
+```bash
+fix(api): correct 404 error on /aggregate/phenotypes endpoint (#28)
+```
+
+**Refactoring:**
+```bash
+refactor(migration): extract CNV parsing logic to dedicated module
+```
+
+**Performance:**
+```bash
+perf(db): add generated columns for subject_id and sex to improve query speed
+```
+
+**Documentation:**
+```bash
+docs: add comprehensive environment configuration guide for frontend
+```
+
+**Testing:**
+```bash
+test(migration): add unit tests for VRS digest generation
+```
+
+**Maintenance:**
+```bash
+chore: update GitHub Actions workflow to use uv for faster CI builds
+```

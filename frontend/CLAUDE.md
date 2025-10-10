@@ -234,3 +234,218 @@ console.log(response.data); // Should show 5 phenopackets
 - **Legacy Compatibility**: Deprecated v1 functions remain for gradual migration
 - Migrated from legacy ESLint config to modern flat config format
 - Enhanced linting rules for Vue 3 best practices
+
+## Git Commit Messages
+
+### Conventional Commit Format
+
+All frontend commits MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+**Format:** `<type>(frontend): <short description>`
+
+**Common Frontend Commit Examples:**
+```bash
+feat(frontend): add HPO term autocomplete to search component
+fix(frontend): resolve pagination reset on filter change
+refactor(frontend): extract phenopacket table to reusable component
+style(frontend): update material design color scheme for dark mode
+perf(frontend): implement virtual scrolling for large tables
+docs(frontend): add JSDoc comments for API service methods
+test(frontend): add unit tests for pagination helper functions
+chore(frontend): upgrade Vite to 6.1 and update dependencies
+```
+
+### Frontend-Specific Commit Guidelines
+
+**When Claude Code Completes a Frontend Task:**
+
+After completing frontend work, Claude will provide a suggested commit message. Always use the `frontend` scope for all Vue.js application changes.
+
+**Example Workflow:**
+```bash
+# After Claude completes work, terminal shows:
+
+---
+✅ Task completed successfully
+
+Suggested commit message:
+---
+feat(frontend): migrate publications view to phenopackets v2 API (#34)
+
+- Update getPhenopackets call to fetch publication data
+- Extract publication references from JSONB metaData.externalReferences
+- Update table columns to display PMID links
+- Add loading states and error handling
+---
+
+# Review changes
+git status
+git diff
+
+# Stage changes
+git add src/views/Publications.vue src/api/index.js
+
+# Commit with suggested message
+git commit -m "feat(frontend): migrate publications view to phenopackets v2 API (#34)
+
+- Update getPhenopackets call to fetch publication data
+- Extract publication references from JSONB metaData.externalReferences
+- Update table columns to display PMID links
+- Add loading states and error handling"
+```
+
+### Frontend Commit Types
+
+| Type | When to Use | Example |
+|------|-------------|---------|
+| `feat(frontend)` | New UI component or feature | `feat(frontend): add variant pathogenicity filter to search` |
+| `fix(frontend)` | Bug fix in UI or behavior | `fix(frontend): correct date formatting in phenopacket table` |
+| `refactor(frontend)` | Component restructuring | `refactor(frontend): split AggregationsDashboard into chart components` |
+| `style(frontend)` | UI styling changes | `style(frontend): update Vuetify theme colors for accessibility` |
+| `perf(frontend)` | Performance optimization | `perf(frontend): add memoization to expensive computed properties` |
+| `test(frontend)` | Adding tests | `test(frontend): add component tests for SearchCard` |
+| `chore(frontend)` | Dependencies or build config | `chore(frontend): update Vue to 3.5 and Vuetify to 3.7` |
+| `docs(frontend)` | Documentation | `docs(frontend): add JSDoc for API client methods` |
+
+### Common Frontend Commit Patterns
+
+**Component Creation:**
+```bash
+feat(frontend): add PhenopacketDetailCard component for clinical data display
+```
+
+**View Migration:**
+```bash
+feat(frontend): migrate individuals view to phenopackets v2 format (#32)
+
+- Rename Individuals.vue → Phenopackets.vue
+- Update API calls from getIndividuals() to getPhenopackets()
+- Transform JSONB data for table display
+- Update router paths: /individuals → /phenopackets
+```
+
+**API Integration:**
+```bash
+feat(frontend): integrate phenopacket batch endpoint to prevent N+1 queries
+
+- Add getPhenopacketsBatch() to API client
+- Update detail views to use batch fetching
+- Reduce API calls from 20 to 1 per page load
+```
+
+**Styling Updates:**
+```bash
+style(frontend): improve table responsiveness on mobile devices
+
+- Add breakpoint-specific column hiding
+- Update Vuetify grid layout for small screens
+- Fix header alignment on tablets
+```
+
+**Bug Fixes:**
+```bash
+fix(frontend): prevent table pagination reset when applying filters (#28)
+
+- Store current page in component state
+- Preserve page number during filter changes
+- Reset to page 1 only when filter values change
+```
+
+**Performance Improvements:**
+```bash
+perf(frontend): implement route-level code splitting for faster initial load
+
+- Convert all route imports to dynamic imports
+- Add webpack chunk names for better debugging
+- Reduce initial bundle size from 800KB to 200KB
+```
+
+**Refactoring:**
+```bash
+refactor(frontend): extract D3.js chart logic to composable functions
+
+- Create useBarChart and usePieChart composables
+- Remove duplicated chart code from view components
+- Add configurable chart options
+```
+
+**Dependency Updates:**
+```bash
+chore(frontend): update frontend dependencies to latest versions
+
+- Vue 3.4 → 3.5
+- Vuetify 3.6 → 3.7
+- Vite 6.0 → 6.1
+- Update vite.config.js for new Vite 6.1 API
+```
+
+### Multi-File Frontend Commits
+
+**Related Component Changes:**
+```bash
+feat(frontend): add phenopacket export functionality
+
+- Add ExportButton component with format selection
+- Integrate file-saver for CSV/JSON export
+- Update PhenopacketsView with export button
+- Add export utilities to utils/export.js
+```
+
+**API + View Changes:**
+```bash
+feat(frontend): add advanced phenopacket search with HPO filters
+
+- Add searchPhenopackets() POST endpoint to API client
+- Create AdvancedSearchForm component with HPO autocomplete
+- Update SearchResults view to display filtered results
+- Add debounced search input for better UX
+```
+
+### Frontend-Specific Best Practices
+
+1. **Always use `frontend` scope** for Vue.js app changes
+2. **Mention component names** when modifying specific components
+3. **Note API changes** if updating `src/api/index.js`
+4. **Reference UI/UX improvements** for styling changes
+5. **Mention performance metrics** for optimization commits
+6. **Include before/after** for refactoring commits
+7. **Note breaking changes** if changing component props/events
+
+### Complete Example
+
+```bash
+# Multiple frontend files changed for one feature
+
+feat(frontend): add phenopacket filtering by HPO terms (#35)
+
+- Add HPO autocomplete component with debounced search
+- Update PhenopacketsView with filter panel
+- Integrate phenopackets search POST endpoint
+- Add URL query params for shareable filter links
+- Update router to handle filter state restoration
+
+Files modified:
+- src/views/Phenopackets.vue
+- src/components/HpoAutocomplete.vue (new)
+- src/api/index.js
+- src/router/index.js
+```
+
+### Commit Message Validation
+
+After Claude provides a suggested commit message:
+
+1. **Review the changes**: `git diff`
+2. **Verify scope is correct**: Should be `(frontend)` for Vue.js changes
+3. **Check description accuracy**: Does it match what actually changed?
+4. **Confirm issue reference**: Is the issue number correct?
+5. **Add details if needed**: Expand the body for complex changes
+6. **Stage and commit**: Use the suggested message or modify as needed
+
+**Quick Reference:**
+- ✅ `feat(frontend): add new component`
+- ✅ `fix(frontend): resolve bug in view`
+- ✅ `style(frontend): update styling`
+- ❌ `feat: add new component` (missing scope)
+- ❌ `Update frontend` (missing type)
+- ❌ `feat(backend): update API` (wrong scope - should be in backend commit)
