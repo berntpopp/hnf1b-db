@@ -13,15 +13,25 @@ See detailed implementation plan: [docs/issues/issue-32-migrate-individual-detai
 
 ## Acceptance Criteria
 
-- [ ] Route changed from `/individuals/:id` to `/phenopackets/:id`
-- [ ] Page displays all phenopacket sections (subject, diseases, features, interpretations, metadata)
-- [ ] Modular card components created in `components/phenopacket/`
-- [ ] Download JSON button works
-- [ ] Conditional rendering for optional sections (features, interpretations, measurements)
-- [ ] ISO8601 durations formatted human-readable
-- [ ] Sex icons color-coded (blue=male, pink=female, grey=unknown)
-- [ ] No 404 errors, all API calls succeed
-- [ ] Responsive 2-column layout
+### Frontend Display
+- [x] Route changed from `/individuals/:id` to `/phenopackets/:id`
+- [x] Page displays all phenopacket sections (subject, diseases, features, interpretations, metadata)
+- [x] Modular card components created in `components/phenopacket/`
+- [x] Download JSON button works
+- [x] Conditional rendering for optional sections (features, interpretations, measurements)
+- [x] ISO8601 durations formatted human-readable
+- [x] Sex icons color-coded (blue=male, pink=female, grey=unknown)
+- [x] No 404 errors, all API calls succeed
+- [x] Responsive 2-column layout
+
+### Data Quality (Multi-Study Individuals)
+- [x] Sex correctly prioritizes non-UNKNOWN values across multiple studies
+- [x] Phenotypic features sorted chronologically (earliest onset first)
+- [x] Temporal onset shows both HPO term and specific age
+- [x] Overlapping CNV variants merged with alternate coordinates
+- [x] Variant labels concise with literature size and dbVar IDs
+- [x] Variant descriptions display fully without truncation
+- [x] Evidence from multiple publications merged correctly
 
 ## Dependencies
 

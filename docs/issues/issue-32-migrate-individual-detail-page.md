@@ -269,35 +269,87 @@ cd frontend && npm run dev   # Terminal 2
 ## Acceptance Criteria
 
 ### Functionality
-- [ ] Page loads phenopacket by ID from v2 API
-- [ ] All GA4GH sections display correctly
-- [ ] Loading spinner during fetch
-- [ ] Error message on 404/failure
-- [ ] Download JSON button works
-- [ ] Back button navigates to list
+- [x] Page loads phenopacket by ID from v2 API
+- [x] All GA4GH sections display correctly
+- [x] Loading spinner during fetch
+- [x] Error message on 404/failure
+- [x] Download JSON button works
+- [x] Back button navigates to list
 
 ### Data Display
-- [ ] Subject: ID, sex (with icon), age, karyotype
-- [ ] Phenotypic features: HPO terms with severity/onset
-- [ ] Diseases: MONDO/OMIM terms with onset
-- [ ] Interpretations: Variants with pathogenicity
-- [ ] Measurements: Lab values with units (if present)
-- [ ] Metadata: Created date, external references
+- [x] Subject: ID, sex (with icon), age, karyotype
+- [x] Phenotypic features: HPO terms with severity/onset
+- [x] Diseases: MONDO/OMIM terms with onset
+- [x] Interpretations: Variants with pathogenicity
+- [x] Measurements: Lab values with units (if present)
+- [x] Metadata: Created date, external references
 
 ### UI/UX
-- [ ] Section cards color-coded
-- [ ] Responsive layout (2-column on desktop)
-- [ ] Empty states for missing sections
-- [ ] ISO8601 durations formatted human-readable
-- [ ] Sex icons color-coded
-- [ ] HPO/MONDO IDs displayed as chips
+- [x] Section cards color-coded
+- [x] Responsive layout (2-column on desktop)
+- [x] Empty states for missing sections
+- [x] ISO8601 durations formatted human-readable
+- [x] Sex icons color-coded
+- [x] HPO/MONDO IDs displayed as chips
 
 ### Code Quality
-- [ ] Reusable section components
-- [ ] Props validation in components
-- [ ] No references to old Individual naming
-- [ ] ESLint passes
-- [ ] No console errors
+- [x] Reusable section components
+- [x] Props validation in components
+- [x] No references to old Individual naming
+- [x] ESLint passes
+- [x] No console errors
+
+### Data Quality (Multi-Study Individuals)
+- [x] Sex correctly prioritizes non-UNKNOWN values across multiple study rows
+- [x] Phenotypic features sorted chronologically (earliest onset first)
+- [x] Temporal onset displays both HPO term and specific age (e.g., "prenatal onset, reported: age 1 year, 4 months")
+- [x] Overlapping CNV variants merged into single interpretation with alternate coordinates
+- [x] Variant labels concise with literature-reported size and dbVar IDs
+- [x] Variant descriptions display fully without text truncation
+- [x] Evidence from multiple publications merged correctly
+
+## Backend Migration Enhancements
+
+### Multi-Study Individual Merging
+
+When the same individual appears in multiple publications, the migration now intelligently merges data:
+
+**Sex Mapping** (`backend/migration/phenopackets/builder_simple.py:122-160`):
+```python
+# Prioritize non-UNKNOWN sex from any row
+for _, row in rows.iterrows():
+    mapped_sex = self._map_sex(row.get("Sex"))
+    if mapped_sex != "UNKNOWN_SEX":
+        sex = mapped_sex
+        break  # Use first non-UNKNOWN value found
+```
+
+**Phenotype Merging** (`backend/migration/phenopackets/builder_simple.py:162-210`):
+- Keeps earliest onset when same phenotype reported at different ages
+- Merges evidence from all publications
+- Sorts chronologically: prenatal → postnatal → specific ages
+
+**CNV Merging** (`backend/migration/phenopackets/builder_simple.py:212-393`):
+- Detects overlapping deletions/duplications (>80% reciprocal overlap)
+- Merges into single variant with alternate coordinate estimates
+- Preserves dbVar IDs and literature-reported sizes
+- Example: Individual 1's deletion reported in 2 studies (1.37Mb + 1.42Mb) → merged into 1 variant
+
+**Variant Labels** (`backend/migration/vrs/cnv_parser.py:158-212`):
+- Concise format: "1.5Mb del (dbVar:nssv1184554)"
+- Uses literature-reported size for searchability
+- Includes calculated coordinates in description
+
+### Frontend Display Fixes
+
+**Text Wrapping** (`frontend/src/components/phenopacket/InterpretationsCard.vue:102-115`):
+- Replaced `v-list-item-subtitle` with plain `div` to avoid Vuetify's text truncation
+- Added CSS: `word-break: break-word`, `overflow-wrap: break-word`, `width: 100%`
+- Ensures long variant descriptions display fully (e.g., merged CNV coordinates)
+
+**Temporal Onset Formatting** (`frontend/src/components/phenopacket/PhenotypicFeaturesCard.vue`):
+- Displays both HPO term and specific age: "prenatal onset, reported: age 1 year, 4 months"
+- Helps researchers understand disease progression timeline
 
 ## Files Modified/Created
 
@@ -319,6 +371,18 @@ frontend/src/views/
 
 frontend/src/router/
 └── index.js                          (route updated)
+
+frontend/src/components/phenopacket/
+├── InterpretationsCard.vue           (text wrapping fix)
+└── PhenotypicFeaturesCard.vue        (temporal onset formatting)
+
+backend/migration/phenopackets/
+├── builder_simple.py                 (multi-study merging logic)
+├── extractors.py                     (CNV deduplication)
+└── age_parser.py                     (temporal data parsing)
+
+backend/migration/vrs/
+└── cnv_parser.py                     (concise labels, dbVar IDs)
 ```
 
 ## Dependencies
