@@ -9,9 +9,10 @@
       :items-length="totalItems"
       :custom-sort="customSort"
       hide-default-footer
-      class="elevation-1"
+      class="elevation-1 clickable-rows"
       density="compact"
       @update:options="onOptionsUpdate"
+      @click:row="handleRowClick"
     >
       <template #top>
         <v-toolbar flat>
@@ -63,7 +64,7 @@
         </v-toolbar>
       </template>
 
-      <!-- Render Phenopacket ID as a chip (TODO: Add link when detail page is ready - Issue #32) -->
+      <!-- Render Phenopacket ID as a chip -->
       <template #item.phenopacket_id="{ item }">
         <v-chip
           color="lime-lighten-2"
@@ -238,17 +239,17 @@ export default {
         const { skip, limit } = pageToSkipLimit(this.currentPage, itemsPerPage);
 
         // Build sort parameter (not fully implemented in backend yet)
-        let sortParam = '';
+        let _sortParam = '';
         if (Array.isArray(sortBy) && sortBy.length > 0) {
           const { key, order } = sortBy[0];
-          sortParam = (order === 'desc' ? '-' : '') + key;
+          _sortParam = (order === 'desc' ? '-' : '') + key;
         }
 
         // Fetch phenopackets from v2 API
         const response = await getPhenopackets({
           skip,
           limit,
-          // sort: sortParam, // TODO: Add when backend supports sorting
+          // sort: _sortParam, // TODO: Add when backend supports sorting
         });
 
         // Transform response data
@@ -363,6 +364,11 @@ export default {
       };
       return labels[sex] || sex;
     },
+
+    handleRowClick(event, { item }) {
+      // Navigate to phenopacket detail page
+      this.$router.push(`/phenopackets/${item.phenopacket_id}`);
+    },
   },
 };
 </script>
@@ -376,5 +382,15 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Make table rows clickable with hover effect */
+.clickable-rows :deep(tbody tr) {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.clickable-rows :deep(tbody tr:hover) {
+  background-color: rgba(0, 0, 0, 0.04);
 }
 </style>
