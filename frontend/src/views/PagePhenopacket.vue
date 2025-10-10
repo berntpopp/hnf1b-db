@@ -2,21 +2,47 @@
 <template>
   <v-container fluid>
     <!-- Loading State -->
-    <v-row v-if="loading" justify="center">
-      <v-col cols="12" class="text-center">
-        <v-progress-circular indeterminate color="primary" size="64" />
-        <div class="mt-4">Loading phenopacket...</div>
+    <v-row
+      v-if="loading"
+      justify="center"
+    >
+      <v-col
+        cols="12"
+        class="text-center"
+      >
+        <v-progress-circular
+          indeterminate
+          color="primary"
+          size="64"
+        />
+        <div class="mt-4">
+          Loading phenopacket...
+        </div>
       </v-col>
     </v-row>
 
     <!-- Error State -->
-    <v-row v-else-if="error" justify="center">
-      <v-col cols="12" md="8">
-        <v-alert type="error" variant="tonal" prominent>
+    <v-row
+      v-else-if="error"
+      justify="center"
+    >
+      <v-col
+        cols="12"
+        md="8"
+      >
+        <v-alert
+          type="error"
+          variant="tonal"
+          prominent
+        >
           <v-alert-title>Error Loading Phenopacket</v-alert-title>
           {{ error }}
         </v-alert>
-        <v-btn class="mt-4" color="primary" @click="$router.push('/phenopackets')">
+        <v-btn
+          class="mt-4"
+          color="primary"
+          @click="$router.push('/phenopackets')"
+        >
           Back to List
         </v-btn>
       </v-col>
@@ -27,15 +53,22 @@
       <!-- Header -->
       <v-row>
         <v-col cols="12">
-          <v-card flat class="mb-4">
+          <v-card
+            flat
+            class="mb-4"
+          >
             <v-card-title class="text-h4">
-              <v-icon left color="primary" size="large">
+              <v-icon
+                left
+                color="primary"
+                size="large"
+              >
                 mdi-file-document
               </v-icon>
-              {{ phenopacket.phenopacket_id }}
+              {{ phenopacket.id }}
             </v-card-title>
             <v-card-subtitle class="text-h6">
-              Subject: {{ phenopacket.phenopacket?.subject?.id || 'N/A' }}
+              Subject: {{ phenopacket.subject?.id || 'N/A' }}
             </v-card-subtitle>
             <v-card-actions>
               <v-btn
@@ -58,39 +91,71 @@
         </v-col>
       </v-row>
 
-      <!-- Content Cards in 2-Column Grid -->
-      <v-row>
+      <!-- Content Cards in Compact Layout -->
+      <v-row dense>
         <!-- Subject Card -->
-        <v-col cols="12" md="6">
-          <SubjectCard v-if="phenopacket.phenopacket?.subject" :subject="phenopacket.phenopacket.subject" />
+        <v-col
+          cols="12"
+          md="6"
+          class="py-1"
+        >
+          <SubjectCard
+            v-if="phenopacket.subject"
+            :subject="phenopacket.subject"
+          />
         </v-col>
 
         <!-- Diseases Card -->
-        <v-col cols="12" md="6">
+        <v-col
+          cols="12"
+          md="6"
+          class="py-1"
+        >
           <DiseasesCard
-            v-if="phenopacket.phenopacket?.diseases"
-            :diseases="phenopacket.phenopacket.diseases"
+            v-if="phenopacket.diseases"
+            :diseases="phenopacket.diseases"
           />
         </v-col>
 
         <!-- Phenotypic Features Card (if present) -->
-        <v-col v-if="hasPhenotypicFeatures" cols="12" md="6">
-          <PhenotypicFeaturesCard :features="phenopacket.phenopacket.phenotypicFeatures" />
+        <v-col
+          v-if="hasPhenotypicFeatures"
+          cols="12"
+          md="6"
+          class="py-1"
+        >
+          <PhenotypicFeaturesCard :features="phenopacket.phenotypicFeatures" />
         </v-col>
 
         <!-- Interpretations Card (if present) -->
-        <v-col v-if="hasInterpretations" cols="12" :md="hasPhenotypicFeatures ? 6 : 12">
-          <InterpretationsCard :interpretations="phenopacket.phenopacket.interpretations" />
+        <v-col
+          v-if="hasInterpretations"
+          cols="12"
+          :md="hasPhenotypicFeatures ? 6 : 12"
+          class="py-1"
+        >
+          <InterpretationsCard :interpretations="phenopacket.interpretations" />
         </v-col>
 
         <!-- Measurements Card (if present) -->
-        <v-col v-if="hasMeasurements" cols="12" md="6">
-          <MeasurementsCard :measurements="phenopacket.phenopacket.measurements" />
+        <v-col
+          v-if="hasMeasurements"
+          cols="12"
+          md="6"
+          class="py-1"
+        >
+          <MeasurementsCard :measurements="phenopacket.measurements" />
         </v-col>
 
         <!-- Metadata Card (full width) -->
-        <v-col cols="12">
-          <MetadataCard v-if="phenopacket.phenopacket?.metaData" :meta-data="phenopacket.phenopacket.metaData" />
+        <v-col
+          cols="12"
+          class="py-1"
+        >
+          <MetadataCard
+            v-if="phenopacket.metaData"
+            :meta-data="phenopacket.metaData"
+          />
         </v-col>
       </v-row>
     </div>
@@ -126,20 +191,20 @@ export default {
   computed: {
     hasPhenotypicFeatures() {
       return (
-        this.phenopacket?.phenopacket?.phenotypicFeatures &&
-        this.phenopacket.phenopacket.phenotypicFeatures.length > 0
+        this.phenopacket?.phenotypicFeatures &&
+        this.phenopacket.phenotypicFeatures.length > 0
       );
     },
     hasInterpretations() {
       return (
-        this.phenopacket?.phenopacket?.interpretations &&
-        this.phenopacket.phenopacket.interpretations.length > 0
+        this.phenopacket?.interpretations &&
+        this.phenopacket.interpretations.length > 0
       );
     },
     hasMeasurements() {
       return (
-        this.phenopacket?.phenopacket?.measurements &&
-        this.phenopacket.phenopacket.measurements.length > 0
+        this.phenopacket?.measurements &&
+        this.phenopacket.measurements.length > 0
       );
     },
   },
@@ -174,7 +239,7 @@ export default {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${this.phenopacket.phenopacket_id}.json`;
+      link.download = `${this.phenopacket.id}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

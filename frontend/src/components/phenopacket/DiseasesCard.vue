@@ -1,21 +1,45 @@
 <!-- src/components/phenopacket/DiseasesCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-h6 bg-red-lighten-5">
-      <v-icon left color="error">
+    <v-card-title class="text-subtitle-1 py-2 bg-red-lighten-5">
+      <v-icon
+        left
+        color="error"
+        size="small"
+      >
         mdi-virus
       </v-icon>
       Diseases ({{ diseases.length }})
     </v-card-title>
-    <v-card-text>
-      <v-alert v-if="diseases.length === 0" type="info" density="compact">
+    <v-card-text class="pa-2">
+      <v-alert
+        v-if="diseases.length === 0"
+        type="info"
+        density="compact"
+      >
         No diseases recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item v-for="(disease, index) in diseases" :key="index" class="mb-2">
+        <v-list-item
+          v-for="(disease, index) in diseases"
+          :key="index"
+          class="mb-2"
+        >
           <template #prepend>
-            <v-chip color="red" variant="flat" size="small">
+            <v-chip
+              :href="getMondoUrl(disease.term.id)"
+              target="_blank"
+              color="red"
+              variant="flat"
+              size="small"
+            >
+              <v-icon
+                left
+                size="x-small"
+              >
+                mdi-open-in-new
+              </v-icon>
               {{ disease.term.id }}
             </v-chip>
           </template>
@@ -67,6 +91,14 @@ export default {
     },
   },
   methods: {
+    getMondoUrl(mondoId) {
+      // Convert MONDO:0018874 to https://monarchinitiative.org/disease/MONDO:0018874
+      if (mondoId && mondoId.startsWith('MONDO:')) {
+        return `https://monarchinitiative.org/disease/${mondoId}`;
+      }
+      return '#';
+    },
+
     formatOnset(onset) {
       if (onset.age?.iso8601duration) {
         return this.formatISO8601Duration(onset.age.iso8601duration);

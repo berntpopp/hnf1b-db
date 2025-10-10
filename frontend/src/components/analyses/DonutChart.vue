@@ -2,9 +2,15 @@
   <div class="donut-chart-container">
     <div class="chart-wrapper">
       <!-- The div where the chart will be rendered -->
-      <div ref="chart" class="chart" />
+      <div
+        ref="chart"
+        class="chart"
+      />
       <!-- Legend -->
-      <div ref="legend" class="legend" />
+      <div
+        ref="legend"
+        class="legend"
+      />
     </div>
   </div>
 </template>

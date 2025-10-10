@@ -1,13 +1,17 @@
 <!-- src/components/phenopacket/SubjectCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-h6 bg-blue-lighten-5">
-      <v-icon left color="primary">
+    <v-card-title class="text-subtitle-1 py-2 bg-blue-lighten-5">
+      <v-icon
+        left
+        color="primary"
+        size="small"
+      >
         mdi-account
       </v-icon>
       Subject Information
     </v-card-title>
-    <v-card-text>
+    <v-card-text class="pa-2">
       <v-list density="compact">
         <v-list-item>
           <v-list-item-title class="font-weight-bold">
@@ -16,12 +20,34 @@
           <v-list-item-subtitle>{{ subject.id || 'N/A' }}</v-list-item-subtitle>
         </v-list-item>
 
+        <v-list-item v-if="subject.alternateIds && subject.alternateIds.length > 0">
+          <v-list-item-title class="font-weight-bold">
+            Individual Identifier{{ subject.alternateIds.length > 1 ? 's' : '' }}
+          </v-list-item-title>
+          <v-list-item-subtitle>
+            <v-chip
+              v-for="(altId, index) in subject.alternateIds"
+              :key="index"
+              size="small"
+              class="mr-1 mb-1 font-weight-medium"
+              color="blue-lighten-4"
+              variant="flat"
+            >
+              {{ altId }}
+            </v-chip>
+          </v-list-item-subtitle>
+        </v-list-item>
+
         <v-list-item>
           <v-list-item-title class="font-weight-bold">
             Sex
           </v-list-item-title>
           <v-list-item-subtitle>
-            <v-icon small :color="getSexColor(subject.sex)" class="mr-1">
+            <v-icon
+              small
+              :color="getSexColor(subject.sex)"
+              class="mr-1"
+            >
               {{ getSexIcon(subject.sex) }}
             </v-icon>
             {{ formatSex(subject.sex) }}
