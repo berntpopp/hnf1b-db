@@ -366,7 +366,7 @@ class CNVParser:
         interpretation = {
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                "disease": {"id": "MONDO:0018874", "label": "HNF1B-related disorder"},
+                "disease": {"id": "MONDO:0011593", "label": "Renal cysts and diabetes syndrome"},
                 "genomicInterpretations": [
                     {
                         "subjectOrBiosampleId": row_data.get(

@@ -46,15 +46,19 @@ class PhenopacketBuilder:
     def _init_mondo_mappings(self) -> Dict[str, Dict[str, str]]:
         """Initialize disease ontology mappings.
 
-        Note: The incorrect MONDO:0018874 (AML) has been removed.
-        Diseases are now only assigned when specific phenotypic evidence exists.
+        All individuals in this database have HNF1B-related genetic findings.
+        MONDO:0011593 (Renal cysts and diabetes syndrome) is the umbrella term
+        for HNF1B-related disorder, also known as RCAD.
         """
         return {
+            "hnf1b_disorder": {
+                "id": "MONDO:0011593",
+                "label": "Renal cysts and diabetes syndrome",
+            },
             "mody5": {
                 "id": "MONDO:0010953",
                 "label": "Maturity-onset diabetes of the young type 5",
             },
-            "rcad": {"id": "ORPHA:93111", "label": "Renal cysts and diabetes syndrome"},
         }
 
     def _safe_value(self, value: Any) -> Optional[str]:
@@ -397,9 +401,10 @@ class PhenopacketBuilder:
     ) -> List[Dict[str, Any]]:
         """Build diseases list for phenopacket.
 
-        Only includes diseases with specific MONDO terms based on phenotypic evidence.
-        The general "HNF1B-related disorder" is not assigned a MONDO term since the
-        database contains individuals with heterogeneous phenotypes.
+        All individuals in this database have HNF1B-related genetic findings,
+        so MONDO:0011593 (Renal cysts and diabetes syndrome / RCAD) is included
+        for all phenopackets as the base disease. Additional specific disease
+        terms are added based on phenotypic evidence.
         """
         diseases = []
 
@@ -415,7 +420,15 @@ class PhenopacketBuilder:
                 "ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}
             }
 
-        # Check for MODY/diabetes - only add MONDO term if explicitly present
+        # Add base HNF1B disorder for all individuals
+        diseases.append(
+            {
+                "term": self.mondo_mappings["hnf1b_disorder"],
+                "onset": disease_onset,
+            }
+        )
+
+        # Check for MODY/diabetes - add specific MONDO term if explicitly present
         mody_col = next(
             (col for col in first_row.index if "mody" in col.lower()), None
         )
@@ -430,8 +443,6 @@ class PhenopacketBuilder:
                     }
                 )
 
-        # If no specific diseases identified, return empty list
-        # The HNF1B gene variant itself is captured in interpretations section
         return diseases
 
     def _build_metadata(self, rows: pd.DataFrame) -> Dict[str, Any]:
