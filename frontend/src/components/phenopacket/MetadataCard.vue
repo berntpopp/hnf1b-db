@@ -190,19 +190,21 @@ export default {
           url: ref.reference,
         }));
 
-      return this.metaData.updates.map((update, index) => {
+      return this.metaData.updates.map((update) => {
         // Extract pub ID from comment (e.g., "Data from pub123" → "pub123")
         const pubMatch = update.comment?.match(/pub(\d+)/i);
 
-        // If we have PMIDs, try to map based on order (pub123 → first PMID, pub156 → second PMID)
+        // Try to find PMID whose id matches the publication number
+        // This is more robust than array index mapping which breaks with reordering
         let pmid = null;
-        if (pubMatch && pmids.length > index) {
-          pmid = pmids[index];
+        if (pubMatch && pubMatch[1]) {
+          // Look for a PMID that contains the publication number
+          pmid = pmids.find((ref) => ref.id.includes(pubMatch[1]));
         }
 
         return {
           ...update,
-          pmid: pmid,
+          pmid: pmid || null,
         };
       });
     },
