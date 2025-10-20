@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.phenopackets.models import Phenopacket, PhenopacketCreate
+from app.phenopackets.models import Phenopacket
 
 
 @pytest.fixture

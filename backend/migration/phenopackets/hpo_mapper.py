@@ -1,7 +1,7 @@
 """HPO term mapping for phenotypic features."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import pandas as pd
 

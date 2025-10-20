@@ -220,7 +220,6 @@ class PhenopacketBuilder:
         into a single variant entry with multiple coordinate estimates.
         """
         variant_dict = {}
-        import re
 
         for _, row in rows.iterrows():
             interpretations = self.variant_extractor.extract(row)

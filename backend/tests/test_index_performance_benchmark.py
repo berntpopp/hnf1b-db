@@ -41,7 +41,7 @@ class TestAggregationQueryPerformance:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Phenotypic Features Aggregation:")
+        print("Phenotypic Features Aggregation:")
         print(f"  Query time:     {elapsed*1000:.2f}ms")
         print(f"  Features found: {len(rows)}")
         if rows:
@@ -80,7 +80,7 @@ class TestAggregationQueryPerformance:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Disease Aggregation:")
+        print("Disease Aggregation:")
         print(f"  Query time:    {elapsed*1000:.2f}ms")
         print(f"  Diseases found: {len(rows)}")
         if rows:
@@ -117,7 +117,7 @@ class TestAggregationQueryPerformance:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Variant Pathogenicity Aggregation:")
+        print("Variant Pathogenicity Aggregation:")
         print(f"  Query time:         {elapsed*1000:.2f}ms")
         print(f"  Classifications:    {len(rows)}")
         print(f"{'='*60}")
@@ -149,7 +149,7 @@ class TestComplexJSONBQueries:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Contains Query (HP:0012622 - Chronic kidney disease):")
+        print("Contains Query (HP:0012622 - Chronic kidney disease):")
         print(f"  Query time:  {elapsed*1000:.2f}ms")
         print(f"  Matches:     {len(rows)}")
         print(f"{'='*60}")
@@ -178,7 +178,7 @@ class TestComplexJSONBQueries:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Existence Query (has phenotypicFeatures):")
+        print("Existence Query (has phenotypicFeatures):")
         print(f"  Query time:  {elapsed*1000:.2f}ms")
         print(f"  Matches:     {len(rows)}")
         print(f"{'='*60}")

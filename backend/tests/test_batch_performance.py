@@ -111,7 +111,7 @@ class TestBatchPerformance:
         improvement = time_individual / time_batch if time_batch > 0 else 0
 
         print(f"\n{'='*60}")
-        print(f"Performance Comparison (50 phenopackets):")
+        print("Performance Comparison (50 phenopackets):")
         print(f"  Individual queries (N+1): {time_individual:.4f}s")
         print(f"  Batch query (WHERE IN):   {time_batch:.4f}s")
         print(f"  Improvement:              {improvement:.1f}x faster")
@@ -153,7 +153,7 @@ class TestBatchPerformance:
         improvement = time_individual / time_batch if time_batch > 0 else 0
 
         print(f"\n{'='*60}")
-        print(f"Features Performance (50 phenopackets):")
+        print("Features Performance (50 phenopackets):")
         print(f"  Individual queries: {time_individual:.4f}s")
         print(f"  Batch query:        {time_batch:.4f}s")
         print(f"  Improvement:        {improvement:.1f}x faster")
@@ -175,7 +175,7 @@ class TestBatchPerformance:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"Scalability Test (100 phenopackets):")
+        print("Scalability Test (100 phenopackets):")
         print(f"  Query time:     {elapsed:.4f}s")
         print(f"  Records/second: {len(phenopackets)/elapsed:.1f}")
         print(f"{'='*60}")
@@ -215,7 +215,7 @@ class TestHPOValidationPerformance:
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")
-        print(f"HPO Validation Performance (5 terms, cache warm):")
+        print("HPO Validation Performance (5 terms, cache warm):")
         print(f"  Local service time: {elapsed:.6f}s")
         print(f"  Terms/second:       {len(hpo_terms)/elapsed:.0f}")
         print(f"{'='*60}")
