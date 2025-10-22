@@ -25,11 +25,11 @@ try:
 
     # Import all Phenopackets v2 models to ensure metadata is complete
     from app.phenopackets.models import (
-        Phenopacket,
-        Family,
         Cohort,
+        Family,
+        Phenopacket,
+        PhenopacketAudit,
         Resource,
-        PhenopacketAudit
     )
 
     target_metadata = Base.metadata

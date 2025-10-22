@@ -56,8 +56,11 @@ class PhenotypeExtractor:
         # Get timestamp from ReviewDate for this observation
         review_timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
 
-        # Get age at onset if available
-        age_onset = self.age_parser.parse_age(row.get("AgeOnset"))
+        # Get age at onset if available (e.g., "prenatal", "postnatal")
+        age_onset_class = self.age_parser.parse_age(row.get("AgeOnset"))
+
+        # Get reported age (e.g., "2y", "1y4m", "P2Y", "P1Y4M")
+        age_reported = self.age_parser.parse_age(row.get("AgeReported"))
 
         # Normalize column names
         normalized_cols = {self._normalize_column_name(col): col for col in row.index}
@@ -86,9 +89,23 @@ class PhenotypeExtractor:
                         "excluded": excluded,
                     }
 
-                    # Add age of onset ONLY if explicitly provided in AgeOnset column
-                    if age_onset and not excluded:
-                        phenotype["onset"] = age_onset
+                    # Add onset information - prenatal/postnatal takes priority
+                    if not excluded:
+                        if age_onset_class:
+                            # Use prenatal/postnatal as primary onset
+                            phenotype["onset"] = age_onset_class
+                            # If we also have a specific age, add it alongside
+                            if age_reported and "ontologyClass" in age_onset_class:
+                                # Combine: ontologyClass (prenatal/postnatal) + age (P2Y)
+                                phenotype["onset"]["age"] = (
+                                    age_reported.get("iso8601duration")
+                                    if isinstance(age_reported, dict)
+                                    and "iso8601duration" in age_reported
+                                    else age_reported
+                                )
+                        elif age_reported:
+                            # Only specific age available, use it
+                            phenotype["onset"] = age_reported
 
                     # Add evidence (using EvidenceBuilder to eliminate duplication)
                     evidence = self.evidence_builder.build_evidence(
@@ -137,7 +154,10 @@ class PhenotypeExtractor:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
 
-        if "multiple glomerular cysts" in value_lower or "glomerular cyst" in value_lower:
+        if (
+            "multiple glomerular cysts" in value_lower
+            or "glomerular cyst" in value_lower
+        ):
             phenotype = {
                 "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
                 "excluded": False,
@@ -149,6 +169,7 @@ class PhenotypeExtractor:
             if evidence:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
+
 
 class VariantExtractor:
     """Extracts variants from spreadsheet rows."""
@@ -191,10 +212,14 @@ class VariantExtractor:
                 row, hg38, hg38_info, variant_type, variant_reported, publication
             )
             if cnv_interp:
-                self._add_classification_info(cnv_interp, verdict, criteria, segregation)
+                self._add_classification_info(
+                    cnv_interp, verdict, criteria, segregation
+                )
                 interpretations.append(cnv_interp)
+                # Skip SNV processing for CNVs - already handled
+                return interpretations
 
-        # Handle SNVs and other variants
+        # Handle SNVs and other variants (only if not a CNV)
         c_dot, p_dot, transcript = self._parse_variant_notation(
             varsome, variant_reported
         )
@@ -248,7 +273,9 @@ class VariantExtractor:
             individual_id = row.get(
                 "IndividualIdentifier", row.get("individual_id", "unknown")
             )
-            subject_id = f"{individual_id}_{publication}" if publication else individual_id
+            subject_id = (
+                f"{individual_id}_{publication}" if publication else individual_id
+            )
             cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
                 "subjectOrBiosampleId"
             ] = subject_id
@@ -333,7 +360,9 @@ class VariantExtractor:
                     {"syntax": "hgvs.c", "value": f"{transcript_id}:{c_dot}"}
                 )
             if p_dot:
-                expressions.append({"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"})
+                expressions.append(
+                    {"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"}
+                )
             if hg38:
                 expressions.append({"syntax": "vcf", "value": hg38})
 
@@ -399,7 +428,13 @@ class VariantExtractor:
             "id": f"interpretation-{interp_count+1:03d}",
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                "disease": self.mondo_mappings["hnf1b"],
+                # Disease term assignment strategy:
+                # - For SNVs/indels: Empty disease field (assigned at phenopacket level)
+                # - For CNVs: Disease assigned by CNVParser (MONDO:0011593)
+                # - Rationale: HNF1B SNVs don't always correlate to a single disease;
+                #   diagnosis depends on full phenotypic evidence reviewed at
+                #   phenopacket level (see builder_simple.py _build_diseases method)
+                "disease": {},  # Explicitly empty for SNVs/indels
                 "genomicInterpretations": [
                     {
                         "subjectOrBiosampleId": subject_biosample_id,

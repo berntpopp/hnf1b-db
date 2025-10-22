@@ -153,11 +153,11 @@ class TestDirectPhenopacketsMigration:
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
 
-        # Should have HNF1B disease
+        # Should have HNF1B disease (RCAD)
         diseases = phenopacket.get("diseases", [])
         assert len(diseases) > 0
-        assert diseases[0]["term"]["id"] == "MONDO:0018874"
-        assert "HNF1B" in diseases[0]["term"]["label"]
+        assert diseases[0]["term"]["id"] == "MONDO:0011593"
+        assert "Renal cysts and diabetes" in diseases[0]["term"]["label"]
 
     def test_metadata_creation(self, migration):
         """Test metadata creation for phenopackets."""

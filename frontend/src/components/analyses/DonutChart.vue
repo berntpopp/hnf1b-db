@@ -2,9 +2,15 @@
   <div class="donut-chart-container">
     <div class="chart-wrapper">
       <!-- The div where the chart will be rendered -->
-      <div ref="chart" class="chart" />
+      <div
+        ref="chart"
+        class="chart"
+      />
       <!-- Legend -->
-      <div ref="legend" class="legend" />
+      <div
+        ref="legend"
+        class="legend"
+      />
     </div>
   </div>
 </template>
@@ -138,12 +144,6 @@ export default {
         .innerRadius(radius * 0.5) // Size of the donut hole.
         .outerRadius(radius * 0.8);
 
-      // Define the outer arc for label positioning.
-      const outerArc = d3
-        .arc()
-        .innerRadius(radius * 0.9)
-        .outerRadius(radius * 0.9);
-
       // Append the donut slices.
       svg
         .selectAll('path.slice')
@@ -230,47 +230,6 @@ export default {
     },
   },
 };
-
-/**
- * A helper function that wraps SVG text by breaking lines at whitespace.
- * If the text length exceeds the specified width, additional <tspan> elements are added.
- *
- * @param {d3.Selection} text - A D3 selection containing one or more text elements.
- * @param {number} width - The maximum width (in pixels) for a line of text.
- */
-function wrap(text, width) {
-  text.each(function () {
-    const text = d3.select(this);
-    const words = text.text().split(/\s+/).reverse();
-    let word;
-    let line = [];
-    let lineNumber = 0;
-    const lineHeight = 1.1; // ems
-    const y = text.attr('y') || 0;
-    const dy = parseFloat(text.attr('dy')) || 0;
-    let tspan = text
-      .text(null)
-      .append('tspan')
-      .attr('x', 0)
-      .attr('y', y)
-      .attr('dy', dy + 'em');
-    while ((word = words.pop())) {
-      line.push(word);
-      tspan.text(line.join(' '));
-      if (tspan.node().getComputedTextLength() > width) {
-        line.pop();
-        tspan.text(line.join(' '));
-        line = [word];
-        tspan = text
-          .append('tspan')
-          .attr('x', 0)
-          .attr('y', y)
-          .attr('dy', ++lineNumber * lineHeight + dy + 'em')
-          .text(word);
-      }
-    }
-  });
-}
 </script>
 
 <style scoped>

@@ -1,150 +1,126 @@
 <!-- src/components/phenopacket/InterpretationsCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-h6 bg-purple-lighten-5">
-      <v-icon left color="deep-purple">
+    <v-card-title class="text-subtitle-1 py-2 bg-purple-lighten-5">
+      <v-icon
+        left
+        color="deep-purple"
+        size="small"
+      >
         mdi-dna
       </v-icon>
-      Genomic Interpretations ({{ interpretations.length }})
+      Genomic Interpretations ({{ uniqueInterpretations.length }})
     </v-card-title>
-    <v-card-text>
-      <v-alert v-if="interpretations.length === 0" type="info" density="compact">
+    <v-card-text class="pa-2">
+      <v-alert
+        v-if="uniqueInterpretations.length === 0"
+        type="info"
+        density="compact"
+      >
         No genomic interpretations recorded
       </v-alert>
 
-      <v-expansion-panels v-else accordion>
-        <v-expansion-panel v-for="(interpretation, index) in interpretations" :key="index">
+      <v-expansion-panels
+        v-else
+        accordion
+      >
+        <v-expansion-panel
+          v-for="(interpretation, index) in uniqueInterpretations"
+          :key="index"
+        >
           <v-expansion-panel-title>
-            <v-icon left color="deep-purple">
+            <v-icon
+              left
+              color="deep-purple"
+              size="small"
+            >
               mdi-dna
             </v-icon>
-            <span class="font-weight-bold mr-2">{{ interpretation.id }}</span>
-            <v-chip
-              :color="getProgressStatusColor(interpretation.progressStatus)"
-              size="small"
-              variant="flat"
-            >
-              {{ interpretation.progressStatus }}
-            </v-chip>
+            <span class="font-weight-medium">
+              {{
+                getVariantSummary(interpretation) ||
+                  `Variant ${index + 1}`
+              }}
+            </span>
           </v-expansion-panel-title>
 
           <v-expansion-panel-text>
-            <v-list v-if="interpretation.diagnosis">
-              <v-list-item v-if="interpretation.diagnosis.disease">
-                <v-list-item-title class="font-weight-bold">
-                  Disease
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  <v-chip color="red" size="small" class="mr-1">
-                    {{ interpretation.diagnosis.disease.id }}
-                  </v-chip>
-                  {{ interpretation.diagnosis.disease.label }}
-                </v-list-item-subtitle>
-              </v-list-item>
-
-              <v-divider class="my-2" />
-
-              <v-list-item-title class="font-weight-bold mb-2">
-                Genomic Interpretations
-              </v-list-item-title>
-
-              <v-card
+            <v-list
+              v-if="interpretation.diagnosis"
+              density="compact"
+            >
+              <div
                 v-for="(gi, giIndex) in interpretation.diagnosis.genomicInterpretations"
                 :key="giIndex"
-                outlined
-                class="mb-2"
+                class="mb-3"
               >
-                <v-card-text>
-                  <div class="mb-2">
-                    <strong>Subject:</strong> {{ gi.subjectOrBiosampleId }}
-                  </div>
-                  <div class="mb-2">
-                    <strong>Status:</strong>
-                    <v-chip
-                      :color="getInterpretationStatusColor(gi.interpretationStatus)"
-                      size="small"
-                      variant="flat"
-                    >
-                      {{ gi.interpretationStatus }}
-                    </v-chip>
-                  </div>
-
-                  <v-divider class="my-2" />
-
-                  <div v-if="gi.variantInterpretation" class="mt-2">
-                    <v-list-item-title class="font-weight-bold mb-2">
-                      Variant Details
-                    </v-list-item-title>
-
-                    <div v-if="gi.variantInterpretation.variationDescriptor">
-                      <div class="mb-2">
-                        <strong>Label:</strong>
+                <div v-if="gi.variantInterpretation">
+                  <div v-if="gi.variantInterpretation.variationDescriptor">
+                    <v-list-item class="px-0">
+                      <v-list-item-title class="font-weight-bold">
+                        Variant Label
+                      </v-list-item-title>
+                      <v-list-item-subtitle>
                         {{ gi.variantInterpretation.variationDescriptor.label || 'N/A' }}
-                      </div>
+                      </v-list-item-subtitle>
+                    </v-list-item>
 
-                      <div
-                        v-if="gi.variantInterpretation.variationDescriptor.geneContext"
-                        class="mb-2"
-                      >
-                        <strong>Gene:</strong>
-                        <v-chip color="blue" size="small" class="mr-1">
+                    <v-list-item
+                      v-if="gi.variantInterpretation.variationDescriptor.geneContext"
+                      class="px-0"
+                    >
+                      <v-list-item-title class="font-weight-bold">
+                        Gene
+                      </v-list-item-title>
+                      <v-list-item-subtitle>
+                        <v-chip
+                          color="blue"
+                          size="small"
+                          class="mr-1"
+                        >
                           {{ gi.variantInterpretation.variationDescriptor.geneContext.valueId }}
                         </v-chip>
                         {{ gi.variantInterpretation.variationDescriptor.geneContext.symbol }}
-                      </div>
+                      </v-list-item-subtitle>
+                    </v-list-item>
 
+                    <v-list-item class="px-0">
+                      <v-list-item-title class="font-weight-bold">
+                        Classification
+                      </v-list-item-title>
+                      <v-list-item-subtitle>
+                        <v-chip
+                          :color="getInterpretationStatusColor(gi.interpretationStatus)"
+                          size="small"
+                          variant="flat"
+                        >
+                          {{ gi.interpretationStatus }}
+                        </v-chip>
+                      </v-list-item-subtitle>
+                    </v-list-item>
+
+                    <div
+                      v-if="gi.variantInterpretation.variationDescriptor.description"
+                      class="px-0 mb-3"
+                    >
+                      <div class="font-weight-bold mb-2 text-subtitle-2">
+                        Description
+                      </div>
                       <div
-                        v-if="gi.variantInterpretation.variationDescriptor.vcfRecord"
-                        class="mb-2"
+                        class="text-body-2"
+                        style="white-space: normal; word-break: break-word; overflow-wrap: break-word; width: 100%; color: rgba(0, 0, 0, 0.6);"
                       >
-                        <strong>VCF:</strong>
-                        {{ gi.variantInterpretation.variationDescriptor.vcfRecord.genomeAssembly }}
-                        - Chr{{ gi.variantInterpretation.variationDescriptor.vcfRecord.chrom }}:{{
-                          gi.variantInterpretation.variationDescriptor.vcfRecord.pos
-                        }}
-                        {{ gi.variantInterpretation.variationDescriptor.vcfRecord.ref }} >
-                        {{ gi.variantInterpretation.variationDescriptor.vcfRecord.alt }}
+                        {{ gi.variantInterpretation.variationDescriptor.description }}
                       </div>
-                    </div>
-
-                    <div
-                      v-if="gi.variantInterpretation.acmgPathogenicityClassification"
-                      class="mb-2"
-                    >
-                      <strong>ACMG Classification:</strong>
-                      <v-chip
-                        :color="
-                          getPathogenicityColor(
-                            gi.variantInterpretation.acmgPathogenicityClassification,
-                          )
-                        "
-                        size="small"
-                        variant="flat"
-                        class="ml-1"
-                      >
-                        {{ gi.variantInterpretation.acmgPathogenicityClassification }}
-                      </v-chip>
-                    </div>
-
-                    <div
-                      v-if="gi.variantInterpretation.therapeuticActionability"
-                      class="mb-2"
-                    >
-                      <strong>Therapeutic Actionability:</strong>
-                      <v-chip
-                        :color="
-                          getActionabilityColor(gi.variantInterpretation.therapeuticActionability)
-                        "
-                        size="small"
-                        variant="flat"
-                        class="ml-1"
-                      >
-                        {{ gi.variantInterpretation.therapeuticActionability }}
-                      </v-chip>
                     </div>
                   </div>
-                </v-card-text>
-              </v-card>
+                </div>
+
+                <v-divider
+                  v-if="giIndex < interpretation.diagnosis.genomicInterpretations.length - 1"
+                  class="my-2"
+                />
+              </div>
             </v-list>
           </v-expansion-panel-text>
         </v-expansion-panel>
@@ -162,15 +138,45 @@ export default {
       default: () => [],
     },
   },
+  computed: {
+    uniqueInterpretations() {
+      // Filter out duplicate interpretations (keep only those with descriptive labels)
+      // Remove interpretations with generic "HNF1B:variant" labels when better labels exist
+      const filtered = this.interpretations.filter((interp) => {
+        if (!interp.diagnosis?.genomicInterpretations) return false;
+
+        const gi = interp.diagnosis.genomicInterpretations[0];
+        const label = gi?.variantInterpretation?.variationDescriptor?.label;
+
+        // Skip generic labels like "HNF1B:variant" or "GENE:variant"
+        if (label && label.match(/^[A-Z0-9]+:variant$/i)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return filtered;
+    },
+  },
   methods: {
-    getProgressStatusColor(status) {
-      const colors = {
-        SOLVED: 'green',
-        UNSOLVED: 'orange',
-        IN_PROGRESS: 'blue',
-        UNKNOWN: 'grey',
-      };
-      return colors[status] || 'grey';
+    getVariantSummary(interpretation) {
+      // Extract variant label from first genomic interpretation
+      if (
+        interpretation?.diagnosis?.genomicInterpretations &&
+        interpretation.diagnosis.genomicInterpretations.length > 0
+      ) {
+        const gi = interpretation.diagnosis.genomicInterpretations[0];
+        const label = gi.variantInterpretation?.variationDescriptor?.label;
+        const gene = gi.variantInterpretation?.variationDescriptor?.geneContext?.symbol;
+
+        if (label) {
+          return label;
+        } else if (gene) {
+          return `${gene} variant`;
+        }
+      }
+      return null;
     },
 
     getInterpretationStatusColor(status) {
@@ -180,6 +186,8 @@ export default {
         CANDIDATE: 'blue',
         UNCERTAIN_SIGNIFICANCE: 'grey',
         NO_KNOWN_DISEASE_RELATIONSHIP: 'grey',
+        PATHOGENIC: 'red',
+        LIKELY_PATHOGENIC: 'orange',
       };
       return colors[status] || 'grey';
     },

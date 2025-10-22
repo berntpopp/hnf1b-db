@@ -44,14 +44,21 @@ class PhenopacketBuilder:
         self.variant_extractor = VariantExtractor(self.mondo_mappings)
 
     def _init_mondo_mappings(self) -> Dict[str, Dict[str, str]]:
-        """Initialize MONDO disease mappings."""
+        """Initialize disease ontology mappings.
+
+        All individuals in this database have HNF1B-related genetic findings.
+        MONDO:0011593 (Renal cysts and diabetes syndrome) is the umbrella term
+        for HNF1B-related disorder, also known as RCAD.
+        """
         return {
-            "hnf1b": {"id": "MONDO:0018874", "label": "HNF1B-related disorder"},
+            "hnf1b_disorder": {
+                "id": "MONDO:0011593",
+                "label": "Renal cysts and diabetes syndrome",
+            },
             "mody5": {
                 "id": "MONDO:0010953",
                 "label": "Maturity-onset diabetes of the young type 5",
             },
-            "rcad": {"id": "ORPHA:93111", "label": "Renal cysts and diabetes syndrome"},
         }
 
     def _safe_value(self, value: Any) -> Optional[str]:
@@ -86,8 +93,8 @@ class PhenopacketBuilder:
         """
         first_row = rows.iloc[0]
 
-        # Build subject
-        subject = self._build_subject(individual_id, first_row)
+        # Build subject (pass all rows to prioritize non-UNKNOWN sex)
+        subject = self._build_subject(individual_id, rows)
 
         # Extract and merge phenotypes
         all_phenotypes = self._merge_phenotypes(rows)
@@ -116,19 +123,40 @@ class PhenopacketBuilder:
 
         return self._clean_empty_fields(phenopacket)
 
-    def _build_subject(self, individual_id: str, first_row: pd.Series) -> Dict[str, Any]:
-        """Build subject section."""
-        individual_identifier = self._safe_value(first_row.get("IndividualIdentifier"))
+    def _build_subject(self, individual_id: str, rows: pd.DataFrame) -> Dict[str, Any]:
+        """Build subject section.
+
+        When individual appears in multiple studies (multiple rows), this method:
+        - Prioritizes non-UNKNOWN_SEX values across all rows
+        - Uses latest reported age
+        - Collects all unique alternate IDs
+        """
+        first_row = rows.iloc[0]
+
+        # Prioritize non-UNKNOWN sex from any row
+        sex = "UNKNOWN_SEX"
+        for _, row in rows.iterrows():
+            mapped_sex = self._map_sex(self._safe_value(row.get("Sex")))
+            if mapped_sex != "UNKNOWN_SEX":
+                sex = mapped_sex
+                break  # Use first non-UNKNOWN value found
+
+        # Collect all unique individual identifiers
+        identifiers = []
+        for _, row in rows.iterrows():
+            identifier = self._safe_value(row.get("IndividualIdentifier"))
+            if identifier and identifier not in identifiers:
+                identifiers.append(identifier)
 
         subject = {
             "id": individual_id,
-            "sex": self._map_sex(self._safe_value(first_row.get("Sex"))),
+            "sex": sex,
         }
 
-        if individual_identifier:
-            subject["alternateIds"] = [individual_identifier]
+        if identifiers:
+            subject["alternateIds"] = identifiers
 
-        # Add age if available
+        # Use latest reported age (from most recent study)
         age_reported = self.age_parser.parse_age(first_row.get("AgeReported"))
         if age_reported:
             subject["timeAtLastEncounter"] = age_reported
@@ -136,7 +164,13 @@ class PhenopacketBuilder:
         return subject
 
     def _merge_phenotypes(self, rows: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Merge phenotypes from multiple rows."""
+        """Merge phenotypes from multiple rows.
+
+        When same phenotype appears in multiple studies:
+        - Keeps earliest onset (most informative temporal data)
+        - Merges evidence from all publications
+        - Sorts phenotypes chronologically by onset age
+        """
         phenotype_dict = {}
 
         for _, row in rows.iterrows():
@@ -166,10 +200,28 @@ class PhenopacketBuilder:
                             if not is_duplicate:
                                 existing_pheno["evidence"].append(new_ev)
 
-        return list(phenotype_dict.values())
+                    # Keep earliest onset when same phenotype reported at different ages
+                    existing_onset = existing_pheno.get("onset")
+                    new_onset = pheno.get("onset")
+
+                    if new_onset and (
+                        not existing_onset
+                        or self._is_earlier_onset(new_onset, existing_onset)
+                    ):
+                        existing_pheno["onset"] = new_onset
+
+        # Sort phenotypes chronologically (earliest onset first)
+        phenotypes_list = list(phenotype_dict.values())
+        phenotypes_list.sort(key=lambda p: self._onset_sort_key(p.get("onset")))
+
+        return phenotypes_list
 
     def _merge_variants(self, rows: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Merge variants from multiple rows."""
+        """Merge variants from multiple rows.
+
+        For CNVs: Merges overlapping deletions/duplications from different studies
+        into a single variant entry with multiple coordinate estimates.
+        """
         variant_dict = {}
 
         for _, row in rows.iterrows():
@@ -192,34 +244,189 @@ class PhenopacketBuilder:
                     variant_dict[f"unique_{len(variant_dict)}"] = interp
                     continue
 
-                if variant_id not in variant_dict:
-                    variant_dict[variant_id] = interp
-                else:
-                    # Merge publication sources
-                    existing_interp = variant_dict[variant_id]
-                    existing_genomic = existing_interp["diagnosis"][
-                        "genomicInterpretations"
-                    ][0]
-                    new_genomic = genomic_interps[0]
+                # Check if this is a CNV and if we have overlapping CNVs
+                is_cnv = "DEL" in variant_id or "DUP" in variant_id
+                merged = False
 
-                    existing_subject = existing_genomic.get("subjectOrBiosampleId", "")
-                    new_subject = new_genomic.get("subjectOrBiosampleId", "")
+                if is_cnv:
+                    # Extract coordinates from this variant
+                    coords = self._extract_cnv_coordinates(variant_desc)
+                    if coords:
+                        chrom, start, end, var_type = coords
 
-                    if new_subject and new_subject != existing_subject:
-                        subjects = []
-                        if existing_subject:
-                            subjects.append(existing_subject)
-                        if new_subject not in subjects:
-                            subjects.append(new_subject)
+                        # Check for overlapping CNVs in existing variants
+                        for existing_id, existing_interp in variant_dict.items():
+                            existing_desc = (
+                                existing_interp["diagnosis"]["genomicInterpretations"][
+                                    0
+                                ]
+                                .get("variantInterpretation", {})
+                                .get("variationDescriptor", {})
+                            )
+                            existing_coords = self._extract_cnv_coordinates(
+                                existing_desc
+                            )
 
-                        existing_genomic["subjectOrBiosampleId"] = " | ".join(subjects)
+                            if existing_coords:
+                                ex_chrom, ex_start, ex_end, ex_type = existing_coords
+
+                                # Check if same type and overlapping (>80% reciprocal overlap)
+                                if chrom == ex_chrom and var_type == ex_type:
+                                    overlap = self._calculate_cnv_overlap(
+                                        start, end, ex_start, ex_end
+                                    )
+                                    if (
+                                        overlap > 0.8
+                                    ):  # 80% reciprocal overlap threshold
+                                        # Merge into existing variant
+                                        self._merge_cnv_interpretations(
+                                            existing_interp,
+                                            interp,
+                                            existing_desc,
+                                            variant_desc,
+                                        )
+                                        merged = True
+                                        break
+
+                if not merged:
+                    if variant_id not in variant_dict:
+                        variant_dict[variant_id] = interp
+                    else:
+                        # Merge publication sources (for identical variants)
+                        existing_interp = variant_dict[variant_id]
+                        existing_genomic = existing_interp["diagnosis"][
+                            "genomicInterpretations"
+                        ][0]
+                        new_genomic = genomic_interps[0]
+
+                        existing_subject = existing_genomic.get(
+                            "subjectOrBiosampleId", ""
+                        )
+                        new_subject = new_genomic.get("subjectOrBiosampleId", "")
+
+                        if new_subject and new_subject != existing_subject:
+                            subjects = []
+                            if existing_subject:
+                                subjects.append(existing_subject)
+                            if new_subject not in subjects:
+                                subjects.append(new_subject)
+
+                            existing_genomic["subjectOrBiosampleId"] = " | ".join(
+                                subjects
+                            )
 
         return list(variant_dict.values())
+
+    def _extract_cnv_coordinates(self, variant_desc: Dict[str, Any]) -> Optional[tuple]:
+        """Extract coordinates from CNV variant descriptor."""
+        extensions = variant_desc.get("extensions", [])
+        for ext in extensions:
+            if ext.get("name") == "coordinates":
+                coords = ext.get("value", {})
+                chrom = coords.get("chromosome")
+                start = coords.get("start")
+                end = coords.get("end")
+
+                # Get variant type from structuralType
+                struct_type = variant_desc.get("structuralType", {})
+                var_type = struct_type.get("label", "").upper()
+
+                if chrom and start and end and var_type:
+                    return (chrom, start, end, var_type)
+        return None
+
+    def _calculate_cnv_overlap(
+        self, start1: int, end1: int, start2: int, end2: int
+    ) -> float:
+        """Calculate reciprocal overlap between two CNVs."""
+        overlap_start = max(start1, start2)
+        overlap_end = min(end1, end2)
+        overlap_len = max(0, overlap_end - overlap_start)
+
+        len1 = end1 - start1
+        len2 = end2 - start2
+
+        if len1 == 0 or len2 == 0:
+            return 0.0
+
+        # Reciprocal overlap: min of (overlap/len1, overlap/len2)
+        return min(overlap_len / len1, overlap_len / len2)
+
+    def _merge_cnv_interpretations(
+        self,
+        existing_interp: Dict[str, Any],
+        new_interp: Dict[str, Any],
+        existing_desc: Dict[str, Any],
+        new_desc: Dict[str, Any],
+    ) -> None:
+        """Merge CNV interpretations from multiple studies."""
+        # Merge subject IDs
+        existing_genomic = existing_interp["diagnosis"]["genomicInterpretations"][0]
+        new_genomic = new_interp["diagnosis"]["genomicInterpretations"][0]
+
+        existing_subject = existing_genomic.get("subjectOrBiosampleId", "")
+        new_subject = new_genomic.get("subjectOrBiosampleId", "")
+
+        if new_subject and new_subject != existing_subject:
+            subjects = []
+            if existing_subject:
+                subjects.append(existing_subject)
+            if new_subject not in subjects:
+                subjects.append(new_subject)
+            existing_genomic["subjectOrBiosampleId"] = " | ".join(subjects)
+
+        # Update description to include both coordinate estimates
+        new_coords_ext = next(
+            (
+                ext
+                for ext in new_desc.get("extensions", [])
+                if ext.get("name") == "coordinates"
+            ),
+            None,
+        )
+
+        if new_coords_ext:
+            new_coords = new_coords_ext.get("value", {})
+            new_chrom = new_coords.get("chromosome")
+            new_start = new_coords.get("start")
+            new_end = new_coords.get("end")
+            new_size_mb = round(new_coords.get("length", 0) / 1_000_000, 2)
+
+            # Append alternate coordinates to description
+            current_desc = existing_desc.get("description", "")
+            if "Alternate coordinates:" not in current_desc:
+                existing_desc["description"] = (
+                    f"{current_desc}; "
+                    f"Alternate coordinates: chr{new_chrom}:{new_start:,}-{new_end:,} ({new_size_mb}Mb)"
+                )
+
+        # Prefer dbVar ID if new variant has it and existing doesn't
+        if not any("dbVar" in str(ext) for ext in existing_desc.get("extensions", [])):
+            for ext in new_desc.get("extensions", []):
+                if ext.get("name") == "external_reference":
+                    dbvar_id = ext.get("value", {}).get("id", "")
+                    if "dbVar" in dbvar_id:
+                        # Add dbVar ID to label
+                        current_label = existing_desc.get("label", "")
+                        if dbvar_id not in current_label:
+                            existing_desc["label"] = f"{current_label} ({dbvar_id})"
+                        # Add extension
+                        existing_desc.setdefault("extensions", []).append(ext)
+                        break
 
     def _build_diseases(
         self, first_row: pd.Series, age_onset: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Build diseases list for phenopacket."""
+        """Build diseases list for phenopacket.
+
+        All individuals in this database have HNF1B-related genetic findings,
+        so MONDO:0011593 (Renal cysts and diabetes syndrome / RCAD) is included
+        for all phenopackets as the base disease. Additional specific disease
+        terms are added based on phenotypic evidence.
+        """
+        diseases = []
+
+        # Determine onset for disease terms
         disease_onset = None
         if age_onset:
             if "ontologyClass" in age_onset:
@@ -231,24 +438,29 @@ class PhenopacketBuilder:
                 "ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}
             }
 
-        diseases = [{"term": self.mondo_mappings["hnf1b"], "onset": disease_onset}]
-
-        # Check for MODY
-        mody_col = next(
-            (col for col in first_row.index if "mody" in col.lower()), None
+        # Add base HNF1B disorder for all individuals
+        diseases.append(
+            {
+                "term": self.mondo_mappings["hnf1b_disorder"],
+                "onset": disease_onset,
+            }
         )
+
+        # Check for MODY/diabetes - add specific MONDO term if explicitly present
+        mody_col = next((col for col in first_row.index if "mody" in col.lower()), None)
         if mody_col:
             mody_val = self._safe_value(first_row[mody_col])
-            if mody_val and mody_val.lower() not in ["no", "not reported", ""]:
+            if not pd.isna(mody_val) and str(mody_val).lower() not in [
+                "no",
+                "not reported",
+                "nan",
+                "",
+            ]:
+                # Individual has MODY - add specific MONDO term
                 diseases.append(
                     {
                         "term": self.mondo_mappings["mody5"],
-                        "onset": {
-                            "ontologyClass": {
-                                "id": "HP:0003577",
-                                "label": "Congenital onset",
-                            }
-                        },
+                        "onset": disease_onset,
                     }
                 )
 
@@ -316,6 +528,104 @@ class PhenopacketBuilder:
                 metadata["externalReferences"] = external_refs
 
         return metadata
+
+    def _iso8601_to_months(self, iso8601: str) -> int:
+        """Convert ISO8601 duration to total months for comparison.
+
+        Args:
+            iso8601: ISO8601 duration string (e.g., "P1Y4M")
+
+        Returns:
+            Total months
+        """
+        import re
+
+        pattern = r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?"
+        match = re.match(pattern, iso8601)
+
+        if not match:
+            return 0
+
+        years = int(match.group(1)) if match.group(1) else 0
+        months = int(match.group(2)) if match.group(2) else 0
+        days = int(match.group(3)) if match.group(3) else 0
+
+        # Convert to months (rough approximation: 30 days = 1 month)
+        total_months = years * 12 + months + (days // 30)
+        return total_months
+
+    def _is_earlier_onset(self, onset1: Dict[str, Any], onset2: Dict[str, Any]) -> bool:
+        """Compare two onset structures and return True if onset1 is earlier.
+
+        Prenatal < Postnatal < specific ages (sorted by duration)
+
+        Args:
+            onset1: First onset dictionary
+            onset2: Second onset dictionary
+
+        Returns:
+            True if onset1 is earlier than onset2
+        """
+        # Get sort keys for comparison
+        key1 = self._onset_sort_key(onset1)
+        key2 = self._onset_sort_key(onset2)
+
+        return key1 < key2
+
+    def _onset_sort_key(self, onset: Optional[Dict[str, Any]]) -> tuple:
+        """Generate sort key for onset (earlier onsets have smaller keys).
+
+        Sort priority:
+        1. Prenatal (HP:0034199) - earliest
+        2. Congenital/Birth (HP:0003577)
+        3. Postnatal (HP:0003674)
+        4. Infantile (HP:0003593)
+        5. Childhood (HP:0011463)
+        6. Adult (HP:0003581)
+        7. Specific ages (sorted by duration in months)
+        8. Unknown (no onset) - latest
+
+        Args:
+            onset: Onset dictionary from phenotype
+
+        Returns:
+            Tuple for sorting (priority, months)
+        """
+        if not onset:
+            return (999, 0)  # Unknown - sort last
+
+        # Check for ontology class (prenatal/postnatal/etc)
+        ontology_class = onset.get("ontologyClass", {})
+        hpo_id = ontology_class.get("id", "")
+
+        # Define priority order
+        hpo_priorities = {
+            "HP:0034199": 1,  # Prenatal
+            "HP:0003577": 2,  # Congenital
+            "HP:0003674": 3,  # Postnatal
+            "HP:0003593": 4,  # Infantile
+            "HP:0011463": 5,  # Childhood
+            "HP:0003581": 6,  # Adult
+        }
+
+        priority = hpo_priorities.get(hpo_id, 50)  # Default priority
+
+        # Get specific age if available
+        age_months = 0
+
+        # Check for age field (combined with ontologyClass)
+        age_value = onset.get("age")
+        if age_value:
+            if isinstance(age_value, str):
+                age_months = self._iso8601_to_months(age_value)
+            elif isinstance(age_value, dict) and "iso8601duration" in age_value:
+                age_months = self._iso8601_to_months(age_value["iso8601duration"])
+
+        # Check for iso8601duration field (age only)
+        if not age_value and "iso8601duration" in onset:
+            age_months = self._iso8601_to_months(onset["iso8601duration"])
+
+        return (priority, age_months)
 
     def _clean_empty_fields(self, obj: Any) -> Any:
         """Recursively remove empty fields from object."""

@@ -932,7 +932,6 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         - female: Number of female subjects
         - unknown_sex: Number of subjects with unknown sex
     """
-
     # 1. Total phenopackets
     total_result = await db.execute(select(func.count()).select_from(Phenopacket))
     total_phenopackets = total_result.scalar()

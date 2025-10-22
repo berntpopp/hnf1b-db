@@ -1,8 +1,8 @@
 """Tests for application configuration and security settings."""
 
-import pytest
 from unittest.mock import patch
-import sys
+
+import pytest
 
 from app.config import Settings
 

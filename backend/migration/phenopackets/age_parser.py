@@ -54,6 +54,8 @@ class AgeParser:
         # Handle special onset terms
         if age_str in ["prenatal", "pre-natal", "antenatal"]:
             return {"ontologyClass": {"id": "HP:0034199", "label": "Prenatal onset"}}
+        elif age_str in ["postnatal", "post-natal"]:
+            return {"ontologyClass": {"id": "HP:0003674", "label": "Postnatal onset"}}
         elif age_str in ["congenital", "birth", "at birth", "newborn", "neonatal"]:
             return {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
         elif age_str in ["infantile", "infant", "infancy"]:

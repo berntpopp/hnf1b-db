@@ -4,7 +4,6 @@ import json
 import os
 from datetime import datetime, timedelta
 from enum import Enum
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -215,7 +214,8 @@ class LocalMappingsProvider:
             "HP:0003149": "Hyperuricemia",
             "HP:0001997": "Gout",
             "MONDO:0005147": "Type 2 diabetes mellitus",
-            "MONDO:0018874": "HNF1B-related autosomal dominant tubulointerstitial kidney disease",
+            "MONDO:0011593": "Renal cysts and diabetes syndrome",
+            "MONDO:0010953": "Maturity-onset diabetes of the young type 5",
         }
 
         for term_id, label in additional_terms.items():

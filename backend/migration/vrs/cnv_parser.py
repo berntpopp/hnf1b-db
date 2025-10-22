@@ -159,10 +159,29 @@ class CNVParser:
         size = end - start + 1
         size_mb = round(size / 1_000_000, 2)
 
+        # Extract literature-reported size from VariantReported (e.g., "1.5 Mb", "1.5-megabase")
+        reported_size = None
+        if variant_reported:
+            size_match = re.search(
+                r"(\d+\.?\d*)\s*-?\s*[Mm](?:ega)?[Bb](?:ase)?", variant_reported
+            )
+            if size_match:
+                reported_size = size_match.group(1) + "Mb"
+
+        # Build concise label: "1.5Mb deletion (dbVar:nssv1184554)"
+        if reported_size:
+            label = f"{reported_size} {variant_type.lower()}"
+        else:
+            label = f"{size_mb}Mb {variant_type.lower()}"
+
+        # Add dbVar ID to label if available (helps with literature search)
+        if dbvar_id:
+            label += f" ({dbvar_id})"
+
         # Build variant descriptor
         variant_descriptor = {
             "id": f"var:HNF1B:{ga4gh_notation}",
-            "label": f"HNF1B {variant_type} ({size_mb}Mb)",
+            "label": label,
             "structuralType": {
                 "id": (
                     "SO:0000159"
@@ -182,9 +201,15 @@ class CNVParser:
             "extensions": [],
         }
 
-        # Add original publication description if available
+        # Description: Full literature text + calculated size
         if variant_reported:
-            variant_descriptor["description"] = variant_reported
+            variant_descriptor[
+                "description"
+            ] = f"{variant_reported} [calculated: {size_mb}Mb, chr{chromosome}:{start:,}-{end:,}]"
+        else:
+            variant_descriptor[
+                "description"
+            ] = f"HNF1B {variant_type} ({size_mb}Mb) - chr{chromosome}:{start:,}-{end:,}"
 
         # Add expressions in various formats
         expressions = variant_descriptor["expressions"]
@@ -341,7 +366,7 @@ class CNVParser:
         interpretation = {
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                "disease": {"id": "MONDO:0018874", "label": "HNF1B-related disorder"},
+                "disease": {"id": "MONDO:0011593", "label": "Renal cysts and diabetes syndrome"},
                 "genomicInterpretations": [
                     {
                         "subjectOrBiosampleId": row_data.get(

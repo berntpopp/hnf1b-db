@@ -80,7 +80,7 @@ def main():
             "HP:9999999",  # Invalid term for testing
         ],
         "diseases": [
-            "MONDO:0018874",  # HNF1B-related disease (might use API)
+            "MONDO:0011593",  # Renal cysts and diabetes syndrome (might use API)
             "MONDO:0005147",  # Type 2 diabetes mellitus (might use API)
             "MONDO:INVALID",  # Invalid for testing
         ],

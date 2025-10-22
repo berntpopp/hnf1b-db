@@ -7,9 +7,10 @@ Create Date: 2025-09-29 15:15:00
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '001_initial_v2'
@@ -20,7 +21,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Create all Phenopackets v2 tables from scratch."""
-
     # Create phenopackets table
     op.create_table(
         'phenopackets',
@@ -179,7 +179,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop all Phenopackets v2 tables."""
-
     # Drop audit table
     op.drop_index(op.f('ix_phenopacket_audit_phenopacket_id'), table_name='phenopacket_audit')
     op.drop_table('phenopacket_audit')

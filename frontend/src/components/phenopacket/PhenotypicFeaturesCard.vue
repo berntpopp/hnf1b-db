@@ -1,21 +1,45 @@
 <!-- src/components/phenopacket/PhenotypicFeaturesCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-h6 bg-green-lighten-5">
-      <v-icon left color="success">
+    <v-card-title class="text-subtitle-1 py-2 bg-green-lighten-5">
+      <v-icon
+        left
+        color="success"
+        size="small"
+      >
         mdi-medical-bag
       </v-icon>
       Phenotypic Features ({{ features.length }})
     </v-card-title>
-    <v-card-text>
-      <v-alert v-if="features.length === 0" type="info" density="compact">
+    <v-card-text class="pa-2">
+      <v-alert
+        v-if="features.length === 0"
+        type="info"
+        density="compact"
+      >
         No phenotypic features recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item v-for="(feature, index) in features" :key="index" class="mb-2">
+        <v-list-item
+          v-for="(feature, index) in features"
+          :key="index"
+          class="mb-2"
+        >
           <template #prepend>
-            <v-chip color="green" variant="flat" size="small">
+            <v-chip
+              :href="getHpoUrl(feature.type.id)"
+              target="_blank"
+              color="green"
+              variant="flat"
+              size="small"
+            >
+              <v-icon
+                left
+                size="x-small"
+              >
+                mdi-open-in-new
+              </v-icon>
               {{ feature.type.id }}
             </v-chip>
           </template>
@@ -59,13 +83,40 @@ export default {
     },
   },
   methods: {
-    formatOnset(onset) {
-      if (onset.age?.iso8601duration) {
-        return this.formatISO8601Duration(onset.age.iso8601duration);
+    getHpoUrl(hpoId) {
+      // Convert HP:0003774 to https://hpo.jax.org/app/browse/term/HP:0003774
+      if (hpoId && hpoId.startsWith('HP:')) {
+        return `https://hpo.jax.org/app/browse/term/${hpoId}`;
       }
+      return '#';
+    },
+
+    formatOnset(onset) {
+      // Handle combined onset (e.g., postnatal + specific age)
+      if (onset.ontologyClass && onset.age) {
+        const classification = (onset.ontologyClass.label || onset.ontologyClass.id).toLowerCase();
+        // age can be a string "P2Y" or an object {"iso8601duration": "P2Y"}
+        const ageValue = typeof onset.age === 'string' ? onset.age : (onset.age.iso8601duration || onset.age);
+        const formattedAge = this.formatISO8601Duration(ageValue);
+        return `${classification}, reported: age ${formattedAge}`;
+      }
+
+      // Handle age-only onset (string format)
+      if (onset.iso8601duration) {
+        return `reported: age ${this.formatISO8601Duration(onset.iso8601duration)}`;
+      }
+
+      // Handle age object
+      if (onset.age) {
+        const ageValue = typeof onset.age === 'string' ? onset.age : (onset.age.iso8601duration || onset.age);
+        return `reported: age ${this.formatISO8601Duration(ageValue)}`;
+      }
+
+      // Handle ontology class only (prenatal/postnatal without specific age)
       if (onset.ontologyClass) {
         return onset.ontologyClass.label || onset.ontologyClass.id;
       }
+
       return 'Unknown';
     },
 
