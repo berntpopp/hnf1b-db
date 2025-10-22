@@ -9,7 +9,7 @@ dependencies = [
     "fastapi>=0.116.1",
     "pandas>=2.3.2",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=3.2.0,<4.0.0",  # Pin to version 3.x for passlib compatibility
+    "bcrypt>=3.2.0,<4.0.0", # Pin to version 3.x for passlib compatibility
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pyjwt>=2.10.1",
@@ -31,6 +31,7 @@ dependencies = [
     "pronto>=2.5.0", # For parsing OBO ontologies (HPO, MONDO)
     "jsonpath-ng>=1.6.0", # For complex JSON queries
     "httpx>=0.28.1",
+    "aiohttp>=3.13.1",
 ]
 
 
