@@ -29,21 +29,23 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 - **`MILESTONE-frontend-phenopackets-migration.md`** - Complete milestone breakdown
 - **`MIGRATION-SUMMARY.md`** - Quick reference & checklists
 
-### Detailed Issue Plans
-- **`issue-32-migrate-individual-detail-page.md`** ✅ (Completed)
-- **`issue-33-update-aggregation-endpoints.md`** ✅ (Completed)
+### Active Issue Plans
 - **`issue-34-migrate-variants-view.md`** ⚠️ (Blocked - needs backend)
 - **`issue-35-migrate-variant-detail-page.md`** ⚠️ (Blocked - needs backend)
-- **`issue-36-migrate-publications-view.md`** ✅ (Completed)
 - **`issue-37-40-batch.md`** - Issues #37, #39, #40
-- **`issue-38-migrate-home-stats.md`** ✅ (Completed)
 - **`issue-41-46-visualizations.md`** - Issues #41-46
 - **`issue-47-49-polish.md`** - Issues #47-49
 
 ### GitHub Templates
-- **`github-issue-32-template.md`** ✅ (Used)
-- **`github-issue-33-template.md`**
-- **`github-templates-34-49.md`** - All remaining templates
+- **`github-templates-34-49.md`** - All remaining issue templates
+
+### Completed Issues (Archived)
+- **`completed/`** - Archive folder for completed issue documentation
+  - **`issue-32-migrate-individual-detail-page.md`** ✅
+  - **`issue-33-update-aggregation-endpoints.md`** ✅
+  - **`github-issue-32-template.md`** ✅
+  - **`github-issue-33-template.md`** ✅
+  - See `completed/README.md` for details
 
 ## 🎯 Next Steps
 
