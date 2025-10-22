@@ -1,197 +1,373 @@
 <!-- src/views/PagePublication.vue -->
 <template>
   <v-container fluid>
-    <v-row justify="center">
-      <v-col cols="12">
-        <v-sheet outlined>
-          <!-- Loading overlay -->
-          <v-overlay
-            :absolute="absolute"
-            :opacity="opacity"
-            :value="loading"
-            :color="color"
-          >
-            <v-progress-circular
-              indeterminate
-              color="primary"
-            />
-          </v-overlay>
+    <!-- Breadcrumb Navigation -->
+    <v-breadcrumbs
+      :items="breadcrumbs"
+      class="px-0"
+    >
+      <template #divider>
+        <v-icon>mdi-chevron-right</v-icon>
+      </template>
+    </v-breadcrumbs>
 
-          <!-- Publication Basic Details Card -->
-          <v-card
-            outlined
-            class="mb-4"
-            :style="{ width: '90%', margin: 'auto' }"
-            tile
+    <!-- Loading State -->
+    <v-card
+      v-if="loading"
+      class="pa-6 text-center"
+    >
+      <v-progress-circular
+        indeterminate
+        color="primary"
+        size="48"
+      />
+      <p class="mt-4 text-grey">
+        Loading publication data...
+      </p>
+    </v-card>
+
+    <!-- Error State -->
+    <v-alert
+      v-else-if="error"
+      type="error"
+      variant="tonal"
+      class="mb-4"
+    >
+      {{ error }}
+    </v-alert>
+
+    <!-- Publication Content -->
+    <div v-else>
+      <!-- Publication Metadata Card -->
+      <v-card class="mb-4">
+        <v-card-title class="text-h5 bg-grey-lighten-4">
+          <v-icon
+            left
+            color="primary"
+            size="large"
           >
-            <v-card-title class="text-h6">
-              <v-icon
-                left
-                color="cyan accent-2"
-              >
-                {{ icons.mdiBookOpenBlankVariant }}
-              </v-icon>
-              Publication:
+            mdi-book-open-variant
+          </v-icon>
+          Publication {{ pmid }}
+        </v-card-title>
+        <v-card-text class="pa-4">
+          <v-list density="comfortable">
+            <v-list-item>
+              <v-list-item-title class="font-weight-bold">
+                PMID
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip
+                  :href="publicationUrl"
+                  target="_blank"
+                  color="primary"
+                  size="small"
+                  variant="flat"
+                >
+                  <v-icon
+                    left
+                    size="x-small"
+                  >
+                    mdi-open-in-new
+                  </v-icon>
+                  {{ pmid }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-list-item v-if="publication.doi">
+              <v-list-item-title class="font-weight-bold">
+                DOI
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip
+                  :href="`https://doi.org/${publication.doi}`"
+                  target="_blank"
+                  color="secondary"
+                  size="small"
+                  variant="flat"
+                >
+                  <v-icon
+                    left
+                    size="x-small"
+                  >
+                    mdi-open-in-new
+                  </v-icon>
+                  {{ publication.doi }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-list-item>
+              <v-list-item-title class="font-weight-bold">
+                Individuals Cited
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip
+                  color="info"
+                  size="small"
+                  variant="flat"
+                >
+                  {{ publication.phenopacket_count || 0 }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-list-item v-if="publication.first_added">
+              <v-list-item-title class="font-weight-bold">
+                First Added to Database
+              </v-list-item-title>
+              <v-list-item-subtitle>
+                {{ formatDate(publication.first_added) }}
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+      </v-card>
+
+      <!-- Phenopackets Citing This Publication -->
+      <v-card>
+        <v-card-title class="text-h6 bg-grey-lighten-4">
+          <v-icon
+            left
+            color="primary"
+          >
+            mdi-account-multiple
+          </v-icon>
+          Individuals Cited in This Publication
+          <v-chip
+            class="ml-2"
+            color="info"
+            size="small"
+          >
+            {{ filteredPhenopackets.length }}
+          </v-chip>
+        </v-card-title>
+        <v-card-text class="pa-0">
+          <v-data-table
+            :headers="phenopacketHeaders"
+            :items="filteredPhenopackets"
+            :loading="phenopacketsLoading"
+            density="compact"
+            class="elevation-0"
+          >
+            <!-- Subject ID as link to phenopacket detail -->
+            <template #item.subject_id="{ item }">
+              <router-link :to="`/phenopackets/${item.id}`">
+                {{ item.subject_id }}
+              </router-link>
+            </template>
+
+            <!-- Sex with icon -->
+            <template #item.sex="{ item }">
               <v-chip
-                color="cyan accent-2"
-                class="ma-2"
+                size="small"
+                :color="getSexColor(item.sex)"
+                variant="flat"
               >
-                {{ publication.publication_id }}
+                {{ formatSex(item.sex) }}
               </v-chip>
-            </v-card-title>
-            <v-card-text class="text-body-1">
-              <v-list dense>
-                <v-list-item>
-                  <span class="font-weight-bold">PMID:</span>
-                  <a
-                    :href="'https://pubmed.ncbi.nlm.nih.gov/' + publication.pmid"
-                    target="_blank"
-                    class="ml-1"
-                  >
-                    {{ publication.pmid }}
-                  </a>
-                </v-list-item>
-                <v-list-item>
-                  <span class="font-weight-bold">DOI:</span>
-                  <a
-                    v-if="publication.doi && publication.doi !== 'nan'"
-                    :href="'https://doi.org/' + publication.doi"
-                    target="_blank"
-                    class="ml-1"
-                  >
-                    {{ publication.doi }}
-                  </a>
-                  <span v-else>Not available</span>
-                </v-list-item>
-                <v-divider
-                  inset
-                  class="my-2"
-                />
-                <v-list-item v-if="publication.publication_entry_date">
-                  <span class="font-weight-bold">Review Date:</span>
-                  <span class="ml-1">{{ publication.publication_entry_date }}</span>
-                </v-list-item>
-                <v-list-item>
-                  <span class="font-weight-bold">Title:</span>
-                  <span class="ml-1">{{ publication.title || 'No title available' }}</span>
-                </v-list-item>
-                <v-list-item>
-                  <span class="font-weight-bold">Abstract:</span>
-                  <span class="ml-1">{{ publication.abstract || 'N/A' }}</span>
-                </v-list-item>
-                <v-list-item v-if="publication.publication_date">
-                  <span class="font-weight-bold">Publication Date:</span>
-                  <span class="ml-1">{{ publication.publication_date }}</span>
-                </v-list-item>
-                <v-list-item>
-                  <span class="font-weight-bold">Journal:</span>
-                  <span class="ml-1">{{ publication.journal || 'Not available' }}</span>
-                </v-list-item>
-                <v-list-item v-if="publication.authors && publication.authors.length">
-                  <span class="font-weight-bold">Authors:</span>
-                  <span class="ml-1">
-                    {{
-                      publication.authors
-                        .map((author) => author.firstname + ' ' + author.lastname)
-                        .join(', ')
-                    }}
-                  </span>
-                </v-list-item>
-              </v-list>
-            </v-card-text>
-          </v-card>
+            </template>
 
-          <!-- Individuals in Publication Card -->
-          <v-card
-            v-if="individuals_in_publication_filter"
-            outlined
-            class="mb-4"
-            :style="{ width: '90%', margin: 'auto' }"
-            tile
-          >
-            <v-card-title class="text-h6">
+            <!-- Has variants indicator -->
+            <template #item.has_variants="{ item }">
               <v-icon
-                left
-                color="primary"
+                :color="item.has_variants ? 'success' : 'grey'"
+                size="small"
               >
-                mdi-account-multiple-outline
+                {{ item.has_variants ? 'mdi-check-circle' : 'mdi-close-circle' }}
               </v-icon>
-              Individuals in This Publication
-            </v-card-title>
-            <v-card-text>
-              <TableIndividuals
-                :show-filter-controls="false"
-                :show-pagination-controls="false"
-                :filter-input="individuals_in_publication_filter"
-                header-label="Individuals"
-                header-sub-label="described in this publication"
-              />
-            </v-card-text>
-          </v-card>
-        </v-sheet>
-      </v-col>
-    </v-row>
+            </template>
+
+            <!-- Phenotype count -->
+            <template #item.phenotype_count="{ item }">
+              <v-chip
+                size="small"
+                color="info"
+                variant="tonal"
+              >
+                {{ item.phenotype_count }}
+              </v-chip>
+            </template>
+
+            <template #no-data>
+              <v-alert
+                type="info"
+                variant="tonal"
+                class="ma-4"
+              >
+                No phenopackets cite this publication.
+              </v-alert>
+            </template>
+          </v-data-table>
+        </v-card-text>
+      </v-card>
+    </div>
   </v-container>
 </template>
 
 <script>
-import TableIndividuals from '@/components/tables/TableIndividuals.vue';
-import colorAndSymbolsMixin from '@/assets/js/mixins/colorAndSymbolsMixin.js';
-import { getPublications } from '@/api';
+import { getPublicationsAggregation, getPhenopackets } from '@/api';
 
 export default {
   name: 'PagePublication',
-  components: {
-    TableIndividuals,
-  },
-  mixins: [colorAndSymbolsMixin],
   data() {
     return {
+      pmid: '',
       publication: {},
-      absolute: true,
-      opacity: 1,
-      color: '#FFFFFF',
+      allPhenopackets: [],
       loading: true,
-      individuals_in_publication_filter: '',
-      icons: {
-        mdiBookOpenBlankVariant: 'mdi-book-open-blank-variant',
-      },
+      phenopacketsLoading: true,
+      error: null,
+      phenopacketHeaders: [
+        {
+          title: 'Subject ID',
+          value: 'subject_id',
+          sortable: true,
+        },
+        {
+          title: 'Sex',
+          value: 'sex',
+          sortable: true,
+          width: '100px',
+        },
+        {
+          title: 'Has Variants',
+          value: 'has_variants',
+          sortable: true,
+          width: '120px',
+          align: 'center',
+        },
+        {
+          title: 'Phenotypes',
+          value: 'phenotype_count',
+          sortable: true,
+          width: '120px',
+          align: 'center',
+        },
+      ],
     };
   },
-  created() {
-    this.loadPublicationData();
+  computed: {
+    breadcrumbs() {
+      return [
+        {
+          title: 'Home',
+          disabled: false,
+          href: '/',
+        },
+        {
+          title: 'Publications',
+          disabled: false,
+          href: '/publications',
+        },
+        {
+          title: this.pmid || 'Loading...',
+          disabled: true,
+        },
+      ];
+    },
+    publicationUrl() {
+      return `https://pubmed.ncbi.nlm.nih.gov/${this.pmid}`;
+    },
+    filteredPhenopackets() {
+      if (!this.allPhenopackets.length) return [];
+
+      // Filter phenopackets that have this PMID in their externalReferences
+      // Note: API returns wrapper with nested phenopacket document at phenopacket.phenopacket
+      return this.allPhenopackets
+        .filter((item) => {
+          // Access the nested phenopacket document
+          const phenopacket = item.phenopacket || item;
+          const externalRefs = phenopacket.metaData?.externalReferences || [];
+          return externalRefs.some((ref) => ref.id === `PMID:${this.pmid}`);
+        })
+        .map((item) => {
+          // Extract useful data for the table
+          const phenopacket = item.phenopacket || item;
+          const subject = phenopacket.subject || {};
+          const phenotypicFeatures = phenopacket.phenotypicFeatures || [];
+          const interpretations = phenopacket.interpretations || [];
+
+          return {
+            id: item.phenopacket_id || phenopacket.id, // Use phenopacket_id for routing
+            subject_id: subject.id || 'Unknown',
+            sex: subject.sex || 'UNKNOWN_SEX',
+            has_variants: interpretations.length > 0,
+            phenotype_count: phenotypicFeatures.length,
+          };
+        });
+    },
+  },
+  async created() {
+    this.pmid = this.$route.params.publication_id;
+    await this.loadPublicationData();
   },
   methods: {
     async loadPublicationData() {
       this.loading = true;
-      // Build the filter as a JSON string; API expects: filter={"publication_id": <id>}
-      const filterParam = JSON.stringify({
-        publication_id: this.$route.params.publication_id,
-      });
+      this.phenopacketsLoading = true;
+      this.error = null;
+
       try {
-        const response = await getPublications({
-          page: 1,
-          page_size: 10,
-          filter: filterParam,
-        });
-        if (!response.data || response.data.length === 0) {
-          this.$router.push('/PageNotFound');
-        } else {
-          // We expect a single publication
-          this.publication = response.data[0];
-          // If the publication contains a reports property with individual IDs, build the filter string
-          if (this.publication.reports && this.publication.reports.length) {
-            const uniqueIds = [
-              ...new Set(this.publication.reports.map((item) => item.individual_id)),
-            ];
-            this.individuals_in_publication_filter =
-              'contains(individual_id,' + uniqueIds.join('|') + ')';
-          }
+        // Fetch publication metadata from aggregation endpoint
+        const response = await getPublicationsAggregation();
+        const publications = response.data;
+
+        // Find the publication matching this PMID
+        this.publication = publications.find((pub) => pub.pmid === this.pmid);
+
+        if (!this.publication) {
+          this.error = `Publication with PMID ${this.pmid} not found in database.`;
+          this.loading = false;
+          this.phenopacketsLoading = false;
+          return;
         }
+
+        this.loading = false;
+
+        // Fetch all phenopackets (we'll filter client-side for now)
+        // TODO: Once backend /by-publication/{pmid} endpoint is implemented, use that instead
+        const phenopacketsResponse = await getPhenopackets({
+          skip: 0,
+          limit: 1000, // Fetch all phenopackets
+        });
+
+        this.allPhenopackets = phenopacketsResponse.data;
+        this.phenopacketsLoading = false;
       } catch (e) {
-        console.error(e);
+        console.error('Error loading publication data:', e);
+        this.error = `Failed to load publication data: ${e.message}`;
+        this.loading = false;
+        this.phenopacketsLoading = false;
       }
-      this.loading = false;
+    },
+    formatDate(dateString) {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    },
+    formatSex(sex) {
+      const sexMap = {
+        MALE: 'Male',
+        FEMALE: 'Female',
+        OTHER_SEX: 'Other',
+        UNKNOWN_SEX: 'Unknown',
+      };
+      return sexMap[sex] || sex;
+    },
+    getSexColor(sex) {
+      const colorMap = {
+        MALE: 'primary',
+        FEMALE: 'secondary',
+        OTHER_SEX: 'info',
+        UNKNOWN_SEX: 'grey',
+      };
+      return colorMap[sex] || 'grey';
     },
   },
 };
