@@ -16,16 +16,14 @@
         </v-toolbar>
       </template>
 
-      <!-- Render PMID as clickable PubMed link -->
+      <!-- Render PMID as clickable link to publication detail page -->
       <template #item.pmid="{ item }">
-        <a
+        <router-link
           v-if="item.pmid"
-          :href="'https://pubmed.ncbi.nlm.nih.gov/' + item.pmid"
-          target="_blank"
-          rel="noopener noreferrer"
+          :to="`/publications/${item.pmid}`"
         >
           {{ item.pmid }}
-        </a>
+        </router-link>
         <span v-else>-</span>
       </template>
 
