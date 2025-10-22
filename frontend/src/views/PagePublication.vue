@@ -207,7 +207,11 @@
 </template>
 
 <script>
-import { getPublicationsAggregation, getPhenopackets } from '@/api';
+import {
+  getPublicationsAggregation,
+  getPhenopacketsByPublication,
+  getPublicationMetadata,
+} from '@/api';
 
 export default {
   name: 'PagePublication',
@@ -215,7 +219,8 @@ export default {
     return {
       pmid: '',
       publication: {},
-      allPhenopackets: [],
+      phenopackets: [],
+      phenopacketsTotal: 0,
       loading: true,
       phenopacketsLoading: true,
       error: null,
@@ -271,32 +276,22 @@ export default {
       return `https://pubmed.ncbi.nlm.nih.gov/${this.pmid}`;
     },
     filteredPhenopackets() {
-      if (!this.allPhenopackets.length) return [];
+      // Use server-filtered phenopackets directly (no client-side filtering needed)
+      return this.phenopackets.map((item) => {
+        // Extract useful data for the table
+        const phenopacket = item.phenopacket || item;
+        const subject = phenopacket.subject || {};
+        const phenotypicFeatures = phenopacket.phenotypicFeatures || [];
+        const interpretations = phenopacket.interpretations || [];
 
-      // Filter phenopackets that have this PMID in their externalReferences
-      // Note: API returns wrapper with nested phenopacket document at phenopacket.phenopacket
-      return this.allPhenopackets
-        .filter((item) => {
-          // Access the nested phenopacket document
-          const phenopacket = item.phenopacket || item;
-          const externalRefs = phenopacket.metaData?.externalReferences || [];
-          return externalRefs.some((ref) => ref.id === `PMID:${this.pmid}`);
-        })
-        .map((item) => {
-          // Extract useful data for the table
-          const phenopacket = item.phenopacket || item;
-          const subject = phenopacket.subject || {};
-          const phenotypicFeatures = phenopacket.phenotypicFeatures || [];
-          const interpretations = phenopacket.interpretations || [];
-
-          return {
-            id: item.phenopacket_id || phenopacket.id, // Use phenopacket_id for routing
-            subject_id: subject.id || 'Unknown',
-            sex: subject.sex || 'UNKNOWN_SEX',
-            has_variants: interpretations.length > 0,
-            phenotype_count: phenotypicFeatures.length,
-          };
-        });
+        return {
+          id: item.phenopacket_id || phenopacket.id, // Use phenopacket_id for routing
+          subject_id: subject.id || 'Unknown',
+          sex: subject.sex || 'UNKNOWN_SEX',
+          has_variants: interpretations.length > 0,
+          phenotype_count: phenotypicFeatures.length,
+        };
+      });
     },
   },
   async created() {
@@ -310,34 +305,42 @@ export default {
       this.error = null;
 
       try {
-        // Fetch publication metadata from aggregation endpoint
-        const response = await getPublicationsAggregation();
-        const publications = response.data;
+        // Try to fetch rich metadata from PubMed API (with database caching)
+        try {
+          const metadataResponse = await getPublicationMetadata(this.pmid);
+          this.publication = {
+            pmid: this.pmid,
+            ...metadataResponse.data,
+          };
+        } catch (pubmedError) {
+          // Fallback to aggregation endpoint if PubMed fetch fails
+          console.warn('PubMed metadata fetch failed, falling back to aggregation:', pubmedError);
+          const response = await getPublicationsAggregation();
+          const publications = response.data;
+          this.publication = publications.find((pub) => pub.pmid === this.pmid);
 
-        // Find the publication matching this PMID
-        this.publication = publications.find((pub) => pub.pmid === this.pmid);
-
-        if (!this.publication) {
-          this.error = `Publication with PMID ${this.pmid} not found in database.`;
-          this.loading = false;
-          this.phenopacketsLoading = false;
-          return;
+          if (!this.publication) {
+            this.error = `Publication with PMID ${this.pmid} not found in database.`;
+            this.loading = false;
+            this.phenopacketsLoading = false;
+            return;
+          }
         }
 
         this.loading = false;
 
-        // Fetch all phenopackets (we'll filter client-side for now)
-        // TODO: Once backend /by-publication/{pmid} endpoint is implemented, use that instead
-        const phenopacketsResponse = await getPhenopackets({
+        // Fetch phenopackets using server-side filtering (much faster!)
+        const phenopacketsResponse = await getPhenopacketsByPublication(this.pmid, {
           skip: 0,
-          limit: 1000, // Fetch all phenopackets
+          limit: 500, // Server enforces max of 500
         });
 
-        this.allPhenopackets = phenopacketsResponse.data;
+        this.phenopackets = phenopacketsResponse.data.data;
+        this.phenopacketsTotal = phenopacketsResponse.data.total;
         this.phenopacketsLoading = false;
       } catch (e) {
         console.error('Error loading publication data:', e);
-        this.error = `Failed to load publication data: ${e.message}`;
+        this.error = `Failed to load publication data: ${e.response?.data?.detail || e.message}`;
         this.loading = false;
         this.phenopacketsLoading = false;
       }

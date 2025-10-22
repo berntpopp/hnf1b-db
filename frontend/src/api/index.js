@@ -109,6 +109,20 @@ export const getPhenopacketsWithVariants = (params = {}) =>
   apiClient.get('/phenopackets/', { params: { ...params, has_variants: true } });
 
 /**
+ * Get phenopackets citing a specific publication.
+ * Server-side filtering for better performance.
+ * @param {string} pmid - PubMed ID (with or without PMID: prefix)
+ * @param {Object} params - Query parameters
+ *   - skip: Pagination offset (default: 0)
+ *   - limit: Max records (default: 100, max: 500)
+ *   - sex: Filter by sex (optional)
+ *   - has_variants: Filter by variant presence (optional)
+ * @returns {Promise} Axios promise with filtered phenopackets and pagination info
+ */
+export const getPhenopacketsByPublication = (pmid, params = {}) =>
+  apiClient.get(`/phenopackets/by-publication/${pmid}`, { params });
+
+/**
  * Get phenotypic features for multiple phenopackets (batch).
  * @param {string} phenopacketIds - Comma-separated phenopacket IDs
  * @returns {Promise} Axios promise with features data
@@ -199,6 +213,25 @@ export const getAgeOfOnsetAggregation = () =>
  * @returns {Promise} Axios promise with small variants data
  */
 export const getSmallVariants = () => apiClient.get('/phenopackets/variants/small-variants');
+
+/* ==================== PUBLICATION ENDPOINTS ==================== */
+
+/**
+ * Get publication metadata by PMID.
+ * Fetches from PubMed API with database caching (90-day TTL).
+ * @param {string} pmid - PubMed ID (with or without PMID: prefix)
+ * @returns {Promise} Axios promise with publication metadata
+ *   - pmid: PubMed ID
+ *   - title: Article title
+ *   - authors: Array of author objects {name, affiliation}
+ *   - journal: Journal name
+ *   - year: Publication year
+ *   - doi: DOI identifier
+ *   - abstract: Article abstract
+ *   - data_source: "PubMed"
+ *   - fetched_at: ISO timestamp
+ */
+export const getPublicationMetadata = (pmid) => apiClient.get(`/publications/${pmid}/metadata`);
 
 /* ==================== AUTHENTICATION ENDPOINTS ==================== */
 
