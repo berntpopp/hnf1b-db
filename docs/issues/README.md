@@ -6,7 +6,7 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 
 **Milestone:** `frontend-phenopackets-v2-migration`
 
-**Status:** 3/20 issues completed (15%)
+**Status:** 7/20 issues completed (35%)
 
 **Timeline:** ~4 weeks (160 hours development)
 
@@ -15,13 +15,13 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 | Phase | Issues | Completed | Remaining |
 |-------|--------|-----------|-----------|
 | Phase 0: Foundation | #30-32 | ✅ 3/3 | 0 |
-| Phase 1: Core Views | #33-38 | 0/6 | 6 |
+| Phase 1: Core Views | #33-38 | ✅ 3/6 | 3 |
 | Phase 2: Search | #39-40 | 0/2 | 2 |
 | Phase 3: Visualizations | #41-43 | 0/3 | 3 |
 | Phase 4: Comparisons | #44-45 | 0/2 | 2 |
 | Phase 5: Survival | #46 | 0/1 | 1 |
 | Phase 6: Polish | #47-49 | 0/3 | 3 |
-| **Total** | **20** | **3** | **17** |
+| **Total** | **20** | **7** | **13** |
 
 ## 📁 Files in This Directory
 
@@ -31,12 +31,12 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 
 ### Detailed Issue Plans
 - **`issue-32-migrate-individual-detail-page.md`** ✅ (Completed)
-- **`issue-33-update-aggregation-endpoints.md`**
-- **`issue-34-migrate-variants-view.md`**
-- **`issue-35-migrate-variant-detail-page.md`**
-- **`issue-36-migrate-publications-view.md`**
+- **`issue-33-update-aggregation-endpoints.md`** ✅ (Completed)
+- **`issue-34-migrate-variants-view.md`** ⚠️ (Blocked - needs backend)
+- **`issue-35-migrate-variant-detail-page.md`** ⚠️ (Blocked - needs backend)
+- **`issue-36-migrate-publications-view.md`** ✅ (Completed)
 - **`issue-37-40-batch.md`** - Issues #37, #39, #40
-- **`issue-38-migrate-home-stats.md`**
+- **`issue-38-migrate-home-stats.md`** ✅ (Completed)
 - **`issue-41-46-visualizations.md`** - Issues #41-46
 - **`issue-47-49-polish.md`** - Issues #47-49
 

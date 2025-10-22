@@ -41,8 +41,8 @@ charts           - D3.js visualizations
 
 | Status | Count | Issues |
 |--------|-------|--------|
-| ✅ Completed | 3 | #30, #31, #32 |
-| 📋 Pending | 17 | #33-#49 |
+| ✅ Completed | 7 | #30, #31, #32, #33, #36, #38 |
+| 📋 Pending | 13 | #34, #35, #37, #39-#49 |
 | **Total** | **20** | |
 
 ## Issues by Phase
@@ -50,12 +50,12 @@ charts           - D3.js visualizations
 ### Phase 1: Core Views Migration (P1) - 6.5 days
 **Goal:** All basic views working with v2 API
 
-- [ ] **#33** `fix(frontend): update aggregation endpoints for phenopacket format` (1.5d)
+- [x] **#33** `fix(frontend): update aggregation endpoints for phenopacket format` (1.5d) ✅
 - [ ] **#34** `feat(frontend): migrate variants view to phenopacket interpretations` (2d) ⚠️ Needs backend
 - [ ] **#35** `feat(frontend): migrate variant detail page to interpretation view` (1.5d)
-- [ ] **#36** `feat(frontend): migrate publications view to external references` (1d)
+- [x] **#36** `feat(frontend): migrate publications view to external references` (1d) ✅
 - [ ] **#37** `feat(frontend): migrate publication detail page` (1d)
-- [ ] **#38** `feat(frontend): migrate home page statistics to v2 API` (0.5d)
+- [x] **#38** `feat(frontend): migrate home page statistics to v2 API` (0.5d) ✅
 
 ### Phase 2: Search & Navigation (P1) - 3 days
 **Goal:** Universal search working
