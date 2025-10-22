@@ -1,6 +1,6 @@
-# Issues #47-49 - Polish & Testing
+# Issues #48-49 - Polish & Testing
 
-## Issue #47: test(frontend): add E2E tests for critical user flows
+## Issue #48: test(frontend): add E2E tests for critical user flows
 
 ### Overview
 Comprehensive end-to-end testing with Playwright for all critical workflows.
@@ -341,7 +341,7 @@ test('Navigate from variant to affected individuals', async ({ page }) => {
 
 ---
 
-## Issue #48: fix(frontend): remove all v1 legacy code
+## Issue #49: fix(frontend): remove all v1 legacy code
 
 ### Overview
 Clean up deprecated v1 code after migration complete.
@@ -410,7 +410,7 @@ rg "v1|legacy|deprecated" src/ -i
 
 ---
 
-## Issue #49: docs(frontend): update user documentation
+## Issue #50: docs(frontend): update user documentation
 
 ### Overview
 Complete user-facing documentation for phenopackets v2 frontend.

@@ -41,9 +41,11 @@ charts           - D3.js visualizations
 
 | Status | Count | Issues |
 |--------|-------|--------|
-| ✅ Completed | 7 | #30, #31, #32, #33, #36, #38 |
-| 📋 Pending | 13 | #34, #35, #37, #39-#49 |
-| **Total** | **20** | |
+| ✅ Completed | 7 | #30, #31, #32, #33, #36, #37 (Phase 1), #38 |
+| 🔄 Partial | 1 | #37 (Phase 2 blocked by backend issues #51-#53) |
+| 📋 Pending | 12 | #34, #35, #39-#50 |
+| 📋 Backend (New) | 3 | #51 (PubMed API), #52 (by-publication endpoint), #53 (publication stats) |
+| **Total** | **23** | |
 
 ## Issues by Phase
 
@@ -54,94 +56,103 @@ charts           - D3.js visualizations
 - [ ] **#34** `feat(frontend): migrate variants view to phenopacket interpretations` (2d) ⚠️ Needs backend
 - [ ] **#35** `feat(frontend): migrate variant detail page to interpretation view` (1.5d)
 - [x] **#36** `feat(frontend): migrate publications view to external references` (1d) ✅
-- [ ] **#37** `feat(frontend): migrate publication detail page` (1d)
+- [x] **#37** `feat(frontend): migrate publication detail page` (1d) ✅ Phase 1 complete
+  - 🔄 Phase 2 blocked by backend issues #51 (PubMed API), #52 (by-publication endpoint), #53 (publication stats)
 - [x] **#38** `feat(frontend): migrate home page statistics to v2 API` (0.5d) ✅
 
 ### Phase 2: Search & Navigation (P1) - 3 days
 **Goal:** Universal search working
 
 - [ ] **#39** `feat(frontend): implement global phenopacket search` (2d)
-- [ ] **#40** `feat(frontend): implement search results with faceted filtering` (1.5d)
+- [ ] **#41** `feat(frontend): implement search results with faceted filtering` (1.5d)
 
 ### Phase 3: Enhanced Visualizations (P2) - 2.5 days
 **Goal:** Rich data visualizations
 
-- [ ] **#41** `feat(frontend): add phenotype distribution stacked bar chart` (1d)
-- [ ] **#42** `feat(frontend): add publication timeline visualization` (1d)
-- [ ] **#43** `feat(frontend): add phenotype count histogram` (1d)
+- [ ] **#42** `feat(frontend): add phenotype distribution stacked bar chart` (1d)
+- [ ] **#43** `feat(frontend): add publication timeline visualization` (1d)
+- [ ] **#44** `feat(frontend): add phenotype count histogram` (1d)
 
 ### Phase 4: Cohort Comparisons (P2) - 3 days
 **Goal:** Statistical comparisons between groups
 
-- [ ] **#44** `feat(frontend): add variant type comparison view` (2d)
-- [ ] **#45** `feat(frontend): add clinical subgroup comparisons` (1.5d)
+- [ ] **#45** `feat(frontend): add variant type comparison view` (2d)
+- [ ] **#46** `feat(frontend): add clinical subgroup comparisons` (1.5d)
 
 ### Phase 5: Survival Analysis (P3) - 2 days
 **Goal:** Kaplan-Meier curves
 
-- [ ] **#46** `feat(frontend): implement Kaplan-Meier survival curves` (2d) ⚠️ Needs temporal data
+- [ ] **#47** `feat(frontend): implement Kaplan-Meier survival curves` (2d) ⚠️ Needs temporal data
 
 ### Phase 6: Polish & Testing (P1) - 4 days
 **Goal:** Production-ready quality
 
-- [ ] **#47** `test(frontend): add E2E tests for critical user flows` (2d)
-- [ ] **#48** `fix(frontend): remove all v1 legacy code` (1d)
-- [ ] **#49** `docs(frontend): update user documentation` (1d)
+- [ ] **#48** `test(frontend): add E2E tests for critical user flows` (2d)
+- [ ] **#49** `fix(frontend): remove all v1 legacy code` (1d)
+- [ ] **#50** `docs(frontend): update user documentation` (1d)
 
 ## Critical Path
 
 ```
 #30 ✅ (API client)
   ├─> #33 (Aggregations)
-  │     ├─> #41, #43, #44, #45 (Visualizations & Comparisons)
-  │     └─> #46 (Survival curves)
+  │     ├─> #42, #44, #45, #46 (Visualizations & Comparisons)
+  │     └─> #47 (Survival curves)
   │
   ├─> #34 (Variants view) ⚠️ BACKEND BLOCKER
   │     └─> #35 (Variant detail)
   │
-  ├─> #36 (Publications view)
-  │     ├─> #37 (Publication detail)
-  │     └─> #42 (Timeline viz)
+  ├─> #36 (Publications view) ✅
+  │     ├─> #37 (Publication detail) ✅ Phase 1 | 📋 Phase 2 (needs #51, #52, #53)
+  │     └─> #43 (Timeline viz)
   │
   ├─> #38 (Home stats)
   │
   └─> #39 (Global search)
-        └─> #40 (Search results)
+        └─> #41 (Search results)
 
 All Phase 1-2 completed
-  └─> #47, #48, #49 (Polish & testing)
+  └─> #48, #49, #50 (Polish & testing)
 ```
 
 ## Backend Dependencies
 
 These issues require NEW backend endpoints:
 
-| Issue | Endpoint Needed | Priority |
-|-------|----------------|----------|
-| #34 | `GET /api/v2/phenopackets/aggregate/variants` | P1 - BLOCKER |
-| #35 | `GET /api/v2/phenopackets/by-variant/{id}` | P1 - BLOCKER |
-| #39 | `POST /api/v2/phenopackets/search` (enhanced) | P1 |
-| #44 | `GET /api/v2/phenopackets/aggregate/compare-groups` | P2 |
-| #46 | `GET /api/v2/phenopackets/aggregate/survival-data` | P3 |
+| Issue | Endpoint Needed | Priority | Backend Issue |
+|-------|----------------|----------|---------------|
+| #34 | `GET /api/v2/phenopackets/aggregate/variants` | P1 - BLOCKER | TBD |
+| #35 | `GET /api/v2/phenopackets/by-variant/{id}` | P1 - BLOCKER | TBD |
+| #37 (Phase 2) | `GET /api/v2/publications/{pmid}/metadata` | P2 | **#51** |
+| #37 (Phase 2) | `GET /api/v2/phenopackets/by-publication/{pmid}` | P2 | **#52** |
+| #37 (Phase 2) | `GET /api/v2/phenopackets/aggregate/publication-summary/{pmid}` | P2 | **#53** |
+| #39 | `POST /api/v2/phenopackets/search` (enhanced) | P1 | TBD |
+| #45 | `GET /api/v2/phenopackets/aggregate/compare-groups` | P2 | TBD |
+| #47 | `GET /api/v2/phenopackets/aggregate/survival-data` | P3 | TBD |
 
 **Action:** Create backend issues for these endpoints BEFORE starting frontend work.
+
+**Backend Issues Created:**
+- **Issue #51:** PubMed API integration with database caching (12 hours) - See `docs/issues/issue-51-backend-pubmed-api.md`
+- **Issue #52:** `/by-publication/{pmid}` endpoint for server-side filtering (8 hours) - See `docs/issues/issue-52-backend-publication-endpoint.md`
+- **Issue #53:** `/aggregate/publication-summary/{pmid}` statistics endpoint (8 hours) - See `docs/issues/issue-53-backend-publication-aggregation.md`
 
 ## Feature-to-Issue Mapping
 
 | Your Requirement | Issue(s) | Priority | Status |
 |------------------|----------|----------|--------|
-| Suchfeld für individuen, varianten, publication | #39, #40 | P1 | 📋 |
+| Suchfeld für individuen, varianten, publication | #39, #41 | P1 | 📋 |
 | Tabellen für individuals + navigation | #31, #32 | P1 | ✅ |
 | Individual detail page | #32 | P1 | ✅ |
 | Variants view + detail | #34, #35 | P1 | 📋 |
-| Publications view + detail | #36, #37 | P1 | 📋 |
+| Publications view + detail | #36, #37 | P1 | ✅ MVP / 📋 Enhanced (needs #51-#53) |
 | Aggregations mit donut plots | #33 | P1 | 📋 |
-| Zeitplan/timeline for publications | #42 | P2 | 📋 |
-| Phenotypes stacked bar charts | #41 | P2 | 📋 |
-| Gruppen vergleiche (T vs nT, 17q, etc.) | #44, #45 | P2 | 📋 |
-| Renal survival curve | #46 | P3 | 📋 |
-| Anzahl phenotypes histogram | #43 | P2 | 📋 |
-| CAKUT vs CAKUT/MODY | #45 | P2 | 📋 |
+| Zeitplan/timeline for publications | #43 | P2 | 📋 |
+| Phenotypes stacked bar charts | #42 | P2 | 📋 |
+| Gruppen vergleiche (T vs nT, 17q, etc.) | #45, #46 | P2 | 📋 |
+| Renal survival curve | #47 | P3 | 📋 |
+| Anzahl phenotypes histogram | #44 | P2 | 📋 |
+| CAKUT vs CAKUT/MODY | #46 | P2 | 📋 |
 
 ## How to Use This Plan
 
@@ -156,7 +167,7 @@ docs/issues/issue-##-<descriptive-name>.md
 # To GitHub issue #33, #34, etc.
 ```
 
-### 2. Create New Issues #41-49
+### 2. Create New Issues #42-49
 
 Create issues with proper titles following convention:
 ```
@@ -194,7 +205,7 @@ In GitHub:
 2. #33 (Aggregations) - Core functionality
 3. #36, #37 (Publications) - Independent from variants
 4. #34, #35 (Variants) - Wait for backend endpoint
-5. #39, #40 (Search) - After basic views work
+5. #39, #41 (Search) - After basic views work
 
 ## Success Metrics
 

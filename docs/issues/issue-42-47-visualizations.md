@@ -1,15 +1,15 @@
-# Issues #41-46 - Visualizations & Analysis
+# Issues #42-46 - Visualizations & Analysis
 
 **Note:** Three placeholder tabs were removed from AggregationsDashboard.vue in issue #33:
 - **Stacked Bar Chart** - Called non-existent `API.getPhenotypeDescribedCount()` (removed as YAGNI per issue #33)
 - **Time Plot** - Called non-existent `API.getPublicationsCumulativeCount()` (removed as YAGNI per issue #33)
 - **Protein Plot** - Called non-existent `API.getProteins()` and `API.getVariantsSmallVariants()` (backend endpoints not implemented)
 
-These visualizations should be reimplemented with proper v2 API endpoints in issues #41, #42, and the protein plot functionality below.
+These visualizations should be reimplemented with proper v2 API endpoints in issues #42, #43, and the protein plot functionality below.
 
 ---
 
-## Issue #41: feat(frontend): add phenotype distribution stacked bar chart
+## Issue #42: feat(frontend): add phenotype distribution stacked bar chart
 
 ### Overview
 Stacked bar chart showing presence/absence of HPO terms across phenopackets.
@@ -39,7 +39,7 @@ GET /api/v2/phenopackets/aggregate/by-feature?limit=20
 
 ---
 
-## Issue #42: feat(frontend): add publication timeline visualization
+## Issue #43: feat(frontend): add publication timeline visualization
 
 ### Overview
 D3.js timeline showing phenopackets added over time by publication.
@@ -71,7 +71,7 @@ GET /api/v2/phenopackets/aggregate/publications-timeline
 
 ---
 
-## Issue #43: feat(frontend): add phenotype count histogram
+## Issue #44: feat(frontend): add phenotype count histogram
 
 ### Overview
 Histogram showing distribution of phenotype counts per individual.
@@ -104,7 +104,7 @@ GET /api/v2/phenopackets/aggregate/phenotype-counts
 
 ---
 
-## Issue #44: feat(frontend): add variant type comparison view
+## Issue #45: feat(frontend): add variant type comparison view
 
 ### Overview
 Side-by-side comparison of phenotype distributions between variant types.
@@ -148,7 +148,7 @@ Body: {
 
 ---
 
-## Issue #45: feat(frontend): add clinical subgroup comparisons
+## Issue #46: feat(frontend): add clinical subgroup comparisons
 
 ### Overview
 Compare phenotypes across clinical subgroups.
@@ -160,7 +160,7 @@ Compare phenotypes across clinical subgroups.
 - With genital abnormalities vs Without
 
 ### Implementation
-- Reuse comparison component from #44
+- Reuse comparison component from #45
 - Add subgroup selector dropdown
 - Multiple comparison view
 - Statistical tests (ANOVA, Chi-square)
@@ -179,7 +179,7 @@ Body: {
 
 ---
 
-## Issue #46: feat(frontend): implement Kaplan-Meier survival curves
+## Issue #47: feat(frontend): implement Kaplan-Meier survival curves
 
 ### Overview
 Renal survival analysis with Kaplan-Meier curves.
@@ -226,7 +226,7 @@ Required fields:
 
 ### Data Audit Required
 
-**Before implementing issue #46, audit phenopackets for temporal data:**
+**Before implementing issue #47, audit phenopackets for temporal data:**
 
 ```sql
 -- Check if phenopackets contain temporal measurements
@@ -267,7 +267,7 @@ FROM (
 
 | Scenario | Action |
 |----------|--------|
-| **< 10% have temporal data** | ❌ **DESCOPE issue #46** - Not enough data for survival analysis |
+| **< 10% have temporal data** | ❌ **DESCOPE issue #47** - Not enough data for survival analysis |
 | **10-50% have temporal data** | ⚠️ **Partial implementation** - Show survival curves with disclaimer about incomplete data |
 | **> 50% have temporal data** | ✅ **Full implementation** - Proceed with Kaplan-Meier curves |
 
