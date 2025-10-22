@@ -204,7 +204,10 @@ class PhenopacketBuilder:
                     existing_onset = existing_pheno.get("onset")
                     new_onset = pheno.get("onset")
 
-                    if new_onset and (not existing_onset or self._is_earlier_onset(new_onset, existing_onset)):
+                    if new_onset and (
+                        not existing_onset
+                        or self._is_earlier_onset(new_onset, existing_onset)
+                    ):
                         existing_pheno["onset"] = new_onset
 
         # Sort phenotypes chronologically (earliest onset first)
@@ -254,11 +257,15 @@ class PhenopacketBuilder:
                         # Check for overlapping CNVs in existing variants
                         for existing_id, existing_interp in variant_dict.items():
                             existing_desc = (
-                                existing_interp["diagnosis"]["genomicInterpretations"][0]
+                                existing_interp["diagnosis"]["genomicInterpretations"][
+                                    0
+                                ]
                                 .get("variantInterpretation", {})
                                 .get("variationDescriptor", {})
                             )
-                            existing_coords = self._extract_cnv_coordinates(existing_desc)
+                            existing_coords = self._extract_cnv_coordinates(
+                                existing_desc
+                            )
 
                             if existing_coords:
                                 ex_chrom, ex_start, ex_end, ex_type = existing_coords
@@ -268,10 +275,15 @@ class PhenopacketBuilder:
                                     overlap = self._calculate_cnv_overlap(
                                         start, end, ex_start, ex_end
                                     )
-                                    if overlap > 0.8:  # 80% reciprocal overlap threshold
+                                    if (
+                                        overlap > 0.8
+                                    ):  # 80% reciprocal overlap threshold
                                         # Merge into existing variant
                                         self._merge_cnv_interpretations(
-                                            existing_interp, interp, existing_desc, variant_desc
+                                            existing_interp,
+                                            interp,
+                                            existing_desc,
+                                            variant_desc,
                                         )
                                         merged = True
                                         break
@@ -287,7 +299,9 @@ class PhenopacketBuilder:
                         ][0]
                         new_genomic = genomic_interps[0]
 
-                        existing_subject = existing_genomic.get("subjectOrBiosampleId", "")
+                        existing_subject = existing_genomic.get(
+                            "subjectOrBiosampleId", ""
+                        )
                         new_subject = new_genomic.get("subjectOrBiosampleId", "")
 
                         if new_subject and new_subject != existing_subject:
@@ -297,7 +311,9 @@ class PhenopacketBuilder:
                             if new_subject not in subjects:
                                 subjects.append(new_subject)
 
-                            existing_genomic["subjectOrBiosampleId"] = " | ".join(subjects)
+                            existing_genomic["subjectOrBiosampleId"] = " | ".join(
+                                subjects
+                            )
 
         return list(variant_dict.values())
 
@@ -361,9 +377,12 @@ class PhenopacketBuilder:
 
         # Update description to include both coordinate estimates
         new_coords_ext = next(
-            (ext for ext in new_desc.get("extensions", [])
-             if ext.get("name") == "coordinates"),
-            None
+            (
+                ext
+                for ext in new_desc.get("extensions", [])
+                if ext.get("name") == "coordinates"
+            ),
+            None,
         )
 
         if new_coords_ext:
@@ -428,12 +447,15 @@ class PhenopacketBuilder:
         )
 
         # Check for MODY/diabetes - add specific MONDO term if explicitly present
-        mody_col = next(
-            (col for col in first_row.index if "mody" in col.lower()), None
-        )
+        mody_col = next((col for col in first_row.index if "mody" in col.lower()), None)
         if mody_col:
             mody_val = self._safe_value(first_row[mody_col])
-            if mody_val and mody_val.lower() not in ["no", "not reported", "nan", ""]:
+            if not pd.isna(mody_val) and str(mody_val).lower() not in [
+                "no",
+                "not reported",
+                "nan",
+                "",
+            ]:
                 # Individual has MODY - add specific MONDO term
                 diseases.append(
                     {
