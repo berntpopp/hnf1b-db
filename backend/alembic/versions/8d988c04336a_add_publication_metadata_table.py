@@ -5,15 +5,14 @@ Revises: 002_jsonb_indexes
 Create Date: 2025-10-22 14:53:20.005022
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
-revision: str = '8d988c04336a'
-down_revision: Union[str, Sequence[str], None] = '002_jsonb_indexes'
+revision: str = "8d988c04336a"
+down_revision: Union[str, Sequence[str], None] = "002_jsonb_indexes"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -58,4 +57,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop publication_metadata table."""
-    op.drop_table('publication_metadata')
+    op.drop_table("publication_metadata")

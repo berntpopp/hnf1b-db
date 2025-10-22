@@ -236,7 +236,9 @@ class VRSBuilder:
                     f"VRS digest computation failed: {e}. Using placeholder."
                 )
                 identifier_string = f"{refseq_id}:{start}-{end}:{ref}>{alt}"
-                vrs_allele["digest"] = cls._create_deterministic_digest(identifier_string)
+                vrs_allele["digest"] = cls._create_deterministic_digest(
+                    identifier_string
+                )
                 vrs_allele["id"] = f"ga4gh:VA.{vrs_allele['digest']}"
         else:
             # Fallback to placeholder digest when ga4gh.vrs is not available

@@ -119,8 +119,7 @@ async def get_phenopackets_batch(
 
 
 def validate_pmid(pmid: str) -> str:
-    """
-    Validate and normalize PMID format.
+    """Validate and normalize PMID format.
 
     Args:
         pmid: PubMed ID (with or without PMID: prefix)
@@ -135,7 +134,7 @@ def validate_pmid(pmid: str) -> str:
         pmid = f"PMID:{pmid}"
 
     # Validate format: PMID followed by 1-8 digits only
-    if not re.match(r'^PMID:\d{1,8}$', pmid):
+    if not re.match(r"^PMID:\d{1,8}$", pmid):
         raise ValueError(f"Invalid PMID format: {pmid}. Expected PMID:12345678")
 
     return pmid
@@ -146,12 +145,15 @@ async def get_by_publication(
     pmid: str,
     skip: int = Query(0, ge=0, description="Pagination offset"),
     limit: int = Query(100, ge=1, le=500, description="Max records (max: 500)"),
-    sex: Optional[str] = Query(None, regex="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"),
-    has_variants: Optional[bool] = Query(None, description="Filter by variant presence"),
+    sex: Optional[str] = Query(
+        None, regex="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"
+    ),
+    has_variants: Optional[bool] = Query(
+        None, description="Filter by variant presence"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Get phenopackets citing a specific publication.
+    """Get phenopackets citing a specific publication.
 
     **Security:** PMID is validated to prevent SQL injection.
 
@@ -231,7 +233,7 @@ async def get_by_publication(
         if total == 0:
             raise HTTPException(
                 status_code=404,
-                detail=f"No phenopackets found citing publication {pmid}"
+                detail=f"No phenopackets found citing publication {pmid}",
             )
 
         # Add pagination (parameters prevent injection)
@@ -243,15 +245,12 @@ async def get_by_publication(
 
         return {
             "data": [
-                {
-                    "phenopacket_id": row.phenopacket_id,
-                    "phenopacket": row.phenopacket
-                }
+                {"phenopacket_id": row.phenopacket_id, "phenopacket": row.phenopacket}
                 for row in rows
             ],
             "total": total,
             "skip": skip,
-            "limit": limit
+            "limit": limit,
         }
 
     except HTTPException:
@@ -672,7 +671,9 @@ async def create_phenopacket(
         await db.rollback()
         # Check for integrity errors (duplicate keys, foreign key violations, etc.)
         error_str = str(e).lower()
-        if ("duplicate" in error_str or "unique" in error_str) and "phenopacket_id" in error_str:
+        if (
+            "duplicate" in error_str or "unique" in error_str
+        ) and "phenopacket_id" in error_str:
             raise HTTPException(
                 status_code=409,
                 detail=f"Phenopacket with ID '{sanitized['id']}' already exists",
@@ -1020,7 +1021,9 @@ async def aggregate_publications(
         {
             "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,  # type: ignore
             "url": row.url,  # type: ignore
-            "doi": row.description.replace("DOI:", "") if row.description and row.description.startswith("DOI:") else None,  # type: ignore
+            "doi": row.description.replace("DOI:", "")
+            if row.description and row.description.startswith("DOI:")
+            else None,  # type: ignore
             "phenopacket_count": row.phenopacket_count,  # type: ignore
             "first_added": row.first_added.isoformat() if row.first_added else None,  # type: ignore
         }

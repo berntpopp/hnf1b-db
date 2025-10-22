@@ -39,7 +39,8 @@ except ImportError:
 
 # Get database URL from environment variable
 database_url = os.getenv(
-    "DATABASE_URL", "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets"
+    "DATABASE_URL",
+    "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets",
 )
 
 # Override the sqlalchemy.url from config with environment variable

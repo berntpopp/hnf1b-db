@@ -28,7 +28,9 @@ class TestJSONBIndexesExist:
 
         assert row is not None, "idx_phenopacket_features_gin index should exist"
         assert "gin" in row.indexdef.lower(), "Should be a GIN index"
-        assert "phenotypicfeatures" in row.indexdef.lower(), "Should index phenotypicFeatures"
+        assert (
+            "phenotypicfeatures" in row.indexdef.lower()
+        ), "Should index phenotypicFeatures"
 
     async def test_interpretations_index_exists(self, db_session: AsyncSession):
         """Verify idx_phenopacket_interpretations_gin index exists."""
@@ -61,7 +63,6 @@ class TestJSONBIndexesExist:
         assert "gin" in row.indexdef.lower(), "Should be a GIN index"
 
 
-
 class TestJSONBIndexUsage:
     """Verify that queries CAN use the JSONB indexes when beneficial.
 
@@ -70,7 +71,9 @@ class TestJSONBIndexUsage:
     Index usage is verified on larger datasets in production/staging environments.
     """
 
-    async def test_contains_operator_query_can_use_index(self, db_session: AsyncSession):
+    async def test_contains_operator_query_can_use_index(
+        self, db_session: AsyncSession
+    ):
         """Verify @> (contains) operator queries can leverage GIN index."""
         # This query uses the @> operator which GIN indexes support
         result = await db_session.execute(
@@ -118,9 +121,9 @@ class TestJSONBIndexUsage:
         print(f"{'='*60}")
 
         # Verify query is valid (uses function scan for jsonb_array_elements)
-        assert "jsonb_array_elements" in explain_text.lower(), (
-            "Should use jsonb_array_elements function"
-        )
+        assert (
+            "jsonb_array_elements" in explain_text.lower()
+        ), "Should use jsonb_array_elements function"
 
 
 class TestIndexStatistics:
@@ -180,7 +183,9 @@ class TestIndexPerformanceManual:
     Run these manually with real data to see performance improvements.
     """
 
-    async def test_compare_query_cost_with_without_index(self, db_session: AsyncSession):
+    async def test_compare_query_cost_with_without_index(
+        self, db_session: AsyncSession
+    ):
         """Compare query costs with and without indexes (manual verification)."""
         # This would require:
         # 1. Run EXPLAIN before creating indexes (save cost)

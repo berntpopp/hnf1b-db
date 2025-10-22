@@ -7,12 +7,13 @@ This module provides publication metadata fetching from PubMed with:
 - Comprehensive error handling
 - Provenance tracking
 """
+
 import asyncio
 import json
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import aiohttp
@@ -39,32 +40,36 @@ else:
 # Custom exceptions
 class PubMedError(Exception):
     """Base exception for PubMed API errors."""
+
     pass
 
 
 class PubMedRateLimitError(PubMedError):
     """Rate limit exceeded (429)."""
+
     pass
 
 
 class PubMedNotFoundError(PubMedError):
     """Publication not found (404)."""
+
     pass
 
 
 class PubMedTimeoutError(PubMedError):
     """API request timed out."""
+
     pass
 
 
 class PubMedAPIError(PubMedError):
     """General API error."""
+
     pass
 
 
 def validate_pmid(pmid: str) -> str:
-    """
-    Validate and normalize PMID format.
+    """Validate and normalize PMID format.
 
     Security: Prevents SQL injection by validating format with regex.
 
@@ -93,7 +98,7 @@ def validate_pmid(pmid: str) -> str:
 
     # Validate format: PMID followed by 1-8 digits only
     # This prevents SQL injection attempts like "PMID:123; DROP TABLE users;"
-    if not re.match(r'^PMID:\d{1,8}$', pmid):
+    if not re.match(r"^PMID:\d{1,8}$", pmid):
         raise ValueError(
             f"Invalid PMID format: {pmid}. Expected PMID:12345678 (1-8 digits)"
         )
@@ -102,12 +107,9 @@ def validate_pmid(pmid: str) -> str:
 
 
 async def get_publication_metadata(
-    pmid: str,
-    db: AsyncSession,
-    fetched_by: Optional[str] = "system"
+    pmid: str, db: AsyncSession, fetched_by: Optional[str] = "system"
 ) -> dict:
-    """
-    Fetch publication metadata with database caching.
+    """Fetch publication metadata with database caching.
 
     Flow:
     1. Validate PMID format (security)
@@ -146,7 +148,10 @@ async def get_publication_metadata(
     if cached:
         logger.info(
             f"Cache hit for {pmid}",
-            extra={"pmid": pmid, "cache_age_days": (datetime.now() - cached['fetched_at']).days}
+            extra={
+                "pmid": pmid,
+                "cache_age_days": (datetime.now() - cached["fetched_at"]).days,
+            },
         )
         return cached
 
@@ -162,8 +167,7 @@ async def get_publication_metadata(
 
 
 async def _get_cached_metadata(pmid: str, db: AsyncSession) -> Optional[dict]:
-    """
-    Check database cache for unexpired metadata.
+    """Check database cache for unexpired metadata.
 
     Args:
         pmid: Validated PMID in format PMID:12345678
@@ -212,8 +216,7 @@ async def _get_cached_metadata(pmid: str, db: AsyncSession) -> Optional[dict]:
 
 
 async def _fetch_from_pubmed(pmid: str) -> dict:
-    """
-    Fetch metadata from PubMed E-utilities API.
+    """Fetch metadata from PubMed E-utilities API.
 
     Args:
         pmid: Validated PMID in format PMID:12345678
@@ -234,7 +237,7 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
         "db": "pubmed",
         "id": pmid_number,
         "retmode": "json",
-        "rettype": "abstract"
+        "rettype": "abstract",
     }
     if PUBMED_API_KEY:
         params["api_key"] = PUBMED_API_KEY
@@ -246,10 +249,10 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
                 async with session.get(PUBMED_API, params=params) as response:
                     # Handle rate limiting
                     if response.status == 429:
-                        retry_after = response.headers.get('Retry-After', '60')
+                        retry_after = response.headers.get("Retry-After", "60")
                         logger.error(
                             f"Rate limit exceeded for {pmid}",
-                            extra={"pmid": pmid, "retry_after": retry_after}
+                            extra={"pmid": pmid, "retry_after": retry_after},
                         )
                         raise PubMedRateLimitError(
                             f"Rate limit exceeded. Retry after {retry_after} seconds"
@@ -259,7 +262,7 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
                     if response.status != 200:
                         logger.error(
                             f"PubMed API returned {response.status} for {pmid}",
-                            extra={"pmid": pmid, "status": response.status}
+                            extra={"pmid": pmid, "status": response.status},
                         )
                         raise PubMedAPIError(
                             f"PubMed API returned status {response.status}"
@@ -268,11 +271,10 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
                     data = await response.json()
 
                     # Check if PMID exists in response
-                    result = data.get('result', {})
+                    result = data.get("result", {})
                     if pmid_number not in result:
                         logger.warning(
-                            f"PMID {pmid} not found in PubMed",
-                            extra={"pmid": pmid}
+                            f"PMID {pmid} not found in PubMed", extra={"pmid": pmid}
                         )
                         raise PubMedNotFoundError(f"PMID {pmid} not found in PubMed")
 
@@ -280,19 +282,23 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
 
                     # Parse authors (preserve order with JSONB)
                     authors = []
-                    for author in pub_data.get('authors', []):
-                        authors.append({
-                            "name": author.get('name', ''),
-                            "affiliation": author.get('affinfo', '')
-                        })
+                    for author in pub_data.get("authors", []):
+                        authors.append(
+                            {
+                                "name": author.get("name", ""),
+                                "affiliation": author.get("affinfo", ""),
+                            }
+                        )
 
                     # Extract metadata
                     metadata = {
                         "pmid": pmid,
-                        "title": pub_data.get('title', 'Unknown'),
+                        "title": pub_data.get("title", "Unknown"),
                         "authors": authors,
-                        "journal": pub_data.get('fulljournalname', ''),
-                        "year": int(pub_data.get('pubdate', '0')[:4]) if pub_data.get('pubdate') else None,
+                        "journal": pub_data.get("fulljournalname", ""),
+                        "year": int(pub_data.get("pubdate", "0")[:4])
+                        if pub_data.get("pubdate")
+                        else None,
                         "doi": _extract_doi(pub_data),
                         "abstract": _extract_abstract(pub_data),
                         "data_source": "PubMed",
@@ -301,7 +307,7 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
 
                     logger.info(
                         f"Successfully fetched metadata for {pmid}",
-                        extra={"pmid": pmid, "title": metadata['title'][:50]}
+                        extra={"pmid": pmid, "title": metadata["title"][:50]},
                     )
 
                     return metadata
@@ -311,17 +317,16 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
         raise PubMedTimeoutError(f"Timeout fetching {pmid}")
     except aiohttp.ClientError as e:
         logger.error(
-            f"Network error fetching {pmid}: {e}",
-            extra={"pmid": pmid, "error": str(e)}
+            f"Network error fetching {pmid}: {e}", extra={"pmid": pmid, "error": str(e)}
         )
         raise PubMedAPIError(f"Network error: {e}")
 
 
 def _extract_doi(pub_data: dict) -> Optional[str]:
     """Extract DOI from PubMed article IDs."""
-    for article_id in pub_data.get('articleids', []):
-        if article_id.get('idtype') == 'doi':
-            return article_id.get('value')
+    for article_id in pub_data.get("articleids", []):
+        if article_id.get("idtype") == "doi":
+            return article_id.get("value")
     return None
 
 
@@ -333,12 +338,9 @@ def _extract_abstract(pub_data: dict) -> Optional[str]:
 
 
 async def _store_in_cache(
-    metadata: dict,
-    db: AsyncSession,
-    fetched_by: str = "system"
+    metadata: dict, db: AsyncSession, fetched_by: str = "system"
 ) -> None:
-    """
-    Store publication metadata in database cache.
+    """Store publication metadata in database cache.
 
     Args:
         metadata: Publication metadata dict
@@ -365,18 +367,23 @@ async def _store_in_cache(
             fetched_by = EXCLUDED.fetched_by
     """)
 
-    await db.execute(query, {
-        "pmid": metadata["pmid"],
-        "title": metadata["title"],
-        "authors": json.dumps(metadata["authors"]),  # Convert to JSON string for JSONB column
-        "journal": metadata["journal"],
-        "year": metadata["year"],
-        "doi": metadata["doi"],
-        "abstract": metadata["abstract"],
-        "data_source": metadata["data_source"],
-        "fetched_by": fetched_by,
-        "fetched_at": metadata["fetched_at"],
-        "api_version": API_VERSION,
-    })
+    await db.execute(
+        query,
+        {
+            "pmid": metadata["pmid"],
+            "title": metadata["title"],
+            "authors": json.dumps(
+                metadata["authors"]
+            ),  # Convert to JSON string for JSONB column
+            "journal": metadata["journal"],
+            "year": metadata["year"],
+            "doi": metadata["doi"],
+            "abstract": metadata["abstract"],
+            "data_source": metadata["data_source"],
+            "fetched_by": fetched_by,
+            "fetched_at": metadata["fetched_at"],
+            "api_version": API_VERSION,
+        },
+    )
 
     await db.commit()
