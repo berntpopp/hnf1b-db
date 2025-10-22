@@ -97,7 +97,12 @@ class PhenotypeExtractor:
                             # If we also have a specific age, add it alongside
                             if age_reported and "ontologyClass" in age_onset_class:
                                 # Combine: ontologyClass (prenatal/postnatal) + age (P2Y)
-                                phenotype["onset"]["age"] = age_reported.get("iso8601duration") if isinstance(age_reported, dict) and "iso8601duration" in age_reported else age_reported
+                                phenotype["onset"]["age"] = (
+                                    age_reported.get("iso8601duration")
+                                    if isinstance(age_reported, dict)
+                                    and "iso8601duration" in age_reported
+                                    else age_reported
+                                )
                         elif age_reported:
                             # Only specific age available, use it
                             phenotype["onset"] = age_reported
@@ -149,7 +154,10 @@ class PhenotypeExtractor:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
 
-        if "multiple glomerular cysts" in value_lower or "glomerular cyst" in value_lower:
+        if (
+            "multiple glomerular cysts" in value_lower
+            or "glomerular cyst" in value_lower
+        ):
             phenotype = {
                 "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
                 "excluded": False,
@@ -161,6 +169,7 @@ class PhenotypeExtractor:
             if evidence:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
+
 
 class VariantExtractor:
     """Extracts variants from spreadsheet rows."""
@@ -203,7 +212,9 @@ class VariantExtractor:
                 row, hg38, hg38_info, variant_type, variant_reported, publication
             )
             if cnv_interp:
-                self._add_classification_info(cnv_interp, verdict, criteria, segregation)
+                self._add_classification_info(
+                    cnv_interp, verdict, criteria, segregation
+                )
                 interpretations.append(cnv_interp)
                 # Skip SNV processing for CNVs - already handled
                 return interpretations
@@ -262,7 +273,9 @@ class VariantExtractor:
             individual_id = row.get(
                 "IndividualIdentifier", row.get("individual_id", "unknown")
             )
-            subject_id = f"{individual_id}_{publication}" if publication else individual_id
+            subject_id = (
+                f"{individual_id}_{publication}" if publication else individual_id
+            )
             cnv_interpretation["diagnosis"]["genomicInterpretations"][0][
                 "subjectOrBiosampleId"
             ] = subject_id
@@ -347,7 +360,9 @@ class VariantExtractor:
                     {"syntax": "hgvs.c", "value": f"{transcript_id}:{c_dot}"}
                 )
             if p_dot:
-                expressions.append({"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"})
+                expressions.append(
+                    {"syntax": "hgvs.p", "value": f"NP_000449.3:{p_dot}"}
+                )
             if hg38:
                 expressions.append({"syntax": "vcf", "value": hg38})
 
@@ -413,9 +428,13 @@ class VariantExtractor:
             "id": f"interpretation-{interp_count+1:03d}",
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                # No disease term assigned here - HNF1B variants don't always
-                # correlate to a single specific disease. Disease terms are
-                # assigned at the phenopacket level based on phenotypic evidence.
+                # Disease term assignment strategy:
+                # - For SNVs/indels: Empty disease field (assigned at phenopacket level)
+                # - For CNVs: Disease assigned by CNVParser (MONDO:0011593)
+                # - Rationale: HNF1B SNVs don't always correlate to a single disease;
+                #   diagnosis depends on full phenotypic evidence reviewed at
+                #   phenopacket level (see builder_simple.py _build_diseases method)
+                "disease": {},  # Explicitly empty for SNVs/indels
                 "genomicInterpretations": [
                     {
                         "subjectOrBiosampleId": subject_biosample_id,
