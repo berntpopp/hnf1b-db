@@ -1,5 +1,8 @@
 """Phenopacket-centric API endpoints."""
 
+import json
+import logging
+import re
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,6 +21,7 @@ from app.phenopackets.models import (
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets"])
 
 validator = PhenopacketValidator()
@@ -112,6 +116,149 @@ async def get_phenopackets_batch(
         }
         for pp in phenopackets
     ]
+
+
+def validate_pmid(pmid: str) -> str:
+    """Validate and normalize PMID format.
+
+    Args:
+        pmid: PubMed ID (with or without PMID: prefix)
+
+    Returns:
+        Normalized PMID (format: PMID:12345678)
+
+    Raises:
+        ValueError: If PMID format is invalid
+    """
+    if not pmid.startswith("PMID:"):
+        pmid = f"PMID:{pmid}"
+
+    # Validate format: PMID followed by 1-8 digits only
+    if not re.match(r"^PMID:\d{1,8}$", pmid):
+        raise ValueError(f"Invalid PMID format: {pmid}. Expected PMID:12345678")
+
+    return pmid
+
+
+@router.get("/by-publication/{pmid}", response_model=Dict)
+async def get_by_publication(
+    pmid: str,
+    skip: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(100, ge=1, le=500, description="Max records (max: 500)"),
+    sex: Optional[str] = Query(
+        None, regex="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"
+    ),
+    has_variants: Optional[bool] = Query(
+        None, description="Filter by variant presence"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get phenopackets citing a specific publication.
+
+    **Security:** PMID is validated to prevent SQL injection.
+
+    **Parameters:**
+    - **pmid**: PubMed ID (format: PMID:12345678 or just 12345678)
+    - **skip**: Pagination offset (default: 0)
+    - **limit**: Max records to return (default: 100, max: 500)
+    - **sex**: Filter by sex (MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)
+    - **has_variants**: Filter by variant presence (true/false)
+
+    **Returns:**
+    - Phenopackets where metaData.externalReferences contains this PMID
+    - Total count of matching phenopackets
+    - Pagination metadata
+
+    **Error Codes:**
+    - 400: Invalid PMID format or parameters
+    - 404: No phenopackets found for this publication
+    - 500: Database error
+    """
+    try:
+        # SECURITY: Validate PMID format to prevent SQL injection
+        pmid = validate_pmid(pmid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # SECURITY: Cap limit to prevent excessive data exposure
+    limit = min(limit, 500)
+
+    # Build query with JSONB filtering
+    query = """
+        SELECT
+            phenopacket_id,
+            phenopacket
+        FROM phenopackets
+        WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
+    """
+
+    # Build JSONB filter for PMID (parameterized - safe from injection)
+    pmid_filter = json.dumps([{"id": pmid}])
+
+    params = {"pmid_filter": pmid_filter, "skip": skip, "limit": limit}
+
+    # Add optional filters with parameterized queries
+    if sex:
+        query += " AND subject_sex = :sex"
+        params["sex"] = sex
+
+    if has_variants is not None:
+        if has_variants:
+            query += " AND jsonb_array_length(phenopacket->'interpretations') > 0"
+        else:
+            query += " AND (phenopacket->'interpretations' IS NULL OR jsonb_array_length(phenopacket->'interpretations') = 0)"
+
+    # Count query (same filters)
+    count_query = """
+        SELECT COUNT(*)
+        FROM phenopackets
+        WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
+    """
+
+    # Add same filters to count query
+    if sex:
+        count_query += " AND subject_sex = :sex"
+    if has_variants is not None:
+        if has_variants:
+            count_query += " AND jsonb_array_length(phenopacket->'interpretations') > 0"
+        else:
+            count_query += " AND (phenopacket->'interpretations' IS NULL OR jsonb_array_length(phenopacket->'interpretations') = 0)"
+
+    try:
+        # Execute count query
+        total_result = await db.execute(text(count_query), params)
+        total = total_result.scalar()
+
+        # Return 404 if no results found
+        if total == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No phenopackets found citing publication {pmid}",
+            )
+
+        # Add pagination (parameters prevent injection)
+        query += " ORDER BY phenopacket_id LIMIT :limit OFFSET :skip"
+
+        # Execute query
+        result = await db.execute(text(query), params)
+        rows = result.fetchall()
+
+        return {
+            "data": [
+                {"phenopacket_id": row.phenopacket_id, "phenopacket": row.phenopacket}
+                for row in rows
+            ],
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, 400)
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching phenopackets for PMID {pmid}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{phenopacket_id}", response_model=Dict)
@@ -524,7 +671,9 @@ async def create_phenopacket(
         await db.rollback()
         # Check for integrity errors (duplicate keys, foreign key violations, etc.)
         error_str = str(e).lower()
-        if ("duplicate" in error_str or "unique" in error_str) and "phenopacket_id" in error_str:
+        if (
+            "duplicate" in error_str or "unique" in error_str
+        ) and "phenopacket_id" in error_str:
             raise HTTPException(
                 status_code=409,
                 detail=f"Phenopacket with ID '{sanitized['id']}' already exists",
@@ -872,7 +1021,9 @@ async def aggregate_publications(
         {
             "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,  # type: ignore
             "url": row.url,  # type: ignore
-            "doi": row.description.replace("DOI:", "") if row.description and row.description.startswith("DOI:") else None,  # type: ignore
+            "doi": row.description.replace("DOI:", "")
+            if row.description and row.description.startswith("DOI:")
+            else None,  # type: ignore
             "phenopacket_count": row.phenopacket_count,  # type: ignore
             "first_added": row.first_added.isoformat() if row.first_added else None,  # type: ignore
         }

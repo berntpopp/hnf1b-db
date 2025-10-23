@@ -17,10 +17,10 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 | Phase 0: Foundation | #30-32 | ✅ 3/3 | 0 |
 | Phase 1: Core Views | #33-38 | ✅ 3/6 | 3 |
 | Phase 2: Search | #39-40 | 0/2 | 2 |
-| Phase 3: Visualizations | #41-43 | 0/3 | 3 |
-| Phase 4: Comparisons | #44-45 | 0/2 | 2 |
-| Phase 5: Survival | #46 | 0/1 | 1 |
-| Phase 6: Polish | #47-49 | 0/3 | 3 |
+| Phase 3: Visualizations | #42-43 | 0/3 | 3 |
+| Phase 4: Comparisons | #45-45 | 0/2 | 2 |
+| Phase 5: Survival | #47 | 0/1 | 1 |
+| Phase 6: Polish | #48-49 | 0/3 | 3 |
 | **Total** | **20** | **7** | **13** |
 
 ## 📁 Files in This Directory
@@ -32,9 +32,9 @@ Complete migration of frontend from v1 normalized schema to GA4GH Phenopackets v
 ### Active Issue Plans
 - **`issue-34-migrate-variants-view.md`** ⚠️ (Blocked - needs backend)
 - **`issue-35-migrate-variant-detail-page.md`** ⚠️ (Blocked - needs backend)
-- **`issue-37-40-batch.md`** - Issues #37, #39, #40
-- **`issue-41-46-visualizations.md`** - Issues #41-46
-- **`issue-47-49-polish.md`** - Issues #47-49
+- **`issue-37-41-batch.md`** - Issues #37, #39, #41
+- **`issue-42-47-visualizations.md`** - Issues #42-46
+- **`issue-48-50-polish.md`** - Issues #48-49
 
 ### GitHub Templates
 - **`github-templates-34-49.md`** - All remaining issue templates
@@ -55,7 +55,7 @@ Read through the detailed plans to understand scope.
 ### 2. Update Existing Issues (#33-40)
 Edit your GitHub issues #33-40 using the detailed plans and templates provided.
 
-### 3. Create New Issues (#41-49)
+### 3. Create New Issues (#42-49)
 Use templates from `github-templates-34-49.md` to create GitHub issues.
 
 ### 4. Create Backend Issues

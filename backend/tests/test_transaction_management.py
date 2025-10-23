@@ -160,9 +160,7 @@ class TestTransactionRollback:
         )
         phenopacket = result.scalar_one_or_none()
 
-        assert (
-            phenopacket is None
-        ), "Phenopacket should not exist after rollback"
+        assert phenopacket is None, "Phenopacket should not exist after rollback"
 
     async def test_duplicate_id_prevents_commit(
         self, db_session: AsyncSession, valid_phenopacket_data
@@ -196,9 +194,9 @@ class TestTransactionRollback:
 
         # Count records before duplicate attempt
         count_before = await db_session.scalar(
-            select(func.count()).select_from(Phenopacket).where(
-                Phenopacket.phenopacket_id == "test_duplicate_tx"
-            )
+            select(func.count())
+            .select_from(Phenopacket)
+            .where(Phenopacket.phenopacket_id == "test_duplicate_tx")
         )
 
         # Attempt to create duplicate
@@ -225,9 +223,9 @@ class TestTransactionRollback:
 
         # Count records after failed attempt
         count_after = await db_session.scalar(
-            select(func.count()).select_from(Phenopacket).where(
-                Phenopacket.phenopacket_id == "test_duplicate_tx"
-            )
+            select(func.count())
+            .select_from(Phenopacket)
+            .where(Phenopacket.phenopacket_id == "test_duplicate_tx")
         )
 
         assert (
@@ -281,9 +279,7 @@ class TestTransactionRollback:
         )
         phenopacket = result.scalar_one_or_none()
 
-        assert (
-            phenopacket is None
-        ), "Phenopacket should not exist after HTTPException"
+        assert phenopacket is None, "Phenopacket should not exist after HTTPException"
 
 
 class TestReadOnlyOperations:

@@ -53,7 +53,7 @@ class TestCORSConfiguration:
         """Test CORS_ORIGINS converts list to string."""
         settings = Settings(
             JWT_SECRET="test-secret",
-            CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+            CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"],
         )
         assert isinstance(settings.CORS_ORIGINS, str)
         assert "http://localhost:3000" in settings.CORS_ORIGINS
@@ -62,7 +62,7 @@ class TestCORSConfiguration:
         """Test get_cors_origins_list() parses string correctly."""
         settings = Settings(
             JWT_SECRET="test-secret",
-            CORS_ORIGINS="http://localhost:3000,http://localhost:8080"
+            CORS_ORIGINS="http://localhost:3000,http://localhost:8080",
         )
         origins = settings.get_cors_origins_list()
         assert len(origins) == 2

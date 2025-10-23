@@ -23,7 +23,10 @@ async def large_phenopacket_dataset(db_session: AsyncSession):
     for i in range(100):
         data = {
             "id": f"perf_test_{i}",
-            "subject": {"id": f"patient_perf_{i}", "sex": "MALE" if i % 2 == 0 else "FEMALE"},
+            "subject": {
+                "id": f"patient_perf_{i}",
+                "sex": "MALE" if i % 2 == 0 else "FEMALE",
+            },
             "phenotypicFeatures": [
                 {"type": {"id": f"HP:{str(j).zfill(7)}", "label": f"Feature {j}"}}
                 for j in range(5)  # 5 features per phenopacket
@@ -118,9 +121,9 @@ class TestBatchPerformance:
         print(f"{'='*60}")
 
         # Batch should be at least 5x faster for 50 records
-        assert improvement >= 5.0, (
-            f"Batch query should be at least 5x faster, got {improvement:.1f}x"
-        )
+        assert (
+            improvement >= 5.0
+        ), f"Batch query should be at least 5x faster, got {improvement:.1f}x"
 
     async def test_batch_features_performance(
         self, db_session: AsyncSession, large_phenopacket_dataset
@@ -181,9 +184,9 @@ class TestBatchPerformance:
         print(f"{'='*60}")
 
         # Should handle 100 records in under 1 second
-        assert elapsed < 1.0, (
-            f"Batch query for 100 records should complete in <1s, took {elapsed:.4f}s"
-        )
+        assert (
+            elapsed < 1.0
+        ), f"Batch query for 100 records should complete in <1s, took {elapsed:.4f}s"
         assert len(phenopackets) == 100
 
 
@@ -211,7 +214,10 @@ class TestHPOValidationPerformance:
         results = {}
         for term_id in hpo_terms:
             term = ontology_service.get_term(term_id)
-            results[term_id] = {"valid": term is not None, "name": term.label if term else None}
+            results[term_id] = {
+                "valid": term is not None,
+                "name": term.label if term else None,
+            }
         elapsed = time.time() - start
 
         print(f"\n{'='*60}")

@@ -37,9 +37,7 @@ class PublicationMapper:
             if pub_alias:
                 self.publication_map[str(pub_alias)] = pub_row
 
-        logger.info(
-            f"Created publication map with {len(self.publication_map)} entries"
-        )
+        logger.info(f"Created publication map with {len(self.publication_map)} entries")
 
     def create_publication_reference(
         self, publication_id: str

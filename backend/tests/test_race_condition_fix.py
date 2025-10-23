@@ -24,9 +24,7 @@ def sample_phenopacket_data():
     return {
         "id": "test_race_condition",
         "subject": {"id": "patient_race_test", "sex": "MALE"},
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0000001", "label": "Test feature"}}
-        ],
+        "phenotypicFeatures": [{"type": {"id": "HP:0000001", "label": "Test feature"}}],
         "metaData": {
             "created": "2024-01-01T00:00:00Z",
             "phenopacketSchemaVersion": "2.0.0",
@@ -264,9 +262,15 @@ class TestConcurrentDuplicates:
         duplicate_count = results.count("duplicate")
         total_completed = len(results)
 
-        assert success_count == 1, f"Exactly one insert should succeed (got {success_count})"
-        assert duplicate_count >= 7, f"At least 7 inserts should fail with IntegrityError (got {duplicate_count})"
-        assert total_completed >= 8, f"At least 8 tasks should complete (got {total_completed}, results: {results})"
+        assert (
+            success_count == 1
+        ), f"Exactly one insert should succeed (got {success_count})"
+        assert (
+            duplicate_count >= 7
+        ), f"At least 7 inserts should fail with IntegrityError (got {duplicate_count})"
+        assert (
+            total_completed >= 8
+        ), f"At least 8 tasks should complete (got {total_completed}, results: {results})"
 
         # Verify only one record exists
         result = await db_session.execute(
@@ -333,7 +337,9 @@ class TestErrorHandling:
             await db_session.rollback()
             # Simulate endpoint error handling
             error_str = str(e).lower()
-            if ("duplicate" in error_str or "unique" in error_str) and "phenopacket_id" in error_str:
+            if (
+                "duplicate" in error_str or "unique" in error_str
+            ) and "phenopacket_id" in error_str:
                 # This should raise HTTPException(409)
                 http_error = HTTPException(
                     status_code=409,

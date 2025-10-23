@@ -203,13 +203,13 @@ class CNVParser:
 
         # Description: Full literature text + calculated size
         if variant_reported:
-            variant_descriptor[
-                "description"
-            ] = f"{variant_reported} [calculated: {size_mb}Mb, chr{chromosome}:{start:,}-{end:,}]"
+            variant_descriptor["description"] = (
+                f"{variant_reported} [calculated: {size_mb}Mb, chr{chromosome}:{start:,}-{end:,}]"
+            )
         else:
-            variant_descriptor[
-                "description"
-            ] = f"HNF1B {variant_type} ({size_mb}Mb) - chr{chromosome}:{start:,}-{end:,}"
+            variant_descriptor["description"] = (
+                f"HNF1B {variant_type} ({size_mb}Mb) - chr{chromosome}:{start:,}-{end:,}"
+            )
 
         # Add expressions in various formats
         expressions = variant_descriptor["expressions"]
@@ -366,7 +366,10 @@ class CNVParser:
         interpretation = {
             "progressStatus": "COMPLETED",
             "diagnosis": {
-                "disease": {"id": "MONDO:0011593", "label": "Renal cysts and diabetes syndrome"},
+                "disease": {
+                    "id": "MONDO:0011593",
+                    "label": "Renal cysts and diabetes syndrome",
+                },
                 "genomicInterpretations": [
                     {
                         "subjectOrBiosampleId": row_data.get(

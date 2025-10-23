@@ -16,13 +16,14 @@ IMPORTANT: This migration runs outside a transaction because
 CREATE INDEX CONCURRENTLY cannot run inside a transaction.
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '002_jsonb_indexes'
-down_revision: Union[str, Sequence[str], None] = '001_initial_v2'
+revision: str = "002_jsonb_indexes"
+down_revision: Union[str, Sequence[str], None] = "001_initial_v2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -35,9 +36,9 @@ def upgrade() -> None:
     """
     # Define indexes to create (DRY principle)
     indexes = [
-        ('idx_phenopacket_features_gin', 'phenotypicFeatures'),
-        ('idx_phenopacket_interpretations_gin', 'interpretations'),
-        ('idx_phenopacket_diseases_gin', 'diseases'),
+        ("idx_phenopacket_features_gin", "phenotypicFeatures"),
+        ("idx_phenopacket_interpretations_gin", "interpretations"),
+        ("idx_phenopacket_diseases_gin", "diseases"),
     ]
 
     # Create each index
@@ -56,9 +57,9 @@ def downgrade() -> None:
     """Remove JSONB path indexes."""
     # Define indexes to drop (DRY principle)
     indexes = [
-        'idx_phenopacket_features_gin',
-        'idx_phenopacket_interpretations_gin',
-        'idx_phenopacket_diseases_gin',
+        "idx_phenopacket_features_gin",
+        "idx_phenopacket_interpretations_gin",
+        "idx_phenopacket_diseases_gin",
     ]
 
     # Drop each index

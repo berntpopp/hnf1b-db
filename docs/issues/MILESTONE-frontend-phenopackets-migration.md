@@ -22,9 +22,13 @@ Complete migration of the frontend from v1 normalized schema to GA4GH Phenopacke
 - **Issue #30:** `feat(api): migrate API client to phenopackets v2 endpoints` ✅
 - **Issue #31:** `feat(frontend): migrate individuals list view to phenopackets` ✅
 - **Issue #32:** `feat(frontend): migrate individual detail page to phenopackets v2` ✅
+- **Issue #33:** `fix(frontend): update aggregation endpoints for phenopacket format` ✅
+- **Issue #36:** `feat(frontend): migrate publications view to external references` ✅
+- **Issue #37:** `feat(frontend): migrate publication detail page` ✅ Phase 1 (MVP)
+- **Issue #38:** `feat(frontend): migrate home page statistics to v2 API` ✅
 
-### 🔄 In Progress
-- None
+### 🔄 Partially Complete
+- **Issue #37:** `feat(frontend): migrate publication detail page` - Phase 2 blocked by backend issues #51-#53
 
 ### 📋 Pending Issues
 See breakdown below
@@ -72,10 +76,25 @@ See breakdown below
 - Show publication statistics (phenopackets per paper)
 
 #### Issue #37: `feat(frontend): migrate publication detail page`
-**Status:** 📋 Pending
-**Depends on:** #36
-**Effort:** 6 hours (1 day)
+**Status:** ✅ Phase 1 Complete | 📋 Phase 2 Blocked
+**Depends on:** #36 ✅ | Backend issues #51, #52, #53
+**Effort:** 6 hours (1 day) - Phase 1 ✅ | 28 hours (3.5 days) - Phase 2 backend + 4 hours frontend
 **Description:** Show all phenopackets linked to a specific publication.
+
+**Phase 1 Complete (MVP):**
+- ✅ Basic publication detail page at `/publications/{pmid}`
+- ✅ Table showing individuals citing this publication
+- ✅ Client-side filtering (works for current 864 phenopackets)
+- ✅ Links to PubMed, DOI
+- ✅ Breadcrumb navigation
+- ✅ Bidirectional navigation working
+
+**Phase 2 Blocked (Enhancements):**
+- ⏸️ PubMed metadata (title, authors, journal) - Requires Issue #51
+- ⏸️ Server-side filtering for performance - Requires Issue #52
+- ⏸️ Summary statistics (sex, phenotypes, variants) - Requires Issue #53
+
+See: `docs/issues/issue-37-41-batch.md` for detailed implementation notes
 
 #### Issue #38: `feat(frontend): migrate home page statistics to v2 API`
 **Status:** 📋 Pending
@@ -97,7 +116,7 @@ See breakdown below
 - Search by PMID, publication
 - Unified search results page
 
-#### Issue #40: `feat(frontend): implement search results with faceted filtering`
+#### Issue #41: `feat(frontend): implement search results with faceted filtering`
 **Status:** 📋 Pending
 **Depends on:** #39
 **Effort:** 10 hours (1.5 days)
@@ -110,7 +129,7 @@ See breakdown below
 
 ### Phase 3: Enhanced Visualizations (P2 - Medium Priority)
 
-#### Issue #41: `feat(frontend): add phenotype distribution stacked bar chart`
+#### Issue #42: `feat(frontend): add phenotype distribution stacked bar chart`
 **Status:** 📋 Pending
 **Depends on:** #33
 **Effort:** 8 hours (1 day)
@@ -120,7 +139,7 @@ See breakdown below
 - Group by clinical categories (renal, diabetes, genital)
 - Show percentage distribution
 
-#### Issue #42: `feat(frontend): add publication timeline visualization`
+#### Issue #43: `feat(frontend): add publication timeline visualization`
 **Status:** 📋 Pending
 **Depends on:** #36
 **Effort:** 6 hours (1 day)
@@ -130,7 +149,7 @@ See breakdown below
 - Show phenopackets added over time
 - Group by publication
 
-#### Issue #43: `feat(frontend): add phenotype count histogram`
+#### Issue #44: `feat(frontend): add phenotype count histogram`
 **Status:** 📋 Pending
 **Depends on:** #33
 **Effort:** 6 hours (1 day)
@@ -141,7 +160,7 @@ See breakdown below
 
 ### Phase 4: Cohort Comparisons (P2 - Medium Priority)
 
-#### Issue #44: `feat(frontend): add variant type comparison view`
+#### Issue #45: `feat(frontend): add variant type comparison view`
 **Status:** 📋 Pending
 **Depends on:** #33, #34
 **Effort:** 12 hours (2 days)
@@ -152,7 +171,7 @@ See breakdown below
 - Side-by-side donut/bar charts
 - Statistical significance indicators
 
-#### Issue #45: `feat(frontend): add clinical subgroup comparisons`
+#### Issue #46: `feat(frontend): add clinical subgroup comparisons`
 **Status:** 📋 Pending
 **Depends on:** #33
 **Effort:** 10 hours (1.5 days)
@@ -165,7 +184,7 @@ See breakdown below
 
 ### Phase 5: Survival Analysis (P3 - Low Priority)
 
-#### Issue #46: `feat(frontend): implement Kaplan-Meier survival curves`
+#### Issue #47: `feat(frontend): implement Kaplan-Meier survival curves`
 **Status:** 📋 Pending
 **Depends on:** #33
 **Effort:** 16 hours (2 days)
@@ -182,7 +201,7 @@ See breakdown below
 
 ### Phase 6: Polish & Testing (P1 - High Priority)
 
-#### Issue #47: `test(frontend): add E2E tests for critical user flows`
+#### Issue #48: `test(frontend): add E2E tests for critical user flows`
 **Status:** 📋 Pending
 **Depends on:** All Phase 1 issues
 **Effort:** 16 hours (2 days)
@@ -193,7 +212,7 @@ See breakdown below
 - Publication → Individual links
 - Filter and sort operations
 
-#### Issue #48: `fix(frontend): remove all v1 legacy code`
+#### Issue #49: `fix(frontend): remove all v1 legacy code`
 **Status:** 📋 Pending
 **Depends on:** All Phase 1-2 issues
 **Effort:** 8 hours (1 day)
@@ -204,9 +223,9 @@ See breakdown below
 - Remove legacy routes
 - Update documentation
 
-#### Issue #49: `docs(frontend): update user documentation`
+#### Issue #50: `docs(frontend): update user documentation`
 **Status:** 📋 Pending
-**Depends on:** #48
+**Depends on:** #49
 **Effort:** 6 hours (1 day)
 **Description:** Complete user-facing documentation.
 
@@ -216,29 +235,29 @@ Based on your notes, here's how each feature maps to issues:
 
 | Your Note | Issue(s) | Status |
 |-----------|----------|--------|
-| Suchfeld für individuen, varianten, publication | #39, #40 | 📋 Pending |
+| Suchfeld für individuen, varianten, publication | #39, #41 | 📋 Pending |
 | Tabellen für individuals + navigation | #31, #32 | ✅ Done |
 | Individual detail page with all info | #32 | ✅ Done |
 | Variants view + detail | #34, #35 | 📋 Pending |
-| Publications view + detail | #36, #37 | 📋 Pending |
+| Publications view + detail | #36, #37 | ✅ MVP / 📋 Enhanced (needs #51-#53) |
 | Aggregations mit donut plots | #33 | 📋 Pending |
-| Zeitplan/timeline for publications | #42 | 📋 Pending |
-| Phenotypes as stacked bar charts | #41 | 📋 Pending |
-| Gruppen vergleiche (T vs nT, 17q, etc.) | #44, #45 | 📋 Pending |
-| Renal survival curve (Kaplan-Meier) | #46 | 📋 Pending |
-| Anzahl phenotypes histogram | #43 | 📋 Pending |
-| CAKUT vs CAKUT/MODY comparison | #45 | 📋 Pending |
+| Zeitplan/timeline for publications | #43 | 📋 Pending |
+| Phenotypes as stacked bar charts | #42 | 📋 Pending |
+| Gruppen vergleiche (T vs nT, 17q, etc.) | #45, #46 | 📋 Pending |
+| Renal survival curve (Kaplan-Meier) | #47 | 📋 Pending |
+| Anzahl phenotypes histogram | #44 | 📋 Pending |
+| CAKUT vs CAKUT/MODY comparison | #46 | 📋 Pending |
 
 ## Timeline Estimate
 
 | Phase | Issues | Effort | Duration |
 |-------|--------|--------|----------|
 | Phase 1: Core Views | #33-#38 | 50 hours | 6.5 days |
-| Phase 2: Search | #39-#40 | 22 hours | 3 days |
-| Phase 3: Visualizations | #41-#43 | 20 hours | 2.5 days |
-| Phase 4: Comparisons | #44-#45 | 22 hours | 3 days |
-| Phase 5: Survival | #46 | 16 hours | 2 days |
-| Phase 6: Polish | #47-#49 | 30 hours | 4 days |
+| Phase 2: Search | #39-#41 | 22 hours | 3 days |
+| Phase 3: Visualizations | #42-#44 | 20 hours | 2.5 days |
+| Phase 4: Comparisons | #45-#46 | 22 hours | 3 days |
+| Phase 5: Survival | #47 | 16 hours | 2 days |
+| Phase 6: Polish | #48-#50 | 30 hours | 4 days |
 | **Total** | **17 issues** | **160 hours** | **21 days (4 weeks)** |
 
 **Note:** This is development time only, does not include code review, testing, or rework.
@@ -248,36 +267,36 @@ Based on your notes, here's how each feature maps to issues:
 ```
 Phase 1 (Core Views):
   #30 (API client) ✅
-    ├── #33 (Aggregations)
+    ├── #33 (Aggregations) ✅
     ├── #34 (Variants view)
     │     └── #35 (Variant detail)
-    ├── #36 (Publications view)
-    │     └── #37 (Publication detail)
-    └── #38 (Home stats)
+    ├── #36 (Publications view) ✅
+    │     └── #37 (Publication detail) ✅ Phase 1 | 📋 Phase 2 (needs #51, #52, #53)
+    └── #38 (Home stats) ✅
 
 Phase 2 (Search):
   #30 ✅
     └── #39 (Global search)
-          └── #40 (Search results)
+          └── #41 (Search results)
 
 Phase 3 (Visualizations):
   #33
-    ├── #41 (Phenotype bars)
-    ├── #43 (Histogram)
-    └── #46 (Survival curves)
+    ├── #42 (Phenotype bars)
+    ├── #44 (Histogram)
+    └── #47 (Survival curves)
   #36
-    └── #42 (Timeline)
+    └── #43 (Timeline)
 
 Phase 4 (Comparisons):
   #33, #34
-    ├── #44 (Variant comparisons)
-    └── #45 (Clinical comparisons)
+    ├── #45 (Variant comparisons)
+    └── #46 (Clinical comparisons)
 
 Phase 6 (Polish):
   All Phase 1-2
-    ├── #47 (E2E tests)
-    ├── #48 (Cleanup)
-    └── #49 (Docs)
+    ├── #48 (E2E tests)
+    ├── #49 (Cleanup)
+    └── #50 (Docs)
 ```
 
 ## Success Criteria
@@ -327,11 +346,11 @@ Phase 6 (Polish):
 
 **Category Labels:**
 - `frontend` - All issues
-- `migration` - Issues #33-40, #48
-- `visualization` - Issues #41-43, #46
+- `migration` - Issues #33-40, #49
+- `visualization` - Issues #42-43, #47
 - `feature` - Issues #39-46
-- `testing` - Issue #47
-- `documentation` - Issue #49
+- `testing` - Issue #48
+- `documentation` - Issue #50
 
 **Priority Labels:**
 - `p0-critical` - Milestone itself
@@ -341,15 +360,51 @@ Phase 6 (Polish):
 
 **Type Labels:**
 - `feat` - Issues #34-46
-- `fix` - Issues #33, #48
-- `test` - Issue #47
-- `docs` - Issue #49
+- `fix` - Issues #33, #49
+- `test` - Issue #48
+- `docs` - Issue #50
 
 **Component Labels:**
 - `views` - Issues #34-38
-- `components` - Issues #41-46
+- `components` - Issues #42-46
 - `api-client` - Issues #39-40
-- `charts` - Issues #41-46
+- `charts` - Issues #42-46
+
+## Backend Issues for Publication Enhancements
+
+Three new backend issues were created to unblock Issue #37 Phase 2:
+
+### Issue #51: `feat(backend): add PubMed API integration with database caching`
+**Effort:** 12 hours (1.5 days)
+**Description:** Fetch and cache publication metadata from PubMed API
+- Creates `publication_metadata` table with 90-day TTL
+- Implements `/publications/{pmid}/metadata` endpoint
+- Cache warming script for known PMIDs
+- Handles rate limiting and errors gracefully
+
+See: `docs/issues/issue-51-backend-pubmed-api.md`
+
+### Issue #52: `feat(backend): add /by-publication/{pmid} phenopackets endpoint`
+**Effort:** 8 hours (1 day)
+**Description:** Server-side filtering for phenopackets by publication
+- Creates `/phenopackets/by-publication/{pmid}` endpoint
+- GIN index on `externalReferences` for performance
+- Replaces client-side filtering (7x performance improvement)
+- Supports pagination and filters
+
+See: `docs/issues/issue-52-backend-publication-endpoint.md`
+
+### Issue #53: `feat(backend): add publication summary statistics endpoint`
+**Effort:** 8 hours (1 day)
+**Description:** Aggregated statistics per publication
+- Creates `/aggregate/publication-summary/{pmid}` endpoint
+- Sex distribution, common phenotypes, variant statistics
+- Query completes in < 200ms
+- Percentages for top 10 phenotypes
+
+See: `docs/issues/issue-53-backend-publication-aggregation.md`
+
+**Templates:** GitHub issue templates available in `docs/issues/github-templates-34-52.md`
 
 ## Next Steps
 
@@ -360,10 +415,12 @@ Phase 6 (Polish):
    Due date: [Set based on team capacity]
    ```
 
-2. **Create issues #33-49** using templates in `docs/issues/`
+2. **Create issues #34-49** using templates in `docs/issues/`
 
-3. **Prioritize Phase 1** - Core views must work first
+3. **Create backend issues #51-52** using templates in `docs/issues/github-templates-34-52.md`
 
-4. **Implement incrementally** - Each issue is independently testable
+4. **Prioritize Phase 1** - Core views must work first
 
-5. **Track progress** - Update this document as issues close
+5. **Implement incrementally** - Each issue is independently testable
+
+6. **Track progress** - Update this document as issues close

@@ -66,7 +66,7 @@ Response:
 ## Dependencies
 
 **Depends On:** #30 (API client)
-**Blocks:** #37 (Publication detail), #42 (Timeline)
+**Blocks:** #37 (Publication detail), #43 (Timeline)
 
 ## Timeline
 

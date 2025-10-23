@@ -9,6 +9,7 @@ from app import auth_endpoints, hpo_proxy, variant_validator_endpoint
 from app.config import settings
 from app.database import engine
 from app.phenopackets import clinical_endpoints, endpoints
+from app.publications import endpoints as publication_endpoints
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.add_middleware(
 # Include routers
 app.include_router(endpoints.router)
 app.include_router(clinical_endpoints.router)
+app.include_router(publication_endpoints.router)
 app.include_router(auth_endpoints.router)
 app.include_router(hpo_proxy.router)
 app.include_router(variant_validator_endpoint.router)

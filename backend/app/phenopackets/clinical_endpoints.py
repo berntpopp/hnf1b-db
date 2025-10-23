@@ -25,8 +25,14 @@ async def get_renal_insufficiency_cases(
 ) -> List[Dict[str, Any]]:
     """Get all cases with renal insufficiency, optionally filtered by stage."""
     # Renal insufficiency HPO terms
-    hpo_terms = ['HP:0012622', 'HP:0012623', 'HP:0012624',
-                 'HP:0012625', 'HP:0012626', 'HP:0003774']
+    hpo_terms = [
+        "HP:0012622",
+        "HP:0012623",
+        "HP:0012624",
+        "HP:0012625",
+        "HP:0012626",
+        "HP:0003774",
+    ]
 
     # Build query using reusable components
     query = ClinicalQueries.get_clinical_features_with_details(
@@ -43,9 +49,9 @@ async def get_renal_insufficiency_cases(
             "phenopacket_id": row.phenopacket_id,
             "subject_id": row.subject_id,
             "sex": row.sex,
-            "feature": row.feature_label if hasattr(row, 'feature_label') else None,
-            "onset_age": row.onset_age if hasattr(row, 'onset_age') else None,
-            "modifiers": row.modifiers if hasattr(row, 'modifiers') else [],
+            "feature": row.feature_label if hasattr(row, "feature_label") else None,
+            "onset_age": row.onset_age if hasattr(row, "onset_age") else None,
+            "modifiers": row.modifiers if hasattr(row, "modifiers") else [],
         }
 
     return await ClinicalQueries.execute_and_format(db, query, format_row)
@@ -60,8 +66,14 @@ async def get_genital_abnormalities(
 ) -> List[Dict[str, Any]]:
     """Get all cases with genital tract abnormalities."""
     # Genital abnormality HPO terms
-    hpo_terms = ['HP:0000078', 'HP:0000079', 'HP:0000080',
-                 'HP:0000119', 'HP:0000062', 'HP:0000008']
+    hpo_terms = [
+        "HP:0000078",
+        "HP:0000079",
+        "HP:0000080",
+        "HP:0000119",
+        "HP:0000062",
+        "HP:0000008",
+    ]
 
     # Build query using reusable components
     query = ClinicalQueries.get_clinical_features_with_details(
@@ -79,10 +91,10 @@ async def get_genital_abnormalities(
             "subject_id": row.subject_id,
             "sex": row.sex,
             "abnormality_type": (
-                row.feature_label if hasattr(row, 'feature_label') else None
+                row.feature_label if hasattr(row, "feature_label") else None
             ),
             "specific_abnormalities": (
-                row.modifiers if hasattr(row, 'modifiers') else []
+                row.modifiers if hasattr(row, "modifiers") else []
             ),
         }
 
@@ -123,7 +135,7 @@ async def get_diabetes_cases(
     # Add complications filter if specified
     if with_complications:
         # Use phenotype query for complications
-        complication_hpo = ['HP:0000083', 'HP:0000820', 'HP:0100512']
+        complication_hpo = ["HP:0000083", "HP:0000820", "HP:0100512"]
         from app.phenopackets.models import Phenopacket as P2
 
         complication_exists = exists(
@@ -133,8 +145,8 @@ async def get_diabetes_cases(
                     func.jsonb_path_exists(
                         P2.phenopacket,
                         "$.phenotypicFeatures[*] ? (@.type.id == $hpo)",
-                        func.jsonb_build_object("hpo", func.any_(complication_hpo))
-                    )
+                        func.jsonb_build_object("hpo", func.any_(complication_hpo)),
+                    ),
                 )
             )
         )
@@ -146,23 +158,23 @@ async def get_diabetes_cases(
 
     formatted_results = []
     for row in rows:
-        diseases = row.diseases if hasattr(row, 'diseases') and row.diseases else []
+        diseases = row.diseases if hasattr(row, "diseases") and row.diseases else []
         for disease in diseases:
-            formatted_results.append({
-                "phenopacket_id": row.phenopacket_id,
-                "subject_id": row.subject_id,
-                "sex": row.sex,
-                "diabetes_type": disease.get('term', {}).get('label'),
-                "onset_age": (
-                    disease.get('onset', {})
-                    .get('age', {})
-                    .get('iso8601duration')
-                ),
-                "disease_stages": [
-                    s.get('label') for s in disease.get('diseaseStage', [])
-                ],
-                "treatments": [],  # Would need separate query for treatments
-            })
+            formatted_results.append(
+                {
+                    "phenopacket_id": row.phenopacket_id,
+                    "subject_id": row.subject_id,
+                    "sex": row.sex,
+                    "diabetes_type": disease.get("term", {}).get("label"),
+                    "onset_age": (
+                        disease.get("onset", {}).get("age", {}).get("iso8601duration")
+                    ),
+                    "disease_stages": [
+                        s.get("label") for s in disease.get("diseaseStage", [])
+                    ],
+                    "treatments": [],  # Would need separate query for treatments
+                }
+            )
 
     return formatted_results
 
@@ -176,8 +188,8 @@ async def get_hypomagnesemia_cases(
 ) -> List[Dict[str, Any]]:
     """Get all cases with hypomagnesemia."""
     # Build combined query for phenotype and measurements
-    hpo_term = ['HP:0002917']  # Hypomagnesemia
-    loinc_code = ['LOINC:2601-3']  # Magnesium measurement
+    hpo_term = ["HP:0002917"]  # Hypomagnesemia
+    loinc_code = ["LOINC:2601-3"]  # Magnesium measurement
 
     # Get phenotype features
     phenotype_query = ClinicalQueries.get_phenotype_features_query(hpo_term)
@@ -185,7 +197,7 @@ async def get_hypomagnesemia_cases(
     if with_measurements:
         # Add measurement filter
         measurement_query = ClinicalQueries.get_measurement_cases(
-            loinc_code, interpretation_hpo='HP:0002917'
+            loinc_code, interpretation_hpo="HP:0002917"
         )
         # Combine queries with intersection
         query = phenotype_query.intersect(measurement_query)
@@ -201,27 +213,31 @@ async def get_hypomagnesemia_cases(
     for row in rows:
         # Get measurements separately if needed
         measurements = []
-        if hasattr(row, 'measurements') and row.measurements:
+        if hasattr(row, "measurements") and row.measurements:
             for m in row.measurements:
-                measurements.append({
-                    'assay': m.get('assay', {}).get('label'),
-                    'value': m.get('value', {}).get('quantity', {}).get('value'),
-                    'unit': (
-                        m.get('value', {})
-                        .get('quantity', {})
-                        .get('unit', {})
-                        .get('label')
-                    ),
-                    'timestamp': m.get('timeObserved', {}).get('timestamp')
-                })
+                measurements.append(
+                    {
+                        "assay": m.get("assay", {}).get("label"),
+                        "value": m.get("value", {}).get("quantity", {}).get("value"),
+                        "unit": (
+                            m.get("value", {})
+                            .get("quantity", {})
+                            .get("unit", {})
+                            .get("label")
+                        ),
+                        "timestamp": m.get("timeObserved", {}).get("timestamp"),
+                    }
+                )
 
-        formatted_results.append({
-            "phenopacket_id": row.phenopacket_id,
-            "subject_id": row.subject_id,
-            "sex": row.sex,
-            "feature": "Hypomagnesemia",
-            "magnesium_measurements": measurements,
-        })
+        formatted_results.append(
+            {
+                "phenopacket_id": row.phenopacket_id,
+                "subject_id": row.subject_id,
+                "sex": row.sex,
+                "feature": "Hypomagnesemia",
+                "magnesium_measurements": measurements,
+            }
+        )
 
     return formatted_results
 
@@ -235,8 +251,14 @@ async def get_pancreatic_abnormalities(
 ) -> List[Dict[str, Any]]:
     """Get all cases with pancreatic abnormalities."""
     # Pancreatic abnormality HPO terms
-    hpo_terms = ['HP:0001732', 'HP:0001733', 'HP:0001738',
-                 'HP:0001735', 'HP:0001744', 'HP:0100027']
+    hpo_terms = [
+        "HP:0001732",
+        "HP:0001733",
+        "HP:0001738",
+        "HP:0001735",
+        "HP:0001744",
+        "HP:0100027",
+    ]
 
     # Build query using reusable components
     query = ClinicalQueries.get_phenotype_features_query(hpo_terms)
@@ -261,30 +283,40 @@ async def get_pancreatic_abnormalities(
 
         # Quick check queries
         diabetes_check = await db.scalar(
-            select(func.jsonb_path_exists(
-                Phenopacket.phenopacket,
-                text("'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"),
-            )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+            select(
+                func.jsonb_path_exists(
+                    Phenopacket.phenopacket,
+                    text(
+                        "'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"
+                    ),
+                )
+            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         exocrine_check = await db.scalar(
-            select(func.jsonb_path_exists(
-                Phenopacket.phenopacket,
-                text("'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"),
-            )).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+            select(
+                func.jsonb_path_exists(
+                    Phenopacket.phenopacket,
+                    text(
+                        "'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"
+                    ),
+                )
+            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
-        features = row.features if hasattr(row, 'features') else []
-        feature_labels = [f.get('type', {}).get('label') for f in features if f]
+        features = row.features if hasattr(row, "features") else []
+        feature_labels = [f.get("type", {}).get("label") for f in features if f]
 
-        formatted_results.append({
-            "phenopacket_id": row.phenopacket_id,
-            "subject_id": row.subject_id,
-            "sex": row.sex,
-            "pancreatic_features": feature_labels,
-            "has_diabetes": diabetes_check or False,
-            "has_exocrine_insufficiency": exocrine_check or False,
-        })
+        formatted_results.append(
+            {
+                "phenopacket_id": row.phenopacket_id,
+                "subject_id": row.subject_id,
+                "sex": row.sex,
+                "pancreatic_features": feature_labels,
+                "has_diabetes": diabetes_check or False,
+                "has_exocrine_insufficiency": exocrine_check or False,
+            }
+        )
 
     return formatted_results
 
@@ -295,12 +327,19 @@ async def get_liver_abnormalities(
 ) -> List[Dict[str, Any]]:
     """Get all cases with liver abnormalities."""
     # Liver abnormality HPO terms
-    hpo_terms = ['HP:0001392', 'HP:0001394', 'HP:0001395',
-                 'HP:0001396', 'HP:0001397', 'HP:0001399',
-                 'HP:0002240', 'HP:0001410']
+    hpo_terms = [
+        "HP:0001392",
+        "HP:0001394",
+        "HP:0001395",
+        "HP:0001396",
+        "HP:0001397",
+        "HP:0001399",
+        "HP:0002240",
+        "HP:0001410",
+    ]
 
     # Liver function test LOINC codes
-    lft_loinc = ['LOINC:1742-6', 'LOINC:1920-8', 'LOINC:6768-6', 'LOINC:1975-2']
+    lft_loinc = ["LOINC:1742-6", "LOINC:1920-8", "LOINC:6768-6", "LOINC:1975-2"]
 
     # Build query using reusable components
     query = ClinicalQueries.get_phenotype_features_query(hpo_terms)
@@ -317,26 +356,28 @@ async def get_liver_abnormalities(
             select(
                 func.jsonb_path_query_array(
                     Phenopacket.phenopacket,
-                    '$.measurements[*] ? (@.assay.id == $loinc)',
-                    func.jsonb_build_object('loinc', func.any_(lft_loinc))
+                    "$.measurements[*] ? (@.assay.id == $loinc)",
+                    func.jsonb_build_object("loinc", func.any_(lft_loinc)),
                 )
             ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         lft_labels = []
         if lft_result:
-            lft_labels = [m.get('assay', {}).get('label') for m in lft_result if m]
+            lft_labels = [m.get("assay", {}).get("label") for m in lft_result if m]
 
-        features = row.features if hasattr(row, 'features') else []
-        feature_labels = [f.get('type', {}).get('label') for f in features if f]
+        features = row.features if hasattr(row, "features") else []
+        feature_labels = [f.get("type", {}).get("label") for f in features if f]
 
-        formatted_results.append({
-            "phenopacket_id": row.phenopacket_id,
-            "subject_id": row.subject_id,
-            "sex": row.sex,
-            "liver_features": feature_labels,
-            "liver_function_tests": lft_labels,
-        })
+        formatted_results.append(
+            {
+                "phenopacket_id": row.phenopacket_id,
+                "subject_id": row.subject_id,
+                "sex": row.sex,
+                "liver_features": feature_labels,
+                "liver_function_tests": lft_labels,
+            }
+        )
 
     return formatted_results
 
@@ -360,25 +401,27 @@ async def get_kidney_morphology(
     formatted_results = []
     for row in rows:
         features = (
-            row.morphology_features
-            if hasattr(row, 'morphology_features')
-            else []
+            row.morphology_features if hasattr(row, "morphology_features") else []
         )
         feature_objects = []
         for f in features:
             if f:
-                feature_objects.append({
-                    'type': f.get('type', {}).get('label'),
-                    'id': f.get('type', {}).get('id'),
-                    'excluded': f.get('excluded', False)
-                })
+                feature_objects.append(
+                    {
+                        "type": f.get("type", {}).get("label"),
+                        "id": f.get("type", {}).get("id"),
+                        "excluded": f.get("excluded", False),
+                    }
+                )
 
-        formatted_results.append({
-            "phenopacket_id": row.phenopacket_id,
-            "subject_id": row.subject_id,
-            "sex": row.sex,
-            "morphology_features": feature_objects,
-        })
+        formatted_results.append(
+            {
+                "phenopacket_id": row.phenopacket_id,
+                "subject_id": row.subject_id,
+                "sex": row.sex,
+                "morphology_features": feature_objects,
+            }
+        )
 
     return formatted_results
 
@@ -406,7 +449,7 @@ async def get_multisystem_involvement(
             "system_count": row.system_count,
             "affected_systems": (
                 [s for s in row.affected_systems if s]
-                if hasattr(row, 'affected_systems')
+                if hasattr(row, "affected_systems")
                 else []
             ),
         }

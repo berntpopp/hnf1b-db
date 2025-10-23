@@ -292,7 +292,7 @@ async def validate_hpo_terms(
             else:
                 results[term_id] = {
                     "valid": False,
-                    "error": "Term not found in local ontology or APIs"
+                    "error": "Term not found in local ontology or APIs",
                 }
         except Exception as e:
             results[term_id] = {"valid": False, "error": str(e)}

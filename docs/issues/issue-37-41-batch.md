@@ -1,13 +1,63 @@
-# Issues #37, #39, #40 - Quick Reference
+# Issues #37, #39, #41 - Quick Reference
 
 ## Issue #37: feat(frontend): migrate publication detail page
+
+### Status: Phase 1 (MVP) Complete ✅
+
+**Implementation Date:** October 22, 2025
+**Commits:** See git log for implementation details
 
 ### Overview
 Show all phenopackets linked to a specific publication (PMID).
 
+### Phase 1: MVP Implementation (Complete ✅)
+
+**What was implemented:**
+- ✅ Publication detail page at `/publications/{pmid}`
+- ✅ Basic metadata display (PMID, DOI, individual count, first added date)
+- ✅ Table showing all individuals citing this publication
+- ✅ Client-side filtering of phenopackets (fetches all, filters by PMID in metaData.externalReferences)
+- ✅ Links to PubMed (external) and DOI (external)
+- ✅ Breadcrumb navigation (Home > Publications > PMID)
+- ✅ Bidirectional navigation:
+  - Publications list → Publication detail ✅
+  - Publication detail → Individual detail ✅
+  - Individual detail → Publication link (via MetadataCard) ✅
+
+**Simplified Approach Used:**
+Instead of waiting for backend `/by-publication/{pmid}` endpoint, implemented client-side filtering by calling `getPhenopackets({skip: 0, limit: 1000})` and filtering the results where `metaData.externalReferences` contains the PMID. This works for the current dataset size (864 phenopackets) but should be replaced with server-side filtering for scalability.
+
+**Files Modified:**
+- `frontend/src/views/PagePublication.vue` (created, ~375 lines)
+- `frontend/src/views/Publications.vue` (modified, links to detail page)
+- `frontend/src/components/phenopacket/MetadataCard.vue` (modified, publication links)
+- `frontend/src/api/index.js` (already had required endpoints)
+
+**Bug Fixes Applied:**
+1. Fixed 404 errors when clicking individuals from publication page (used `phenopacket_id` instead of UUID)
+2. Fixed MetadataCard to show clickable PMID links instead of "data from pub000" (array index mapping)
+3. Fixed CORS errors by using Vite proxy (`/api/v2` instead of `http://localhost:8000/api/v2`)
+
+### Phase 2: Backend Enhancements (Blocked - Future Work 📋)
+
+**Requires Backend Issues:**
+- Issue #51: PubMed API integration with database caching
+- Issue #52: `/by-publication/{pmid}` endpoint for server-side filtering
+- Issue #53: `/aggregate/publication-summary/{pmid}` endpoint for statistics
+
+**Enhanced Features (Not Yet Implemented):**
+- ⏸️ Display publication title, authors, journal from PubMed API
+- ⏸️ Server-side filtering via `/by-publication/{pmid}` (performance improvement)
+- ⏸️ Summary statistics (sex distribution, common phenotypes)
+- ⏸️ Variant statistics (pathogenicity distribution, common genes)
+- ⏸️ Abstract display from PubMed
+
+**Why Blocked:**
+These features require backend infrastructure that doesn't exist yet. Once issues #51-#53 are completed, Phase 2 can be implemented by enhancing the existing PagePublication.vue component.
+
 ---
 
-## Publication Metadata Strategy
+## Publication Metadata Strategy (Phase 2 - Future)
 
 ### Problem
 
@@ -273,23 +323,45 @@ make backend-shell
 - Cache miss: ~500ms (first request only)
 - Subsequent loads: **< 20ms** ✅
 
-### Implementation
-- Display publication info (PMID, DOI, title from cached PubMed data)
-- Table of all phenopackets citing this publication
-- Stats: Total individuals, sex distribution, common phenotypes
+### Implementation Checklist
 
-### Checklist
-- [ ] Backend: Create `publication_metadata` table
-- [ ] Backend: `/by-publication/{pmid}` endpoint
-- [ ] Backend: PubMed API integration with caching
-- [ ] Backend: Cache warming script
-- [ ] API: `getPhenopacketsByPublication(pmid)`
-- [ ] View: Create PagePublication.vue
-- [ ] Display publication metadata with fallback for errors
-- [ ] Display phenopackets table with filters
+#### Phase 1: MVP (Complete ✅)
+- [x] View: Create PagePublication.vue
+- [x] Display basic publication metadata (PMID, DOI, count, date)
+- [x] Display phenopackets table citing this publication
+- [x] Implement client-side filtering by PMID
+- [x] Add breadcrumb navigation
+- [x] Links to PubMed and DOI (external)
+- [x] Links to individual phenopacket details
+- [x] Handle loading and error states
+- [x] Fix navigation bugs (phenopacket_id, MetadataCard links)
 
-### Timeline: 6 hours (1 day)
-### Labels: `frontend`, `views`, `phenopackets`, `p1`
+#### Phase 2: Backend Infrastructure (Blocked 📋)
+- [ ] Backend: Create `publication_metadata` table (Issue #51)
+- [ ] Backend: PubMed API integration with caching (Issue #51)
+- [ ] Backend: Cache warming script (Issue #51)
+- [ ] Backend: `/by-publication/{pmid}` endpoint (Issue #52)
+- [ ] Backend: `/aggregate/publication-summary/{pmid}` endpoint (Issue #53)
+
+#### Phase 3: Frontend Enhancements (Future)
+- [ ] API: Add `getPublicationMetadata(pmid)` client function
+- [ ] API: Add `getPhenopacketsByPublication(pmid)` client function
+- [ ] API: Add `getPublicationSummary(pmid)` client function
+- [ ] View: Display publication title, authors, journal from PubMed
+- [ ] View: Display summary statistics card (sex, phenotypes, variants)
+- [ ] View: Replace client-side filtering with server-side endpoint
+- [ ] View: Display common phenotypes as chips
+- [ ] View: Add abstract display (expandable)
+
+### Timeline
+**Phase 1 (Complete):** 6 hours (1 day)
+**Phase 2 (Backend):** 28 hours (3.5 days) - Issues #51, #52, #53
+**Phase 3 (Frontend):** 4 hours (0.5 days)
+**Total:** 38 hours (5 days)
+
+### Labels
+`frontend`, `views`, `phenopackets`, `p1` (Phase 1)
+`backend`, `api`, `p2` (Phase 2 - Issues #51-#53)
 
 ---
 
@@ -530,7 +602,7 @@ export function getRecentSearches() {
 
 ---
 
-## Issue #40: feat(frontend): implement search results with faceted filtering
+## Issue #41: feat(frontend): implement search results with faceted filtering
 
 ### Overview
 Enhanced search results page with sidebar filters.

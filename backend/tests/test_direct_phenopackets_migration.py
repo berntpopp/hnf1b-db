@@ -37,15 +37,19 @@ class TestDirectPhenopacketsMigration:
     def test_phenopacket_building(self, migration):
         """Test actual phenopacket construction."""
         # Create test data
-        rows = pd.DataFrame([{
-            "individual_id": "TEST001",
-            "IndividualIdentifier": "HNF1B-001",
-            "Sex": "Male",
-            "AgeReported": "45",
-            "RenalInsufficiency": "1",
-            "Diabetes": "1",
-            "Hypomagnesemia": "0",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "TEST001",
+                    "IndividualIdentifier": "HNF1B-001",
+                    "Sex": "Male",
+                    "AgeReported": "45",
+                    "RenalInsufficiency": "1",
+                    "Diabetes": "1",
+                    "Hypomagnesemia": "0",
+                }
+            ]
+        )
 
         # Initialize required components
         migration.individuals_df = rows
@@ -53,6 +57,7 @@ class TestDirectPhenopacketsMigration:
         migration.publications_df = None
 
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         migration.phenopacket_builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
@@ -67,21 +72,28 @@ class TestDirectPhenopacketsMigration:
 
         # Check for phenotypic features
         assert "phenotypicFeatures" in phenopacket
-        feature_ids = [f["type"]["id"] for f in phenopacket.get("phenotypicFeatures", [])]
+        feature_ids = [
+            f["type"]["id"] for f in phenopacket.get("phenotypicFeatures", [])
+        ]
         # Should have renal insufficiency and diabetes
         assert any("HP:" in fid for fid in feature_ids)
 
     def test_subject_id_mapping(self, migration):
         """Test that subject IDs are correctly mapped."""
-        rows = pd.DataFrame([{
-            "individual_id": "IND001",
-            "IndividualIdentifier": "HNF1B-001",
-            "Sex": "Male",
-            "AgeReported": "45",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "IND001",
+                    "IndividualIdentifier": "HNF1B-001",
+                    "Sex": "Male",
+                    "AgeReported": "45",
+                }
+            ]
+        )
 
         # Initialize builder
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
@@ -98,6 +110,7 @@ class TestDirectPhenopacketsMigration:
     def test_age_parsing(self):
         """Test age field parsing."""
         from migration.phenopackets.age_parser import AgeParser
+
         parser = AgeParser()
 
         # Test valid age
@@ -112,17 +125,22 @@ class TestDirectPhenopacketsMigration:
 
     def test_phenotype_extraction(self, migration):
         """Test phenotypic feature extraction."""
-        rows = pd.DataFrame([{
-            "individual_id": "TEST001",
-            "Sex": "Male",
-            "RenalInsufficiency": "1",
-            "Diabetes": "1",
-            "Hypomagnesemia": "0",
-            "MentalDisease": "1",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "TEST001",
+                    "Sex": "Male",
+                    "RenalInsufficiency": "1",
+                    "Diabetes": "1",
+                    "Hypomagnesemia": "0",
+                    "MentalDisease": "1",
+                }
+            ]
+        )
 
         # Initialize builder
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
@@ -140,13 +158,18 @@ class TestDirectPhenopacketsMigration:
 
     def test_mondo_disease_mapping(self, migration):
         """Test MONDO disease ontology mapping."""
-        rows = pd.DataFrame([{
-            "individual_id": "TEST001",
-            "Sex": "Female",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "TEST001",
+                    "Sex": "Female",
+                }
+            ]
+        )
 
         # Initialize builder
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
@@ -161,13 +184,18 @@ class TestDirectPhenopacketsMigration:
 
     def test_metadata_creation(self, migration):
         """Test metadata creation for phenopackets."""
-        rows = pd.DataFrame([{
-            "individual_id": "TEST001",
-            "Sex": "Female",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "TEST001",
+                    "Sex": "Female",
+                }
+            ]
+        )
 
         # Initialize builder
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
@@ -196,17 +224,22 @@ class TestDirectPhenopacketsMigration:
 
     def test_phenopacket_validation(self, migration):
         """Test that created phenopackets pass basic validation."""
-        rows = pd.DataFrame([{
-            "individual_id": "TEST001",
-            "IndividualIdentifier": "HNF1B-TEST001",
-            "Sex": "Male",
-            "AgeReported": "45",
-            "RenalInsufficiency": "1",
-            "Diabetes": "1",
-        }])
+        rows = pd.DataFrame(
+            [
+                {
+                    "individual_id": "TEST001",
+                    "IndividualIdentifier": "HNF1B-TEST001",
+                    "Sex": "Male",
+                    "AgeReported": "45",
+                    "RenalInsufficiency": "1",
+                    "Diabetes": "1",
+                }
+            ]
+        )
 
         # Initialize builder
         from migration.phenopackets.builder_simple import PhenopacketBuilder
+
         builder = PhenopacketBuilder(
             migration.ontology_mapper, migration.publication_mapper
         )
