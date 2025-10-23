@@ -48,9 +48,59 @@
           >
             mdi-book-open-variant
           </v-icon>
-          Publication {{ pmid }}
+          {{ publication.title || `Publication ${pmid}` }}
         </v-card-title>
+
+        <!-- Authors and Journal -->
+        <v-card-subtitle
+          v-if="publication.authors || publication.journal"
+          class="pt-3"
+        >
+          <div v-if="publication.authors && publication.authors.length > 0">
+            <v-icon
+              size="small"
+              class="mr-1"
+            >
+              mdi-account-multiple
+            </v-icon>
+            {{ formatAuthors(publication.authors) }}
+          </div>
+          <div
+            v-if="publication.journal || publication.year"
+            class="mt-1"
+          >
+            <v-icon
+              size="small"
+              class="mr-1"
+            >
+              mdi-book
+            </v-icon>
+            {{ publication.journal }}{{ publication.year ? ` (${publication.year})` : '' }}
+          </div>
+        </v-card-subtitle>
+
         <v-card-text class="pa-4">
+          <!-- Abstract (if available) -->
+          <v-expansion-panels
+            v-if="publication.abstract"
+            class="mb-4"
+          >
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon
+                  left
+                  size="small"
+                >
+                  mdi-text-box-outline
+                </v-icon>
+                Abstract
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                {{ publication.abstract }}
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
+
           <v-list density="comfortable">
             <v-list-item>
               <v-list-item-title class="font-weight-bold">
@@ -108,7 +158,7 @@
                   size="small"
                   variant="flat"
                 >
-                  {{ publication.phenopacket_count || 0 }}
+                  {{ phenopacketsTotal }}
                 </v-chip>
               </v-list-item-subtitle>
             </v-list-item>
@@ -353,6 +403,21 @@ export default {
         month: 'short',
         day: 'numeric',
       });
+    },
+    formatAuthors(authors) {
+      if (!authors || authors.length === 0) return '';
+
+      // Handle both array of strings and array of objects
+      const authorNames = authors.map((author) => {
+        if (typeof author === 'string') return author;
+        return author.name || '';
+      }).filter(Boolean);
+
+      // Show first 3 authors, then "et al."
+      if (authorNames.length <= 3) {
+        return authorNames.join(', ');
+      }
+      return `${authorNames.slice(0, 3).join(', ')}, et al.`;
     },
     formatSex(sex) {
       const sexMap = {
