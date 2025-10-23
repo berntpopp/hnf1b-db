@@ -1031,6 +1031,167 @@ async def aggregate_publications(
     ]
 
 
+@router.get("/aggregate/all-variants", response_model=List[Dict])
+async def aggregate_all_variants(
+    limit: int = Query(100, ge=1, le=1000),
+    skip: int = Query(0, ge=0),
+    pathogenicity: Optional[str] = Query(None),
+    gene: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all unique variants across phenopackets with counts.
+
+    Aggregates variants from all phenopackets and returns unique variants
+    with their details and the count of individuals carrying each variant.
+
+    Args:
+        limit: Maximum number of variants to return (default: 100, max: 1000)
+        skip: Number of variants to skip for pagination (default: 0)
+        pathogenicity: Filter by ACMG classification (PATHOGENIC, LIKELY_PATHOGENIC, etc.)
+        gene: Filter by gene symbol (e.g., "HNF1B")
+        db: Database session
+
+    Returns:
+        List of unique variants with:
+        - variant_id: VRS ID or custom identifier
+        - label: Human-readable variant description
+        - gene_symbol: Gene symbol (e.g., "HNF1B")
+        - gene_id: HGNC ID (e.g., "HGNC:5024")
+        - structural_type: Variant type (e.g., "deletion", "SNV")
+        - pathogenicity: ACMG classification
+        - phenopacket_count: Number of individuals with this variant
+        - vcf_string: VCF representation (chrom:pos:ref:alt)
+    """
+    # Build query with optional filters
+    where_clauses = []
+    params = {"limit": limit, "offset": skip}
+
+    if pathogenicity:
+        where_clauses.append(
+            "vi->>'acmgPathogenicityClassification' = :pathogenicity"
+        )
+        params["pathogenicity"] = pathogenicity
+
+    if gene:
+        where_clauses.append(
+            "vd->'geneContext'->>'symbol' = :gene"
+        )
+        params["gene"] = gene
+
+    where_sql = "AND " + " AND ".join(where_clauses) if where_clauses else ""
+
+    query = f"""
+    WITH variant_raw AS (
+        SELECT DISTINCT ON (vd->>'id', p.id)
+            vd->>'id' as variant_id,
+            vd->>'label' as label,
+            vd->'geneContext'->>'symbol' as gene_symbol,
+            vd->'geneContext'->>'valueId' as gene_id,
+            COALESCE(
+                vd->'structuralType'->>'label',
+                CASE
+                    WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+                    WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
+                    ELSE 'OTHER'
+                END
+            ) as structural_type,
+            COALESCE(
+                vi->>'acmgPathogenicityClassification',
+                gi->>'interpretationStatus'
+            ) as pathogenicity,
+            COALESCE(
+                NULLIF(CONCAT(
+                    COALESCE(vd->'vcfRecord'->>'chrom', ''), ':',
+                    COALESCE(vd->'vcfRecord'->>'pos', ''), ':',
+                    COALESCE(vd->'vcfRecord'->>'ref', ''), ':',
+                    COALESCE(vd->'vcfRecord'->>'alt', '')
+                ), ':::'),
+                (
+                    SELECT elem->>'value'
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' IN ('vcf', 'ga4gh', 'text')
+                    LIMIT 1
+                ),
+                vd->>'description'
+            ) as hg38,
+            (
+                SELECT elem->>'value'
+                FROM jsonb_array_elements(vd->'expressions') elem
+                WHERE elem->>'syntax' = 'hgvs.c'
+                LIMIT 1
+            ) as transcript,
+            (
+                SELECT elem->>'value'
+                FROM jsonb_array_elements(vd->'expressions') elem
+                WHERE elem->>'syntax' = 'hgvs.p'
+                LIMIT 1
+            ) as protein,
+            p.id as phenopacket_id
+        FROM
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
+            LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
+        WHERE
+            vi_lateral.vi IS NOT NULL
+            AND vd_lateral.vd IS NOT NULL
+            {where_sql}
+    ),
+    variant_agg AS (
+        SELECT
+            variant_id,
+            MAX(label) as label,
+            MAX(gene_symbol) as gene_symbol,
+            MAX(gene_id) as gene_id,
+            MAX(structural_type) as structural_type,
+            MAX(pathogenicity) as pathogenicity,
+            MAX(hg38) as hg38,
+            MAX(transcript) as transcript,
+            MAX(protein) as protein,
+            COUNT(DISTINCT phenopacket_id) as phenopacket_count
+        FROM variant_raw
+        GROUP BY variant_id
+    )
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY phenopacket_count DESC, gene_symbol ASC) as simple_id,
+        variant_id,
+        label,
+        gene_symbol,
+        gene_id,
+        structural_type,
+        pathogenicity,
+        phenopacket_count,
+        hg38,
+        transcript,
+        protein
+    FROM variant_agg
+    ORDER BY phenopacket_count DESC, gene_symbol ASC
+    LIMIT :limit
+    OFFSET :offset
+    """
+
+    result = await db.execute(text(query), params)
+    rows = result.fetchall()
+
+    return [
+        {
+            "simple_id": f"Var{row.simple_id}",  # type: ignore
+            "variant_id": row.variant_id,  # type: ignore
+            "label": row.label,  # type: ignore
+            "gene_symbol": row.gene_symbol,  # type: ignore
+            "gene_id": row.gene_id,  # type: ignore
+            "structural_type": row.structural_type,  # type: ignore
+            "pathogenicity": row.pathogenicity,  # type: ignore
+            "phenopacket_count": row.phenopacket_count,  # type: ignore
+            "hg38": row.hg38,  # type: ignore
+            "transcript": row.transcript,  # type: ignore
+            "protein": row.protein,  # type: ignore
+        }
+        for row in rows
+    ]
+
+
 @router.get("/aggregate/age-of-onset", response_model=List[AggregationResult])
 async def aggregate_age_of_onset(
     db: AsyncSession = Depends(get_db),
@@ -1079,6 +1240,7 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         - with_variants: Phenopackets containing interpretations
         - distinct_hpo_terms: Number of unique HPO terms used
         - distinct_publications: Number of unique publication references
+        - distinct_variants: Number of unique genetic variants
         - male: Number of male subjects
         - female: Number of female subjects
         - unknown_sex: Number of subjects with unknown sex
@@ -1119,7 +1281,23 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
     )
     distinct_publications = distinct_publications_result.scalar() or 0
 
-    # 5. Sex distribution
+    # 5. Distinct variants (unique variants across all phenopackets)
+    distinct_variants_result = await db.execute(
+        text("""
+            SELECT COUNT(DISTINCT vd->>'id')
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+                 LATERAL (
+                     SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
+                 ) vd_lateral
+            WHERE vd_lateral.vd IS NOT NULL
+              AND vd_lateral.vd->>'id' IS NOT NULL
+        """)
+    )
+    distinct_variants = distinct_variants_result.scalar() or 0
+
+    # 6. Sex distribution
     sex_distribution_result = await db.execute(
         text("""
             SELECT
@@ -1148,6 +1326,7 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         "with_variants": with_variants,
         "distinct_hpo_terms": distinct_hpo_terms,
         "distinct_publications": distinct_publications,
+        "distinct_variants": distinct_variants,
         "male": male,
         "female": female,
         "unknown_sex": unknown_sex,

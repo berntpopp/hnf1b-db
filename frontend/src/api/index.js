@@ -327,15 +327,58 @@ export const getIndividuals = (params) =>
   );
 
 /**
- * @deprecated Use getPhenopacketsWithVariants() with variant extraction.
- * Legacy compatibility wrapper for old API.
+ * Get aggregated unique variants across all phenopackets.
+ *
+ * @param {Object} params - Query parameters
+ * @param {number} params.page - Page number (1-indexed)
+ * @param {number} params.page_size - Items per page
+ * @param {string} [params.pathogenicity] - Filter by ACMG pathogenicity classification
+ * @param {string} [params.gene] - Filter by gene symbol
+ * @returns {Promise} Promise resolving to variants data with pagination metadata
  */
-export const getVariants = (params) =>
-  deprecatedPaginationWrapper(
-    'getVariants() is deprecated. Use getPhenopacketsWithVariants() instead.',
-    getPhenopacketsWithVariants,
-    params
-  );
+export const getVariants = async (params = {}) => {
+  const { page = 1, page_size = 10, pathogenicity, gene } = params;
+  const { skip, limit } = pageToSkipLimit(page, page_size);
+
+  const response = await apiClient.get('/phenopackets/aggregate/all-variants', {
+    params: {
+      skip,
+      limit,
+      pathogenicity,
+      gene,
+    },
+  });
+
+  // Transform backend response to match expected format
+  // Note: Backend returns plain array without total count
+  // So we estimate total based on returned data
+  const data = response.data || [];
+
+  return {
+    data: data.map(variant => ({
+      id: variant.simple_id || variant.variant_id,
+      simple_id: variant.simple_id,
+      variant_id: variant.variant_id,
+      label: variant.label,
+      geneSymbol: variant.gene_symbol,
+      geneId: variant.gene_id,
+      variant_type: variant.structural_type,
+      hg38: variant.hg38,
+      transcript: variant.transcript,
+      protein: variant.protein,
+      classificationVerdict: variant.pathogenicity,
+      individualCount: variant.phenopacket_count,
+    })),
+    meta: {
+      // Since backend doesn't provide total count, we estimate
+      // If we got fewer items than requested, we're on the last page
+      total: data.length < limit ? skip + data.length : (page + 1) * page_size,
+      total_pages: data.length < limit ? page : page + 1,
+      current_page: page,
+      page_size: page_size,
+    },
+  };
+};
 
 /**
  * @deprecated Publications are now stored in phenopacket.metaData.externalReferences.

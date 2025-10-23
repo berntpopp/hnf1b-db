@@ -147,11 +147,11 @@ export default {
         // Animate each statistic from 0 to its target value.
         // Map API response fields to display fields:
         // - total_phenopackets -> individuals
-        // - with_variants -> variants
+        // - distinct_variants -> variants (UNIQUE variants, not total variant interpretations)
         // - distinct_hpo_terms -> total_reports (repurposed for HPO count)
         // - distinct_publications -> publications
         animateCount('individuals', data.total_phenopackets || 0);
-        animateCount('variants', data.with_variants || 0);
+        animateCount('variants', data.distinct_variants || 0);
         animateCount('total_reports', data.distinct_hpo_terms || 0);
         animateCount('publications', data.distinct_publications || 0);
       } catch (error) {

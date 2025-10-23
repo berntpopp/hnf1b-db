@@ -12,6 +12,7 @@
       class="elevation-1"
       density="compact"
       @update:options="onOptionsUpdate"
+      @click:row="handleRowClick"
     >
       <template #top>
         <v-toolbar flat>
@@ -63,35 +64,57 @@
         </v-toolbar>
       </template>
 
-      <!-- Render Variant ID as a clickable chip linking to its detail page -->
-      <template #item.variant_id="{ item }">
+      <!-- Render simple_id as a clickable chip -->
+      <template #item.simple_id="{ item }">
         <v-chip
-          color="pink-lighten-4"
-          class="ma-2"
-          small
-          link
+          color="pink-lighten-3"
+          class="ma-1"
+          size="small"
           variant="flat"
-          :to="'/variants/' + item.variant_id"
         >
-          {{ item.variant_id }}
+          {{ item.simple_id }}
           <v-icon right>
             mdi-dna
           </v-icon>
         </v-chip>
       </template>
 
-      <!-- Custom slot for Classification Verdict column -->
-      <template #item.classificationVerdict="{ item }">
-        {{
-          item.classifications && item.classifications.length
-            ? item.classifications[0].verdict
-            : 'N/A'
-        }}
+      <!-- Render variant type with color coding -->
+      <template #item.variant_type="{ item }">
+        <v-chip
+          :color="getVariantTypeColor(item.variant_type)"
+          class="ma-1"
+          size="small"
+          variant="flat"
+        >
+          {{ item.variant_type }}
+        </v-chip>
       </template>
 
-      <!-- Custom slot for Individual Count column -->
+      <!-- Render classification with color coding -->
+      <template #item.classificationVerdict="{ item }">
+        <v-chip
+          v-if="item.classificationVerdict"
+          :color="getPathogenicityColor(item.classificationVerdict)"
+          class="ma-1"
+          size="small"
+          variant="flat"
+        >
+          {{ item.classificationVerdict }}
+        </v-chip>
+        <span v-else>-</span>
+      </template>
+
+      <!-- Render individual count as a badge -->
       <template #item.individualCount="{ item }">
-        {{ item.individual_ids ? item.individual_ids.length : 'N/A' }}
+        <v-chip
+          color="light-green-lighten-3"
+          class="ma-1"
+          size="small"
+          variant="flat"
+        >
+          {{ item.individualCount || 0 }}
+        </v-chip>
       </template>
 
       <template #no-data>
@@ -115,9 +138,31 @@ export default {
       headers: [
         {
           title: 'Variant ID',
-          value: 'variant_id',
+          value: 'simple_id',
           sortable: true,
-          maxWidth: '150px',
+          maxWidth: '100px',
+          cellClass: 'truncate',
+          headerProps: {
+            class: 'font-weight-bold',
+          },
+          nowrap: true,
+        },
+        {
+          title: 'Transcript (c.)',
+          value: 'transcript',
+          sortable: true,
+          maxWidth: '200px',
+          cellClass: 'truncate',
+          headerProps: {
+            class: 'font-weight-bold',
+          },
+          nowrap: true,
+        },
+        {
+          title: 'Protein (p.)',
+          value: 'protein',
+          sortable: true,
+          maxWidth: '200px',
           cellClass: 'truncate',
           headerProps: {
             class: 'font-weight-bold',
@@ -128,7 +173,7 @@ export default {
           title: 'Variant Type',
           value: 'variant_type',
           sortable: true,
-          maxWidth: '100px',
+          maxWidth: '120px',
           cellClass: 'truncate',
           headerProps: {
             class: 'font-weight-bold',
@@ -139,7 +184,7 @@ export default {
           title: 'HG38',
           value: 'hg38',
           sortable: true,
-          maxWidth: '150px',
+          maxWidth: '250px',
           cellClass: 'truncate',
           headerProps: {
             class: 'font-weight-bold',
@@ -147,10 +192,10 @@ export default {
           nowrap: true,
         },
         {
-          title: 'Classification Verdict',
+          title: 'Classification',
           value: 'classificationVerdict',
           sortable: true,
-          maxWidth: '100px',
+          maxWidth: '150px',
           cellClass: 'truncate',
           headerProps: {
             class: 'font-weight-bold',
@@ -161,7 +206,7 @@ export default {
           title: 'Individual Count',
           value: 'individualCount',
           sortable: false,
-          maxWidth: '100px',
+          maxWidth: '120px',
           cellClass: 'truncate',
           headerProps: {
             class: 'font-weight-bold',
@@ -253,6 +298,42 @@ export default {
     goToLastPage() {
       this.options.page = this.totalPages;
     },
+    handleRowClick(event, row) {
+      // Navigate to variant detail page using variant_id
+      if (row.item && row.item.variant_id) {
+        this.$router.push(`/variants/${row.item.variant_id}`);
+      }
+    },
+    getVariantTypeColor(variantType) {
+      const colorMap = {
+        deletion: 'red-lighten-3',
+        duplication: 'blue-lighten-3',
+        SNV: 'purple-lighten-3',
+        insertion: 'green-lighten-3',
+        inversion: 'orange-lighten-3',
+        CNV: 'amber-lighten-3',
+      };
+      return colorMap[variantType] || 'grey-lighten-2';
+    },
+    getPathogenicityColor(pathogenicity) {
+      const upperPath = pathogenicity ? pathogenicity.toUpperCase() : '';
+      if (upperPath.includes('PATHOGENIC') && !upperPath.includes('LIKELY')) {
+        return 'red-lighten-3';
+      }
+      if (upperPath.includes('LIKELY_PATHOGENIC') || upperPath.includes('LIKELY PATHOGENIC')) {
+        return 'orange-lighten-3';
+      }
+      if (upperPath.includes('UNCERTAIN') || upperPath.includes('VUS')) {
+        return 'yellow-lighten-3';
+      }
+      if (upperPath.includes('LIKELY_BENIGN') || upperPath.includes('LIKELY BENIGN')) {
+        return 'light-green-lighten-3';
+      }
+      if (upperPath.includes('BENIGN')) {
+        return 'green-lighten-3';
+      }
+      return 'grey-lighten-2';
+    },
   },
 };
 </script>
@@ -268,5 +349,14 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Make table rows look clickable */
+:deep(tbody tr) {
+  cursor: pointer;
+}
+
+:deep(tbody tr:hover) {
+  background-color: rgba(0, 0, 0, 0.04);
 }
 </style>
