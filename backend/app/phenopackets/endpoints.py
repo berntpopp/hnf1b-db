@@ -1254,6 +1254,45 @@ async def aggregate_all_variants(
     ]
 
 
+@router.get("/by-variant/{variant_id}", response_model=List[PhenopacketResponse])
+async def get_phenopackets_by_variant(
+    variant_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all phenopackets that contain a specific variant.
+
+    Args:
+        variant_id: The variant ID to search for
+
+    Returns:
+        List of phenopackets containing this variant
+    """
+    query = """
+    SELECT DISTINCT p.*
+    FROM phenopackets p,
+         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+    WHERE gi->'variantInterpretation'->'variationDescriptor'->>'id' = :variant_id
+    ORDER BY p.created_at DESC
+    """
+
+    result = await db.execute(text(query), {"variant_id": variant_id})
+    phenopackets = result.fetchall()
+
+    return [
+        PhenopacketResponse(
+            id=str(pp.id),
+            phenopacket_id=pp.phenopacket_id,
+            version=pp.version,
+            phenopacket=pp.phenopacket,
+            created_at=pp.created_at,
+            updated_at=pp.updated_at,
+            schema_version=pp.schema_version,
+        )
+        for pp in phenopackets
+    ]
+
+
 @router.get("/aggregate/age-of-onset", response_model=List[AggregationResult])
 async def aggregate_age_of_onset(
     db: AsyncSession = Depends(get_db),
