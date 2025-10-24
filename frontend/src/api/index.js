@@ -142,6 +142,14 @@ export const getVariantsBatch = (phenopacketIds) =>
     params: { phenopacket_ids: phenopacketIds },
   });
 
+/**
+ * Get all phenopackets that contain a specific variant.
+ * @param {string} variantId - The variant ID to search for
+ * @returns {Promise} Axios promise with phenopackets containing this variant
+ */
+export const getPhenopacketsByVariant = (variantId) =>
+  apiClient.get(`/phenopackets/by-variant/${variantId}`);
+
 /* ==================== AGGREGATION ENDPOINTS ==================== */
 
 /**
