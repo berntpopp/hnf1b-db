@@ -177,10 +177,12 @@ export const getDiseaseAggregation = (params = {}) =>
 
 /**
  * Get variant pathogenicity distribution.
+ * @param {Object} params - Query parameters
+ * @param {string} params.count_mode - Count mode: 'all' (default) or 'unique'
  * @returns {Promise} Axios promise with pathogenicity counts
  */
-export const getVariantPathogenicity = () =>
-  apiClient.get('/phenopackets/aggregate/variant-pathogenicity');
+export const getVariantPathogenicity = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/variant-pathogenicity', { params });
 
 /**
  * Get kidney disease stage distribution.
@@ -190,9 +192,12 @@ export const getKidneyStages = () => apiClient.get('/phenopackets/aggregate/kidn
 
 /**
  * Get variant type distribution (SNV, CNV, etc.).
+ * @param {Object} params - Query parameters
+ * @param {string} params.count_mode - Count mode: 'all' (default) or 'unique'
  * @returns {Promise} Axios promise with variant type counts
  */
-export const getVariantTypes = () => apiClient.get('/phenopackets/aggregate/variant-types');
+export const getVariantTypes = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/variant-types', { params });
 
 /**
  * Get publications aggregation with citation counts.

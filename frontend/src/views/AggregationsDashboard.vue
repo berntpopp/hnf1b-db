@@ -20,7 +20,8 @@
                   <v-row class="pa-3">
                     <v-col
                       cols="12"
-                      sm="6"
+                      :sm="isVariantAggregation ? 6 : 12"
+                      :md="isVariantAggregation ? 4 : 6"
                     >
                       <v-select
                         v-model="selectedCategory"
@@ -33,7 +34,8 @@
                     </v-col>
                     <v-col
                       cols="12"
-                      sm="6"
+                      :sm="isVariantAggregation ? 6 : 12"
+                      :md="isVariantAggregation ? 4 : 6"
                     >
                       <v-select
                         v-model="selectedAggregation"
@@ -41,6 +43,23 @@
                         item-title="label"
                         item-value="value"
                         label="Aggregation"
+                        @change="fetchAggregationData"
+                      />
+                    </v-col>
+                    <v-col
+                      v-if="isVariantAggregation"
+                      cols="12"
+                      sm="6"
+                      md="4"
+                    >
+                      <v-select
+                        v-model="variantCountMode"
+                        :items="countModeOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Count Mode"
+                        hint="'All' counts variant instances (e.g., 864), 'Unique' counts distinct variants"
+                        persistent-hint
                         @change="fetchAggregationData"
                       />
                     </v-col>
@@ -104,8 +123,8 @@ export default {
         {
           label: 'Variants',
           aggregations: [
-            { label: 'Pathogenicity Classification', value: 'getVariantPathogenicity' },
-            { label: 'Variant Types (SNV/CNV)', value: 'getVariantTypes' },
+            { label: 'Pathogenicity Classification', value: 'getVariantPathogenicity', supportsCountMode: true },
+            { label: 'Variant Types (SNV/CNV)', value: 'getVariantTypes', supportsCountMode: true },
           ],
         },
         {
@@ -117,6 +136,11 @@ export default {
       ],
       selectedCategory: 'Phenopackets',
       selectedAggregation: 'getSexDistribution',
+      variantCountMode: 'all',
+      countModeOptions: [
+        { label: 'All Variant Instances', value: 'all' },
+        { label: 'Unique Variants', value: 'unique' },
+      ],
     };
   },
   computed: {
@@ -129,6 +153,11 @@ export default {
     selectedAggregations() {
       const category = this.categories.find((cat) => cat.label === this.selectedCategory);
       return category ? category.aggregations : [];
+    },
+    isVariantAggregation() {
+      const category = this.categories.find((cat) => cat.label === this.selectedCategory);
+      const aggregation = category?.aggregations.find((agg) => agg.value === this.selectedAggregation);
+      return aggregation?.supportsCountMode || false;
     },
   },
   watch: {
@@ -144,6 +173,9 @@ export default {
       }
       this.fetchAggregationData();
     },
+    variantCountMode() {
+      this.fetchAggregationData();
+    },
   },
   mounted() {
     this.fetchAggregationData();
@@ -153,7 +185,12 @@ export default {
       const category = this.categories.find((cat) => cat.label === this.selectedCategory);
       const aggregation = category?.aggregations.find((agg) => agg.value === this.selectedAggregation);
       const funcName = this.selectedAggregation;
-      const params = aggregation?.params || {};
+      const params = { ...(aggregation?.params || {}) };
+
+      // Add count_mode parameter if this is a variant aggregation
+      if (aggregation?.supportsCountMode) {
+        params.count_mode = this.variantCountMode;
+      }
 
       if (API[funcName] && typeof API[funcName] === 'function') {
         API[funcName](params)

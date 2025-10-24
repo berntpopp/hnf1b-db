@@ -912,22 +912,49 @@ async def aggregate_sex_distribution(
 
 @router.get("/aggregate/variant-pathogenicity", response_model=List[AggregationResult])
 async def aggregate_variant_pathogenicity(
+    count_mode: str = Query("all", regex="^(all|unique)$", description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get distribution of variant pathogenicity classifications."""
-    query = """
-    SELECT
-        gi->>'interpretationStatus' as classification,
-        COUNT(*) as count
-    FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'interpretations') as interp,
-        jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-    GROUP BY
-        gi->>'interpretationStatus'
-    ORDER BY
-        count DESC
+    """Get distribution of variant pathogenicity classifications.
+
+    Args:
+        count_mode:
+            - "all" (default): Count all variant instances across phenopackets (e.g., 864 total)
+            - "unique": Count only unique variants (deduplicates by variant ID)
     """
+    if count_mode == "unique":
+        # Count unique variants by variant ID
+        query = """
+        SELECT
+            gi->>'interpretationStatus' as classification,
+            COUNT(DISTINCT vd->>'id') as count
+        FROM
+            phenopackets,
+            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
+        WHERE
+            gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+        GROUP BY
+            gi->>'interpretationStatus'
+        ORDER BY
+            count DESC
+        """
+    else:
+        # Count all variant instances (original behavior)
+        query = """
+        SELECT
+            gi->>'interpretationStatus' as classification,
+            COUNT(*) as count
+        FROM
+            phenopackets,
+            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+        GROUP BY
+            gi->>'interpretationStatus'
+        ORDER BY
+            count DESC
+        """
 
     result = await db.execute(text(query))
     rows = result.fetchall()
@@ -946,29 +973,64 @@ async def aggregate_variant_pathogenicity(
 
 @router.get("/aggregate/variant-types", response_model=List[AggregationResult])
 async def aggregate_variant_types(
+    count_mode: str = Query("all", regex="^(all|unique)$", description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get distribution of variant types (SNV, CNV, etc.)."""
-    query = """
-    SELECT
-        CASE
-            WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
-            WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
-            ELSE 'OTHER'
-        END as variant_type,
-        COUNT(*) as count
-    FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'interpretations') as interp,
-        jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-        LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
-    WHERE
-        gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
-    GROUP BY
-        variant_type
-    ORDER BY
-        count DESC
+    """Get distribution of variant types (SNV, CNV, etc.).
+
+    Args:
+        count_mode:
+            - "all" (default): Count all variant instances across phenopackets (e.g., 864 total)
+            - "unique": Count only unique variants (deduplicates by variant ID)
     """
+    if count_mode == "unique":
+        # Count unique variants by variant ID
+        query = """
+        WITH variant_types AS (
+            SELECT DISTINCT
+                vd->>'id' as variant_id,
+                CASE
+                    WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+                    WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
+                    ELSE 'OTHER'
+                END as variant_type
+            FROM
+                phenopackets,
+                jsonb_array_elements(phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+                LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
+            WHERE
+                gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+        )
+        SELECT
+            variant_type,
+            COUNT(*) as count
+        FROM variant_types
+        GROUP BY variant_type
+        ORDER BY count DESC
+        """
+    else:
+        # Count all variant instances (original behavior)
+        query = """
+        SELECT
+            CASE
+                WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+                WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
+                ELSE 'OTHER'
+            END as variant_type,
+            COUNT(*) as count
+        FROM
+            phenopackets,
+            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation'->'variationDescriptor' as vd) sub
+        WHERE
+            gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+        GROUP BY
+            variant_type
+        ORDER BY
+            count DESC
+        """
 
     result = await db.execute(text(query))
     rows = result.fetchall()
