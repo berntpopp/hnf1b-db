@@ -92,12 +92,12 @@
       <!-- Render variant type with color coding -->
       <template #item.variant_type="{ item }">
         <v-chip
-          :color="getVariantTypeColor(item.variant_type)"
+          :color="getVariantTypeColor(getVariantType(item))"
           class="ma-1"
           size="small"
           variant="flat"
         >
-          {{ item.variant_type }}
+          {{ getVariantType(item) }}
         </v-chip>
       </template>
 
@@ -260,6 +260,50 @@ export default {
     },
   },
   methods: {
+    getVariantType(variant) {
+      // Detect actual variant type from HGVS c. notation and genomic coordinates
+      // Large CNVs are labeled as "CNV" in list view for clarity
+      if (!variant) return 'Unknown';
+
+      // Check if this is a large CNV (has genomic coordinates in format chr:start-end)
+      // CNVs are typically whole gene or multi-gene deletions/duplications
+      if (variant.hg38) {
+        const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
+        if (cnvMatch) {
+          // This is a CNV - return "CNV" for list view
+          return 'CNV';
+        }
+      }
+
+      // For small variants, detect type from c. notation
+      const cNotation = this.extractCNotation(variant.transcript);
+
+      if (cNotation) {
+        // Check for deletions
+        if (/del/.test(cNotation) && !/dup/.test(cNotation)) {
+          return 'deletion';
+        }
+        // Check for duplications
+        if (/dup/.test(cNotation)) {
+          return 'duplication';
+        }
+        // Check for insertions
+        if (/ins/.test(cNotation)) {
+          return 'insertion';
+        }
+        // Check for delins (deletion-insertion)
+        if (/delins/.test(cNotation)) {
+          return 'indel';
+        }
+        // Check for substitutions (true SNVs: single position with >)
+        if (/>\w$/.test(cNotation) && !/[\+\-]/.test(cNotation) && !/_/.test(cNotation)) {
+          return 'SNV';
+        }
+      }
+
+      // Fall back to stored variant_type
+      return variant.variant_type || 'Unknown';
+    },
     async fetchVariants() {
       this.loading = true;
       try {
