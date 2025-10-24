@@ -347,10 +347,11 @@ export const getIndividuals = (params) =>
  * @param {number} params.page_size - Items per page
  * @param {string} [params.pathogenicity] - Filter by ACMG pathogenicity classification
  * @param {string} [params.gene] - Filter by gene symbol
+ * @param {string} [params.sort] - Sort field (prefix with '-' for descending order, e.g., 'simple_id' or '-individualCount')
  * @returns {Promise} Promise resolving to variants data with pagination metadata
  */
 export const getVariants = async (params = {}) => {
-  const { page = 1, page_size = 10, pathogenicity, gene } = params;
+  const { page = 1, page_size = 10, pathogenicity, gene, sort } = params;
   const { skip, limit } = pageToSkipLimit(page, page_size);
 
   const response = await apiClient.get('/phenopackets/aggregate/all-variants', {
@@ -359,6 +360,7 @@ export const getVariants = async (params = {}) => {
       limit,
       pathogenicity,
       gene,
+      sort,
     },
   });
 

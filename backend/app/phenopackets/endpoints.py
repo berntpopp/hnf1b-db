@@ -1099,6 +1099,7 @@ async def aggregate_all_variants(
     skip: int = Query(0, ge=0),
     pathogenicity: Optional[str] = Query(None),
     gene: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all unique variants across phenopackets with counts.
@@ -1111,6 +1112,7 @@ async def aggregate_all_variants(
         skip: Number of variants to skip for pagination (default: 0)
         pathogenicity: Filter by ACMG classification (PATHOGENIC, LIKELY_PATHOGENIC, etc.)
         gene: Filter by gene symbol (e.g., "HNF1B")
+        sort: Sort field with optional '-' prefix for descending (e.g., 'simple_id', '-individualCount')
         db: Database session
 
     Returns:
@@ -1141,6 +1143,34 @@ async def aggregate_all_variants(
         params["gene"] = gene
 
     where_sql = "AND " + " AND ".join(where_clauses) if where_clauses else ""
+
+    # Build ORDER BY clause from sort parameter
+    # Map frontend field names to SQL column names
+    sort_field_map = {
+        "simple_id": "simple_id",
+        "variant_id": "variant_id",
+        "transcript": "transcript",
+        "protein": "protein",
+        "variant_type": "structural_type",
+        "hg38": "hg38",
+        "classificationVerdict": "pathogenicity",
+        "individualCount": "phenopacket_count",
+    }
+
+    order_by = "phenopacket_count DESC, gene_symbol ASC"  # Default sort
+    if sort:
+        # Check if descending (starts with '-')
+        if sort.startswith('-'):
+            field_name = sort[1:]
+            direction = "DESC"
+        else:
+            field_name = sort
+            direction = "ASC"
+
+        # Map field name to SQL column
+        sql_column = sort_field_map.get(field_name)
+        if sql_column:
+            order_by = f"{sql_column} {direction}, gene_symbol ASC"
 
     query = f"""
     WITH variant_raw AS (
@@ -1214,21 +1244,25 @@ async def aggregate_all_variants(
             COUNT(DISTINCT phenopacket_id) as phenopacket_count
         FROM variant_raw
         GROUP BY variant_id
+    ),
+    variant_with_id AS (
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY phenopacket_count DESC, gene_symbol ASC) as simple_id,
+            variant_id,
+            label,
+            gene_symbol,
+            gene_id,
+            structural_type,
+            pathogenicity,
+            phenopacket_count,
+            hg38,
+            transcript,
+            protein
+        FROM variant_agg
     )
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY phenopacket_count DESC, gene_symbol ASC) as simple_id,
-        variant_id,
-        label,
-        gene_symbol,
-        gene_id,
-        structural_type,
-        pathogenicity,
-        phenopacket_count,
-        hg38,
-        transcript,
-        protein
-    FROM variant_agg
-    ORDER BY phenopacket_count DESC, gene_symbol ASC
+    SELECT *
+    FROM variant_with_id
+    ORDER BY {order_by}
     LIMIT :limit
     OFFSET :offset
     """
@@ -1236,6 +1270,8 @@ async def aggregate_all_variants(
     result = await db.execute(text(query), params)
     rows = result.fetchall()
 
+    # simple_id is calculated using default sort order (by individual count)
+    # This ensures each variant has a stable ID regardless of current sort
     return [
         {
             "simple_id": f"Var{row.simple_id}",  # type: ignore
