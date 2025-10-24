@@ -79,6 +79,16 @@
         </v-chip>
       </template>
 
+      <!-- Render transcript with only c. notation (strip NM_ prefix) -->
+      <template #item.transcript="{ item }">
+        {{ extractCNotation(item.transcript) }}
+      </template>
+
+      <!-- Render protein with only p. notation (strip NP_ prefix) -->
+      <template #item.protein="{ item }">
+        {{ extractPNotation(item.protein) }}
+      </template>
+
       <!-- Render variant type with color coding -->
       <template #item.variant_type="{ item }">
         <v-chip
@@ -333,6 +343,32 @@ export default {
         return 'green-lighten-3';
       }
       return 'grey-lighten-2';
+    },
+    extractCNotation(transcript) {
+      // Extract only the c. notation from HGVS format (e.g., "NM_000458.4:c.544+1G>T" -> "c.544+1G>T")
+      if (!transcript) return '-';
+
+      // Match the c. notation part (everything after the colon)
+      const match = transcript.match(/:(.+)$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      // If no colon found, return the original value
+      return transcript;
+    },
+    extractPNotation(protein) {
+      // Extract only the p. notation from HGVS format (e.g., "NP_000449.3:p.Arg177Ter" -> "p.Arg177Ter")
+      if (!protein) return '-';
+
+      // Match the p. notation part (everything after the colon)
+      const match = protein.match(/:(.+)$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      // If no colon found, return the original value
+      return protein;
     },
   },
 };

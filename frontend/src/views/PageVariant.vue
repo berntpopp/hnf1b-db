@@ -46,18 +46,143 @@
                   sm="6"
                 >
                   <div><strong>Type:</strong> {{ variant.variant_type }}</div>
-                  <div><strong>HG19:</strong> {{ variant.hg19 }}</div>
-                  <div><strong>HG19 Info:</strong> {{ variant.hg19_INFO || 'N/A' }}</div>
+                  <div><strong>HG38:</strong> {{ variant.hg38 }}</div>
+                  <div v-if="variant.transcript">
+                    <strong>Transcript:</strong>
+                    <a
+                      v-if="extractTranscriptId(variant.transcript)"
+                      :href="`https://www.ncbi.nlm.nih.gov/nuccore/${extractTranscriptId(variant.transcript)}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="transcript-link"
+                    >
+                      {{ extractTranscriptId(variant.transcript) }}
+                    </a>
+                    {{ extractCNotation(variant.transcript) }}
+                  </div>
+                  <div v-if="variant.protein">
+                    <strong>Protein:</strong>
+                    <a
+                      v-if="extractProteinId(variant.protein)"
+                      :href="`https://www.ncbi.nlm.nih.gov/protein/${extractProteinId(variant.protein)}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="protein-link"
+                    >
+                      {{ extractProteinId(variant.protein) }}
+                    </a>
+                    {{ extractPNotation(variant.protein) }}
+                  </div>
                 </v-col>
                 <v-col
                   cols="12"
                   sm="6"
                 >
-                  <div><strong>HG38:</strong> {{ variant.hg38 }}</div>
-                  <div><strong>HG38 Info:</strong> {{ variant.hg38_INFO || 'N/A' }}</div>
+                  <div v-if="variant.classificationVerdict">
+                    <strong>Classification:</strong>
+                    <v-chip
+                      :color="getPathogenicityColor(variant.classificationVerdict)"
+                      class="ml-2"
+                      size="small"
+                      variant="flat"
+                    >
+                      {{ variant.classificationVerdict }}
+                    </v-chip>
+                  </div>
+                  <div v-if="getMolecularConsequence(variant)">
+                    <strong>Molecular Consequence:</strong>
+                    <v-chip
+                      color="purple-lighten-3"
+                      class="ml-2"
+                      size="small"
+                      variant="flat"
+                    >
+                      {{ getMolecularConsequence(variant) }}
+                    </v-chip>
+                  </div>
                   <div>
                     <strong>Individuals Count:</strong>
-                    {{ variant.individual_ids ? variant.individual_ids.length : 'N/A' }}
+                    {{ variant.individualCount || phenopacketsWithVariant.length }}
+                  </div>
+                  <div v-if="hasExternalLinks(variant)">
+                    <strong>External Resources:</strong>
+                    <div class="external-links-container">
+                      <a
+                        v-if="getClinVarLink(variant)"
+                        :href="getClinVarLink(variant)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="external-link"
+                      >
+                        ClinVar
+                        <v-icon
+                          size="x-small"
+                          class="ml-1"
+                        >
+                          mdi-open-in-new
+                        </v-icon>
+                      </a>
+                      <a
+                        v-if="getDbSNPLink(variant)"
+                        :href="getDbSNPLink(variant)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="external-link"
+                      >
+                        dbSNP
+                        <v-icon
+                          size="x-small"
+                          class="ml-1"
+                        >
+                          mdi-open-in-new
+                        </v-icon>
+                      </a>
+                      <a
+                        v-if="getClinGenLink(variant)"
+                        :href="getClinGenLink(variant)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="external-link"
+                      >
+                        ClinGen
+                        <v-icon
+                          size="x-small"
+                          class="ml-1"
+                        >
+                          mdi-open-in-new
+                        </v-icon>
+                      </a>
+                      <a
+                        v-if="getDecipherLink(variant)"
+                        :href="getDecipherLink(variant)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="external-link"
+                      >
+                        DECIPHER
+                        <v-icon
+                          size="x-small"
+                          class="ml-1"
+                        >
+                          mdi-open-in-new
+                        </v-icon>
+                      </a>
+                      <a
+                        v-if="getUCSCLink(variant)"
+                        :href="getUCSCLink(variant)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="external-link"
+                      >
+                        UCSC Browser
+                        <v-icon
+                          size="x-small"
+                          class="ml-1"
+                        >
+                          mdi-open-in-new
+                        </v-icon>
+                      </a>
+                    </div>
                   </div>
                 </v-col>
               </v-row>
@@ -294,16 +419,46 @@
               >
                 mdi-account-multiple-outline
               </v-icon>
-              Individuals Carrying This Variant
+              Individuals Carrying This Variant ({{ phenopacketsWithVariant.length }})
             </v-card-title>
             <v-card-text>
-              <TableIndividuals
-                :show-filter-controls="false"
-                :show-pagination-controls="false"
-                :filter-input="individuals_with_variant_filter"
-                header-label="Individuals"
-                header-sub-label="carrying this variant"
-              />
+              <v-data-table
+                :headers="phenopacketHeaders"
+                :items="phenopacketsWithVariant"
+                :items-per-page="10"
+                density="compact"
+                class="elevation-1"
+                @click:row="handlePhenopacketRowClick"
+              >
+                <template #item.phenopacket_id="{ item }">
+                  <v-chip
+                    color="blue-lighten-3"
+                    size="small"
+                    class="ma-1"
+                  >
+                    {{ item.phenopacket_id }}
+                  </v-chip>
+                </template>
+
+                <template #item.subject_sex="{ item }">
+                  <v-chip
+                    :color="getSexColor(item.subject_sex)"
+                    size="small"
+                    class="ma-1"
+                  >
+                    {{ item.subject_sex }}
+                  </v-chip>
+                </template>
+
+                <template #no-data>
+                  <v-alert
+                    type="info"
+                    variant="tonal"
+                  >
+                    No phenopackets found with this variant.
+                  </v-alert>
+                </template>
+              </v-data-table>
             </v-card-text>
           </v-card>
         </v-sheet>
@@ -314,17 +469,16 @@
 
 <script>
 import ProteinLinearPlot from '@/components/analyses/ProteinLinearPlot.vue';
-import TableIndividuals from '@/components/tables/TableIndividuals.vue';
 import colorAndSymbolsMixin from '@/assets/js/mixins/colorAndSymbolsMixin.js';
-import { getVariants } from '@/api';
+import { getVariants, getPhenopacketsByVariant } from '@/api';
 
 export default {
   name: 'PageVariant',
   components: {
     ProteinLinearPlot,
-    TableIndividuals,
   },
   mixins: [colorAndSymbolsMixin],
+
   data() {
     return {
       variant: {},
@@ -332,65 +486,348 @@ export default {
       opacity: 1,
       color: '#FFFFFF',
       loading: true,
-      individuals_with_variant: [],
-      individuals_with_variant_filter: '',
+      phenopacketsWithVariant: [],
+      phenopacketHeaders: [
+        {
+          title: 'Phenopacket ID',
+          value: 'phenopacket_id',
+          sortable: true,
+        },
+        {
+          title: 'Sex',
+          value: 'subject_sex',
+          sortable: true,
+        },
+        {
+          title: 'Created',
+          value: 'created_at',
+          sortable: true,
+        },
+      ],
       icons: {
         mdiDna: 'mdi-dna',
         mdiNewspaperVariant: 'mdi-newspaper-variant',
-      },
-      // Consistent fallback icons for sex:
-      sex_symbol: {
-        male: 'mdi-gender-male',
-        female: 'mdi-gender-female',
-        unspecified: 'mdi-gender-non-binary',
-      },
-      // Consistent styling for cohorts:
-      cohort_style: {
-        born: 'blue',
-      },
-      // Consistent color mapping for phenotype:
-      reported_phenotype_color: {
-        yes: 'green',
-        no: 'red',
-        'not reported': 'orange',
-      },
-      reported_phenotype_symbol: {
-        yes: 'mdi-check-circle',
-        no: 'mdi-close-circle',
-        'not reported': 'mdi-alert-circle',
       },
     };
   },
   created() {
     this.loadVariantData();
   },
+  watch: {
+    '$route.params.variant_id': {
+      handler() {
+        this.loadVariantData();
+      },
+      immediate: false,
+    },
+  },
   methods: {
     async loadVariantData() {
       this.loading = true;
-      // Build filter as a JSON string; API expects filter={"variant_id": "varXXXX"}
-      const filterParam = JSON.stringify({
-        variant_id: this.$route.params.variant_id,
-      });
+      const variantId = this.$route.params.variant_id;
+
       try {
-        const response = await getVariants({
+        // Fetch all variants to find the one with matching ID
+        // Note: We fetch a large page size since there's no single variant endpoint
+        const variantResponse = await getVariants({
           page: 1,
-          page_size: 10,
-          filter: filterParam,
+          page_size: 1000,
         });
-        if (!response.data || response.data.length === 0) {
+
+        if (!variantResponse.data || variantResponse.data.length === 0) {
           this.$router.push('/PageNotFound');
-        } else {
-          this.variant = response.data[0];
-          // Build filter string for TableIndividuals based on variant.individual_ids if defined
-          this.individuals_with_variant_filter =
-            this.variant.individual_ids && this.variant.individual_ids.length
-              ? 'contains(individual_id,' + this.variant.individual_ids.join('|') + ')'
-              : '';
+          return;
         }
+
+        // Find the variant with matching ID
+        this.variant = variantResponse.data.find((v) => v.variant_id === variantId);
+
+        if (!this.variant) {
+          console.error(`Variant with ID ${variantId} not found`);
+          this.$router.push('/PageNotFound');
+          return;
+        }
+
+        // Fetch phenopackets containing this variant
+        const phenopacketsResponse = await getPhenopacketsByVariant(variantId);
+
+        // Transform phenopacket data for table display
+        this.phenopacketsWithVariant = phenopacketsResponse.data.map((pp) => ({
+          phenopacket_id: pp.phenopacket_id,
+          subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
+          created_at: new Date(pp.created_at).toLocaleDateString(),
+        }));
       } catch (e) {
-        console.error(e);
+        console.error('Error loading variant data:', e);
       }
+
       this.loading = false;
+    },
+    handlePhenopacketRowClick(event, row) {
+      // Navigate to phenopacket detail page
+      if (row.item && row.item.phenopacket_id) {
+        this.$router.push(`/phenopackets/${row.item.phenopacket_id}`);
+      }
+    },
+    getSexColor(sex) {
+      const colorMap = {
+        MALE: 'blue-lighten-3',
+        FEMALE: 'pink-lighten-3',
+        UNKNOWN_SEX: 'grey-lighten-2',
+        OTHER_SEX: 'purple-lighten-3',
+      };
+      return colorMap[sex] || 'grey-lighten-2';
+    },
+    extractCNotation(transcript) {
+      // Extract only the c. notation from HGVS format (e.g., "NM_000458.4:c.544+1G>T" -> "c.544+1G>T")
+      if (!transcript) return '-';
+
+      // Match the c. notation part (everything after the colon)
+      const match = transcript.match(/:(.+)$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      // If no colon found, return the original value
+      return transcript;
+    },
+    extractPNotation(protein) {
+      // Extract only the p. notation from HGVS format (e.g., "NP_000449.3:p.Arg177Ter" -> "p.Arg177Ter")
+      if (!protein) return '-';
+
+      // Match the p. notation part (everything after the colon)
+      const match = protein.match(/:(.+)$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      // If no colon found, return the original value
+      return protein;
+    },
+    getPathogenicityColor(pathogenicity) {
+      const upperPath = pathogenicity ? pathogenicity.toUpperCase() : '';
+      if (upperPath.includes('PATHOGENIC') && !upperPath.includes('LIKELY')) {
+        return 'red-lighten-3';
+      }
+      if (upperPath.includes('LIKELY_PATHOGENIC') || upperPath.includes('LIKELY PATHOGENIC')) {
+        return 'orange-lighten-3';
+      }
+      if (upperPath.includes('UNCERTAIN') || upperPath.includes('VUS')) {
+        return 'yellow-lighten-3';
+      }
+      if (upperPath.includes('LIKELY_BENIGN') || upperPath.includes('LIKELY BENIGN')) {
+        return 'light-green-lighten-3';
+      }
+      if (upperPath.includes('BENIGN')) {
+        return 'green-lighten-3';
+      }
+      return 'grey-lighten-2';
+    },
+    extractTranscriptId(transcript) {
+      // Extract the NM_ reference from HGVS format (e.g., "NM_000458.4:c.544+1G>T" -> "NM_000458.4")
+      if (!transcript) return null;
+
+      // Match the NM_ part (everything before the colon)
+      const match = transcript.match(/^(NM_[\d.]+):/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      return null;
+    },
+    extractProteinId(protein) {
+      // Extract the NP_ reference from HGVS format (e.g., "NP_000449.3:p.Arg177Ter" -> "NP_000449.3")
+      if (!protein) return null;
+
+      // Match the NP_ part (everything before the colon)
+      const match = protein.match(/^(NP_[\d.]+):/);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      return null;
+    },
+    getClinVarLink(variant) {
+      // Generate ClinVar search URL based on variant information
+      // ClinVar search works best with gene + HGVS notation for SNVs
+      // Skip ClinVar for CNVs as coordinate search doesn't work well
+      if (!variant) return null;
+
+      // Only for SNVs with transcript notation
+      if (variant.variant_type === 'SNV' && variant.transcript && variant.geneSymbol) {
+        const cNotation = this.extractCNotation(variant.transcript);
+        if (cNotation) {
+          // ClinVar search format: gene[gene] AND c.notation
+          const searchTerm = encodeURIComponent(`${variant.geneSymbol}[gene] AND ${cNotation}`);
+          return `https://www.ncbi.nlm.nih.gov/clinvar/?term=${searchTerm}`;
+        }
+      }
+
+      return null;
+    },
+    getDbSNPLink(variant) {
+      // Generate dbSNP search URL
+      // dbSNP works best with chromosome position for SNVs
+      if (!variant) return null;
+
+      // Only for SNVs with HG38 coordinates
+      if (variant.variant_type === 'SNV' && variant.hg38) {
+        // Parse chr17-37739455-G-A format to get chromosome and position
+        const match = variant.hg38.match(/chr(\d+|X|Y|MT?)-(\d+)/);
+        if (match) {
+          const chromosome = match[1];
+          const position = match[2];
+          // dbSNP search by chromosome:position
+          return `https://www.ncbi.nlm.nih.gov/snp/?term=${chromosome}[CHR]+AND+${position}[POS]`;
+        }
+      }
+
+      return null;
+    },
+    getClinGenLink(variant) {
+      // Generate ClinGen search URL
+      // ClinGen works well with gene + variant notation
+      if (!variant) return null;
+
+      // For SNVs with transcript notation
+      if (variant.variant_type === 'SNV' && variant.transcript && variant.geneSymbol) {
+        const cNotation = this.extractCNotation(variant.transcript);
+        if (cNotation) {
+          // ClinGen search format: gene + c. notation
+          const searchTerm = encodeURIComponent(`${variant.geneSymbol} ${cNotation}`);
+          return `https://reg.clinicalgenome.org/redmine/projects/registry/genboree_registry/by_caid?caid=${searchTerm}`;
+        }
+      }
+
+      // For CNVs, use ClinGen dosage sensitivity map
+      if ((variant.variant_type === 'deletion' || variant.variant_type === 'duplication') && variant.geneSymbol) {
+        // Search by gene in dosage sensitivity map
+        return `https://search.clinicalgenome.org/kb/genes/${variant.geneSymbol}`;
+      }
+
+      return null;
+    },
+    getDecipherLink(variant) {
+      // Generate DECIPHER database link for CNVs
+      // DECIPHER is excellent for CNV interpretation
+      if (!variant) return null;
+
+      // Only for CNVs with HG38 coordinates
+      if ((variant.variant_type === 'deletion' || variant.variant_type === 'duplication') && variant.hg38) {
+        // Parse 17:36459258-37832869:DEL format
+        const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
+        if (match) {
+          const chr = match[1];
+          const start = match[2];
+          const end = match[3];
+          // DECIPHER browser format
+          return `https://www.deciphergenomics.org/browser#q/${chr}:${start}-${end}`;
+        }
+      }
+
+      return null;
+    },
+    getUCSCLink(variant) {
+      // Generate UCSC Genome Browser link for visualizing CNVs
+      if (!variant) return null;
+
+      // Only for CNVs with HG38 coordinates
+      if ((variant.variant_type === 'deletion' || variant.variant_type === 'duplication') && variant.hg38) {
+        // Parse 17:36459258-37832869:DEL format
+        const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
+        if (match) {
+          const chr = match[1];
+          const start = match[2];
+          const end = match[3];
+          // UCSC browser format (hg38 assembly)
+          return `https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr${chr}:${start}-${end}`;
+        }
+      }
+
+      return null;
+    },
+    hasExternalLinks(variant) {
+      // Check if variant has any external links available
+      return this.getClinVarLink(variant) || this.getDbSNPLink(variant) || this.getClinGenLink(variant) || this.getDecipherLink(variant) || this.getUCSCLink(variant);
+    },
+    getMolecularConsequence(variant) {
+      // Infer molecular consequence from protein notation
+      // This is a simplified inference - ideally would come from VEP or ClinVar API
+      if (!variant) return null;
+
+      // For CNVs
+      if (variant.variant_type === 'deletion') {
+        return 'Copy Number Loss';
+      }
+      if (variant.variant_type === 'duplication') {
+        return 'Copy Number Gain';
+      }
+
+      // For SNVs, infer from protein notation
+      if (variant.protein) {
+        const pNotation = this.extractPNotation(variant.protein);
+        if (!pNotation) return 'Coding Sequence Variant';
+
+        // Frameshift (check before Nonsense since frameshifts often end with Ter)
+        if (pNotation.includes('fs')) {
+          return 'Frameshift';
+        }
+
+        // Nonsense (stop gain)
+        if (pNotation.includes('Ter') || pNotation.includes('*')) {
+          return 'Nonsense';
+        }
+
+        // Missense (amino acid substitution)
+        if (pNotation.match(/p\.[A-Z][a-z]{2}\d+[A-Z][a-z]{2}/)) {
+          return 'Missense';
+        }
+
+        // Deletion/insertion
+        if (pNotation.includes('del') && !pNotation.includes('fs')) {
+          return 'In-frame Deletion';
+        }
+        if (pNotation.includes('ins') && !pNotation.includes('fs')) {
+          return 'In-frame Insertion';
+        }
+
+        // Synonymous (no change)
+        if (pNotation.includes('=')) {
+          return 'Synonymous';
+        }
+
+        return 'Coding Sequence Variant';
+      }
+
+      // For variants with c. notation but no p. notation
+      if (variant.transcript) {
+        const cNotation = this.extractCNotation(variant.transcript);
+        if (!cNotation) return null;
+
+        // Splice site variants - distinguish between donor and acceptor
+        const spliceMatch = cNotation.match(/([+-])(\d+)/);
+        if (spliceMatch) {
+          const sign = spliceMatch[1];
+          const position = parseInt(spliceMatch[2], 10);
+
+          // Donor site: +1 to +6 (GT dinucleotide at +1/+2, extended donor at +3 to +6)
+          if (sign === '+' && position >= 1 && position <= 6) {
+            return 'Splice Donor';
+          }
+
+          // Acceptor site: -1 to -3 (AG dinucleotide at -2/-1, extended acceptor at -3)
+          if (sign === '-' && position >= 1 && position <= 3) {
+            return 'Splice Acceptor';
+          }
+
+          // Other intronic positions
+          return 'Intronic Variant';
+        }
+
+        return 'Coding Sequence Variant';
+      }
+
+      return null;
     },
   },
 };
@@ -404,5 +841,44 @@ export default {
 .phenotype-chip {
   font-size: 0.7rem;
   margin: 1px !important;
+}
+
+/* Link styling for transcript, protein, and external resources */
+.transcript-link,
+.protein-link {
+  color: #1976d2;
+  text-decoration: none;
+  margin-right: 4px;
+}
+
+.transcript-link:hover,
+.protein-link:hover {
+  text-decoration: underline;
+}
+
+/* External links container */
+.external-links-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.external-link {
+  display: inline-flex;
+  align-items: center;
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 4px 8px;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.external-link:hover {
+  background-color: #1976d2;
+  color: white;
+  text-decoration: none;
 }
 </style>
