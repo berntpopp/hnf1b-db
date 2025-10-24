@@ -283,7 +283,7 @@ export default {
           return 'indel';
         }
         // Check for substitutions (true SNVs: single position with >)
-        if (/>\w$/.test(cNotation) && !/[\+\-]/.test(cNotation) && !/_/.test(cNotation)) {
+        if (/>\w$/.test(cNotation) && !/[+-]/.test(cNotation) && !/_/.test(cNotation)) {
           return 'SNV';
         }
       }

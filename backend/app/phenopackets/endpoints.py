@@ -1110,9 +1110,11 @@ async def aggregate_all_variants(
     Args:
         limit: Maximum number of variants to return (default: 100, max: 1000)
         skip: Number of variants to skip for pagination (default: 0)
-        pathogenicity: Filter by ACMG classification (PATHOGENIC, LIKELY_PATHOGENIC, etc.)
+        pathogenicity: Filter by ACMG classification
+            (PATHOGENIC, LIKELY_PATHOGENIC, etc.)
         gene: Filter by gene symbol (e.g., "HNF1B")
-        sort: Sort field with optional '-' prefix for descending (e.g., 'simple_id', '-individualCount')
+        sort: Sort field with optional '-' prefix for descending
+            (e.g., 'simple_id', '-individualCount')
         db: Database session
 
     Returns:
@@ -1247,7 +1249,9 @@ async def aggregate_all_variants(
     ),
     variant_with_id AS (
         SELECT
-            ROW_NUMBER() OVER (ORDER BY phenopacket_count DESC, gene_symbol ASC) as simple_id,
+            ROW_NUMBER() OVER (
+                ORDER BY phenopacket_count DESC, gene_symbol ASC
+            ) as simple_id,
             variant_id,
             label,
             gene_symbol,
