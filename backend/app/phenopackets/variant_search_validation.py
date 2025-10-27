@@ -59,14 +59,13 @@ ALLOWED_CLASSIFICATIONS = {
 ALLOWED_GENES = {"HNF1B"}  # Expand as database grows
 
 # Molecular consequence types (computed from HGVS notation)
+# Note: CNV-related consequences (Copy Number Loss/Gain) are covered by variant type filters
 ALLOWED_CONSEQUENCES = {
     "Frameshift",
     "Nonsense",
     "Missense",
     "Splice Donor",
     "Splice Acceptor",
-    "Copy Number Loss",
-    "Copy Number Gain",
     "In-frame Deletion",
     "In-frame Insertion",
     "Synonymous",
