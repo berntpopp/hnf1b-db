@@ -1449,7 +1449,8 @@ async def aggregate_all_variants(
         "individualCount": "phenopacket_count",
     }
 
-    order_by = "phenopacket_count DESC, gene_symbol ASC"  # Default sort
+    # Default sort: by individual count DESC, then variant_id for deterministic ordering
+    order_by = "phenopacket_count DESC, variant_id ASC"
     if sort:
         # Check if descending (starts with '-')
         if sort.startswith('-'):
@@ -1462,7 +1463,8 @@ async def aggregate_all_variants(
         # Map field name to SQL column
         sql_column = sort_field_map.get(field_name)
         if sql_column:
-            order_by = f"{sql_column} {direction}, gene_symbol ASC"
+            # Add variant_id as tie-breaker for deterministic ordering
+            order_by = f"{sql_column} {direction}, variant_id ASC"
 
     query = f"""
     WITH all_variants_unfiltered AS (
@@ -1492,9 +1494,10 @@ async def aggregate_all_variants(
     ),
     all_variants_with_stable_id AS (
         -- Assign stable IDs to ALL variants based on unfiltered dataset
+        -- Use variant_id as tie-breaker for deterministic ordering
         SELECT
             ROW_NUMBER() OVER (
-                ORDER BY phenopacket_count DESC, gene_symbol ASC
+                ORDER BY phenopacket_count DESC, gene_symbol ASC, variant_id ASC
             ) as simple_id,
             variant_id
         FROM all_variants_agg
