@@ -340,26 +340,41 @@ export const getIndividuals = (params) =>
   );
 
 /**
- * Get aggregated unique variants across all phenopackets.
+ * Get aggregated unique variants across all phenopackets with search and filters.
+ * Implements backend search endpoint from Issue #64.
  *
  * @param {Object} params - Query parameters
  * @param {number} params.page - Page number (1-indexed)
  * @param {number} params.page_size - Items per page
- * @param {string} [params.pathogenicity] - Filter by ACMG pathogenicity classification
- * @param {string} [params.gene] - Filter by gene symbol
- * @param {string} [params.sort] - Sort field (prefix with '-' for descending order, e.g., 'simple_id' or '-individualCount')
+ * @param {string} [params.query] - Text search (HGVS, variant ID, coordinates)
+ * @param {string} [params.variant_type] - Filter by variant type (SNV, deletion, etc.)
+ * @param {string} [params.classification] - Filter by ACMG classification
+ * @param {string} [params.consequence] - Filter by molecular consequence
+ * @param {string} [params.pathogenicity] - DEPRECATED: use classification instead
+ * @param {string} [params.sort] - Sort field (prefix with '-' for descending order)
  * @returns {Promise} Promise resolving to variants data with pagination metadata
  */
 export const getVariants = async (params = {}) => {
-  const { page = 1, page_size = 10, pathogenicity, gene, sort } = params;
+  const {
+    page = 1,
+    page_size = 10,
+    query,
+    variant_type,
+    classification,
+    consequence,
+    pathogenicity,
+    sort,
+  } = params;
   const { skip, limit } = pageToSkipLimit(page, page_size);
 
   const response = await apiClient.get('/phenopackets/aggregate/all-variants', {
     params: {
       skip,
       limit,
-      pathogenicity,
-      gene,
+      query,
+      variant_type,
+      classification: classification || pathogenicity, // Support both new and legacy params
+      consequence,
       sort,
     },
   });
@@ -370,7 +385,7 @@ export const getVariants = async (params = {}) => {
   const data = response.data || [];
 
   return {
-    data: data.map(variant => ({
+    data: data.map((variant) => ({
       id: variant.simple_id || variant.variant_id,
       simple_id: variant.simple_id,
       variant_id: variant.variant_id,
@@ -383,6 +398,7 @@ export const getVariants = async (params = {}) => {
       protein: variant.protein,
       classificationVerdict: variant.pathogenicity,
       individualCount: variant.phenopacket_count,
+      molecular_consequence: variant.molecular_consequence,
     })),
     meta: {
       // Since backend doesn't provide total count, we estimate
