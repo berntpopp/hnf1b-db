@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_auth
 from app.database import get_db
+from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.phenopackets.models import (
     AggregationResult,
     Phenopacket,
@@ -18,6 +19,10 @@ from app.phenopackets.models import (
     PhenopacketResponse,
     PhenopacketSearchQuery,
     PhenopacketUpdate,
+)
+from app.phenopackets.molecular_consequence import (
+    compute_molecular_consequence,
+    filter_by_consequence,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.phenopackets.variant_search_validation import (
@@ -27,11 +32,6 @@ from app.phenopackets.variant_search_validation import (
     validate_search_query,
     validate_variant_type,
 )
-from app.phenopackets.molecular_consequence import (
-    compute_molecular_consequence,
-    filter_by_consequence,
-)
-from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.utils.audit_logger import log_variant_search
 
 logger = logging.getLogger(__name__)
@@ -1228,11 +1228,95 @@ async def aggregate_all_variants(
         params["query"] = f"%{validated_query}%"
 
     # Variant type filter
+    # Filter logic must match frontend display in getVariantType()
     if validated_variant_type:
-        where_clauses.append(
-            "vd->'structuralType'->>'label' = :variant_type"
-        )
-        params["variant_type"] = validated_variant_type
+        if validated_variant_type == "CNV":
+            # CNVs: Large structural variants with coordinate range format
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'value' ~ ':\\d+-\\d+:'
+                )"""
+            )
+        elif validated_variant_type == "deletion":
+            # Small deletions: Has 'del' in c. notation but NOT a CNV
+            where_clauses.append(
+                """(
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'del'
+                        AND elem->>'value' !~ 'dup'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'value' ~ ':\\d+-\\d+:'
+                    )
+                )"""
+            )
+        elif validated_variant_type == "duplication":
+            # Small duplications: Has 'dup' in c. notation but NOT a CNV
+            where_clauses.append(
+                """(
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'dup'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'value' ~ ':\\d+-\\d+:'
+                    )
+                )"""
+            )
+        elif validated_variant_type == "insertion":
+            # Insertions: Has 'ins' in c. notation but NOT a CNV
+            where_clauses.append(
+                """(
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'ins'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'value' ~ ':\\d+-\\d+:'
+                    )
+                )"""
+            )
+        elif validated_variant_type == "SNV":
+            # SNVs: Match genomic context but exclude deletions/insertions/duplications
+            # True SNVs are substitutions (>) without del/ins/dup keywords
+            where_clauses.append(
+                """(
+                    vd->>'moleculeContext' = 'genomic'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'value' ~ 'del|ins|dup|delins'
+                    )
+                )"""
+            )
+        else:
+            # Fallback for other types
+            where_clauses.append(
+                """COALESCE(
+                    vd->'structuralType'->>'label',
+                    CASE
+                        WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+                        WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
+                        ELSE 'OTHER'
+                    END
+                ) = :variant_type"""
+            )
+            params["variant_type"] = validated_variant_type
 
     # Classification filter
     if validated_classification:
@@ -1248,9 +1332,107 @@ async def aggregate_all_variants(
         )
         params["gene"] = validated_gene
 
-    # Molecular consequence filter (computed from HGVS notation)
-    # This will be applied post-query since consequence is computed
-    # For now, we'll filter in Python after fetching results
+    # Molecular consequence filter (SQL-based for correct pagination)
+    # Translate Python consequence logic to SQL WHERE clauses
+    if validated_consequence:
+        if validated_consequence == "Frameshift":
+            # Protein notation contains 'fs' (frameshift)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~* 'fs'
+                )"""
+            )
+        elif validated_consequence == "Nonsense":
+            # Protein notation contains 'Ter' or '*' (stop gained)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND (elem->>'value' ~* 'ter' OR elem->>'value' ~ '\\*')
+                )"""
+            )
+        elif validated_consequence == "Missense":
+            # Protein notation is amino acid substitution (e.g., p.Arg177Cys)
+            # Pattern: three-letter amino acid, digits, three-letter amino acid
+            # NOT containing 'Ter', 'fs', 'del', 'ins', or '='
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~ '[A-Z][a-z]{2}\\d+[A-Z][a-z]{2}'
+                    AND elem->>'value' !~* 'ter|fs|del|ins|='
+                )"""
+            )
+        elif validated_consequence == "Splice Donor":
+            # Transcript notation with +1 to +6 (e.g., c.544+1G>T)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.c'
+                    AND elem->>'value' ~ '\\+[1-6]'
+                )"""
+            )
+        elif validated_consequence == "Splice Acceptor":
+            # Transcript notation with -1 to -3 (e.g., c.1654-2A>T)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.c'
+                    AND elem->>'value' ~ '-[1-3]'
+                )"""
+            )
+        elif validated_consequence == "In-frame Deletion":
+            # Protein notation contains 'del' but NOT 'fs' (frameshift)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~* 'del'
+                    AND elem->>'value' !~* 'fs'
+                )"""
+            )
+        elif validated_consequence == "In-frame Insertion":
+            # Protein notation contains 'ins' but NOT 'fs' (frameshift)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~* 'ins'
+                    AND elem->>'value' !~* 'fs'
+                )"""
+            )
+        elif validated_consequence == "Synonymous":
+            # Protein notation contains '=' (no amino acid change)
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~ '='
+                )"""
+            )
+        elif validated_consequence == "Intronic Variant":
+            # Transcript notation with +/- positions beyond splice sites
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.c'
+                    AND (
+                        elem->>'value' ~ '\\+[7-9]|\\+\\d{2,}'
+                        OR elem->>'value' ~ '-[4-9]|-\\d{2,}'
+                    )
+                )"""
+            )
 
     where_sql = "AND " + " AND ".join(where_clauses) if where_clauses else ""
 
@@ -1283,7 +1465,42 @@ async def aggregate_all_variants(
             order_by = f"{sql_column} {direction}, gene_symbol ASC"
 
     query = f"""
-    WITH variant_raw AS (
+    WITH all_variants_unfiltered AS (
+        -- Extract ALL variants WITHOUT filters to establish stable IDs
+        SELECT DISTINCT ON (vd->>'id', p.id)
+            vd->>'id' as variant_id,
+            vd->'geneContext'->>'symbol' as gene_symbol,
+            p.id as phenopacket_id
+        FROM
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
+            LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
+        WHERE
+            vi_lateral.vi IS NOT NULL
+            AND vd_lateral.vd IS NOT NULL
+    ),
+    all_variants_agg AS (
+        -- Aggregate all variants to count occurrences
+        SELECT
+            variant_id,
+            MAX(gene_symbol) as gene_symbol,
+            COUNT(DISTINCT phenopacket_id) as phenopacket_count
+        FROM all_variants_unfiltered
+        GROUP BY variant_id
+    ),
+    all_variants_with_stable_id AS (
+        -- Assign stable IDs to ALL variants based on unfiltered dataset
+        SELECT
+            ROW_NUMBER() OVER (
+                ORDER BY phenopacket_count DESC, gene_symbol ASC
+            ) as simple_id,
+            variant_id
+        FROM all_variants_agg
+    ),
+    variant_raw AS (
+        -- NOW apply filtering for the actual results
         SELECT DISTINCT ON (vd->>'id', p.id)
             vd->>'id' as variant_id,
             vd->>'label' as label,
@@ -1341,6 +1558,7 @@ async def aggregate_all_variants(
             {where_sql}
     ),
     variant_agg AS (
+        -- Aggregate filtered variants
         SELECT
             variant_id,
             MAX(label) as label,
@@ -1355,25 +1573,25 @@ async def aggregate_all_variants(
         FROM variant_raw
         GROUP BY variant_id
     ),
-    variant_with_id AS (
+    variant_with_stable_id AS (
+        -- Join filtered results with pre-calculated stable IDs
         SELECT
-            ROW_NUMBER() OVER (
-                ORDER BY phenopacket_count DESC, gene_symbol ASC
-            ) as simple_id,
-            variant_id,
-            label,
-            gene_symbol,
-            gene_id,
-            structural_type,
-            pathogenicity,
-            phenopacket_count,
-            hg38,
-            transcript,
-            protein
-        FROM variant_agg
+            avwsi.simple_id,  -- Stable ID from unfiltered dataset
+            va.variant_id,
+            va.label,
+            va.gene_symbol,
+            va.gene_id,
+            va.structural_type,
+            va.pathogenicity,
+            va.phenopacket_count,
+            va.hg38,
+            va.transcript,
+            va.protein
+        FROM variant_agg va
+        INNER JOIN all_variants_with_stable_id avwsi ON va.variant_id = avwsi.variant_id
     )
     SELECT *
-    FROM variant_with_id
+    FROM variant_with_stable_id
     ORDER BY {order_by}
     LIMIT :limit
     OFFSET :offset
@@ -1405,10 +1623,6 @@ async def aggregate_all_variants(
         }
         for row in rows
     ]
-
-    # Apply molecular consequence filter (post-query filtering)
-    if validated_consequence:
-        variants = filter_by_consequence(variants, validated_consequence)
 
     # Audit logging (GDPR compliance)
     log_variant_search(
