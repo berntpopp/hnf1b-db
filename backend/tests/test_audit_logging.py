@@ -6,8 +6,6 @@ This module tests the audit logging for GDPR compliance and security monitoring.
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.utils.audit_logger import (
     log_rate_limit_exceeded,
     log_validation_error,

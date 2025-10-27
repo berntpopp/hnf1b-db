@@ -142,7 +142,8 @@ def log_validation_error(
     Args:
         client_ip: Client IP address
         user_id: Authenticated user ID (if available)
-        error_type: Type of validation error (e.g., "SQL_INJECTION_ATTEMPT", "INVALID_HGVS")
+        error_type: Type of validation error
+            (e.g., "SQL_INJECTION_ATTEMPT", "INVALID_HGVS")
         invalid_input: The invalid input that was rejected
         error_message: Error message returned to user
         request_path: Request path
@@ -198,7 +199,8 @@ def configure_audit_logger(log_file_path: Optional[str] = None) -> None:
 
         # JSON formatter for structured logging
         formatter = logging.Formatter(
-            '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", %(extra)s}'
+            '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
+            '"message": "%(message)s", %(extra)s}'
         )
         file_handler.setFormatter(formatter)
 

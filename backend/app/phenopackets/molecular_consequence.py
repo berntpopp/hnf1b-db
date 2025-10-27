@@ -90,8 +90,6 @@ def compute_molecular_consequence(
 
     # Transcript-level consequence determination (when protein not available)
     if c_notation:
-        c_lower = c_notation.lower()
-
         # Splice site detection
         # Pattern: c.544+1G>T (donor) or c.1654-2A>T (acceptor)
         splice_match = re.search(r"([+-])(\d+)", c_notation)

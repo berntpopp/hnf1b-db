@@ -8,6 +8,10 @@ consequence filtering.
 import pytest
 from fastapi import HTTPException
 
+from app.phenopackets.molecular_consequence import (
+    compute_molecular_consequence,
+    filter_by_consequence,
+)
 from app.phenopackets.variant_search_validation import (
     validate_classification,
     validate_gene,
@@ -16,10 +20,6 @@ from app.phenopackets.variant_search_validation import (
     validate_molecular_consequence,
     validate_search_query,
     validate_variant_type,
-)
-from app.phenopackets.molecular_consequence import (
-    compute_molecular_consequence,
-    filter_by_consequence,
 )
 
 
@@ -138,8 +138,13 @@ class TestClassificationValidation:
     def test_valid_classifications(self):
         """Test valid classifications."""
         assert validate_classification("PATHOGENIC") == "PATHOGENIC"
-        assert validate_classification("LIKELY_PATHOGENIC") == "LIKELY_PATHOGENIC"
-        assert validate_classification("UNCERTAIN_SIGNIFICANCE") == "UNCERTAIN_SIGNIFICANCE"
+        assert (
+            validate_classification("LIKELY_PATHOGENIC") == "LIKELY_PATHOGENIC"
+        )
+        assert (
+            validate_classification("UNCERTAIN_SIGNIFICANCE")
+            == "UNCERTAIN_SIGNIFICANCE"
+        )
         assert validate_classification("LIKELY_BENIGN") == "LIKELY_BENIGN"
         assert validate_classification("BENIGN") == "BENIGN"
 

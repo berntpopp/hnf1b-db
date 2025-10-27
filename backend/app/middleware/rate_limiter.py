@@ -96,7 +96,10 @@ def check_rate_limit(request: Request) -> None:
             status_code=429,
             detail={
                 "error": "Rate limit exceeded",
-                "message": f"Maximum {RATE_LIMIT} requests per {RATE_WINDOW} seconds allowed",
+                "message": (
+                    f"Maximum {RATE_LIMIT} requests per "
+                    f"{RATE_WINDOW} seconds allowed"
+                ),
                 "retry_after": RATE_WINDOW,
                 "current_count": current_count,
             }

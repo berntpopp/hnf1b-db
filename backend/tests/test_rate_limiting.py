@@ -3,11 +3,10 @@
 This module tests the rate limiting functionality to prevent API abuse.
 """
 
-import time
 from datetime import datetime, timedelta
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 
 from app.middleware.rate_limiter import (
     RATE_LIMIT,
@@ -25,6 +24,7 @@ class MockRequest:
     """Mock FastAPI Request for testing."""
 
     def __init__(self, client_host: str = "127.0.0.1", forwarded_for: str = None):
+        """Initialize mock request with client host and optional forwarded headers."""
         self.client = type('obj', (object,), {'host': client_host})
         self.headers = {}
         if forwarded_for:

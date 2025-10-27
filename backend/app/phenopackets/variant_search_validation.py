@@ -15,7 +15,6 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-
 # HGVS validation patterns
 HGVS_PATTERNS = {
     # c. notation: c.1654-2A>T, c.544+1G>T, c.1621C>T, c.1654_1656del
