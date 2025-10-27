@@ -5,7 +5,7 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,19 @@ from app.phenopackets.models import (
     PhenopacketUpdate,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
+from app.phenopackets.variant_search_validation import (
+    validate_classification,
+    validate_gene,
+    validate_molecular_consequence,
+    validate_search_query,
+    validate_variant_type,
+)
+from app.phenopackets.molecular_consequence import (
+    compute_molecular_consequence,
+    filter_by_consequence,
+)
+from app.middleware.rate_limiter import check_rate_limit, get_client_ip
+from app.utils.audit_logger import log_variant_search
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets"])
@@ -1095,30 +1108,49 @@ async def aggregate_publications(
 
 @router.get("/aggregate/all-variants", response_model=List[Dict])
 async def aggregate_all_variants(
+    request: Request,
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0),
-    pathogenicity: Optional[str] = Query(None),
-    gene: Optional[str] = Query(None),
-    sort: Optional[str] = Query(None),
+    query: Optional[str] = Query(None, description="Search in HGVS notations, variant ID, or genomic coordinates"),
+    variant_type: Optional[str] = Query(None, description="Filter by variant type (SNV, deletion, etc.)"),
+    classification: Optional[str] = Query(None, description="Filter by ACMG classification"),
+    gene: Optional[str] = Query(None, description="Filter by gene symbol"),
+    consequence: Optional[str] = Query(None, description="Filter by molecular consequence"),
+    pathogenicity: Optional[str] = Query(None, description="DEPRECATED: use 'classification' instead"),
+    sort: Optional[str] = Query(None, description="Sort field with optional '-' prefix for descending"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all unique variants across phenopackets with counts.
+    """Search and filter variants across all phenopackets.
 
     Aggregates variants from all phenopackets and returns unique variants
     with their details and the count of individuals carrying each variant.
 
+    **Search Fields (8 total):**
+    1. **Transcript (c. notation)**: e.g., "c.1654-2A>T"
+    2. **Protein (p. notation)**: e.g., "p.Arg177Ter"
+    3. **Variant ID**: e.g., "Var1", "ga4gh:VA.xxx"
+    4. **HG38 Coordinates**: e.g., "chr17:36098063", "17:36459258-37832869"
+    5. **Variant Type**: SNV, deletion, duplication, insertion, inversion, CNV
+    6. **Classification**: PATHOGENIC, LIKELY_PATHOGENIC, etc.
+    7. **Gene Symbol**: HNF1B
+    8. **Molecular Consequence**: Frameshift, Nonsense, Missense, etc.
+
     Args:
+        query: Text search across HGVS notations, variant IDs, and coordinates
+        variant_type: Filter by variant structural type
+        classification: Filter by ACMG pathogenicity classification
+        gene: Filter by gene symbol (e.g., "HNF1B")
+        consequence: Filter by molecular consequence (e.g., "Frameshift")
         limit: Maximum number of variants to return (default: 100, max: 1000)
         skip: Number of variants to skip for pagination (default: 0)
-        pathogenicity: Filter by ACMG classification
-            (PATHOGENIC, LIKELY_PATHOGENIC, etc.)
-        gene: Filter by gene symbol (e.g., "HNF1B")
         sort: Sort field with optional '-' prefix for descending
             (e.g., 'simple_id', '-individualCount')
+        pathogenicity: DEPRECATED - use 'classification' instead
         db: Database session
 
     Returns:
         List of unique variants with:
+        - simple_id: User-friendly variant ID (e.g., "Var1")
         - variant_id: VRS ID or custom identifier
         - label: Human-readable variant description
         - gene_symbol: Gene symbol (e.g., "HNF1B")
@@ -1126,23 +1158,99 @@ async def aggregate_all_variants(
         - structural_type: Variant type (e.g., "deletion", "SNV")
         - pathogenicity: ACMG classification
         - phenopacket_count: Number of individuals with this variant
-        - vcf_string: VCF representation (chrom:pos:ref:alt)
+        - hg38: Genomic coordinates or VCF string
+        - transcript: HGVS c. notation
+        - protein: HGVS p. notation
+        - molecular_consequence: Computed molecular consequence
+
+    Security:
+        - All inputs validated with character whitelists
+        - HGVS format validation
+        - SQL injection prevention via parameterized queries
+        - Length limits enforced (max 200 chars)
+
+    Examples:
+        # Search by HGVS notation
+        GET /aggregate/all-variants?query=c.1654-2A>T
+
+        # Search by genomic coordinates
+        GET /aggregate/all-variants?query=chr17:36098063
+
+        # Filter pathogenic deletions
+        GET /aggregate/all-variants?variant_type=deletion&classification=PATHOGENIC
+
+        # Search with molecular consequence filter
+        GET /aggregate/all-variants?query=frameshift&consequence=Frameshift
+
+        # Combined search and filters
+        GET /aggregate/all-variants?query=HNF1B&variant_type=SNV&classification=PATHOGENIC
     """
+    # Rate limiting (security layer)
+    check_rate_limit(request)
+
+    # Input validation (security layer)
+    validated_query = validate_search_query(query)
+    validated_variant_type = validate_variant_type(variant_type)
+    validated_gene = validate_gene(gene)
+    validated_consequence = validate_molecular_consequence(consequence)
+
+    # Handle legacy 'pathogenicity' parameter (maintain backwards compatibility)
+    classification_param = classification or pathogenicity
+    validated_classification = validate_classification(classification_param)
+
     # Build query with optional filters
     where_clauses = []
     params = {"limit": limit, "offset": skip}
 
-    if pathogenicity:
+    # Text search: Search across HGVS notations, variant IDs, and coordinates
+    if validated_query:
         where_clauses.append(
-            "vi->>'acmgPathogenicityClassification' = :pathogenicity"
+            """(
+                vd->>'id' ILIKE :query
+                OR vd->>'label' ILIKE :query
+                OR vd->>'description' ILIKE :query
+                OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') AS expr
+                    WHERE expr->>'value' ILIKE :query
+                )
+                OR COALESCE(
+                    NULLIF(CONCAT(
+                        COALESCE(vd->'vcfRecord'->>'chrom', ''), ':',
+                        COALESCE(vd->'vcfRecord'->>'pos', ''), ':',
+                        COALESCE(vd->'vcfRecord'->>'ref', ''), ':',
+                        COALESCE(vd->'vcfRecord'->>'alt', '')
+                    ), ':::'),
+                    ''
+                ) ILIKE :query
+            )"""
         )
-        params["pathogenicity"] = pathogenicity
+        params["query"] = f"%{validated_query}%"
 
-    if gene:
+    # Variant type filter
+    if validated_variant_type:
+        where_clauses.append(
+            "vd->'structuralType'->>'label' = :variant_type"
+        )
+        params["variant_type"] = validated_variant_type
+
+    # Classification filter
+    if validated_classification:
+        where_clauses.append(
+            "vi->>'acmgPathogenicityClassification' = :classification"
+        )
+        params["classification"] = validated_classification
+
+    # Gene filter
+    if validated_gene:
         where_clauses.append(
             "vd->'geneContext'->>'symbol' = :gene"
         )
-        params["gene"] = gene
+        params["gene"] = validated_gene
+
+    # Molecular consequence filter (computed from HGVS notation)
+    # This will be applied post-query since consequence is computed
+    # For now, we'll filter in Python after fetching results
 
     where_sql = "AND " + " AND ".join(where_clauses) if where_clauses else ""
 
@@ -1276,7 +1384,7 @@ async def aggregate_all_variants(
 
     # simple_id is calculated using default sort order (by individual count)
     # This ensures each variant has a stable ID regardless of current sort
-    return [
+    variants = [
         {
             "simple_id": f"Var{row.simple_id}",  # type: ignore
             "variant_id": row.variant_id,  # type: ignore
@@ -1289,9 +1397,33 @@ async def aggregate_all_variants(
             "hg38": row.hg38,  # type: ignore
             "transcript": row.transcript,  # type: ignore
             "protein": row.protein,  # type: ignore
+            "molecular_consequence": compute_molecular_consequence(
+                transcript=row.transcript,  # type: ignore
+                protein=row.protein,  # type: ignore
+                variant_type=row.structural_type  # type: ignore
+            ),
         }
         for row in rows
     ]
+
+    # Apply molecular consequence filter (post-query filtering)
+    if validated_consequence:
+        variants = filter_by_consequence(variants, validated_consequence)
+
+    # Audit logging (GDPR compliance)
+    log_variant_search(
+        client_ip=get_client_ip(request),
+        user_id=None,  # TODO: Get from auth when available
+        query=validated_query,
+        variant_type=validated_variant_type,
+        classification=validated_classification,
+        gene=validated_gene,
+        consequence=validated_consequence,
+        result_count=len(variants),
+        request_path=str(request.url.path),
+    )
+
+    return variants
 
 
 @router.get("/by-variant/{variant_id}", response_model=List[PhenopacketResponse])
