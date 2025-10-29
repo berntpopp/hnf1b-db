@@ -266,6 +266,49 @@
             {{ snackbarMessage }}
           </v-snackbar>
 
+          <!-- Gene/Protein Visualizations -->
+          <div
+            :style="{ width: '90%', margin: 'auto' }"
+            class="mb-4"
+          >
+            <v-card>
+              <v-tabs
+                v-model="visualizationTab"
+                bg-color="grey-lighten-4"
+              >
+                <v-tab value="gene">
+                  <v-icon left>
+                    mdi-dna
+                  </v-icon>
+                  Gene View
+                </v-tab>
+                <v-tab value="protein">
+                  <v-icon left>
+                    mdi-protein
+                  </v-icon>
+                  Protein View
+                </v-tab>
+              </v-tabs>
+
+              <v-window v-model="visualizationTab">
+                <v-window-item value="gene">
+                  <HNF1BGeneVisualization
+                    :variants="allVariants"
+                    :current-variant-id="$route.params.variant_id"
+                    @variant-clicked="navigateToVariant"
+                  />
+                </v-window-item>
+                <v-window-item value="protein">
+                  <HNF1BProteinVisualization
+                    :variants="allVariants"
+                    :current-variant-id="$route.params.variant_id"
+                    @variant-clicked="navigateToVariant"
+                  />
+                </v-window-item>
+              </v-window>
+            </v-card>
+          </div>
+
           <!-- Affected Individuals Table -->
           <v-card
             v-if="phenopacketsWithVariant.length > 0"
@@ -333,16 +376,24 @@
 
 <script>
 import { getVariants, getPhenopacketsByVariant } from '@/api';
+import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
+import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 
 export default {
   name: 'PageVariant',
+  components: {
+    HNF1BGeneVisualization,
+    HNF1BProteinVisualization,
+  },
   data() {
     return {
       variant: {},
       phenopacketsWithVariant: [],
+      allVariants: [], // All variants for visualization context
       loading: false,
       snackbar: false,
       snackbarMessage: '',
+      visualizationTab: 'gene', // Default to gene view
       headers: [
         {
           title: 'Phenopacket ID',
@@ -374,8 +425,29 @@ export default {
   },
   created() {
     this.loadVariantData();
+    this.loadAllVariants();
   },
   methods: {
+    async loadAllVariants() {
+      // Load all variants for visualization context
+      try {
+        const response = await getVariants({
+          page: 1,
+          page_size: 1000, // Get all variants
+        });
+        this.allVariants = response.data || [];
+      } catch (error) {
+        console.error('Error loading variants for visualization:', error);
+        // Don't block page load if this fails
+        this.allVariants = [];
+      }
+    },
+    navigateToVariant(variant) {
+      // Navigate to another variant's detail page
+      if (variant && variant.variant_id) {
+        this.$router.push(`/variants/${variant.variant_id}`);
+      }
+    },
     getVariantType(variant) {
       // Detect actual variant type - detail view shows specific type (deletion/duplication)
       // while list view shows "CNV" for large structural variants
