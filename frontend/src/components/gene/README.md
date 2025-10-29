@@ -65,10 +65,11 @@ Variants must have:
 - **Stacking**: Multiple variants at the same position are stacked vertically
 - **Frequency encoding**: Stem height indicates number of individuals with variant
 - **Pathogenicity colors**: Circle colors indicate clinical significance
-- **Functional sites**: Gold stars mark key DNA-binding residues
 - **CNV alert**: Informs user that CNVs are not shown (use Gene View instead)
 - **Interactive tooltips**: Hover for variant details including amino acid position
 - **Zoom controls**: Zoom in/out/reset for detailed inspection
+
+**Note:** Functional DNA-binding site markers were intentionally excluded from this visualization due to inability to verify accuracy against authoritative protein structure references.
 
 **Visual Layout:**
 ```
