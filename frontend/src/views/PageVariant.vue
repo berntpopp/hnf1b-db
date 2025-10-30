@@ -46,12 +46,16 @@
                 >
                   <div><strong>Type:</strong> {{ getVariantType(variant) }}</div>
 
+                  <!-- Variant size (for all types except SNVs) -->
+                  <div v-if="getVariantSize(variant)">
+                    <strong>Size:</strong> {{ getVariantSize(variant) }}
+                  </div>
+
                   <!-- CNV-specific details -->
                   <div v-if="isCNV(variant) && getCNVDetails(variant)">
                     <div><strong>Chromosome:</strong> chr{{ getCNVDetails(variant).chromosome }}</div>
                     <div><strong>Start Position:</strong> {{ formatPosition(getCNVDetails(variant).start) }}</div>
                     <div><strong>End Position:</strong> {{ formatPosition(getCNVDetails(variant).end) }}</div>
-                    <div><strong>Size:</strong> {{ getCNVSize(variant) }}</div>
                   </div>
 
                   <div>
@@ -644,11 +648,17 @@ export default {
       return 'grey-lighten-2';
     },
     getMolecularConsequence(variant) {
+      // Backend now correctly computes molecular_consequence
+      // Just return it directly instead of recomputing
       if (!variant) return null;
 
-      if (variant.variant_type === 'deletion') return 'Copy Number Loss';
-      if (variant.variant_type === 'duplication') return 'Copy Number Gain';
+      // Use the computed consequence from backend if available
+      if (variant.molecular_consequence) {
+        return variant.molecular_consequence;
+      }
 
+      // Fallback to client-side computation (for backwards compatibility)
+      // IMPORTANT: Check protein/transcript BEFORE variant_type
       if (variant.protein) {
         const pNotation = this.extractPNotation(variant.protein);
         if (!pNotation) return 'Coding Sequence Variant';
@@ -679,6 +689,10 @@ export default {
 
         return 'Coding Sequence Variant';
       }
+
+      // Check variant type last (only for CNVs without protein/transcript data)
+      if (variant.variant_type === 'deletion') return 'Copy Number Loss';
+      if (variant.variant_type === 'duplication') return 'Copy Number Gain';
 
       return null;
     },
@@ -722,7 +736,8 @@ export default {
       }
     },
     getClinVarLink(variant) {
-      if (!variant || variant.variant_type !== 'SNV' || !variant.transcript || !variant.geneSymbol) {
+      // ClinVar search works for all variant types with HGVS notation (not just SNVs)
+      if (!variant || !variant.transcript || !variant.geneSymbol) {
         return null;
       }
       const cNotation = this.extractCNotation(variant.transcript);
@@ -730,6 +745,56 @@ export default {
         const searchTerm = encodeURIComponent(`${variant.geneSymbol}[gene] AND ${cNotation}`);
         return `https://www.ncbi.nlm.nih.gov/clinvar/?term=${searchTerm}`;
       }
+      return null;
+    },
+    getVariantSize(variant) {
+      if (!variant || !variant.hg38) return null;
+
+      // SNVs don't need size display
+      if (variant.variant_type === 'SNV') return null;
+
+      // Parse VCF format: chr17-37739638-TG-T or 17:12345-67890:DEL
+      // For small variants: chr-pos-REF-ALT
+      const smallVariantMatch = variant.hg38.match(/chr\d+-\d+-([A-Z]+)-([A-Z]+)/i);
+      if (smallVariantMatch) {
+        const ref = smallVariantMatch[1];
+        const alt = smallVariantMatch[2];
+        const refLen = ref.length;
+        const altLen = alt.length;
+
+        if (variant.variant_type === 'deletion') {
+          const deleted = refLen - altLen;
+          const deletedBases = ref.slice(1); // Skip first base (anchor)
+          return `${deleted}bp deletion (${deletedBases} deleted)`;
+        } else if (variant.variant_type === 'insertion') {
+          const inserted = altLen - refLen;
+          const insertedBases = alt.slice(1); // Skip first base (anchor)
+          return `${inserted}bp insertion (${insertedBases} inserted)`;
+        } else if (variant.variant_type === 'indel') {
+          const deleted = refLen - 1; // Subtract anchor base
+          const inserted = altLen - 1; // Subtract anchor base
+          const deletedBases = ref.slice(1);
+          const insertedBases = alt.slice(1);
+          return `${deleted}bp deleted, ${inserted}bp inserted (${deletedBases}→${insertedBases})`;
+        }
+      }
+
+      // For large CNVs: 17:12345-67890:DEL
+      const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
+      if (cnvMatch && (variant.variant_type === 'deletion' || variant.variant_type === 'duplication')) {
+        const start = parseInt(cnvMatch[2]);
+        const end = parseInt(cnvMatch[3]);
+        const size = end - start;
+
+        if (size >= 1000000) {
+          return `${(size / 1000000).toFixed(2)}Mb`;
+        } else if (size >= 1000) {
+          return `${(size / 1000).toFixed(1)}kb`;
+        } else {
+          return `${size}bp`;
+        }
+      }
+
       return null;
     },
     getDbSNPLink(variant) {
