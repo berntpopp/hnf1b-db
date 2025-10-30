@@ -669,6 +669,55 @@ cd frontend && npm run dev  # Terminal 2
 
 `frontend`, `visualization`, `variants`, `enhancement`, `p3`
 
+## 17q12 CNV Region Enhancements (2025-01-29)
+
+### Additional Features Implemented
+
+After the initial implementation, user feedback led to three key improvements for the 17q12 CNV region view:
+
+**1. CNV Boundary Markers**
+- **Problem**: CNV bar extended beyond visible region, unclear where CNV starts/ends
+- **Solution**: Added red dashed vertical lines at CNV start and end positions with coordinate labels
+- **Implementation**: Lines 303-367 in HNF1BGeneVisualization.vue
+- **Visual**: "CNV Start" and "CNV End" labels with exact genomic coordinates
+- **Status**: ✅ Completed and tested
+
+**2. Staggered Gene Labels**
+- **Problem**: Gene labels overlapping when genes are close together (e.g., SYNRG, MYO19, AATF)
+- **Solution**: Alternating gene labels in two vertical rows using `index % 2` pattern
+- **Implementation**: Lines 264-277 in HNF1BGeneVisualization.vue
+- **Configuration**:
+  - Even index genes (0,2,4...): y-position -70px above gene
+  - Odd index genes (1,3,5...): y-position -85px above gene
+  - Reduced minimum gene width threshold: 30px → 20px to show more labels
+- **SVG dimensions**: Increased height from 250px to 320px, bottom margin 40px to 60px
+- **Status**: ✅ Completed and tested
+
+**3. Smart Tooltip Positioning**
+- **Problem**: Tooltip cut off when hovering over rightmost genes (e.g., LHX1 at position 37.8 Mb)
+- **Solution**: Viewport-aware tooltip positioning that adjusts based on available space
+- **Implementation**: Lines 872-895 in HNF1BGeneVisualization.vue
+- **Logic**:
+  - Check if tooltip would overflow right edge → position to left of cursor
+  - Check if tooltip would overflow bottom edge → position above cursor
+  - Add 10px safety margins from all edges
+  - Approximate tooltip dimensions: 300px width, 200px height
+- **Status**: ✅ Completed and tested with LHX1 gene hover
+
+**Testing Verification:**
+```bash
+# Tested with MCP Playwright browser automation
+# URL: http://localhost:5173/variants/var:HNF1B:17:36459258-37832869:DEL
+# Steps:
+1. Toggle "17q12 Region (1.4 Mb)" button
+2. Verify CNV boundary markers visible at start (36,459,258) and end (37,832,869)
+3. Verify gene labels staggered (SYNRG, AATF, PIGW, ACACA, HNF1B on row 1; MYO19, LHX1 on row 2)
+4. Hover over LHX1 gene (rightmost gene)
+5. Verify tooltip displays completely without overflow
+
+Results: ✅ All improvements working correctly
+```
+
 ## Future Enhancements
 
 - [ ] Show protein domains more prominently
