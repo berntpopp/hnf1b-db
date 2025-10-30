@@ -372,7 +372,7 @@ export default {
   emits: ['variant-clicked'],
   data() {
     return {
-      svgWidth: 1000,
+      svgWidth: 1200, // Increased default width to reduce empty space
       svgHeight: 300,
       margin: { top: 60, right: 50, bottom: 50, left: 50 },
       domainHeight: 30,
@@ -474,8 +474,9 @@ export default {
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
-        // Ensure minimum width to prevent scaling issues
-        this.svgWidth = Math.max(containerWidth, 800);
+        // Use full container width, with minimum of 800px for readability
+        // Prefer using 100% of available space to avoid empty white space
+        this.svgWidth = Math.max(containerWidth - 20, 800); // Subtract 20px for padding
       }
     },
     scaleAAPosition(aaPosition) {

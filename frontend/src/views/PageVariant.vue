@@ -267,41 +267,75 @@
           </v-snackbar>
 
           <!-- Gene/Protein Visualizations -->
+          <!-- Use wider layout (98%) for region view, standard (90%) otherwise -->
           <div
-            :style="{ width: '90%', margin: 'auto' }"
+            :style="{ width: (visualizationTab === 'region' ? '98%' : '90%'), margin: 'auto' }"
             class="mb-4"
           >
             <v-card>
+              <!-- Conditional tabs based on variant type -->
               <v-tabs
                 v-model="visualizationTab"
                 bg-color="grey-lighten-4"
               >
+                <!-- Gene View tab (always shown) -->
                 <v-tab value="gene">
                   <v-icon left>
                     mdi-dna
                   </v-icon>
-                  Gene View
+                  <span v-if="isCNV(variant)">Gene View (HNF1B only)</span>
+                  <span v-else>Gene View</span>
                 </v-tab>
-                <v-tab value="protein">
+
+                <!-- Protein View tab (only for SNVs/indels) -->
+                <v-tab
+                  v-if="!isCNV(variant)"
+                  value="protein"
+                >
                   <v-icon left>
                     mdi-protein
                   </v-icon>
                   Protein View
                 </v-tab>
+
+                <!-- Region View tab (only for CNVs) -->
+                <v-tab
+                  v-if="isCNV(variant)"
+                  value="region"
+                >
+                  <v-icon left>
+                    mdi-map-marker-radius
+                  </v-icon>
+                  Region View (17q12 - 15 genes)
+                </v-tab>
               </v-tabs>
 
               <v-window v-model="visualizationTab">
+                <!-- Gene View: Shows HNF1B gene structure -->
                 <v-window-item value="gene">
                   <HNF1BGeneVisualization
+                    :variants="allVariants"
+                    :current-variant-id="$route.params.variant_id"
+                    :force-view-mode="isCNV(variant) ? 'gene' : null"
+                    @variant-clicked="navigateToVariant"
+                  />
+                </v-window-item>
+
+                <!-- Protein View: Only for SNVs/indels -->
+                <v-window-item value="protein">
+                  <HNF1BProteinVisualization
                     :variants="allVariants"
                     :current-variant-id="$route.params.variant_id"
                     @variant-clicked="navigateToVariant"
                   />
                 </v-window-item>
-                <v-window-item value="protein">
-                  <HNF1BProteinVisualization
+
+                <!-- Region View: Only for CNVs - shows 17q12 region with 15 genes -->
+                <v-window-item value="region">
+                  <HNF1BGeneVisualization
                     :variants="allVariants"
                     :current-variant-id="$route.params.variant_id"
+                    :force-view-mode="'cnv'"
                     @variant-clicked="navigateToVariant"
                   />
                 </v-window-item>
