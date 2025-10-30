@@ -430,7 +430,7 @@ export default {
       filteredCount: 0,
 
       // Filter options
-      variantTypes: ['SNV', 'deletion', 'duplication', 'insertion', 'CNV'],
+      variantTypes: ['SNV', 'deletion', 'duplication', 'insertion', 'indel', 'CNV'],
       classifications: [
         'PATHOGENIC',
         'LIKELY_PATHOGENIC',
@@ -702,6 +702,11 @@ export default {
       const cNotation = this.extractCNotation(variant.transcript);
 
       if (cNotation) {
+        // Check for delins (complex indels) FIRST before checking for simple del/ins
+        // Match patterns like "delins", "delGCTCTGins", "delAins" etc.
+        if (/del[A-Z]*ins/.test(cNotation)) {
+          return 'indel';
+        }
         // Check for deletions
         if (/del/.test(cNotation) && !/dup/.test(cNotation)) {
           return 'deletion';
@@ -713,10 +718,6 @@ export default {
         // Check for insertions
         if (/ins/.test(cNotation)) {
           return 'insertion';
-        }
-        // Check for delins (deletion-insertion)
-        if (/delins/.test(cNotation)) {
-          return 'indel';
         }
         // Check for substitutions (true SNVs: single position with >)
         if (/>\w$/.test(cNotation) && !/[+-]/.test(cNotation) && !/_/.test(cNotation)) {
@@ -770,6 +771,7 @@ export default {
         duplication: 'blue-lighten-3',
         SNV: 'purple-lighten-3',
         insertion: 'green-lighten-3',
+        indel: 'pink-lighten-3',
         inversion: 'orange-lighten-3',
         CNV: 'amber-lighten-3',
       };
