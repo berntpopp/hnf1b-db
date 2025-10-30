@@ -397,7 +397,10 @@ class VariantExtractor:
             elif "<DUP>" in hg38:
                 molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
         elif c_dot:
-            if "del" in c_dot:
+            # Check for complex indels (delins) first before simple del/ins
+            if "delins" in c_dot:
+                molecular_consequence = {"id": "SO:1000032", "label": "indel"}
+            elif "del" in c_dot:
                 molecular_consequence = {"id": "SO:0000159", "label": "deletion"}
             elif "dup" in c_dot:
                 molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
