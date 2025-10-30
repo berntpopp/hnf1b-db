@@ -47,7 +47,7 @@ HG38_PATTERN = re.compile(
 
 # Allowed values for controlled vocabularies
 ALLOWED_VARIANT_TYPES = {
-    "SNV", "deletion", "duplication", "insertion", "inversion", "CNV"
+    "SNV", "deletion", "duplication", "insertion", "indel", "inversion", "CNV"
 }
 ALLOWED_CLASSIFICATIONS = {
     "PATHOGENIC",

@@ -1239,6 +1239,24 @@ async def aggregate_all_variants(
                     WHERE elem->>'value' ~ ':\\d+-\\d+:'
                 )"""
             )
+        elif validated_variant_type == "indel":
+            # Indel: Small insertions, deletions, and complex indels (< 50bp)
+            # Includes: del, ins, delins - but NOT CNVs
+            where_clauses.append(
+                """(
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'del|ins|delins'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'value' ~ ':\\d+-\\d+:'
+                    )
+                )"""
+            )
         elif validated_variant_type == "deletion":
             # Small deletions: Has 'del' in c. notation but NOT a CNV
             where_clauses.append(
@@ -1511,6 +1529,7 @@ async def aggregate_all_variants(
             vd->'geneContext'->>'valueId' as gene_id,
             COALESCE(
                 vd->'structuralType'->>'label',
+                vd->'molecularConsequences'->0->>'label',
                 CASE
                     WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
                     WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
