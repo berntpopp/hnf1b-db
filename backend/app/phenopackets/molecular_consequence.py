@@ -33,14 +33,9 @@ def compute_molecular_consequence(
         >>> compute_molecular_consequence(None, None, "deletion")
         "Copy Number Loss"
     """
-    # Check variant type first (CNVs)
-    if variant_type:
-        if variant_type.lower() in ("deletion", "del"):
-            return "Copy Number Loss"
-        if variant_type.lower() in ("duplication", "dup"):
-            return "Copy Number Gain"
-
-    # Extract p. notation from full HGVS string
+    # Extract p. notation from full HGVS string first
+    # IMPORTANT: Check protein-level consequences BEFORE structural type
+    # A small deletion can be a frameshift, not just "Copy Number Loss"
     p_notation = None
     if protein:
         match = re.search(r":?(p\..+)$", protein)
@@ -53,11 +48,13 @@ def compute_molecular_consequence(
     if p_notation:
         p_lower = p_notation.lower()
 
-        # Frameshift
+        # Frameshift (must check BEFORE nonsense, as frameshifts often contain "Ter")
+        # Example: p.Gln243SerfsTer22 - contains both "fs" and "Ter"
         if "fs" in p_lower:
             return "Frameshift"
 
-        # Nonsense (stop gained)
+        # Nonsense (stop gained) - only if not a frameshift
+        # Example: p.Arg177Ter (stop codon without frameshift)
         if "ter" in p_lower or "*" in p_notation:
             return "Nonsense"
 
@@ -111,6 +108,14 @@ def compute_molecular_consequence(
         # If we have c. notation but no splice site, assume coding sequence variant
         if c_notation.startswith("c."):
             return "Coding Sequence Variant"
+
+    # Check variant type last (only for CNVs without protein consequences)
+    # This ensures small deletions/insertions with frameshift are not misclassified
+    if variant_type:
+        if variant_type.lower() in ("deletion", "del"):
+            return "Copy Number Loss"
+        if variant_type.lower() in ("duplication", "dup"):
+            return "Copy Number Gain"
 
     # Default: unknown consequence
     return None

@@ -1529,12 +1529,54 @@ async def aggregate_all_variants(
             vd->'geneContext'->>'valueId' as gene_id,
             COALESCE(
                 vd->'structuralType'->>'label',
-                vd->'molecularConsequences'->0->>'label',
+                -- Classify based on HGVS notation to distinguish insertions from indels
                 CASE
+                    -- Check for delins (indel = deletion + insertion) - must check first
+                    -- Pattern matches both "delins" and "del[BASES]ins[BASES]"
+                    WHEN (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) ~ 'del[A-Z]*ins' THEN 'indel'
+                    -- Check for pure insertions (has 'ins' but not 'del')
+                    WHEN (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) ~ 'ins' AND (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) !~ 'del' THEN 'insertion'
+                    -- Check for pure deletions (has 'del' but not 'ins' or 'dup')
+                    WHEN (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) ~ 'del' AND (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) !~ 'ins' THEN 'deletion'
+                    -- Check for duplications (has 'dup' in HGVS)
+                    WHEN (
+                        SELECT elem->>'value'
+                        FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        LIMIT 1
+                    ) ~ 'dup' THEN 'duplication'
+                    -- CNVs from VCF alt field
                     WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+                    -- Default: SNV for genomic variants
                     WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
                     ELSE 'OTHER'
-                END
+                END,
+                vd->'molecularConsequences'->0->>'label'
             ) as structural_type,
             COALESCE(
                 vi->>'acmgPathogenicityClassification',
