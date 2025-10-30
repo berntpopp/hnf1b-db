@@ -83,19 +83,6 @@
               </v-icon>
               Pathogenic
             </v-chip>
-            <v-chip
-              v-if="currentVariantId"
-              size="small"
-              color="purple"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-star
-              </v-icon>
-              Current
-            </v-chip>
           </div>
         </v-col>
       </v-row>
@@ -196,7 +183,7 @@
               :x2="scaleAAPosition(parseInt(position))"
               :y2="backboneY - domainHeight / 2 - getLollipopHeight(group)"
               :stroke="getGroupColor(group)"
-              :stroke-width="group.some((v) => v.isCurrentVariant) ? 3 : 2"
+              :stroke-width="2"
             />
             <!-- Lollipop circles (stacked if multiple) -->
             <g
@@ -206,13 +193,11 @@
               <circle
                 :cx="scaleAAPosition(parseInt(position))"
                 :cy="backboneY - domainHeight / 2 - getLollipopHeight(group.slice(0, vIndex + 1))"
-                :r="variant.isCurrentVariant ? 12 : 6"
+                :r="8"
                 :fill="getVariantColor(variant)"
-                :stroke="variant.isCurrentVariant ? '#9C27B0' : '#424242'"
-                :stroke-width="variant.isCurrentVariant ? 4 : 1"
-                :opacity="variant.isCurrentVariant ? 1 : 0.6"
+                :stroke="'#424242'"
+                :stroke-width="1.5"
                 class="lollipop-circle"
-                :class="{ 'current-variant': variant.isCurrentVariant }"
                 @mouseenter="showVariantTooltip($event, variant)"
                 @mousemove="updateTooltipPosition($event)"
                 @click="handleVariantClick(variant)"
@@ -372,7 +357,7 @@ export default {
   emits: ['variant-clicked'],
   data() {
     return {
-      svgWidth: 1200, // Increased default width to reduce empty space
+      svgWidth: 1400, // Will be overridden by updateSVGWidth in mounted()
       svgHeight: 300,
       margin: { top: 60, right: 50, bottom: 50, left: 50 },
       domainHeight: 30,
@@ -474,9 +459,9 @@ export default {
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
-        // Use full container width, with minimum of 800px for readability
-        // Prefer using 100% of available space to avoid empty white space
-        this.svgWidth = Math.max(containerWidth - 20, 800); // Subtract 20px for padding
+        // Use full container width to match gene view
+        // Only apply minimum width if container is unusually small
+        this.svgWidth = containerWidth > 0 ? Math.max(containerWidth, 800) : 1400;
       }
     },
     scaleAAPosition(aaPosition) {

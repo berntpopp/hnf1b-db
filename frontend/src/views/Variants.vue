@@ -386,6 +386,44 @@
         </v-chip>
       </template>
 
+      <!-- Custom header for Variant Type with cycle sort -->
+      <template #header.variant_type="{ column }">
+        <div
+          class="d-flex align-center"
+          style="cursor: pointer; user-select: none;"
+          @click="cycleVariantTypeSort"
+        >
+          <span>{{ column.title }}</span>
+          <v-chip
+            v-if="variantTypeSortPriority"
+            size="x-small"
+            color="primary"
+            class="ml-1"
+          >
+            {{ variantTypeSortPriority }}
+          </v-chip>
+        </div>
+      </template>
+
+      <!-- Custom header for Classification with cycle sort -->
+      <template #header.classificationVerdict="{ column }">
+        <div
+          class="d-flex align-center"
+          style="cursor: pointer; user-select: none;"
+          @click="cycleClassificationSort"
+        >
+          <span>{{ column.title }}</span>
+          <v-chip
+            v-if="classificationSortPriority"
+            size="x-small"
+            color="primary"
+            class="ml-1"
+          >
+            {{ classificationSortPriority }}
+          </v-chip>
+        </div>
+      </template>
+
       <template #no-data>
         <v-empty-state
           v-if="hasActiveFilters"
@@ -430,7 +468,7 @@ export default {
       filteredCount: 0,
 
       // Filter options
-      variantTypes: ['SNV', 'deletion', 'duplication', 'insertion', 'indel', 'CNV'],
+      variantTypes: ['SNV', 'insertion', 'indel', 'deletion', 'duplication'],
       classifications: [
         'PATHOGENIC',
         'LIKELY_PATHOGENIC',
@@ -438,6 +476,12 @@ export default {
         'LIKELY_BENIGN',
         'BENIGN',
       ],
+
+      // Cycle sorting state
+      variantTypeCycleIndex: -1, // -1 means no cycle sort active
+      classificationCycleIndex: -1, // -1 means no cycle sort active
+      variantTypeSortPriority: null, // Selected type to show on top
+      classificationSortPriority: null, // Selected classification to show on top
       consequences: [
         'Frameshift',
         'Nonsense',
@@ -520,7 +564,7 @@ export default {
       options: {
         page: 1,
         itemsPerPage: 10,
-        sortBy: [],
+        sortBy: [{ key: 'simple_id', order: 'desc' }], // Default: sort by Variant ID descending
       },
       itemsPerPageOptions: [10, 20, 50, 100],
     };
@@ -581,10 +625,17 @@ export default {
 
         // Build request params with search and filters
         const requestParams = {
-          page,
-          page_size: itemsPerPage,
           sort: sortParam,
         };
+
+        // When priority sorting is active, fetch ALL variants to sort them properly across pages
+        if (this.variantTypeSortPriority || this.classificationSortPriority) {
+          requestParams.page = 1;
+          requestParams.page_size = 1000; // Fetch all variants (adjust if you have more than 1000)
+        } else {
+          requestParams.page = page;
+          requestParams.page_size = itemsPerPage;
+        }
 
         // Add search query if present
         if (this.searchQuery) {
@@ -605,10 +656,31 @@ export default {
         const response = await getVariants(requestParams);
 
         // Unpack the response
-        this.variants = response.data;
-        this.totalItems = response.meta.total || 0;
-        this.totalPages = response.meta.total_pages || 0;
-        this.filteredCount = this.variants.length;
+        let variants = response.data;
+
+        // Apply client-side priority sorting if active
+        if (this.variantTypeSortPriority) {
+          variants = this.sortByVariantTypePriority(variants, this.variantTypeSortPriority);
+        } else if (this.classificationSortPriority) {
+          variants = this.sortByClassificationPriority(variants, this.classificationSortPriority);
+        }
+
+        // Handle client-side pagination when priority sorting is active
+        if (this.variantTypeSortPriority || this.classificationSortPriority) {
+          this.totalItems = variants.length;
+          this.totalPages = Math.ceil(variants.length / itemsPerPage);
+
+          // Apply pagination client-side
+          const start = (page - 1) * itemsPerPage;
+          const end = start + itemsPerPage;
+          this.variants = variants.slice(start, end);
+          this.filteredCount = variants.length;
+        } else {
+          this.variants = variants;
+          this.totalItems = response.meta.total || 0;
+          this.totalPages = response.meta.total_pages || 0;
+          this.filteredCount = this.variants.length;
+        }
       } catch (error) {
         console.error('Error fetching variants:', error);
         // Show error message to user
@@ -736,6 +808,70 @@ export default {
     // Disable client-side sorting
     customSort(items) {
       return items;
+    },
+
+    // Cycle through variant types on header click (sorts with selected type on top)
+    cycleVariantTypeSort() {
+      // Cycle to next variant type
+      this.variantTypeCycleIndex = (this.variantTypeCycleIndex + 1) % this.variantTypes.length;
+      const selectedType = this.variantTypes[this.variantTypeCycleIndex];
+
+      // Apply custom sorting: selected type first, then others
+      // Create custom sort parameter that backend can handle
+      this.options.sortBy = [
+        { key: 'variant_type_priority', order: 'asc', priority: selectedType }
+      ];
+
+      // Store the priority type for custom sorting
+      this.variantTypeSortPriority = selectedType;
+      this.fetchVariants();
+    },
+
+    // Cycle through classifications on header click (sorts with selected classification on top)
+    cycleClassificationSort() {
+      // Cycle to next classification
+      this.classificationCycleIndex =
+        (this.classificationCycleIndex + 1) % this.classifications.length;
+      const selectedClassification = this.classifications[this.classificationCycleIndex];
+
+      // Apply custom sorting: selected classification first, then others
+      this.options.sortBy = [
+        { key: 'classification_priority', order: 'asc', priority: selectedClassification }
+      ];
+
+      // Store the priority classification for custom sorting
+      this.classificationSortPriority = selectedClassification;
+      this.fetchVariants();
+    },
+
+    // Sort variants with priority type on top
+    sortByVariantTypePriority(variants, priorityType) {
+      return [...variants].sort((a, b) => {
+        const aType = this.getVariantType(a);
+        const bType = this.getVariantType(b);
+
+        // Priority type comes first
+        if (aType === priorityType && bType !== priorityType) return -1;
+        if (aType !== priorityType && bType === priorityType) return 1;
+
+        // Both same priority or both not priority - maintain original order
+        return 0;
+      });
+    },
+
+    // Sort variants with priority classification on top
+    sortByClassificationPriority(variants, priorityClassification) {
+      return [...variants].sort((a, b) => {
+        const aClass = a.classificationVerdict;
+        const bClass = b.classificationVerdict;
+
+        // Priority classification comes first
+        if (aClass === priorityClassification && bClass !== priorityClassification) return -1;
+        if (aClass !== priorityClassification && bClass === priorityClassification) return 1;
+
+        // Both same priority or both not priority - maintain original order
+        return 0;
+      });
     },
 
     goToFirstPage() {
