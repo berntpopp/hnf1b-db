@@ -8,7 +8,25 @@
       >
         mdi-protein
       </v-icon>
-      HNF1B Protein Domains (557 amino acids)
+      HNF1B Protein Domains (NP_000449.3, 557 aa)
+      <v-tooltip location="bottom">
+        <template #activator="{ props }">
+          <v-btn
+            icon
+            size="x-small"
+            variant="text"
+            v-bind="props"
+            href="https://www.uniprot.org/uniprotkb/P35680/entry"
+            target="_blank"
+            class="ml-1"
+          >
+            <v-icon size="small">
+              mdi-open-in-new
+            </v-icon>
+          </v-btn>
+        </template>
+        <span>View in UniProt (P35680)</span>
+      </v-tooltip>
       <v-spacer />
       <v-chip
         size="small"
@@ -90,12 +108,38 @@
       <!-- Info Alert for CNVs -->
       <v-alert
         v-if="cnvVariants.length > 0"
-        type="info"
+        type="warning"
         density="compact"
         class="mb-3"
       >
+        <v-icon
+          size="small"
+          class="mr-1"
+        >
+          mdi-alert
+        </v-icon>
         {{ cnvVariants.length }} CNV(s) not shown in protein view. Switch to Gene View to see structural
         variants.
+      </v-alert>
+
+      <!-- Info Alert for Splice Variants -->
+      <v-alert
+        v-if="isCurrentVariantSpliceVariant"
+        type="info"
+        density="compact"
+        variant="tonal"
+        class="mb-3"
+      >
+        <v-icon
+          size="small"
+          class="mr-1"
+        >
+          mdi-information
+        </v-icon>
+        <strong>Splice site variant detected:</strong> {{ currentVariantTranscript }}
+        <div class="text-caption mt-1">
+          This variant affects RNA splicing and cannot be displayed in protein view. The exact protein effect depends on how splicing is disrupted (exon skipping, intron retention, or cryptic splice sites). Switch to Gene View to see the genomic location.
+        </div>
       </v-alert>
 
       <!-- SVG Visualization -->
@@ -357,7 +401,7 @@ export default {
   emits: ['variant-clicked'],
   data() {
     return {
-      svgWidth: 1400, // Will be overridden by updateSVGWidth in mounted()
+      svgWidth: 1000, // Will be overridden by updateSVGWidth in mounted()
       svgHeight: 300,
       margin: { top: 60, right: 50, bottom: 50, left: 50 },
       domainHeight: 30,
@@ -447,6 +491,26 @@ export default {
       });
       return groups;
     },
+    isCurrentVariantSpliceVariant() {
+      // Check if current variant is a splice site variant (has transcript but no protein notation)
+      if (!this.currentVariantId) return false;
+
+      const currentVariant = this.variants.find((v) => v.variant_id === this.currentVariantId);
+      if (!currentVariant) return false;
+
+      // Splice variants have transcript notation but no protein notation
+      // Also check for splice site indicators: +/- positions or specific consequences
+      const hasTranscript = currentVariant.transcript && currentVariant.transcript !== '-';
+      const noProtein = !currentVariant.protein || currentVariant.protein === '-';
+      const isSpliceSite = hasTranscript && /[+-]\d+/.test(currentVariant.transcript);
+
+      return hasTranscript && noProtein && isSpliceSite;
+    },
+    currentVariantTranscript() {
+      if (!this.currentVariantId) return '';
+      const currentVariant = this.variants.find((v) => v.variant_id === this.currentVariantId);
+      return currentVariant?.transcript || '';
+    },
   },
   mounted() {
     this.updateSVGWidth();
@@ -459,9 +523,8 @@ export default {
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
-        // Use full container width to match gene view
-        // Only apply minimum width if container is unusually small
-        this.svgWidth = containerWidth > 0 ? Math.max(containerWidth, 800) : 1400;
+        // Use full container width without minimum to prevent horizontal scrolling
+        this.svgWidth = containerWidth > 0 ? containerWidth : 1000;
       }
     },
     scaleAAPosition(aaPosition) {
@@ -476,8 +539,15 @@ export default {
       const pNotation = this.extractPNotation(variant.protein);
       if (!pNotation) return null;
 
-      // Match patterns like p.Arg177Ter, p.Ser546Phe, p.Met1?, etc.
-      const match = pNotation.match(/p\.([A-Z][a-z]{2})?(\d+)/);
+      // Match various patterns:
+      // - p.Arg177Ter (nonsense)
+      // - p.Ser546Phe (missense)
+      // - p.Met1? (unknown start)
+      // - p.Arg177del (deletion)
+      // - p.Arg177_Ser178del (deletion range - use start position)
+      // - p.Arg177dup (duplication)
+      // - p.Arg177_Ser178dup (duplication range - use start position)
+      const match = pNotation.match(/p\.([A-Z][a-z]{2})?(\d+)(_[A-Z][a-z]{2}\d+)?(del|dup|ins|Ter|[A-Z][a-z]{2}|\?)?/);
       if (match && match[2]) {
         return parseInt(match[2]);
       }
@@ -609,7 +679,7 @@ export default {
 
 .svg-container {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden; /* Prevent horizontal scrolling - SVG fits container */
 }
 
 .protein-visualization {

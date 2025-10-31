@@ -9,6 +9,24 @@
         mdi-dna
       </v-icon>
       HNF1B Gene Structure (NM_000458.4)
+      <v-tooltip location="bottom">
+        <template #activator="{ props }">
+          <v-btn
+            icon
+            size="x-small"
+            variant="text"
+            v-bind="props"
+            :href="effectiveViewMode === 'cnv' ? 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A36458167-37854616' : 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A37686430-37745059'"
+            target="_blank"
+            class="ml-1"
+          >
+            <v-icon size="small">
+              mdi-open-in-new
+            </v-icon>
+          </v-btn>
+        </template>
+        <span>{{ effectiveViewMode === 'cnv' ? 'View 17q12 region in UCSC (GRCh38)' : 'View HNF1B in UCSC (GRCh38)' }}</span>
+      </v-tooltip>
       <v-spacer />
       <v-chip
         size="small"
@@ -141,6 +159,19 @@
                 mdi-rectangle-outline
               </v-icon>
               Small Variant (&lt;50bp)
+            </v-chip>
+            <v-chip
+              v-if="spliceVariants.length > 0"
+              size="small"
+              color="teal"
+            >
+              <v-icon
+                left
+                size="small"
+              >
+                mdi-rhombus
+              </v-icon>
+              Splice Variant
             </v-chip>
             <!-- "Current" chip: only show when there are multiple variants to distinguish from -->
             <v-chip
@@ -476,26 +507,26 @@
             v-for="(variant, index) in snvVariants"
             :key="`snv-${index}`"
           >
-            <!-- Connecting line -->
+            <!-- Connecting line (longer to avoid exon label overlap) -->
             <line
               v-if="variant.position"
               :x1="scalePosition(variant.position)"
               :y1="hnf1bTrackY - exonHeight / 2"
               :x2="scalePosition(variant.position)"
-              :y2="hnf1bTrackY - exonHeight / 2 - 30 - (index % 3) * 10"
+              :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
               :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
               :stroke-width="variant.isCurrentVariant ? 2 : 1"
               stroke-dasharray="2,2"
             />
-            <!-- Variant marker circle -->
+            <!-- Variant marker circle (removed purple border for non-current) -->
             <circle
               v-if="variant.position"
               :cx="scalePosition(variant.position)"
-              :cy="hnf1bTrackY - exonHeight / 2 - 30 - (index % 3) * 10"
+              :cy="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
               :r="variant.isCurrentVariant ? 15 : 5"
               :fill="getVariantColor(variant)"
-              :stroke="variant.isCurrentVariant ? '#9C27B0' : '#424242'"
-              :stroke-width="variant.isCurrentVariant ? 5 : 1"
+              :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+              :stroke-width="variant.isCurrentVariant ? 5 : 0"
               :opacity="variant.isCurrentVariant ? 1 : 0.7"
               class="variant-circle"
               :class="{ 'current-variant': variant.isCurrentVariant }"
@@ -507,7 +538,7 @@
             <text
               v-if="variant.position && variant.isCurrentVariant"
               :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 30 - (index % 3) * 10 + 6"
+              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 6"
               text-anchor="middle"
               class="variant-star-icon"
               fill="white"
@@ -521,7 +552,7 @@
             <text
               v-if="variant.position && variant.isCurrentVariant"
               :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 70"
+              :y="hnf1bTrackY - exonHeight / 2 - 90"
               text-anchor="middle"
               class="variant-label-text"
               fill="#9C27B0"
@@ -535,7 +566,7 @@
             <text
               v-if="variant.position && variant.isCurrentVariant && variant.protein"
               :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 55"
+              :y="hnf1bTrackY - exonHeight / 2 - 75"
               text-anchor="middle"
               class="variant-protein-text"
               fill="#757575"
@@ -543,6 +574,83 @@
               pointer-events="none"
             >
               {{ extractPNotation(variant.protein) }}
+            </text>
+          </g>
+
+          <!-- Splice variant markers (diamonds) -->
+          <g
+            v-for="(variant, index) in spliceVariants"
+            :key="`splice-${index}`"
+          >
+            <!-- Connecting line (same as SNVs but with different end position) -->
+            <line
+              v-if="variant.position"
+              :x1="scalePosition(variant.position)"
+              :y1="hnf1bTrackY - exonHeight / 2"
+              :x2="scalePosition(variant.position)"
+              :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+              :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
+              :stroke-width="variant.isCurrentVariant ? 2 : 1"
+              stroke-dasharray="2,2"
+            />
+            <!-- Diamond marker (rotated square) -->
+            <rect
+              v-if="variant.position"
+              :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
+              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 - (variant.isCurrentVariant ? 10.5 : 3.5)"
+              :width="variant.isCurrentVariant ? 21 : 7"
+              :height="variant.isCurrentVariant ? 21 : 7"
+              :fill="getVariantColor(variant)"
+              :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+              :stroke-width="variant.isCurrentVariant ? 3 : 0"
+              :opacity="variant.isCurrentVariant ? 1 : 0.7"
+              :transform="`rotate(45, ${scalePosition(variant.position)}, ${hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12})`"
+              class="variant-diamond"
+              :class="{ 'current-variant': variant.isCurrentVariant }"
+              @mouseenter="showVariantTooltip($event, variant)"
+              @mousemove="updateTooltipPosition($event)"
+              @click="handleVariantClick(variant)"
+            />
+            <!-- Star icon for current splice variant -->
+            <text
+              v-if="variant.position && variant.isCurrentVariant"
+              :x="scalePosition(variant.position)"
+              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 5"
+              text-anchor="middle"
+              class="variant-star-icon"
+              fill="white"
+              font-size="14"
+              font-weight="bold"
+              pointer-events="none"
+            >
+              ★
+            </text>
+            <!-- Variant label for current splice variant -->
+            <text
+              v-if="variant.position && variant.isCurrentVariant"
+              :x="scalePosition(variant.position)"
+              :y="hnf1bTrackY - exonHeight / 2 - 90"
+              text-anchor="middle"
+              class="variant-label-text"
+              fill="#9C27B0"
+              font-size="14"
+              font-weight="bold"
+              pointer-events="none"
+            >
+              {{ variant.simple_id || variant.variant_id }}
+            </text>
+            <!-- Transcript notation for current splice variant -->
+            <text
+              v-if="variant.position && variant.isCurrentVariant && variant.transcript"
+              :x="scalePosition(variant.position)"
+              :y="hnf1bTrackY - exonHeight / 2 - 75"
+              text-anchor="middle"
+              class="variant-protein-text"
+              fill="#757575"
+              font-size="11"
+              pointer-events="none"
+            >
+              {{ extractCNotation(variant.transcript) }}
             </text>
           </g>
         </svg>
@@ -828,11 +936,15 @@ export default {
           position: this.extractVariantPosition(v),
           isCNV: this.isCNV(v),
           isIndel: this.isIndel(v),
+          isSpliceVariant: this.isSpliceVariant(v),
         }))
         .filter((v) => v.position !== null);
     },
     snvVariants() {
-      return this.variantsWithPositions.filter((v) => !v.isCNV && !v.isIndel);
+      return this.variantsWithPositions.filter((v) => !v.isCNV && !v.isIndel && !v.isSpliceVariant);
+    },
+    spliceVariants() {
+      return this.variantsWithPositions.filter((v) => v.isSpliceVariant);
     },
     indelVariants() {
       return this.variantsWithPositions
@@ -1087,6 +1199,17 @@ export default {
       }
 
       return false;
+    },
+    isSpliceVariant(variant) {
+      // Check if variant is a splice site variant
+      // Splice variants have transcript notation with +/- positions and no protein notation
+      if (!variant) return false;
+
+      const hasTranscript = variant.transcript && variant.transcript !== '-';
+      const noProtein = !variant.protein || variant.protein === '-';
+      const isSpliceSite = hasTranscript && /[+-]\d+/.test(variant.transcript);
+
+      return hasTranscript && noProtein && isSpliceSite;
     },
     getCNVDetails(variant) {
       if (!variant || !variant.hg38) return null;

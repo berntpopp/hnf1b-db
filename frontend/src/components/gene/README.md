@@ -12,20 +12,23 @@ This directory contains interactive SVG-based visualizations for displaying HNF1
 - **Exon structure**: Shows all 9 exons with accurate genomic coordinates (GRCh38)
 - **Intron backbone**: Connects exons with a horizontal line representing the gene span
 - **SNV markers**: Point mutations displayed as colored circles above the gene
+- **Splice variant markers**: Splice site variants displayed as diamond shapes (rotated squares) for visual distinction
 - **CNV tracks**: Large deletions/duplications shown as colored bars below the gene
 - **Domain highlighting**: Exons colored by functional domain (POU-S, POU-H, Transactivation)
 - **Interactive tooltips**: Hover to see exon details or variant information
 - **Exon-level zoom**: Click any exon to zoom in for detailed variant positioning within that exon
 - **Zoom controls**: Zoom in/out/reset for detailed inspection (also resets exon zoom)
 - **Current variant highlighting**: Purple border highlights the currently viewed variant
+- **Data source information**: UCSC Genome Browser link in card title for GRCh38/hg38 assembly verification
+- **17q12 region view**: Toggle to view all 15 genes in the 17q12 deletion region with clinical significance color-coding
 
 **Visual Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │         HNF1B Gene (chr17:37.69-37.75 Mb) - 58.6 kb         │
 ├─────────────────────────────────────────────────────────────┤
-│   ⬤       ⬤⬤            ⬤        ⬤                        │ <- SNV markers
-│   │       ││            │        │                         │
+│   ⬤       ⬤⬤     ◆      ⬤        ⬤                        │ <- SNV markers (●) & splice variants (◆)
+│   │       ││     │      │        │                         │
 │ ╔═╗ ╔═╗ ╔═══╗ ╔═══╗ ╔══╗ ╔═╗ ╔═══╗ ╔═══╗ ╔═════╗         │
 │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
 │         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░                       │ <- CNV deletion
@@ -66,8 +69,10 @@ Variants must have:
 - **Frequency encoding**: Stem height indicates number of individuals with variant
 - **Pathogenicity colors**: Circle colors indicate clinical significance
 - **CNV alert**: Informs user that CNVs are not shown (use Gene View instead)
+- **Splice variant alert**: Informational alert explaining why splice site variants cannot be displayed in protein view, with biological rationale about RNA splicing effects
 - **Interactive tooltips**: Hover for variant details including amino acid position
 - **Zoom controls**: Zoom in/out/reset for detailed inspection
+- **Data source information**: UniProt link in card title (P35680) and protein reference (NP_000449.3)
 
 **Note:** Functional DNA-binding site markers were intentionally excluded from this visualization due to inability to verify accuracy against authoritative protein structure references.
 
@@ -224,6 +229,13 @@ export default {
 ### CNV Colors
 - **Red** (`#EF5350`): Deletions
 - **Blue** (`#42A5F5`): Duplications
+
+### Variant Type Markers (Gene View)
+- **Circle** (●): SNV variants (single nucleotide variants)
+- **Diamond** (◆): Splice site variants (affects RNA splicing, no direct protein change)
+  - Detected by regex pattern `/[+-]\d+/` in transcript notation (e.g., `c.544+1G>T`)
+  - Legend chip shown in teal color with rhombus icon
+  - Informational alert displayed in Protein View explaining biological rationale
 
 ## Performance
 
