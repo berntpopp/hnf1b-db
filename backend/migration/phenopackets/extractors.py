@@ -20,7 +20,8 @@ class PhenotypeExtractor:
     """Extracts phenotypic features from spreadsheet rows.
 
     Depends on OntologyMapper abstraction following Dependency Inversion Principle.
-    This allows for easy testing with mock mappers and flexibility to swap implementations.
+    This allows for easy testing with mock mappers and flexibility to swap
+    implementations.
     """
 
     def __init__(
@@ -72,7 +73,7 @@ class PhenotypeExtractor:
                 value = self._safe_value(row[original_col])
 
                 if value and value.lower() not in ["no", "not reported", "unknown", ""]:
-                    # Special handling for KidneyBiopsy which contains specific diagnoses
+                    # Special handling for KidneyBiopsy with specific diagnoses
                     if pheno_key == "kidneybiopsy":
                         self._handle_kidney_biopsy(
                             value, row, review_timestamp, phenotypes
@@ -96,7 +97,7 @@ class PhenotypeExtractor:
                             phenotype["onset"] = age_onset_class
                             # If we also have a specific age, add it alongside
                             if age_reported and "ontologyClass" in age_onset_class:
-                                # Combine: ontologyClass (prenatal/postnatal) + age (P2Y)
+                                # Combine ontologyClass (prenatal/postnatal) + age
                                 phenotype["onset"]["age"] = (
                                     age_reported.get("iso8601duration")
                                     if isinstance(age_reported, dict)

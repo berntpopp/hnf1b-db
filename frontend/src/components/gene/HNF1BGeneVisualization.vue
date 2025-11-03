@@ -366,233 +366,236 @@
 
           <!-- Indel markers (small deletions/insertions < 50bp) -->
           <!-- Only shown in gene mode, not CNV mode -->
-          <g
-            v-if="effectiveViewMode !== 'cnv'"
-            v-for="(indel, index) in indelVariants"
-            :key="`indel-${index}`"
-          >
-            <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
-            <rect
-              v-if="indel.start && indel.end"
-              :x="scalePosition(indel.start)"
-              :y="hnf1bTrackY + exonHeight / 2 + 30"
-              :width="Math.max(scalePosition(indel.end) - scalePosition(indel.start), 3)"
-              :height="25"
-              :fill="getVariantColor(indel)"
-              :stroke="'#424242'"
-              :stroke-width="1"
-              :opacity="0.9"
-              class="indel-rect"
-              @mouseenter="showVariantTooltip($event, indel)"
-              @mousemove="updateTooltipPosition($event)"
-              @click="handleVariantClick(indel)"
-            />
-            <!-- Connecting line from indel to affected exon region -->
-            <line
-              v-if="indel.start && indel.end"
-              :x1="scalePosition(indel.start)"
-              :y1="hnf1bTrackY + exonHeight / 2"
-              :x2="scalePosition(indel.start)"
-              :y2="hnf1bTrackY + exonHeight / 2 + 30"
-              stroke="#424242"
-              stroke-width="1"
-              opacity="0.6"
-            />
-            <line
-              v-if="indel.start && indel.end"
-              :x1="scalePosition(indel.end)"
-              :y1="hnf1bTrackY + exonHeight / 2"
-              :x2="scalePosition(indel.end)"
-              :y2="hnf1bTrackY + exonHeight / 2 + 30"
-              stroke="#424242"
-              stroke-width="1"
-              opacity="0.6"
-            />
-            <!-- Indel label for current variant (positioned below the bar) -->
-            <text
-              v-if="indel.isCurrentVariant"
-              :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2"
-              :y="hnf1bTrackY + exonHeight / 2 + 65"
-              text-anchor="middle"
-              class="indel-label-text"
-              fill="#9C27B0"
-              font-size="13"
-              font-weight="bold"
-              pointer-events="none"
+          <template v-if="effectiveViewMode !== 'cnv'">
+            <g
+              v-for="(indel, index) in indelVariants"
+              :key="`indel-${index}`"
             >
-              {{ indel.simple_id || indel.variant_id }}
-            </text>
-            <!-- Star icon for current indel (next to label) -->
-            <text
-              v-if="indel.isCurrentVariant"
-              :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2 - 35"
-              :y="hnf1bTrackY + exonHeight / 2 + 65"
-              text-anchor="middle"
-              class="variant-star-icon"
-              fill="#9C27B0"
-              font-size="13"
-              font-weight="bold"
-              pointer-events="none"
-            >
-              ★
-            </text>
-          </g>
+              <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
+              <rect
+                v-if="indel.start && indel.end"
+                :x="scalePosition(indel.start)"
+                :y="hnf1bTrackY + exonHeight / 2 + 30"
+                :width="Math.max(scalePosition(indel.end) - scalePosition(indel.start), 3)"
+                :height="25"
+                :fill="getVariantColor(indel)"
+                :stroke="'#424242'"
+                :stroke-width="1"
+                :opacity="0.9"
+                class="indel-rect"
+                @mouseenter="showVariantTooltip($event, indel)"
+                @mousemove="updateTooltipPosition($event)"
+                @click="handleVariantClick(indel)"
+              />
+              <!-- Connecting line from indel to affected exon region -->
+              <line
+                v-if="indel.start && indel.end"
+                :x1="scalePosition(indel.start)"
+                :y1="hnf1bTrackY + exonHeight / 2"
+                :x2="scalePosition(indel.start)"
+                :y2="hnf1bTrackY + exonHeight / 2 + 30"
+                stroke="#424242"
+                stroke-width="1"
+                opacity="0.6"
+              />
+              <line
+                v-if="indel.start && indel.end"
+                :x1="scalePosition(indel.end)"
+                :y1="hnf1bTrackY + exonHeight / 2"
+                :x2="scalePosition(indel.end)"
+                :y2="hnf1bTrackY + exonHeight / 2 + 30"
+                stroke="#424242"
+                stroke-width="1"
+                opacity="0.6"
+              />
+              <!-- Indel label for current variant (positioned below the bar) -->
+              <text
+                v-if="indel.isCurrentVariant"
+                :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2"
+                :y="hnf1bTrackY + exonHeight / 2 + 65"
+                text-anchor="middle"
+                class="indel-label-text"
+                fill="#9C27B0"
+                font-size="13"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                {{ indel.simple_id || indel.variant_id }}
+              </text>
+              <!-- Star icon for current indel (next to label) -->
+              <text
+                v-if="indel.isCurrentVariant"
+                :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2 - 35"
+                :y="hnf1bTrackY + exonHeight / 2 + 65"
+                text-anchor="middle"
+                class="variant-star-icon"
+                fill="#9C27B0"
+                font-size="13"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                ★
+              </text>
+            </g>
+          </template>
 
           <!-- SNV markers -->
           <!-- Only shown in gene mode, not CNV mode -->
-          <g
-            v-if="effectiveViewMode !== 'cnv'"
-            v-for="(variant, index) in snvVariants"
-            :key="`snv-${index}`"
-          >
-            <!-- Connecting line (longer to avoid exon label overlap) -->
-            <line
-              v-if="variant.position"
-              :x1="scalePosition(variant.position)"
-              :y1="hnf1bTrackY - exonHeight / 2"
-              :x2="scalePosition(variant.position)"
-              :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-              :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
-              :stroke-width="variant.isCurrentVariant ? 2 : 1"
-              stroke-dasharray="2,2"
-            />
-            <!-- Variant marker circle (removed purple border for non-current) -->
-            <circle
-              v-if="variant.position"
-              :cx="scalePosition(variant.position)"
-              :cy="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-              :r="variant.isCurrentVariant ? 15 : 5"
-              :fill="getVariantColor(variant)"
-              :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
-              :stroke-width="variant.isCurrentVariant ? 5 : 0"
-              :opacity="variant.isCurrentVariant ? 1 : 0.7"
-              class="variant-circle"
-              :class="{ 'current-variant': variant.isCurrentVariant }"
-              @mouseenter="showVariantTooltip($event, variant)"
-              @mousemove="updateTooltipPosition($event)"
-              @click="handleVariantClick(variant)"
-            />
-            <!-- Star icon for current variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 6"
-              text-anchor="middle"
-              class="variant-star-icon"
-              fill="white"
-              font-size="16"
-              font-weight="bold"
-              pointer-events="none"
+          <template v-if="effectiveViewMode !== 'cnv'">
+            <g
+              v-for="(variant, index) in snvVariants"
+              :key="`snv-${index}`"
             >
-              ★
-            </text>
-            <!-- Variant label for current variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 90"
-              text-anchor="middle"
-              class="variant-label-text"
-              fill="#9C27B0"
-              font-size="14"
-              font-weight="bold"
-              pointer-events="none"
-            >
-              {{ variant.simple_id || variant.variant_id }}
-            </text>
-            <!-- Protein notation for current variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant && variant.protein"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 75"
-              text-anchor="middle"
-              class="variant-protein-text"
-              fill="#757575"
-              font-size="11"
-              pointer-events="none"
-            >
-              {{ extractPNotation(variant.protein) }}
-            </text>
-          </g>
+              <!-- Connecting line (longer to avoid exon label overlap) -->
+              <line
+                v-if="variant.position"
+                :x1="scalePosition(variant.position)"
+                :y1="hnf1bTrackY - exonHeight / 2"
+                :x2="scalePosition(variant.position)"
+                :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
+                :stroke-width="variant.isCurrentVariant ? 2 : 1"
+                stroke-dasharray="2,2"
+              />
+              <!-- Variant marker circle (removed purple border for non-current) -->
+              <circle
+                v-if="variant.position"
+                :cx="scalePosition(variant.position)"
+                :cy="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                :r="variant.isCurrentVariant ? 15 : 5"
+                :fill="getVariantColor(variant)"
+                :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+                :stroke-width="variant.isCurrentVariant ? 5 : 0"
+                :opacity="variant.isCurrentVariant ? 1 : 0.7"
+                class="variant-circle"
+                :class="{ 'current-variant': variant.isCurrentVariant }"
+                @mouseenter="showVariantTooltip($event, variant)"
+                @mousemove="updateTooltipPosition($event)"
+                @click="handleVariantClick(variant)"
+              />
+              <!-- Star icon for current variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 6"
+                text-anchor="middle"
+                class="variant-star-icon"
+                fill="white"
+                font-size="16"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                ★
+              </text>
+              <!-- Variant label for current variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 90"
+                text-anchor="middle"
+                class="variant-label-text"
+                fill="#9C27B0"
+                font-size="14"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                {{ variant.simple_id || variant.variant_id }}
+              </text>
+              <!-- Protein notation for current variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant && variant.protein"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 75"
+                text-anchor="middle"
+                class="variant-protein-text"
+                fill="#757575"
+                font-size="11"
+                pointer-events="none"
+              >
+                {{ extractPNotation(variant.protein) }}
+              </text>
+            </g>
+          </template>
 
           <!-- Splice variant markers (diamonds) -->
           <!-- Only shown in gene mode, not CNV mode -->
-          <g
-            v-if="effectiveViewMode !== 'cnv'"
-            v-for="(variant, index) in spliceVariants"
-            :key="`splice-${index}`"
-          >
-            <!-- Connecting line (same as SNVs but with different end position) -->
-            <line
-              v-if="variant.position"
-              :x1="scalePosition(variant.position)"
-              :y1="hnf1bTrackY - exonHeight / 2"
-              :x2="scalePosition(variant.position)"
-              :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-              :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
-              :stroke-width="variant.isCurrentVariant ? 2 : 1"
-              stroke-dasharray="2,2"
-            />
-            <!-- Diamond marker (rotated square) -->
-            <rect
-              v-if="variant.position"
-              :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
-              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 - (variant.isCurrentVariant ? 10.5 : 3.5)"
-              :width="variant.isCurrentVariant ? 21 : 7"
-              :height="variant.isCurrentVariant ? 21 : 7"
-              :fill="getVariantColor(variant)"
-              :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
-              :stroke-width="variant.isCurrentVariant ? 3 : 0"
-              :opacity="variant.isCurrentVariant ? 1 : 0.7"
-              :transform="`rotate(45, ${scalePosition(variant.position)}, ${hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12})`"
-              class="variant-diamond"
-              :class="{ 'current-variant': variant.isCurrentVariant }"
-              @mouseenter="showVariantTooltip($event, variant)"
-              @mousemove="updateTooltipPosition($event)"
-              @click="handleVariantClick(variant)"
-            />
-            <!-- Star icon for current splice variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 5"
-              text-anchor="middle"
-              class="variant-star-icon"
-              fill="white"
-              font-size="14"
-              font-weight="bold"
-              pointer-events="none"
+          <template v-if="effectiveViewMode !== 'cnv'">
+            <g
+              v-for="(variant, index) in spliceVariants"
+              :key="`splice-${index}`"
             >
-              ★
-            </text>
-            <!-- Variant label for current splice variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 90"
-              text-anchor="middle"
-              class="variant-label-text"
-              fill="#9C27B0"
-              font-size="14"
-              font-weight="bold"
-              pointer-events="none"
-            >
-              {{ variant.simple_id || variant.variant_id }}
-            </text>
-            <!-- Transcript notation for current splice variant -->
-            <text
-              v-if="variant.position && variant.isCurrentVariant && variant.transcript"
-              :x="scalePosition(variant.position)"
-              :y="hnf1bTrackY - exonHeight / 2 - 75"
-              text-anchor="middle"
-              class="variant-protein-text"
-              fill="#757575"
-              font-size="11"
-              pointer-events="none"
-            >
-              {{ extractCNotation(variant.transcript) }}
-            </text>
-          </g>
+              <!-- Connecting line (same as SNVs but with different end position) -->
+              <line
+                v-if="variant.position"
+                :x1="scalePosition(variant.position)"
+                :y1="hnf1bTrackY - exonHeight / 2"
+                :x2="scalePosition(variant.position)"
+                :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
+                :stroke-width="variant.isCurrentVariant ? 2 : 1"
+                stroke-dasharray="2,2"
+              />
+              <!-- Diamond marker (rotated square) -->
+              <rect
+                v-if="variant.position"
+                :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
+                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 - (variant.isCurrentVariant ? 10.5 : 3.5)"
+                :width="variant.isCurrentVariant ? 21 : 7"
+                :height="variant.isCurrentVariant ? 21 : 7"
+                :fill="getVariantColor(variant)"
+                :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+                :stroke-width="variant.isCurrentVariant ? 3 : 0"
+                :opacity="variant.isCurrentVariant ? 1 : 0.7"
+                :transform="`rotate(45, ${scalePosition(variant.position)}, ${hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12})`"
+                class="variant-diamond"
+                :class="{ 'current-variant': variant.isCurrentVariant }"
+                @mouseenter="showVariantTooltip($event, variant)"
+                @mousemove="updateTooltipPosition($event)"
+                @click="handleVariantClick(variant)"
+              />
+              <!-- Star icon for current splice variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 5"
+                text-anchor="middle"
+                class="variant-star-icon"
+                fill="white"
+                font-size="14"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                ★
+              </text>
+              <!-- Variant label for current splice variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 90"
+                text-anchor="middle"
+                class="variant-label-text"
+                fill="#9C27B0"
+                font-size="14"
+                font-weight="bold"
+                pointer-events="none"
+              >
+                {{ variant.simple_id || variant.variant_id }}
+              </text>
+              <!-- Transcript notation for current splice variant -->
+              <text
+                v-if="variant.position && variant.isCurrentVariant && variant.transcript"
+                :x="scalePosition(variant.position)"
+                :y="hnf1bTrackY - exonHeight / 2 - 75"
+                text-anchor="middle"
+                class="variant-protein-text"
+                fill="#757575"
+                font-size="11"
+                pointer-events="none"
+              >
+                {{ extractCNotation(variant.transcript) }}
+              </text>
+            </g>
+          </template>
         </svg>
       </div>
 

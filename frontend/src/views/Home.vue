@@ -236,30 +236,6 @@ export default {
     };
 
     /**
-     * Check if a variant is an indel (small insertion/deletion < 50bp).
-     *
-     * @param {Object} variant - Variant object with hg38 field
-     * @returns {boolean} True if variant is a small indel
-     */
-    const isIndel = (variant) => {
-      if (!variant || !variant.hg38) return false;
-      // Check for range notation with size < 50bp
-      const match = variant.hg38.match(/:(\d+)-(\d+):/);
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-        const size = end - start;
-        return size < 50;
-      }
-      // Check for VCF-style indels: chr17-37710502-ATCG-A (different ref/alt lengths)
-      const vcfMatch = variant.hg38.match(/chr\d+-\d+-([A-Z]+)-([A-Z]+)/i);
-      if (vcfMatch) {
-        return vcfMatch[1].length !== vcfMatch[2].length;
-      }
-      return false;
-    };
-
-    /**
      * Fetch all variants for the gene visualization.
      * Splits variants into SNVs (for HNF1B gene view) and CNVs (for 17q12 region view).
      *
