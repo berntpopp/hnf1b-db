@@ -4,11 +4,11 @@
     <v-card-title class="text-h6 bg-grey-lighten-4">
       <v-icon
         left
-        color="primary"
+        :color="effectiveViewMode === 'cnv' ? 'error' : 'primary'"
       >
-        mdi-dna
+        {{ effectiveViewMode === 'cnv' ? 'mdi-chart-box-outline' : 'mdi-dna' }}
       </v-icon>
-      HNF1B Gene Structure (NM_000458.4)
+      {{ effectiveViewMode === 'cnv' ? '17q12 Region - Copy Number Variants' : 'HNF1B Gene - SNVs and Small Variants' }}
       <v-tooltip location="bottom">
         <template #activator="{ props }">
           <v-btn
@@ -199,7 +199,7 @@
         <svg
           ref="geneSvg"
           :width="svgWidth"
-          :height="svgHeight"
+          :height="dynamicSvgHeight"
           class="gene-visualization"
           @mouseleave="hideTooltip"
         >
@@ -215,14 +215,14 @@
           <!-- Gene coordinates (showing visible range) -->
           <text
             :x="margin.left"
-            :y="svgHeight - 10"
+            :y="dynamicSvgHeight - 10"
             class="coordinate-label"
           >
             {{ formatCoordinate(visibleGeneStart) }}
           </text>
           <text
             :x="svgWidth - margin.right"
-            :y="svgHeight - 10"
+            :y="dynamicSvgHeight - 10"
             text-anchor="end"
             class="coordinate-label"
           >
@@ -232,7 +232,7 @@
           <text
             v-if="zoomedExon"
             :x="svgWidth / 2"
-            :y="svgHeight - 10"
+            :y="dynamicSvgHeight - 10"
             text-anchor="middle"
             class="zoom-indicator-label"
           >
@@ -285,7 +285,7 @@
             <!-- Gene track title -->
             <text
               :x="margin.left"
-              :y="centerY - 80"
+              :y="centerY - 120"
               class="gene-track-label"
               font-weight="600"
             >
@@ -350,96 +350,32 @@
             <rect
               v-if="cnv.start && cnv.end && getCNVDisplayCoords(cnv).width > 0"
               :x="getCNVDisplayCoords(cnv).x"
-              :y="hnf1bTrackY + exonHeight / 2 + 10 + (index % 3) * 15"
+              :y="hnf1bTrackY + exonHeight / 2 + 10 + index * 20"
               :width="getCNVDisplayCoords(cnv).width"
-              :height="12"
+              :height="15"
               :fill="getCNVColor(cnv)"
-              :opacity="0.6"
-              stroke="#D32F2F"
+              :opacity="0.7"
+              stroke="#424242"
               stroke-width="1"
               class="cnv-rect"
               @mouseenter="showVariantTooltip($event, cnv)"
               @mousemove="updateTooltipPosition($event)"
               @click="handleVariantClick(cnv)"
             />
-
-            <!-- CNV Start Boundary Marker (only in CNV mode) -->
-            <g v-if="effectiveViewMode === 'cnv' && cnv.start >= visibleGeneStart && cnv.start <= visibleGeneEnd">
-              <line
-                :x1="scalePosition(cnv.start)"
-                :y1="hnf1bTrackY - 20"
-                :x2="scalePosition(cnv.start)"
-                :y2="hnf1bTrackY + 80"
-                stroke="#D32F2F"
-                stroke-width="2"
-                stroke-dasharray="5,5"
-                opacity="0.8"
-              />
-              <text
-                :x="scalePosition(cnv.start)"
-                :y="hnf1bTrackY + 95"
-                text-anchor="middle"
-                font-size="10"
-                font-weight="600"
-                fill="#D32F2F"
-              >
-                CNV Start
-              </text>
-              <text
-                :x="scalePosition(cnv.start)"
-                :y="hnf1bTrackY + 107"
-                text-anchor="middle"
-                font-size="9"
-                fill="#666"
-              >
-                {{ formatCoordinate(cnv.start) }}
-              </text>
-            </g>
-
-            <!-- CNV End Boundary Marker (only in CNV mode) -->
-            <g v-if="effectiveViewMode === 'cnv' && cnv.end >= visibleGeneStart && cnv.end <= visibleGeneEnd">
-              <line
-                :x1="scalePosition(cnv.end)"
-                :y1="hnf1bTrackY - 20"
-                :x2="scalePosition(cnv.end)"
-                :y2="hnf1bTrackY + 80"
-                stroke="#D32F2F"
-                stroke-width="2"
-                stroke-dasharray="5,5"
-                opacity="0.8"
-              />
-              <text
-                :x="scalePosition(cnv.end)"
-                :y="hnf1bTrackY + 95"
-                text-anchor="middle"
-                font-size="10"
-                font-weight="600"
-                fill="#D32F2F"
-              >
-                CNV End
-              </text>
-              <text
-                :x="scalePosition(cnv.end)"
-                :y="hnf1bTrackY + 107"
-                text-anchor="middle"
-                font-size="9"
-                fill="#666"
-              >
-                {{ formatCoordinate(cnv.end) }}
-              </text>
-            </g>
           </g>
 
           <!-- Indel markers (small deletions/insertions < 50bp) -->
+          <!-- Only shown in gene mode, not CNV mode -->
           <g
+            v-if="effectiveViewMode !== 'cnv'"
             v-for="(indel, index) in indelVariants"
             :key="`indel-${index}`"
           >
-            <!-- Indel deletion bar (positioned below HNF1B track, between exons and CNV bars) -->
+            <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
             <rect
               v-if="indel.start && indel.end"
               :x="scalePosition(indel.start)"
-              :y="hnf1bTrackY + exonHeight / 2 + 5"
+              :y="hnf1bTrackY + exonHeight / 2 + 30"
               :width="Math.max(scalePosition(indel.end) - scalePosition(indel.start), 3)"
               :height="25"
               :fill="getVariantColor(indel)"
@@ -457,7 +393,7 @@
               :x1="scalePosition(indel.start)"
               :y1="hnf1bTrackY + exonHeight / 2"
               :x2="scalePosition(indel.start)"
-              :y2="hnf1bTrackY + exonHeight / 2 + 5"
+              :y2="hnf1bTrackY + exonHeight / 2 + 30"
               stroke="#424242"
               stroke-width="1"
               opacity="0.6"
@@ -467,7 +403,7 @@
               :x1="scalePosition(indel.end)"
               :y1="hnf1bTrackY + exonHeight / 2"
               :x2="scalePosition(indel.end)"
-              :y2="hnf1bTrackY + exonHeight / 2 + 5"
+              :y2="hnf1bTrackY + exonHeight / 2 + 30"
               stroke="#424242"
               stroke-width="1"
               opacity="0.6"
@@ -476,7 +412,7 @@
             <text
               v-if="indel.isCurrentVariant"
               :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2"
-              :y="hnf1bTrackY + exonHeight / 2 + 40"
+              :y="hnf1bTrackY + exonHeight / 2 + 65"
               text-anchor="middle"
               class="indel-label-text"
               fill="#9C27B0"
@@ -490,7 +426,7 @@
             <text
               v-if="indel.isCurrentVariant"
               :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2 - 35"
-              :y="hnf1bTrackY + exonHeight / 2 + 40"
+              :y="hnf1bTrackY + exonHeight / 2 + 65"
               text-anchor="middle"
               class="variant-star-icon"
               fill="#9C27B0"
@@ -503,7 +439,9 @@
           </g>
 
           <!-- SNV markers -->
+          <!-- Only shown in gene mode, not CNV mode -->
           <g
+            v-if="effectiveViewMode !== 'cnv'"
             v-for="(variant, index) in snvVariants"
             :key="`snv-${index}`"
           >
@@ -578,7 +516,9 @@
           </g>
 
           <!-- Splice variant markers (diamonds) -->
+          <!-- Only shown in gene mode, not CNV mode -->
           <g
+            v-if="effectiveViewMode !== 'cnv'"
             v-for="(variant, index) in spliceVariants"
             :key="`splice-${index}`"
           >
@@ -867,8 +807,17 @@ export default {
     showViewModeToggle() {
       return this.forceViewMode === null;
     },
+    // Dynamic SVG height based on number of CNVs in CNV mode
+    dynamicSvgHeight() {
+      if (this.effectiveViewMode === 'cnv' && this.cnvVariants.length > 0) {
+        // Base height + space for CNVs (20px per CNV)
+        const cnvSpace = this.cnvVariants.length * 20 + 50;
+        return Math.max(600, this.margin.top + this.margin.bottom + cnvSpace + 200);
+      }
+      return this.svgHeight;
+    },
     centerY() {
-      return (this.svgHeight - this.margin.top - this.margin.bottom) / 2 + this.margin.top;
+      return (this.dynamicSvgHeight - this.margin.top - this.margin.bottom) / 2 + this.margin.top;
     },
     // HNF1B track Y position (shifted down in CNV mode to avoid overlap with gene labels)
     hnf1bTrackY() {
@@ -928,11 +877,16 @@ export default {
       return hasCNVsInArray;
     },
     variantsWithPositions() {
-      return this.variants
-        .filter((v) => v.variant_id === this.currentVariantId) // Only show current variant
+      // If currentVariantId is provided, show only that variant (used on variant detail page)
+      // If no currentVariantId, show all variants (used on homepage)
+      const filteredVariants = this.currentVariantId
+        ? this.variants.filter((v) => v.variant_id === this.currentVariantId)
+        : this.variants;
+
+      return filteredVariants
         .map((v) => ({
           ...v,
-          isCurrentVariant: true,
+          isCurrentVariant: v.variant_id === this.currentVariantId,
           position: this.extractVariantPosition(v),
           isCNV: this.isCNV(v),
           isIndel: this.isIndel(v),
@@ -970,9 +924,11 @@ export default {
             start: cnvDetails?.start ? parseInt(cnvDetails.start) : null,
             end: cnvDetails?.end ? parseInt(cnvDetails.end) : null,
             cnvType: cnvDetails?.type,
+            size: cnvDetails ? parseInt(cnvDetails.end) - parseInt(cnvDetails.start) : 0,
           };
         })
-        .filter((v) => v.start && v.end);
+        .filter((v) => v.start && v.end)
+        .sort((a, b) => b.size - a.size); // Sort by size descending (largest first)
 
       // If variants array is empty but current variant is a CNV, add it
       if (cnvsFromArray.length === 0 && this.currentVariantCNVDetails) {
@@ -984,6 +940,7 @@ export default {
             end: this.currentVariantCNVDetails.end,
             cnvType: this.currentVariantCNVDetails.type,
             classificationVerdict: 'PATHOGENIC', // Default for current variant
+            size: this.currentVariantCNVDetails.end - this.currentVariantCNVDetails.start,
           },
         ];
       }

@@ -463,11 +463,16 @@ export default {
       return markers;
     },
     variantsWithPositions() {
-      return this.variants
-        .filter((v) => v.variant_id === this.currentVariantId) // Only show current variant
+      // If currentVariantId is provided, show only that variant (used on variant detail page)
+      // If no currentVariantId, show all variants (used on homepage)
+      const filteredVariants = this.currentVariantId
+        ? this.variants.filter((v) => v.variant_id === this.currentVariantId)
+        : this.variants;
+
+      return filteredVariants
         .map((v) => ({
           ...v,
-          isCurrentVariant: true,
+          isCurrentVariant: v.variant_id === this.currentVariantId,
           aaPosition: this.extractAAPosition(v),
           isCNV: this.isCNV(v),
         }))

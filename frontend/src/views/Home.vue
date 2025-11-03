@@ -78,6 +78,41 @@
             </div>
           </v-card-text>
         </v-card>
+
+        <!-- SNV Visualization - HNF1B Gene Detail -->
+        <v-card
+          class="mt-4"
+          variant="flat"
+        >
+          <HNF1BGeneVisualization
+            :variants="snvVariants"
+            force-view-mode="gene"
+            @variant-clicked="navigateToVariant"
+          />
+        </v-card>
+
+        <!-- Protein Visualization - SNVs mapped to protein domains -->
+        <v-card
+          class="mt-4"
+          variant="flat"
+        >
+          <HNF1BProteinVisualization
+            :variants="snvVariants"
+            @variant-clicked="navigateToVariant"
+          />
+        </v-card>
+
+        <!-- CNV Visualization - 17q12 Region -->
+        <v-card
+          class="mt-4"
+          variant="flat"
+        >
+          <HNF1BGeneVisualization
+            :variants="cnvVariants"
+            force-view-mode="cnv"
+            @variant-clicked="navigateToVariant"
+          />
+        </v-card>
       </v-col>
     </v-row>
   </v-container>
@@ -86,7 +121,9 @@
 <script>
 import { ref, onMounted } from 'vue';
 import SearchCard from '@/components/SearchCard.vue';
-import { getSummaryStats } from '@/api/index.js';
+import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
+import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
+import { getSummaryStats, getVariants } from '@/api/index.js';
 
 /**
  * Home view component.
@@ -100,6 +137,8 @@ export default {
   name: 'Home',
   components: {
     SearchCard,
+    HNF1BGeneVisualization,
+    HNF1BProteinVisualization,
   },
   setup() {
     // Holds the stats to be displayed, with default values of 0.
@@ -109,6 +148,13 @@ export default {
       total_reports: 0,
       publications: 0,
     });
+
+    // Holds all variants for the gene visualization
+    const allVariants = ref([]);
+
+    // Separate variants by type for different visualization cards
+    const snvVariants = ref([]);
+    const cnvVariants = ref([]);
 
     /**
      * Animate a count from 0 to the target value.
@@ -159,9 +205,101 @@ export default {
       }
     };
 
-    onMounted(fetchStats);
+    /**
+     * Check if a variant is a CNV that extends beyond HNF1B gene boundaries.
+     * Only large structural variants that span beyond HNF1B should be in CNV track.
+     *
+     * @param {Object} variant - Variant object with hg38 field
+     * @returns {boolean} True if variant is a large CNV extending beyond HNF1B
+     */
+    const isCNV = (variant) => {
+      if (!variant || !variant.hg38) return false;
 
-    return { displayStats };
+      // HNF1B gene boundaries (GRCh38)
+      const HNF1B_START = 37686430;
+      const HNF1B_END = 37745059;
+
+      // Check for range notation: 17:start-end:DEL/DUP
+      const match = variant.hg38.match(/:(\d+)-(\d+):/);
+      if (match) {
+        const start = parseInt(match[1]);
+        const end = parseInt(match[2]);
+        const size = end - start;
+
+        // Only consider it a "CNV track variant" if:
+        // 1. Size >= 50bp (structural variant)
+        // 2. Extends beyond HNF1B gene boundaries
+        const extendsBeyondHNF1B = start < HNF1B_START || end > HNF1B_END;
+        return size >= 50 && extendsBeyondHNF1B;
+      }
+      return false;
+    };
+
+    /**
+     * Check if a variant is an indel (small insertion/deletion < 50bp).
+     *
+     * @param {Object} variant - Variant object with hg38 field
+     * @returns {boolean} True if variant is a small indel
+     */
+    const isIndel = (variant) => {
+      if (!variant || !variant.hg38) return false;
+      // Check for range notation with size < 50bp
+      const match = variant.hg38.match(/:(\d+)-(\d+):/);
+      if (match) {
+        const start = parseInt(match[1]);
+        const end = parseInt(match[2]);
+        const size = end - start;
+        return size < 50;
+      }
+      // Check for VCF-style indels: chr17-37710502-ATCG-A (different ref/alt lengths)
+      const vcfMatch = variant.hg38.match(/chr\d+-\d+-([A-Z]+)-([A-Z]+)/i);
+      if (vcfMatch) {
+        return vcfMatch[1].length !== vcfMatch[2].length;
+      }
+      return false;
+    };
+
+    /**
+     * Fetch all variants for the gene visualization.
+     * Splits variants into SNVs (for HNF1B gene view) and CNVs (for 17q12 region view).
+     *
+     * @async
+     * @function fetchAllVariants
+     * @returns {Promise<void>}
+     */
+    const fetchAllVariants = async () => {
+      try {
+        // Fetch all variants with a large page size to get everything
+        const response = await getVariants({ page: 1, page_size: 1000 });
+        allVariants.value = response.data || [];
+
+        // Split variants by type
+        // SNVs: Point mutations, splice variants, and ALL small variants (shown in gene detail view)
+        // CNVs: ONLY large structural variants >= 50bp (shown in 17q12 region view)
+        // This matches publication style where CNVs and SNVs are shown separately
+        snvVariants.value = allVariants.value.filter((v) => !isCNV(v));
+        cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
+      } catch (error) {
+        console.error('Error fetching variants:', error);
+      }
+    };
+
+    /**
+     * Navigate to a variant detail page when clicked in the visualization.
+     *
+     * @param {Object} variant - The variant object that was clicked
+     */
+    const navigateToVariant = (variant) => {
+      // Use the router to navigate to the variant detail page
+      window.location.href = `/variants/${variant.variant_id}`;
+    };
+
+    onMounted(() => {
+      fetchStats();
+      fetchAllVariants();
+    });
+
+    return { displayStats, snvVariants, cnvVariants, navigateToVariant };
   },
 };
 </script>
