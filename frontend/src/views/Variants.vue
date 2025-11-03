@@ -923,7 +923,7 @@ export default {
         return 'orange-lighten-3';
       }
       if (upperPath.includes('UNCERTAIN') || upperPath.includes('VUS')) {
-        return 'yellow-lighten-3';
+        return 'yellow-darken-1';
       }
       if (upperPath.includes('LIKELY_BENIGN') || upperPath.includes('LIKELY BENIGN')) {
         return 'light-green-lighten-3';

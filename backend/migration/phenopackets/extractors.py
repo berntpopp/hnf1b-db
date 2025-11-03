@@ -469,19 +469,22 @@ class VariantExtractor:
                 ] = {"id": "GENO:0000135", "label": "heterozygous"}
 
         # Map pathogenicity
+        # IMPORTANT: Check more specific patterns first to avoid substring matches
+        # e.g., "likely pathogenic" must be checked before "pathogenic"
         if verdict:
-            path_map = {
-                "pathogenic": "PATHOGENIC",
-                "likely pathogenic": "LIKELY_PATHOGENIC",
-                "uncertain significance": "UNCERTAIN_SIGNIFICANCE",
-                "likely benign": "LIKELY_BENIGN",
-                "benign": "BENIGN",
-            }
             verdict_lower = verdict.lower()
-            for key, value in path_map.items():
-                if key in verdict_lower:
-                    genomic_interp["interpretationStatus"] = value
-                    break
+
+            # Check specific patterns first (longer strings before shorter)
+            if "likely pathogenic" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "LIKELY_PATHOGENIC"
+            elif "likely benign" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "LIKELY_BENIGN"
+            elif "pathogenic" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "PATHOGENIC"
+            elif "uncertain significance" in verdict_lower or "vus" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "UNCERTAIN_SIGNIFICANCE"
+            elif "benign" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "BENIGN"
 
         # Add classification criteria
         if criteria:

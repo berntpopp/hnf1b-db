@@ -101,6 +101,42 @@
               </v-icon>
               Pathogenic
             </v-chip>
+            <v-chip
+              size="small"
+              color="orange-lighten-3"
+            >
+              <v-icon
+                left
+                size="small"
+              >
+                mdi-circle
+              </v-icon>
+              Likely Pathogenic
+            </v-chip>
+            <v-chip
+              size="small"
+              color="yellow-darken-1"
+            >
+              <v-icon
+                left
+                size="small"
+              >
+                mdi-circle
+              </v-icon>
+              VUS
+            </v-chip>
+            <v-chip
+              size="small"
+              color="light-green-lighten-3"
+            >
+              <v-icon
+                left
+                size="small"
+              >
+                mdi-circle
+              </v-icon>
+              Likely Benign
+            </v-chip>
           </div>
         </v-col>
       </v-row>
@@ -600,7 +636,7 @@ export default {
         return '#FF9800'; // orange-lighten-3
       }
       if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return '#FFEB3B'; // yellow-lighten-3
+        return '#FBC02D'; // yellow-darken-1
       }
       if (classification.includes('LIKELY_BENIGN')) {
         return '#9CCC65'; // light-green-lighten-3
