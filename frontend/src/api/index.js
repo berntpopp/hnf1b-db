@@ -379,10 +379,10 @@ export const getVariants = async (params = {}) => {
     },
   });
 
-  // Transform backend response to match expected format
-  // Note: Backend returns plain array without total count
-  // So we estimate total based on returned data
-  const data = response.data || [];
+  // Backend now returns { data: [...], total: N, skip: N, limit: N }
+  const responseData = response.data || {};
+  const data = responseData.data || [];
+  const total = responseData.total || 0;
 
   return {
     data: data.map((variant) => ({
@@ -401,10 +401,9 @@ export const getVariants = async (params = {}) => {
       molecular_consequence: variant.molecular_consequence,
     })),
     meta: {
-      // Since backend doesn't provide total count, we estimate
-      // If we got fewer items than requested, we're on the last page
-      total: data.length < limit ? skip + data.length : (page + 1) * page_size,
-      total_pages: data.length < limit ? page : page + 1,
+      // Backend provides accurate total count
+      total: total,
+      total_pages: Math.ceil(total / page_size),
       current_page: page,
       page_size: page_size,
     },

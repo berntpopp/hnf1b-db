@@ -22,7 +22,6 @@ from app.phenopackets.models import (
 )
 from app.phenopackets.molecular_consequence import (
     compute_molecular_consequence,
-    filter_by_consequence,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.phenopackets.variant_search_validation import (
@@ -1106,7 +1105,7 @@ async def aggregate_publications(
     ]
 
 
-@router.get("/aggregate/all-variants", response_model=List[Dict])
+@router.get("/aggregate/all-variants")
 async def aggregate_all_variants(
     request: Request,
     limit: int = Query(100, ge=1, le=1000),
@@ -1664,6 +1663,63 @@ async def aggregate_all_variants(
     result = await db.execute(text(query), params)
     rows = result.fetchall()
 
+    # Get total count of variants (without limit/offset)
+    # Reuse the same CTEs but only count final results
+    count_query = f"""
+    WITH all_variants_unfiltered AS (
+        SELECT DISTINCT ON (vd->>'id', p.id)
+            vd->>'id' as variant_id,
+            vd->'geneContext'->>'symbol' as gene_symbol,
+            p.id as phenopacket_id
+        FROM
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
+            LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
+        WHERE
+            vi_lateral.vi IS NOT NULL
+            AND vd_lateral.vd IS NOT NULL
+    ),
+    all_variants_agg AS (
+        SELECT
+            variant_id,
+            MAX(gene_symbol) as gene_symbol,
+            COUNT(DISTINCT phenopacket_id) as phenopacket_count
+        FROM all_variants_unfiltered
+        GROUP BY variant_id
+    ),
+    variant_raw AS (
+        SELECT DISTINCT ON (vd->>'id', p.id)
+            vd->>'id' as variant_id,
+            p.id as phenopacket_id
+        FROM
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+            LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
+            LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
+        WHERE
+            vi_lateral.vi IS NOT NULL
+            AND vd_lateral.vd IS NOT NULL
+            {where_sql}
+    ),
+    variant_agg AS (
+        SELECT
+            variant_id,
+            COUNT(DISTINCT phenopacket_id) as phenopacket_count
+        FROM variant_raw
+        GROUP BY variant_id
+    )
+    SELECT COUNT(*) as total
+    FROM variant_agg
+    """
+
+    # Create a copy of params without limit/offset for count query
+    count_params = {k: v for k, v in params.items() if k not in ('limit', 'offset')}
+    count_result = await db.execute(text(count_query), count_params)
+    total_count = count_result.scalar() or 0
+
     # simple_id is calculated using default sort order (by individual count)
     # This ensures each variant has a stable ID regardless of current sort
     variants = [
@@ -1701,7 +1757,13 @@ async def aggregate_all_variants(
         request_path=str(request.url.path),
     )
 
-    return variants
+    # Return variants with pagination metadata
+    return {
+        "data": variants,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get("/by-variant/{variant_id}", response_model=List[PhenopacketResponse])
