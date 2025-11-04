@@ -481,6 +481,8 @@ export default {
           function: 'Transcriptional activation',
         },
       ],
+      // functionalSites is intentionally left empty pending verification of functional site data accuracy
+      // The rendering code (lines 288-302) remains in place for future implementation when curated data is available
       functionalSites: [],
     };
   },
