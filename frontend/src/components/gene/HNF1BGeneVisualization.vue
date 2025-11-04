@@ -988,7 +988,7 @@ export default {
         for (let row = 0; row < 6; row++) {
           // Check if this position collides with any existing labels in this row
           const hasCollision = rowOccupancy[row].some(occupied => {
-            return !(labelEnd < occupied.start || labelStart > occupied.end);
+            return labelEnd >= occupied.start && labelStart <= occupied.end;
           });
 
           if (!hasCollision) {
