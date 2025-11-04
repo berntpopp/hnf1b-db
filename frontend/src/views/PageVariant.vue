@@ -682,6 +682,16 @@ export default {
           const sign = spliceMatch[1];
           const position = parseInt(spliceMatch[2], 10);
 
+          // Canonical splice site boundaries (HGVS/Sequence Ontology conventions):
+          // Splice Donor (5' site): +1 to +6 positions after exon end
+          //   - Conserved GT dinucleotide at +1/+2 (SO:0000164)
+          //   - Extended donor motif spans +1 to +6
+          // Splice Acceptor (3' site): -1 to -3 positions before exon start
+          //   - Conserved AG dinucleotide at -2/-1 (SO:0000162)
+          //   - Branch point region at -3
+          // References:
+          //   - Sequence Ontology: http://www.sequenceontology.org/
+          //   - HGVS nomenclature: https://varnomen.hgvs.org/
           if (sign === '+' && position >= 1 && position <= 6) return 'Splice Donor';
           if (sign === '-' && position >= 1 && position <= 3) return 'Splice Acceptor';
           return 'Intronic Variant';
