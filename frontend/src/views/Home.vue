@@ -120,6 +120,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
@@ -141,6 +142,8 @@ export default {
     HNF1BProteinVisualization,
   },
   setup() {
+    const router = useRouter();
+
     // Holds the stats to be displayed, with default values of 0.
     const displayStats = ref({
       individuals: 0,
@@ -266,8 +269,8 @@ export default {
      * @param {Object} variant - The variant object that was clicked
      */
     const navigateToVariant = (variant) => {
-      // Use the router to navigate to the variant detail page
-      window.location.href = `/variants/${variant.variant_id}`;
+      // Use Vue Router for SPA navigation (no page reload)
+      router.push(`/variants/${variant.variant_id}`);
     };
 
     onMounted(() => {
