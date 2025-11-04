@@ -92,6 +92,11 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.per-file-ignores]
+# Alembic migration files: revision identifiers are required by Alembic framework
+# These variables are read via introspection, not direct import
+"alembic/versions/*.py" = ["F841"]  # Unused variable (revision, down_revision, etc.)
+
 [tool.ruff.lint.isort]
 # Configuration compatible with black formatting
 
