@@ -398,6 +398,8 @@
 </template>
 
 <script>
+import { extractCNotation, extractPNotation } from '@/utils/hgvs';
+
 export default {
   name: 'HNF1BProteinVisualization',
   props: {
@@ -621,16 +623,9 @@ export default {
       }
       return '#BDBDBD'; // grey
     },
-    extractCNotation(transcript) {
-      if (!transcript) return '';
-      const match = transcript.match(/:(.+)$/);
-      return match && match[1] ? match[1] : transcript;
-    },
-    extractPNotation(protein) {
-      if (!protein) return '';
-      const match = protein.match(/:(.+)$/);
-      return match && match[1] ? match[1] : protein;
-    },
+    // HGVS extraction functions imported from utils/hgvs
+    extractCNotation,
+    extractPNotation,
     showDomainTooltip(event, domain) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'domain', data: domain };
