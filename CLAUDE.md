@@ -523,6 +523,16 @@ uv run pytest              # Run tests
 
 ## Testing & CI/CD
 
+### Critical Rule: Never Skip or Ignore Issues
+
+**⚠️ ABSOLUTE REQUIREMENT:**
+- **NEVER skip failing tests** - Always fix them properly
+- **NEVER ignore linting errors** - Fix or properly suppress with documentation
+- **NEVER ignore type checking errors** - Fix code or add documented exceptions
+- Use modern best practices (e.g., pytest `caplog` for logging tests, not mocking)
+- Pre-existing issues must be fixed, not skipped or worked around
+- Quality gates are mandatory - all checks must pass before merge
+
 ### Why Testing is Critical
 
 Recent issues (see #20) were caused by:
