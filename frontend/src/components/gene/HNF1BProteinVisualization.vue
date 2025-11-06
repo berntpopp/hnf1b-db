@@ -284,22 +284,6 @@
               />
             </g>
           </g>
-
-          <!-- Functional sites (stars) -->
-          <g
-            v-for="site in functionalSites"
-            :key="`site-${site.position}`"
-          >
-            <path
-              :d="getStarPath(scaleAAPosition(site.position), backboneY - domainHeight / 2 - 5)"
-              fill="#FFD700"
-              stroke="#FF6F00"
-              stroke-width="1"
-              class="functional-site"
-              @mouseenter="showSiteTooltip($event, site)"
-              @mousemove="updateTooltipPosition($event)"
-            />
-          </g>
         </svg>
       </div>
 
@@ -407,14 +391,6 @@
               Click to view details
             </div>
           </div>
-          <div v-else-if="tooltipContent.type === 'site'">
-            <div class="text-h6 mb-2">
-              {{ tooltipContent.data.label }}
-            </div>
-            <div class="text-body-2">
-              <strong>Position:</strong> aa {{ tooltipContent.data.position }}
-            </div>
-          </div>
         </v-card-text>
       </v-card>
     </div>
@@ -481,9 +457,6 @@ export default {
           function: 'Transcriptional activation',
         },
       ],
-      // functionalSites is intentionally left empty pending verification of functional site data accuracy
-      // The rendering code (lines 288-302) remains in place for future implementation when curated data is available
-      functionalSites: [],
     };
   },
   computed: {
@@ -658,17 +631,6 @@ export default {
       const match = protein.match(/:(.+)$/);
       return match && match[1] ? match[1] : protein;
     },
-    getStarPath(cx, cy) {
-      // Create a 5-pointed star path
-      const size = 6;
-      const points = [];
-      for (let i = 0; i < 10; i++) {
-        const angle = (i * Math.PI) / 5 - Math.PI / 2;
-        const radius = i % 2 === 0 ? size : size / 2;
-        points.push(`${cx + radius * Math.cos(angle)},${cy + radius * Math.sin(angle)}`);
-      }
-      return `M${points.join('L')}Z`;
-    },
     showDomainTooltip(event, domain) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'domain', data: domain };
@@ -677,11 +639,6 @@ export default {
     showVariantTooltip(event, variant) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'variant', data: variant };
-      this.tooltipVisible = true;
-    },
-    showSiteTooltip(event, site) {
-      this.updateTooltipPosition(event);
-      this.tooltipContent = { type: 'site', data: site };
       this.tooltipVisible = true;
     },
     updateTooltipPosition(event) {
