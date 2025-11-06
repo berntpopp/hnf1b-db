@@ -193,7 +193,9 @@ export default {
   },
   methods: {
     async loadAllVariants() {
-      const response = await getVariants({ page: 1, page_size: 1000 });
+      // ⚠️ WARNING: Fetches all variants assuming database size < MAX_VARIANTS_FOR_PRIORITY_SORT
+      // See @/config/app.js API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT for details
+      const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
       this.allVariants = response.data || [];
     },
     navigateToVariant(variant) {

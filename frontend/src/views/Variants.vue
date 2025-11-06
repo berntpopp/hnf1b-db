@@ -458,6 +458,7 @@ import {
   getVariantTypeColor,
 } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
+import { API_CONFIG } from '@/config/app';
 
 export default {
   name: 'Variants',
@@ -638,9 +639,12 @@ export default {
         };
 
         // When priority sorting is active, fetch ALL variants to sort them properly across pages
+        // ⚠️ WARNING: This assumes database has fewer variants than MAX_VARIANTS_FOR_PRIORITY_SORT
+        // If database grows beyond this limit, priority sorting will only work on first N variants
+        // See @/config/app.js API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT for details and solutions
         if (this.variantTypeSortPriority || this.classificationSortPriority) {
           requestParams.page = 1;
-          requestParams.page_size = 1000; // Fetch all variants (adjust if you have more than 1000)
+          requestParams.page_size = API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT;
         } else {
           requestParams.page = page;
           requestParams.page_size = itemsPerPage;

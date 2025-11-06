@@ -179,6 +179,7 @@ import SearchCard from '@/components/SearchCard.vue';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 import { getSummaryStats, getVariants } from '@/api/index.js';
+import { API_CONFIG } from '@/config/app';
 
 /**
  * Home view component.
@@ -312,7 +313,9 @@ export default {
 
       try {
         // Fetch all variants to filter SNVs
-        const response = await getVariants({ page: 1, page_size: 1000 });
+        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
+        // See @/config/app.js for details
+        const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
         allVariants.value = response.data || [];
 
         // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
@@ -336,8 +339,10 @@ export default {
 
       try {
         // Use cached allVariants if available, otherwise fetch
+        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
+        // See @/config/app.js for details
         if (allVariants.value.length === 0) {
-          const response = await getVariants({ page: 1, page_size: 1000 });
+          const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
           allVariants.value = response.data || [];
         }
 
