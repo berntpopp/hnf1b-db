@@ -1,9 +1,11 @@
 # PR #67 Refactoring Implementation Plan
 
-**Status:** In Progress
+**Status:** Phase 2 Complete - Backend Next
 **Created:** 2025-11-06
+**Last Updated:** 2025-11-06
 **PR:** feat/variant-page → main
 **Review:** docs/reviews/feat-variant-page/detailed-review.md
+**Current Phase:** Phase 3 - Backend DRY Violations
 
 ---
 
@@ -12,8 +14,8 @@
 This document provides a detailed, session-resumable implementation plan for refactoring PR #67 to address Priority 1 blocking issues identified in code review.
 
 **Total Estimated Time:** 25-33 hours
-**Completed:** 2 hours (utility modules created)
-**Remaining:** 23-31 hours
+**Completed:** 8 hours (Phase 1 + Phase 2 complete)
+**Remaining:** 17-25 hours
 
 ---
 
@@ -26,172 +28,143 @@ This document provides a detailed, session-resumable implementation plan for ref
 - [x] Create `frontend/src/utils/hgvs.js` (extractCNotation, extractPNotation, extractTranscriptId, extractProteinId)
 - [x] Create `frontend/src/utils/colors.js` (getPathogenicityColor, getVariantTypeColor, getClassificationColor)
 - [x] Create `frontend/src/utils/variants.js` (getVariantType, isCNV, isIndel, isSpliceVariant, getVariantSize)
+- [x] Enhanced `variants.js` with configurable options (specificCNVType, formatted)
 - [x] Commit utility modules
 
-**Commit Message:**
+**Commit Messages:**
 ```
 refactor(frontend): create utility modules to eliminate DRY violations
+refactor(frontend): enhance variant utilities with configurable options
 ```
 
 ---
 
-## 🔄 Phase 2: DRY Violations - Component Refactoring (IN PROGRESS)
+## ✅ Phase 2: DRY Violations - Component Refactoring (COMPLETED)
 
-**Estimated Time:** 6-8 hours
-**Status:** NEXT
+**Time Spent:** 6 hours
+**Status:** ✅ DONE
 
-Refactor 4 components to use the new utility modules instead of duplicated code.
+Refactored 4 components to use the new utility modules instead of duplicated code.
 
-### 2.1 Update PageVariant.vue (~1.5 hours)
+### ✅ 2.1 Update PageVariant.vue (COMPLETED)
 
-**File:** `frontend/src/views/PageVariant.vue` (971 lines)
+**File:** `frontend/src/views/PageVariant.vue`
+**Reduction:** 971 → 886 lines (85 lines removed, 8.8%)
 
-**Current Duplicated Methods (to remove):**
-- Lines 618-627: `extractCNotation()`
-- Lines 629-636: `extractPNotation()`
-- Lines 638-656: `getPathogenicityColor()`
-- Lines 658-674: `getVariantType()` (partial, CNV detection only)
-
-**Steps:**
-1. Add imports at top of script section:
-   ```javascript
-   import { extractCNotation, extractPNotation } from '@/utils/hgvs';
-   import { getPathogenicityColor } from '@/utils/colors';
-   import { getVariantType, isCNV, getVariantSize } from '@/utils/variants';
-   ```
-
-2. Remove methods: `extractCNotation`, `extractPNotation`, `getPathogenicityColor`, `getVariantType`
-
-3. Update `methods` object to reference imported functions:
-   ```javascript
-   methods: {
-     extractCNotation,
-     extractPNotation,
-     getPathogenicityColor,
-     getVariantType,
-     isCNV,
-     getVariantSize,
-     // ... other methods
-   }
-   ```
-
-4. Verify no other methods call the removed functions with `this.` prefix
-5. Test the variant detail page loads correctly
-6. Run linting: `npm run lint`
-
-**Expected Line Reduction:** ~60 lines
+**Changes Made:**
+- Added imports for HGVS, color, and variant utilities
+- Removed duplicated methods: `extractCNotation`, `extractPNotation`, `extractTranscriptId`, `extractProteinId`, `getPathogenicityColor`, `getVariantType`, `isCNV`, `getCNVDetails`, `getVariantSize`
+- Created wrapper methods calling utilities with `specificCNVType: true` option for detail view
+- All tests passed, no console errors
 
 **Commit Message:**
 ```
-refactor(frontend): update PageVariant to use utility functions
+refactor(frontend): migrate PageVariant to use utility functions (#67)
 
-- Replace duplicated extractCNotation/extractPNotation with utils/hgvs
-- Replace duplicated getPathogenicityColor with utils/colors
-- Replace duplicated getVariantType with utils/variants
-- Reduces file from 971 to ~910 lines
-- Part of DRY violations fix for PR #67
+- Import HGVS, color, and variant utilities
+- Remove 85 lines of duplicated code (971 → 886 lines)
+- Use wrapper methods with specificCNVType option for detail view
+- Phase 2.1 complete
 ```
 
 ---
 
-### 2.2 Update Variants.vue (~1.5 hours)
+### ✅ 2.2 Update Variants.vue (COMPLETED)
 
-**File:** `frontend/src/views/Variants.vue` (989 lines)
+**File:** `frontend/src/views/Variants.vue`
+**Reduction:** 989 → 899 lines (90 lines removed, 9.1%)
 
-**Current Duplicated Methods (to remove):**
-- Lines 937-949: `extractCNotation()`
-- Lines 951-963: `extractPNotation()`
-- Lines 738-756: `getClassificationColor()` (similar to getPathogenicityColor)
-- Lines 917-935: `getPathogenicityColor()`
-- Lines 758-802: `getVariantType()`
-- Lines 904-915: `getVariantTypeColor()`
-
-**Steps:**
-1. Add imports at top of script section:
-   ```javascript
-   import { extractCNotation, extractPNotation } from '@/utils/hgvs';
-   import { getPathogenicityColor, getVariantTypeColor, getClassificationColor } from '@/utils/colors';
-   import { getVariantType } from '@/utils/variants';
-   ```
-
-2. Remove methods: `extractCNotation`, `extractPNotation`, `getClassificationColor`, `getPathogenicityColor`, `getVariantType`, `getVariantTypeColor`
-
-3. Update `methods` object to reference imported functions:
-   ```javascript
-   methods: {
-     extractCNotation,
-     extractPNotation,
-     getClassificationColor,
-     getPathogenicityColor,
-     getVariantType,
-     getVariantTypeColor,
-     // ... other methods
-   }
-   ```
-
-4. Test the variants list page:
-   - Loads correctly
-   - Search works
-   - Filters work
-   - Colors display correctly
-   - Sorting works
-
-5. Run linting: `npm run lint`
-
-**Expected Line Reduction:** ~100 lines
+**Changes Made:**
+- Added imports for HGVS, color, and variant utilities
+- Removed duplicated methods: `extractCNotation`, `extractPNotation`, `getClassificationColor`, `getPathogenicityColor`, `getVariantType`, `getVariantTypeColor`
+- All tests passed: list loads, filters work, colors display correctly
+- No console errors
 
 **Commit Message:**
 ```
-refactor(frontend): update Variants view to use utility functions
+refactor(frontend): migrate Variants view to use utility functions (#67)
 
-- Replace duplicated HGVS extraction with utils/hgvs
-- Replace duplicated color mapping with utils/colors
-- Replace duplicated variant type detection with utils/variants
-- Reduces file from 989 to ~890 lines
-- Part of DRY violations fix for PR #67
+- Import HGVS, color, and variant utilities
+- Remove 90 lines of duplicated code (989 → 899 lines)
+- Tested: 198 variants load correctly with filters
+- Phase 2.2 complete
 ```
 
 ---
 
-### 2.3 Update HNF1BGeneVisualization.vue (~1.5 hours)
+### ✅ 2.3 Update HNF1BGeneVisualization.vue (COMPLETED)
 
-**File:** `frontend/src/components/gene/HNF1BGeneVisualization.vue` (1,510 lines)
+**File:** `frontend/src/components/gene/HNF1BGeneVisualization.vue`
+**Reduction:** 1,510 → 1,493 lines (17 lines removed, 1.1%)
 
-**Current Duplicated Methods (to remove):**
-- Lines 1289-1298: `extractCNotation()`
-- Possibly other HGVS/color functions (needs verification)
-
-**Steps:**
-1. Search file for all duplicated functions:
-   ```bash
-   grep -n "extractCNotation\|extractPNotation\|getPathogenicityColor\|getVariantType" frontend/src/components/gene/HNF1BGeneVisualization.vue
-   ```
-
-2. Add imports:
-   ```javascript
-   import { extractCNotation, extractPNotation } from '@/utils/hgvs';
-   import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
-   import { getVariantType, isCNV } from '@/utils/variants';
-   ```
-
-3. Remove duplicated methods
-
-4. Update `methods` object to reference imported functions
-
-5. Test gene visualization:
-   - Renders correctly on homepage
-   - Renders correctly on variant detail page
-   - Variants clickable
-   - Tooltips work
-   - Gene view vs CNV view toggle works
-
-6. Run linting: `npm run lint`
-
-**Expected Line Reduction:** ~20-30 lines
+**Changes Made:**
+- Added imports for HGVS extraction utilities
+- Removed duplicated methods: `extractCNotation`, `extractPNotation`
+- Extracted `getCNVDetails()` to utils/variants (was duplicated)
+- Kept component-specific methods: `isSpliceVariant()` (includes protein check), `getIndelDetails()` (complex VCF parsing for SVG)
+- Decision based on Rule of Three and YAGNI principles
 
 **Commit Message:**
 ```
-refactor(frontend): update HNF1BGeneVisualization to use utility functions
+refactor(frontend): remove HGVS duplicates from gene visualization (#67)
+
+- Import HGVS utilities and getCNVDetails from utils
+- Remove 17 lines of duplicated code (1510 → 1493 lines)
+- Keep component-specific visualization logic
+- Phase 2.3 complete
+```
+
+---
+
+### ✅ 2.4 Update HNF1BProteinVisualization.vue (COMPLETED)
+
+**File:** `frontend/src/components/gene/HNF1BProteinVisualization.vue`
+**Reduction:** 734 → 729 lines (5 lines removed, 0.7%)
+
+**Changes Made:**
+- Added imports for HGVS extraction utilities
+- Removed duplicated methods: `extractCNotation`, `extractPNotation`
+- Kept component-specific methods: `isCNV()` (simpler filter version), `getVariantColor()` (returns hex for D3.js SVG), `getPathogenicityScore()` (lollipop stacking), `extractAAPosition()` (complex HGVS parsing)
+- All D3.js visualization methods remain component-specific
+
+**Commit Message:**
+```
+refactor(frontend): remove HGVS extraction duplicates from protein visualization (#67)
+
+- Import extractCNotation and extractPNotation from utils/hgvs
+- Remove 5 lines of duplicated code (734 → 729 lines)
+- Keep component-specific D3.js SVG rendering methods
+- Phase 2.4 complete
+```
+
+---
+
+## Phase 2 Summary
+
+**Total Time Spent:** 6 hours
+**Total Lines Removed:** 197 lines across 4 files
+**Success Metrics:**
+- ✅ PageVariant.vue: 971 → 886 (-85 lines, 8.8%)
+- ✅ Variants.vue: 989 → 899 (-90 lines, 9.1%)
+- ✅ HNF1BGeneVisualization.vue: 1510 → 1493 (-17 lines, 1.1%)
+- ✅ HNF1BProteinVisualization.vue: 734 → 729 (-5 lines, 0.7%)
+- ✅ All components tested and working
+- ✅ No console errors
+- ✅ ESLint passes
+
+**Key Decisions:**
+- Enhanced utilities with configurable options (specificCNVType, formatted) to support both list and detail view use cases
+- Applied Rule of Three: Only extracted functions duplicated across multiple components
+- Applied YAGNI: Kept component-specific visualization logic (D3.js SVG rendering, complex parsing)
+
+---
+
+## 🔄 Phase 3: Backend DRY Violations (NEXT)
+
+**Estimated Time:** 4-6 hours
+**Status:** PENDING
+
+Extract duplicated query logic in backend endpoints
 
 - Replace duplicated extractCNotation with utils/hgvs
 - Add imports for color and variant utilities
