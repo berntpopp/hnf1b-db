@@ -176,7 +176,7 @@ class TestIndexStatistics:
         assert has_stats, "Table statistics should be updated (run ANALYZE)"
 
 
-@pytest.mark.skip(reason="Manual verification - requires data and visual inspection")
+@pytest.mark.benchmark
 class TestIndexPerformanceManual:
     """Manual tests for verifying index performance improvements.
 

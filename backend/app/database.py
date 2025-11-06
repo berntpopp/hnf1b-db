@@ -94,15 +94,22 @@ async def init_db() -> None:
 
     try:
         async with engine.begin():
+            # DEAD CODE: models module does not exist
             # Import all models to ensure they're registered with Base.metadata
-            try:
-                from app import models  # noqa: F401
-
-                logger.info("Models imported successfully")
-            except ImportError:
-                logger.warning(
-                    "Models not found - this is expected during initial setup"
-                )
+            # This import is currently unused as we don't have an app/models.py module
+            # TODO: Remove this code block or create app/models.py if needed
+            # try:
+            #     from app import models  # noqa: F401
+            #
+            #     logger.info("Models imported successfully")
+            # except ImportError:
+            #     logger.warning(
+            #         "Models not found - this is expected during initial setup"
+            #     )
+            logger.info(
+                "Database initialization - skipping models import "
+                "(no models module exists)"
+            )
 
             # Create all tables (in production, use Alembic migrations instead)
             # await conn.run_sync(Base.metadata.create_all)

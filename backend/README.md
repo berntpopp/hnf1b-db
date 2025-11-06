@@ -66,3 +66,62 @@ cp .env.example .env
 Required variables:
 - `DATABASE_URL` - PostgreSQL connection string
 - `JWT_SECRET` - Secret for JWT token signing (generate with `openssl rand -hex 32`)
+
+## API Documentation
+
+### Phenopackets Module
+
+Comprehensive API for phenopacket operations, variant search, and clinical queries.
+
+**Module Documentation:** [app/phenopackets/README.md](app/phenopackets/README.md)
+
+**Key Features:**
+- GA4GH Phenopackets v2 CRUD operations
+- **Variant Search** with 8 search fields (HGVS, coordinates, type, classification, etc.)
+- Clinical feature queries (renal, genital, diabetes, hypomagnesemia)
+- Aggregation endpoints for statistics
+
+**Variant Search API:** [docs/api/VARIANT_SEARCH.md](../docs/api/VARIANT_SEARCH.md)
+
+### Interactive API Docs
+
+When the server is running, visit:
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+## Testing
+
+Run the test suite:
+
+```bash
+make test             # Run all tests
+make check            # Run lint + typecheck + tests
+```
+
+**Testing Documentation:** [tests/README.md](tests/README.md)
+
+**Key Test Files:**
+- `test_variant_search.py` - Variant search validation (40+ tests)
+- `test_batch_endpoints.py` - Batch endpoint performance
+- `test_jsonb_indexes.py` - Database index verification
+- `test_phenopackets.py` - Core CRUD operations
+
+## Database Migrations
+
+Run migrations with Alembic:
+
+```bash
+# Upgrade to latest version
+uv run alembic upgrade head
+
+# Check current version
+uv run alembic current
+
+# See migration history
+uv run alembic history
+```
+
+**Recent Migrations:**
+- `001_initial_phenopackets_v2_schema.py` - Phenopackets v2 tables
+- `002_add_jsonb_path_indexes.py` - JSONB GIN indexes
+- `003_add_variant_search_indexes.py` - Variant search optimization (10x faster)

@@ -61,29 +61,29 @@ jobs:
         cd backend
         uv run alembic upgrade head
 
-    # Linting removed - use pre-commit hooks locally instead
-    # Style issues don't affect functionality
+    # Quality checks - must match `make check` exactly for 1-to-1 compatibility
+    # Commands: check-env lint typecheck test
+
+    - name: Run linting (ruff check)
+      run: |
+        cd backend
+        uv run ruff check .
 
     - name: Run type checking (mypy)
       run: |
         cd backend
         uv run mypy app/ migration/
-      continue-on-error: true  # Don't fail build on type errors initially
 
-    - name: Run tests with coverage
+    - name: Run tests (pytest)
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
       run: |
         cd backend
-        uv run pytest tests/ -v --cov=app --cov=migration --cov-report=xml --cov-report=term
+        uv run pytest -m "not benchmark" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
         file: ./backend/coverage.xml
         fail_ci_if_error: false
-
-  # Linting jobs removed - these are style checks, not functional tests
-  # Use pre-commit hooks locally for code style enforcement
-  # CI focuses on: tests, type checking, and critical error detection

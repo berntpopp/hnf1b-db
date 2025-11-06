@@ -148,7 +148,7 @@ class PhenopacketBuilder:
             if identifier and identifier not in identifiers:
                 identifiers.append(identifier)
 
-        subject = {
+        subject: Dict[str, Any] = {
             "id": individual_id,
             "sex": sex,
         }
@@ -222,7 +222,7 @@ class PhenopacketBuilder:
         For CNVs: Merges overlapping deletions/duplications from different studies
         into a single variant entry with multiple coordinate estimates.
         """
-        variant_dict = {}
+        variant_dict: Dict[str, Any] = {}
 
         for _, row in rows.iterrows():
             interpretations = self.variant_extractor.extract(row)

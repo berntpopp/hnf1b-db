@@ -173,7 +173,7 @@ class VRSBuilder:
         end = start + len(ref)
 
         # Build VRS 2.0 Allele structure
-        vrs_allele = {
+        vrs_allele: Dict[str, Any] = {
             "type": "Allele",
             "digest": None,  # Would be computed using GA4GH digest algorithm
             "location": {
@@ -308,11 +308,11 @@ class VRSBuilder:
     def create_vrs_snv_variant(
         cls,
         hg38: str,
-        c_dot: str = None,
-        p_dot: str = None,
-        transcript: str = None,
-        variant_reported: str = None,
-    ) -> Dict[str, Any]:
+        c_dot: str | None = None,
+        p_dot: str | None = None,
+        transcript: str | None = None,
+        variant_reported: str | None = None,
+    ) -> dict[str, Any] | None:
         """Create a VRS 2.0 compliant variant descriptor for SNVs/Indels.
 
         Args:

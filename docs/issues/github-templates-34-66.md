@@ -1,9 +1,11 @@
-# GitHub Issue Templates #34-#53
+# GitHub Issue Templates #34-#67
 
 Copy these templates to create GitHub issues.
 
 **Issues #34-#50:** Frontend migration and visualization tasks
 **Issues #51-#53:** Backend enhancements for publication features
+**Issue #62:** API infrastructure (JSON:API pagination)
+**Issues #64-#66:** Variant search and visualization enhancements
 
 ---
 
@@ -963,3 +965,287 @@ See: [docs/issues/issue-53-backend-publication-aggregation.md](./issue-53-backen
 ## Labels
 `backend`, `api`, `aggregation`, `statistics`, `privacy`, `p2`
 ```
+
+---
+
+## Issue #64
+
+```markdown
+# feat(backend): add variant search API endpoint with security
+
+⚠️ **SECURITY WARNING**: This issue implements database search functionality. All input validation, SQL injection prevention, and rate limiting MUST be implemented before production deployment.
+
+## Summary
+Create secure backend API endpoint for variant search across all phenopackets with multiple filter criteria, input validation, rate limiting, and audit logging.
+
+**Current:** No search endpoint exists - variants must be manually filtered client-side
+**Target:** RESTful search endpoint with parameterized queries, HGVS validation, rate limiting, and GDPR-compliant audit logging
+
+## Details
+See: [docs/issues/issue-64-variant-search.md](./issue-64-variant-search.md)
+
+## Acceptance Criteria
+
+**Security:**
+- [ ] All user inputs validated and sanitized
+- [ ] SQL injection prevented (parameterized queries only)
+- [ ] HGVS notation format validated
+- [ ] Rate limiting enforced (10 req/min per IP)
+- [ ] Audit logging captures all searches
+
+**Functionality:**
+- [ ] `/aggregate/variants/search` endpoint responds
+- [ ] Text search works for HGVS notations (c., p., g.)
+- [ ] Type filter works (SNV, deletion, etc.)
+- [ ] Classification filter works (P, LP, VUS, etc.)
+- [ ] Gene filter works (HNF1B)
+- [ ] Multiple filters can be combined (AND logic)
+- [ ] Returns total and filtered counts
+
+**Performance:**
+- [ ] Backend query performance < 200ms (with GIN indexes)
+- [ ] GIN indexes created for variant IDs, expressions, types, classifications
+- [ ] Max limit enforced (1000 variants per request)
+
+**Testing:**
+- [ ] SQL injection attempts fail (400 Bad Request)
+- [ ] Rate limit exceeded returns 429 Too Many Requests
+- [ ] Invalid HGVS notation returns 400 with helpful error
+
+## Dependencies
+- Issue #57 (Variant deduplication) - ⚠️ **BLOCKER** - Must resolve duplicate variants before search returns accurate results
+- Issue #34 (Variants list page) - ✅ Required for context
+- Issue #66 (Frontend search UI) - ⚠️ **DEPENDS ON THIS** - Cannot implement frontend without backend endpoint
+
+## Priority
+**P1 (High)** - Blocker for Issue #66 (frontend search UI)
+
+**Rationale:**
+- Security-critical endpoint (SQL injection risk)
+- Required for variant search functionality
+- Blocks frontend development until complete
+
+## Labels
+`backend`, `security`, `search`, `variants`, `database`, `p1`, `blocker`
+```
+
+---
+
+## Issue #65
+
+```markdown
+# feat(frontend): add HNF1B gene visualization with variant mapping
+
+## Summary
+Add interactive SVG visualization of HNF1B gene structure to variant detail page, showing exon/intron architecture with variants mapped to genomic positions.
+
+**Current:** Variant detail page shows metadata only (text/table)
+**Target:** Visual gene diagram with variants positioned on gene structure
+
+## Details
+See: [docs/issues/issue-65-gene-visualization.md](./issue-65-gene-visualization.md)
+
+## Acceptance Criteria
+- [ ] Gene structure displays all 9 exons correctly positioned
+- [ ] Exons rendered with genomic coordinates
+- [ ] Introns shown as connecting lines
+- [ ] Variants displayed as colored circles
+- [ ] Current variant highlighted distinctly
+- [ ] Variant colors match pathogenicity (P=red, LP=orange, VUS=yellow)
+- [ ] Exon hover shows number, position, size, domain
+- [ ] Variant hover shows HGVS, classification
+- [ ] Clicking variant navigates to detail page
+- [ ] Zoom controls work (in/out/reset)
+- [ ] Legend explains colors and symbols
+- [ ] Renders < 100ms for 100 variants
+
+## Dependencies
+- Issue #35 (Variant detail page) - ✅ Required
+- Issue #34 (Variants list) - ✅ Required (for fetching variants)
+
+## Priority
+**P3 (Low)** - Enhancement, not critical for MVP
+
+## Labels
+`frontend`, `visualization`, `variants`, `enhancement`, `p3`, `svg`, `d3`
+```
+
+---
+
+## Issue #66
+
+```markdown
+# feat(frontend): add variant search UI with filters
+
+## Summary
+Add frontend search interface to the variants list page, enabling users to quickly find specific variants by HGVS notation, gene, type, and pathogenicity classification.
+
+**Current:** Variants list shows all variants without search/filter capabilities
+**Target:** Interactive search bar with filters, active filter chips, and real-time result counts
+
+## Details
+See: [docs/issues/issue-66-frontend-variant-search-ui.md](./issue-66-frontend-variant-search-ui.md)
+
+## Acceptance Criteria
+
+**Search Functionality:**
+- [ ] Search bar accepts text input
+- [ ] Search is debounced (300ms delay)
+- [ ] Text search works for HGVS notations (c., p., g.)
+- [ ] Text search works for variant IDs
+- [ ] Text search works for gene symbols
+- [ ] Empty search shows all variants
+
+**Filter Functionality:**
+- [ ] Type filter works (SNV, deletion, duplication, insertion, inversion, CNV)
+- [ ] Classification filter works (P, LP, VUS, LB, B)
+- [ ] Gene filter works (HNF1B)
+- [ ] Multiple filters can be combined
+- [ ] Filters applied immediately (no debounce)
+
+**UI/UX:**
+- [ ] Active filters displayed as colored chips
+- [ ] Each chip has close button
+- [ ] Clear All button removes all filters
+- [ ] Results count shows "X of Y variants"
+- [ ] Search help tooltip shows examples
+- [ ] Loading states shown during API calls
+- [ ] No results message displayed appropriately
+- [ ] Responsive on mobile devices
+
+**Performance:**
+- [ ] Debouncing prevents excessive API calls (max 3/sec)
+- [ ] UI remains responsive during search
+- [ ] No flickering during debounced typing
+
+**Error Handling:**
+- [ ] API errors display user-friendly messages
+- [ ] Rate limit errors (429) handled gracefully
+- [ ] Network errors show connection failed message
+
+## Dependencies
+- Issue #64 (Backend search endpoint) - ⚠️ **BLOCKER** - Must be completed first
+- Issue #34 (Variants list page) - ✅ Required for context
+- `lodash-es` npm package - For debouncing
+
+## Priority
+**P1 (High)** - Core feature for variant discovery
+
+**Rationale:**
+- Directly impacts user ability to find variants
+- Complements backend search endpoint (Issue #64)
+- Required for efficient variant lookup
+- Relatively quick win (9 hours)
+
+## Labels
+`frontend`, `search`, `variants`, `ui`, `p1`
+```
+
+---
+
+## Issue #62
+
+```markdown
+# feat(api): implement JSON:API query conventions and cursor pagination
+
+## Summary
+Add JSON:API v1.1 pagination, filtering, and sorting conventions to `/api/v2/phenopackets` endpoint. Maintain GA4GH Phenopackets response structure while adding standardized metadata and navigation links.
+
+**Current:** `GET /phenopackets?skip=0&limit=100&sex=MALE` → `List[...]` (no metadata)
+**Target:** `GET /phenopackets?page[number]=1&page[size]=100&filter[sex]=MALE&sort=-created_at` → `{data, meta, links}`
+
+## Details
+See: [docs/issues/issue-62-json-api-pagination.md](./issue-62-json-api-pagination.md)
+
+## Acceptance Criteria
+
+**Offset Pagination:**
+- [ ] `page[number]` parameter works (1-indexed pages)
+- [ ] `page[size]` parameter works (default: 100, max: 1000)
+- [ ] Response includes `meta.page.totalRecords`
+- [ ] Response includes `meta.page.totalPages`
+- [ ] Response includes `meta.page.currentPage`
+- [ ] Response includes `meta.page.pageSize`
+
+**Navigation Links:**
+- [ ] `links.self` points to current page
+- [ ] `links.first` points to first page
+- [ ] `links.last` points to last page
+- [ ] `links.prev` exists when not on first page (null on page 1)
+- [ ] `links.next` exists when not on last page (null on last page)
+
+**Filtering:**
+- [ ] `filter[sex]` parameter works (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
+- [ ] `filter[has_variants]` parameter works (true/false)
+- [ ] Filters reflected in pagination links
+- [ ] Total counts respect active filters
+
+**Sorting:**
+- [ ] `sort` parameter works (comma-separated fields)
+- [ ] Descending order with `-` prefix (e.g., `-created_at`)
+- [ ] Ascending order without prefix (e.g., `subject_id`)
+- [ ] Supported fields: `created_at`, `subject_id`, `subject_sex`
+- [ ] Invalid sort fields return 400 error with message
+
+**Cursor Pagination (Bonus):**
+- [ ] `page[after]` parameter works for forward pagination
+- [ ] `page[before]` parameter works for backward pagination
+- [ ] Response includes `meta.page.endCursor`
+- [ ] Response includes `meta.page.startCursor`
+- [ ] Response includes `meta.page.hasNextPage`
+- [ ] Response includes `meta.page.hasPreviousPage`
+- [ ] Cursor pagination prevents duplicate/missing records
+
+**Backwards Compatibility:**
+- [ ] Legacy `skip` parameter still works (deprecated)
+- [ ] Legacy `limit` parameter still works (deprecated)
+- [ ] Legacy `sex` parameter still works (deprecated)
+- [ ] Legacy `has_variants` parameter still works (deprecated)
+- [ ] `X-Deprecation` header returned when legacy params used
+- [ ] Legacy params return JSON:API response format
+
+**Performance:**
+- [ ] Query time < 200ms for page[size]=100
+- [ ] Add `(created_at, id)` database index for cursor pagination
+- [ ] COUNT query optimized (avoid full table scan)
+
+**Tests:**
+- [ ] Unit tests for offset pagination pass
+- [ ] Unit tests for cursor pagination pass
+- [ ] Unit tests for filtering pass
+- [ ] Unit tests for sorting pass
+- [ ] Integration tests for full pagination workflows pass
+- [ ] Backwards compatibility tests pass
+
+**Documentation:**
+- [ ] OpenAPI schema updated with JSON:API examples
+- [ ] `backend/CLAUDE.md` updated with conventions
+- [ ] `frontend/CLAUDE.md` updated with pagination examples
+- [ ] Migration guide created (`frontend/MIGRATION-JSON-API.md`)
+- [ ] ADR created for JSON:API adoption decision
+
+**Frontend Integration:**
+- [ ] `frontend/src/api/index.js` updated with new `getPhenopackets()` function
+- [ ] `frontend/src/views/Phenopackets.vue` displays pagination metadata
+- [ ] Frontend shows "Page X of Y" text
+- [ ] Frontend shows total record count
+- [ ] Sort dropdown implemented
+- [ ] Pagination controls use `links.next`/`links.prev`
+
+## Dependencies
+None (independent feature)
+
+## Priority
+**P1 (High)** - No pagination metadata breaks UX (can't show "Page X of Y")
+
+**Rationale:**
+- Without metadata, frontend cannot display current page or total pages
+- Users have no visibility into dataset size
+- Navigation buttons cannot be intelligently disabled
+- Standard JSON:API conventions improve developer experience
+- Cursor pagination prevents data inconsistencies during browsing
+
+## Labels
+`backend`, `api`, `pagination`, `json-api`, `p1`, `enhancement`, `frontend`
+```
+

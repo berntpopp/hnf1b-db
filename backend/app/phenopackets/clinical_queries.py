@@ -3,7 +3,7 @@
 Follows DRY/SOLID/KISS principles.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import (
     Integer,
@@ -15,6 +15,7 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    true,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
@@ -75,7 +76,7 @@ class ClinicalQueries:
                     ),
                 )
             )
-        hpo_condition = or_(*hpo_conditions) if hpo_conditions else True
+        hpo_condition = or_(*hpo_conditions) if hpo_conditions else true()
 
         # Check for non-excluded features
         excluded_condition = func.jsonb_path_exists(
@@ -185,7 +186,7 @@ class ClinicalQueries:
                 ]
             )
             if hpo_terms
-            else True
+            else true()
         )
 
         return query
@@ -460,7 +461,7 @@ class ClinicalQueries:
 
     @staticmethod
     async def execute_and_format(
-        db: AsyncSession, query: Select, format_func: Optional[callable] = None
+        db: AsyncSession, query: Select, format_func: Optional[Callable[[Any], Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
         """Execute query and format results - DRY principle.
 

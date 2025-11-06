@@ -245,72 +245,74 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
     try:
         async with aiohttp.ClientSession() as session:
             # 5 second timeout for API call
-            async with asyncio.timeout(5):
-                async with session.get(PUBMED_API, params=params) as response:
-                    # Handle rate limiting
-                    if response.status == 429:
-                        retry_after = response.headers.get("Retry-After", "60")
-                        logger.error(
-                            f"Rate limit exceeded for {pmid}",
-                            extra={"pmid": pmid, "retry_after": retry_after},
-                        )
-                        raise PubMedRateLimitError(
-                            f"Rate limit exceeded. Retry after {retry_after} seconds"
-                        )
-
-                    # Handle non-200 responses
-                    if response.status != 200:
-                        logger.error(
-                            f"PubMed API returned {response.status} for {pmid}",
-                            extra={"pmid": pmid, "status": response.status},
-                        )
-                        raise PubMedAPIError(
-                            f"PubMed API returned status {response.status}"
-                        )
-
-                    data = await response.json()
-
-                    # Check if PMID exists in response
-                    result = data.get("result", {})
-                    if pmid_number not in result:
-                        logger.warning(
-                            f"PMID {pmid} not found in PubMed", extra={"pmid": pmid}
-                        )
-                        raise PubMedNotFoundError(f"PMID {pmid} not found in PubMed")
-
-                    pub_data = result[pmid_number]
-
-                    # Parse authors (preserve order with JSONB)
-                    authors = []
-                    for author in pub_data.get("authors", []):
-                        authors.append(
-                            {
-                                "name": author.get("name", ""),
-                                "affiliation": author.get("affinfo", ""),
-                            }
-                        )
-
-                    # Extract metadata
-                    metadata = {
-                        "pmid": pmid,
-                        "title": pub_data.get("title", "Unknown"),
-                        "authors": authors,
-                        "journal": pub_data.get("fulljournalname", ""),
-                        "year": int(pub_data.get("pubdate", "0")[:4])
-                        if pub_data.get("pubdate")
-                        else None,
-                        "doi": _extract_doi(pub_data),
-                        "abstract": _extract_abstract(pub_data),
-                        "data_source": "PubMed",
-                        "fetched_at": datetime.now(),
-                    }
-
-                    logger.info(
-                        f"Successfully fetched metadata for {pmid}",
-                        extra={"pmid": pmid, "title": metadata["title"][:50]},
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with session.get(
+                PUBMED_API, params=params, timeout=timeout
+            ) as response:
+                # Handle rate limiting
+                if response.status == 429:
+                    retry_after = response.headers.get("Retry-After", "60")
+                    logger.error(
+                        f"Rate limit exceeded for {pmid}",
+                        extra={"pmid": pmid, "retry_after": retry_after},
+                    )
+                    raise PubMedRateLimitError(
+                        f"Rate limit exceeded. Retry after {retry_after} seconds"
                     )
 
-                    return metadata
+                # Handle non-200 responses
+                if response.status != 200:
+                    logger.error(
+                        f"PubMed API returned {response.status} for {pmid}",
+                        extra={"pmid": pmid, "status": response.status},
+                    )
+                    raise PubMedAPIError(
+                        f"PubMed API returned status {response.status}"
+                    )
+
+                data = await response.json()
+
+                # Check if PMID exists in response
+                result = data.get("result", {})
+                if pmid_number not in result:
+                    logger.warning(
+                        f"PMID {pmid} not found in PubMed", extra={"pmid": pmid}
+                    )
+                    raise PubMedNotFoundError(f"PMID {pmid} not found in PubMed")
+
+                pub_data = result[pmid_number]
+
+                # Parse authors (preserve order with JSONB)
+                authors = []
+                for author in pub_data.get("authors", []):
+                    authors.append(
+                        {
+                            "name": author.get("name", ""),
+                            "affiliation": author.get("affinfo", ""),
+                        }
+                    )
+
+                # Extract metadata
+                metadata = {
+                    "pmid": pmid,
+                    "title": pub_data.get("title", "Unknown"),
+                    "authors": authors,
+                    "journal": pub_data.get("fulljournalname", ""),
+                    "year": int(pub_data.get("pubdate", "0")[:4])
+                    if pub_data.get("pubdate")
+                    else None,
+                    "doi": _extract_doi(pub_data),
+                    "abstract": _extract_abstract(pub_data),
+                    "data_source": "PubMed",
+                    "fetched_at": datetime.now(),
+                }
+
+                logger.info(
+                    f"Successfully fetched metadata for {pmid}",
+                    extra={"pmid": pmid, "title": metadata["title"][:50]},
+                )
+
+                return metadata
 
     except asyncio.TimeoutError:
         logger.error(f"Timeout fetching {pmid} from PubMed", extra={"pmid": pmid})
@@ -338,7 +340,7 @@ def _extract_abstract(pub_data: dict) -> Optional[str]:
 
 
 async def _store_in_cache(
-    metadata: dict, db: AsyncSession, fetched_by: str = "system"
+    metadata: dict, db: AsyncSession, fetched_by: Optional[str] = "system"
 ) -> None:
     """Store publication metadata in database cache.
 

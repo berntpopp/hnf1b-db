@@ -31,6 +31,33 @@ When an issue is completed:
   - Refactored DonutChart with interactive legend
   - Removed 3 deprecated tabs (for future reimplementation)
 
+### Phase 1: Publication Features
+
+- ✅ **#37** - Publication Detail Page → `../issue-37-41-batch.md` *(still in active folder with #39, #41)*
+  - Implemented publication detail page with rich metadata
+  - Server-side filtering via `/by-publication/{pmid}` endpoint
+  - PubMed API integration with database caching
+  - Displays individuals citing each publication
+  - Performance: 350ms → 80ms (4.4x faster)
+  - Commits: `3800ef4`, `e165d80`, `92a37dc`, `14a4304`
+  - **Note:** File not moved because it contains incomplete issues #39 and #41
+
+- ✅ **#51** - PubMed API Integration → `issue-51-backend-pubmed-api.md`
+  - Created `/api/v2/publications/{pmid}/metadata` endpoint
+  - Database caching with 90-day TTL
+  - Fetches title, authors, journal, year, DOI, abstract from PubMed
+  - Handles rate limiting and timeouts gracefully
+  - HIPAA/GDPR compliance documented
+  - Commit: `0f2320e`
+
+- ✅ **#52** - By-Publication Endpoint → `issue-52-backend-publication-endpoint.md`
+  - Created `/api/v2/phenopackets/by-publication/{pmid}` endpoint
+  - Server-side filtering with GIN index on JSONB externalReferences
+  - Supports filters: sex, has_variants, skip, limit
+  - PMID validation prevents SQL injection
+  - Query time: <100ms with index
+  - Commit: `b84858a`
+
 ### Future Completions
 
 As more issues are completed, they will be archived here following the same pattern.

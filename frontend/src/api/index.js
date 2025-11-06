@@ -142,6 +142,14 @@ export const getVariantsBatch = (phenopacketIds) =>
     params: { phenopacket_ids: phenopacketIds },
   });
 
+/**
+ * Get all phenopackets that contain a specific variant.
+ * @param {string} variantId - The variant ID to search for
+ * @returns {Promise} Axios promise with phenopackets containing this variant
+ */
+export const getPhenopacketsByVariant = (variantId) =>
+  apiClient.get(`/phenopackets/by-variant/${variantId}`);
+
 /* ==================== AGGREGATION ENDPOINTS ==================== */
 
 /**
@@ -177,10 +185,12 @@ export const getDiseaseAggregation = (params = {}) =>
 
 /**
  * Get variant pathogenicity distribution.
+ * @param {Object} params - Query parameters
+ * @param {string} params.count_mode - Count mode: 'all' (default) or 'unique'
  * @returns {Promise} Axios promise with pathogenicity counts
  */
-export const getVariantPathogenicity = () =>
-  apiClient.get('/phenopackets/aggregate/variant-pathogenicity');
+export const getVariantPathogenicity = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/variant-pathogenicity', { params });
 
 /**
  * Get kidney disease stage distribution.
@@ -190,9 +200,12 @@ export const getKidneyStages = () => apiClient.get('/phenopackets/aggregate/kidn
 
 /**
  * Get variant type distribution (SNV, CNV, etc.).
+ * @param {Object} params - Query parameters
+ * @param {string} params.count_mode - Count mode: 'all' (default) or 'unique'
  * @returns {Promise} Axios promise with variant type counts
  */
-export const getVariantTypes = () => apiClient.get('/phenopackets/aggregate/variant-types');
+export const getVariantTypes = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/variant-types', { params });
 
 /**
  * Get publications aggregation with citation counts.
@@ -327,15 +340,77 @@ export const getIndividuals = (params) =>
   );
 
 /**
- * @deprecated Use getPhenopacketsWithVariants() with variant extraction.
- * Legacy compatibility wrapper for old API.
+ * Get aggregated unique variants across all phenopackets with search and filters.
+ * Implements backend search endpoint from Issue #64.
+ *
+ * @param {Object} params - Query parameters
+ * @param {number} params.page - Page number (1-indexed)
+ * @param {number} params.page_size - Items per page
+ * @param {string} [params.query] - Text search (HGVS, variant ID, coordinates)
+ * @param {string} [params.variant_type] - Filter by variant type (SNV, deletion, etc.)
+ * @param {string} [params.classification] - Filter by ACMG classification
+ * @param {string} [params.consequence] - Filter by molecular consequence
+ * @param {string} [params.pathogenicity] - DEPRECATED: use classification instead
+ * @param {string} [params.sort] - Sort field (prefix with '-' for descending order)
+ * @returns {Promise} Promise resolving to variants data with pagination metadata
  */
-export const getVariants = (params) =>
-  deprecatedPaginationWrapper(
-    'getVariants() is deprecated. Use getPhenopacketsWithVariants() instead.',
-    getPhenopacketsWithVariants,
-    params
-  );
+export const getVariants = async (params = {}) => {
+  const {
+    page = 1,
+    page_size = 10,
+    query,
+    variant_type,
+    classification,
+    consequence,
+    pathogenicity,
+    sort,
+  } = params;
+  const { skip, limit } = pageToSkipLimit(page, page_size);
+
+  const response = await apiClient.get('/phenopackets/aggregate/all-variants', {
+    params: {
+      skip,
+      limit,
+      query,
+      variant_type,
+      classification: classification || pathogenicity, // Support both new and legacy params
+      consequence,
+      sort,
+    },
+  });
+
+  // Backend now returns { data: [...], total: N, skip: N, limit: N }
+  const responseData = response.data || {};
+  const data = responseData.data || [];
+  const total = responseData.total || 0;
+
+  return {
+    data: data.map((variant) => ({
+      // 'id' uses 'simple_id' if present, otherwise falls back to 'variant_id'.
+      // This fallback may cause ambiguity; ideally, the backend should always provide 'simple_id'.
+      id: variant.simple_id || variant.variant_id,
+      simple_id: variant.simple_id,
+      variant_id: variant.variant_id,
+      label: variant.label,
+      geneSymbol: variant.gene_symbol,
+      geneId: variant.gene_id,
+      variant_type: variant.structural_type,
+      hg38: variant.hg38,
+      transcript: variant.transcript,
+      protein: variant.protein,
+      classificationVerdict: variant.pathogenicity,
+      individualCount: variant.phenopacket_count,
+      molecular_consequence: variant.molecular_consequence,
+    })),
+    meta: {
+      // Backend provides accurate total count
+      total: total,
+      total_pages: Math.ceil(total / page_size),
+      current_page: page,
+      page_size: page_size,
+    },
+  };
+};
 
 /**
  * @deprecated Publications are now stored in phenopacket.metaData.externalReferences.

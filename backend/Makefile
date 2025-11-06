@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format typecheck server clean db-migrate db-upgrade db-reset phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -10,17 +10,41 @@ install:  ## Install dependencies
 dev:  ## Install dependencies including dev and test groups
 	uv sync --group dev --group test
 
-test:  ## Run tests
+check-env:  ## Verify virtual environment integrity
+	@echo "🔍 Checking virtual environment..."
+	@uv run python -c "import sys; sys.exit(0 if '.venv' in sys.executable else 1)" || \
+		(echo "❌ ERROR: Not using project venv!"; \
+		 echo "Current: $$(uv run which python)"; \
+		 echo "Expected: $$(pwd)/.venv/bin/python"; \
+		 echo ""; \
+		 echo "FIX: export UV_LINK_MODE=copy && rm -rf .venv && uv sync --group dev --group test"; \
+		 exit 1)
+	@echo "✅ Virtual environment OK"
+	@echo "🔍 Checking critical dependencies..."
+	@uv run python -c "import asyncpg, pytest" 2>/dev/null || \
+		(echo "❌ ERROR: Missing dependencies!"; \
+		 echo "FIX: uv sync --group dev --group test"; \
+		 exit 1)
+	@echo "✅ Dependencies OK"
+	@echo "✅ Environment is healthy"
+
+test: check-env  ## Run tests (excluding benchmarks)
+	uv run pytest -m "not benchmark"
+
+test-all: check-env  ## Run all tests including benchmarks
 	uv run pytest
 
-lint:  ## Run linting (ruff)
+test-benchmark: check-env  ## Run only benchmark tests
+	uv run pytest -m benchmark -v -s
+
+lint: check-env  ## Run linting (ruff)
 	uv run ruff check .
 
 format:  ## Format code (ruff)
 	uv run ruff format .
 	uv run ruff check --fix .
 
-typecheck:  ## Run type checking (mypy)
+typecheck: check-env  ## Run type checking (mypy)
 	uv run mypy app/ migration/
 
 server:  ## Start development server
@@ -47,7 +71,7 @@ phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
 phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
 	uv run python -m migration.direct_sheets_to_phenopackets --test --dry-run
 
-check: lint typecheck test  ## Run all checks (lint, typecheck, test)
+check: check-env lint typecheck test  ## Run all checks (lint, typecheck, test)
 
 clean:  ## Remove virtual environment and cache
 	rm -rf .venv

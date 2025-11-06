@@ -37,7 +37,9 @@ def test_phenopackets():
     except ImportError as e:
         print(f"⚠ phenopackets module import issue: {e}")
 
-    return phenopacket_json
+    # Assert phenopacket structure is valid
+    assert phenopacket_json["id"] == "test_phenopacket_1"
+    assert phenopacket_json["subject"]["id"] == "patient1"
 
 
 def test_pronto_hpo():
@@ -50,7 +52,10 @@ def test_pronto_hpo():
     # term = hpo["HP:0012622"]
     # print(f"Term: {term.name}")
 
-    return True
+    # Verify pronto is importable
+    import pronto  # noqa: F401
+
+    assert True  # Test passes if import succeeds
 
 
 def test_jsonpath():
@@ -69,7 +74,10 @@ def test_jsonpath():
 
     print("\n✓ JSONPath found HPO terms:", matches)
 
-    return matches
+    # Assert matches are correct
+    assert len(matches) == 2
+    assert "HP:0012622" in matches
+    assert "HP:0000078" in matches
 
 
 def test_vrs():
@@ -87,7 +95,10 @@ def test_vrs():
     print("\n✓ GA4GH VRS models available")
     print(f"  Location: {location.start}-{location.end}")
 
-    return True
+    # Assert location is valid
+    assert location.start == 100
+    assert location.end == 200
+    assert location.sequenceReference.refgetAccession == "SQ.F-LrLMe1SRpfUZHkQmvkVKFEGaoDeHul"
 
 
 if __name__ == "__main__":

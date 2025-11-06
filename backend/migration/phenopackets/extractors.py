@@ -4,7 +4,7 @@ Follows Dependency Inversion Principle by depending on OntologyMapper abstractio
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -20,7 +20,8 @@ class PhenotypeExtractor:
     """Extracts phenotypic features from spreadsheet rows.
 
     Depends on OntologyMapper abstraction following Dependency Inversion Principle.
-    This allows for easy testing with mock mappers and flexibility to swap implementations.
+    This allows for easy testing with mock mappers and flexibility to swap
+    implementations.
     """
 
     def __init__(
@@ -51,7 +52,7 @@ class PhenotypeExtractor:
 
     def extract(self, row: pd.Series) -> List[Dict[str, Any]]:
         """Extract phenotypic features from a row with temporal information."""
-        phenotypes = []
+        phenotypes: List[Dict[str, Any]] = []
 
         # Get timestamp from ReviewDate for this observation
         review_timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
@@ -72,7 +73,7 @@ class PhenotypeExtractor:
                 value = self._safe_value(row[original_col])
 
                 if value and value.lower() not in ["no", "not reported", "unknown", ""]:
-                    # Special handling for KidneyBiopsy which contains specific diagnoses
+                    # Special handling for KidneyBiopsy with specific diagnoses
                     if pheno_key == "kidneybiopsy":
                         self._handle_kidney_biopsy(
                             value, row, review_timestamp, phenotypes
@@ -96,8 +97,9 @@ class PhenotypeExtractor:
                             phenotype["onset"] = age_onset_class
                             # If we also have a specific age, add it alongside
                             if age_reported and "ontologyClass" in age_onset_class:
-                                # Combine: ontologyClass (prenatal/postnatal) + age (P2Y)
-                                phenotype["onset"]["age"] = (
+                                # Combine ontologyClass (prenatal/postnatal) + age
+                                onset_dict = cast(Dict[str, Any], phenotype["onset"])
+                                onset_dict["age"] = (
                                     age_reported.get("iso8601duration")
                                     if isinstance(age_reported, dict)
                                     and "iso8601duration" in age_reported
@@ -252,7 +254,7 @@ class VariantExtractor:
         row: pd.Series,
         hg38: str,
         hg38_info: str,
-        variant_type: str,
+        variant_type: Optional[str],
         variant_reported: Optional[str],
         publication: Optional[str],
     ) -> Optional[Dict[str, Any]]:
@@ -397,7 +399,10 @@ class VariantExtractor:
             elif "<DUP>" in hg38:
                 molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
         elif c_dot:
-            if "del" in c_dot:
+            # Check for complex indels (delins) first before simple del/ins
+            if "delins" in c_dot:
+                molecular_consequence = {"id": "SO:1000032", "label": "indel"}
+            elif "del" in c_dot:
                 molecular_consequence = {"id": "SO:0000159", "label": "deletion"}
             elif "dup" in c_dot:
                 molecular_consequence = {"id": "SO:1000035", "label": "duplication"}
@@ -466,19 +471,22 @@ class VariantExtractor:
                 ] = {"id": "GENO:0000135", "label": "heterozygous"}
 
         # Map pathogenicity
+        # IMPORTANT: Check more specific patterns first to avoid substring matches
+        # e.g., "likely pathogenic" must be checked before "pathogenic"
         if verdict:
-            path_map = {
-                "pathogenic": "PATHOGENIC",
-                "likely pathogenic": "LIKELY_PATHOGENIC",
-                "uncertain significance": "UNCERTAIN_SIGNIFICANCE",
-                "likely benign": "LIKELY_BENIGN",
-                "benign": "BENIGN",
-            }
             verdict_lower = verdict.lower()
-            for key, value in path_map.items():
-                if key in verdict_lower:
-                    genomic_interp["interpretationStatus"] = value
-                    break
+
+            # Check specific patterns first (longer strings before shorter)
+            if "likely pathogenic" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "LIKELY_PATHOGENIC"
+            elif "likely benign" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "LIKELY_BENIGN"
+            elif "pathogenic" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "PATHOGENIC"
+            elif "uncertain significance" in verdict_lower or "vus" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "UNCERTAIN_SIGNIFICANCE"
+            elif "benign" in verdict_lower:
+                genomic_interp["interpretationStatus"] = "BENIGN"
 
         # Add classification criteria
         if criteria:
