@@ -1043,8 +1043,8 @@ export default {
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
-        // Use container width with a minimum of 800px for gene view, but allow wider for region view
-        const minWidth = this.effectiveViewMode === 'cnv' ? 1200 : 800;
+        // Use full container width for CNV view (no scrolling), minimum 800px for gene view
+        const minWidth = this.effectiveViewMode === 'cnv' ? containerWidth : 800;
         this.svgWidth = Math.max(containerWidth, minWidth);
       }
     },
@@ -1391,7 +1391,7 @@ export default {
 
 .svg-container {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .gene-visualization {

@@ -7,7 +7,9 @@
     >
       <v-col
         cols="12"
-        md="8"
+        md="11"
+        lg="10"
+        xl="10"
       >
         <v-card
           class="pa-4"
