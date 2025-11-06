@@ -1,11 +1,11 @@
 # PR #67 Refactoring Implementation Plan
 
-**Status:** Phase 2 Complete - Backend Next
+**Status:** Phase 4.3 Complete - Continue with Phase 4.4
 **Created:** 2025-11-06
 **Last Updated:** 2025-11-06
 **PR:** feat/variant-page → main
 **Review:** docs/reviews/feat-variant-page/detailed-review.md
-**Current Phase:** Phase 3 - Backend DRY Violations
+**Current Phase:** Phase 4 - Backend File Size Violations (Router Split)
 
 ---
 
@@ -14,8 +14,8 @@
 This document provides a detailed, session-resumable implementation plan for refactoring PR #67 to address Priority 1 blocking issues identified in code review.
 
 **Total Estimated Time:** 25-33 hours
-**Completed:** 8 hours (Phase 1 + Phase 2 complete)
-**Remaining:** 17-25 hours
+**Completed:** 14 hours (Phase 1 + 2 + 3 + 4.1-4.3 complete)
+**Remaining:** 11-19 hours
 
 ---
 
@@ -159,12 +159,12 @@ refactor(frontend): remove HGVS extraction duplicates from protein visualization
 
 ---
 
-## 🔄 Phase 3: Backend DRY Violations (NEXT)
+## ✅ Phase 3: Backend DRY Violations (COMPLETED)
 
-**Estimated Time:** 4-6 hours
-**Status:** PENDING
+**Time Spent:** 4 hours
+**Status:** ✅ DONE
 
-Extract duplicated query logic in backend endpoints
+Extracted duplicated query logic in backend endpoints
 
 - Replace duplicated extractCNotation with utils/hgvs
 - Add imports for color and variant utilities
@@ -239,7 +239,7 @@ refactor(frontend): update HNF1BProteinVisualization to use utility functions
 
 ## 🔄 Phase 3: Backend DRY Violations (~4-6 hours)
 
-### 3.1 Create query_builders.py (~2 hours)
+### ✅ 3.1 Create query_builders.py (COMPLETED)
 
 **File:** `backend/app/phenopackets/query_builders.py` (NEW)
 
@@ -423,7 +423,7 @@ refactor(backend): create query builder utilities to eliminate DRY violations
 
 ---
 
-### 3.2 Refactor endpoints.py to use query_builders (~2-4 hours)
+### ✅ 3.2 Refactor endpoints.py to use query_builders (COMPLETED)
 
 **File:** `backend/app/phenopackets/endpoints.py` (1,960 lines)
 
@@ -508,7 +508,7 @@ refactor(backend): update endpoints to use query builder utilities
 **Current State:** `endpoints.py` is 1,960 lines with 27 functions
 **Goal:** Split into 5 focused routers (~300-400 lines each)
 
-### 4.1 Create Router Structure (~1 hour)
+### ✅ 4.1 Create Router Structure (COMPLETED)
 
 **Steps:**
 1. Create directory:
@@ -542,7 +542,7 @@ refactor(backend): update endpoints to use query builder utilities
 
 ---
 
-### 4.2 Create crud.py Router (~2 hours)
+### ✅ 4.2 Create crud.py Router (COMPLETED)
 
 **File:** `backend/app/phenopackets/routers/crud.py` (NEW, ~200 lines)
 
@@ -628,7 +628,7 @@ refactor(backend): extract CRUD operations to dedicated router
 
 ---
 
-### 4.3 Create aggregations.py Router (~2 hours)
+### ✅ 4.3 Create aggregations.py Router (COMPLETED)
 
 **File:** `backend/app/phenopackets/routers/aggregations.py` (NEW, ~400 lines)
 
@@ -702,9 +702,18 @@ refactor(backend): extract aggregation endpoints to dedicated router
 - Part of file size violations fix for PR #67
 ```
 
+**Completed Work:**
+- Created `backend/app/phenopackets/routers/aggregations.py` (1166 lines)
+- Extracted 10 aggregation endpoints from endpoints.py
+- All E501 line length violations fixed
+- Integrated into routers/__init__.py
+- All linting checks pass
+
 ---
 
-### 4.4 Create search.py Router (~1.5 hours)
+### 🔄 4.4 Create search.py Router (NEXT - Start Here)
+
+**Estimated Time:** ~1.5 hours
 
 **File:** `backend/app/phenopackets/routers/search.py` (NEW, ~250 lines)
 
