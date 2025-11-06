@@ -386,6 +386,8 @@ export const getVariants = async (params = {}) => {
 
   return {
     data: data.map((variant) => ({
+      // 'id' uses 'simple_id' if present, otherwise falls back to 'variant_id'.
+      // This fallback may cause ambiguity; ideally, the backend should always provide 'simple_id'.
       id: variant.simple_id || variant.variant_id,
       simple_id: variant.simple_id,
       variant_id: variant.variant_id,
