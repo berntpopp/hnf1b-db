@@ -41,6 +41,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "prettier": "^3.5.0",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "terser": "^5.44.1",
     "vite": "^6.1.0",
     "vite-plugin-compression": "^0.5.1",
     "vite-plugin-vuetify": "^2.1.0",
