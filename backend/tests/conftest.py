@@ -37,5 +37,5 @@ async def db_session():
             await session.rollback()
             await session.close()
 
-    # Cleanup engine
-    await engine.dispose()
+    # Cleanup engine - properly close all connections
+    await engine.dispose(close=True)

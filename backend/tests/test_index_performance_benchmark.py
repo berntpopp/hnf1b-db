@@ -257,7 +257,7 @@ class TestQueryPlanVerification:
         # On large datasets (>1000 rows), would use GIN index with bitmap scan
 
 
-@pytest.mark.skip(reason="Benchmark only - compare before/after manually")
+@pytest.mark.benchmark
 class TestBeforeAfterComparison:
     """Manual tests to compare performance before/after adding indexes.
 

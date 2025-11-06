@@ -28,8 +28,14 @@ check-env:  ## Verify virtual environment integrity
 	@echo "✅ Dependencies OK"
 	@echo "✅ Environment is healthy"
 
-test: check-env  ## Run tests
+test: check-env  ## Run tests (excluding benchmarks)
+	uv run pytest -m "not benchmark"
+
+test-all: check-env  ## Run all tests including benchmarks
 	uv run pytest
+
+test-benchmark: check-env  ## Run only benchmark tests
+	uv run pytest -m benchmark -v -s
 
 lint: check-env  ## Run linting (ruff)
 	uv run ruff check .

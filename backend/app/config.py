@@ -3,7 +3,7 @@ import logging
 import sys
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -56,10 +56,7 @@ class Settings(BaseSettings):
         """Convert CORS_ORIGINS string to list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
-    class Config:
-        """Pydantic configuration."""
-
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 
 settings = Settings()

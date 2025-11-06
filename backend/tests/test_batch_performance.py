@@ -241,7 +241,7 @@ class TestHPOValidationPerformance:
         assert all(results[term]["name"] is not None for term in hpo_terms)
 
 
-@pytest.mark.skip(reason="Benchmark only - run manually with -v -s")
+@pytest.mark.benchmark
 class TestLargeScaleBenchmark:
     """Large-scale benchmarks (skip in regular test runs)."""
 
