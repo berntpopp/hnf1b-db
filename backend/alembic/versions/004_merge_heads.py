@@ -13,13 +13,9 @@ This is a no-op migration that simply merges the two heads.
 
 from typing import Sequence, Union
 
-from alembic import op
-
 # revision identifiers, used by Alembic.
 revision: str = "004_merge_heads"
 down_revision: Union[str, Sequence[str], None] = ("003_variant_search_indexes", "533c020aa76d")
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
