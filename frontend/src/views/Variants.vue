@@ -679,7 +679,7 @@ export default {
           this.variants = variants;
           this.totalItems = response.meta.total || 0;
           this.totalPages = response.meta.total_pages || 0;
-          this.filteredCount = this.variants.length;
+          this.filteredCount = response.meta.total || 0;
         }
       } catch (error) {
         console.error('Error fetching variants:', error);
