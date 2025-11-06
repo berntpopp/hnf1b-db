@@ -4,7 +4,7 @@ Provides statistical summaries, aggregations by features, diseases,
 variants, and publications.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select, text
@@ -56,14 +56,14 @@ async def aggregate_by_feature(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.label or row.hpo_id,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
-            details={"hpo_id": row.hpo_id},  # type: ignore
+            label=row.label or row.hpo_id,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            details={"hpo_id": row.hpo_id},
         )
         for row in rows
     ]
@@ -92,14 +92,14 @@ async def aggregate_by_disease(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.label or row.disease_id,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
-            details={"disease_id": row.disease_id},  # type: ignore
+            label=row.label or row.disease_id,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            details={"disease_id": row.disease_id},
         )
         for row in rows
     ]
@@ -130,13 +130,13 @@ async def aggregate_kidney_stages(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.stage,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            label=row.stage,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
         )
         for row in rows
     ]
@@ -162,13 +162,13 @@ async def aggregate_sex_distribution(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.sex,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            label=row.sex,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
         )
         for row in rows
     ]
@@ -235,13 +235,13 @@ async def aggregate_variant_pathogenicity(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.classification,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            label=row.classification,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
         )
         for row in rows
     ]
@@ -341,13 +341,13 @@ async def aggregate_variant_types(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.variant_type,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
+            label=row.variant_type,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
         )
         for row in rows
     ]
@@ -387,17 +387,17 @@ async def aggregate_publications(
 
     return [
         {
-            "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,  # type: ignore
-            "url": row.url,  # type: ignore
+            "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,
+            "url": row.url,
             "doi": (
                 row.description.replace("DOI:", "")
                 if row.description and row.description.startswith("DOI:")
                 else None
-            ),  # type: ignore
-            "phenopacket_count": row.phenopacket_count,  # type: ignore
+            ),
+            "phenopacket_count": row.phenopacket_count,
             "first_added": (
                 row.first_added.isoformat() if row.first_added else None
-            ),  # type: ignore
+            ),
         }
         for row in rows
     ]
@@ -512,7 +512,7 @@ async def aggregate_all_variants(
 
     # Build query with optional filters
     where_clauses = []
-    params = {"limit": limit, "offset": skip}
+    params: Dict[str, Any] = {"limit": limit, "offset": skip}
 
     # Text search: Search across HGVS notations, variant IDs, and coordinates
     if validated_query:
@@ -1036,21 +1036,21 @@ async def aggregate_all_variants(
     # This ensures each variant has a stable ID regardless of current sort
     variants = [
         {
-            "simple_id": f"Var{row.simple_id}",  # type: ignore
-            "variant_id": row.variant_id,  # type: ignore
-            "label": row.label,  # type: ignore
-            "gene_symbol": row.gene_symbol,  # type: ignore
-            "gene_id": row.gene_id,  # type: ignore
-            "structural_type": row.structural_type,  # type: ignore
-            "pathogenicity": row.pathogenicity,  # type: ignore
-            "phenopacket_count": row.phenopacket_count,  # type: ignore
-            "hg38": row.hg38,  # type: ignore
-            "transcript": row.transcript,  # type: ignore
-            "protein": row.protein,  # type: ignore
+            "simple_id": f"Var{row.simple_id}",
+            "variant_id": row.variant_id,
+            "label": row.label,
+            "gene_symbol": row.gene_symbol,
+            "gene_id": row.gene_id,
+            "structural_type": row.structural_type,
+            "pathogenicity": row.pathogenicity,
+            "phenopacket_count": row.phenopacket_count,
+            "hg38": row.hg38,
+            "transcript": row.transcript,
+            "protein": row.protein,
             "molecular_consequence": compute_molecular_consequence(
-                transcript=row.transcript,  # type: ignore
-                protein=row.protein,  # type: ignore
-                variant_type=row.structural_type,  # type: ignore
+                transcript=row.transcript,
+                protein=row.protein,
+                variant_type=row.structural_type,
             ),
         }
         for row in rows
@@ -1103,14 +1103,14 @@ async def aggregate_age_of_onset(
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(row.count for row in rows)  # type: ignore
+    total = sum(int(row._mapping["count"]) for row in rows)
 
     return [
         AggregationResult(
-            label=row.onset_label,  # type: ignore
-            count=row.count,  # type: ignore
-            percentage=(row.count / total * 100) if total > 0 else 0,  # type: ignore
-            details={"hpo_id": row.onset_id},  # type: ignore
+            label=row.onset_label,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            details={"hpo_id": row.onset_id},
         )
         for row in rows
     ]
@@ -1214,12 +1214,12 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
     female = 0
     unknown_sex = 0
     for row in sex_rows:
-        if row.subject_sex == "MALE":  # type: ignore
-            male = row.count  # type: ignore
-        elif row.subject_sex == "FEMALE":  # type: ignore
-            female = row.count  # type: ignore
+        if row.subject_sex == "MALE":
+            male = int(row._mapping["count"])
+        elif row.subject_sex == "FEMALE":
+            female = int(row._mapping["count"])
         else:
-            unknown_sex += row.count  # type: ignore
+            unknown_sex += int(row._mapping["count"])
 
     return {
         "total_phenopackets": total_phenopackets,
