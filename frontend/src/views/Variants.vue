@@ -447,7 +447,7 @@
 </template>
 
 <script>
-import { debounce } from 'lodash-es';
+import debounce from 'just-debounce-it';
 import { getVariants } from '@/api';
 
 export default {
