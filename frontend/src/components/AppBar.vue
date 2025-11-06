@@ -1,15 +1,7 @@
 <template>
-  <v-app-bar
-    app
-    color="teal"
-    dark
-  >
+  <v-app-bar app color="teal" dark>
     <v-container fluid>
-      <v-row
-        align="center"
-        justify="space-between"
-        no-gutters
-      >
+      <v-row align="center" justify="space-between" no-gutters>
         <!-- Left Section: Logo -->
         <v-col>
           <v-img
@@ -24,54 +16,22 @@
 
         <!-- Middle Section: Navigation Links with Dividers -->
         <v-col class="d-flex align-center px-10">
-          <v-divider
-            class="border-opacity-100"
-            vertical
-          />
+          <v-divider class="border-opacity-100" vertical />
           <v-toolbar-items>
-            <v-btn
-              text
-              to="/phenopackets"
-            >
-              Phenopackets
-            </v-btn>
-            <v-btn
-              text
-              to="/publications"
-            >
-              Publications
-            </v-btn>
-            <v-btn
-              text
-              to="/variants"
-            >
-              Variants
-            </v-btn>
-            <v-btn
-              text
-              to="/aggregations"
-            >
-              Aggregations
-            </v-btn>
+            <v-btn text to="/phenopackets"> Phenopackets </v-btn>
+            <v-btn text to="/publications"> Publications </v-btn>
+            <v-btn text to="/variants"> Variants </v-btn>
+            <v-btn text to="/aggregations"> Aggregations </v-btn>
           </v-toolbar-items>
-          <v-divider
-            class="border-opacity-100"
-            vertical
-          />
+          <v-divider class="border-opacity-100" vertical />
         </v-col>
 
         <!-- Right Section: Login Controls -->
         <v-col>
           <div v-if="isAuthenticated">
-            <v-menu
-              v-model="menu"
-              offset-y
-            >
+            <v-menu v-model="menu" offset-y>
               <template #activator="{ props }">
-                <v-btn
-                  icon
-                  v-bind="props"
-                >
+                <v-btn icon v-bind="props">
                   <v-icon>mdi-account</v-icon>
                 </v-btn>
               </template>
@@ -86,10 +46,7 @@
             </v-menu>
           </div>
           <div v-else>
-            <v-btn
-              icon
-              to="/login"
-            >
+            <v-btn icon to="/login">
               <v-icon>mdi-login</v-icon>
             </v-btn>
           </div>

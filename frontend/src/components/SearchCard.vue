@@ -1,10 +1,6 @@
 <!-- src/components/SearchCard.vue -->
 <template>
-  <v-card
-    variant="flat"
-    class="pa-8 mx-auto search-card"
-    theme="light"
-  >
+  <v-card variant="flat" class="pa-8 mx-auto search-card" theme="light">
     <v-autocomplete
       v-model="selectedItem"
       v-model:search="typedText"

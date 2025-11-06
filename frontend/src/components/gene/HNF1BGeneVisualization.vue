@@ -2,13 +2,14 @@
 <template>
   <v-card class="gene-viz-card">
     <v-card-title class="text-h6 bg-grey-lighten-4">
-      <v-icon
-        left
-        :color="effectiveViewMode === 'cnv' ? 'error' : 'primary'"
-      >
+      <v-icon left :color="effectiveViewMode === 'cnv' ? 'error' : 'primary'">
         {{ effectiveViewMode === 'cnv' ? 'mdi-chart-box-outline' : 'mdi-dna' }}
       </v-icon>
-      {{ effectiveViewMode === 'cnv' ? '17q12 Region - Copy Number Variants' : 'HNF1B Gene - SNVs and Small Variants' }}
+      {{
+        effectiveViewMode === 'cnv'
+          ? '17q12 Region - Copy Number Variants'
+          : 'HNF1B Gene - SNVs and Small Variants'
+      }}
       <v-tooltip location="bottom">
         <template #activator="{ props }">
           <v-btn
@@ -16,57 +17,47 @@
             size="x-small"
             variant="text"
             v-bind="props"
-            :href="effectiveViewMode === 'cnv' ? 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A36458167-37854616' : 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A37686430-37745059'"
+            :href="
+              effectiveViewMode === 'cnv'
+                ? 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A36458167-37854616'
+                : 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A37686430-37745059'
+            "
             target="_blank"
             class="ml-1"
           >
-            <v-icon size="small">
-              mdi-open-in-new
-            </v-icon>
+            <v-icon size="small"> mdi-open-in-new </v-icon>
           </v-btn>
         </template>
-        <span>{{ effectiveViewMode === 'cnv' ? 'View 17q12 region in UCSC (GRCh38)' : 'View HNF1B in UCSC (GRCh38)' }}</span>
+        <span>{{
+          effectiveViewMode === 'cnv'
+            ? 'View 17q12 region in UCSC (GRCh38)'
+            : 'View HNF1B in UCSC (GRCh38)'
+        }}</span>
       </v-tooltip>
       <v-spacer />
-      <v-chip
-        size="small"
-        color="info"
-      >
-        {{ variantsWithPositions.length }} variant{{ variantsWithPositions.length !== 1 ? 's' : '' }}
+      <v-chip size="small" color="info">
+        {{ variantsWithPositions.length }} variant{{
+          variantsWithPositions.length !== 1 ? 's' : ''
+        }}
       </v-chip>
     </v-card-title>
 
     <v-card-text>
       <!-- View Mode Toggle -->
-      <v-row
-        v-if="hasExtendedCNV"
-        class="mb-3"
-      >
+      <v-row v-if="hasExtendedCNV" class="mb-3">
         <v-col cols="12">
-          <v-alert
-            type="warning"
-            density="compact"
-            variant="tonal"
-          >
-            <v-icon left>
-              mdi-alert
-            </v-icon>
+          <v-alert type="warning" density="compact" variant="tonal">
+            <v-icon left> mdi-alert </v-icon>
             CNV extends beyond HNF1B gene ({{ formatCNVSize() }})
           </v-alert>
           <!-- Toggle button: only show when not in forced mode (i.e., when used standalone) -->
-          <v-btn-group
-            v-if="showViewModeToggle"
-            mandatory
-            class="mt-2"
-          >
+          <v-btn-group v-if="showViewModeToggle" mandatory class="mt-2">
             <v-btn
               :variant="effectiveViewMode === 'gene' ? 'flat' : 'outlined'"
               color="primary"
               @click="viewMode = 'gene'"
             >
-              <v-icon left>
-                mdi-dna
-              </v-icon>
+              <v-icon left> mdi-dna </v-icon>
               HNF1B Detail
             </v-btn>
             <v-btn
@@ -74,9 +65,7 @@
               color="warning"
               @click="viewMode = 'cnv'"
             >
-              <v-icon left>
-                mdi-chart-box-outline
-              </v-icon>
+              <v-icon left> mdi-chart-box-outline </v-icon>
               17q12 Region ({{ formatRegionSize() }})
             </v-btn>
           </v-btn-group>
@@ -87,90 +76,32 @@
       <v-row class="mb-2">
         <v-col cols="12">
           <div class="legend-container">
-            <v-chip
-              size="small"
-              color="blue"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-square
-              </v-icon>
+            <v-chip size="small" color="blue">
+              <v-icon left size="small"> mdi-square </v-icon>
               Exon (click to zoom)
             </v-chip>
-            <v-chip
-              size="small"
-              color="grey"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-minus
-              </v-icon>
+            <v-chip size="small" color="grey">
+              <v-icon left size="small"> mdi-minus </v-icon>
               Intron
             </v-chip>
-            <v-chip
-              size="small"
-              color="red-lighten-3"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="red-lighten-3">
+              <v-icon left size="small"> mdi-circle </v-icon>
               Pathogenic
             </v-chip>
-            <v-chip
-              size="small"
-              color="orange-lighten-3"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="orange-lighten-3">
+              <v-icon left size="small"> mdi-circle </v-icon>
               Likely Pathogenic
             </v-chip>
-            <v-chip
-              size="small"
-              color="yellow-darken-1"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="yellow-darken-1">
+              <v-icon left size="small"> mdi-circle </v-icon>
               VUS
             </v-chip>
-            <v-chip
-              v-if="indelVariants.length > 0"
-              size="small"
-              color="deep-orange"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-rectangle-outline
-              </v-icon>
+            <v-chip v-if="indelVariants.length > 0" size="small" color="deep-orange">
+              <v-icon left size="small"> mdi-rectangle-outline </v-icon>
               Small Variant (&lt;50bp)
             </v-chip>
-            <v-chip
-              v-if="spliceVariants.length > 0"
-              size="small"
-              color="teal"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-rhombus
-              </v-icon>
+            <v-chip v-if="spliceVariants.length > 0" size="small" color="teal">
+              <v-icon left size="small"> mdi-rhombus </v-icon>
               Splice Variant
             </v-chip>
             <!-- "Current" chip: only show when there are multiple variants to distinguish from -->
@@ -179,12 +110,7 @@
               size="small"
               color="purple"
             >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-star
-              </v-icon>
+              <v-icon left size="small"> mdi-star </v-icon>
               Current
             </v-chip>
           </div>
@@ -192,10 +118,7 @@
       </v-row>
 
       <!-- SVG Visualization -->
-      <div
-        ref="svgContainer"
-        class="svg-container"
-      >
+      <div ref="svgContainer" class="svg-container">
         <svg
           ref="geneSvg"
           :width="svgWidth"
@@ -204,20 +127,16 @@
           @mouseleave="hideTooltip"
         >
           <!-- Chromosome label -->
-          <text
-            :x="margin.left"
-            :y="20"
-            class="chromosome-label"
-          >
-            {{ effectiveViewMode === 'cnv' ? `Chromosome ${chr17q12Region.cytoBand} • ${chr17q12Region.name}` : 'Chromosome 17q12 • HNF1B (TCF2) • chr17:37,686,430-37,745,059 (58.6 kb)' }}
+          <text :x="margin.left" :y="20" class="chromosome-label">
+            {{
+              effectiveViewMode === 'cnv'
+                ? `Chromosome ${chr17q12Region.cytoBand} • ${chr17q12Region.name}`
+                : 'Chromosome 17q12 • HNF1B (TCF2) • chr17:37,686,430-37,745,059 (58.6 kb)'
+            }}
           </text>
 
           <!-- Gene coordinates (showing visible range) -->
-          <text
-            :x="margin.left"
-            :y="dynamicSvgHeight - 10"
-            class="coordinate-label"
-          >
+          <text :x="margin.left" :y="dynamicSvgHeight - 10" class="coordinate-label">
             {{ formatCoordinate(visibleGeneStart) }}
           </text>
           <text
@@ -236,7 +155,8 @@
             text-anchor="middle"
             class="zoom-indicator-label"
           >
-            Zoomed to Exon {{ zoomedExon.number }} ({{ zoomedExon.size }} bp) - Click exon again or Reset to zoom out
+            Zoomed to Exon {{ zoomedExon.number }} ({{ zoomedExon.size }} bp) - Click exon again or
+            Reset to zoom out
           </text>
 
           <!-- Intron line (backbone) -->
@@ -250,10 +170,7 @@
           />
 
           <!-- Exons -->
-          <g
-            v-for="exon in exons"
-            :key="`exon-${exon.number}`"
-          >
+          <g v-for="exon in exons" :key="`exon-${exon.number}`">
             <rect
               :x="scalePosition(exon.start)"
               :y="hnf1bTrackY - exonHeight / 2"
@@ -271,7 +188,10 @@
             <!-- Exon label: hidden in region view to avoid clutter -->
             <text
               v-if="effectiveViewMode !== 'cnv'"
-              :x="scalePosition(exon.start) + (scalePosition(exon.end) - scalePosition(exon.start)) / 2"
+              :x="
+                scalePosition(exon.start) +
+                (scalePosition(exon.end) - scalePosition(exon.start)) / 2
+              "
               :y="hnf1bTrackY - exonHeight / 2 - 8"
               text-anchor="middle"
               class="exon-label"
@@ -283,20 +203,12 @@
           <!-- Gene Track (CNV mode only) -->
           <g v-if="effectiveViewMode === 'cnv'">
             <!-- Gene track title -->
-            <text
-              :x="margin.left"
-              :y="centerY - 120"
-              class="gene-track-label"
-              font-weight="600"
-            >
+            <text :x="margin.left" :y="centerY - 120" class="gene-track-label" font-weight="600">
               Genes in 17q12 Region:
             </text>
 
             <!-- Gene rectangles -->
-            <g
-              v-for="(gene, index) in chr17q12Genes"
-              :key="`gene-${gene.symbol}`"
-            >
+            <g v-for="(gene, index) in chr17q12Genes" :key="`gene-${gene.symbol}`">
               <rect
                 :x="scalePosition(gene.start)"
                 :y="centerY - 60"
@@ -315,9 +227,15 @@
               <g>
                 <!-- Connecting line from gene to label -->
                 <line
-                  :x1="scalePosition(gene.start) + (scalePosition(gene.end) - scalePosition(gene.start)) / 2"
+                  :x1="
+                    scalePosition(gene.start) +
+                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                  "
                   :y1="getGeneLabelRow(index, gene) < 3 ? centerY - 60 : centerY - 40"
-                  :x2="scalePosition(gene.start) + (scalePosition(gene.end) - scalePosition(gene.start)) / 2"
+                  :x2="
+                    scalePosition(gene.start) +
+                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                  "
                   :y2="getGeneLabelLineEndY(getGeneLabelRow(index, gene))"
                   stroke="#666"
                   stroke-width="1"
@@ -326,13 +244,20 @@
                 />
                 <!-- Gene label -->
                 <text
-                  :x="scalePosition(gene.start) + (scalePosition(gene.end) - scalePosition(gene.start)) / 2"
+                  :x="
+                    scalePosition(gene.start) +
+                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                  "
                   :y="getGeneLabelYPosition(getGeneLabelRow(index, gene))"
                   text-anchor="middle"
                   class="gene-name-label"
                   font-size="10"
                   font-weight="600"
-                  :fill="gene.clinicalSignificance === 'critical' || gene.clinicalSignificance === 'high' ? '#D32F2F' : '#424242'"
+                  :fill="
+                    gene.clinicalSignificance === 'critical' || gene.clinicalSignificance === 'high'
+                      ? '#D32F2F'
+                      : '#424242'
+                  "
                   pointer-events="none"
                 >
                   {{ gene.symbol }}
@@ -342,10 +267,7 @@
           </g>
 
           <!-- CNV deletions (background bars) -->
-          <g
-            v-for="(cnv, index) in cnvVariants"
-            :key="`cnv-${index}`"
-          >
+          <g v-for="(cnv, index) in cnvVariants" :key="`cnv-${index}`">
             <!-- CNV deletion/duplication bar -->
             <rect
               v-if="cnv.start && cnv.end && getCNVDisplayCoords(cnv).width > 0"
@@ -367,10 +289,7 @@
           <!-- Indel markers (small deletions/insertions < 50bp) -->
           <!-- Only shown in gene mode, not CNV mode -->
           <template v-if="effectiveViewMode !== 'cnv'">
-            <g
-              v-for="(indel, index) in indelVariants"
-              :key="`indel-${index}`"
-            >
+            <g v-for="(indel, index) in indelVariants" :key="`indel-${index}`">
               <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
               <rect
                 v-if="indel.start && indel.end"
@@ -411,7 +330,10 @@
               <!-- Indel label for current variant (positioned below the bar) -->
               <text
                 v-if="indel.isCurrentVariant"
-                :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2"
+                :x="
+                  scalePosition(indel.start) +
+                  (scalePosition(indel.end) - scalePosition(indel.start)) / 2
+                "
                 :y="hnf1bTrackY + exonHeight / 2 + 65"
                 text-anchor="middle"
                 class="indel-label-text"
@@ -425,7 +347,11 @@
               <!-- Star icon for current indel (next to label) -->
               <text
                 v-if="indel.isCurrentVariant"
-                :x="scalePosition(indel.start) + (scalePosition(indel.end) - scalePosition(indel.start)) / 2 - 35"
+                :x="
+                  scalePosition(indel.start) +
+                  (scalePosition(indel.end) - scalePosition(indel.start)) / 2 -
+                  35
+                "
                 :y="hnf1bTrackY + exonHeight / 2 + 65"
                 text-anchor="middle"
                 class="variant-star-icon"
@@ -442,10 +368,7 @@
           <!-- SNV markers -->
           <!-- Only shown in gene mode, not CNV mode -->
           <template v-if="effectiveViewMode !== 'cnv'">
-            <g
-              v-for="(variant, index) in snvVariants"
-              :key="`snv-${index}`"
-            >
+            <g v-for="(variant, index) in snvVariants" :key="`snv-${index}`">
               <!-- Connecting line (longer to avoid exon label overlap) -->
               <line
                 v-if="variant.position"
@@ -520,10 +443,7 @@
           <!-- Splice variant markers (diamonds) -->
           <!-- Only shown in gene mode, not CNV mode -->
           <template v-if="effectiveViewMode !== 'cnv'">
-            <g
-              v-for="(variant, index) in spliceVariants"
-              :key="`splice-${index}`"
-            >
+            <g v-for="(variant, index) in spliceVariants" :key="`splice-${index}`">
               <!-- Connecting line (same as SNVs but with different end position) -->
               <line
                 v-if="variant.position"
@@ -539,7 +459,13 @@
               <rect
                 v-if="variant.position"
                 :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
-                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 - (variant.isCurrentVariant ? 10.5 : 3.5)"
+                :y="
+                  hnf1bTrackY -
+                  exonHeight / 2 -
+                  50 -
+                  (index % 3) * 12 -
+                  (variant.isCurrentVariant ? 10.5 : 3.5)
+                "
                 :width="variant.isCurrentVariant ? 21 : 7"
                 :height="variant.isCurrentVariant ? 21 : 7"
                 :fill="getVariantColor(variant)"
@@ -601,27 +527,15 @@
 
       <!-- Zoom Controls -->
       <v-row class="mt-3">
-        <v-col
-          cols="12"
-          class="text-center"
-        >
+        <v-col cols="12" class="text-center">
           <v-btn-group density="compact">
-            <v-btn
-              size="small"
-              @click="zoomIn"
-            >
+            <v-btn size="small" @click="zoomIn">
               <v-icon>mdi-magnify-plus</v-icon>
             </v-btn>
-            <v-btn
-              size="small"
-              @click="zoomOut"
-            >
+            <v-btn size="small" @click="zoomOut">
               <v-icon>mdi-magnify-minus</v-icon>
             </v-btn>
-            <v-btn
-              size="small"
-              @click="resetZoom"
-            >
+            <v-btn size="small" @click="resetZoom">
               <v-icon>mdi-magnify</v-icon>
               Reset
             </v-btn>
@@ -641,36 +555,21 @@
       }"
       class="custom-tooltip"
     >
-      <v-card
-        max-width="350"
-        elevation="8"
-      >
+      <v-card max-width="350" elevation="8">
         <v-card-text class="pa-3">
           <div v-if="tooltipContent.type === 'exon'">
-            <div class="text-h6 mb-2">
-              Exon {{ tooltipContent.data.number }}
-            </div>
+            <div class="text-h6 mb-2">Exon {{ tooltipContent.data.number }}</div>
             <div class="text-body-2">
               <strong>Position:</strong> chr17:{{ formatCoordinate(tooltipContent.data.start) }}-{{
                 formatCoordinate(tooltipContent.data.end)
               }}
             </div>
-            <div class="text-body-2">
-              <strong>Size:</strong> {{ tooltipContent.data.size }} bp
-            </div>
-            <div
-              v-if="tooltipContent.data.domain"
-              class="text-body-2"
-            >
+            <div class="text-body-2"><strong>Size:</strong> {{ tooltipContent.data.size }} bp</div>
+            <div v-if="tooltipContent.data.domain" class="text-body-2">
               <strong>Domain:</strong> {{ tooltipContent.data.domain }}
             </div>
             <div class="text-caption mt-2 text-grey">
-              <v-icon
-                size="small"
-                left
-              >
-                mdi-magnify-plus-outline
-              </v-icon>
+              <v-icon size="small" left> mdi-magnify-plus-outline </v-icon>
               Click to zoom to this exon
             </div>
           </div>
@@ -678,35 +577,21 @@
             <div class="text-h6 mb-2">
               {{ tooltipContent.data.simple_id || tooltipContent.data.variant_id }}
             </div>
-            <div
-              v-if="tooltipContent.data.indelType"
-              class="text-body-2 mb-1"
-            >
+            <div v-if="tooltipContent.data.indelType" class="text-body-2 mb-1">
               <strong>Type:</strong> {{ tooltipContent.data.indelType }}
             </div>
-            <div
-              v-if="tooltipContent.data.transcript"
-              class="text-body-2"
-            >
+            <div v-if="tooltipContent.data.transcript" class="text-body-2">
               {{ extractCNotation(tooltipContent.data.transcript) }}
             </div>
-            <div
-              v-if="tooltipContent.data.protein"
-              class="text-body-2"
-            >
+            <div v-if="tooltipContent.data.protein" class="text-body-2">
               {{ extractPNotation(tooltipContent.data.protein) }}
             </div>
             <div class="mt-2">
-              <v-chip
-                :color="getVariantColor(tooltipContent.data)"
-                size="small"
-              >
+              <v-chip :color="getVariantColor(tooltipContent.data)" size="small">
                 {{ tooltipContent.data.classificationVerdict || 'Unknown' }}
               </v-chip>
             </div>
-            <div class="text-caption mt-2 text-grey">
-              Click to view details
-            </div>
+            <div class="text-caption mt-2 text-grey">Click to view details</div>
           </div>
           <div v-else-if="tooltipContent.type === 'gene'">
             <div class="text-h6 mb-2">
@@ -716,21 +601,17 @@
               <strong>{{ tooltipContent.data.name }}</strong>
             </div>
             <div class="text-body-2">
-              chr17:{{ formatCoordinate(tooltipContent.data.start) }}-{{ formatCoordinate(tooltipContent.data.end) }}
+              chr17:{{ formatCoordinate(tooltipContent.data.start) }}-{{
+                formatCoordinate(tooltipContent.data.end)
+              }}
             </div>
             <div class="text-body-2">
               Size: {{ (tooltipContent.data.size / 1000).toFixed(1) }} kb
             </div>
-            <div
-              v-if="tooltipContent.data.function"
-              class="text-body-2 mt-2"
-            >
+            <div v-if="tooltipContent.data.function" class="text-body-2 mt-2">
               <strong>Function:</strong> {{ tooltipContent.data.function }}
             </div>
-            <div
-              v-if="tooltipContent.data.phenotype"
-              class="text-body-2 mt-1"
-            >
+            <div v-if="tooltipContent.data.phenotype" class="text-body-2 mt-1">
               <strong>Phenotype:</strong> {{ tooltipContent.data.phenotype }}
             </div>
             <v-chip
@@ -791,7 +672,7 @@ export default {
       exons: [
         // HNF1B coding exons (GRCh38 coordinates from UCSC NM_000458.4)
         // Note: Gene is on minus strand, so exon 1 is at higher genomic coordinates
-        { number: 1, start: 37744540, end: 37745059, size: 519, domain: '5\' UTR' },
+        { number: 1, start: 37744540, end: 37745059, size: 519, domain: "5' UTR" },
         { number: 2, start: 37739439, end: 37739639, size: 200, domain: null },
         { number: 3, start: 37733556, end: 37733821, size: 265, domain: 'POU-S' },
         { number: 4, start: 37731594, end: 37731830, size: 236, domain: 'POU-H' },
@@ -799,7 +680,7 @@ export default {
         { number: 6, start: 37704916, end: 37705049, size: 133, domain: null },
         { number: 7, start: 37700982, end: 37701177, size: 195, domain: 'Transactivation' },
         { number: 8, start: 37699075, end: 37699194, size: 119, domain: 'Transactivation' },
-        { number: 9, start: 37686430, end: 37687392, size: 962, domain: '3\' UTR' },
+        { number: 9, start: 37686430, end: 37687392, size: 962, domain: "3' UTR" },
       ],
     };
   },
@@ -989,7 +870,7 @@ export default {
         let assignedRow = -1;
         for (let row = 0; row < 6; row++) {
           // Check if this position collides with any existing labels in this row
-          const hasCollision = rowOccupancy[row].some(occupied => {
+          const hasCollision = rowOccupancy[row].some((occupied) => {
             return labelEnd >= occupied.start && labelStart <= occupied.end;
           });
 
@@ -1004,11 +885,11 @@ export default {
           let minOverlap = Infinity;
           for (let row = 0; row < 6; row++) {
             let totalOverlap = 0;
-            rowOccupancy[row].forEach(occupied => {
+            rowOccupancy[row].forEach((occupied) => {
               const overlapStart = Math.max(labelStart, occupied.start);
               const overlapEnd = Math.min(labelEnd, occupied.end);
               if (overlapStart < overlapEnd) {
-                totalOverlap += (overlapEnd - overlapStart);
+                totalOverlap += overlapEnd - overlapStart;
               }
             });
             if (totalOverlap < minOverlap) {
@@ -1238,7 +1119,10 @@ export default {
       if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
         return '#EF5350'; // red-lighten-3
       }
-      if (classification.includes('LIKELY_PATHOGENIC') || classification.includes('LIKELY PATHOGENIC')) {
+      if (
+        classification.includes('LIKELY_PATHOGENIC') ||
+        classification.includes('LIKELY PATHOGENIC')
+      ) {
         return '#FF9800'; // orange-lighten-3
       }
       if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
@@ -1418,7 +1302,8 @@ export default {
 }
 
 @keyframes pulse-zoom {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 6px rgba(255, 111, 0, 0.8));
   }
   50% {

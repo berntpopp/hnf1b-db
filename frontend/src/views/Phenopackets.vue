@@ -32,32 +32,16 @@
             <!-- Display the current items range -->
             <span class="mx-2">{{ rangeText }}</span>
             <!-- Pagination navigation buttons -->
-            <v-btn
-              icon
-              :disabled="currentPage === 1"
-              @click="goToFirstPage"
-            >
+            <v-btn icon :disabled="currentPage === 1" @click="goToFirstPage">
               <v-icon>mdi-page-first</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="currentPage === 1"
-              @click="goToPreviousPage"
-            >
+            <v-btn icon :disabled="currentPage === 1" @click="goToPreviousPage">
               <v-icon>mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="currentPage >= totalPages"
-              @click="goToNextPage"
-            >
+            <v-btn icon :disabled="currentPage >= totalPages" @click="goToNextPage">
               <v-icon>mdi-chevron-right</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="currentPage >= totalPages"
-              @click="goToLastPage"
-            >
+            <v-btn icon :disabled="currentPage >= totalPages" @click="goToLastPage">
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
@@ -66,16 +50,9 @@
 
       <!-- Render Phenopacket ID as a chip -->
       <template #item.phenopacket_id="{ item }">
-        <v-chip
-          color="lime-lighten-2"
-          class="ma-2"
-          small
-          variant="flat"
-        >
+        <v-chip color="lime-lighten-2" class="ma-2" small variant="flat">
           {{ item.phenopacket_id }}
-          <v-icon right>
-            mdi-file-document
-          </v-icon>
+          <v-icon right> mdi-file-document </v-icon>
         </v-chip>
       </template>
 
@@ -86,11 +63,7 @@
 
       <!-- Render sex with icon -->
       <template #item.sex="{ item }">
-        <v-icon
-          small
-          :color="getSexColor(item.sex)"
-          class="mr-1"
-        >
+        <v-icon small :color="getSexColor(item.sex)" class="mr-1">
           {{ getSexIcon(item.sex) }}
         </v-icon>
         {{ formatSex(item.sex) }}
@@ -98,10 +71,7 @@
 
       <!-- Render primary disease -->
       <template #item.primary_disease="{ item }">
-        <v-tooltip
-          v-if="item.primary_disease"
-          location="top"
-        >
+        <v-tooltip v-if="item.primary_disease" location="top">
           <template #activator="{ props }">
             <span
               v-bind="props"
@@ -118,29 +88,19 @@
 
       <!-- Render features count with badge -->
       <template #item.features_count="{ item }">
-        <v-chip
-          :color="item.features_count > 0 ? 'green' : 'grey'"
-          small
-          variant="flat"
-        >
+        <v-chip :color="item.features_count > 0 ? 'green' : 'grey'" small variant="flat">
           {{ item.features_count }}
         </v-chip>
       </template>
 
       <!-- Render variants count with badge -->
       <template #item.variants_count="{ item }">
-        <v-chip
-          :color="item.variants_count > 0 ? 'blue' : 'grey'"
-          small
-          variant="flat"
-        >
+        <v-chip :color="item.variants_count > 0 ? 'blue' : 'grey'" small variant="flat">
           {{ item.variants_count }}
         </v-chip>
       </template>
 
-      <template #no-data>
-        No phenopackets found.
-      </template>
+      <template #no-data> No phenopackets found. </template>
     </v-data-table-server>
   </v-container>
 </template>

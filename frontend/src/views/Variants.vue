@@ -7,10 +7,7 @@
       <v-card-text>
         <v-row>
           <!-- Text Search -->
-          <v-col
-            cols="12"
-            md="4"
-          >
+          <v-col cols="12" md="4">
             <v-text-field
               v-model="searchQuery"
               label="Search"
@@ -65,10 +62,7 @@
           </v-col>
 
           <!-- Variant Type Filter -->
-          <v-col
-            cols="12"
-            md="2"
-          >
+          <v-col cols="12" md="2">
             <v-select
               v-model="filterType"
               :items="variantTypes"
@@ -81,10 +75,7 @@
           </v-col>
 
           <!-- Classification Filter -->
-          <v-col
-            cols="12"
-            md="2"
-          >
+          <v-col cols="12" md="2">
             <v-select
               v-model="filterClassification"
               :items="classifications"
@@ -97,10 +88,7 @@
           </v-col>
 
           <!-- Molecular Consequence Filter -->
-          <v-col
-            cols="12"
-            md="4"
-          >
+          <v-col cols="12" md="4">
             <v-select
               v-model="filterConsequence"
               :items="consequences"
@@ -114,10 +102,7 @@
         </v-row>
 
         <!-- Active Filters Display -->
-        <v-row
-          v-if="hasActiveFilters"
-          class="mt-2"
-        >
+        <v-row v-if="hasActiveFilters" class="mt-2">
           <v-col cols="12">
             <v-chip-group>
               <v-chip
@@ -128,12 +113,7 @@
                 variant="flat"
                 @click:close="clearSearch"
               >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-magnify
-                </v-icon>
+                <v-icon start size="small"> mdi-magnify </v-icon>
                 Search: {{ searchQuery }}
               </v-chip>
               <v-chip
@@ -144,12 +124,7 @@
                 variant="flat"
                 @click:close="clearTypeFilter"
               >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-dna
-                </v-icon>
+                <v-icon start size="small"> mdi-dna </v-icon>
                 Type: {{ filterType }}
               </v-chip>
               <v-chip
@@ -160,12 +135,7 @@
                 variant="flat"
                 @click:close="clearClassificationFilter"
               >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-alert-circle
-                </v-icon>
+                <v-icon start size="small"> mdi-alert-circle </v-icon>
                 {{ filterClassification }}
               </v-chip>
               <v-chip
@@ -176,26 +146,11 @@
                 variant="flat"
                 @click:close="clearConsequenceFilter"
               >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-molecule
-                </v-icon>
+                <v-icon start size="small"> mdi-molecule </v-icon>
                 {{ filterConsequence }}
               </v-chip>
-              <v-chip
-                color="error"
-                size="small"
-                variant="outlined"
-                @click="clearAllFilters"
-              >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-close
-                </v-icon>
+              <v-chip color="error" size="small" variant="outlined" @click="clearAllFilters">
+                <v-icon start size="small"> mdi-close </v-icon>
                 Clear All
               </v-chip>
             </v-chip-group>
@@ -206,17 +161,8 @@
         <v-row class="mt-1">
           <v-col cols="12">
             <div class="d-flex align-center">
-              <v-chip
-                color="info"
-                size="small"
-                variant="flat"
-              >
-                <v-icon
-                  start
-                  size="small"
-                >
-                  mdi-filter
-                </v-icon>
+              <v-chip color="info" size="small" variant="flat">
+                <v-icon start size="small"> mdi-filter </v-icon>
                 {{ filteredCount }} variants
                 <span v-if="hasActiveFilters"> (filtered)</span>
               </v-chip>
@@ -228,9 +174,7 @@
                 color="primary"
                 @click="clearAllFilters"
               >
-                <v-icon start>
-                  mdi-refresh
-                </v-icon>
+                <v-icon start> mdi-refresh </v-icon>
                 Reset Filters
               </v-btn>
             </div>
@@ -271,32 +215,16 @@
             <!-- Display the current items range -->
             <span class="mx-2">{{ rangeText }}</span>
             <!-- Pagination navigation buttons -->
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              @click="goToFirstPage"
-            >
+            <v-btn icon :disabled="options.page === 1" @click="goToFirstPage">
               <v-icon>mdi-page-first</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              @click="goToPreviousPage"
-            >
+            <v-btn icon :disabled="options.page === 1" @click="goToPreviousPage">
               <v-icon>mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              @click="goToNextPage"
-            >
+            <v-btn icon :disabled="options.page === totalPages" @click="goToNextPage">
               <v-icon>mdi-chevron-right</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              @click="goToLastPage"
-            >
+            <v-btn icon :disabled="options.page === totalPages" @click="goToLastPage">
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
@@ -305,16 +233,9 @@
 
       <!-- Render simple_id as a clickable chip -->
       <template #item.simple_id="{ item }">
-        <v-chip
-          color="pink-lighten-3"
-          class="ma-1"
-          size="small"
-          variant="flat"
-        >
+        <v-chip color="pink-lighten-3" class="ma-1" size="small" variant="flat">
           {{ item.simple_id }}
-          <v-icon right>
-            mdi-dna
-          </v-icon>
+          <v-icon right> mdi-dna </v-icon>
         </v-chip>
       </template>
 
@@ -342,20 +263,19 @@
 
       <!-- Render HG38 with truncation for long values -->
       <template #item.hg38="{ item }">
-        <v-tooltip
-          v-if="item.hg38 && item.hg38.length > 40"
-          location="top"
-        >
+        <v-tooltip v-if="item.hg38 && item.hg38.length > 40" location="top">
           <template #activator="{ props }">
             <span
               v-bind="props"
               class="text-truncate d-inline-block"
-              style="max-width: 280px; cursor: help;"
+              style="max-width: 280px; cursor: help"
             >
               {{ item.hg38 }}
             </span>
           </template>
-          <span style="word-break: break-all; max-width: 500px; display: block;">{{ item.hg38 }}</span>
+          <span style="word-break: break-all; max-width: 500px; display: block">{{
+            item.hg38
+          }}</span>
         </v-tooltip>
         <span v-else>{{ item.hg38 || '-' }}</span>
       </template>
@@ -376,12 +296,7 @@
 
       <!-- Render individual count as a badge -->
       <template #item.individualCount="{ item }">
-        <v-chip
-          color="light-green-lighten-3"
-          class="ma-1"
-          size="small"
-          variant="flat"
-        >
+        <v-chip color="light-green-lighten-3" class="ma-1" size="small" variant="flat">
           {{ item.individualCount || 0 }}
         </v-chip>
       </template>
@@ -390,16 +305,11 @@
       <template #header.variant_type="{ column }">
         <div
           class="d-flex align-center"
-          style="cursor: pointer; user-select: none;"
+          style="cursor: pointer; user-select: none"
           @click="cycleVariantTypeSort"
         >
           <span>{{ column.title }}</span>
-          <v-chip
-            v-if="variantTypeSortPriority"
-            size="x-small"
-            color="primary"
-            class="ml-1"
-          >
+          <v-chip v-if="variantTypeSortPriority" size="x-small" color="primary" class="ml-1">
             {{ variantTypeSortPriority }}
           </v-chip>
         </div>
@@ -409,16 +319,11 @@
       <template #header.classificationVerdict="{ column }">
         <div
           class="d-flex align-center"
-          style="cursor: pointer; user-select: none;"
+          style="cursor: pointer; user-select: none"
           @click="cycleClassificationSort"
         >
           <span>{{ column.title }}</span>
-          <v-chip
-            v-if="classificationSortPriority"
-            size="x-small"
-            color="primary"
-            class="ml-1"
-          >
+          <v-chip v-if="classificationSortPriority" size="x-small" color="primary" class="ml-1">
             {{ classificationSortPriority }}
           </v-chip>
         </div>
@@ -432,12 +337,7 @@
           text="No variants match your search criteria. Try adjusting your filters or clearing them."
         >
           <template #actions>
-            <v-btn
-              color="primary"
-              @click="clearAllFilters"
-            >
-              Clear Filters
-            </v-btn>
+            <v-btn color="primary" @click="clearAllFilters"> Clear Filters </v-btn>
           </template>
         </v-empty-state>
         <span v-else>No variants found.</span>
@@ -449,14 +349,8 @@
 <script>
 import debounce from 'just-debounce-it';
 import { getVariants } from '@/api';
-import {
-  extractCNotation,
-  extractPNotation,
-} from '@/utils/hgvs';
-import {
-  getPathogenicityColor,
-  getVariantTypeColor,
-} from '@/utils/colors';
+import { extractCNotation, extractPNotation } from '@/utils/hgvs';
+import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
 import { API_CONFIG } from '@/config/app';
 
@@ -793,7 +687,7 @@ export default {
       // Apply custom sorting: selected type first, then others
       // Create custom sort parameter that backend can handle
       this.options.sortBy = [
-        { key: 'variant_type_priority', order: 'asc', priority: selectedType }
+        { key: 'variant_type_priority', order: 'asc', priority: selectedType },
       ];
 
       // Store the priority type for custom sorting
@@ -810,7 +704,7 @@ export default {
 
       // Apply custom sorting: selected classification first, then others
       this.options.sortBy = [
-        { key: 'classification_priority', order: 'asc', priority: selectedClassification }
+        { key: 'classification_priority', order: 'asc', priority: selectedClassification },
       ];
 
       // Store the priority classification for custom sorting
@@ -874,7 +768,6 @@ export default {
         this.$router.push(`/variants/${row.item.variant_id}`);
       }
     },
-
   },
 };
 </script>

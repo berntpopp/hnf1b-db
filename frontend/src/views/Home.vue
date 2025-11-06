@@ -1,24 +1,11 @@
 <!-- src/views/Home.vue -->
 <template>
   <v-container fill-height>
-    <v-row
-      align="center"
-      justify="center"
-    >
-      <v-col
-        cols="12"
-        md="11"
-        lg="10"
-        xl="10"
-      >
-        <v-card
-          class="pa-4"
-          variant="flat"
-        >
+    <v-row align="center" justify="center">
+      <v-col cols="12" md="11" lg="10" xl="10">
+        <v-card class="pa-4" variant="flat">
           <!-- Title -->
-          <v-card-title class="text-h3 text-center">
-            Welcome to HNF1B-db
-          </v-card-title>
+          <v-card-title class="text-h3 text-center"> Welcome to HNF1B-db </v-card-title>
 
           <!-- Subtitle -->
           <v-card-subtitle class="text-center">
@@ -29,48 +16,24 @@
           <v-card-text class="text-center">
             <!-- Stats row: defaults start at 0 and then animate upward -->
             <p>
-              <v-chip
-                color="light-green-lighten-3"
-                class="ma-1"
-                variant="flat"
-              >
+              <v-chip color="light-green-lighten-3" class="ma-1" variant="flat">
                 {{ displayStats.individuals }} individuals
-                <v-icon right>
-                  mdi-account
-                </v-icon>
+                <v-icon right> mdi-account </v-icon>
               </v-chip>
               with
-              <v-chip
-                color="pink-lighten-3"
-                class="ma-1"
-                variant="flat"
-              >
+              <v-chip color="pink-lighten-3" class="ma-1" variant="flat">
                 {{ displayStats.variants }} genetic variants
-                <v-icon right>
-                  mdi-dna
-                </v-icon>
+                <v-icon right> mdi-dna </v-icon>
               </v-chip>
               with
-              <v-chip
-                color="amber-lighten-3"
-                class="ma-1"
-                variant="flat"
-              >
+              <v-chip color="amber-lighten-3" class="ma-1" variant="flat">
                 {{ displayStats.total_reports }} phenotypes
-                <v-icon right>
-                  mdi-medical-bag
-                </v-icon>
+                <v-icon right> mdi-medical-bag </v-icon>
               </v-chip>
               from
-              <v-chip
-                color="cyan-lighten-3"
-                class="ma-1"
-                variant="flat"
-              >
+              <v-chip color="cyan-lighten-3" class="ma-1" variant="flat">
                 {{ displayStats.publications }} publications
-                <v-icon right>
-                  mdi-book-open-blank-variant
-                </v-icon>
+                <v-icon right> mdi-book-open-blank-variant </v-icon>
               </v-chip>
             </p>
 
@@ -82,13 +45,8 @@
         </v-card>
 
         <!-- Variant Visualizations with Tabs -->
-        <v-card
-          class="mt-4"
-          variant="flat"
-        >
-          <v-card-title class="text-h5">
-            HNF1B Variant Visualizations
-          </v-card-title>
+        <v-card class="mt-4" variant="flat">
+          <v-card-title class="text-h5"> HNF1B Variant Visualizations </v-card-title>
           <v-tabs
             v-model="activeTab"
             bg-color="transparent"
@@ -96,21 +54,15 @@
             @update:model-value="handleTabChange"
           >
             <v-tab value="protein">
-              <v-icon start>
-                mdi-protein
-              </v-icon>
+              <v-icon start> mdi-protein </v-icon>
               Protein View
             </v-tab>
             <v-tab value="gene">
-              <v-icon start>
-                mdi-dna
-              </v-icon>
+              <v-icon start> mdi-dna </v-icon>
               Gene View
             </v-tab>
             <v-tab value="region">
-              <v-icon start>
-                mdi-map-marker-radius
-              </v-icon>
+              <v-icon start> mdi-map-marker-radius </v-icon>
               17q12 Region
             </v-tab>
           </v-tabs>
@@ -124,11 +76,7 @@
                   :variants="snvVariants"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="400"
-                />
+                <v-skeleton-loader v-else type="image" height="400" />
               </v-card-text>
             </v-window-item>
 
@@ -141,11 +89,7 @@
                   force-view-mode="gene"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="400"
-                />
+                <v-skeleton-loader v-else type="image" height="400" />
               </v-card-text>
             </v-window-item>
 
@@ -158,11 +102,7 @@
                   force-view-mode="cnv"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="400"
-                />
+                <v-skeleton-loader v-else type="image" height="400" />
               </v-card-text>
             </v-window-item>
           </v-window>
@@ -315,7 +255,10 @@ export default {
         // Fetch all variants to filter SNVs
         // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
         // See @/config/app.js for details
-        const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
+        const response = await getVariants({
+          page: 1,
+          page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
+        });
         allVariants.value = response.data || [];
 
         // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
@@ -342,7 +285,10 @@ export default {
         // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
         // See @/config/app.js for details
         if (allVariants.value.length === 0) {
-          const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
+          const response = await getVariants({
+            page: 1,
+            page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
+          });
           allVariants.value = response.data || [];
         }
 

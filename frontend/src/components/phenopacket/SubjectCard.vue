@@ -2,21 +2,13 @@
 <template>
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-blue-lighten-5">
-      <v-icon
-        left
-        color="primary"
-        size="small"
-      >
-        mdi-account
-      </v-icon>
+      <v-icon left color="primary" size="small"> mdi-account </v-icon>
       Subject Information
     </v-card-title>
     <v-card-text class="pa-2">
       <v-list density="compact">
         <v-list-item>
-          <v-list-item-title class="font-weight-bold">
-            Subject ID
-          </v-list-item-title>
+          <v-list-item-title class="font-weight-bold"> Subject ID </v-list-item-title>
           <v-list-item-subtitle>{{ subject.id || 'N/A' }}</v-list-item-subtitle>
         </v-list-item>
 
@@ -39,15 +31,9 @@
         </v-list-item>
 
         <v-list-item>
-          <v-list-item-title class="font-weight-bold">
-            Sex
-          </v-list-item-title>
+          <v-list-item-title class="font-weight-bold"> Sex </v-list-item-title>
           <v-list-item-subtitle>
-            <v-icon
-              small
-              :color="getSexColor(subject.sex)"
-              class="mr-1"
-            >
+            <v-icon small :color="getSexColor(subject.sex)" class="mr-1">
               {{ getSexIcon(subject.sex) }}
             </v-icon>
             {{ formatSex(subject.sex) }}
@@ -55,23 +41,17 @@
         </v-list-item>
 
         <v-list-item v-if="subject.karyotypicSex">
-          <v-list-item-title class="font-weight-bold">
-            Karyotypic Sex
-          </v-list-item-title>
+          <v-list-item-title class="font-weight-bold"> Karyotypic Sex </v-list-item-title>
           <v-list-item-subtitle>{{ subject.karyotypicSex }}</v-list-item-subtitle>
         </v-list-item>
 
         <v-list-item v-if="age">
-          <v-list-item-title class="font-weight-bold">
-            Age at Last Encounter
-          </v-list-item-title>
+          <v-list-item-title class="font-weight-bold"> Age at Last Encounter </v-list-item-title>
           <v-list-item-subtitle>{{ age }}</v-list-item-subtitle>
         </v-list-item>
 
         <v-list-item v-if="subject.taxonomy">
-          <v-list-item-title class="font-weight-bold">
-            Taxonomy
-          </v-list-item-title>
+          <v-list-item-title class="font-weight-bold"> Taxonomy </v-list-item-title>
           <v-list-item-subtitle>
             {{ subject.taxonomy.label || subject.taxonomy.id }}
           </v-list-item-subtitle>

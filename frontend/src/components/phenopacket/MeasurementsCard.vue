@@ -2,35 +2,18 @@
 <template>
   <v-card outlined>
     <v-card-title class="text-h6 bg-orange-lighten-5">
-      <v-icon
-        left
-        color="orange"
-      >
-        mdi-test-tube
-      </v-icon>
+      <v-icon left color="orange"> mdi-test-tube </v-icon>
       Measurements ({{ measurements.length }})
     </v-card-title>
     <v-card-text>
-      <v-alert
-        v-if="measurements.length === 0"
-        type="info"
-        density="compact"
-      >
+      <v-alert v-if="measurements.length === 0" type="info" density="compact">
         No measurements recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item
-          v-for="(measurement, index) in measurements"
-          :key="index"
-          class="mb-2"
-        >
+        <v-list-item v-for="(measurement, index) in measurements" :key="index" class="mb-2">
           <template #prepend>
-            <v-chip
-              color="orange"
-              variant="flat"
-              size="small"
-            >
+            <v-chip color="orange" variant="flat" size="small">
               {{ measurement.assay.id }}
             </v-chip>
           </template>
@@ -48,7 +31,8 @@
           </v-list-item-subtitle>
 
           <v-list-item-subtitle v-if="measurement.procedure">
-            <strong>Procedure:</strong> {{ measurement.procedure.label || measurement.procedure.id }}
+            <strong>Procedure:</strong>
+            {{ measurement.procedure.label || measurement.procedure.id }}
           </v-list-item-subtitle>
         </v-list-item>
       </v-list>

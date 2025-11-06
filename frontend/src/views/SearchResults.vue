@@ -10,10 +10,7 @@
     <!-- Show a loading indicator -->
     <v-row v-if="loading">
       <v-col cols="12">
-        <v-progress-circular
-          color="primary"
-          indeterminate
-        />
+        <v-progress-circular color="primary" indeterminate />
         <span>Loading...</span>
       </v-col>
     </v-row>
@@ -45,23 +42,13 @@
                 :to="`/individuals/${item.id}`"
               >
                 {{ item.id }}
-                <v-icon right>
-                  mdi-account
-                </v-icon>
+                <v-icon right> mdi-account </v-icon>
               </v-chip>
             </template>
             <template v-else-if="item.category === 'Variants'">
-              <v-chip
-                color="pink lighten-4"
-                class="ma-2"
-                small
-                link
-                :to="`/variants/${item.id}`"
-              >
+              <v-chip color="pink lighten-4" class="ma-2" small link :to="`/variants/${item.id}`">
                 {{ item.id }}
-                <v-icon right>
-                  mdi-dna
-                </v-icon>
+                <v-icon right> mdi-dna </v-icon>
               </v-chip>
             </template>
             <template v-else-if="item.category === 'Publications'">
@@ -73,9 +60,7 @@
                 :to="`/publications/${item.id}`"
               >
                 pub{{ item.id }}
-                <v-icon right>
-                  mdi-book-open-blank-variant
-                </v-icon>
+                <v-icon right> mdi-book-open-blank-variant </v-icon>
               </v-chip>
             </template>
             <template v-else>

@@ -9,6 +9,7 @@ This directory contains interactive SVG-based visualizations for displaying HNF1
 **Purpose:** Displays variants mapped to the HNF1B gene structure on chromosome 17.
 
 **Features:**
+
 - **Exon structure**: Shows all 9 exons with accurate genomic coordinates (GRCh38)
 - **Intron backbone**: Connects exons with a horizontal line representing the gene span
 - **SNV markers**: Point mutations displayed as colored circles above the gene
@@ -23,6 +24,7 @@ This directory contains interactive SVG-based visualizations for displaying HNF1
 - **17q12 region view**: Toggle to view all 15 genes in the 17q12 deletion region with clinical significance color-coding
 
 **Visual Layout:**
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │         HNF1B Gene (chr17:37.69-37.75 Mb) - 58.6 kb         │
@@ -38,14 +40,17 @@ This directory contains interactive SVG-based visualizations for displaying HNF1
 ```
 
 **Props:**
+
 - `variants` (Array): Array of variant objects with genomic positions
 - `currentVariantId` (String): ID of the variant being viewed (highlighted in purple)
 
 **Events:**
+
 - `variant-clicked`: Emitted when user clicks on a variant marker (payload: variant object)
 
 **Data Requirements:**
 Variants must have:
+
 - `variant_id`: Unique identifier
 - `hg38`: Genomic coordinate in format:
   - SNVs: `chr17-36098063-C-T`
@@ -59,6 +64,7 @@ Variants must have:
 **Purpose:** Displays variants mapped to the HNF1B protein structure (557 amino acids).
 
 **Features:**
+
 - **Domain architecture**: Shows 4 functional domains with accurate amino acid positions
   - Dimerization Domain (aa 1-32) - Orange
   - POU-Specific Domain (aa 101-157) - Blue
@@ -77,6 +83,7 @@ Variants must have:
 **Note:** Functional DNA-binding site markers were intentionally excluded from this visualization due to inability to verify accuracy against authoritative protein structure references.
 
 **Visual Layout:**
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              HNF1B Protein Domains (557 aa)                 │
@@ -92,14 +99,17 @@ Variants must have:
 ```
 
 **Props:**
+
 - `variants` (Array): Array of variant objects with protein positions
 - `currentVariantId` (String): ID of the variant being viewed (highlighted in purple)
 
 **Events:**
+
 - `variant-clicked`: Emitted when user clicks on a variant marker (payload: variant object)
 
 **Data Requirements:**
 Variants must have:
+
 - `variant_id`: Unique identifier
 - `protein`: HGVS protein notation (e.g., `NP_000449.3:p.Arg177Ter`)
 - `classificationVerdict`: Pathogenicity classification
@@ -109,6 +119,7 @@ Variants must have:
 
 **Amino Acid Position Extraction:**
 The component parses amino acid positions from HGVS p. notation:
+
 - `p.Arg177Ter` → position 177
 - `p.Ser546Phe` → position 546
 - `p.Met1?` → position 1
@@ -118,6 +129,7 @@ The component parses amino acid positions from HGVS p. notation:
 ### Exon Zoom Feature
 
 **How to use:**
+
 1. **Click any exon** in the gene visualization to zoom into that specific exon
 2. The view will **automatically adjust** to show:
    - The selected exon (highlighted with orange border and pulsing animation)
@@ -128,6 +140,7 @@ The component parses amino acid positions from HGVS p. notation:
 5. **To zoom out**: Click the same exon again OR click the "Reset" button
 
 **Example use case:**
+
 ```
 Scenario: You have a variant at chr17:37,744,550 in Exon 1
 Problem: The full gene view (58.6 kb) makes it hard to see exact position within the 519bp exon
@@ -140,6 +153,7 @@ Solution:
 ```
 
 **Visual indicators:**
+
 - **Orange border (4px)**: Currently zoomed exon
 - **Pulsing animation**: Orange glow effect on zoomed exon
 - **Cursor changes**: Pointer cursor on all exons (indicates clickable)
@@ -195,7 +209,10 @@ export default {
     async loadAllVariants() {
       // ⚠️ WARNING: Fetches all variants assuming database size < MAX_VARIANTS_FOR_PRIORITY_SORT
       // See @/config/app.js API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT for details
-      const response = await getVariants({ page: 1, page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT });
+      const response = await getVariants({
+        page: 1,
+        page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
+      });
       this.allVariants = response.data || [];
     },
     navigateToVariant(variant) {
@@ -209,6 +226,7 @@ export default {
 ## Color Coding
 
 ### Pathogenicity Colors
+
 - **Red** (`#EF5350`): Pathogenic
 - **Orange** (`#FF9800`): Likely Pathogenic
 - **Yellow** (`#FFEB3B`): Uncertain Significance (VUS)
@@ -217,22 +235,26 @@ export default {
 - **Grey** (`#BDBDBD`): Unknown/Not classified
 
 ### Domain Colors (Gene View)
+
 - **Blue** (`#42A5F5`): POU domains (DNA binding)
 - **Green** (`#66BB6A`): Transactivation domain
 - **Grey** (`#BDBDBD`): UTR regions
 - **Default Blue** (`#1E88E5`): Other exons
 
 ### Domain Colors (Protein View)
+
 - **Orange** (`#FFB74D`): Dimerization Domain
 - **Blue** (`#64B5F6`): POU-Specific Domain
 - **Cyan** (`#4FC3F7`): POU Homeodomain
 - **Green** (`#81C784`): Transactivation Domain
 
 ### CNV Colors
+
 - **Red** (`#EF5350`): Deletions
 - **Blue** (`#42A5F5`): Duplications
 
 ### Variant Type Markers (Gene View)
+
 - **Circle** (●): SNV variants (single nucleotide variants)
 - **Diamond** (◆): Splice site variants (affects RNA splicing, no direct protein change)
   - Detected by regex pattern `/[+-]\d+/` in transcript notation (e.g., `c.544+1G>T`)
@@ -242,12 +264,14 @@ export default {
 ## Performance
 
 ### Rendering
+
 - **Gene View**: ~50ms for 100 variants
 - **Protein View**: ~50ms for 100 variants
 - **Zoom/Pan**: ~10ms (SVG transforms only)
 - **Tooltips**: Instant (<5ms)
 
 ### Memory
+
 - **SVG DOM**: ~1KB per variant
 - **100 variants**: ~100KB memory footprint
 - **Responsive**: Adapts to container width
@@ -269,6 +293,7 @@ export default {
 ## Future Enhancements
 
 ### Potential Features
+
 - [ ] Conservation score heatmap overlay
 - [ ] Transcript isoform selector (if multiple isoforms exist)
 - [ ] Variant frequency bar charts
@@ -279,6 +304,7 @@ export default {
 - [ ] Pathway interaction overlay
 
 ### Performance Optimizations
+
 - [ ] Virtual scrolling for 1000+ variants
 - [ ] WebGL rendering for massive datasets
 - [ ] Canvas fallback for older browsers
@@ -289,12 +315,14 @@ export default {
 ### Issue: Variants not appearing
 
 **Possible causes:**
+
 1. Missing genomic coordinates (`hg38` field)
 2. Missing protein notation (`protein` field)
 3. Invalid coordinate format
 
 **Solution:**
 Check variant data structure:
+
 ```javascript
 console.log(variants[0]);
 // Should have: variant_id, hg38 (gene view), protein (protein view)
@@ -303,11 +331,13 @@ console.log(variants[0]);
 ### Issue: Tooltips not showing
 
 **Possible causes:**
+
 1. Z-index conflict with other components
 2. Pointer events disabled
 
 **Solution:**
 Ensure tooltip container has high z-index:
+
 ```css
 .custom-tooltip {
   z-index: 9999;
@@ -318,11 +348,13 @@ Ensure tooltip container has high z-index:
 ### Issue: Visualizations not responsive
 
 **Possible causes:**
+
 1. Fixed width container
 2. Window resize listener not working
 
 **Solution:**
 Ensure parent container has width: 100%:
+
 ```css
 .svg-container {
   width: 100%;
@@ -333,6 +365,7 @@ Ensure parent container has width: 100%:
 ## References
 
 ### HNF1B Gene
+
 - **HGNC ID**: HGNC:5024
 - **Chromosome**: 17q12
 - **Coordinates (GRCh38)**: chr17:37,686,430-37,745,059
@@ -343,6 +376,7 @@ Ensure parent container has width: 100%:
 - **Strand**: Minus (reverse complement)
 
 ### External Resources
+
 - [UCSC Genome Browser](https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A37686430-37745059)
 - [Ensembl](https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=ENSG00000108753)
 - [UniProt](https://www.uniprot.org/uniprotkb/P35680/entry)

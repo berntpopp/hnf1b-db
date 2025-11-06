@@ -2,12 +2,7 @@
 <template>
   <v-card class="protein-viz-card">
     <v-card-title class="text-h6 bg-grey-lighten-4">
-      <v-icon
-        left
-        color="secondary"
-      >
-        mdi-protein
-      </v-icon>
+      <v-icon left color="secondary"> mdi-protein </v-icon>
       HNF1B Protein Domains (NP_000449.3, 557 aa)
       <v-tooltip location="bottom">
         <template #activator="{ props }">
@@ -20,18 +15,13 @@
             target="_blank"
             class="ml-1"
           >
-            <v-icon size="small">
-              mdi-open-in-new
-            </v-icon>
+            <v-icon size="small"> mdi-open-in-new </v-icon>
           </v-btn>
         </template>
         <span>View in UniProt (P35680)</span>
       </v-tooltip>
       <v-spacer />
-      <v-chip
-        size="small"
-        color="info"
-      >
+      <v-chip size="small" color="info">
         {{ snvVariants.length }} SNV{{ snvVariants.length !== 1 ? 's' : '' }}
       </v-chip>
     </v-card-title>
@@ -41,100 +31,36 @@
       <v-row class="mb-2">
         <v-col cols="12">
           <div class="legend-container">
-            <v-chip
-              size="small"
-              color="orange-lighten-2"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-square
-              </v-icon>
+            <v-chip size="small" color="orange-lighten-2">
+              <v-icon left size="small"> mdi-square </v-icon>
               Dimerization
             </v-chip>
-            <v-chip
-              size="small"
-              color="blue-lighten-2"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-square
-              </v-icon>
+            <v-chip size="small" color="blue-lighten-2">
+              <v-icon left size="small"> mdi-square </v-icon>
               POU-Specific
             </v-chip>
-            <v-chip
-              size="small"
-              color="cyan-lighten-2"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-square
-              </v-icon>
+            <v-chip size="small" color="cyan-lighten-2">
+              <v-icon left size="small"> mdi-square </v-icon>
               POU-Homeodomain
             </v-chip>
-            <v-chip
-              size="small"
-              color="green-lighten-2"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-square
-              </v-icon>
+            <v-chip size="small" color="green-lighten-2">
+              <v-icon left size="small"> mdi-square </v-icon>
               Transactivation
             </v-chip>
-            <v-chip
-              size="small"
-              color="red-lighten-3"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="red-lighten-3">
+              <v-icon left size="small"> mdi-circle </v-icon>
               Pathogenic
             </v-chip>
-            <v-chip
-              size="small"
-              color="orange-lighten-3"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="orange-lighten-3">
+              <v-icon left size="small"> mdi-circle </v-icon>
               Likely Pathogenic
             </v-chip>
-            <v-chip
-              size="small"
-              color="yellow-darken-1"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="yellow-darken-1">
+              <v-icon left size="small"> mdi-circle </v-icon>
               VUS
             </v-chip>
-            <v-chip
-              size="small"
-              color="light-green-lighten-3"
-            >
-              <v-icon
-                left
-                size="small"
-              >
-                mdi-circle
-              </v-icon>
+            <v-chip size="small" color="light-green-lighten-3">
+              <v-icon left size="small"> mdi-circle </v-icon>
               Likely Benign
             </v-chip>
           </div>
@@ -142,20 +68,10 @@
       </v-row>
 
       <!-- Info Alert for CNVs -->
-      <v-alert
-        v-if="cnvVariants.length > 0"
-        type="warning"
-        density="compact"
-        class="mb-3"
-      >
-        <v-icon
-          size="small"
-          class="mr-1"
-        >
-          mdi-alert
-        </v-icon>
-        {{ cnvVariants.length }} CNV(s) not shown in protein view. Switch to Gene View to see structural
-        variants.
+      <v-alert v-if="cnvVariants.length > 0" type="warning" density="compact" class="mb-3">
+        <v-icon size="small" class="mr-1"> mdi-alert </v-icon>
+        {{ cnvVariants.length }} CNV(s) not shown in protein view. Switch to Gene View to see
+        structural variants.
       </v-alert>
 
       <!-- Info Alert for Splice Variants -->
@@ -166,23 +82,17 @@
         variant="tonal"
         class="mb-3"
       >
-        <v-icon
-          size="small"
-          class="mr-1"
-        >
-          mdi-information
-        </v-icon>
+        <v-icon size="small" class="mr-1"> mdi-information </v-icon>
         <strong>Splice site variant detected:</strong> {{ currentVariantTranscript }}
         <div class="text-caption mt-1">
-          This variant affects RNA splicing and cannot be displayed in protein view. The exact protein effect depends on how splicing is disrupted (exon skipping, intron retention, or cryptic splice sites). Switch to Gene View to see the genomic location.
+          This variant affects RNA splicing and cannot be displayed in protein view. The exact
+          protein effect depends on how splicing is disrupted (exon skipping, intron retention, or
+          cryptic splice sites). Switch to Gene View to see the genomic location.
         </div>
       </v-alert>
 
       <!-- SVG Visualization -->
-      <div
-        ref="svgContainer"
-        class="svg-container"
-      >
+      <div ref="svgContainer" class="svg-container">
         <svg
           ref="proteinSvg"
           :width="svgWidth"
@@ -201,10 +111,7 @@
           />
 
           <!-- Amino acid scale markers -->
-          <g
-            v-for="marker in scaleMarkers"
-            :key="`marker-${marker}`"
-          >
+          <g v-for="marker in scaleMarkers" :key="`marker-${marker}`">
             <line
               :x1="scaleAAPosition(marker)"
               :y1="backboneY"
@@ -224,10 +131,7 @@
           </g>
 
           <!-- Protein domains -->
-          <g
-            v-for="(domain, index) in domains"
-            :key="`domain-${index}`"
-          >
+          <g v-for="(domain, index) in domains" :key="`domain-${index}`">
             <rect
               :x="scaleAAPosition(domain.start)"
               :y="backboneY - domainHeight / 2"
@@ -242,7 +146,10 @@
               @mousemove="updateTooltipPosition($event)"
             />
             <text
-              :x="scaleAAPosition(domain.start) + Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1) / 2"
+              :x="
+                scaleAAPosition(domain.start) +
+                Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1) / 2
+              "
               :y="backboneY + 5"
               text-anchor="middle"
               class="domain-label"
@@ -252,10 +159,7 @@
           </g>
 
           <!-- Lollipop stems and circles for variants -->
-          <g
-            v-for="(group, position) in groupedVariants"
-            :key="`lollipop-${position}`"
-          >
+          <g v-for="(group, position) in groupedVariants" :key="`lollipop-${position}`">
             <!-- Stem (line from protein to lollipop) -->
             <line
               :x1="scaleAAPosition(parseInt(position))"
@@ -266,10 +170,7 @@
               :stroke-width="2"
             />
             <!-- Lollipop circles (stacked if multiple) -->
-            <g
-              v-for="(variant, vIndex) in group"
-              :key="`variant-${variant.variant_id}-${vIndex}`"
-            >
+            <g v-for="(variant, vIndex) in group" :key="`variant-${variant.variant_id}-${vIndex}`">
               <circle
                 :cx="scaleAAPosition(parseInt(position))"
                 :cy="backboneY - domainHeight / 2 - getLollipopHeight(group.slice(0, vIndex + 1))"
@@ -289,27 +190,15 @@
 
       <!-- Zoom Controls -->
       <v-row class="mt-3">
-        <v-col
-          cols="12"
-          class="text-center"
-        >
+        <v-col cols="12" class="text-center">
           <v-btn-group density="compact">
-            <v-btn
-              size="small"
-              @click="zoomIn"
-            >
+            <v-btn size="small" @click="zoomIn">
               <v-icon>mdi-magnify-plus</v-icon>
             </v-btn>
-            <v-btn
-              size="small"
-              @click="zoomOut"
-            >
+            <v-btn size="small" @click="zoomOut">
               <v-icon>mdi-magnify-minus</v-icon>
             </v-btn>
-            <v-btn
-              size="small"
-              @click="resetZoom"
-            >
+            <v-btn size="small" @click="resetZoom">
               <v-icon>mdi-magnify</v-icon>
               Reset
             </v-btn>
@@ -329,25 +218,22 @@
       }"
       class="custom-tooltip"
     >
-      <v-card
-        max-width="350"
-        elevation="8"
-      >
+      <v-card max-width="350" elevation="8">
         <v-card-text class="pa-3">
           <div v-if="tooltipContent.type === 'domain'">
             <div class="text-h6 mb-2">
               {{ tooltipContent.data.name }}
             </div>
             <div class="text-body-2">
-              <strong>Position:</strong> aa {{ tooltipContent.data.start }}-{{ tooltipContent.data.end }}
+              <strong>Position:</strong> aa {{ tooltipContent.data.start }}-{{
+                tooltipContent.data.end
+              }}
             </div>
             <div class="text-body-2">
-              <strong>Length:</strong> {{ tooltipContent.data.end - tooltipContent.data.start + 1 }} amino acids
+              <strong>Length:</strong>
+              {{ tooltipContent.data.end - tooltipContent.data.start + 1 }} amino acids
             </div>
-            <div
-              v-if="tooltipContent.data.function"
-              class="text-body-2 mt-1"
-            >
+            <div v-if="tooltipContent.data.function" class="text-body-2 mt-1">
               <strong>Function:</strong> {{ tooltipContent.data.function }}
             </div>
           </div>
@@ -355,41 +241,24 @@
             <div class="text-h6 mb-2">
               {{ tooltipContent.data.simple_id || tooltipContent.data.variant_id }}
             </div>
-            <div
-              v-if="tooltipContent.data.protein"
-              class="text-body-2"
-            >
+            <div v-if="tooltipContent.data.protein" class="text-body-2">
               {{ extractPNotation(tooltipContent.data.protein) }}
             </div>
-            <div
-              v-if="tooltipContent.data.transcript"
-              class="text-body-2 text-grey"
-            >
+            <div v-if="tooltipContent.data.transcript" class="text-body-2 text-grey">
               {{ extractCNotation(tooltipContent.data.transcript) }}
             </div>
-            <div
-              v-if="tooltipContent.data.aaPosition"
-              class="text-body-2"
-            >
+            <div v-if="tooltipContent.data.aaPosition" class="text-body-2">
               <strong>Position:</strong> aa {{ tooltipContent.data.aaPosition }}
             </div>
             <div class="mt-2">
-              <v-chip
-                :color="getVariantColor(tooltipContent.data)"
-                size="small"
-              >
+              <v-chip :color="getVariantColor(tooltipContent.data)" size="small">
                 {{ tooltipContent.data.classificationVerdict || 'Unknown' }}
               </v-chip>
             </div>
-            <div
-              v-if="tooltipContent.data.individualCount"
-              class="text-body-2 mt-1"
-            >
+            <div v-if="tooltipContent.data.individualCount" class="text-body-2 mt-1">
               <strong>Individuals:</strong> {{ tooltipContent.data.individualCount }}
             </div>
-            <div class="text-caption mt-2 text-grey">
-              Click to view details
-            </div>
+            <div class="text-caption mt-2 text-grey">Click to view details</div>
           </div>
         </v-card-text>
       </v-card>
@@ -565,7 +434,9 @@ export default {
       // - p.Arg177_Ser178del (deletion range - use start position)
       // - p.Arg177dup (duplication)
       // - p.Arg177_Ser178dup (duplication range - use start position)
-      const match = pNotation.match(/p\.([A-Z][a-z]{2})?(\d+)(_[A-Z][a-z]{2}\d+)?(del|dup|ins|Ter|[A-Z][a-z]{2}|\?)?/);
+      const match = pNotation.match(
+        /p\.([A-Z][a-z]{2})?(\d+)(_[A-Z][a-z]{2}\d+)?(del|dup|ins|Ter|[A-Z][a-z]{2}|\?)?/
+      );
       if (match && match[2]) {
         return parseInt(match[2]);
       }
@@ -609,7 +480,10 @@ export default {
       if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
         return '#EF5350'; // red-lighten-3
       }
-      if (classification.includes('LIKELY_PATHOGENIC') || classification.includes('LIKELY PATHOGENIC')) {
+      if (
+        classification.includes('LIKELY_PATHOGENIC') ||
+        classification.includes('LIKELY PATHOGENIC')
+      ) {
         return '#FF9800'; // orange-lighten-3
       }
       if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {

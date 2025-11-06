@@ -2,37 +2,20 @@
 <template>
   <v-container fluid>
     <!-- Breadcrumb Navigation -->
-    <v-breadcrumbs
-      :items="breadcrumbs"
-      class="px-0"
-    >
+    <v-breadcrumbs :items="breadcrumbs" class="px-0">
       <template #divider>
         <v-icon>mdi-chevron-right</v-icon>
       </template>
     </v-breadcrumbs>
 
     <!-- Loading State -->
-    <v-card
-      v-if="loading"
-      class="pa-6 text-center"
-    >
-      <v-progress-circular
-        indeterminate
-        color="primary"
-        size="48"
-      />
-      <p class="mt-4 text-grey">
-        Loading publication data...
-      </p>
+    <v-card v-if="loading" class="pa-6 text-center">
+      <v-progress-circular indeterminate color="primary" size="48" />
+      <p class="mt-4 text-grey">Loading publication data...</p>
     </v-card>
 
     <!-- Error State -->
-    <v-alert
-      v-else-if="error"
-      type="error"
-      variant="tonal"
-      class="mb-4"
-    >
+    <v-alert v-else-if="error" type="error" variant="tonal" class="mb-4">
       {{ error }}
     </v-alert>
 
@@ -41,58 +24,28 @@
       <!-- Publication Metadata Card -->
       <v-card class="mb-4">
         <v-card-title class="text-h5 bg-grey-lighten-4">
-          <v-icon
-            left
-            color="primary"
-            size="large"
-          >
-            mdi-book-open-variant
-          </v-icon>
+          <v-icon left color="primary" size="large"> mdi-book-open-variant </v-icon>
           {{ publication.title || `Publication ${pmid}` }}
         </v-card-title>
 
         <!-- Authors and Journal -->
-        <v-card-subtitle
-          v-if="publication.authors || publication.journal"
-          class="pt-3"
-        >
+        <v-card-subtitle v-if="publication.authors || publication.journal" class="pt-3">
           <div v-if="publication.authors && publication.authors.length > 0">
-            <v-icon
-              size="small"
-              class="mr-1"
-            >
-              mdi-account-multiple
-            </v-icon>
+            <v-icon size="small" class="mr-1"> mdi-account-multiple </v-icon>
             {{ formatAuthors(publication.authors) }}
           </div>
-          <div
-            v-if="publication.journal || publication.year"
-            class="mt-1"
-          >
-            <v-icon
-              size="small"
-              class="mr-1"
-            >
-              mdi-book
-            </v-icon>
+          <div v-if="publication.journal || publication.year" class="mt-1">
+            <v-icon size="small" class="mr-1"> mdi-book </v-icon>
             {{ publication.journal }}{{ publication.year ? ` (${publication.year})` : '' }}
           </div>
         </v-card-subtitle>
 
         <v-card-text class="pa-4">
           <!-- Abstract (if available) -->
-          <v-expansion-panels
-            v-if="publication.abstract"
-            class="mb-4"
-          >
+          <v-expansion-panels v-if="publication.abstract" class="mb-4">
             <v-expansion-panel>
               <v-expansion-panel-title>
-                <v-icon
-                  left
-                  size="small"
-                >
-                  mdi-text-box-outline
-                </v-icon>
+                <v-icon left size="small"> mdi-text-box-outline </v-icon>
                 Abstract
               </v-expansion-panel-title>
               <v-expansion-panel-text>
@@ -103,9 +56,7 @@
 
           <v-list density="comfortable">
             <v-list-item>
-              <v-list-item-title class="font-weight-bold">
-                PMID
-              </v-list-item-title>
+              <v-list-item-title class="font-weight-bold"> PMID </v-list-item-title>
               <v-list-item-subtitle>
                 <v-chip
                   :href="publicationUrl"
@@ -114,21 +65,14 @@
                   size="small"
                   variant="flat"
                 >
-                  <v-icon
-                    left
-                    size="x-small"
-                  >
-                    mdi-open-in-new
-                  </v-icon>
+                  <v-icon left size="x-small"> mdi-open-in-new </v-icon>
                   {{ pmid }}
                 </v-chip>
               </v-list-item-subtitle>
             </v-list-item>
 
             <v-list-item v-if="publication.doi">
-              <v-list-item-title class="font-weight-bold">
-                DOI
-              </v-list-item-title>
+              <v-list-item-title class="font-weight-bold"> DOI </v-list-item-title>
               <v-list-item-subtitle>
                 <v-chip
                   :href="`https://doi.org/${publication.doi}`"
@@ -137,27 +81,16 @@
                   size="small"
                   variant="flat"
                 >
-                  <v-icon
-                    left
-                    size="x-small"
-                  >
-                    mdi-open-in-new
-                  </v-icon>
+                  <v-icon left size="x-small"> mdi-open-in-new </v-icon>
                   {{ publication.doi }}
                 </v-chip>
               </v-list-item-subtitle>
             </v-list-item>
 
             <v-list-item>
-              <v-list-item-title class="font-weight-bold">
-                Individuals Cited
-              </v-list-item-title>
+              <v-list-item-title class="font-weight-bold"> Individuals Cited </v-list-item-title>
               <v-list-item-subtitle>
-                <v-chip
-                  color="info"
-                  size="small"
-                  variant="flat"
-                >
+                <v-chip color="info" size="small" variant="flat">
                   {{ phenopacketsTotal }}
                 </v-chip>
               </v-list-item-subtitle>
@@ -178,18 +111,9 @@
       <!-- Phenopackets Citing This Publication -->
       <v-card>
         <v-card-title class="text-h6 bg-grey-lighten-4">
-          <v-icon
-            left
-            color="primary"
-          >
-            mdi-account-multiple
-          </v-icon>
+          <v-icon left color="primary"> mdi-account-multiple </v-icon>
           Individuals Cited in This Publication
-          <v-chip
-            class="ml-2"
-            color="info"
-            size="small"
-          >
+          <v-chip class="ml-2" color="info" size="small">
             {{ filteredPhenopackets.length }}
           </v-chip>
         </v-card-title>
@@ -210,42 +134,27 @@
 
             <!-- Sex with icon -->
             <template #item.sex="{ item }">
-              <v-chip
-                size="small"
-                :color="getSexColor(item.sex)"
-                variant="flat"
-              >
+              <v-chip size="small" :color="getSexColor(item.sex)" variant="flat">
                 {{ formatSex(item.sex) }}
               </v-chip>
             </template>
 
             <!-- Has variants indicator -->
             <template #item.has_variants="{ item }">
-              <v-icon
-                :color="item.has_variants ? 'success' : 'grey'"
-                size="small"
-              >
+              <v-icon :color="item.has_variants ? 'success' : 'grey'" size="small">
                 {{ item.has_variants ? 'mdi-check-circle' : 'mdi-close-circle' }}
               </v-icon>
             </template>
 
             <!-- Phenotype count -->
             <template #item.phenotype_count="{ item }">
-              <v-chip
-                size="small"
-                color="info"
-                variant="tonal"
-              >
+              <v-chip size="small" color="info" variant="tonal">
                 {{ item.phenotype_count }}
               </v-chip>
             </template>
 
             <template #no-data>
-              <v-alert
-                type="info"
-                variant="tonal"
-                class="ma-4"
-              >
+              <v-alert type="info" variant="tonal" class="ma-4">
                 No phenopackets cite this publication.
               </v-alert>
             </template>
@@ -408,10 +317,12 @@ export default {
       if (!authors || authors.length === 0) return '';
 
       // Handle both array of strings and array of objects
-      const authorNames = authors.map((author) => {
-        if (typeof author === 'string') return author;
-        return author.name || '';
-      }).filter(Boolean);
+      const authorNames = authors
+        .map((author) => {
+          if (typeof author === 'string') return author;
+          return author.name || '';
+        })
+        .filter(Boolean);
 
       // Show first 3 authors, then "et al."
       if (authorNames.length <= 3) {

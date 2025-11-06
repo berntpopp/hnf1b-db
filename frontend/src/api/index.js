@@ -162,8 +162,7 @@ export const getSummaryStats = () => apiClient.get('/phenopackets/aggregate/summ
  * Get sex distribution across all phenopackets.
  * @returns {Promise} Axios promise with sex distribution data
  */
-export const getSexDistribution = () =>
-  apiClient.get('/phenopackets/aggregate/sex-distribution');
+export const getSexDistribution = () => apiClient.get('/phenopackets/aggregate/sex-distribution');
 
 /**
  * Get HPO term frequency aggregation.
@@ -218,8 +217,7 @@ export const getPublicationsAggregation = () =>
  * Get age of onset distribution.
  * @returns {Promise} Axios promise with age of onset data
  */
-export const getAgeOfOnsetAggregation = () =>
-  apiClient.get('/phenopackets/aggregate/age-of-onset');
+export const getAgeOfOnsetAggregation = () => apiClient.get('/phenopackets/aggregate/age-of-onset');
 
 /**
  * Get small variants (SNVs) for protein plot visualization.
@@ -291,8 +289,7 @@ export const getRenalInsufficiencyCases = () => apiClient.get('/clinical/renal-i
  * Get phenopackets with genital abnormalities.
  * @returns {Promise} Axios promise with clinical data
  */
-export const getGenitalAbnormalitiesCases = () =>
-  apiClient.get('/clinical/genital-abnormalities');
+export const getGenitalAbnormalitiesCases = () => apiClient.get('/clinical/genital-abnormalities');
 
 /**
  * Get phenopackets with diabetes.

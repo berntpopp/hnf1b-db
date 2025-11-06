@@ -2,16 +2,8 @@
   <v-container fluid>
     <v-sheet outlined>
       <!-- Overlay spinner while loading -->
-      <v-overlay
-        :absolute="true"
-        :opacity="1"
-        :value="loading"
-        color="#FFFFFF"
-      >
-        <v-progress-circular
-          indeterminate
-          color="primary"
-        />
+      <v-overlay :absolute="true" :opacity="1" :value="loading" color="#FFFFFF">
+        <v-progress-circular indeterminate color="primary" />
       </v-overlay>
 
       <!-- Table header -->
@@ -97,11 +89,7 @@
 
               <!-- Cohort cell as a chip -->
               <template #item.cohort="{ item: report }">
-                <v-chip
-                  :color="cohortColor(report.cohort)"
-                  class="ma-2"
-                  small
-                >
+                <v-chip :color="cohortColor(report.cohort)" class="ma-2" small>
                   {{ report.cohort }}
                 </v-chip>
               </template>
@@ -116,10 +104,7 @@
                     small
                     class="ma-1"
                   >
-                    <v-icon
-                      left
-                      small
-                    >
+                    <v-icon left small>
                       {{ reportedPhenotypeSymbol(phenotype.described) }}
                     </v-icon>
                     {{ phenotype.name }}

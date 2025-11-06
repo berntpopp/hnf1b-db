@@ -2,30 +2,16 @@
 <template>
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-red-lighten-5">
-      <v-icon
-        left
-        color="error"
-        size="small"
-      >
-        mdi-virus
-      </v-icon>
+      <v-icon left color="error" size="small"> mdi-virus </v-icon>
       Diseases ({{ diseases.length }})
     </v-card-title>
     <v-card-text class="pa-2">
-      <v-alert
-        v-if="diseases.length === 0"
-        type="info"
-        density="compact"
-      >
+      <v-alert v-if="diseases.length === 0" type="info" density="compact">
         No diseases recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item
-          v-for="(disease, index) in diseases"
-          :key="index"
-          class="mb-2"
-        >
+        <v-list-item v-for="(disease, index) in diseases" :key="index" class="mb-2">
           <template #prepend>
             <v-chip
               :href="getMondoUrl(disease.term.id)"
@@ -34,12 +20,7 @@
               variant="flat"
               size="small"
             >
-              <v-icon
-                left
-                size="x-small"
-              >
-                mdi-open-in-new
-              </v-icon>
+              <v-icon left size="x-small"> mdi-open-in-new </v-icon>
               {{ disease.term.id }}
             </v-chip>
           </template>
@@ -64,7 +45,9 @@
             </v-chip>
           </v-list-item-subtitle>
 
-          <v-list-item-subtitle v-if="disease.clinicalTnmFinding && disease.clinicalTnmFinding.length > 0">
+          <v-list-item-subtitle
+            v-if="disease.clinicalTnmFinding && disease.clinicalTnmFinding.length > 0"
+          >
             <strong>TNM Finding:</strong>
             <v-chip
               v-for="(tnm, tnmIndex) in disease.clinicalTnmFinding"
