@@ -5,8 +5,7 @@ import logging
 from typing import Any, Dict, List
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,7 @@ class PhenopacketStorage:
             database_url: Async database URL
         """
         self.engine = create_async_engine(database_url)
-        self.session_maker = sessionmaker(
+        self.session_maker = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
 

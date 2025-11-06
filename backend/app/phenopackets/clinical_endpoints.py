@@ -1,10 +1,11 @@
 """Clinical feature-specific query endpoints for phenopackets."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, exists, func, not_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import CompoundSelect, Select
 
 from app.database import get_db
 from app.phenopackets.clinical_queries import ClinicalQueries
@@ -194,6 +195,8 @@ async def get_hypomagnesemia_cases(
     # Get phenotype features
     phenotype_query = ClinicalQueries.get_phenotype_features_query(hpo_term)
 
+    # Query can be either Select or CompoundSelect depending on conditions
+    query: Union[Select[Any], CompoundSelect[Any]]
     if with_measurements:
         # Add measurement filter
         measurement_query = ClinicalQueries.get_measurement_cases(

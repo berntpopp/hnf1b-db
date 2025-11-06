@@ -4,7 +4,7 @@ Follows Dependency Inversion Principle by depending on OntologyMapper abstractio
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -52,7 +52,7 @@ class PhenotypeExtractor:
 
     def extract(self, row: pd.Series) -> List[Dict[str, Any]]:
         """Extract phenotypic features from a row with temporal information."""
-        phenotypes = []
+        phenotypes: List[Dict[str, Any]] = []
 
         # Get timestamp from ReviewDate for this observation
         review_timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
@@ -98,7 +98,8 @@ class PhenotypeExtractor:
                             # If we also have a specific age, add it alongside
                             if age_reported and "ontologyClass" in age_onset_class:
                                 # Combine ontologyClass (prenatal/postnatal) + age
-                                phenotype["onset"]["age"] = (
+                                onset_dict = cast(Dict[str, Any], phenotype["onset"])
+                                onset_dict["age"] = (
                                     age_reported.get("iso8601duration")
                                     if isinstance(age_reported, dict)
                                     and "iso8601duration" in age_reported
@@ -253,7 +254,7 @@ class VariantExtractor:
         row: pd.Series,
         hg38: str,
         hg38_info: str,
-        variant_type: str,
+        variant_type: Optional[str],
         variant_reported: Optional[str],
         publication: Optional[str],
     ) -> Optional[Dict[str, Any]]:

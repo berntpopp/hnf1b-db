@@ -18,7 +18,7 @@ class PublicationMapper:
         Args:
             publications_df: DataFrame containing publication data
         """
-        self.publication_map = {}
+        self.publication_map: Dict[str, Any] = {}
         if publications_df is not None and not publications_df.empty:
             self._build_publication_map(publications_df)
 

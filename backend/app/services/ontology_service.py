@@ -391,7 +391,11 @@ class HybridOntologyService:
 
     def validate_phenopacket(self, phenopacket: Dict[str, Any]) -> Dict[str, Any]:
         """Validate all ontology terms in a phenopacket."""
-        validation_results = {"valid_terms": [], "invalid_terms": [], "warnings": []}
+        validation_results: Dict[str, Any] = {
+            "valid_terms": [],
+            "invalid_terms": [],
+            "warnings": [],
+        }
 
         # Check phenotypic features
         for feature in phenopacket.get("phenotypicFeatures", []):

@@ -173,7 +173,7 @@ class VRSBuilder:
         end = start + len(ref)
 
         # Build VRS 2.0 Allele structure
-        vrs_allele = {
+        vrs_allele: Dict[str, Any] = {
             "type": "Allele",
             "digest": None,  # Would be computed using GA4GH digest algorithm
             "location": {

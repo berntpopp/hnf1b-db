@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class CNVParser:
     @staticmethod
     def parse_hg38_coordinates(
         hg38: str, hg38_info: str
-    ) -> Optional[Tuple[str, int, int, str]]:
+    ) -> Optional[Tuple[str, int, int, Optional[str]]]:
         """Parse hg38 coordinates from VCF-style notation.
 
         Args:
@@ -129,7 +129,7 @@ class CNVParser:
         hg38_info: str,
         variant_type_str: Optional[str] = None,
         variant_reported: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """Create a complete phenopacket CNV variant representation.
 
         Args:
@@ -147,6 +147,10 @@ class CNVParser:
             return None
 
         chromosome, start, end, variant_type = coords
+
+        # Handle missing variant_type
+        if variant_type is None:
+            variant_type = "CNV"  # Default to generic CNV if type not determined
 
         # Create various notations
         ga4gh_notation = cls.create_ga4gh_cnv_notation(
@@ -212,7 +216,7 @@ class CNVParser:
             )
 
         # Add expressions in various formats
-        expressions = variant_descriptor["expressions"]
+        expressions = cast(List[Dict[str, str]], variant_descriptor["expressions"])
 
         # GA4GH CNV notation (primary)
         expressions.append({"syntax": "ga4gh", "value": ga4gh_notation})
@@ -229,7 +233,7 @@ class CNVParser:
             expressions.append({"syntax": "text", "value": variant_reported})
 
         # Add extensions with detailed information
-        extensions = variant_descriptor["extensions"]
+        extensions = cast(List[Dict[str, Any]], variant_descriptor["extensions"])
 
         # Add dbVar reference if available
         if dbvar_id:

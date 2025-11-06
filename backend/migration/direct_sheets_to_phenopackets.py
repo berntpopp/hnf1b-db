@@ -66,13 +66,13 @@ class DirectSheetsToPhenopackets:
         self.storage = PhenopacketStorage(target_db_url)
         # Use provided mapper or default to HPOMapper (concrete implementation)
         self.ontology_mapper = ontology_mapper if ontology_mapper else HPOMapper()
-        self.publication_mapper = None
-        self.phenopacket_builder = None
+        self.publication_mapper: Optional[PublicationMapper] = None
+        self.phenopacket_builder: Optional[PhenopacketBuilder] = None
 
         # Data storage
-        self.individuals_df = None
-        self.phenotypes_df = None
-        self.publications_df = None
+        self.individuals_df: Optional[pd.DataFrame] = None
+        self.phenotypes_df: Optional[pd.DataFrame] = None
+        self.publications_df: Optional[pd.DataFrame] = None
 
     async def load_data(self) -> None:
         """Load all data from Google Sheets."""
@@ -122,6 +122,10 @@ class DirectSheetsToPhenopackets:
         Returns:
             List of phenopacket dictionaries
         """
+        # Ensure data has been loaded (must call load_data() first)
+        assert self.individuals_df is not None, "Must call load_data() before building phenopackets"
+        assert self.phenopacket_builder is not None, "Phenopacket builder not initialized"
+
         # Normalize column names
         self.individuals_df.columns = [
             col.strip() for col in self.individuals_df.columns
@@ -170,7 +174,7 @@ class DirectSheetsToPhenopackets:
         with_variants = sum(1 for p in phenopackets if p.get("interpretations"))
         with_diseases = sum(1 for p in phenopackets if p.get("diseases"))
 
-        sex_distribution = {}
+        sex_distribution: Dict[str, int] = {}
         for p in phenopackets:
             sex = p.get("subject", {}).get("sex", "UNKNOWN")
             sex_distribution[sex] = sex_distribution.get(sex, 0) + 1

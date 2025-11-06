@@ -157,6 +157,54 @@ class PhenopacketValidator:
         """
         return self.variant_validator.validate_variants_in_phenopacket(phenopacket)
 
+    # Simple regex-based validation methods (used by variant_validator_endpoint)
+    def _validate_hgvs_c(self, notation: str) -> bool:
+        """Validate HGVS c. notation format."""
+        import re
+        return bool(re.match(r'^[A-Z_]+\d+\.\d+:c\.\d+[ACGT]>[ACGT]', notation))
+
+    def _validate_hgvs_p(self, notation: str) -> bool:
+        """Validate HGVS p. notation format."""
+        import re
+        return bool(re.match(r'^[A-Z_]+\d+\.\d+:p\.\w+', notation))
+
+    def _validate_hgvs_g(self, notation: str) -> bool:
+        """Validate HGVS g. notation format."""
+        import re
+        return bool(re.match(r'^(chr)?[\dXY]+:g\.\d+[ACGT]>[ACGT]', notation))
+
+    def _validate_vcf(self, notation: str) -> bool:
+        """Validate VCF format."""
+        import re
+        return bool(re.match(r'^(chr)?[\dXY]+-\d+-[ATCG]+-[ATCG]+', notation))
+
+    def _is_ga4gh_cnv_notation(self, notation: str) -> bool:
+        """Check if notation is GA4GH CNV format."""
+        import re
+        return bool(re.match(r'^[\dXY]+:\d+-\d+:(DEL|DUP|INS|INV)', notation))
+
+    def _get_notation_suggestions(self, notation: str) -> List[str]:
+        """Get suggestions for variant notation."""
+        suggestions = []
+        if ':' in notation:
+            if 'c.' in notation:
+                suggestions.append("Format: NM_000458.4:c.123A>G")
+            elif 'p.' in notation:
+                suggestions.append("Format: NP_000449.3:p.Arg181*")
+            elif 'g.' in notation:
+                suggestions.append("Format: chr17:g.36459258A>G")
+        return suggestions
+
+    def _fallback_validation(self, notation: str) -> bool:
+        """Try all validation methods as fallback."""
+        return (
+            self._validate_hgvs_c(notation)
+            or self._validate_hgvs_p(notation)
+            or self._validate_hgvs_g(notation)
+            or self._validate_vcf(notation)
+            or self._is_ga4gh_cnv_notation(notation)
+        )
+
 
 # Export sanitizer for backward compatibility
 __all__ = ["PhenopacketValidator", "PhenopacketSanitizer"]
