@@ -124,7 +124,7 @@ export default {
           label: 'Variants',
           aggregations: [
             { label: 'Pathogenicity Classification', value: 'getVariantPathogenicity', supportsCountMode: true },
-            { label: 'Variant Types (SNV/CNV)', value: 'getVariantTypes', supportsCountMode: true },
+            { label: 'Variant Types (SNV/Indel/CNV)', value: 'getVariantTypes', supportsCountMode: true },
           ],
         },
         {

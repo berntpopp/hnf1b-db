@@ -996,15 +996,22 @@ async def aggregate_variant_types(
             - "unique": Count only unique variants (deduplicates by variant ID)
     """
     if count_mode == "unique":
-        # Count unique variants by variant ID
+        # Count unique variants by variant ID using structuralType field
         query = """
         WITH variant_types AS (
             SELECT DISTINCT
                 vd->>'id' as variant_id,
                 CASE
-                    WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
-                    WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
-                    ELSE 'OTHER'
+                    WHEN COALESCE(
+                        vd->'structuralType'->>'label',
+                        vd->'molecularConsequences'->0->>'label',
+                        'Other'
+                    ) = 'SNV' THEN 'SNV'
+                    ELSE INITCAP(COALESCE(
+                        vd->'structuralType'->>'label',
+                        vd->'molecularConsequences'->0->>'label',
+                        'Other'
+                    ))
                 END as variant_type
             FROM
                 phenopackets,
@@ -1022,13 +1029,20 @@ async def aggregate_variant_types(
         ORDER BY count DESC
         """
     else:
-        # Count all variant instances (original behavior)
+        # Count all variant instances using structuralType field
         query = """
         SELECT
             CASE
-                WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
-                WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
-                ELSE 'OTHER'
+                WHEN COALESCE(
+                    vd->'structuralType'->>'label',
+                    vd->'molecularConsequences'->0->>'label',
+                    'Other'
+                ) = 'SNV' THEN 'SNV'
+                ELSE INITCAP(COALESCE(
+                    vd->'structuralType'->>'label',
+                    vd->'molecularConsequences'->0->>'label',
+                    'Other'
+                ))
             END as variant_type,
             COUNT(*) as count
         FROM
