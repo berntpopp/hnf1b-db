@@ -13,8 +13,9 @@ Routers:
 
 from fastapi import APIRouter
 
+from .crud import router as crud_router
+
 # Import will be added as routers are created
-# from .crud import router as crud_router
 # from .aggregations import router as aggregations_router
 # from .search import router as search_router
 # from .variants import router as variants_router
@@ -23,8 +24,10 @@ from fastapi import APIRouter
 # Combine all routers under /api/v2/phenopackets prefix
 router = APIRouter()
 
+# Include CRUD router
+router.include_router(crud_router)
+
 # Routers will be included as they are created
-# router.include_router(crud_router)
 # router.include_router(aggregations_router)
 # router.include_router(search_router)
 # router.include_router(variants_router)
