@@ -24,22 +24,33 @@ const HNF1B_END = 36112306;
  * 5. Fallback to stored variant_type
  *
  * @param {Object} variant - Variant object with transcript, hg38, and variant_type fields
+ * @param {Object} options - Optional configuration
+ * @param {boolean} options.specificCNVType - If true, returns specific type (deletion/duplication) for CNVs instead of generic "CNV"
  * @returns {string} Variant type classification
  *
  * @example
- * getVariantType({ hg38: '17:36098063-36112306:...' }) // Returns: 'CNV'
+ * getVariantType({ hg38: '17:36098063-36112306:DEL' }) // Returns: 'CNV'
+ * getVariantType({ hg38: '17:36098063-36112306:DEL' }, { specificCNVType: true }) // Returns: 'deletion'
  * getVariantType({ transcript: 'NM_000458.4:c.544delinsAG' }) // Returns: 'indel'
  * getVariantType({ transcript: 'NM_000458.4:c.544del' }) // Returns: 'deletion'
  * getVariantType({ transcript: 'NM_000458.4:c.544G>T' }) // Returns: 'SNV'
  */
-export function getVariantType(variant) {
+export function getVariantType(variant, options = {}) {
   if (!variant) return 'Unknown';
 
   // Check if this is a large CNV (has genomic coordinates in format chr:start-end)
   // CNVs are typically whole gene or multi-gene deletions/duplications
   if (variant.hg38) {
-    const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
+    const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)?/);
     if (cnvMatch) {
+      // If specificCNVType is requested and we have the SV type, return specific type
+      if (options.specificCNVType && cnvMatch[4]) {
+        const svType = cnvMatch[4]; // DEL, DUP, etc.
+        if (svType === 'DEL') return 'deletion';
+        if (svType === 'DUP') return 'duplication';
+        return svType.toLowerCase();
+      }
+      // Otherwise return generic "CNV" for list views
       return 'CNV';
     }
   }
@@ -151,15 +162,20 @@ export function isSpliceVariant(variant) {
  * Get variant size in base pairs from HGVS notation or genomic coordinates.
  *
  * @param {Object} variant - Variant object with transcript and/or hg38 fields
- * @returns {number|null} Variant size in bp, or null if not determinable
+ * @param {Object} options - Optional configuration
+ * @param {boolean} options.formatted - If true, returns human-readable format (e.g., "2.5 Mb", "15.3 kb", "544 bp")
+ * @returns {number|string|null} Variant size in bp (or formatted string if options.formatted=true), or null if not determinable
  *
  * @example
  * getVariantSize({ hg38: '17:36098063-36112306:...' }) // Returns: 14243
+ * getVariantSize({ hg38: '17:36098063-36112306:...' }, { formatted: true }) // Returns: "14.24 kb"
  * getVariantSize({ transcript: 'NM_000458.4:c.544_547del' }) // Returns: 4
  * getVariantSize({ transcript: 'NM_000458.4:c.544G>T' }) // Returns: 1
  */
-export function getVariantSize(variant) {
+export function getVariantSize(variant, options = {}) {
   if (!variant) return null;
+
+  let sizeInBp = null;
 
   // Try genomic coordinates first (most accurate)
   if (variant.hg38) {
@@ -167,25 +183,65 @@ export function getVariantSize(variant) {
     if (match) {
       const start = parseInt(match[2]);
       const end = parseInt(match[3]);
-      return end - start;
+      sizeInBp = end - start;
     }
   }
 
-  // Try to determine from c. notation
-  const cNotation = extractCNotation(variant.transcript);
-  if (!cNotation || cNotation === '-') return null;
-
-  // Range deletion/duplication: c.544_547del
-  const rangeMatch = cNotation.match(/(\d+)_(\d+)/);
-  if (rangeMatch) {
-    const start = parseInt(rangeMatch[1]);
-    const end = parseInt(rangeMatch[2]);
-    return end - start + 1;
+  // Try to determine from c. notation if genomic coordinates not available
+  if (sizeInBp === null) {
+    const cNotation = extractCNotation(variant.transcript);
+    if (cNotation && cNotation !== '-') {
+      // Range deletion/duplication: c.544_547del
+      const rangeMatch = cNotation.match(/(\d+)_(\d+)/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1]);
+        const end = parseInt(rangeMatch[2]);
+        sizeInBp = end - start + 1;
+      }
+      // Single position change: c.544G>T
+      else if (/^\d+[A-Z]>[A-Z]$/.test(cNotation) || /^c\.\d+[A-Z]>[A-Z]$/.test(cNotation)) {
+        sizeInBp = 1;
+      }
+    }
   }
 
-  // Single position change: c.544G>T
-  if (/^\d+[A-Z]>[A-Z]$/.test(cNotation) || /^c\.\d+[A-Z]>[A-Z]$/.test(cNotation)) {
-    return 1;
+  if (sizeInBp === null) return null;
+
+  // Return formatted string if requested
+  if (options.formatted) {
+    if (sizeInBp >= 1000000) {
+      return `${(sizeInBp / 1000000).toFixed(2)} Mb`;
+    } else if (sizeInBp >= 1000) {
+      return `${(sizeInBp / 1000).toFixed(2)} kb`;
+    } else {
+      return `${sizeInBp.toLocaleString()} bp`;
+    }
+  }
+
+  return sizeInBp;
+}
+
+/**
+ * Extract CNV details from HG38 genomic coordinates.
+ *
+ * @param {Object} variant - Variant object with hg38 field
+ * @returns {Object|null} CNV details with chromosome, start, end, and type, or null if not a CNV
+ *
+ * @example
+ * getCNVDetails({ hg38: '17:36098063-36112306:DEL' })
+ * // Returns: { chromosome: '17', start: '36098063', end: '36112306', type: 'DEL' }
+ */
+export function getCNVDetails(variant) {
+  if (!variant || !variant.hg38) return null;
+
+  const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)?/);
+  if (match) {
+    return {
+      chromosome: match[1],
+      start: match[2],
+      end: match[3],
+      type: match[4] || null,
+    };
   }
 
   return null;
