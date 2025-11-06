@@ -42,6 +42,10 @@ export default [
           allowModifiers: true,
         },
       ],
+      // Disable overly strict template formatting rules for better readability
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+      'vue/html-indent': 'off',
       'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
       'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
     },
