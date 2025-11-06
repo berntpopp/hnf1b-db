@@ -2,53 +2,25 @@
 <template>
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-purple-lighten-5">
-      <v-icon
-        left
-        color="deep-purple"
-        size="small"
-      >
-        mdi-dna
-      </v-icon>
+      <v-icon left color="deep-purple" size="small"> mdi-dna </v-icon>
       Genomic Interpretations ({{ uniqueInterpretations.length }})
     </v-card-title>
     <v-card-text class="pa-2">
-      <v-alert
-        v-if="uniqueInterpretations.length === 0"
-        type="info"
-        density="compact"
-      >
+      <v-alert v-if="uniqueInterpretations.length === 0" type="info" density="compact">
         No genomic interpretations recorded
       </v-alert>
 
-      <v-expansion-panels
-        v-else
-        accordion
-      >
-        <v-expansion-panel
-          v-for="(interpretation, index) in uniqueInterpretations"
-          :key="index"
-        >
+      <v-expansion-panels v-else accordion>
+        <v-expansion-panel v-for="(interpretation, index) in uniqueInterpretations" :key="index">
           <v-expansion-panel-title>
-            <v-icon
-              left
-              color="deep-purple"
-              size="small"
-            >
-              mdi-dna
-            </v-icon>
+            <v-icon left color="deep-purple" size="small"> mdi-dna </v-icon>
             <span class="font-weight-medium">
-              {{
-                getVariantSummary(interpretation) ||
-                  `Variant ${index + 1}`
-              }}
+              {{ getVariantSummary(interpretation) || `Variant ${index + 1}` }}
             </span>
           </v-expansion-panel-title>
 
           <v-expansion-panel-text>
-            <v-list
-              v-if="interpretation.diagnosis"
-              density="compact"
-            >
+            <v-list v-if="interpretation.diagnosis" density="compact">
               <div
                 v-for="(gi, giIndex) in interpretation.diagnosis.genomicInterpretations"
                 :key="giIndex"
@@ -69,15 +41,9 @@
                       v-if="gi.variantInterpretation.variationDescriptor.geneContext"
                       class="px-0"
                     >
-                      <v-list-item-title class="font-weight-bold">
-                        Gene
-                      </v-list-item-title>
+                      <v-list-item-title class="font-weight-bold"> Gene </v-list-item-title>
                       <v-list-item-subtitle>
-                        <v-chip
-                          color="blue"
-                          size="small"
-                          class="mr-1"
-                        >
+                        <v-chip color="blue" size="small" class="mr-1">
                           {{ gi.variantInterpretation.variationDescriptor.geneContext.valueId }}
                         </v-chip>
                         {{ gi.variantInterpretation.variationDescriptor.geneContext.symbol }}
@@ -103,12 +69,16 @@
                       v-if="gi.variantInterpretation.variationDescriptor.description"
                       class="px-0 mb-3"
                     >
-                      <div class="font-weight-bold mb-2 text-subtitle-2">
-                        Description
-                      </div>
+                      <div class="font-weight-bold mb-2 text-subtitle-2">Description</div>
                       <div
                         class="text-body-2"
-                        style="white-space: normal; word-break: break-word; overflow-wrap: break-word; width: 100%; color: rgba(0, 0, 0, 0.6);"
+                        style="
+                          white-space: normal;
+                          word-break: break-word;
+                          overflow-wrap: break-word;
+                          width: 100%;
+                          color: rgba(0, 0, 0, 0.6);
+                        "
                       >
                         {{ gi.variantInterpretation.variationDescriptor.description }}
                       </div>

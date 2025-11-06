@@ -31,32 +31,16 @@
             <!-- Display the current items range -->
             <span class="mx-2">{{ rangeText }}</span>
             <!-- Pagination navigation buttons -->
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              @click="goToFirstPage"
-            >
+            <v-btn icon :disabled="options.page === 1" @click="goToFirstPage">
               <v-icon>mdi-page-first</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              @click="goToPreviousPage"
-            >
+            <v-btn icon :disabled="options.page === 1" @click="goToPreviousPage">
               <v-icon>mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              @click="goToNextPage"
-            >
+            <v-btn icon :disabled="options.page === totalPages" @click="goToNextPage">
               <v-icon>mdi-chevron-right</v-icon>
             </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              @click="goToLastPage"
-            >
+            <v-btn icon :disabled="options.page === totalPages" @click="goToLastPage">
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
@@ -74,15 +58,11 @@
           :to="'/individuals/' + item.individual_id"
         >
           {{ item.individual_id }}
-          <v-icon right>
-            mdi-account
-          </v-icon>
+          <v-icon right> mdi-account </v-icon>
         </v-chip>
       </template>
 
-      <template #no-data>
-        No individuals found.
-      </template>
+      <template #no-data> No individuals found. </template>
     </v-data-table-server>
   </v-container>
 </template>

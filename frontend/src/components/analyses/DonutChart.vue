@@ -2,15 +2,9 @@
   <div class="donut-chart-container">
     <div class="chart-wrapper">
       <!-- The div where the chart will be rendered -->
-      <div
-        ref="chart"
-        class="chart"
-      />
+      <div ref="chart" class="chart" />
       <!-- Legend -->
-      <div
-        ref="legend"
-        class="legend"
-      />
+      <div ref="legend" class="legend" />
     </div>
   </div>
 </template>
@@ -52,10 +46,7 @@ export default {
     /** Color scheme for the donut slices */
     colorScheme: {
       type: Array,
-      default: () => [
-        ...d3.schemeCategory10,
-        ...d3.schemePaired,
-      ],
+      default: () => [...d3.schemeCategory10, ...d3.schemePaired],
     },
     /**
      * If true, shows an export button that lets the user download the chart as PNG.
@@ -103,7 +94,6 @@ export default {
         .attr('preserveAspectRatio', 'xMinYMin meet')
         .append('g')
         .attr('transform', `translate(${width / 2}, ${height / 2})`);
-
 
       // Create a tooltip div within the chart container.
       const tooltip = d3
@@ -198,12 +188,11 @@ export default {
         .style('align-items', 'center')
         .style('margin-bottom', '8px')
         .style('cursor', 'pointer')
-        .on('mouseover', function(event, d) {
+        .on('mouseover', function (event, d) {
           // Highlight corresponding slice
-          svg.selectAll('path.slice')
-            .style('opacity', slice => slice === d ? 1 : 0.3);
+          svg.selectAll('path.slice').style('opacity', (slice) => (slice === d ? 1 : 0.3));
         })
-        .on('mouseout', function() {
+        .on('mouseout', function () {
           // Reset all slices
           svg.selectAll('path.slice').style('opacity', 0.7);
         });

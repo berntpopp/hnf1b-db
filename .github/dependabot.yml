@@ -1,0 +1,76 @@
+version: 2
+updates:
+  # Frontend npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "berntpopp"
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(frontend)"
+      include: "scope"
+    groups:
+      # Group patch and minor updates for devDependencies
+      dev-dependencies:
+        applies-to: version-updates
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group patch updates for production dependencies
+      production-dependencies:
+        applies-to: version-updates
+        dependency-type: "production"
+        update-types:
+          - "patch"
+
+  # Backend Python dependencies (managed by uv)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "berntpopp"
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "chore(backend)"
+      include: "scope"
+    groups:
+      # Group patch and minor updates
+      python-dependencies:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "berntpopp"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"

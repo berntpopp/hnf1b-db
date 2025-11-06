@@ -1,25 +1,15 @@
 <template>
   <v-container>
     <v-row justify="center">
-      <v-col
-        cols="12"
-        md="8"
-      >
+      <v-col cols="12" md="8">
         <v-card class="pa-4">
-          <v-card-title class="text-h5">
-            User Profile
-          </v-card-title>
+          <v-card-title class="text-h5"> User Profile </v-card-title>
           <v-card-text>
             <div v-if="user">
               <p><strong>Username:</strong> {{ user.user }}</p>
               <!-- Additional user details can be displayed here -->
             </div>
-            <v-alert
-              v-else
-              type="error"
-            >
-              Failed to load user information.
-            </v-alert>
+            <v-alert v-else type="error"> Failed to load user information. </v-alert>
           </v-card-text>
         </v-card>
       </v-col>

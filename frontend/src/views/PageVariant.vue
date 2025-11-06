@@ -5,45 +5,22 @@
       <v-col cols="12">
         <v-sheet outlined>
           <!-- Loading overlay -->
-          <v-overlay
-            :model-value="loading"
-            contained
-            class="align-center justify-center"
-          >
-            <v-progress-circular
-              indeterminate
-              color="primary"
-            />
+          <v-overlay :model-value="loading" contained class="align-center justify-center">
+            <v-progress-circular indeterminate color="primary" />
           </v-overlay>
 
           <!-- Variant Details Card -->
-          <v-card
-            outlined
-            class="mb-4"
-            :style="{ width: '90%', margin: 'auto' }"
-            tile
-          >
+          <v-card outlined class="mb-4" :style="{ width: '90%', margin: 'auto' }" tile>
             <v-card-title class="text-h6">
-              <v-icon
-                left
-                color="pink darken-2"
-              >
-                mdi-dna
-              </v-icon>
+              <v-icon left color="pink darken-2"> mdi-dna </v-icon>
               Variant Details
-              <v-chip
-                color="pink lighten-4"
-                class="ma-2"
-              >
+              <v-chip color="pink lighten-4" class="ma-2">
                 {{ variant.simple_id || variant.variant_id }}
               </v-chip>
             </v-card-title>
             <v-card-text class="text-body-1">
               <v-row>
-                <v-col
-                  cols="12"
-                  sm="6"
-                >
+                <v-col cols="12" sm="6">
                   <div><strong>Type:</strong> {{ getVariantType(variant) }}</div>
 
                   <!-- Variant size (for all types except SNVs) -->
@@ -53,9 +30,17 @@
 
                   <!-- CNV-specific details -->
                   <div v-if="isCNV(variant) && getCNVDetails(variant)">
-                    <div><strong>Chromosome:</strong> chr{{ getCNVDetails(variant).chromosome }}</div>
-                    <div><strong>Start Position:</strong> {{ formatPosition(getCNVDetails(variant).start) }}</div>
-                    <div><strong>End Position:</strong> {{ formatPosition(getCNVDetails(variant).end) }}</div>
+                    <div>
+                      <strong>Chromosome:</strong> chr{{ getCNVDetails(variant).chromosome }}
+                    </div>
+                    <div>
+                      <strong>Start Position:</strong>
+                      {{ formatPosition(getCNVDetails(variant).start) }}
+                    </div>
+                    <div>
+                      <strong>End Position:</strong>
+                      {{ formatPosition(getCNVDetails(variant).end) }}
+                    </div>
                   </div>
 
                   <div>
@@ -107,10 +92,7 @@
                     {{ extractPNotation(variant.protein) }}
                   </div>
                 </v-col>
-                <v-col
-                  cols="12"
-                  sm="6"
-                >
+                <v-col cols="12" sm="6">
                   <div v-if="variant.classificationVerdict">
                     <strong>Classification:</strong>
                     <v-chip
@@ -124,12 +106,7 @@
                   </div>
                   <div v-if="getMolecularConsequence(variant)">
                     <strong>Molecular Consequence:</strong>
-                    <v-chip
-                      color="purple-lighten-3"
-                      class="ml-2"
-                      size="small"
-                      variant="flat"
-                    >
+                    <v-chip color="purple-lighten-3" class="ml-2" size="small" variant="flat">
                       {{ getMolecularConsequence(variant) }}
                     </v-chip>
                   </div>
@@ -149,12 +126,7 @@
                         class="external-link"
                       >
                         ClinVar
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                       <a
                         v-if="getDbSNPLink(variant)"
@@ -164,12 +136,7 @@
                         class="external-link"
                       >
                         dbSNP
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                       <a
                         v-if="getClinGenLink(variant)"
@@ -179,12 +146,7 @@
                         class="external-link"
                       >
                         ClinGen
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                       <a
                         v-if="getDecipherLink(variant)"
@@ -194,12 +156,7 @@
                         class="external-link"
                       >
                         DECIPHER
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                       <a
                         v-if="getUCSCLink(variant)"
@@ -209,19 +166,11 @@
                         class="external-link"
                       >
                         UCSC Browser
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
 
                       <!-- Gene databases (divider) -->
-                      <span
-                        v-if="variant.geneSymbol"
-                        class="external-link-divider"
-                      >|</span>
+                      <span v-if="variant.geneSymbol" class="external-link-divider">|</span>
 
                       <!-- General gene databases -->
                       <a
@@ -232,12 +181,7 @@
                         class="external-link external-link-gene"
                       >
                         NCBI Gene
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                       <a
                         v-if="variant.geneSymbol"
@@ -247,12 +191,7 @@
                         class="external-link external-link-gene"
                       >
                         OMIM
-                        <v-icon
-                          size="x-small"
-                          class="ml-1"
-                        >
-                          mdi-open-in-new
-                        </v-icon>
+                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
                       </a>
                     </div>
                   </div>
@@ -262,54 +201,35 @@
           </v-card>
 
           <!-- Snackbar for copy notification -->
-          <v-snackbar
-            v-model="snackbar"
-            :timeout="2000"
-            color="success"
-          >
+          <v-snackbar v-model="snackbar" :timeout="2000" color="success">
             {{ snackbarMessage }}
           </v-snackbar>
 
           <!-- Gene/Protein Visualizations -->
           <!-- Use wider layout (98%) for region view, standard (90%) otherwise -->
           <div
-            :style="{ width: (visualizationTab === 'region' ? '98%' : '90%'), margin: 'auto' }"
+            :style="{ width: visualizationTab === 'region' ? '98%' : '90%', margin: 'auto' }"
             class="mb-4"
           >
             <v-card>
               <!-- Conditional tabs based on variant type -->
-              <v-tabs
-                v-model="visualizationTab"
-                bg-color="grey-lighten-4"
-              >
+              <v-tabs v-model="visualizationTab" bg-color="grey-lighten-4">
                 <!-- Gene View tab (always shown) -->
                 <v-tab value="gene">
-                  <v-icon left>
-                    mdi-dna
-                  </v-icon>
+                  <v-icon left> mdi-dna </v-icon>
                   <span v-if="isCNV(variant)">Gene View (HNF1B only)</span>
                   <span v-else>Gene View</span>
                 </v-tab>
 
                 <!-- Protein View tab (only for SNVs/indels) -->
-                <v-tab
-                  v-if="!isCNV(variant)"
-                  value="protein"
-                >
-                  <v-icon left>
-                    mdi-protein
-                  </v-icon>
+                <v-tab v-if="!isCNV(variant)" value="protein">
+                  <v-icon left> mdi-protein </v-icon>
                   Protein View
                 </v-tab>
 
                 <!-- Region View tab (only for CNVs) -->
-                <v-tab
-                  v-if="isCNV(variant)"
-                  value="region"
-                >
-                  <v-icon left>
-                    mdi-map-marker-radius
-                  </v-icon>
+                <v-tab v-if="isCNV(variant)" value="region">
+                  <v-icon left> mdi-map-marker-radius </v-icon>
                   Region View (17q12 - 15 genes)
                 </v-tab>
               </v-tabs>
@@ -356,12 +276,7 @@
             tile
           >
             <v-card-title class="text-h6">
-              <v-icon
-                left
-                color="purple darken-2"
-              >
-                mdi-account-multiple
-              </v-icon>
+              <v-icon left color="purple darken-2"> mdi-account-multiple </v-icon>
               Affected Individuals ({{ phenopacketsWithVariant.length }})
             </v-card-title>
             <v-card-text>
@@ -381,23 +296,14 @@
                     link
                   >
                     {{ item.phenopacket_id }}
-                    <v-icon
-                      right
-                      size="small"
-                    >
-                      mdi-open-in-new
-                    </v-icon>
+                    <v-icon right size="small"> mdi-open-in-new </v-icon>
                   </v-chip>
                 </template>
 
                 <!-- Sex with icon -->
                 <template #item.subject_sex="{ item }">
                   <div class="d-flex align-center">
-                    <v-icon
-                      :color="getSexColor(item.subject_sex)"
-                      size="small"
-                      class="mr-1"
-                    >
+                    <v-icon :color="getSexColor(item.subject_sex)" size="small" class="mr-1">
                       {{ getSexIcon(item.subject_sex) }}
                     </v-icon>
                     {{ formatSex(item.subject_sex) }}
@@ -423,12 +329,7 @@ import {
   extractProteinId,
 } from '@/utils/hgvs';
 import { getPathogenicityColor } from '@/utils/colors';
-import {
-  getVariantType,
-  isCNV,
-  getCNVDetails,
-  getVariantSize,
-} from '@/utils/variants';
+import { getVariantType, isCNV, getCNVDetails, getVariantSize } from '@/utils/variants';
 
 export default {
   name: 'PageVariant',
@@ -545,7 +446,7 @@ export default {
         }
 
         const phenopacketsResponse = await getPhenopacketsByVariant(variantId);
-        this.phenopacketsWithVariant = phenopacketsResponse.data.map(pp => ({
+        this.phenopacketsWithVariant = phenopacketsResponse.data.map((pp) => ({
           phenopacket_id: pp.phenopacket_id,
           subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
           created_at: new Date(pp.created_at).toLocaleDateString('en-US', {
@@ -629,24 +530,29 @@ export default {
       return null;
     },
     hasExternalLinks(variant) {
-      return this.getClinVarLink(variant) ||
-             this.getDbSNPLink(variant) ||
-             this.getClinGenLink(variant) ||
-             this.getDecipherLink(variant) ||
-             this.getUCSCLink(variant) ||
-             variant.geneSymbol; // Always show if we have gene symbol (for NCBI Gene & OMIM)
+      return (
+        this.getClinVarLink(variant) ||
+        this.getDbSNPLink(variant) ||
+        this.getClinGenLink(variant) ||
+        this.getDecipherLink(variant) ||
+        this.getUCSCLink(variant) ||
+        variant.geneSymbol
+      ); // Always show if we have gene symbol (for NCBI Gene & OMIM)
     },
     copyToClipboard(text, label) {
       // Copy to clipboard using modern Clipboard API
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-          this.snackbarMessage = `${label} copied to clipboard!`;
-          this.snackbar = true;
-        }).catch((err) => {
-          console.error('Failed to copy:', err);
-          this.snackbarMessage = 'Failed to copy to clipboard';
-          this.snackbar = true;
-        });
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            this.snackbarMessage = `${label} copied to clipboard!`;
+            this.snackbar = true;
+          })
+          .catch((err) => {
+            console.error('Failed to copy:', err);
+            this.snackbarMessage = 'Failed to copy to clipboard';
+            this.snackbar = true;
+          });
       } else {
         // Fallback for older browsers
         const textarea = document.createElement('textarea');
@@ -713,7 +619,10 @@ export default {
 
       // For large CNVs: 17:12345-67890:DEL
       const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
-      if (cnvMatch && (variant.variant_type === 'deletion' || variant.variant_type === 'duplication')) {
+      if (
+        cnvMatch &&
+        (variant.variant_type === 'deletion' || variant.variant_type === 'duplication')
+      ) {
         const start = parseInt(cnvMatch[2]);
         const end = parseInt(cnvMatch[3]);
         const size = end - start;
@@ -750,14 +659,21 @@ export default {
         }
       }
 
-      if ((variant.variant_type === 'deletion' || variant.variant_type === 'duplication') && variant.geneSymbol) {
+      if (
+        (variant.variant_type === 'deletion' || variant.variant_type === 'duplication') &&
+        variant.geneSymbol
+      ) {
         return `https://search.clinicalgenome.org/kb/genes/${variant.geneSymbol}`;
       }
 
       return null;
     },
     getDecipherLink(variant) {
-      if (!variant || (variant.variant_type !== 'deletion' && variant.variant_type !== 'duplication') || !variant.hg38) {
+      if (
+        !variant ||
+        (variant.variant_type !== 'deletion' && variant.variant_type !== 'duplication') ||
+        !variant.hg38
+      ) {
         return null;
       }
       const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
@@ -770,7 +686,11 @@ export default {
       return null;
     },
     getUCSCLink(variant) {
-      if (!variant || (variant.variant_type !== 'deletion' && variant.variant_type !== 'duplication') || !variant.hg38) {
+      if (
+        !variant ||
+        (variant.variant_type !== 'deletion' && variant.variant_type !== 'duplication') ||
+        !variant.hg38
+      ) {
         return null;
       }
       const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);

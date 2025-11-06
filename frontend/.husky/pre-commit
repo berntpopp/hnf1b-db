@@ -1,0 +1,18 @@
+# Run from frontend directory (monorepo structure)
+cd frontend && npm run lint:staged
+
+# Ensure package.json and package-lock.json are committed together
+STAGED_FILES=$(git diff --name-only --cached)
+HAS_PACKAGE_JSON=$(echo "$STAGED_FILES" | grep -c "^frontend/package\.json$" || true)
+HAS_PACKAGE_LOCK=$(echo "$STAGED_FILES" | grep -c "^frontend/package-lock\.json$" || true)
+
+if [ "$HAS_PACKAGE_JSON" -eq 1 ] && [ "$HAS_PACKAGE_LOCK" -eq 0 ]; then
+  echo ""
+  echo "❌ ERROR: package.json is staged but package-lock.json is not!"
+  echo "This will cause CI failure when 'npm ci' runs."
+  echo ""
+  echo "Fix: git add package-lock.json"
+  echo "If out of sync: npm install && git add package-lock.json"
+  echo ""
+  exit 1
+fi

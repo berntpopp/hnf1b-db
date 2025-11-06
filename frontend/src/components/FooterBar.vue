@@ -1,9 +1,5 @@
 <template>
-  <v-footer
-    app
-    padless
-    class="elevation-3"
-  >
+  <v-footer app padless class="elevation-3">
     <v-card-text class="text-center">
       <v-btn
         v-for="link in footerLinks"

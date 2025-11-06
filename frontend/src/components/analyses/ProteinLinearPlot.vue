@@ -1,14 +1,8 @@
 <template>
   <v-container fluid>
     <!-- Optional controls to filter displayed variants by classification -->
-    <v-row
-      v-if="showControls"
-      class="mb-3"
-    >
-      <v-col
-        cols="12"
-        sm="6"
-      >
+    <v-row v-if="showControls" class="mb-3">
+      <v-col cols="12" sm="6">
         <v-select
           v-model="classificationSelect"
           :items="classificationOptions"

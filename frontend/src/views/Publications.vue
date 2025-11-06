@@ -18,10 +18,7 @@
 
       <!-- Render PMID as clickable link to publication detail page -->
       <template #item.pmid="{ item }">
-        <router-link
-          v-if="item.pmid"
-          :to="`/publications/${item.pmid}`"
-        >
+        <router-link v-if="item.pmid" :to="`/publications/${item.pmid}`">
           {{ item.pmid }}
         </router-link>
         <span v-else>-</span>
@@ -57,10 +54,7 @@
       </template>
 
       <template #no-data>
-        <v-alert
-          type="info"
-          variant="tonal"
-        >
+        <v-alert type="info" variant="tonal">
           No publications found. Publications are extracted from phenopacket metadata.
         </v-alert>
       </template>

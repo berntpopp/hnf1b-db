@@ -1,43 +1,16 @@
 <template>
   <v-container>
     <v-row justify="center">
-      <v-col
-        cols="12"
-        md="6"
-      >
+      <v-col cols="12" md="6">
         <v-card class="pa-4">
-          <v-card-title class="text-h5">
-            Login
-          </v-card-title>
+          <v-card-title class="text-h5"> Login </v-card-title>
           <v-card-text>
-            <v-form
-              ref="loginForm"
-              @submit.prevent="handleLogin"
-            >
-              <v-text-field
-                v-model="username"
-                label="Username"
-                required
-              />
-              <v-text-field
-                v-model="password"
-                label="Password"
-                type="password"
-                required
-              />
-              <v-btn
-                type="submit"
-                color="teal"
-                class="mt-4"
-              >
-                Login
-              </v-btn>
+            <v-form ref="loginForm" @submit.prevent="handleLogin">
+              <v-text-field v-model="username" label="Username" required />
+              <v-text-field v-model="password" label="Password" type="password" required />
+              <v-btn type="submit" color="teal" class="mt-4"> Login </v-btn>
             </v-form>
-            <v-alert
-              v-if="error"
-              type="error"
-              class="mt-4"
-            >
+            <v-alert v-if="error" type="error" class="mt-4">
               {{ error }}
             </v-alert>
           </v-card-text>

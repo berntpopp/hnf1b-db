@@ -5,13 +5,8 @@
       <v-col cols="12">
         <v-sheet outlined>
           <v-card>
-            <v-tabs
-              v-model="tab"
-              bg-color="primary"
-            >
-              <v-tab value="Donut Chart">
-                Donut Chart
-              </v-tab>
+            <v-tabs v-model="tab" bg-color="primary">
+              <v-tab value="Donut Chart"> Donut Chart </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -46,12 +41,7 @@
                         @change="fetchAggregationData"
                       />
                     </v-col>
-                    <v-col
-                      v-if="isVariantAggregation"
-                      cols="12"
-                      sm="6"
-                      md="4"
-                    >
+                    <v-col v-if="isVariantAggregation" cols="12" sm="6" md="4">
                       <v-select
                         v-model="variantCountMode"
                         :items="countModeOptions"
@@ -64,10 +54,7 @@
                       />
                     </v-col>
                   </v-row>
-                  <component
-                    :is="donutChartProps.content"
-                    v-bind="donutChartProps.props"
-                  />
+                  <component :is="donutChartProps.content" v-bind="donutChartProps.props" />
                 </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
@@ -111,27 +98,35 @@ export default {
         {
           label: 'Phenotypic Features',
           aggregations: [
-            { label: 'Top 20 HPO Terms', value: 'getPhenotypicFeaturesAggregation', params: { limit: 20 } },
+            {
+              label: 'Top 20 HPO Terms',
+              value: 'getPhenotypicFeaturesAggregation',
+              params: { limit: 20 },
+            },
           ],
         },
         {
           label: 'Diseases',
-          aggregations: [
-            { label: 'Disease Frequency', value: 'getDiseaseAggregation' },
-          ],
+          aggregations: [{ label: 'Disease Frequency', value: 'getDiseaseAggregation' }],
         },
         {
           label: 'Variants',
           aggregations: [
-            { label: 'Pathogenicity Classification', value: 'getVariantPathogenicity', supportsCountMode: true },
-            { label: 'Variant Types (SNV/Indel/CNV)', value: 'getVariantTypes', supportsCountMode: true },
+            {
+              label: 'Pathogenicity Classification',
+              value: 'getVariantPathogenicity',
+              supportsCountMode: true,
+            },
+            {
+              label: 'Variant Types (SNV/Indel/CNV)',
+              value: 'getVariantTypes',
+              supportsCountMode: true,
+            },
           ],
         },
         {
           label: 'Publications',
-          aggregations: [
-            { label: 'Publication Statistics', value: 'getPublicationsAggregation' },
-          ],
+          aggregations: [{ label: 'Publication Statistics', value: 'getPublicationsAggregation' }],
         },
       ],
       selectedCategory: 'Phenopackets',
@@ -156,7 +151,9 @@ export default {
     },
     isVariantAggregation() {
       const category = this.categories.find((cat) => cat.label === this.selectedCategory);
-      const aggregation = category?.aggregations.find((agg) => agg.value === this.selectedAggregation);
+      const aggregation = category?.aggregations.find(
+        (agg) => agg.value === this.selectedAggregation
+      );
       return aggregation?.supportsCountMode || false;
     },
   },
@@ -183,7 +180,9 @@ export default {
   methods: {
     fetchAggregationData() {
       const category = this.categories.find((cat) => cat.label === this.selectedCategory);
-      const aggregation = category?.aggregations.find((agg) => agg.value === this.selectedAggregation);
+      const aggregation = category?.aggregations.find(
+        (agg) => agg.value === this.selectedAggregation
+      );
       const funcName = this.selectedAggregation;
       const params = { ...(aggregation?.params || {}) };
 
@@ -215,29 +214,29 @@ export default {
               const othersCount = remainingItems.reduce((sum, item) => sum + item.count, 0);
 
               // Build grouped counts
-              groupedCounts = topItems.map(item => ({
+              groupedCounts = topItems.map((item) => ({
                 _id: item.label || 'Unknown',
-                count: item.count || 0
+                count: item.count || 0,
               }));
 
               // Add "Others" category if there are remaining items
               if (othersCount > 0) {
                 groupedCounts.push({
                   _id: 'Others',
-                  count: othersCount
+                  count: othersCount,
                 });
               }
             } else {
               // No limit, show all items
-              groupedCounts = data.map(item => ({
+              groupedCounts = data.map((item) => ({
                 _id: item.label || 'Unknown',
-                count: item.count || 0
+                count: item.count || 0,
               }));
             }
 
             this.chartData = {
               total_count: totalCount,
-              grouped_counts: groupedCounts
+              grouped_counts: groupedCounts,
             };
           })
           .catch((error) => {
