@@ -1352,7 +1352,7 @@ async def aggregate_all_variants(
     # Classification filter
     if validated_classification:
         where_clauses.append(
-            "vi->>'acmgPathogenicityClassification' = :classification"
+            "gi->>'interpretationStatus' = :classification"
         )
         params["classification"] = validated_classification
 
