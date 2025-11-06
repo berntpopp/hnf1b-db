@@ -449,6 +449,15 @@
 <script>
 import debounce from 'just-debounce-it';
 import { getVariants } from '@/api';
+import {
+  extractCNotation,
+  extractPNotation,
+} from '@/utils/hgvs';
+import {
+  getPathogenicityColor,
+  getVariantTypeColor,
+} from '@/utils/colors';
+import { getVariantType } from '@/utils/variants';
 
 export default {
   name: 'Variants',
@@ -755,51 +764,12 @@ export default {
       return 'grey';
     },
 
-    getVariantType(variant) {
-      // Detect actual variant type from HGVS c. notation and genomic coordinates
-      // Large CNVs are labeled as "CNV" in list view for clarity
-      if (!variant) return 'Unknown';
-
-      // Check if this is a large CNV (has genomic coordinates in format chr:start-end)
-      // CNVs are typically whole gene or multi-gene deletions/duplications
-      if (variant.hg38) {
-        const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
-        if (cnvMatch) {
-          // This is a CNV - return "CNV" for list view
-          return 'CNV';
-        }
-      }
-
-      // For small variants, detect type from c. notation
-      const cNotation = this.extractCNotation(variant.transcript);
-
-      if (cNotation) {
-        // Check for delins (complex indels) FIRST before checking for simple del/ins
-        // Match patterns like "delins", "delGCTCTGins", "delAins" etc.
-        if (/del[A-Z]*ins/.test(cNotation)) {
-          return 'indel';
-        }
-        // Check for deletions
-        if (/del/.test(cNotation) && !/dup/.test(cNotation)) {
-          return 'deletion';
-        }
-        // Check for duplications
-        if (/dup/.test(cNotation)) {
-          return 'duplication';
-        }
-        // Check for insertions
-        if (/ins/.test(cNotation)) {
-          return 'insertion';
-        }
-        // Check for substitutions (true SNVs: single position with >)
-        if (/>\w$/.test(cNotation) && !/[+-]/.test(cNotation) && !/_/.test(cNotation)) {
-          return 'SNV';
-        }
-      }
-
-      // Fall back to stored variant_type
-      return variant.variant_type || 'Unknown';
-    },
+    // Utility functions imported from utils modules
+    getVariantType,
+    extractCNotation,
+    extractPNotation,
+    getPathogenicityColor,
+    getVariantTypeColor,
 
     onOptionsUpdate(newOptions) {
       this.options = { ...newOptions };
@@ -901,66 +871,6 @@ export default {
       }
     },
 
-    getVariantTypeColor(variantType) {
-      const colorMap = {
-        deletion: 'red-lighten-3',
-        duplication: 'blue-lighten-3',
-        SNV: 'purple-lighten-3',
-        insertion: 'green-lighten-3',
-        indel: 'pink-lighten-3',
-        inversion: 'orange-lighten-3',
-        CNV: 'amber-lighten-3',
-      };
-      return colorMap[variantType] || 'grey-lighten-2';
-    },
-
-    getPathogenicityColor(pathogenicity) {
-      const upperPath = pathogenicity ? pathogenicity.toUpperCase() : '';
-      if (upperPath.includes('PATHOGENIC') && !upperPath.includes('LIKELY')) {
-        return 'red-lighten-3';
-      }
-      if (upperPath.includes('LIKELY_PATHOGENIC') || upperPath.includes('LIKELY PATHOGENIC')) {
-        return 'orange-lighten-3';
-      }
-      if (upperPath.includes('UNCERTAIN') || upperPath.includes('VUS')) {
-        return 'yellow-darken-1';
-      }
-      if (upperPath.includes('LIKELY_BENIGN') || upperPath.includes('LIKELY BENIGN')) {
-        return 'light-green-lighten-3';
-      }
-      if (upperPath.includes('BENIGN')) {
-        return 'green-lighten-3';
-      }
-      return 'grey-lighten-2';
-    },
-
-    extractCNotation(transcript) {
-      // Extract only the c. notation from HGVS format (e.g., "NM_000458.4:c.544+1G>T" -> "c.544+1G>T")
-      if (!transcript) return '-';
-
-      // Match the c. notation part (everything after the colon)
-      const match = transcript.match(/:(.+)$/);
-      if (match && match[1]) {
-        return match[1];
-      }
-
-      // If no colon found, return the original value
-      return transcript;
-    },
-
-    extractPNotation(protein) {
-      // Extract only the p. notation from HGVS format (e.g., "NP_000449.3:p.Arg177Ter" -> "p.Arg177Ter")
-      if (!protein) return '-';
-
-      // Match the p. notation part (everything after the colon)
-      const match = protein.match(/:(.+)$/);
-      if (match && match[1]) {
-        return match[1];
-      }
-
-      // If no colon found, return the original value
-      return protein;
-    },
   },
 };
 </script>

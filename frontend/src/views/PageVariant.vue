@@ -416,6 +416,19 @@
 import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
+import {
+  extractCNotation,
+  extractPNotation,
+  extractTranscriptId,
+  extractProteinId,
+} from '@/utils/hgvs';
+import { getPathogenicityColor } from '@/utils/colors';
+import {
+  getVariantType,
+  isCNV,
+  getCNVDetails,
+  getVariantSize,
+} from '@/utils/variants';
 
 export default {
   name: 'PageVariant',
@@ -493,87 +506,16 @@ export default {
         this.$router.push(`/variants/${variant.variant_id}`);
       }
     },
+    // Wrapper methods that use utility functions with appropriate options for detail view
     getVariantType(variant) {
-      // Detect actual variant type - detail view shows specific type (deletion/duplication)
-      // while list view shows "CNV" for large structural variants
-      if (!variant) return 'Unknown';
-
-      // For CNVs, check the HG38 format to determine deletion vs duplication
-      if (variant.hg38) {
-        const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)/);
-        if (cnvMatch) {
-          const svType = cnvMatch[4]; // DEL, DUP, etc.
-          if (svType === 'DEL') return 'deletion';
-          if (svType === 'DUP') return 'duplication';
-          return svType.toLowerCase();
-        }
-      }
-
-      // For small variants, detect type from c. notation
-      const cNotation = this.extractCNotation(variant.transcript);
-
-      if (cNotation) {
-        // Check for deletions
-        if (/del/.test(cNotation) && !/dup/.test(cNotation)) {
-          return 'deletion';
-        }
-        // Check for duplications
-        if (/dup/.test(cNotation)) {
-          return 'duplication';
-        }
-        // Check for insertions
-        if (/ins/.test(cNotation)) {
-          return 'insertion';
-        }
-        // Check for delins (deletion-insertion)
-        if (/delins/.test(cNotation)) {
-          return 'indel';
-        }
-        // Check for substitutions (true SNVs: single position with >)
-        if (/>\w$/.test(cNotation) && !/[+-]/.test(cNotation) && !/_/.test(cNotation)) {
-          return 'SNV';
-        }
-      }
-
-      // Fall back to stored variant_type
-      return variant.variant_type || 'Unknown';
+      // Detail view shows specific type (deletion/duplication) instead of generic "CNV"
+      return getVariantType(variant, { specificCNVType: true });
     },
-    isCNV(variant) {
-      // Check if this variant is a CNV (has genomic coordinates)
-      if (!variant || !variant.hg38) return false;
-      return /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
-    },
-    getCNVDetails(variant) {
-      // Extract CNV details from HG38 format: "17:36459258-37832869:DEL"
-      if (!variant || !variant.hg38) return null;
-      const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)/);
-      if (match) {
-        return {
-          chromosome: match[1],
-          start: match[2],
-          end: match[3],
-          type: match[4],
-        };
-      }
-      return null;
-    },
+    isCNV,
+    getCNVDetails,
     getCNVSize(variant) {
       // Calculate CNV size in human-readable format
-      const details = this.getCNVDetails(variant);
-      if (!details) return null;
-
-      const start = parseInt(details.start);
-      const end = parseInt(details.end);
-      const sizeInBp = end - start;
-
-      // Format size based on magnitude
-      if (sizeInBp >= 1000000) {
-        return `${(sizeInBp / 1000000).toFixed(2)} Mb`;
-      } else if (sizeInBp >= 1000) {
-        return `${(sizeInBp / 1000).toFixed(2)} kb`;
-      } else {
-        return `${sizeInBp.toLocaleString()} bp`;
-      }
+      return getVariantSize(variant, { formatted: true });
     },
     formatPosition(pos) {
       // Add thousand separators: 36459258 → 36,459,258
@@ -619,45 +561,14 @@ export default {
         this.loading = false;
       }
     },
-    extractCNotation(transcript) {
-      if (!transcript) return '-';
-      const match = transcript.match(/:(.+)$/);
-      return match && match[1] ? match[1] : transcript;
-    },
-    extractPNotation(protein) {
-      if (!protein) return '-';
-      const match = protein.match(/:(.+)$/);
-      return match && match[1] ? match[1] : protein;
-    },
-    extractTranscriptId(transcript) {
-      if (!transcript) return null;
-      const match = transcript.match(/^(NM_[\d.]+):/);
-      return match && match[1] ? match[1] : null;
-    },
-    extractProteinId(protein) {
-      if (!protein) return null;
-      const match = protein.match(/^(NP_[\d.]+):/);
-      return match && match[1] ? match[1] : null;
-    },
-    getPathogenicityColor(pathogenicity) {
-      const upperPath = pathogenicity ? pathogenicity.toUpperCase() : '';
-      if (upperPath.includes('PATHOGENIC') && !upperPath.includes('LIKELY')) {
-        return 'red-lighten-3';
-      }
-      if (upperPath.includes('LIKELY_PATHOGENIC') || upperPath.includes('LIKELY PATHOGENIC')) {
-        return 'orange-lighten-3';
-      }
-      if (upperPath.includes('UNCERTAIN') || upperPath.includes('VUS')) {
-        return 'yellow-darken-1';
-      }
-      if (upperPath.includes('LIKELY_BENIGN') || upperPath.includes('LIKELY BENIGN')) {
-        return 'light-green-lighten-3';
-      }
-      if (upperPath.includes('BENIGN')) {
-        return 'green-lighten-3';
-      }
-      return 'grey-lighten-2';
-    },
+    // HGVS extraction functions imported from utils/hgvs
+    extractCNotation,
+    extractPNotation,
+    extractTranscriptId,
+    extractProteinId,
+    // Color mapping functions imported from utils/colors
+    getPathogenicityColor,
+    // Note: getVariantType, isCNV, getCNVDetails, getCNVSize are defined below as wrapper methods
     getMolecularConsequence(variant) {
       // Backend now correctly computes molecular_consequence
       // Just return it directly instead of recomputing

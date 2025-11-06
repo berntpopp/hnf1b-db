@@ -23,6 +23,11 @@ from app.phenopackets.models import (
 from app.phenopackets.molecular_consequence import (
     compute_molecular_consequence,
 )
+from app.phenopackets.query_builders import (
+    add_has_variants_filter,
+    add_sex_filter,
+    build_phenopacket_response,
+)
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.phenopackets.variant_search_validation import (
     validate_classification,
@@ -53,40 +58,16 @@ async def list_phenopackets(
     """List all phenopackets with optional filtering."""
     query = select(Phenopacket)
 
-    if sex:
-        query = query.where(Phenopacket.subject_sex == sex)
-
-    if has_variants is not None:
-        if has_variants:
-            query = query.where(
-                func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]) > 0
-            )
-        else:
-            query = query.where(
-                func.coalesce(
-                    func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]),
-                    0,
-                )
-                == 0
-            )
+    # Apply filters using query builder utilities
+    query = add_sex_filter(query, sex)
+    query = add_has_variants_filter(query, has_variants)
 
     query = query.offset(skip).limit(limit).order_by(Phenopacket.created_at.desc())
 
     result = await db.execute(query)
     phenopackets = result.scalars().all()
 
-    return [
-        PhenopacketResponse(
-            id=str(pp.id),
-            phenopacket_id=pp.phenopacket_id,
-            version=pp.version,
-            phenopacket=pp.phenopacket,
-            created_at=pp.created_at,
-            updated_at=pp.updated_at,
-            schema_version=pp.schema_version,
-        )
-        for pp in phenopackets
-    ]
+    return [build_phenopacket_response(pp) for pp in phenopackets]
 
 
 @router.get("/batch", response_model=List[Dict])
@@ -403,18 +384,7 @@ async def search_phenopackets(
     result = await db.execute(base_query)
     phenopackets = result.scalars().all()
 
-    return [
-        PhenopacketResponse(
-            id=str(pp.id),
-            phenopacket_id=pp.phenopacket_id,
-            version=pp.version,
-            phenopacket=pp.phenopacket,
-            created_at=pp.created_at,
-            updated_at=pp.updated_at,
-            schema_version=pp.schema_version,
-        )
-        for pp in phenopackets
-    ]
+    return [build_phenopacket_response(pp) for pp in phenopackets]
 
 
 @router.get("/features/batch", response_model=List[Dict])
@@ -693,15 +663,7 @@ async def create_phenopacket(
         # Re-raise other database errors
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from e
 
-    return PhenopacketResponse(
-        id=str(new_phenopacket.id),
-        phenopacket_id=new_phenopacket.phenopacket_id,
-        version=new_phenopacket.version,
-        phenopacket=new_phenopacket.phenopacket,
-        created_at=new_phenopacket.created_at,
-        updated_at=new_phenopacket.updated_at,
-        schema_version=new_phenopacket.schema_version,
-    )
+    return build_phenopacket_response(new_phenopacket)
 
 
 @router.put("/{phenopacket_id}", response_model=PhenopacketResponse)
@@ -741,15 +703,7 @@ async def update_phenopacket(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    return PhenopacketResponse(
-        id=str(existing.id),
-        phenopacket_id=existing.phenopacket_id,
-        version=existing.version,
-        phenopacket=existing.phenopacket,
-        created_at=existing.created_at,
-        updated_at=existing.updated_at,
-        schema_version=existing.schema_version,
-    )
+    return build_phenopacket_response(existing)
 
 
 @router.delete("/{phenopacket_id}")
