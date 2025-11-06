@@ -81,39 +81,91 @@
           </v-card-text>
         </v-card>
 
-        <!-- SNV Visualization - HNF1B Gene Detail -->
+        <!-- Variant Visualizations with Tabs -->
         <v-card
           class="mt-4"
           variant="flat"
         >
-          <HNF1BGeneVisualization
-            :variants="snvVariants"
-            force-view-mode="gene"
-            @variant-clicked="navigateToVariant"
-          />
-        </v-card>
+          <v-card-title class="text-h5">
+            HNF1B Variant Visualizations
+          </v-card-title>
+          <v-tabs
+            v-model="activeTab"
+            bg-color="transparent"
+            color="primary"
+            @update:model-value="handleTabChange"
+          >
+            <v-tab value="protein">
+              <v-icon start>
+                mdi-protein
+              </v-icon>
+              Protein View
+            </v-tab>
+            <v-tab value="gene">
+              <v-icon start>
+                mdi-dna
+              </v-icon>
+              Gene View
+            </v-tab>
+            <v-tab value="region">
+              <v-icon start>
+                mdi-map-marker-radius
+              </v-icon>
+              17q12 Region
+            </v-tab>
+          </v-tabs>
 
-        <!-- Protein Visualization - SNVs mapped to protein domains -->
-        <v-card
-          class="mt-4"
-          variant="flat"
-        >
-          <HNF1BProteinVisualization
-            :variants="snvVariants"
-            @variant-clicked="navigateToVariant"
-          />
-        </v-card>
+          <v-window v-model="activeTab">
+            <!-- Protein View Tab (Default) -->
+            <v-window-item value="protein">
+              <v-card-text>
+                <HNF1BProteinVisualization
+                  v-if="snvVariantsLoaded"
+                  :variants="snvVariants"
+                  @variant-clicked="navigateToVariant"
+                />
+                <v-skeleton-loader
+                  v-else
+                  type="image"
+                  height="400"
+                />
+              </v-card-text>
+            </v-window-item>
 
-        <!-- CNV Visualization - 17q12 Region -->
-        <v-card
-          class="mt-4"
-          variant="flat"
-        >
-          <HNF1BGeneVisualization
-            :variants="cnvVariants"
-            force-view-mode="cnv"
-            @variant-clicked="navigateToVariant"
-          />
+            <!-- Gene View Tab -->
+            <v-window-item value="gene">
+              <v-card-text>
+                <HNF1BGeneVisualization
+                  v-if="snvVariantsLoaded"
+                  :variants="snvVariants"
+                  force-view-mode="gene"
+                  @variant-clicked="navigateToVariant"
+                />
+                <v-skeleton-loader
+                  v-else
+                  type="image"
+                  height="400"
+                />
+              </v-card-text>
+            </v-window-item>
+
+            <!-- CNV Region View Tab -->
+            <v-window-item value="region">
+              <v-card-text>
+                <HNF1BGeneVisualization
+                  v-if="cnvVariantsLoaded"
+                  :variants="cnvVariants"
+                  force-view-mode="cnv"
+                  @variant-clicked="navigateToVariant"
+                />
+                <v-skeleton-loader
+                  v-else
+                  type="image"
+                  height="400"
+                />
+              </v-card-text>
+            </v-window-item>
+          </v-window>
         </v-card>
       </v-col>
     </v-row>
@@ -121,7 +173,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
@@ -160,6 +212,13 @@ export default {
     // Separate variants by type for different visualization cards
     const snvVariants = ref([]);
     const cnvVariants = ref([]);
+
+    // Track which variant types have been loaded (for lazy loading)
+    const snvVariantsLoaded = ref(false);
+    const cnvVariantsLoaded = ref(false);
+
+    // Active tab state (default to protein view)
+    const activeTab = ref('protein');
 
     /**
      * Animate a count from 0 to the target value.
@@ -241,28 +300,72 @@ export default {
     };
 
     /**
-     * Fetch all variants for the gene visualization.
-     * Splits variants into SNVs (for HNF1B gene view) and CNVs (for 17q12 region view).
+     * Fetch SNV variants for protein and gene visualizations.
+     * Only fetches if not already loaded (lazy loading).
      *
      * @async
-     * @function fetchAllVariants
+     * @function fetchSNVVariants
      * @returns {Promise<void>}
      */
-    const fetchAllVariants = async () => {
+    const fetchSNVVariants = async () => {
+      if (snvVariantsLoaded.value) return; // Already loaded
+
       try {
-        // Fetch all variants with a large page size to get everything
+        // Fetch all variants to filter SNVs
         const response = await getVariants({ page: 1, page_size: 1000 });
         allVariants.value = response.data || [];
 
-        // Split variants by type
-        // SNVs: Point mutations, splice variants, and ALL small variants (shown in gene detail view)
-        // CNVs: ONLY large structural variants >= 50bp (shown in 17q12 region view)
-        // This matches publication style where CNVs and SNVs are shown separately
+        // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
         snvVariants.value = allVariants.value.filter((v) => !isCNV(v));
-        cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
+        snvVariantsLoaded.value = true;
       } catch (error) {
-        console.error('Error fetching variants:', error);
+        console.error('Error fetching SNV variants:', error);
       }
+    };
+
+    /**
+     * Fetch CNV variants for 17q12 region visualization.
+     * Only fetches if not already loaded (lazy loading).
+     *
+     * @async
+     * @function fetchCNVVariants
+     * @returns {Promise<void>}
+     */
+    const fetchCNVVariants = async () => {
+      if (cnvVariantsLoaded.value) return; // Already loaded
+
+      try {
+        // Use cached allVariants if available, otherwise fetch
+        if (allVariants.value.length === 0) {
+          const response = await getVariants({ page: 1, page_size: 1000 });
+          allVariants.value = response.data || [];
+        }
+
+        // Filter CNVs: Large structural variants >= 50bp that extend beyond HNF1B
+        cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
+        cnvVariantsLoaded.value = true;
+      } catch (error) {
+        console.error('Error fetching CNV variants:', error);
+      }
+    };
+
+    /**
+     * Handle tab change - lazy load variants when tab is clicked.
+     * Triggers a resize event after DOM updates to ensure SVG visualizations render correctly.
+     *
+     * @param {string} tab - The active tab value ('protein', 'gene', or 'region')
+     */
+    const handleTabChange = (tab) => {
+      if (tab === 'protein' || tab === 'gene') {
+        fetchSNVVariants(); // Protein and gene views use SNVs
+      } else if (tab === 'region') {
+        fetchCNVVariants(); // Region view uses CNVs
+      }
+
+      // Trigger resize event after DOM updates to fix SVG width calculation
+      nextTick(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
     };
 
     /**
@@ -276,11 +379,23 @@ export default {
     };
 
     onMounted(() => {
+      // Load statistics immediately (lightweight)
       fetchStats();
-      fetchAllVariants();
+
+      // Load protein view variants immediately (default tab)
+      fetchSNVVariants();
     });
 
-    return { displayStats, snvVariants, cnvVariants, navigateToVariant };
+    return {
+      displayStats,
+      snvVariants,
+      cnvVariants,
+      snvVariantsLoaded,
+      cnvVariantsLoaded,
+      activeTab,
+      handleTabChange,
+      navigateToVariant,
+    };
   },
 };
 </script>
