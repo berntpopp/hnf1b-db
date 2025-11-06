@@ -87,3 +87,39 @@ jobs:
       with:
         file: ./backend/coverage.xml
         fail_ci_if_error: false
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    # Quality checks - must match `make check` for 1-to-1 compatibility
+    # Commands: test lint:check format:check
+
+    - name: Run tests (vitest)
+      run: |
+        cd frontend
+        npm test
+
+    - name: Run linting (eslint)
+      run: |
+        cd frontend
+        npm run lint:check
+
+    - name: Run format check (prettier)
+      run: |
+        cd frontend
+        npm run format:check
