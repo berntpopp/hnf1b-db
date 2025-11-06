@@ -460,6 +460,13 @@ export default {
       },
       immediate: false,
     },
+    visualizationTab() {
+      // When tab changes, trigger a resize event after DOM updates
+      // This ensures SVG width is recalculated correctly for the newly visible tab
+      this.$nextTick(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+    },
   },
   created() {
     this.loadVariantData();
