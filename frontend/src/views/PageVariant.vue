@@ -606,7 +606,11 @@ export default {
         this.phenopacketsWithVariant = phenopacketsResponse.data.map(pp => ({
           phenopacket_id: pp.phenopacket_id,
           subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
-          created_at: new Date(pp.created_at).toLocaleDateString(),
+          created_at: new Date(pp.created_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }),
         }));
 
         this.loading = false;
