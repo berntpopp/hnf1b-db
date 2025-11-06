@@ -45,7 +45,7 @@ test = [
     "ga4gh-vrs>=2.1.3",
     "pytest==8.4.2",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
-    "pytest-cov==4.1.0",
+    "pytest-cov==7.0.0",
     "tqdm>=4.67.1",
     "types-tqdm>=4.66.0",  # Type stubs for tqdm
 ]
