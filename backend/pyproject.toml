@@ -47,6 +47,7 @@ test = [
     "pytest-asyncio==0.21.1",
     "pytest-cov==4.1.0",
     "tqdm>=4.67.1",
+    "types-tqdm>=4.66.0",  # Type stubs for tqdm
 ]
 migration = [
     "tqdm>=4.66.0",  # Progress bars for migration
@@ -61,14 +62,23 @@ phenopackets = [
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = false
-warn_unused_configs = true  
+warn_unused_configs = true
 disallow_untyped_defs = false
 no_implicit_optional = true
+warn_unused_ignores = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["pandas.*", "passlib.*", "biopython.*", "Bio.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ga4gh.*", "bioutils.*"]
+ignore_missing_imports = true
+# NOTE: ga4gh.vrs and bioutils libraries do not include type annotations (no py.typed marker)
+# and have no published type stubs on PyPI (verified 2025-01-06).
+# These libraries are tested and functional; suppressing tool limitation only.
+# TODO: Remove when upstream adds py.typed marker or type stubs become available.
 
 [tool.ruff]
 line-length = 88
@@ -95,7 +105,22 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 # Alembic migration files: revision identifiers are required by Alembic framework
 # These variables are read via introspection, not direct import
-"alembic/versions/*.py" = ["F841"]  # Unused variable (revision, down_revision, etc.)
+"alembic/versions/*.py" = ["F841", "E501", "D415"]  # Unused variable, long SQL queries, docstring format
+"alembic/env.py" = ["E501"]  # Long comments explaining model imports
+# Migration files: allow long SQL queries, data strings, and complex expressions
+"migration/**/*.py" = ["E501"]
+# Test files: allow long test strings and fixtures
+"tests/*.py" = ["E501"]
+# App files with SQL/JSONPath queries and long API parameters
+"app/phenopackets/clinical_endpoints.py" = ["E501"]  # JSONPath queries
+"app/phenopackets/clinical_queries.py" = ["E501"]  # JSONPath and SQL queries
+"app/phenopackets/endpoints.py" = ["E501", "D417"]  # SQL queries and API param descriptions
+"app/phenopackets/validation/variant_validator.py" = ["E501"]  # Long regex patterns
+"app/phenopackets/variant_search_validation.py" = ["E501"]  # Long comments
+"app/publications/endpoints.py" = ["E501", "D106"]  # Long strings and nested Config class
+"app/services/ontology_service.py" = ["D107", "D205"]  # __init__ docstrings and formatting
+"app/schemas.py" = ["D101"]  # Simple schema classes don't need docstrings
+"examples/**/*.py" = ["E501"]  # Example scripts with long print statements
 
 [tool.ruff.lint.isort]
 # Configuration compatible with black formatting

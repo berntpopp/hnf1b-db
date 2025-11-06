@@ -127,8 +127,8 @@ class CNVParser:
         cls,
         hg38: str,
         hg38_info: str,
-        variant_type_str: str = None,
-        variant_reported: str = None,
+        variant_type_str: Optional[str] = None,
+        variant_reported: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a complete phenopacket CNV variant representation.
 

@@ -24,12 +24,21 @@ try:
     from app.database import Base
 
     # Import all Phenopackets v2 models to ensure metadata is complete
+    # Using redundant aliases to signal intentional re-exports (models register with Base.metadata)
     from app.phenopackets.models import (
-        Cohort,
-        Family,
-        Phenopacket,
-        PhenopacketAudit,
-        Resource,
+        Cohort as Cohort,
+    )
+    from app.phenopackets.models import (
+        Family as Family,
+    )
+    from app.phenopackets.models import (
+        Phenopacket as Phenopacket,
+    )
+    from app.phenopackets.models import (
+        PhenopacketAudit as PhenopacketAudit,
+    )
+    from app.phenopackets.models import (
+        Resource as Resource,
     )
 
     target_metadata = Base.metadata
