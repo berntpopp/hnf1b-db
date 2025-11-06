@@ -750,6 +750,8 @@
 
 <script>
 import chr17q12Data from '@/data/chr17q12_genes.json';
+import { extractCNotation, extractPNotation } from '@/utils/hgvs';
+import { getCNVDetails } from '@/utils/variants';
 
 export default {
   name: 'HNF1BGeneVisualization',
@@ -1171,19 +1173,6 @@ export default {
 
       return hasTranscript && noProtein && isSpliceSite;
     },
-    getCNVDetails(variant) {
-      if (!variant || !variant.hg38) return null;
-      const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)/);
-      if (match) {
-        return {
-          chromosome: match[1],
-          start: match[2],
-          end: match[3],
-          type: match[4],
-        };
-      }
-      return null;
-    },
     getIndelDetails(variant) {
       if (!variant || !variant.hg38) return null;
 
@@ -1286,16 +1275,10 @@ export default {
     formatCoordinate(pos) {
       return parseInt(pos).toLocaleString();
     },
-    extractCNotation(transcript) {
-      if (!transcript) return '';
-      const match = transcript.match(/:(.+)$/);
-      return match && match[1] ? match[1] : transcript;
-    },
-    extractPNotation(protein) {
-      if (!protein) return '';
-      const match = protein.match(/:(.+)$/);
-      return match && match[1] ? match[1] : protein;
-    },
+    // Utility functions imported from utils
+    extractCNotation,
+    extractPNotation,
+    getCNVDetails,
     showExonTooltip(event, exon) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'exon', data: exon };
