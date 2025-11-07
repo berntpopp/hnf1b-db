@@ -741,14 +741,14 @@ export default {
         initialized: this.loadingInitialized,
       });
 
-      this.options = { ...newOptions };
-
-      // Mark as initialized and trigger initial fetch
-      // This ensures fetchVariants() is only called once on mount
+      // Mark as initialized BEFORE updating options
+      // This allows the watch to trigger fetchVariants() exactly once
       if (!this.loadingInitialized) {
         this.loadingInitialized = true;
-        this.fetchVariants();
       }
+
+      // Update options - this triggers the watch which calls fetchVariants()
+      this.options = { ...newOptions };
     },
 
     // Disable client-side sorting
