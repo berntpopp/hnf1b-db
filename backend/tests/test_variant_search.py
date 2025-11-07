@@ -138,9 +138,7 @@ class TestClassificationValidation:
     def test_valid_classifications(self):
         """Test valid classifications."""
         assert validate_classification("PATHOGENIC") == "PATHOGENIC"
-        assert (
-            validate_classification("LIKELY_PATHOGENIC") == "LIKELY_PATHOGENIC"
-        )
+        assert validate_classification("LIKELY_PATHOGENIC") == "LIKELY_PATHOGENIC"
         assert (
             validate_classification("UNCERTAIN_SIGNIFICANCE")
             == "UNCERTAIN_SIGNIFICANCE"
@@ -195,97 +193,75 @@ class TestMolecularConsequenceComputation:
     def test_frameshift(self):
         """Test frameshift detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Arg177fs",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Arg177fs", variant_type=None
         )
         assert result == "Frameshift"
 
     def test_nonsense(self):
         """Test nonsense/stop-gained detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Arg177Ter",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Arg177Ter", variant_type=None
         )
         assert result == "Nonsense"
 
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Arg177*",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Arg177*", variant_type=None
         )
         assert result == "Nonsense"
 
     def test_missense(self):
         """Test missense detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Arg177Cys",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Arg177Cys", variant_type=None
         )
         assert result == "Missense"
 
     def test_inframe_deletion(self):
         """Test in-frame deletion detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Gly319del",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Gly319del", variant_type=None
         )
         assert result == "In-frame Deletion"
 
     def test_splice_donor(self):
         """Test splice donor detection."""
         result = compute_molecular_consequence(
-            transcript="NM_000458.4:c.544+1G>T",
-            protein=None,
-            variant_type=None
+            transcript="NM_000458.4:c.544+1G>T", protein=None, variant_type=None
         )
         assert result == "Splice Donor"
 
     def test_splice_acceptor(self):
         """Test splice acceptor detection."""
         result = compute_molecular_consequence(
-            transcript="NM_000458.4:c.1654-2A>T",
-            protein=None,
-            variant_type=None
+            transcript="NM_000458.4:c.1654-2A>T", protein=None, variant_type=None
         )
         assert result == "Splice Acceptor"
 
     def test_intronic_variant(self):
         """Test intronic variant detection."""
         result = compute_molecular_consequence(
-            transcript="NM_000458.4:c.544+15G>T",
-            protein=None,
-            variant_type=None
+            transcript="NM_000458.4:c.544+15G>T", protein=None, variant_type=None
         )
         assert result == "Intronic Variant"
 
     def test_copy_number_loss(self):
         """Test copy number loss (deletion) detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein=None,
-            variant_type="deletion"
+            transcript=None, protein=None, variant_type="deletion"
         )
         assert result == "Copy Number Loss"
 
     def test_copy_number_gain(self):
         """Test copy number gain (duplication) detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein=None,
-            variant_type="duplication"
+            transcript=None, protein=None, variant_type="duplication"
         )
         assert result == "Copy Number Gain"
 
     def test_synonymous(self):
         """Test synonymous variant detection."""
         result = compute_molecular_consequence(
-            transcript=None,
-            protein="NP_000449.3:p.Arg177=",
-            variant_type=None
+            transcript=None, protein="NP_000449.3:p.Arg177=", variant_type=None
         )
         assert result == "Synonymous"
 
@@ -300,19 +276,19 @@ class TestConsequenceFiltering:
                 "variant_id": "var1",
                 "transcript": "NM_000458.4:c.544+1G>T",
                 "protein": None,
-                "structural_type": "SNV"
+                "structural_type": "SNV",
             },
             {
                 "variant_id": "var2",
                 "transcript": None,
                 "protein": "NP_000449.3:p.Arg177Ter",
-                "structural_type": "SNV"
+                "structural_type": "SNV",
             },
             {
                 "variant_id": "var3",
                 "transcript": "NM_000458.4:c.1654-2A>T",
                 "protein": None,
-                "structural_type": "SNV"
+                "structural_type": "SNV",
             },
         ]
 

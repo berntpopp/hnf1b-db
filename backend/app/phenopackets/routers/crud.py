@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_auth
+from app.auth import get_current_user
 from app.database import get_db
 from app.phenopackets.models import (
     Phenopacket,
@@ -118,7 +118,7 @@ async def get_phenopacket(
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Create a new phenopacket.
 
@@ -173,7 +173,7 @@ async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Update an existing phenopacket."""
     result = await db.execute(
@@ -212,7 +212,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Delete a phenopacket."""
     result = await db.execute(

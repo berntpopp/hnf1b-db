@@ -161,37 +161,42 @@ class PhenopacketValidator:
     def _validate_hgvs_c(self, notation: str) -> bool:
         """Validate HGVS c. notation format."""
         import re
-        return bool(re.match(r'^[A-Z_]+\d+\.\d+:c\.\d+[ACGT]>[ACGT]', notation))
+
+        return bool(re.match(r"^[A-Z_]+\d+\.\d+:c\.\d+[ACGT]>[ACGT]", notation))
 
     def _validate_hgvs_p(self, notation: str) -> bool:
         """Validate HGVS p. notation format."""
         import re
-        return bool(re.match(r'^[A-Z_]+\d+\.\d+:p\.\w+', notation))
+
+        return bool(re.match(r"^[A-Z_]+\d+\.\d+:p\.\w+", notation))
 
     def _validate_hgvs_g(self, notation: str) -> bool:
         """Validate HGVS g. notation format."""
         import re
-        return bool(re.match(r'^(chr)?[\dXY]+:g\.\d+[ACGT]>[ACGT]', notation))
+
+        return bool(re.match(r"^(chr)?[\dXY]+:g\.\d+[ACGT]>[ACGT]", notation))
 
     def _validate_vcf(self, notation: str) -> bool:
         """Validate VCF format."""
         import re
-        return bool(re.match(r'^(chr)?[\dXY]+-\d+-[ATCG]+-[ATCG]+', notation))
+
+        return bool(re.match(r"^(chr)?[\dXY]+-\d+-[ATCG]+-[ATCG]+", notation))
 
     def _is_ga4gh_cnv_notation(self, notation: str) -> bool:
         """Check if notation is GA4GH CNV format."""
         import re
-        return bool(re.match(r'^[\dXY]+:\d+-\d+:(DEL|DUP|INS|INV)', notation))
+
+        return bool(re.match(r"^[\dXY]+:\d+-\d+:(DEL|DUP|INS|INV)", notation))
 
     def _get_notation_suggestions(self, notation: str) -> List[str]:
         """Get suggestions for variant notation."""
         suggestions = []
-        if ':' in notation:
-            if 'c.' in notation:
+        if ":" in notation:
+            if "c." in notation:
                 suggestions.append("Format: NM_000458.4:c.123A>G")
-            elif 'p.' in notation:
+            elif "p." in notation:
                 suggestions.append("Format: NP_000449.3:p.Arg181*")
-            elif 'g.' in notation:
+            elif "g." in notation:
                 suggestions.append("Format: chr17:g.36459258A>G")
         return suggestions
 

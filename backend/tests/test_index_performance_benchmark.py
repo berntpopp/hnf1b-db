@@ -40,22 +40,22 @@ class TestAggregationQueryPerformance:
         rows = result.fetchall()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Phenotypic Features Aggregation:")
-        print(f"  Query time:     {elapsed*1000:.2f}ms")
+        print(f"  Query time:     {elapsed * 1000:.2f}ms")
         print(f"  Features found: {len(rows)}")
         if rows:
             print(
                 f"  Top feature:    {rows[0].hpo_label} ({rows[0].count} occurrences)"
             )
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # With GIN index, should complete in reasonable time
         # For 864 phenopackets: <200ms is good performance
         # For 10,000 phenopackets: <500ms is good performance
-        assert (
-            elapsed < 1.0
-        ), f"Aggregation query should complete in <1s, took {elapsed*1000:.2f}ms"
+        assert elapsed < 1.0, (
+            f"Aggregation query should complete in <1s, took {elapsed * 1000:.2f}ms"
+        )
 
     async def test_disease_aggregation_performance(self, db_session: AsyncSession):
         """Benchmark disease term aggregation query."""
@@ -81,17 +81,17 @@ class TestAggregationQueryPerformance:
         rows = result.fetchall()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Disease Aggregation:")
-        print(f"  Query time:    {elapsed*1000:.2f}ms")
+        print(f"  Query time:    {elapsed * 1000:.2f}ms")
         print(f"  Diseases found: {len(rows)}")
         if rows:
             print(f"  Top disease:    {rows[0].disease_label} ({rows[0].count} cases)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
-        assert (
-            elapsed < 1.0
-        ), f"Disease aggregation should complete in <1s, took {elapsed*1000:.2f}ms"
+        assert elapsed < 1.0, (
+            f"Disease aggregation should complete in <1s, took {elapsed * 1000:.2f}ms"
+        )
 
     async def test_variant_pathogenicity_aggregation_performance(
         self, db_session: AsyncSession
@@ -118,15 +118,15 @@ class TestAggregationQueryPerformance:
         rows = result.fetchall()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Variant Pathogenicity Aggregation:")
-        print(f"  Query time:         {elapsed*1000:.2f}ms")
+        print(f"  Query time:         {elapsed * 1000:.2f}ms")
         print(f"  Classifications:    {len(rows)}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
-        assert (
-            elapsed < 1.0
-        ), f"Variant aggregation should complete in <1s, took {elapsed*1000:.2f}ms"
+        assert elapsed < 1.0, (
+            f"Variant aggregation should complete in <1s, took {elapsed * 1000:.2f}ms"
+        )
 
 
 class TestComplexJSONBQueries:
@@ -150,16 +150,16 @@ class TestComplexJSONBQueries:
         rows = result.fetchall()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Contains Query (HP:0012622 - Chronic kidney disease):")
-        print(f"  Query time:  {elapsed*1000:.2f}ms")
+        print(f"  Query time:  {elapsed * 1000:.2f}ms")
         print(f"  Matches:     {len(rows)}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Contains queries with GIN index should be very fast
-        assert (
-            elapsed < 0.5
-        ), f"Contains query should complete in <500ms, took {elapsed*1000:.2f}ms"
+        assert elapsed < 0.5, (
+            f"Contains query should complete in <500ms, took {elapsed * 1000:.2f}ms"
+        )
 
     async def test_existence_query_performance(self, db_session: AsyncSession):
         """Test ? (existence) operator performance with GIN index."""
@@ -179,15 +179,15 @@ class TestComplexJSONBQueries:
         rows = result.fetchall()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Existence Query (has phenotypicFeatures):")
-        print(f"  Query time:  {elapsed*1000:.2f}ms")
+        print(f"  Query time:  {elapsed * 1000:.2f}ms")
         print(f"  Matches:     {len(rows)}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
-        assert (
-            elapsed < 0.5
-        ), f"Existence query should complete in <500ms, took {elapsed*1000:.2f}ms"
+        assert elapsed < 0.5, (
+            f"Existence query should complete in <500ms, took {elapsed * 1000:.2f}ms"
+        )
 
 
 class TestQueryPlanVerification:
@@ -216,16 +216,16 @@ class TestQueryPlanVerification:
         explain_lines = [row[0] for row in result.fetchall()]
         explain_text = "\n".join(explain_lines)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Query Plan for Feature Aggregation:")
         print(explain_text)
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Verify query uses jsonb_array_elements (core requirement)
         explain_lower = explain_text.lower()
-        assert (
-            "jsonb_array_elements" in explain_lower
-        ), "Query should use jsonb_array_elements function"
+        assert "jsonb_array_elements" in explain_lower, (
+            "Query should use jsonb_array_elements function"
+        )
 
         # On small datasets, seq scan is expected and optimal
         # On large datasets (>1000 rows), would use index/bitmap scan
@@ -244,10 +244,10 @@ class TestQueryPlanVerification:
         explain_lines = [row[0] for row in result.fetchall()]
         explain_text = "\n".join(explain_lines)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Query Plan for Contains Query:")
         print(explain_text)
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Verify query uses the @> operator (GIN-indexable)
         explain_lower = explain_text.lower()

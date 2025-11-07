@@ -11,7 +11,7 @@ from typing import Optional
 def compute_molecular_consequence(
     transcript: Optional[str],
     protein: Optional[str],
-    variant_type: Optional[str] = None
+    variant_type: Optional[str] = None,
 ) -> Optional[str]:
     """Compute molecular consequence from HGVS notations and variant type.
 
@@ -121,10 +121,7 @@ def compute_molecular_consequence(
     return None
 
 
-def filter_by_consequence(
-    variants: list,
-    consequence_filter: Optional[str]
-) -> list:
+def filter_by_consequence(variants: list, consequence_filter: Optional[str]) -> list:
     """Filter variants list by molecular consequence.
 
     Args:
@@ -146,7 +143,7 @@ def filter_by_consequence(
         computed_consequence = compute_molecular_consequence(
             transcript=variant.get("transcript"),
             protein=variant.get("protein"),
-            variant_type=variant.get("structural_type")
+            variant_type=variant.get("structural_type"),
         )
         if computed_consequence == consequence_filter:
             filtered.append(variant)

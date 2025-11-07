@@ -17,6 +17,14 @@ export default defineConfig({
     // happy-dom for Vue component testing (faster than jsdom)
     environment: 'happy-dom',
 
+    // Use threads pool for CI/CD environments
+    // Note: In WSL development, forks may be more stable, but threads works in GitHub Actions
+    pool: 'threads',
+
+    // Timeout configuration
+    testTimeout: 10000, // 10 seconds for individual tests
+    hookTimeout: 10000, // 10 seconds for hooks (beforeEach, afterEach)
+
     // Coverage configuration
     coverage: {
       provider: 'v8', // Native V8 coverage (faster than Istanbul)

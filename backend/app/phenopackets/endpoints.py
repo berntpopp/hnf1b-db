@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_auth
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.phenopackets.models import (
@@ -616,7 +616,7 @@ async def get_small_variants(
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Create a new phenopacket.
 
@@ -671,7 +671,7 @@ async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Update an existing phenopacket."""
     result = await db.execute(
@@ -710,7 +710,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_auth),
+    current_user=Depends(get_current_user),
 ):
     """Delete a phenopacket."""
     result = await db.execute(
@@ -878,7 +878,11 @@ async def aggregate_sex_distribution(
 
 @router.get("/aggregate/variant-pathogenicity", response_model=List[AggregationResult])
 async def aggregate_variant_pathogenicity(
-    count_mode: str = Query("all", regex="^(all|unique)$", description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants"),
+    count_mode: str = Query(
+        "all",
+        regex="^(all|unique)$",
+        description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get distribution of variant pathogenicity classifications.
@@ -939,7 +943,11 @@ async def aggregate_variant_pathogenicity(
 
 @router.get("/aggregate/variant-types", response_model=List[AggregationResult])
 async def aggregate_variant_types(
-    count_mode: str = Query("all", regex="^(all|unique)$", description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants"),
+    count_mode: str = Query(
+        "all",
+        regex="^(all|unique)$",
+        description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Get distribution of variant types (SNV, CNV, etc.).
@@ -1078,13 +1086,25 @@ async def aggregate_all_variants(
     request: Request,
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0),
-    query: Optional[str] = Query(None, description="Search in HGVS notations, variant ID, or genomic coordinates"),
-    variant_type: Optional[str] = Query(None, description="Filter by variant type (SNV, deletion, etc.)"),
-    classification: Optional[str] = Query(None, description="Filter by ACMG classification"),
+    query: Optional[str] = Query(
+        None, description="Search in HGVS notations, variant ID, or genomic coordinates"
+    ),
+    variant_type: Optional[str] = Query(
+        None, description="Filter by variant type (SNV, deletion, etc.)"
+    ),
+    classification: Optional[str] = Query(
+        None, description="Filter by ACMG classification"
+    ),
     gene: Optional[str] = Query(None, description="Filter by gene symbol"),
-    consequence: Optional[str] = Query(None, description="Filter by molecular consequence"),
-    pathogenicity: Optional[str] = Query(None, description="DEPRECATED: use 'classification' instead"),
-    sort: Optional[str] = Query(None, description="Sort field with optional '-' prefix for descending"),
+    consequence: Optional[str] = Query(
+        None, description="Filter by molecular consequence"
+    ),
+    pathogenicity: Optional[str] = Query(
+        None, description="DEPRECATED: use 'classification' instead"
+    ),
+    sort: Optional[str] = Query(
+        None, description="Sort field with optional '-' prefix for descending"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Search and filter variants across all phenopackets.
@@ -1305,16 +1325,12 @@ async def aggregate_all_variants(
 
     # Classification filter
     if validated_classification:
-        where_clauses.append(
-            "gi->>'interpretationStatus' = :classification"
-        )
+        where_clauses.append("gi->>'interpretationStatus' = :classification")
         params["classification"] = validated_classification
 
     # Gene filter
     if validated_gene:
-        where_clauses.append(
-            "vd->'geneContext'->>'symbol' = :gene"
-        )
+        where_clauses.append("vd->'geneContext'->>'symbol' = :gene")
         params["gene"] = validated_gene
 
     # Molecular consequence filter (SQL-based for correct pagination)
@@ -1438,7 +1454,7 @@ async def aggregate_all_variants(
     order_by = "phenopacket_count DESC, variant_id ASC"
     if sort:
         # Check if descending (starts with '-')
-        if sort.startswith('-'):
+        if sort.startswith("-"):
             field_name = sort[1:]
             direction = "DESC"
         else:
@@ -1684,7 +1700,7 @@ async def aggregate_all_variants(
     """
 
     # Create a copy of params without limit/offset for count query
-    count_params = {k: v for k, v in params.items() if k not in ('limit', 'offset')}
+    count_params = {k: v for k, v in params.items() if k not in ("limit", "offset")}
     count_result = await db.execute(text(count_query), count_params)
     total_count = count_result.scalar() or 0
 
@@ -1706,7 +1722,7 @@ async def aggregate_all_variants(
             "molecular_consequence": compute_molecular_consequence(
                 transcript=row.transcript,
                 protein=row.protein,
-                variant_type=row.structural_type
+                variant_type=row.structural_type,
             ),
         }
         for row in rows

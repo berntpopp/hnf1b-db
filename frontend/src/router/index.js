@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { updatePageTitle } from '@/composables/usePageTitle';
+import { useAuthStore } from '@/stores/authStore';
 
 const routes = [
   {
@@ -78,13 +79,44 @@ const routes = [
     path: '/user',
     name: 'User',
     component: () => import(/* webpackChunkName: "user" */ '../views/User.vue'),
-    meta: { title: 'User Profile' },
+    meta: { title: 'User Profile', requiresAuth: true },
   },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// Global navigation guard: Check authentication before each route
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore();
+
+  // Check if route requires authentication
+  if (to.meta.requiresAuth) {
+    // Check if user has a valid access token
+    if (!authStore.accessToken) {
+      // No token, redirect to login with return URL
+      window.logService.info('Route requires authentication, redirecting to login', {
+        from: from.path,
+        to: to.path,
+      });
+      next({
+        name: 'Login',
+        query: { redirect: to.fullPath },
+      });
+      return;
+    }
+    // Has token, allow navigation (component will fetch user data if needed)
+  } else if (to.name === 'Login' && authStore.accessToken) {
+    // User already has token, redirect to home
+    window.logService.info('User already authenticated, redirecting to home');
+    next({ name: 'Home' });
+    return;
+  }
+
+  // All good, proceed with navigation
+  next();
 });
 
 // Global navigation guard to update page title dynamically

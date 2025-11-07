@@ -15,7 +15,9 @@ from app.phenopackets.validator import PhenopacketSanitizer
 
 # CI environments are typically 2-3x slower than local machines
 # Use environment variable to adjust timeout expectations
-CI_TIMEOUT_MULTIPLIER = float(os.getenv("CI_TIMEOUT_MULTIPLIER", "2.5" if os.getenv("CI") else "1.0"))
+CI_TIMEOUT_MULTIPLIER = float(
+    os.getenv("CI_TIMEOUT_MULTIPLIER", "2.5" if os.getenv("CI") else "1.0")
+)
 
 
 @pytest.fixture
@@ -118,17 +120,17 @@ class TestBatchPerformance:
         # Calculate improvement
         improvement = time_individual / time_batch if time_batch > 0 else 0
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Performance Comparison (50 phenopackets):")
         print(f"  Individual queries (N+1): {time_individual:.4f}s")
         print(f"  Batch query (WHERE IN):   {time_batch:.4f}s")
         print(f"  Improvement:              {improvement:.1f}x faster")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Batch should be at least 5x faster for 50 records
-        assert (
-            improvement >= 5.0
-        ), f"Batch query should be at least 5x faster, got {improvement:.1f}x"
+        assert improvement >= 5.0, (
+            f"Batch query should be at least 5x faster, got {improvement:.1f}x"
+        )
 
     async def test_batch_features_performance(
         self, db_session: AsyncSession, large_phenopacket_dataset
@@ -160,12 +162,12 @@ class TestBatchPerformance:
 
         improvement = time_individual / time_batch if time_batch > 0 else 0
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Features Performance (50 phenopackets):")
         print(f"  Individual queries: {time_individual:.4f}s")
         print(f"  Batch query:        {time_batch:.4f}s")
         print(f"  Improvement:        {improvement:.1f}x faster")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         assert improvement >= 5.0
 
@@ -182,18 +184,18 @@ class TestBatchPerformance:
         phenopackets = result.scalars().all()
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Scalability Test (100 phenopackets):")
         print(f"  Query time:     {elapsed:.4f}s")
-        print(f"  Records/second: {len(phenopackets)/elapsed:.1f}")
+        print(f"  Records/second: {len(phenopackets) / elapsed:.1f}")
         print(f"  CI multiplier:  {CI_TIMEOUT_MULTIPLIER}x")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Should handle 100 records in under 1 second locally, <2.5s in CI
         timeout = 1.0 * CI_TIMEOUT_MULTIPLIER
-        assert (
-            elapsed < timeout
-        ), f"Batch query for 100 records should complete in <{timeout:.1f}s (CI multiplier: {CI_TIMEOUT_MULTIPLIER}x), took {elapsed:.4f}s"
+        assert elapsed < timeout, (
+            f"Batch query for 100 records should complete in <{timeout:.1f}s (CI multiplier: {CI_TIMEOUT_MULTIPLIER}x), took {elapsed:.4f}s"
+        )
         assert len(phenopackets) == 100
 
 
@@ -227,12 +229,12 @@ class TestHPOValidationPerformance:
             }
         elapsed = time.time() - start
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("HPO Validation Performance (5 terms, cache warm):")
         print(f"  Local service time: {elapsed:.6f}s")
-        print(f"  Terms/second:       {len(hpo_terms)/elapsed:.0f}")
+        print(f"  Terms/second:       {len(hpo_terms) / elapsed:.0f}")
         print(f"  CI multiplier:      {CI_TIMEOUT_MULTIPLIER}x")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # After cache warm-up, should be reasonable (< 3s for 5 terms locally, <7.5s in CI)
         # This is still 100x+ faster than N external API calls (which would take ~2.5s each)
@@ -241,8 +243,8 @@ class TestHPOValidationPerformance:
         timeout = 3.0 * CI_TIMEOUT_MULTIPLIER
         assert elapsed < timeout, (
             f"Local HPO validation should be <{timeout:.1f}s (CI multiplier: {CI_TIMEOUT_MULTIPLIER}x), "
-            f"took {elapsed*1000:.2f}ms. "
-            f"Still much faster than {len(hpo_terms)} external API calls (~{len(hpo_terms)*0.5}s)"
+            f"took {elapsed * 1000:.2f}ms. "
+            f"Still much faster than {len(hpo_terms)} external API calls (~{len(hpo_terms) * 0.5}s)"
         )
 
         # All terms should be validated

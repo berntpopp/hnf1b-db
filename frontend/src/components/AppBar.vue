@@ -41,14 +41,26 @@
       <v-spacer />
 
       <!-- User Menu (all screen sizes) -->
-      <div v-if="isAuthenticated" class="ml-4">
+      <div v-if="authStore.isAuthenticated" class="ml-4">
         <v-menu location="bottom">
           <template #activator="{ props }">
             <v-btn icon v-bind="props" aria-label="User menu">
-              <v-icon>mdi-account</v-icon>
+              <v-avatar v-if="authStore.user" color="primary" size="small">
+                <span class="text-white">{{ getUserInitials }}</span>
+              </v-avatar>
+              <v-icon v-else>mdi-account</v-icon>
             </v-btn>
           </template>
           <v-list>
+            <v-list-item v-if="authStore.user">
+              <v-list-item-title>{{ authStore.user.username }}</v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip :color="getRoleColor" size="x-small" dark>
+                  {{ authStore.user.role }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
+            <v-divider />
             <v-list-item prepend-icon="mdi-account-circle" @click="goToUser">
               <v-list-item-title>User Profile</v-list-item-title>
             </v-list-item>
@@ -70,7 +82,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { authStatus, removeToken } from '@/utils/auth';
+import { useAuthStore } from '@/stores/authStore';
 import { navigationItems } from '@/config/navigationItems';
 
 // Emit toggle-drawer event for mobile menu
@@ -78,12 +90,27 @@ defineEmits(['toggle-drawer']);
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 
 /**
- * Reactive authentication status from globally reactive variable.
- * Updates automatically when token is set or removed.
+ * Get user initials for avatar
  */
-const isAuthenticated = computed(() => authStatus.value);
+const getUserInitials = computed(() => {
+  if (!authStore.user?.username) return '?';
+  return authStore.user.username.substring(0, 2).toUpperCase();
+});
+
+/**
+ * Get role badge color
+ */
+const getRoleColor = computed(() => {
+  const colors = {
+    admin: 'red',
+    curator: 'orange',
+    viewer: 'grey',
+  };
+  return colors[authStore.user?.role] || 'grey';
+});
 
 /**
  * Check if a route is currently active
@@ -107,10 +134,10 @@ const goToUser = () => {
 };
 
 /**
- * Log out user by removing token and redirecting to home
+ * Log out user and redirect to home
  */
-const handleLogout = () => {
-  removeToken();
+const handleLogout = async () => {
+  await authStore.logout();
   router.push('/');
 };
 </script>

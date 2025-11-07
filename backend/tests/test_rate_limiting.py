@@ -25,7 +25,7 @@ class MockRequest:
 
     def __init__(self, client_host: str = "127.0.0.1", forwarded_for: str = None):
         """Initialize mock request with client host and optional forwarded headers."""
-        self.client = type('obj', (object,), {'host': client_host})
+        self.client = type("obj", (object,), {"host": client_host})
         self.headers = {}
         if forwarded_for:
             self.headers["X-Forwarded-For"] = forwarded_for
@@ -41,17 +41,14 @@ class TestGetClientIP:
 
     def test_forwarded_for_single_ip(self):
         """Test X-Forwarded-For with single IP."""
-        request = MockRequest(
-            client_host="127.0.0.1",
-            forwarded_for="203.0.113.42"
-        )
+        request = MockRequest(client_host="127.0.0.1", forwarded_for="203.0.113.42")
         assert get_client_ip(request) == "203.0.113.42"
 
     def test_forwarded_for_multiple_ips(self):
         """Test X-Forwarded-For with multiple IPs (takes first)."""
         request = MockRequest(
             client_host="127.0.0.1",
-            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1"
+            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1",
         )
         assert get_client_ip(request) == "203.0.113.42"
 
@@ -67,27 +64,27 @@ class TestRateLimiting:
         """Test that requests within limit pass."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 9 requests (below limit of 10)
-        for i in range(9):
+        # Make 4 requests (below limit of 5)
+        for i in range(4):
             check_rate_limit(request)  # Should not raise
 
     def test_exactly_at_rate_limit(self):
-        """Test that 10th request (at limit) still passes."""
+        """Test that 5th request (at limit) still passes."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make exactly 10 requests (at limit)
-        for i in range(10):
+        # Make exactly 5 requests (at limit)
+        for i in range(5):
             check_rate_limit(request)  # Should not raise
 
     def test_exceed_rate_limit(self):
-        """Test that 11th request (exceeds limit) raises 429."""
+        """Test that 6th request (exceeds limit) raises 429."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 10 requests (at limit)
-        for i in range(10):
+        # Make 5 requests (at limit)
+        for i in range(5):
             check_rate_limit(request)
 
-        # 11th request should raise HTTPException with status 429
+        # 6th request should raise HTTPException with status 429
         with pytest.raises(HTTPException) as exc:
             check_rate_limit(request)
 
@@ -100,12 +97,12 @@ class TestRateLimiting:
         request1 = MockRequest(client_host="192.168.1.100")
         request2 = MockRequest(client_host="192.168.1.101")
 
-        # First IP makes 10 requests (at limit)
-        for i in range(10):
+        # First IP makes 5 requests (at limit)
+        for i in range(5):
             check_rate_limit(request1)
 
         # Second IP should still have full quota
-        for i in range(10):
+        for i in range(5):
             check_rate_limit(request2)  # Should not raise
 
         # First IP should be blocked
@@ -117,8 +114,8 @@ class TestRateLimiting:
         """Test that rate limit uses sliding window (old requests expire)."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 10 requests
-        for i in range(10):
+        # Make 5 requests
+        for i in range(5):
             check_rate_limit(request)
 
         # Manually set first request to be outside window
@@ -133,15 +130,15 @@ class TestRateLimiting:
         """Test that reset clears all rate limit counters."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 10 requests (at limit)
-        for i in range(10):
+        # Make 5 requests (at limit)
+        for i in range(5):
             check_rate_limit(request)
 
         # Reset counters
         reset_rate_limits()
 
         # Should be able to make requests again
-        for i in range(10):
+        for i in range(5):
             check_rate_limit(request)  # Should not raise
 
 
@@ -166,24 +163,24 @@ class TestRateLimitStatus:
         """Test status after making some requests."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 5 requests
-        for i in range(5):
+        # Make 3 requests
+        for i in range(3):
             check_rate_limit(request)
 
         status = get_rate_limit_status(request)
-        assert status["requests_made"] == 5
-        assert status["requests_remaining"] == 5
+        assert status["requests_made"] == 3
+        assert status["requests_remaining"] == 2
 
     def test_status_at_limit(self):
         """Test status when at rate limit."""
         request = MockRequest(client_host="192.168.1.100")
 
-        # Make 10 requests (at limit)
-        for i in range(10):
+        # Make 5 requests (at limit)
+        for i in range(5):
             check_rate_limit(request)
 
         status = get_rate_limit_status(request)
-        assert status["requests_made"] == 10
+        assert status["requests_made"] == 5
         assert status["requests_remaining"] == 0
 
 
@@ -199,7 +196,7 @@ class TestRateLimitErrorDetails:
         request = MockRequest(client_host="192.168.1.100")
 
         # Exceed limit
-        for i in range(10):
+        for i in range(5):
             check_rate_limit(request)
 
         with pytest.raises(HTTPException) as exc:
@@ -213,21 +210,21 @@ class TestRateLimitErrorDetails:
         request = MockRequest(client_host="192.168.1.100")
 
         # Exceed limit
-        for i in range(10):
+        for i in range(5):
             check_rate_limit(request)
 
         with pytest.raises(HTTPException) as exc:
             check_rate_limit(request)
 
         assert "current_count" in exc.value.detail
-        assert exc.value.detail["current_count"] == 10
+        assert exc.value.detail["current_count"] == 5
 
     def test_error_message_helpful(self):
         """Test that error message is user-friendly."""
         request = MockRequest(client_host="192.168.1.100")
 
         # Exceed limit
-        for i in range(10):
+        for i in range(5):
             check_rate_limit(request)
 
         with pytest.raises(HTTPException) as exc:

@@ -1,18 +1,99 @@
 <template>
-  <v-container>
-    <v-row justify="center">
-      <v-col cols="12" md="6">
-        <v-card class="pa-4">
-          <v-card-title class="text-h5"> Login </v-card-title>
+  <v-container class="fill-height">
+    <v-row justify="center" align="center">
+      <v-col cols="12" sm="8" md="6" lg="4">
+        <!-- Login Card -->
+        <v-card elevation="8" rounded="lg" class="pa-2">
+          <!-- Header -->
+          <v-card-title class="text-h4 font-weight-bold text-center py-6">
+            Welcome Back
+          </v-card-title>
+
+          <v-card-subtitle class="text-center pb-4">
+            Sign in to access the HNF1B Database
+          </v-card-subtitle>
+
           <v-card-text>
-            <v-form ref="loginForm" @submit.prevent="handleLogin">
-              <v-text-field v-model="username" label="Username" required />
-              <v-text-field v-model="password" label="Password" type="password" required />
-              <v-btn type="submit" color="teal" class="mt-4"> Login </v-btn>
-            </v-form>
-            <v-alert v-if="error" type="error" class="mt-4">
-              {{ error }}
+            <!-- Error Alert -->
+            <v-alert
+              v-if="authStore.error"
+              type="error"
+              variant="tonal"
+              closable
+              class="mb-4"
+              @click:close="authStore.error = null"
+            >
+              <div class="text-subtitle-2">{{ authStore.error }}</div>
+              <div class="text-caption mt-1">Please check your credentials and try again.</div>
             </v-alert>
+
+            <!-- Login Form -->
+            <v-form ref="loginForm" @submit.prevent="handleLogin">
+              <!-- Username Field -->
+              <v-text-field
+                v-model="username"
+                label="Username"
+                prepend-inner-icon="mdi-account"
+                variant="outlined"
+                density="comfortable"
+                :disabled="authStore.isLoading"
+                :rules="[rules.required]"
+                autocomplete="username"
+                autofocus
+                class="mb-2"
+              />
+
+              <!-- Password Field -->
+              <v-text-field
+                v-model="password"
+                label="Password"
+                prepend-inner-icon="mdi-lock"
+                :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+                :type="showPassword ? 'text' : 'password'"
+                variant="outlined"
+                density="comfortable"
+                :disabled="authStore.isLoading"
+                :rules="[rules.required]"
+                autocomplete="current-password"
+                class="mb-2"
+                @click:append-inner="showPassword = !showPassword"
+              />
+
+              <!-- Remember Me & Forgot Password -->
+              <div class="d-flex justify-space-between align-center mb-4">
+                <v-checkbox
+                  v-model="rememberMe"
+                  label="Remember me"
+                  density="compact"
+                  hide-details
+                  color="teal"
+                />
+                <v-btn
+                  variant="text"
+                  color="teal"
+                  size="small"
+                  class="text-none"
+                  @click="handleForgotPassword"
+                >
+                  Forgot password?
+                </v-btn>
+              </div>
+
+              <!-- Login Button -->
+              <v-btn
+                type="submit"
+                color="teal"
+                variant="elevated"
+                size="large"
+                block
+                :loading="authStore.isLoading"
+                :disabled="!username || !password"
+                class="text-none font-weight-bold"
+              >
+                <v-icon start>mdi-login</v-icon>
+                Sign In
+              </v-btn>
+            </v-form>
           </v-card-text>
         </v-card>
       </v-col>
@@ -20,52 +101,72 @@
   </v-container>
 </template>
 
-<script>
+<script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { login } from '@/api/auth';
-import { setToken } from '@/utils/auth';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/authStore';
 
-export default {
-  name: 'Login',
-  setup() {
-    const username = ref('');
-    const password = ref('');
-    const error = ref('');
-    const router = useRouter();
+const authStore = useAuthStore();
+const router = useRouter();
+const route = useRoute();
 
-    /**
-     * Handles the login process by calling the API and storing the token.
-     */
-    const handleLogin = async () => {
-      error.value = '';
-      try {
-        const response = await login(username.value, password.value);
-        if (response.data && response.data.access_token) {
-          setToken(response.data.access_token);
-          window.logService.info('User logged in successfully', {
-            username: username.value,
-          });
-          router.push({ name: 'User' });
-        } else {
-          error.value = 'Invalid response from server.';
-        }
-      } catch (err) {
-        window.logService.warn('Login attempt failed', {
-          error: err.message,
-          status: err.response?.status,
-          username: username.value,
-        });
-        error.value = 'Login failed. Please check your credentials.';
-      }
-    };
+const username = ref('');
+const password = ref('');
+const showPassword = ref(false);
+const rememberMe = ref(false);
 
-    return {
-      username,
-      password,
-      error,
-      handleLogin,
-    };
-  },
+// Validation rules
+const rules = {
+  required: (value) => !!value || 'This field is required',
 };
+
+/**
+ * Handles the login process using the Pinia auth store.
+ */
+const handleLogin = async () => {
+  try {
+    const success = await authStore.login({
+      username: username.value,
+      password: password.value,
+    });
+
+    if (success) {
+      // Save remember me preference
+      if (rememberMe.value) {
+        localStorage.setItem('remember_me', 'true');
+        localStorage.setItem('remembered_username', username.value);
+      } else {
+        localStorage.removeItem('remember_me');
+        localStorage.removeItem('remembered_username');
+      }
+
+      // Redirect to original destination or user profile page
+      const redirectPath = route.query.redirect || '/user';
+      router.push(redirectPath);
+    }
+  } catch (err) {
+    // Error is already handled by the auth store
+    window.logService.warn('Login failed', {
+      error: err.message,
+    });
+  }
+};
+
+/**
+ * Handles forgot password action.
+ */
+const handleForgotPassword = () => {
+  // TODO: Implement forgot password flow
+  window.logService.info('Forgot password clicked');
+  alert('Password reset functionality will be implemented in a future update.');
+};
+
+// Check if user should be remembered on mount
+if (localStorage.getItem('remember_me') === 'true') {
+  const rememberedUsername = localStorage.getItem('remembered_username');
+  if (rememberedUsername) {
+    username.value = rememberedUsername;
+    rememberMe.value = true;
+  }
+}
 </script>

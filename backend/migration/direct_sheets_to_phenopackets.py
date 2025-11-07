@@ -123,8 +123,12 @@ class DirectSheetsToPhenopackets:
             List of phenopacket dictionaries
         """
         # Ensure data has been loaded (must call load_data() first)
-        assert self.individuals_df is not None, "Must call load_data() before building phenopackets"
-        assert self.phenopacket_builder is not None, "Phenopacket builder not initialized"
+        assert self.individuals_df is not None, (
+            "Must call load_data() before building phenopackets"
+        )
+        assert self.phenopacket_builder is not None, (
+            "Phenopacket builder not initialized"
+        )
 
         # Normalize column names
         self.individuals_df.columns = [
@@ -184,13 +188,13 @@ class DirectSheetsToPhenopackets:
         logger.info("=" * 60)
         logger.info(f"Total phenopackets created: {total}")
         logger.info(
-            f"With phenotypic features: {with_phenotypes} ({with_phenotypes*100//total if total else 0}%)"
+            f"With phenotypic features: {with_phenotypes} ({with_phenotypes * 100 // total if total else 0}%)"
         )
         logger.info(
-            f"With genetic variants: {with_variants} ({with_variants*100//total if total else 0}%)"
+            f"With genetic variants: {with_variants} ({with_variants * 100 // total if total else 0}%)"
         )
         logger.info(
-            f"With disease diagnoses: {with_diseases} ({with_diseases*100//total if total else 0}%)"
+            f"With disease diagnoses: {with_diseases} ({with_diseases * 100 // total if total else 0}%)"
         )
         logger.info(f"Sex distribution: {sex_distribution}")
         logger.info("=" * 60)

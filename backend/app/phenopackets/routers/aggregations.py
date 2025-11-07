@@ -395,9 +395,7 @@ async def aggregate_publications(
                 else None
             ),
             "phenopacket_count": row.phenopacket_count,
-            "first_added": (
-                row.first_added.isoformat() if row.first_added else None
-            ),
+            "first_added": (row.first_added.isoformat() if row.first_added else None),
         }
         for row in rows
     ]
