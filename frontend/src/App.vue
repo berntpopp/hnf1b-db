@@ -1,6 +1,7 @@
 <template>
   <v-app>
-    <AppBar />
+    <AppBar @toggle-drawer="drawer = !drawer" />
+    <MobileDrawer v-model="drawer" />
     <v-main>
       <router-view />
     </v-main>
@@ -9,17 +10,13 @@
   </v-app>
 </template>
 
-<script>
+<script setup>
+import { ref } from 'vue';
 import AppBar from './components/AppBar.vue';
+import MobileDrawer from './components/MobileDrawer.vue';
 import FooterBar from './components/FooterBar.vue';
 import LogViewer from './components/LogViewer.vue';
 
-export default {
-  name: 'App',
-  components: {
-    AppBar,
-    FooterBar,
-    LogViewer,
-  },
-};
+// Mobile navigation drawer state
+const drawer = ref(false);
 </script>
