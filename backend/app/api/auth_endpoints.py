@@ -219,12 +219,8 @@ async def change_password(
 
     # Update password
     repo = UserRepository(db)
-    await repo.update(
-        current_user,
-        UserUpdate(
-            password=password_data.new_password,
-        ),
-    )
+    user_update = UserUpdate(password=password_data.new_password)  # type: ignore[call-arg]
+    await repo.update(current_user, user_update)
 
     await log_user_action(
         db=db,

@@ -1,5 +1,6 @@
 """JWT token creation and verification."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -27,6 +28,7 @@ def create_access_token(subject: str, role: str, permissions: list[str]) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "sub": subject,
+        "jti": str(uuid.uuid4()),  # Unique token ID (RFC 7519)
         "type": "access",
         "role": role,
         "permissions": permissions,
@@ -52,6 +54,7 @@ def create_refresh_token(subject: str) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "sub": subject,
+        "jti": str(uuid.uuid4()),  # Unique token ID (RFC 7519) ensures rotation
         "type": "refresh",
     }
 

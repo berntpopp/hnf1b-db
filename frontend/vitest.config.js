@@ -17,6 +17,21 @@ export default defineConfig({
     // happy-dom for Vue component testing (faster than jsdom)
     environment: 'happy-dom',
 
+    // Use forks pool in single-fork mode for WSL compatibility
+    pool: 'forks',
+
+    // Pool options for better performance and stability
+    poolOptions: {
+      forks: {
+        singleFork: true, // Single fork mode for compatibility
+        isolate: true, // Isolate tests for reliability
+      },
+    },
+
+    // Timeout configuration
+    testTimeout: 10000, // 10 seconds for individual tests
+    hookTimeout: 10000, // 10 seconds for hooks (beforeEach, afterEach)
+
     // Coverage configuration
     coverage: {
       provider: 'v8', // Native V8 coverage (faster than Istanbul)
