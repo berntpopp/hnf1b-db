@@ -10,7 +10,7 @@
     "id": "api-docs",
     "title": "API Documentation",
     "icon": "mdi-api",
-    "url": "http://localhost:8000/docs",
+    "url": "__API_DOCS_URL__",
     "enabled": true
   },
   {

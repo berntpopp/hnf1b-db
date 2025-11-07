@@ -45,10 +45,11 @@ const REDACTION_PATTERNS = {
     pattern: /Bearer\s+[\w.-]+/g,
     replacement: 'Bearer [TOKEN]',
   },
-  apiKey: {
-    pattern: /[A-Za-z0-9_-]{32,}/g,
-    replacement: '[API_KEY]',
-  },
+  // API key pattern commented out - too broad, causes false positives
+  // apiKey: {
+  //   pattern: /[A-Za-z0-9_-]{32,}/g,
+  //   replacement: '[API_KEY]',
+  // },
 };
 
 /**
@@ -83,7 +84,8 @@ export function sanitizeLogData(message, context = {}) {
 export function containsSensitiveData(data) {
   const stringified = JSON.stringify(data);
 
-  return Object.values(REDACTION_PATTERNS).some(({ pattern }) => pattern.test(stringified));
+  // Use .match() instead of .test() to avoid regex state issues with global flag
+  return Object.values(REDACTION_PATTERNS).some(({ pattern }) => stringified.match(pattern));
 }
 
 export default {

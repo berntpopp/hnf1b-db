@@ -48,7 +48,11 @@ class LogService {
     );
 
     const logEntry = {
-      id: Date.now() + Math.random(), // Unique ID
+      // Use crypto.randomUUID() if available (modern browsers), fallback to timestamp+random
+      id:
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2),
       level: level.label,
       levelValue: level.value,
       message: sanitizedMessage,

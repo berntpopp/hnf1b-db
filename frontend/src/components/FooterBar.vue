@@ -132,10 +132,21 @@ const refreshHealth = async () => {
 };
 
 const loadFooterConfig = async () => {
+  // Get API URL from environment variable, fallback to localhost for development
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v2';
+  const apiDocsUrl = apiBaseUrl.replace('/api/v2', '') + '/docs';
+
   try {
     const response = await fetch('/config/footerConfig.json');
     const config = await response.json();
-    footerLinks.value = config.filter((link) => link.enabled);
+
+    // Replace placeholders with actual URLs
+    footerLinks.value = config
+      .filter((link) => link.enabled)
+      .map((link) => ({
+        ...link,
+        url: link.url === '__API_DOCS_URL__' ? apiDocsUrl : link.url,
+      }));
 
     window.logService.info('Footer configuration loaded', {
       linksCount: footerLinks.value.length,
@@ -145,7 +156,7 @@ const loadFooterConfig = async () => {
       error: error.message,
       path: '/config/footerConfig.json',
     });
-    // Fallback to default links
+    // Fallback to default links with environment-aware API docs URL
     footerLinks.value = [
       {
         id: 'github',
@@ -157,7 +168,7 @@ const loadFooterConfig = async () => {
         id: 'api-docs',
         title: 'API Documentation',
         icon: 'mdi-api',
-        url: 'http://localhost:8000/docs',
+        url: apiDocsUrl,
       },
       {
         id: 'license',
