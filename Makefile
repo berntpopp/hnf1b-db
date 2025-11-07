@@ -1,5 +1,5 @@
 .PHONY: help install dev test lint format typecheck server clean hybrid-up hybrid-down \
-        dev-up dev-down dev-logs backend frontend status db-migrate db-upgrade db-reset \
+        dev-up dev-down dev-logs backend frontend status db-migrate db-upgrade db-reset db-init db-create-admin \
         phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry check reset clean-all
 
 # Detect docker compose command
@@ -32,6 +32,8 @@ help:  ## Show this help message
 	@echo "  make check           - Run all checks (lint + typecheck + test)"
 	@echo ""
 	@echo "🗄️ DATABASE:"
+	@echo "  make db-init         - Initialize database (migrations + admin user)"
+	@echo "  make db-create-admin - Create/update admin user"
 	@echo "  make db-migrate      - Create new migration"
 	@echo "  make db-upgrade      - Apply migrations"
 	@echo "  make db-reset        - Reset database"
@@ -129,6 +131,12 @@ db-upgrade:  ## Apply pending database migrations
 db-reset:  ## Reset database (drop and recreate all tables)
 	cd backend && uv run alembic downgrade base
 	cd backend && uv run alembic upgrade head
+
+db-init:  ## Initialize database (run migrations + create admin user)
+	cd backend && make db-init
+
+db-create-admin:  ## Create or update admin user
+	cd backend && make db-create-admin
 
 # Phenopackets Migration Commands (Primary method for data import)
 phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format

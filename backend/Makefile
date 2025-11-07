@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -60,6 +60,18 @@ db-upgrade:  ## Apply pending database migrations
 db-reset:  ## Reset database (drop and recreate all tables)
 	uv run alembic downgrade base
 	uv run alembic upgrade head
+
+db-init:  ## Initialize database (run migrations + create admin user)
+	@echo "🗄️  Initializing database..."
+	uv run alembic upgrade head
+	@echo ""
+	@echo "👤 Creating admin user..."
+	uv run python scripts/create_admin_user.py
+	@echo ""
+	@echo "✅ Database initialized successfully!"
+
+db-create-admin:  ## Create or update admin user
+	uv run python scripts/create_admin_user.py
 
 # Phenopackets Migration Commands (Primary method for data import)
 phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format

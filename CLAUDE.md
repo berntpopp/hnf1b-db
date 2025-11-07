@@ -427,6 +427,50 @@ steps:
 
 ---
 
+### User Management & Authentication
+
+**Initialize User System (First-Time Setup):**
+```bash
+# Create users table and initial admin user
+cd backend
+make db-create-admin
+
+# Or combined with migrations:
+make db-init  # Runs migrations + creates admin user
+```
+
+**Default Admin Credentials** (if not set in `.env`):
+- Username: `admin`
+- Email: `admin@hnf1b-db.local`
+- Password: `ChangeMe!Admin2025`
+
+**⚠️ SECURITY**: Change admin password immediately after first login!
+
+**Customize Admin Credentials:**
+```bash
+# Add to backend/.env BEFORE running db-create-admin:
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@hnf1b-db.local
+ADMIN_PASSWORD=ChangeMe!Admin2025
+
+# Then create/update admin:
+cd backend
+make db-create-admin
+```
+
+**Script Behavior:**
+- Idempotent: Safe to run multiple times
+- Updates existing admin if username/email matches
+- Resets password and ensures admin role/active status
+- Located at: `backend/scripts/create_admin_user.py`
+
+**Testing Note:**
+- 3 auth tests currently fail due to duplicate admin username conflicts
+- Tests need isolation fixes to run with existing admin user
+- Script itself is tested, linted, and type-checked ✅
+
+---
+
 ### Data Import (Phenopackets Direct Migration)
 ```bash
 # Import all data directly from Google Sheets to Phenopackets format
