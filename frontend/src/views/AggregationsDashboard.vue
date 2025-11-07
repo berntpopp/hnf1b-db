@@ -191,10 +191,28 @@ export default {
         params.count_mode = this.variantCountMode;
       }
 
+      window.logService.debug('Fetching aggregation data', {
+        category: this.selectedCategory,
+        aggregation: aggregation?.label,
+        funcName: funcName,
+        params: params,
+        supportsCountMode: aggregation?.supportsCountMode || false,
+      });
+
       if (API[funcName] && typeof API[funcName] === 'function') {
         API[funcName](params)
           .then((response) => {
-            console.log('Donut chart data:', response.data);
+            window.logService.info('Donut chart data loaded', {
+              aggregation: aggregation.title,
+              count: response.data?.length,
+            });
+
+            window.logService.debug('Transforming aggregation data for chart', {
+              rawDataCount: response.data?.length || 0,
+              totalCount: response.data?.reduce((sum, item) => sum + item.count, 0) || 0,
+              hasLimit: !!params.limit,
+              limit: params.limit,
+            });
 
             // Transform v2 API format to DonutChart format
             // v2 API: [{ label: "X", count: 10, percentage: 50 }, ...]
@@ -212,6 +230,12 @@ export default {
 
               // Sum up remaining items into "Others"
               const othersCount = remainingItems.reduce((sum, item) => sum + item.count, 0);
+
+              window.logService.debug('Applied client-side limit to data', {
+                originalCount: data.length,
+                limitedCount: topItems.length,
+                othersCount: othersCount,
+              });
 
               // Build grouped counts
               groupedCounts = topItems.map((item) => ({

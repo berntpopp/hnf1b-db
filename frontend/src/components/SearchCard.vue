@@ -115,6 +115,11 @@ export default {
      */
     function onAutocompleteChange(item) {
       if (item && item.collection && item.id) {
+        window.logService.info('Search autocomplete selection', {
+          collection: item.collection,
+          id: item.id,
+          query: typedText.value,
+        });
         navigateToDetail(item.collection, item.id);
       }
     }
@@ -141,6 +146,12 @@ export default {
     function searchAndNavigate() {
       const query = typedText.value.trim();
       if (!query) return;
+
+      window.logService.info('Navigating to search results', {
+        query: query,
+        suggestionCount: searchSuggestions.value.length,
+      });
+
       router.push({ name: 'SearchResults', query: { q: query } });
     }
 
@@ -159,12 +170,34 @@ export default {
         searchSuggestions.value = [];
         return;
       }
+
+      window.logService.debug('Autocomplete search triggered', {
+        query: newVal,
+        queryLength: newVal.length,
+        debounceDelay: '300ms',
+      });
+
       loading.value = true;
       try {
         const { data: searchData } = await search(newVal, null, true);
         searchSuggestions.value = formatSearchResults(searchData);
+
+        window.logService.debug('Autocomplete suggestions received', {
+          query: newVal,
+          totalSuggestions: searchSuggestions.value.length,
+          limitedTo: 10,
+          suggestionsByType: {
+            individuals: searchData.results?.individuals?.data?.length || 0,
+            variants: searchData.results?.variants?.data?.length || 0,
+            publications: searchData.results?.publications?.data?.length || 0,
+          },
+        });
       } catch (err) {
-        console.error('Search error:', err);
+        window.logService.error('Search autocomplete failed', {
+          error: err.message,
+          query: newVal,
+          status: err.response?.status,
+        });
       } finally {
         loading.value = false;
       }

@@ -201,12 +201,22 @@ export default {
         // - distinct_variants -> variants (UNIQUE variants, not total variant interpretations)
         // - distinct_hpo_terms -> total_reports (repurposed for HPO count)
         // - distinct_publications -> publications
+        window.logService.info('Summary statistics loaded', {
+          individuals: data.total_phenopackets || 0,
+          variants: data.distinct_variants || 0,
+          hpoTerms: data.distinct_hpo_terms || 0,
+          publications: data.distinct_publications || 0,
+        });
+
         animateCount('individuals', data.total_phenopackets || 0);
         animateCount('variants', data.distinct_variants || 0);
         animateCount('total_reports', data.distinct_hpo_terms || 0);
         animateCount('publications', data.distinct_publications || 0);
       } catch (error) {
-        console.error('Error fetching summary stats:', error);
+        window.logService.error('Failed to fetch summary statistics', {
+          error: error.message,
+          status: error.response?.status,
+        });
       }
     };
 
@@ -249,7 +259,16 @@ export default {
      * @returns {Promise<void>}
      */
     const fetchSNVVariants = async () => {
-      if (snvVariantsLoaded.value) return; // Already loaded
+      if (snvVariantsLoaded.value) {
+        window.logService.debug('SNV variants already loaded, skipping fetch', {
+          snvCount: snvVariants.value.length,
+        });
+        return; // Already loaded
+      }
+
+      window.logService.debug('Fetching SNV variants for visualization', {
+        pageSize: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
+      });
 
       try {
         // Fetch all variants to filter SNVs
@@ -264,8 +283,17 @@ export default {
         // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
         snvVariants.value = allVariants.value.filter((v) => !isCNV(v));
         snvVariantsLoaded.value = true;
+
+        window.logService.debug('SNV variants filtered', {
+          totalVariants: allVariants.value.length,
+          snvVariants: snvVariants.value.length,
+          cnvVariants: allVariants.value.length - snvVariants.value.length,
+        });
       } catch (error) {
-        console.error('Error fetching SNV variants:', error);
+        window.logService.error('Failed to fetch SNV variants for visualization', {
+          error: error.message,
+          status: error.response?.status,
+        });
       }
     };
 
@@ -296,7 +324,10 @@ export default {
         cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
         cnvVariantsLoaded.value = true;
       } catch (error) {
-        console.error('Error fetching CNV variants:', error);
+        window.logService.error('Failed to fetch CNV variants for visualization', {
+          error: error.message,
+          status: error.response?.status,
+        });
       }
     };
 
@@ -307,6 +338,13 @@ export default {
      * @param {string} tab - The active tab value ('protein', 'gene', or 'region')
      */
     const handleTabChange = (tab) => {
+      window.logService.debug('Visualization tab changed', {
+        fromTab: activeTab.value,
+        toTab: tab,
+        snvVariantsLoaded: snvVariantsLoaded.value,
+        cnvVariantsLoaded: cnvVariantsLoaded.value,
+      });
+
       if (tab === 'protein' || tab === 'gene') {
         fetchSNVVariants(); // Protein and gene views use SNVs
       } else if (tab === 'region') {

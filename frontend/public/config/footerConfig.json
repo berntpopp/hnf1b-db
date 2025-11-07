@@ -1,0 +1,23 @@
+[
+  {
+    "id": "github",
+    "title": "GitHub Repository",
+    "icon": "mdi-github",
+    "url": "https://github.com/berntpopp/hnf1b-db",
+    "enabled": true
+  },
+  {
+    "id": "api-docs",
+    "title": "API Documentation",
+    "icon": "mdi-api",
+    "url": "__API_DOCS_URL__",
+    "enabled": true
+  },
+  {
+    "id": "license",
+    "title": "CC BY 4.0 License",
+    "icon": "mdi-creative-commons",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "enabled": true
+  }
+]

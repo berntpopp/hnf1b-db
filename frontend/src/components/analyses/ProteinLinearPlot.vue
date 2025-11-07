@@ -76,7 +76,10 @@ export default {
         // Use the "small_variants" array from the response.
         this.variants = variantsRes.data.small_variants;
       } catch (error) {
-        console.error('Error loading protein or variant data:', error);
+        window.logService.error('Failed to load protein/variant data for plot', {
+          error: error.message,
+          status: error.response?.status,
+        });
       }
     },
     // Helper: if protein_position is a range (e.g., "108-110"), return its average.

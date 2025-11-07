@@ -43,12 +43,19 @@ export default {
         const response = await login(username.value, password.value);
         if (response.data && response.data.access_token) {
           setToken(response.data.access_token);
+          window.logService.info('User logged in successfully', {
+            username: username.value,
+          });
           router.push({ name: 'User' });
         } else {
           error.value = 'Invalid response from server.';
         }
       } catch (err) {
-        console.error('Login error:', err);
+        window.logService.warn('Login attempt failed', {
+          error: err.message,
+          status: err.response?.status,
+          username: username.value,
+        });
         error.value = 'Login failed. Please check your credentials.';
       }
     };

@@ -310,7 +310,10 @@ export const getHypomagnesemiaCases = () => apiClient.get('/clinical/hypomagnese
  * @private
  */
 function deprecatedPaginationWrapper(warningMsg, newFn, params) {
-  console.warn(warningMsg);
+  window.logService.warn('Deprecated API function called', {
+    message: warningMsg,
+    params: params,
+  });
   const { page = 1, page_size = 10, ...rest } = params || {};
   const { skip, limit } = pageToSkipLimit(page, page_size);
   return newFn({ skip, limit, ...rest });
@@ -321,7 +324,10 @@ function deprecatedPaginationWrapper(warningMsg, newFn, params) {
  * @private
  */
 function deprecatedWrapper(warningMsg, newFn, ...args) {
-  console.warn(warningMsg);
+  window.logService.warn('Deprecated API function called', {
+    message: warningMsg,
+    argsCount: args.length,
+  });
   return newFn(...args);
 }
 

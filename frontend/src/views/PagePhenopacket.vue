@@ -142,12 +142,37 @@ export default {
       this.loading = true;
       this.error = null;
 
+      const phenopacketId = this.$route.params.phenopacket_id;
+      window.logService.debug('Loading phenopacket detail page', {
+        phenopacketId: phenopacketId,
+        route: this.$route.path,
+      });
+
       try {
-        const phenopacketId = this.$route.params.phenopacket_id;
         const response = await getPhenopacket(phenopacketId);
         this.phenopacket = response.data;
+
+        window.logService.debug('Phenopacket data received', {
+          phenopacketId: phenopacketId,
+          dataStructure: Object.keys(this.phenopacket),
+          subjectId: this.phenopacket.subject?.id,
+          featuresCount: this.phenopacket.phenotypicFeatures?.length || 0,
+          interpretationsCount: this.phenopacket.interpretations?.length || 0,
+          measurementsCount: this.phenopacket.measurements?.length || 0,
+        });
+
+        window.logService.info('Phenopacket loaded successfully', {
+          phenopacketId: phenopacketId,
+          hasFeatures: this.hasPhenotypicFeatures,
+          hasInterpretations: this.hasInterpretations,
+          hasMeasurements: this.hasMeasurements,
+        });
       } catch (error) {
-        console.error('Error fetching phenopacket:', error);
+        window.logService.error('Failed to fetch phenopacket', {
+          error: error.message,
+          phenopacketId: this.$route.params.phenopacket_id,
+          status: error.response?.status,
+        });
         this.error =
           error.response?.status === 404
             ? `Phenopacket '${this.$route.params.phenopacket_id}' not found.`
@@ -161,6 +186,20 @@ export default {
       if (!this.phenopacket) return;
 
       const dataStr = JSON.stringify(this.phenopacket, null, 2);
+      const fileSizeKB = (new Blob([dataStr]).size / 1024).toFixed(2);
+
+      window.logService.debug('Preparing phenopacket JSON download', {
+        phenopacketId: this.phenopacket.id,
+        fileName: `${this.phenopacket.id}.json`,
+        fileSizeKB: fileSizeKB,
+        dataStructure: Object.keys(this.phenopacket),
+      });
+
+      window.logService.info('Phenopacket JSON downloaded', {
+        phenopacketId: this.phenopacket.id,
+        fileName: `${this.phenopacket.id}.json`,
+      });
+
       const blob = new Blob([dataStr], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

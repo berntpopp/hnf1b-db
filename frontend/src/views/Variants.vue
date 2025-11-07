@@ -518,6 +518,18 @@ export default {
   methods: {
     async fetchVariants() {
       this.loading = true;
+      window.logService.debug('Starting variant fetch', {
+        page: this.options.page,
+        itemsPerPage: this.options.itemsPerPage,
+        activeFilters: {
+          searchQuery: this.searchQuery,
+          filterType: this.filterType,
+          filterClassification: this.filterClassification,
+          filterConsequence: this.filterConsequence,
+        },
+        sortBy: this.options.sortBy,
+      });
+
       try {
         const { page, itemsPerPage, sortBy } = this.options;
         let sortParam = '';
@@ -562,13 +574,28 @@ export default {
 
         const response = await getVariants(requestParams);
 
+        window.logService.info('Variants fetched successfully', {
+          count: response.data?.length || 0,
+          total: response.meta?.total || 0,
+          page,
+          hasFilters: this.hasActiveFilters,
+        });
+
         // Unpack the response
         let variants = response.data;
 
         // Apply client-side priority sorting if active
         if (this.variantTypeSortPriority) {
+          window.logService.debug('Applying variant type priority sort', {
+            priorityType: this.variantTypeSortPriority,
+            variantsBeforeSort: variants.length,
+          });
           variants = this.sortByVariantTypePriority(variants, this.variantTypeSortPriority);
         } else if (this.classificationSortPriority) {
+          window.logService.debug('Applying classification priority sort', {
+            priorityClassification: this.classificationSortPriority,
+            variantsBeforeSort: variants.length,
+          });
           variants = this.sortByClassificationPriority(variants, this.classificationSortPriority);
         }
 
@@ -589,13 +616,21 @@ export default {
           this.filteredCount = response.meta.total || 0;
         }
       } catch (error) {
-        console.error('Error fetching variants:', error);
+        window.logService.error('Failed to fetch variants', {
+          error: error.message,
+          status: error.response?.status,
+          requestParams: {
+            page: this.options.page,
+            itemsPerPage: this.options.itemsPerPage,
+            hasFilters: this.hasActiveFilters,
+          },
+        });
         // Show error message to user
         if (error.response?.status === 429) {
           // Rate limit error
-          console.warn('Rate limit exceeded. Please try again later.');
-        } else {
-          console.error('Failed to load variants. Please try again.');
+          window.logService.warn('Rate limit exceeded on variants endpoint', {
+            endpoint: '/phenopackets/aggregate/all-variants',
+          });
         }
       } finally {
         this.loading = false;
@@ -609,6 +644,15 @@ export default {
     },
 
     applyFilters() {
+      window.logService.debug('Filters applied', {
+        activeFilters: {
+          searchQuery: this.searchQuery,
+          filterType: this.filterType,
+          filterClassification: this.filterClassification,
+          filterConsequence: this.filterConsequence,
+        },
+        resetToPageOne: true,
+      });
       // Reset to page 1 when applying filters
       this.options.page = 1;
       this.fetchVariants();
@@ -670,6 +714,18 @@ export default {
     getVariantTypeColor,
 
     onOptionsUpdate(newOptions) {
+      window.logService.debug('Table options updated', {
+        oldOptions: {
+          page: this.options.page,
+          itemsPerPage: this.options.itemsPerPage,
+          sortBy: this.options.sortBy,
+        },
+        newOptions: {
+          page: newOptions.page,
+          itemsPerPage: newOptions.itemsPerPage,
+          sortBy: newOptions.sortBy,
+        },
+      });
       this.options = { ...newOptions };
     },
 
@@ -765,6 +821,10 @@ export default {
     handleRowClick(event, row) {
       // Navigate to variant detail page using variant_id
       if (row.item && row.item.variant_id) {
+        window.logService.info('Navigating to variant detail', {
+          variantId: row.item.variant_id,
+          simpleId: row.item.simple_id,
+        });
         this.$router.push(`/variants/${row.item.variant_id}`);
       }
     },

@@ -273,7 +273,11 @@ export default {
           };
         } catch (pubmedError) {
           // Fallback to aggregation endpoint if PubMed fetch fails
-          console.warn('PubMed metadata fetch failed, falling back to aggregation:', pubmedError);
+          window.logService.warn('PubMed metadata fetch failed, using fallback', {
+            pmid: this.pmid,
+            error: pubmedError.message,
+            fallback: 'getPublicationsAggregation',
+          });
           const response = await getPublicationsAggregation();
           const publications = response.data;
           this.publication = publications.find((pub) => pub.pmid === this.pmid);
@@ -297,8 +301,19 @@ export default {
         this.phenopackets = phenopacketsResponse.data.data;
         this.phenopacketsTotal = phenopacketsResponse.data.total;
         this.phenopacketsLoading = false;
+
+        window.logService.info('Publication data loaded successfully', {
+          pmid: this.pmid,
+          phenopacketCount: this.phenopacketsTotal,
+          hasMetadata: !!this.publication.title,
+        });
       } catch (e) {
-        console.error('Error loading publication data:', e);
+        window.logService.error('Failed to load publication data', {
+          error: e.message,
+          pmid: this.pmid,
+          status: e.response?.status,
+          detail: e.response?.data?.detail,
+        });
         this.error = `Failed to load publication data: ${e.response?.data?.detail || e.message}`;
         this.loading = false;
         this.phenopacketsLoading = false;

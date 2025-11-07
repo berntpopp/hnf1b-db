@@ -192,6 +192,12 @@ export default {
   methods: {
     async fetchPhenopackets() {
       this.loading = true;
+      window.logService.debug('Starting phenopackets fetch', {
+        currentPage: this.currentPage,
+        itemsPerPage: this.options.itemsPerPage,
+        sortBy: this.options.sortBy,
+      });
+
       try {
         const { itemsPerPage, sortBy } = this.options;
 
@@ -215,6 +221,18 @@ export default {
         // Transform response data
         this.phenopackets = response.data.map((pp) => this.transformPhenopacket(pp));
 
+        window.logService.debug('Phenopackets data transformation complete', {
+          rawDataCount: response.data.length,
+          transformedCount: this.phenopackets.length,
+          sampleStructure: this.phenopackets.length > 0 ? Object.keys(this.phenopackets[0]) : [],
+        });
+
+        window.logService.info('Phenopackets fetched successfully', {
+          count: response.data.length,
+          page: this.currentPage,
+          itemsPerPage,
+        });
+
         // Update total count
         // Note: Backend doesn't return total count yet, so we estimate
         // If we got fewer results than requested, we're on the last page
@@ -225,7 +243,11 @@ export default {
           this.totalItems = Math.max(this.totalItems, skip + limit + 1);
         }
       } catch (error) {
-        console.error('Error fetching phenopackets:', error);
+        window.logService.error('Failed to fetch phenopackets', {
+          error: error.message,
+          status: error.response?.status,
+          pagination: { page: this.currentPage, itemsPerPage: this.options.itemsPerPage },
+        });
         this.phenopackets = [];
         this.totalItems = 0;
       } finally {
@@ -272,12 +294,20 @@ export default {
     },
 
     goToFirstPage() {
+      window.logService.debug('Pagination: navigating to first page', {
+        fromPage: this.currentPage,
+        toPage: 1,
+      });
       this.currentPage = 1;
       this.fetchPhenopackets();
     },
 
     goToPreviousPage() {
       if (this.currentPage > 1) {
+        window.logService.debug('Pagination: navigating to previous page', {
+          fromPage: this.currentPage,
+          toPage: this.currentPage - 1,
+        });
         this.currentPage--;
         this.fetchPhenopackets();
       }
@@ -285,12 +315,20 @@ export default {
 
     goToNextPage() {
       if (this.currentPage < this.totalPages) {
+        window.logService.debug('Pagination: navigating to next page', {
+          fromPage: this.currentPage,
+          toPage: this.currentPage + 1,
+        });
         this.currentPage++;
         this.fetchPhenopackets();
       }
     },
 
     goToLastPage() {
+      window.logService.debug('Pagination: navigating to last page', {
+        fromPage: this.currentPage,
+        toPage: this.totalPages,
+      });
       this.currentPage = this.totalPages;
       this.fetchPhenopackets();
     },
@@ -327,6 +365,10 @@ export default {
 
     handleRowClick(event, { item }) {
       // Navigate to phenopacket detail page
+      window.logService.info('Navigating to phenopacket detail', {
+        phenopacketId: item.phenopacket_id,
+        subjectId: item.subject_id,
+      });
       this.$router.push(`/phenopackets/${item.phenopacket_id}`);
     },
   },

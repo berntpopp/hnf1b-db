@@ -180,7 +180,11 @@ export default {
         this.totalItems = response.meta.total || 0;
         this.totalPages = response.meta.total_pages || 0;
       } catch (error) {
-        console.error('Error fetching individuals:', error);
+        window.logService.error('Failed to fetch individuals (deprecated endpoint)', {
+          error: error.message,
+          status: error.response?.status,
+          pagination: { page: this.options.page, itemsPerPage: this.options.itemsPerPage },
+        });
       } finally {
         this.loading = false;
       }

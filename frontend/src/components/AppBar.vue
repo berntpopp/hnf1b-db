@@ -1,116 +1,127 @@
 <template>
-  <v-app-bar app color="teal" dark>
-    <v-container fluid>
-      <v-row align="center" justify="space-between" no-gutters>
-        <!-- Left Section: Logo -->
-        <v-col>
-          <v-img
-            src="/HNF1B-db_logo.webp"
-            class="app-logo ml-auto"
-            contain
-            max-height="48"
-            max-width="184"
-            @click="navigateHome"
-          />
-        </v-col>
+  <v-app-bar app color="teal" dark elevation="2">
+    <v-container fluid class="d-flex align-center px-4">
+      <!-- Mobile: Hamburger Menu (visible < 960px) -->
+      <v-app-bar-nav-icon
+        class="d-md-none mr-2"
+        aria-label="Open navigation menu"
+        @click="$emit('toggle-drawer')"
+      />
 
-        <!-- Middle Section: Navigation Links with Dividers -->
-        <v-col class="d-flex align-center px-10">
-          <v-divider class="border-opacity-100" vertical />
-          <v-toolbar-items>
-            <v-btn text to="/phenopackets"> Phenopackets </v-btn>
-            <v-btn text to="/publications"> Publications </v-btn>
-            <v-btn text to="/variants"> Variants </v-btn>
-            <v-btn text to="/aggregations"> Aggregations </v-btn>
-          </v-toolbar-items>
-          <v-divider class="border-opacity-100" vertical />
-        </v-col>
+      <!-- Logo (all screen sizes) -->
+      <v-toolbar-title class="mr-4">
+        <v-img
+          src="/HNF1B-db_logo.svg"
+          alt="HNF1B Database Logo"
+          class="app-logo"
+          contain
+          max-height="48"
+          max-width="184"
+          @click="navigateHome"
+        />
+      </v-toolbar-title>
 
-        <!-- Right Section: Login Controls -->
-        <v-col>
-          <div v-if="isAuthenticated">
-            <v-menu v-model="menu" offset-y>
-              <template #activator="{ props }">
-                <v-btn icon v-bind="props">
-                  <v-icon>mdi-account</v-icon>
-                </v-btn>
-              </template>
-              <v-list>
-                <v-list-item @click="goToUser">
-                  <v-list-item-title>User Profile</v-list-item-title>
-                </v-list-item>
-                <v-list-item @click="handleLogout">
-                  <v-list-item-title>Logout</v-list-item-title>
-                </v-list-item>
-              </v-list>
-            </v-menu>
-          </div>
-          <div v-else>
-            <v-btn icon to="/login">
-              <v-icon>mdi-login</v-icon>
+      <v-spacer />
+
+      <!-- Desktop: Navigation Links (visible >= 960px) -->
+      <div class="d-none d-md-flex align-center">
+        <v-btn
+          v-for="item in navigationItems"
+          :key="item.route"
+          :to="item.route"
+          :prepend-icon="item.icon"
+          variant="text"
+          :class="{ 'v-btn--active': isActiveRoute(item.route) }"
+          :aria-label="`Navigate to ${item.label}`"
+        >
+          {{ item.label }}
+        </v-btn>
+      </div>
+
+      <v-spacer />
+
+      <!-- User Menu (all screen sizes) -->
+      <div v-if="isAuthenticated" class="ml-4">
+        <v-menu location="bottom">
+          <template #activator="{ props }">
+            <v-btn icon v-bind="props" aria-label="User menu">
+              <v-icon>mdi-account</v-icon>
             </v-btn>
-          </div>
-        </v-col>
-      </v-row>
+          </template>
+          <v-list>
+            <v-list-item prepend-icon="mdi-account-circle" @click="goToUser">
+              <v-list-item-title>User Profile</v-list-item-title>
+            </v-list-item>
+            <v-list-item prepend-icon="mdi-logout" @click="handleLogout">
+              <v-list-item-title>Logout</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+      </div>
+      <div v-else class="ml-4">
+        <v-btn icon to="/login" aria-label="Login">
+          <v-icon>mdi-login</v-icon>
+        </v-btn>
+      </div>
     </v-container>
   </v-app-bar>
 </template>
 
-<script>
-import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+<script setup>
+import { computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { authStatus, removeToken } from '@/utils/auth';
+import { navigationItems } from '@/config/navigationItems';
 
-export default {
-  name: 'AppBar',
-  setup() {
-    const router = useRouter();
-    const menu = ref(false);
+// Emit toggle-drawer event for mobile menu
+defineEmits(['toggle-drawer']);
 
-    /**
-     * Reactive authentication status from a globally reactive variable.
-     * This updates automatically when the token is set or removed.
-     */
-    const isAuthenticated = computed(() => authStatus.value);
+const router = useRouter();
+const route = useRoute();
 
-    /**
-     * Navigates to the home page.
-     */
-    const navigateHome = () => {
-      router.push('/');
-    };
+/**
+ * Reactive authentication status from globally reactive variable.
+ * Updates automatically when token is set or removed.
+ */
+const isAuthenticated = computed(() => authStatus.value);
 
-    /**
-     * Navigates to the user profile and closes the menu.
-     */
-    const goToUser = () => {
-      menu.value = false;
-      router.push({ name: 'User' });
-    };
+/**
+ * Check if a route is currently active
+ */
+const isActiveRoute = (routePath) => {
+  return route.path === routePath;
+};
 
-    /**
-     * Logs out the user by removing the token,
-     * closing the menu, and redirecting to the home page.
-     */
-    const handleLogout = () => {
-      menu.value = false;
-      removeToken();
-      router.push('/');
-    };
+/**
+ * Navigate to home page
+ */
+const navigateHome = () => {
+  router.push('/');
+};
 
-    return {
-      navigateHome,
-      isAuthenticated,
-      menu,
-      goToUser,
-      handleLogout,
-    };
-  },
+/**
+ * Navigate to user profile
+ */
+const goToUser = () => {
+  router.push({ name: 'User' });
+};
+
+/**
+ * Log out user by removing token and redirecting to home
+ */
+const handleLogout = () => {
+  removeToken();
+  router.push('/');
 };
 </script>
 
 <style scoped>
 .app-logo {
   cursor: pointer;
+}
+
+/* Active route indicator */
+.v-btn--active {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 </style>
