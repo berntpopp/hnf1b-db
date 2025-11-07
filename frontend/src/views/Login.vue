@@ -6,12 +6,31 @@
           <v-card-title class="text-h5"> Login </v-card-title>
           <v-card-text>
             <v-form ref="loginForm" @submit.prevent="handleLogin">
-              <v-text-field v-model="username" label="Username" required />
-              <v-text-field v-model="password" label="Password" type="password" required />
-              <v-btn type="submit" color="teal" class="mt-4"> Login </v-btn>
+              <v-text-field
+                v-model="username"
+                label="Username"
+                :disabled="authStore.isLoading"
+                required
+              />
+              <v-text-field
+                v-model="password"
+                label="Password"
+                type="password"
+                :disabled="authStore.isLoading"
+                required
+              />
+              <v-btn
+                type="submit"
+                color="teal"
+                class="mt-4"
+                :loading="authStore.isLoading"
+                :disabled="!username || !password"
+              >
+                Login
+              </v-btn>
             </v-form>
-            <v-alert v-if="error" type="error" class="mt-4">
-              {{ error }}
+            <v-alert v-if="authStore.error" type="error" class="mt-4">
+              {{ authStore.error }}
             </v-alert>
           </v-card-text>
         </v-card>
@@ -20,52 +39,38 @@
   </v-container>
 </template>
 
-<script>
+<script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { login } from '@/api/auth';
-import { setToken } from '@/utils/auth';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/authStore';
 
-export default {
-  name: 'Login',
-  setup() {
-    const username = ref('');
-    const password = ref('');
-    const error = ref('');
-    const router = useRouter();
+const authStore = useAuthStore();
+const router = useRouter();
+const route = useRoute();
 
-    /**
-     * Handles the login process by calling the API and storing the token.
-     */
-    const handleLogin = async () => {
-      error.value = '';
-      try {
-        const response = await login(username.value, password.value);
-        if (response.data && response.data.access_token) {
-          setToken(response.data.access_token);
-          window.logService.info('User logged in successfully', {
-            username: username.value,
-          });
-          router.push({ name: 'User' });
-        } else {
-          error.value = 'Invalid response from server.';
-        }
-      } catch (err) {
-        window.logService.warn('Login attempt failed', {
-          error: err.message,
-          status: err.response?.status,
-          username: username.value,
-        });
-        error.value = 'Login failed. Please check your credentials.';
-      }
-    };
+const username = ref('');
+const password = ref('');
 
-    return {
-      username,
-      password,
-      error,
-      handleLogin,
-    };
-  },
+/**
+ * Handles the login process using the Pinia auth store.
+ */
+const handleLogin = async () => {
+  try {
+    const success = await authStore.login({
+      username: username.value,
+      password: password.value,
+    });
+
+    if (success) {
+      // Redirect to original destination or user profile page
+      const redirectPath = route.query.redirect || '/user';
+      router.push(redirectPath);
+    }
+  } catch (err) {
+    // Error is already handled by the auth store
+    window.logService.warn('Login failed', {
+      error: err.message,
+    });
+  }
 };
 </script>
