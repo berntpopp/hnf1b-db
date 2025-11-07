@@ -301,34 +301,6 @@
         </v-chip>
       </template>
 
-      <!-- Custom header for Variant Type with cycle sort -->
-      <template #header.variant_type="{ column }">
-        <div
-          class="d-flex align-center"
-          style="cursor: pointer; user-select: none"
-          @click="cycleVariantTypeSort"
-        >
-          <span>{{ column.title }}</span>
-          <v-chip v-if="variantTypeSortPriority" size="x-small" color="primary" class="ml-1">
-            {{ variantTypeSortPriority }}
-          </v-chip>
-        </div>
-      </template>
-
-      <!-- Custom header for Classification with cycle sort -->
-      <template #header.classificationVerdict="{ column }">
-        <div
-          class="d-flex align-center"
-          style="cursor: pointer; user-select: none"
-          @click="cycleClassificationSort"
-        >
-          <span>{{ column.title }}</span>
-          <v-chip v-if="classificationSortPriority" size="x-small" color="primary" class="ml-1">
-            {{ classificationSortPriority }}
-          </v-chip>
-        </div>
-      </template>
-
       <template #no-data>
         <v-empty-state
           v-if="hasActiveFilters"
@@ -352,7 +324,7 @@ import { getVariants } from '@/api';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
-import { API_CONFIG } from '@/config/app';
+import { buildSortParameter, buildPaginationParameters } from '@/utils/pagination';
 
 export default {
   name: 'Variants',
@@ -385,11 +357,6 @@ export default {
         'BENIGN',
       ],
 
-      // Cycle sorting state
-      variantTypeCycleIndex: -1, // -1 means no cycle sort active
-      classificationCycleIndex: -1, // -1 means no cycle sort active
-      variantTypeSortPriority: null, // Selected type to show on top
-      classificationSortPriority: null, // Selected classification to show on top
       consequences: [
         'Frameshift',
         'Nonsense',
@@ -432,7 +399,7 @@ export default {
         {
           title: 'Variant Type',
           value: 'variant_type',
-          sortable: true,
+          sortable: false, // Not a typical sort field
           width: '130px',
           headerProps: {
             class: 'font-weight-bold',
@@ -441,7 +408,7 @@ export default {
         {
           title: 'HG38',
           value: 'hg38',
-          sortable: true,
+          sortable: false, // Not a sortable field
           width: '280px',
           headerProps: {
             class: 'font-weight-bold',
@@ -545,29 +512,25 @@ export default {
 
       try {
         const { page, itemsPerPage, sortBy } = this.options;
-        let sortParam = '';
-        if (Array.isArray(sortBy) && sortBy.length > 0) {
-          // Expect sortBy[0] in the form: { key: 'fieldName', order: 'asc' } or { key: 'fieldName', order: 'desc' }
-          const { key, order } = sortBy[0];
-          sortParam = (order === 'desc' ? '-' : '') + key;
-        }
 
-        // Build request params with search and filters
-        const requestParams = {
-          sort: sortParam,
+        // Map frontend column keys to backend sort fields
+        const sortFieldMap = {
+          simple_id: 'variant_id',
+          transcript: 'transcript',
+          protein: 'protein',
+          classificationVerdict: 'classification',
+          individualCount: 'individual_count',
         };
 
-        // When priority sorting is active, fetch ALL variants to sort them properly across pages
-        // ⚠️ WARNING: This assumes database has fewer variants than MAX_VARIANTS_FOR_PRIORITY_SORT
-        // If database grows beyond this limit, priority sorting will only work on first N variants
-        // See @/config/app.js API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT for details and solutions
-        if (this.variantTypeSortPriority || this.classificationSortPriority) {
-          requestParams.page = 1;
-          requestParams.page_size = API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT;
-        } else {
-          requestParams.page = page;
-          requestParams.page_size = itemsPerPage;
-        }
+        // Build sort and pagination parameters using utility functions
+        const sortParam = buildSortParameter(sortBy, sortFieldMap);
+        const paginationParams = buildPaginationParameters(page, itemsPerPage);
+
+        // Build request params with pagination, search, and filters
+        const requestParams = {
+          ...paginationParams,
+          ...(sortParam && { sort: sortParam }),
+        };
 
         // Add search query if present
         if (this.searchQuery) {
@@ -594,40 +557,11 @@ export default {
           hasFilters: this.hasActiveFilters,
         });
 
-        // Unpack the response
-        let variants = response.data;
-
-        // Apply client-side priority sorting if active
-        if (this.variantTypeSortPriority) {
-          window.logService.debug('Applying variant type priority sort', {
-            priorityType: this.variantTypeSortPriority,
-            variantsBeforeSort: variants.length,
-          });
-          variants = this.sortByVariantTypePriority(variants, this.variantTypeSortPriority);
-        } else if (this.classificationSortPriority) {
-          window.logService.debug('Applying classification priority sort', {
-            priorityClassification: this.classificationSortPriority,
-            variantsBeforeSort: variants.length,
-          });
-          variants = this.sortByClassificationPriority(variants, this.classificationSortPriority);
-        }
-
-        // Handle client-side pagination when priority sorting is active
-        if (this.variantTypeSortPriority || this.classificationSortPriority) {
-          this.totalItems = variants.length;
-          this.totalPages = Math.ceil(variants.length / itemsPerPage);
-
-          // Apply pagination client-side
-          const start = (page - 1) * itemsPerPage;
-          const end = start + itemsPerPage;
-          this.variants = variants.slice(start, end);
-          this.filteredCount = variants.length;
-        } else {
-          this.variants = variants;
-          this.totalItems = response.meta.total || 0;
-          this.totalPages = response.meta.total_pages || 0;
-          this.filteredCount = response.meta.total || 0;
-        }
+        // Set variants from response
+        this.variants = response.data;
+        this.totalItems = response.meta.total || 0;
+        this.totalPages = response.meta.total_pages || 0;
+        this.filteredCount = response.meta.total || 0;
       } catch (error) {
         window.logService.error('Failed to fetch variants', {
           error: error.message,
@@ -751,73 +685,9 @@ export default {
       this.options = { ...newOptions };
     },
 
-    // Disable client-side sorting
+    // Disable client-side sorting (use backend sorting instead)
     customSort(items) {
       return items;
-    },
-
-    // Cycle through variant types on header click (sorts with selected type on top)
-    cycleVariantTypeSort() {
-      // Cycle to next variant type
-      this.variantTypeCycleIndex = (this.variantTypeCycleIndex + 1) % this.variantTypes.length;
-      const selectedType = this.variantTypes[this.variantTypeCycleIndex];
-
-      // Apply custom sorting: selected type first, then others
-      // Create custom sort parameter that backend can handle
-      this.options.sortBy = [
-        { key: 'variant_type_priority', order: 'asc', priority: selectedType },
-      ];
-
-      // Store the priority type for custom sorting
-      this.variantTypeSortPriority = selectedType;
-      this.fetchVariants();
-    },
-
-    // Cycle through classifications on header click (sorts with selected classification on top)
-    cycleClassificationSort() {
-      // Cycle to next classification
-      this.classificationCycleIndex =
-        (this.classificationCycleIndex + 1) % this.classifications.length;
-      const selectedClassification = this.classifications[this.classificationCycleIndex];
-
-      // Apply custom sorting: selected classification first, then others
-      this.options.sortBy = [
-        { key: 'classification_priority', order: 'asc', priority: selectedClassification },
-      ];
-
-      // Store the priority classification for custom sorting
-      this.classificationSortPriority = selectedClassification;
-      this.fetchVariants();
-    },
-
-    // Sort variants with priority type on top
-    sortByVariantTypePriority(variants, priorityType) {
-      return [...variants].sort((a, b) => {
-        const aType = this.getVariantType(a);
-        const bType = this.getVariantType(b);
-
-        // Priority type comes first
-        if (aType === priorityType && bType !== priorityType) return -1;
-        if (aType !== priorityType && bType === priorityType) return 1;
-
-        // Both same priority or both not priority - maintain original order
-        return 0;
-      });
-    },
-
-    // Sort variants with priority classification on top
-    sortByClassificationPriority(variants, priorityClassification) {
-      return [...variants].sort((a, b) => {
-        const aClass = a.classificationVerdict;
-        const bClass = b.classificationVerdict;
-
-        // Priority classification comes first
-        if (aClass === priorityClassification && bClass !== priorityClassification) return -1;
-        if (aClass !== priorityClassification && bClass === priorityClassification) return 1;
-
-        // Both same priority or both not priority - maintain original order
-        return 0;
-      });
     },
 
     goToFirstPage() {

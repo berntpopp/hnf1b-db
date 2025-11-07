@@ -131,13 +131,43 @@ export function pageToSkipLimit(page, pageSize) {
 /* ==================== PHENOPACKETS ENDPOINTS ==================== */
 
 /**
- * Get a list of phenopackets with optional filters.
+ * Get a list of phenopackets with JSON:API pagination and filtering.
+ * Supports both new JSON:API parameters and legacy skip/limit for backwards compatibility.
+ *
+ * **JSON:API Parameters (Recommended):**
  * @param {Object} params - Query parameters
- *   - skip: Number of records to skip (default: 0)
- *   - limit: Max records to return (default: 100, max: 1000)
- *   - sex: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
- *   - has_variants: Filter by variant presence (boolean)
- * @returns {Promise} Axios promise with phenopackets data
+ *   - page[number]: Page number (1-indexed, default: 1)
+ *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - filter[sex]: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
+ *   - filter[has_variants]: Filter by variant presence (boolean)
+ *   - sort: Comma-separated fields to sort by (prefix with '-' for descending)
+ *
+ * **Legacy Parameters (Deprecated, auto-converted to JSON:API):**
+ *   - skip: Number of records to skip (converted to page[number])
+ *   - limit: Max records to return (converted to page[size])
+ *   - sex: Filter by sex (converted to filter[sex])
+ *   - has_variants: Filter by variant presence (converted to filter[has_variants])
+ *
+ * **Response Format (JSON:API):**
+ * Returns { data, meta, links } where:
+ *   - data: Array of phenopacket documents
+ *   - meta.page: { currentPage, pageSize, totalPages, totalRecords }
+ *   - links: { self, first, prev, next, last }
+ *
+ * @returns {Promise} Axios promise resolving to JSON:API response
+ *
+ * @example
+ * // JSON:API style (recommended)
+ * getPhenopackets({
+ *   'page[number]': 1,
+ *   'page[size]': 20,
+ *   'filter[sex]': 'MALE',
+ *   'sort': '-created_at'
+ * })
+ *
+ * @example
+ * // Legacy style (auto-converted)
+ * getPhenopackets({ skip: 0, limit: 20, sex: 'MALE' })
  */
 export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { params });
 

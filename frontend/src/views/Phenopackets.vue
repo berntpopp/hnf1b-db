@@ -106,7 +106,12 @@
 </template>
 
 <script>
-import { getPhenopackets, pageToSkipLimit } from '@/api';
+import { getPhenopackets } from '@/api';
+import {
+  buildSortParameter,
+  buildPaginationParameters,
+  extractPaginationMeta,
+} from '@/utils/pagination';
 
 export default {
   name: 'Phenopackets',
@@ -201,47 +206,50 @@ export default {
       try {
         const { itemsPerPage, sortBy } = this.options;
 
-        // Convert page to skip/limit
-        const { skip, limit } = pageToSkipLimit(this.currentPage, itemsPerPage);
+        // Map frontend column keys to backend sort fields
+        const sortFieldMap = {
+          phenopacket_id: 'created_at', // Default to created_at for phenopacket_id
+          subject_id: 'subject_id',
+          sex: 'subject_sex',
+        };
 
-        // Build sort parameter (not fully implemented in backend yet)
-        let _sortParam = '';
-        if (Array.isArray(sortBy) && sortBy.length > 0) {
-          const { key, order } = sortBy[0];
-          _sortParam = (order === 'desc' ? '-' : '') + key;
-        }
+        // Build sort and pagination parameters using utility functions
+        const sortParam = buildSortParameter(sortBy, sortFieldMap);
+        const paginationParams = buildPaginationParameters(this.currentPage, itemsPerPage);
 
-        // Fetch phenopackets from v2 API
+        // Fetch phenopackets using JSON:API parameters
         const response = await getPhenopackets({
-          skip,
-          limit,
-          // sort: _sortParam, // TODO: Add when backend supports sorting
+          ...paginationParams,
+          ...(sortParam && { sort: sortParam }),
         });
 
-        // Transform response data
-        this.phenopackets = response.data.map((pp) => this.transformPhenopacket(pp));
+        // Extract JSON:API response structure
+        const jsonApiData = response.data || {};
+        const phenopacketDocuments = jsonApiData.data || [];
+        const paginationMeta = extractPaginationMeta(response);
+
+        window.logService.debug('JSON:API response received', {
+          dataCount: phenopacketDocuments.length,
+          pagination: paginationMeta,
+          hasLinks: !!jsonApiData.links,
+        });
+
+        // Transform response data (phenopackets are already GA4GH format)
+        this.phenopackets = phenopacketDocuments.map((pp) => this.transformPhenopacket(pp));
 
         window.logService.debug('Phenopackets data transformation complete', {
-          rawDataCount: response.data.length,
+          rawDataCount: phenopacketDocuments.length,
           transformedCount: this.phenopackets.length,
           sampleStructure: this.phenopackets.length > 0 ? Object.keys(this.phenopackets[0]) : [],
         });
 
-        window.logService.info('Phenopackets fetched successfully', {
-          count: response.data.length,
-          page: this.currentPage,
-          itemsPerPage,
-        });
+        // Update pagination metadata from JSON:API response
+        this.totalItems = paginationMeta.totalRecords;
 
-        // Update total count
-        // Note: Backend doesn't return total count yet, so we estimate
-        // If we got fewer results than requested, we're on the last page
-        if (response.data.length < limit) {
-          this.totalItems = skip + response.data.length;
-        } else {
-          // Estimate total (this is a workaround until backend provides count)
-          this.totalItems = Math.max(this.totalItems, skip + limit + 1);
-        }
+        window.logService.info('Phenopackets fetched successfully', {
+          count: phenopacketDocuments.length,
+          ...paginationMeta,
+        });
       } catch (error) {
         window.logService.error('Failed to fetch phenopackets', {
           error: error.message,
@@ -258,9 +266,9 @@ export default {
     /**
      * Transform phenopacket JSONB to flat table row.
      * Extracts nested fields for display.
+     * Input is now GA4GH Phenopacket v2 directly (from JSON:API data array)
      */
-    transformPhenopacket(pp) {
-      const phenopacket = pp.phenopacket || {};
+    transformPhenopacket(phenopacket) {
       const subject = phenopacket.subject || {};
       const diseases = phenopacket.diseases || [];
       const features = phenopacket.phenotypicFeatures || [];
@@ -274,8 +282,7 @@ export default {
       });
 
       return {
-        id: pp.id,
-        phenopacket_id: pp.phenopacket_id,
+        phenopacket_id: phenopacket.id,
         subject_id: subject.id || 'N/A',
         sex: subject.sex || 'UNKNOWN_SEX',
         primary_disease: diseases[0]?.term?.label || null,

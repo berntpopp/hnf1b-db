@@ -9,7 +9,8 @@ from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.config import settings
 from app.database import engine
-from app.phenopackets import clinical_endpoints, endpoints
+from app.phenopackets import clinical_endpoints
+from app.phenopackets.routers import router as phenopackets_router
 from app.publications import endpoints as publication_endpoints
 
 
@@ -46,7 +47,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(endpoints.router)
+app.include_router(phenopackets_router)  # Already has /api/v2/phenopackets prefix
 app.include_router(clinical_endpoints.router)
 app.include_router(publication_endpoints.router)
 app.include_router(auth_endpoints.router)
