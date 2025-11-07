@@ -1,20 +1,21 @@
 import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Minimal working configuration for Vitest 4.0.7
-// Start with config/utility tests, add Vue component testing later
+// Vitest configuration for Vue 3 + Composition API component testing
 export default defineConfig({
+  plugins: [vue()],
+
   // Test-specific configuration
   test: {
     // Jest-compatible global API (describe, it, expect, etc.)
     globals: true,
 
-    // Node environment for config/utility tests
-    // Switch to 'happy-dom' when testing Vue components
-    environment: 'node',
+    // happy-dom for Vue component testing (faster than jsdom)
+    environment: 'happy-dom',
 
     // Coverage configuration
     coverage: {
@@ -26,14 +27,12 @@ export default defineConfig({
         '**/node_modules/**',
         '**/tests/**',
         '**/*.config.js',
+        '**/*.spec.js',
       ],
-      // NO THRESHOLDS - Start without, add gradually
-      // Best practice: Don't enforce coverage % on day 1
-      // Reference: https://vitest.dev/guide/coverage
     },
 
     // Test file patterns
-    include: ['tests/unit/**/*.spec.js'],
+    include: ['tests/unit/**/*.spec.js', 'tests/components/**/*.spec.js'],
   },
 
   // Path alias resolution

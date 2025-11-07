@@ -111,7 +111,10 @@ export default {
         const response = await getPublicationsAggregation();
         this.publications = response.data;
       } catch (error) {
-        console.error('Error fetching publications:', error);
+        window.logService.error('Failed to fetch publications aggregation', {
+          error: error.message,
+          status: error.response?.status,
+        });
       } finally {
         this.loading = false;
       }

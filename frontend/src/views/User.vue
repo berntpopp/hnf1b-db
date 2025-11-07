@@ -35,15 +35,21 @@ export default {
     const fetchUser = async () => {
       const token = getToken();
       if (!token) {
+        window.logService.warn('No auth token found, redirecting to login');
         router.push({ name: 'Login' });
         return;
       }
       try {
         const response = await getCurrentUser(token);
         user.value = response.data;
-        console.log('User info:', user.value);
+        window.logService.info('User profile loaded successfully', {
+          username: user.value?.user,
+        });
       } catch (err) {
-        console.error('Error fetching user info:', err);
+        window.logService.error('Failed to fetch user info', {
+          error: err.message,
+          status: err.response?.status,
+        });
         user.value = null;
       }
     };

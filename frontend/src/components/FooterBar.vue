@@ -1,52 +1,203 @@
 <template>
-  <v-footer app padless class="elevation-3">
-    <v-card-text class="text-center">
+  <v-footer app height="44" class="d-flex align-center justify-center px-4 text-caption">
+    <!-- Backend Status -->
+    <div class="d-flex align-center mr-auto">
+      <v-btn
+        variant="text"
+        size="small"
+        :aria-label="healthTooltip"
+        :title="healthTooltip"
+        @click="refreshHealth"
+      >
+        <v-icon :color="healthStatus.color" size="16" class="mr-2">
+          {{ healthStatus.icon }}
+        </v-icon>
+        <span class="status-text">
+          {{ healthStatus.text }}
+          <span v-if="backendConnected" class="version-text"> | {{ responseTime }}ms </span>
+        </span>
+      </v-btn>
+    </div>
+
+    <!-- Footer Links -->
+    <div class="d-flex align-center ml-auto">
       <v-btn
         v-for="link in footerLinks"
-        :key="link.text"
+        :key="link.id"
+        :href="link.url"
+        :title="link.title"
+        :aria-label="link.title"
+        target="_blank"
+        rel="noopener noreferrer"
         icon
-        :href="link.href"
-        :target="link.target"
-        text
+        variant="text"
+        size="small"
+        class="mx-1"
       >
-        <v-icon size="24px">
-          {{ link.icon }}
-        </v-icon>
+        <v-icon size="small">{{ link.icon }}</v-icon>
       </v-btn>
-    </v-card-text>
+
+      <!-- Log Viewer Toggle -->
+      <v-btn
+        icon="mdi-text-box-search-outline"
+        variant="text"
+        size="small"
+        aria-label="Open application logs"
+        title="Open application logs"
+        class="mx-1"
+        @click="toggleLogViewer"
+      />
+    </div>
   </v-footer>
 </template>
 
-<script>
-export default {
-  name: 'FooterBar',
-  data() {
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { useLogStore } from '@/stores/logStore';
+import { healthService } from '@/services/healthService';
+
+// No need for frontend version or current year anymore
+
+// Pinia store
+const logStore = useLogStore();
+
+// Reactive state
+const footerLinks = ref([]);
+const backendHealth = ref({
+  connected: false,
+  version: null,
+  responseTime: null,
+  lastCheck: null,
+  error: null,
+});
+
+// Health service subscription
+let unsubscribeHealth = null;
+
+// Computed properties
+const backendConnected = computed(() => backendHealth.value.connected);
+
+const responseTime = computed(() => backendHealth.value.responseTime || 0);
+
+const healthStatus = computed(() => {
+  if (backendHealth.value.connected) {
+    const rt = backendHealth.value.responseTime;
+    if (rt < 100) {
+      return {
+        color: 'success',
+        icon: 'mdi-check-circle',
+        text: 'Excellent',
+      };
+    } else if (rt < 500) {
+      return {
+        color: 'success',
+        icon: 'mdi-check-circle',
+        text: 'Good',
+      };
+    } else {
+      return {
+        color: 'warning',
+        icon: 'mdi-alert-circle',
+        text: 'Slow',
+      };
+    }
+  } else {
     return {
-      footerLinks: [
-        {
-          text: 'GitHub',
-          icon: 'mdi-github',
-          href: 'https://github.com/berntpopp/HNF1B-db',
-          target: '_blank',
-        },
-        {
-          text: 'API',
-          icon: 'mdi-api',
-          href: '/API',
-          target: '_self',
-        },
-        {
-          text: 'License',
-          icon: 'mdi-copyright',
-          href: 'https://creativecommons.org/licenses/by/4.0/',
-          target: '_blank',
-        },
-      ],
+      color: 'error',
+      icon: 'mdi-close-circle',
+      text: 'Offline',
     };
-  },
+  }
+});
+
+const healthTooltip = computed(() => {
+  if (backendHealth.value.connected) {
+    const lastCheck = backendHealth.value.lastCheck
+      ? new Date(backendHealth.value.lastCheck).toLocaleTimeString()
+      : 'Never';
+    return `Backend Online\nResponse Time: ${responseTime.value}ms\nLast Check: ${lastCheck}`;
+  } else {
+    const error = backendHealth.value.error || 'Unknown error';
+    return `Backend Offline\nError: ${error}`;
+  }
+});
+
+// Methods
+const toggleLogViewer = () => {
+  logStore.toggleViewer();
 };
+
+const refreshHealth = async () => {
+  await healthService.checkBackendHealth();
+};
+
+const loadFooterConfig = async () => {
+  try {
+    const response = await fetch('/config/footerConfig.json');
+    const config = await response.json();
+    footerLinks.value = config.filter((link) => link.enabled);
+
+    window.logService.info('Footer configuration loaded', {
+      linksCount: footerLinks.value.length,
+    });
+  } catch (error) {
+    window.logService.error('Failed to load footer configuration', {
+      error: error.message,
+      path: '/config/footerConfig.json',
+    });
+    // Fallback to default links
+    footerLinks.value = [
+      {
+        id: 'github',
+        title: 'GitHub Repository',
+        icon: 'mdi-github',
+        url: 'https://github.com/berntpopp/hnf1b-db',
+      },
+      {
+        id: 'api-docs',
+        title: 'API Documentation',
+        icon: 'mdi-api',
+        url: 'http://localhost:8000/docs',
+      },
+      {
+        id: 'license',
+        title: 'CC BY 4.0 License',
+        icon: 'mdi-creative-commons',
+        url: 'https://creativecommons.org/licenses/by/4.0/',
+      },
+    ];
+  }
+};
+
+// Lifecycle hooks
+onMounted(() => {
+  // Load footer configuration
+  loadFooterConfig();
+
+  // Subscribe to health service updates
+  unsubscribeHealth = healthService.subscribe((status) => {
+    backendHealth.value = status.backend;
+  });
+
+  // Get initial health status
+  backendHealth.value = healthService.getStatus().backend;
+});
+
+onBeforeUnmount(() => {
+  // Cleanup health subscription
+  if (unsubscribeHealth) {
+    unsubscribeHealth();
+  }
+});
 </script>
 
 <style scoped>
-/* Add any additional footer styling here if needed */
+.status-text {
+  font-size: 0.75rem;
+}
+
+.version-text {
+  opacity: 0.7;
+  font-weight: 500;
+}
 </style>

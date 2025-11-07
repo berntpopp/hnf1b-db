@@ -160,15 +160,41 @@ export default {
     async function doSearch() {
       const query = searchQuery.value.trim();
       if (!query) return;
+
+      window.logService.debug('Starting search', {
+        query: query,
+        queryLength: query.length,
+        reduceDoc: true,
+      });
+
       loading.value = true;
       try {
         // reduceDoc = true returns only minimal fields.
         const { data: searchData } = await search(query, null, true);
         if (searchData && searchData.results) {
           results.value = searchData.results;
+
+          window.logService.debug('Search results received', {
+            query: query,
+            individualsCount: searchData.results.individuals?.data?.length || 0,
+            variantsCount: searchData.results.variants?.data?.length || 0,
+            publicationsCount: searchData.results.publications?.data?.length || 0,
+          });
+
+          window.logService.info('Search completed successfully', {
+            query: query,
+            totalResults:
+              (searchData.results.individuals?.data?.length || 0) +
+              (searchData.results.variants?.data?.length || 0) +
+              (searchData.results.publications?.data?.length || 0),
+          });
         }
       } catch (err) {
-        console.error('Search error:', err);
+        window.logService.error('Search request failed', {
+          error: err.message,
+          query: query,
+          status: err.response?.status,
+        });
       } finally {
         loading.value = false;
       }

@@ -396,7 +396,10 @@ export default {
         });
         this.allVariants = response.data || [];
       } catch (error) {
-        console.error('Error loading variants for visualization:', error);
+        window.logService.error('Failed to load variants for visualization', {
+          error: error.message,
+          status: error.response?.status,
+        });
         // Don't block page load if this fails
         this.allVariants = [];
       }
@@ -404,6 +407,11 @@ export default {
     navigateToVariant(variant) {
       // Navigate to another variant's detail page
       if (variant && variant.variant_id) {
+        window.logService.info('Navigating to variant from visualization', {
+          fromVariantId: this.$route.params.variant_id,
+          toVariantId: variant.variant_id,
+          source: 'gene visualization',
+        });
         this.$router.push(`/variants/${variant.variant_id}`);
       }
     },
@@ -426,6 +434,11 @@ export default {
       this.loading = true;
       const variantId = this.$route.params.variant_id;
 
+      window.logService.debug('Loading variant detail page', {
+        variantId: variantId,
+        route: this.$route.path,
+      });
+
       try {
         const variantResponse = await getVariants({
           page: 1,
@@ -440,7 +453,10 @@ export default {
         this.variant = variantResponse.data.find((v) => v.variant_id === variantId);
 
         if (!this.variant) {
-          console.error(`Variant with ID ${variantId} not found`);
+          window.logService.warn('Variant not found', {
+            variantId: variantId,
+            redirectTo: '/PageNotFound',
+          });
           this.$router.push('/PageNotFound');
           return;
         }
@@ -456,9 +472,29 @@ export default {
           }),
         }));
 
+        window.logService.debug('Phenopackets data transformation complete', {
+          rawPhenopacketCount: phenopacketsResponse.data.length,
+          transformedCount: this.phenopacketsWithVariant.length,
+          variantDetails: {
+            hg38: this.variant.hg38,
+            type: this.getVariantType(this.variant),
+            classification: this.variant.classificationVerdict,
+          },
+        });
+
+        window.logService.info('Variant detail loaded successfully', {
+          variantId: this.variant.variant_id,
+          variantType: this.getVariantType(this.variant),
+          phenopacketCount: this.phenopacketsWithVariant.length,
+        });
+
         this.loading = false;
       } catch (error) {
-        console.error('Error loading variant data:', error);
+        window.logService.error('Failed to load variant detail data', {
+          error: error.message,
+          variantId: this.$route.params.variant_id,
+          status: error.response?.status,
+        });
         this.loading = false;
       }
     },
@@ -540,16 +576,25 @@ export default {
       ); // Always show if we have gene symbol (for NCBI Gene & OMIM)
     },
     copyToClipboard(text, label) {
+      window.logService.debug('Clipboard copy initiated', {
+        label: label,
+        textLength: text?.length || 0,
+      });
+
       // Copy to clipboard using modern Clipboard API
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard
           .writeText(text)
           .then(() => {
+            window.logService.debug('Clipboard copy succeeded', { label: label });
             this.snackbarMessage = `${label} copied to clipboard!`;
             this.snackbar = true;
           })
           .catch((err) => {
-            console.error('Failed to copy:', err);
+            window.logService.warn('Clipboard copy failed', {
+              error: err.message,
+              label: label,
+            });
             this.snackbarMessage = 'Failed to copy to clipboard';
             this.snackbar = true;
           });
@@ -566,7 +611,10 @@ export default {
           this.snackbarMessage = `${label} copied to clipboard!`;
           this.snackbar = true;
         } catch (err) {
-          console.error('Failed to copy:', err);
+          window.logService.warn('Fallback clipboard copy failed', {
+            error: err.message,
+            label: label,
+          });
           this.snackbarMessage = 'Failed to copy to clipboard';
           this.snackbar = true;
         }
