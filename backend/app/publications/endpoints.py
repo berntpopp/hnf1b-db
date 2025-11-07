@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -44,8 +44,8 @@ class PublicationMetadataResponse(BaseModel):
     data_source: str = Field(default="PubMed", description="Data source")
     fetched_at: str = Field(..., description="Cache timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "pmid": "PMID:30791938",
                 "title": "HNF1B-related disorder: clinical characteristics and genetic findings",
@@ -61,6 +61,7 @@ class PublicationMetadataResponse(BaseModel):
                 "fetched_at": "2025-10-22T14:30:00",
             }
         }
+    )
 
 
 @router.get(
