@@ -3,7 +3,7 @@
 Implements in-memory rate limiting to prevent API abuse. For production
 deployments, consider using Redis for distributed rate limiting.
 
-Rate Limit: 10 requests per 60 seconds per IP address.
+Rate Limit: 5 requests per second per IP address.
 """
 
 import logging
@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 REQUEST_COUNTS: Dict[str, List[datetime]] = defaultdict(list)
 
 # Rate limit configuration
-RATE_LIMIT = 10  # Maximum requests
-RATE_WINDOW = 60  # Time window in seconds
+# Balanced limit for frontend applications making burst requests
+# 5 requests per second allows normal operation while preventing abuse
+RATE_LIMIT = 5  # Maximum requests
+RATE_WINDOW = 1  # Time window in seconds
 
 
 def get_client_ip(request: Request) -> str:
@@ -60,7 +62,7 @@ def check_rate_limit(request: Request) -> None:
         HTTPException: 429 Too Many Requests if rate limit exceeded
 
     Rate Limit:
-        - 10 requests per 60 seconds per IP address
+        - 5 requests per second per IP address
         - Sliding window implementation
         - Old requests automatically cleaned up
 
@@ -81,8 +83,7 @@ def check_rate_limit(request: Request) -> None:
 
     # Clean up old requests outside the time window
     REQUEST_COUNTS[client_ip] = [
-        req_time for req_time in REQUEST_COUNTS[client_ip]
-        if req_time > window_start
+        req_time for req_time in REQUEST_COUNTS[client_ip] if req_time > window_start
     ]
 
     # Check if rate limit exceeded
@@ -97,12 +98,11 @@ def check_rate_limit(request: Request) -> None:
             detail={
                 "error": "Rate limit exceeded",
                 "message": (
-                    f"Maximum {RATE_LIMIT} requests per "
-                    f"{RATE_WINDOW} seconds allowed"
+                    f"Maximum {RATE_LIMIT} requests per {RATE_WINDOW} seconds allowed"
                 ),
                 "retry_after": RATE_WINDOW,
                 "current_count": current_count,
-            }
+            },
         )
 
     # Record this request
@@ -142,8 +142,7 @@ def get_rate_limit_status(request: Request) -> Dict[str, int]:
 
     # Clean up old requests
     REQUEST_COUNTS[client_ip] = [
-        req_time for req_time in REQUEST_COUNTS[client_ip]
-        if req_time > window_start
+        req_time for req_time in REQUEST_COUNTS[client_ip] if req_time > window_start
     ]
 
     requests_made = len(REQUEST_COUNTS[client_ip])
