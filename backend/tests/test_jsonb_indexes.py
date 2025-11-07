@@ -28,9 +28,9 @@ class TestJSONBIndexesExist:
 
         assert row is not None, "idx_phenopacket_features_gin index should exist"
         assert "gin" in row.indexdef.lower(), "Should be a GIN index"
-        assert (
-            "phenotypicfeatures" in row.indexdef.lower()
-        ), "Should index phenotypicFeatures"
+        assert "phenotypicfeatures" in row.indexdef.lower(), (
+            "Should index phenotypicFeatures"
+        )
 
     async def test_interpretations_index_exists(self, db_session: AsyncSession):
         """Verify idx_phenopacket_interpretations_gin index exists."""
@@ -87,10 +87,10 @@ class TestJSONBIndexUsage:
         explain_lines = [row[0] for row in result.fetchall()]
         explain_text = "\n".join(explain_lines)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Query Plan for Contains Operator (@>):")
         print(explain_text)
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # On small datasets, seq scan is expected and faster
         # On large datasets (>1000 rows), GIN index would be used
@@ -115,15 +115,15 @@ class TestJSONBIndexUsage:
         explain_lines = [row[0] for row in result.fetchall()]
         explain_text = "\n".join(explain_lines)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Query Plan for Array Elements Aggregation:")
         print(explain_text)
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Verify query is valid (uses function scan for jsonb_array_elements)
-        assert (
-            "jsonb_array_elements" in explain_text.lower()
-        ), "Should use jsonb_array_elements function"
+        assert "jsonb_array_elements" in explain_text.lower(), (
+            "Should use jsonb_array_elements function"
+        )
 
 
 class TestIndexStatistics:
@@ -148,11 +148,11 @@ class TestIndexStatistics:
         assert len(indexes) >= 3, f"Should have 3+ GIN indexes, found {len(indexes)}"
 
         # Print index sizes for visibility
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("JSONB Index Sizes:")
         for idx in indexes:
             print(f"  {idx.indexname}: {idx.size}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     async def test_table_statistics_updated(self, db_session: AsyncSession):
         """Verify table statistics are up-to-date (ANALYZE was run)."""

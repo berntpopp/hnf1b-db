@@ -113,9 +113,9 @@ class TestTransactionRollback:
         fetched = result.scalar_one_or_none()
 
         assert fetched is not None, "Valid phenopacket should exist in database"
-        assert (
-            fetched.phenopacket_id == valid_phenopacket_data["id"]
-        ), "Phenopacket ID should match"
+        assert fetched.phenopacket_id == valid_phenopacket_data["id"], (
+            "Phenopacket ID should match"
+        )
 
         # Cleanup
         await db_session.delete(fetched)
@@ -228,9 +228,9 @@ class TestTransactionRollback:
             .where(Phenopacket.phenopacket_id == "test_duplicate_tx")
         )
 
-        assert (
-            count_before == count_after == 1
-        ), "Only one record should exist after duplicate attempt"
+        assert count_before == count_after == 1, (
+            "Only one record should exist after duplicate attempt"
+        )
 
         # Cleanup
         result = await db_session.execute(

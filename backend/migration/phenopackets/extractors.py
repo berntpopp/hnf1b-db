@@ -430,7 +430,7 @@ class VariantExtractor:
         )
 
         return {
-            "id": f"interpretation-{interp_count+1:03d}",
+            "id": f"interpretation-{interp_count + 1:03d}",
             "progressStatus": "COMPLETED",
             "diagnosis": {
                 # Disease term assignment strategy:

@@ -16,8 +16,21 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""  # Required, will be loaded from environment
     OLD_DATABASE_URL: str | None = None  # Optional, for migration purposes
 
-    # Authentication
+    # Authentication - JWT
     JWT_SECRET: str = Field(default="")  # Required, will be loaded from environment
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Authentication - Password Security
+    PASSWORD_MIN_LENGTH: int = 8
+    MAX_LOGIN_ATTEMPTS: int = 5
+    ACCOUNT_LOCKOUT_MINUTES: int = 15
+
+    # Default Admin Credentials (for initial setup)
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_EMAIL: str = "admin@hnf1b-db.local"
+    ADMIN_PASSWORD: str = "ChangeMe!Admin2025"
 
     # CORS Configuration
     CORS_ORIGINS: str = (

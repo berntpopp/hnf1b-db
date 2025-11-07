@@ -129,9 +129,9 @@ class TestSequentialDuplicates:
                 phenopacket_id_unique = True
                 break
 
-        assert (
-            phenopacket_id_unique
-        ), "phenopacket_id must have UNIQUE constraint in database"
+        assert phenopacket_id_unique, (
+            "phenopacket_id must have UNIQUE constraint in database"
+        )
 
 
 class TestConcurrentDuplicates:
@@ -262,15 +262,15 @@ class TestConcurrentDuplicates:
         duplicate_count = results.count("duplicate")
         total_completed = len(results)
 
-        assert (
-            success_count == 1
-        ), f"Exactly one insert should succeed (got {success_count})"
-        assert (
-            duplicate_count >= 7
-        ), f"At least 7 inserts should fail with IntegrityError (got {duplicate_count})"
-        assert (
-            total_completed >= 8
-        ), f"At least 8 tasks should complete (got {total_completed}, results: {results})"
+        assert success_count == 1, (
+            f"Exactly one insert should succeed (got {success_count})"
+        )
+        assert duplicate_count >= 7, (
+            f"At least 7 inserts should fail with IntegrityError (got {duplicate_count})"
+        )
+        assert total_completed >= 8, (
+            f"At least 8 tasks should complete (got {total_completed}, results: {results})"
+        )
 
         # Verify only one record exists
         result = await db_session.execute(

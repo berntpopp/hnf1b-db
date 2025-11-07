@@ -15,7 +15,10 @@ from typing import Sequence, Union
 
 # revision identifiers, used by Alembic.
 revision: str = "004_merge_heads"
-down_revision: Union[str, Sequence[str], None] = ("003_variant_search_indexes", "533c020aa76d")
+down_revision: Union[str, Sequence[str], None] = (
+    "003_variant_search_indexes",
+    "533c020aa76d",
+)
 
 
 def upgrade() -> None:

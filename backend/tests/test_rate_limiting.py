@@ -25,7 +25,7 @@ class MockRequest:
 
     def __init__(self, client_host: str = "127.0.0.1", forwarded_for: str = None):
         """Initialize mock request with client host and optional forwarded headers."""
-        self.client = type('obj', (object,), {'host': client_host})
+        self.client = type("obj", (object,), {"host": client_host})
         self.headers = {}
         if forwarded_for:
             self.headers["X-Forwarded-For"] = forwarded_for
@@ -41,17 +41,14 @@ class TestGetClientIP:
 
     def test_forwarded_for_single_ip(self):
         """Test X-Forwarded-For with single IP."""
-        request = MockRequest(
-            client_host="127.0.0.1",
-            forwarded_for="203.0.113.42"
-        )
+        request = MockRequest(client_host="127.0.0.1", forwarded_for="203.0.113.42")
         assert get_client_ip(request) == "203.0.113.42"
 
     def test_forwarded_for_multiple_ips(self):
         """Test X-Forwarded-For with multiple IPs (takes first)."""
         request = MockRequest(
             client_host="127.0.0.1",
-            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1"
+            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1",
         )
         assert get_client_ip(request) == "203.0.113.42"
 

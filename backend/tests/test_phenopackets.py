@@ -98,7 +98,10 @@ def test_vrs():
     # Assert location is valid
     assert location.start == 100
     assert location.end == 200
-    assert location.sequenceReference.refgetAccession == "SQ.F-LrLMe1SRpfUZHkQmvkVKFEGaoDeHul"
+    assert (
+        location.sequenceReference.refgetAccession
+        == "SQ.F-LrLMe1SRpfUZHkQmvkVKFEGaoDeHul"
+    )
 
 
 if __name__ == "__main__":

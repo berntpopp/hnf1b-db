@@ -23,7 +23,7 @@ HGVS_PATTERNS = {
         r"([\d]+([+-]\d+)?"  # Position (with optional intron offset)
         r"(_[\d]+([+-]\d+)?)?"  # Optional range end
         r"([ACGT]+>[ACGT]+|del|dup|ins[ACGT]*|delins[ACGT]*))$",  # Variation
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     # p. notation: p.Arg177Ter, p.(Ser546Phe), p.Gly319del
     "p": re.compile(
@@ -35,19 +35,25 @@ HGVS_PATTERNS = {
         r"^g\."
         r"(\d+(_\d+)?"  # Position or range
         r"([ACGT]+>[ACGT]+|del|dup|ins[ACGT]*|delins[ACGT]*))$",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
 }
 
 # HG38 coordinate formats: chr17:36098063, chr17-36098063-A-T, 17:36459258-37832869:DEL
 HG38_PATTERN = re.compile(
     r"^(chr)?(\d+|X|Y|MT?)([:-])(\d+)([-:](\d+))?([:-]([A-Z]+(-[A-Z]+)?))?$",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # Allowed values for controlled vocabularies
 ALLOWED_VARIANT_TYPES = {
-    "SNV", "deletion", "duplication", "insertion", "indel", "inversion", "CNV"
+    "SNV",
+    "deletion",
+    "duplication",
+    "insertion",
+    "indel",
+    "inversion",
+    "CNV",
 }
 ALLOWED_CLASSIFICATIONS = {
     "PATHOGENIC",
@@ -141,8 +147,7 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
     # Length validation (prevent DoS)
     if len(query) > 200:
         raise HTTPException(
-            status_code=400,
-            detail="Search query too long (max 200 characters)"
+            status_code=400, detail="Search query too long (max 200 characters)"
         )
 
     # Character whitelist: alphanumeric + HGVS/VCF symbols
@@ -153,7 +158,7 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
             detail=(
                 "Search query contains invalid characters. "
                 "Allowed: A-Z a-z 0-9 . _ : > ( ) + - = * /"
-            )
+            ),
         )
 
     # Optional: Validate HGVS format if it looks like HGVS
@@ -162,7 +167,7 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
         if not validate_hgvs_notation(query_stripped):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid HGVS notation format: {query_stripped}"
+                detail=f"Invalid HGVS notation format: {query_stripped}",
             )
 
     # Optional: Validate HG38 coordinates if they look like coordinates
@@ -170,7 +175,7 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
         if not validate_hg38_coordinate(query_stripped):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid HG38 coordinate format: {query_stripped}"
+                detail=f"Invalid HG38 coordinate format: {query_stripped}",
             )
 
     return query_stripped
@@ -197,7 +202,7 @@ def validate_variant_type(variant_type: Optional[str]) -> Optional[str]:
             detail=(
                 f"Invalid variant type: {variant_type}. "
                 f"Allowed: {', '.join(sorted(ALLOWED_VARIANT_TYPES))}"
-            )
+            ),
         )
 
     return variant_type
@@ -224,7 +229,7 @@ def validate_classification(classification: Optional[str]) -> Optional[str]:
             detail=(
                 f"Invalid classification: {classification}. "
                 f"Allowed: {', '.join(sorted(ALLOWED_CLASSIFICATIONS))}"
-            )
+            ),
         )
 
     return classification
@@ -251,7 +256,7 @@ def validate_gene(gene: Optional[str]) -> Optional[str]:
             detail=(
                 f"Invalid gene symbol: {gene}. "
                 f"Allowed: {', '.join(sorted(ALLOWED_GENES))}"
-            )
+            ),
         )
 
     return gene
@@ -278,7 +283,7 @@ def validate_molecular_consequence(consequence: Optional[str]) -> Optional[str]:
             detail=(
                 f"Invalid molecular consequence: {consequence}. "
                 f"Allowed: {', '.join(sorted(ALLOWED_CONSEQUENCES))}"
-            )
+            ),
         )
 
     return consequence

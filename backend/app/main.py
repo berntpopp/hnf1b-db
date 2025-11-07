@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import auth_endpoints, hpo_proxy, variant_validator_endpoint
+from app import hpo_proxy, variant_validator_endpoint
+from app.api import auth_endpoints
 from app.config import settings
 from app.database import engine
 from app.phenopackets import clinical_endpoints, endpoints

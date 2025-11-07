@@ -461,7 +461,9 @@ class ClinicalQueries:
 
     @staticmethod
     async def execute_and_format(
-        db: AsyncSession, query: Select, format_func: Optional[Callable[[Any], Dict[str, Any]]] = None
+        db: AsyncSession,
+        query: Select,
+        format_func: Optional[Callable[[Any], Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """Execute query and format results - DRY principle.
 

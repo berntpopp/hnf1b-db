@@ -176,7 +176,7 @@ def test_performance():
     second_pass = time.time() - start
 
     print(f"Second pass (from cache): {second_pass:.2f} seconds")
-    print(f"Speedup: {first_pass/second_pass:.1f}x faster")
+    print(f"Speedup: {first_pass / second_pass:.1f}x faster")
 
 
 if __name__ == "__main__":

@@ -91,10 +91,7 @@ def log_variant_search(
     }
 
     # Log as structured JSON (easy to parse for analysis)
-    audit_logger.info(
-        "VARIANT_SEARCH",
-        extra=log_entry
-    )
+    audit_logger.info("VARIANT_SEARCH", extra=log_entry)
 
 
 def log_rate_limit_exceeded(
@@ -123,10 +120,7 @@ def log_rate_limit_exceeded(
         "severity": "WARNING",
     }
 
-    audit_logger.warning(
-        "RATE_LIMIT_EXCEEDED",
-        extra=log_entry
-    )
+    audit_logger.warning("RATE_LIMIT_EXCEEDED", extra=log_entry)
 
 
 def log_validation_error(
@@ -165,10 +159,7 @@ def log_validation_error(
         "severity": "WARNING",
     }
 
-    audit_logger.warning(
-        "VALIDATION_ERROR",
-        extra=log_entry
-    )
+    audit_logger.warning("VALIDATION_ERROR", extra=log_entry)
 
 
 def configure_audit_logger(log_file_path: Optional[str] = None) -> None:
@@ -192,6 +183,7 @@ def configure_audit_logger(log_file_path: Optional[str] = None) -> None:
     # Create file handler
     try:
         import os
+
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 
         file_handler = logging.FileHandler(log_file_path)
@@ -207,13 +199,30 @@ def configure_audit_logger(log_file_path: Optional[str] = None) -> None:
         # Add handler to audit logger
         audit_logger.addHandler(file_handler)
 
-        audit_logger.info(
-            "AUDIT_LOGGER_CONFIGURED",
-            extra={"log_file": log_file_path}
-        )
+        audit_logger.info("AUDIT_LOGGER_CONFIGURED", extra={"log_file": log_file_path})
     except Exception as e:
         # If file logging fails, log to console
         audit_logger.error(
             f"Failed to configure audit logger file handler: {e}",
-            extra={"error": str(e)}
+            extra={"error": str(e)},
         )
+
+
+async def log_user_action(
+    db,  # AsyncSession, but avoiding circular import
+    user_id: int,
+    action: str,
+    details: str,
+) -> None:
+    """Log user management action.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        action: Action type (LOGIN, LOGOUT, PASSWORD_CHANGE, etc.)
+        details: Action details
+    """
+    # For now, just log to console
+    # Future: Store in audit_log table
+    logger = logging.getLogger(__name__)
+    logger.info(f"User action: user_id={user_id}, action={action}, details={details}")
