@@ -95,19 +95,7 @@
               </v-btn>
             </v-form>
           </v-card-text>
-
-          <!-- Footer -->
-          <v-card-text class="text-center text-caption text-medium-emphasis pt-2">
-            <v-icon size="small" class="mr-1">mdi-shield-check</v-icon>
-            Your credentials are encrypted and secure
-          </v-card-text>
         </v-card>
-
-        <!-- Help Text -->
-        <div class="text-center mt-4 text-caption text-medium-emphasis">
-          <v-icon size="small" class="mr-1">mdi-help-circle</v-icon>
-          Need help? Contact your system administrator
-        </div>
       </v-col>
     </v-row>
   </v-container>
