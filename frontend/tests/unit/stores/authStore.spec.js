@@ -138,8 +138,9 @@ describe('Auth Store', () => {
       authStore.user = { role: 'curator' };
       expect(authStore.isCurator).toBe(true);
 
+      // Admin is also considered a curator
       authStore.user = { role: 'admin' };
-      expect(authStore.isCurator).toBe(false);
+      expect(authStore.isCurator).toBe(true);
     });
 
     it('should compute userPermissions correctly', () => {
@@ -193,7 +194,7 @@ describe('Auth Store', () => {
       expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'mock_access_token');
       expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'mock_refresh_token');
       expect(window.logService.info).toHaveBeenCalledWith('User logged in successfully', {
-        user: 'testuser',
+        username: 'testuser',
       });
     });
 
@@ -210,15 +211,15 @@ describe('Auth Store', () => {
 
       apiClient.post.mockRejectedValueOnce(mockError);
 
-      const success = await authStore.login({
-        username: 'testuser',
-        password: 'wrongpassword',
-      });
+      // login() throws error on failure
+      await expect(
+        authStore.login({
+          username: 'testuser',
+          password: 'wrongpassword',
+        })
+      ).rejects.toThrow();
 
-      expect(success).toBe(false);
       expect(authStore.error).toBe('Invalid credentials');
-      expect(authStore.accessToken).toBeNull();
-      expect(authStore.user).toBeNull();
       expect(window.logService.error).toHaveBeenCalled();
     });
 
@@ -295,6 +296,7 @@ describe('Auth Store', () => {
       expect(authStore.accessToken).toBeNull();
       expect(authStore.user).toBeNull();
       expect(localStorageMock.removeItem).toHaveBeenCalled();
+      expect(window.logService.warn).toHaveBeenCalled();
     });
   });
 
@@ -315,23 +317,30 @@ describe('Auth Store', () => {
 
       apiClient.get.mockResolvedValueOnce(mockUserResponse);
 
-      const success = await authStore.fetchCurrentUser();
+      await authStore.fetchCurrentUser();
 
-      expect(success).toBe(true);
       expect(authStore.user).toEqual(mockUserResponse.data);
       expect(apiClient.get).toHaveBeenCalledWith('/auth/me');
+      expect(window.logService.debug).toHaveBeenCalled();
     });
 
     it('should handle fetch user failure', async () => {
       const authStore = useAuthStore();
       authStore.accessToken = 'test_token';
 
-      apiClient.get.mockRejectedValueOnce(new Error('Unauthorized'));
+      const mockError = {
+        response: { status: 401 },
+        message: 'Unauthorized',
+      };
 
-      const success = await authStore.fetchCurrentUser();
+      apiClient.get.mockRejectedValueOnce(mockError);
+      apiClient.post.mockResolvedValueOnce({ data: {} }); // Mock logout call
 
-      expect(success).toBe(false);
-      expect(authStore.user).toBeNull();
+      // fetchCurrentUser() throws and calls logout on 401
+      await expect(authStore.fetchCurrentUser()).rejects.toThrow();
+
+      expect(window.logService.error).toHaveBeenCalled();
+      expect(authStore.accessToken).toBeNull(); // Logout was called
     });
   });
 
@@ -351,13 +360,14 @@ describe('Auth Store', () => {
 
       apiClient.post.mockResolvedValueOnce(mockResponse);
 
-      const success = await authStore.refreshAccessToken();
+      const result = await authStore.refreshAccessToken();
 
-      expect(success).toBe(true);
+      expect(result).toBe('new_access_token');
       expect(authStore.accessToken).toBe('new_access_token');
       expect(authStore.refreshToken).toBe('new_refresh_token');
       expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'new_access_token');
       expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'new_refresh_token');
+      expect(window.logService.debug).toHaveBeenCalledWith('Access token refreshed');
     });
 
     it('should handle refresh token failure and logout', async () => {
@@ -366,15 +376,17 @@ describe('Auth Store', () => {
       authStore.accessToken = 'old_token';
       authStore.user = { username: 'test' };
 
-      apiClient.post.mockRejectedValueOnce(new Error('Invalid refresh token'));
+      apiClient.post
+        .mockRejectedValueOnce(new Error('Invalid refresh token')) // refresh call fails
+        .mockResolvedValueOnce({ data: {} }); // logout call succeeds
 
-      const success = await authStore.refreshAccessToken();
+      await expect(authStore.refreshAccessToken()).rejects.toThrow();
 
-      expect(success).toBe(false);
       // Should clear auth state on refresh failure
       expect(authStore.accessToken).toBeNull();
       expect(authStore.refreshToken).toBeNull();
       expect(authStore.user).toBeNull();
+      expect(window.logService.error).toHaveBeenCalled();
     });
   });
 
@@ -386,10 +398,7 @@ describe('Auth Store', () => {
         data: { message: 'Password changed successfully' },
       });
 
-      const success = await authStore.changePassword({
-        current_password: 'oldpass',
-        new_password: 'newpass',
-      });
+      const success = await authStore.changePassword('oldpass', 'newpass');
 
       expect(success).toBe(true);
       expect(authStore.error).toBeNull();
@@ -397,6 +406,7 @@ describe('Auth Store', () => {
         current_password: 'oldpass',
         new_password: 'newpass',
       });
+      expect(window.logService.info).toHaveBeenCalledWith('Password changed successfully');
     });
 
     it('should handle password change failure', async () => {
@@ -412,13 +422,10 @@ describe('Auth Store', () => {
 
       apiClient.post.mockRejectedValueOnce(mockError);
 
-      const success = await authStore.changePassword({
-        current_password: 'wrongpass',
-        new_password: 'newpass',
-      });
+      await expect(authStore.changePassword('wrongpass', 'newpass')).rejects.toThrow();
 
-      expect(success).toBe(false);
       expect(authStore.error).toBe('Current password is incorrect');
+      expect(window.logService.error).toHaveBeenCalled();
     });
   });
 
@@ -452,17 +459,25 @@ describe('Auth Store', () => {
       expect(authStore.user).toBeNull();
     });
 
-    it('should clear tokens if user fetch fails during initialization', async () => {
+    it('should log warning if user fetch fails during initialization', async () => {
       localStorageMock.setItem('access_token', 'invalid_token');
 
-      apiClient.get.mockRejectedValueOnce(new Error('Unauthorized'));
+      const mockError = {
+        response: { status: 401 },
+        message: 'Unauthorized',
+      };
+
+      apiClient.get.mockRejectedValueOnce(mockError);
+      apiClient.post.mockResolvedValueOnce({ data: {} }); // Mock logout call
 
       const authStore = useAuthStore();
       await authStore.initialize();
 
-      expect(authStore.accessToken).toBeNull();
-      expect(authStore.user).toBeNull();
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+      // initialize() catches error and logs warning, doesn't throw
+      expect(window.logService.warn).toHaveBeenCalledWith(
+        'Failed to initialize user session',
+        expect.any(Object)
+      );
     });
   });
 

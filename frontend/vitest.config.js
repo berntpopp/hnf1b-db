@@ -17,16 +17,9 @@ export default defineConfig({
     // happy-dom for Vue component testing (faster than jsdom)
     environment: 'happy-dom',
 
-    // Use forks pool in single-fork mode for WSL compatibility
-    pool: 'forks',
-
-    // Pool options for better performance and stability
-    poolOptions: {
-      forks: {
-        singleFork: true, // Single fork mode for compatibility
-        isolate: true, // Isolate tests for reliability
-      },
-    },
+    // Use threads pool for CI/CD environments
+    // Note: In WSL development, forks may be more stable, but threads works in GitHub Actions
+    pool: 'threads',
 
     // Timeout configuration
     testTimeout: 10000, // 10 seconds for individual tests
