@@ -223,10 +223,6 @@ async def change_password(
         current_user,
         UserUpdate(
             password=password_data.new_password,
-            email=None,
-            full_name=None,
-            role=None,
-            is_active=None,
         ),
     )
 
