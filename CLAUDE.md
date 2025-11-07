@@ -468,6 +468,8 @@ make phenopackets-migrate-dry
 - Each module follows Single Responsibility Principle (no file exceeds 500 lines)
 
 ### Code Quality Tools
+
+**Backend (Python):**
 ```bash
 # Install development dependencies (automatically included with sync)
 uv sync --group dev --group test
@@ -494,6 +496,33 @@ uv run ruff check --fix .   # Lint and auto-fix issues
 uv run mypy app/            # Type checking
 uv run pytest              # Run tests
 ```
+
+**Frontend (Vue.js):**
+```bash
+cd frontend
+
+# Run all quality checks (test + lint + format) - REQUIRED before commits
+make check
+
+# Individual commands
+make test           # Run Vitest unit tests
+make lint           # Lint with ESLint and auto-fix
+make format         # Format with Prettier
+
+# Alternative: Run tools directly
+npm test            # Run tests
+npm run lint        # Lint and auto-fix
+npm run lint:check  # Lint without auto-fix
+npm run format      # Format code
+npm run format:check # Check formatting
+```
+
+**⚠️ Pre-Commit Requirements:**
+- **ALWAYS run `make check`** before committing (backend or frontend)
+- All tests must pass
+- All linting errors must be fixed
+- Code must be properly formatted
+- GitHub Actions CI/CD runs these checks automatically
 
 ### Code Quality Guidelines
 
@@ -715,8 +744,15 @@ The project handles specialized genomic data formats:
 - Material Design responsive UI
 - JWT authentication flow
 - Real-time statistics dashboard
+- Privacy-first logging system with automatic PII/PHI redaction
 
-See `frontend/CLAUDE.md` for detailed frontend architecture and patterns.
+**Logging System (REQUIRED):**
+- **NEVER use `console.log()`** in frontend code
+- **ALWAYS use `window.logService`** for logging
+- Automatically redacts sensitive data (HPO terms, emails, variants, DNA sequences, tokens)
+- Methods: `window.logService.debug()`, `.info()`, `.warn()`, `.error()`
+- Example: `window.logService.info('User logged in', { username: user.value?.user })`
+- Logging console OFF by default (enable in LogViewer component)
 
 ### Development Considerations
 
