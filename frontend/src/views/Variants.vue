@@ -371,6 +371,10 @@ export default {
       totalPages: 0,
       filteredCount: 0,
 
+      // Initialization flag to prevent double loading
+      // See: https://github.com/vuetifyjs/vuetify/issues/16878
+      loadingInitialized: false,
+
       // Filter options
       variantTypes: ['SNV', 'insertion', 'indel', 'deletion', 'duplication'],
       classifications: [
@@ -502,13 +506,22 @@ export default {
     },
   },
   watch: {
-    // Fetch data on initialization and whenever pagination or sorting options change
+    // Fetch data whenever pagination or sorting options change
+    // IMPORTANT: Do NOT use immediate:true here to prevent double loading
+    // The v-data-table-server component calls @update:options on mount,
+    // which triggers fetchVariants() through onOptionsUpdate()
+    // Using immediate:true would cause fetchVariants() to be called twice:
+    // 1. On component creation (immediate:true)
+    // 2. On mount when table initializes (@update:options event)
+    // See: https://github.com/vuetifyjs/vuetify/issues/16878
     options: {
       handler() {
-        this.fetchVariants();
+        // Only fetch if initialization has completed
+        if (this.loadingInitialized) {
+          this.fetchVariants();
+        }
       },
       deep: true,
-      immediate: true,
     },
   },
   created() {
@@ -725,8 +738,17 @@ export default {
           itemsPerPage: newOptions.itemsPerPage,
           sortBy: newOptions.sortBy,
         },
+        initialized: this.loadingInitialized,
       });
+
       this.options = { ...newOptions };
+
+      // Mark as initialized and trigger initial fetch
+      // This ensures fetchVariants() is only called once on mount
+      if (!this.loadingInitialized) {
+        this.loadingInitialized = true;
+        this.fetchVariants();
+      }
     },
 
     // Disable client-side sorting
