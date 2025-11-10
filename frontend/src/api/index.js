@@ -132,15 +132,21 @@ export function pageToSkipLimit(page, pageSize) {
 
 /**
  * Get a list of phenopackets with JSON:API pagination and filtering.
- * Supports both new JSON:API parameters and legacy skip/limit for backwards compatibility.
+ * Supports offset pagination, cursor pagination, and legacy skip/limit for backwards compatibility.
  *
- * **JSON:API Parameters (Recommended):**
+ * **JSON:API Offset Pagination (Simple):**
  * @param {Object} params - Query parameters
  *   - page[number]: Page number (1-indexed, default: 1)
  *   - page[size]: Items per page (default: 100, max: 1000)
  *   - filter[sex]: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
  *   - filter[has_variants]: Filter by variant presence (boolean)
  *   - sort: Comma-separated fields to sort by (prefix with '-' for descending)
+ *
+ * **JSON:API Cursor Pagination (Stable, Recommended):**
+ *   - page[after]: Cursor token for next page (opaque token from meta.page.endCursor)
+ *   - page[before]: Cursor token for previous page (opaque token from meta.page.startCursor)
+ *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - Cursors provide stable results even when data changes during browsing
  *
  * **Legacy Parameters (Deprecated, auto-converted to JSON:API):**
  *   - skip: Number of records to skip (converted to page[number])
@@ -151,13 +157,14 @@ export function pageToSkipLimit(page, pageSize) {
  * **Response Format (JSON:API):**
  * Returns { data, meta, links } where:
  *   - data: Array of phenopacket documents
- *   - meta.page: { currentPage, pageSize, totalPages, totalRecords }
- *   - links: { self, first, prev, next, last }
+ *   - meta.page: Offset pagination → { currentPage, pageSize, totalPages, totalRecords }
+ *   - meta.page: Cursor pagination → { pageSize, hasNextPage, hasPreviousPage, startCursor, endCursor }
+ *   - links: { self, first, prev, next, last } (or { self, first, prev, next } for cursor)
  *
  * @returns {Promise} Axios promise resolving to JSON:API response
  *
  * @example
- * // JSON:API style (recommended)
+ * // Offset pagination (simple, may skip/duplicate records if data changes)
  * getPhenopackets({
  *   'page[number]': 1,
  *   'page[size]': 20,
@@ -166,7 +173,13 @@ export function pageToSkipLimit(page, pageSize) {
  * })
  *
  * @example
- * // Legacy style (auto-converted)
+ * // Cursor pagination (stable, recommended for browsing)
+ * const response1 = await getPhenopackets({ 'page[size]': 20 })
+ * const nextCursor = response1.meta.page.endCursor
+ * const response2 = await getPhenopackets({ 'page[after]': nextCursor, 'page[size]': 20 })
+ *
+ * @example
+ * // Legacy style (auto-converted to JSON:API)
  * getPhenopackets({ skip: 0, limit: 20, sex: 'MALE' })
  */
 export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { params });

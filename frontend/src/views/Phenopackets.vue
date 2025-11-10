@@ -18,6 +18,26 @@
         <v-toolbar flat>
           <v-toolbar-title>Phenopackets</v-toolbar-title>
           <v-spacer />
+          <!-- Cursor pagination toggle -->
+          <v-tooltip location="bottom">
+            <template #activator="{ props }">
+              <v-switch
+                v-model="useCursorPagination"
+                v-bind="props"
+                label="Stable pagination"
+                color="primary"
+                hide-details
+                density="compact"
+                class="mr-4"
+                @update:model-value="onPaginationModeChange"
+              />
+            </template>
+            <span>
+              Enable cursor pagination for stable results<br>
+              (prevents duplicate/missing records when data changes)
+            </span>
+          </v-tooltip>
+          <v-divider vertical class="mr-4" />
           <div class="d-flex align-center">
             <!-- Rows per page label and dropdown -->
             <span class="mr-2">Rows per page:</span>
@@ -32,16 +52,16 @@
             <!-- Display the current items range -->
             <span class="mx-2">{{ rangeText }}</span>
             <!-- Pagination navigation buttons -->
-            <v-btn icon :disabled="currentPage === 1" @click="goToFirstPage">
+            <v-btn icon :disabled="!canGoToFirst" @click="goToFirstPage">
               <v-icon>mdi-page-first</v-icon>
             </v-btn>
-            <v-btn icon :disabled="currentPage === 1" @click="goToPreviousPage">
+            <v-btn icon :disabled="!canGoToPrevious" @click="goToPreviousPage">
               <v-icon>mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn icon :disabled="currentPage >= totalPages" @click="goToNextPage">
+            <v-btn icon :disabled="!canGoToNext" @click="goToNextPage">
               <v-icon>mdi-chevron-right</v-icon>
             </v-btn>
-            <v-btn icon :disabled="currentPage >= totalPages" @click="goToLastPage">
+            <v-btn icon :disabled="!canGoToLast" @click="goToLastPage">
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
@@ -110,6 +130,7 @@ import { getPhenopackets } from '@/api';
 import {
   buildSortParameter,
   buildPaginationParameters,
+  buildCursorPaginationParameters,
   extractPaginationMeta,
 } from '@/utils/pagination';
 
@@ -121,6 +142,10 @@ export default {
       loading: false,
       totalItems: 0,
       currentPage: 1,
+      useCursorPagination: false, // Toggle for cursor vs offset pagination
+      paginationMeta: null, // Store pagination metadata (offset or cursor)
+      currentCursor: null, // Current page cursor for cursor pagination
+      paginationDirection: 'after', // Direction for cursor pagination ('after' or 'before')
       headers: [
         {
           title: 'Phenopacket ID',
@@ -171,6 +196,9 @@ export default {
   },
   computed: {
     totalPages() {
+      if (this.useCursorPagination) {
+        return 0; // Not available in cursor pagination
+      }
       return Math.ceil(this.totalItems / this.options.itemsPerPage);
     },
     pageStart() {
@@ -180,9 +208,40 @@ export default {
       return Math.min(this.currentPage * this.options.itemsPerPage, this.totalItems);
     },
     rangeText() {
+      if (this.useCursorPagination) {
+        // Cursor pagination: show current page items count (page number not available)
+        const itemCount = this.phenopackets.length;
+        return `Current page (${itemCount} items)`;
+      }
+      // Offset pagination: show range
       return this.totalItems === 0
         ? '0 of 0'
         : `${this.pageStart}-${this.pageEnd} of ${this.totalItems}`;
+    },
+    canGoToPrevious() {
+      if (this.useCursorPagination) {
+        return this.paginationMeta?.hasPreviousPage || false;
+      }
+      return this.currentPage > 1;
+    },
+    canGoToNext() {
+      if (this.useCursorPagination) {
+        return this.paginationMeta?.hasNextPage || false;
+      }
+      return this.currentPage < this.totalPages;
+    },
+    canGoToFirst() {
+      if (this.useCursorPagination) {
+        // Can go to first if there's a previous page (meaning we're not on first page)
+        return this.paginationMeta?.hasPreviousPage || false;
+      }
+      return this.currentPage > 1;
+    },
+    canGoToLast() {
+      if (this.useCursorPagination) {
+        return false; // Cannot jump to last with cursor pagination
+      }
+      return this.currentPage < this.totalPages;
     },
   },
   watch: {
@@ -201,6 +260,7 @@ export default {
         currentPage: this.currentPage,
         itemsPerPage: this.options.itemsPerPage,
         sortBy: this.options.sortBy,
+        useCursorPagination: this.useCursorPagination,
       });
 
       try {
@@ -213,9 +273,22 @@ export default {
           sex: 'subject_sex',
         };
 
-        // Build sort and pagination parameters using utility functions
+        // Build sort parameter
         const sortParam = buildSortParameter(sortBy, sortFieldMap);
-        const paginationParams = buildPaginationParameters(this.currentPage, itemsPerPage);
+
+        // Build pagination parameters based on mode
+        let paginationParams;
+        if (this.useCursorPagination) {
+          // Cursor pagination: use current cursor with direction
+          paginationParams = buildCursorPaginationParameters(
+            this.currentCursor,
+            itemsPerPage,
+            this.paginationDirection
+          );
+        } else {
+          // Offset pagination: use page number
+          paginationParams = buildPaginationParameters(this.currentPage, itemsPerPage);
+        }
 
         // Fetch phenopackets using JSON:API parameters
         const response = await getPhenopackets({
@@ -243,8 +316,17 @@ export default {
           sampleStructure: this.phenopackets.length > 0 ? Object.keys(this.phenopackets[0]) : [],
         });
 
-        // Update pagination metadata from JSON:API response
-        this.totalItems = paginationMeta.totalRecords;
+        // Store pagination metadata
+        this.paginationMeta = paginationMeta;
+
+        // Update UI state based on pagination type
+        if (paginationMeta.type === 'cursor') {
+          // Cursor pagination: totalItems not available, use hasNextPage for navigation
+          this.totalItems = 0; // Not available in cursor pagination
+        } else {
+          // Offset pagination: use totalRecords
+          this.totalItems = paginationMeta.totalRecords;
+        }
 
         window.logService.info('Phenopackets fetched successfully', {
           count: phenopacketDocuments.length,
@@ -295,43 +377,87 @@ export default {
       this.options = { ...newOptions };
     },
 
+    onPaginationModeChange(useCursor) {
+      window.logService.info('Pagination mode changed', {
+        mode: useCursor ? 'cursor' : 'offset',
+      });
+      // Reset pagination state when switching modes
+      this.currentPage = 1;
+      this.currentCursor = null;
+      this.paginationDirection = 'after';
+      this.paginationMeta = null;
+      // Refetch with new mode
+      this.fetchPhenopackets();
+    },
+
     // Disable client-side sorting
     customSort(items) {
       return items;
     },
 
     goToFirstPage() {
-      window.logService.debug('Pagination: navigating to first page', {
-        fromPage: this.currentPage,
-        toPage: 1,
-      });
-      this.currentPage = 1;
+      window.logService.debug('Pagination: navigating to first page');
+      if (this.useCursorPagination) {
+        // Reset cursor pagination
+        this.currentCursor = null;
+        this.paginationDirection = 'after';
+      } else {
+        this.currentPage = 1;
+      }
       this.fetchPhenopackets();
     },
 
     goToPreviousPage() {
-      if (this.currentPage > 1) {
-        window.logService.debug('Pagination: navigating to previous page', {
-          fromPage: this.currentPage,
-          toPage: this.currentPage - 1,
-        });
-        this.currentPage--;
-        this.fetchPhenopackets();
+      if (this.useCursorPagination) {
+        // Cursor pagination: use startCursor with page[before]
+        if (this.paginationMeta?.hasPreviousPage) {
+          window.logService.debug('Pagination: navigating to previous page (cursor)');
+          // Use startCursor to go backwards
+          this.currentCursor = this.paginationMeta.startCursor;
+          this.paginationDirection = 'before';
+          this.fetchPhenopackets();
+        }
+      } else {
+        // Offset pagination
+        if (this.currentPage > 1) {
+          window.logService.debug('Pagination: navigating to previous page (offset)', {
+            fromPage: this.currentPage,
+            toPage: this.currentPage - 1,
+          });
+          this.currentPage--;
+          this.fetchPhenopackets();
+        }
       }
     },
 
     goToNextPage() {
-      if (this.currentPage < this.totalPages) {
-        window.logService.debug('Pagination: navigating to next page', {
-          fromPage: this.currentPage,
-          toPage: this.currentPage + 1,
-        });
-        this.currentPage++;
-        this.fetchPhenopackets();
+      if (this.useCursorPagination) {
+        // Cursor pagination: use endCursor with page[after]
+        if (this.paginationMeta?.hasNextPage) {
+          window.logService.debug('Pagination: navigating to next page (cursor)');
+          this.currentCursor = this.paginationMeta.endCursor;
+          this.paginationDirection = 'after';
+          this.fetchPhenopackets();
+        }
+      } else {
+        // Offset pagination
+        if (this.currentPage < this.totalPages) {
+          window.logService.debug('Pagination: navigating to next page (offset)', {
+            fromPage: this.currentPage,
+            toPage: this.currentPage + 1,
+          });
+          this.currentPage++;
+          this.fetchPhenopackets();
+        }
       }
     },
 
     goToLastPage() {
+      if (this.useCursorPagination) {
+        // Cursor pagination doesn't support jumping to last page
+        window.logService.warn('Cannot jump to last page with cursor pagination');
+        return;
+      }
       window.logService.debug('Pagination: navigating to last page', {
         fromPage: this.currentPage,
         toPage: this.totalPages,
