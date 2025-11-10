@@ -1,5 +1,13 @@
-# Run from frontend directory (monorepo structure)
-cd frontend && npm run lint:staged
+#!/bin/sh
+
+# Only run frontend checks if frontend files are staged
+STAGED_FILES=$(git diff --name-only --cached)
+HAS_FRONTEND_FILES=$(echo "$STAGED_FILES" | grep -c "^frontend/" || true)
+
+if [ "$HAS_FRONTEND_FILES" -gt 0 ]; then
+  # Run from frontend directory (monorepo structure)
+  cd frontend && npm run lint:staged
+fi
 
 # Ensure package.json and package-lock.json are committed together
 STAGED_FILES=$(git diff --name-only --cached)
