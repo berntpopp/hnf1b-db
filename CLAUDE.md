@@ -720,6 +720,101 @@ The API (in `backend/app/`) uses GA4GH Phenopackets v2 format:
   - `/clinical/diabetes` - Diabetes cases
   - `/clinical/hypomagnesemia` - Hypomagnesemia cases
 
+#### JSON:API v1.1 Pagination (Issue #62)
+
+The `/api/v2/phenopackets/` endpoint implements JSON:API v1.1 compliant pagination with two modes:
+
+**1. Offset Pagination (Page Numbers)**
+```bash
+# Basic pagination
+GET /api/v2/phenopackets/?page[number]=1&page[size]=20
+
+# With filters and sorting
+GET /api/v2/phenopackets/?page[number]=2&page[size]=50&filter[sex]=MALE&sort=-created_at
+
+# Response structure
+{
+  "data": [...],  # Array of phenopackets
+  "meta": {
+    "page": {
+      "currentPage": 1,
+      "pageSize": 20,
+      "totalPages": 44,
+      "totalRecords": 864
+    }
+  },
+  "links": {
+    "self": "/api/v2/phenopackets/?page[number]=1&page[size]=20",
+    "first": "/api/v2/phenopackets/?page[number]=1&page[size]=20",
+    "prev": null,
+    "next": "/api/v2/phenopackets/?page[number]=2&page[size]=20",
+    "last": "/api/v2/phenopackets/?page[number]=44&page[size]=20"
+  }
+}
+```
+
+**2. Cursor Pagination (Stable Results)**
+```bash
+# First page (triggers cursor mode with empty page[after])
+GET /api/v2/phenopackets/?page[size]=20
+
+# Next page using endCursor from response
+GET /api/v2/phenopackets/?page[after]=eyJpZCI6IjEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9&page[size]=20
+
+# Previous page using startCursor
+GET /api/v2/phenopackets/?page[before]=eyJpZCI6IjQ1NiIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEzOjAwOjAwWiJ9&page[size]=20
+
+# Response structure
+{
+  "data": [...],
+  "meta": {
+    "page": {
+      "pageSize": 20,
+      "hasNextPage": true,
+      "hasPreviousPage": false,
+      "startCursor": "eyJpZCI6IjEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9",
+      "endCursor": "eyJpZCI6IjE0MiIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjE1OjAwWiJ9"
+    }
+  },
+  "links": {
+    "self": "/api/v2/phenopackets/?page[size]=20",
+    "first": "/api/v2/phenopackets/?page[size]=20",
+    "prev": null,
+    "next": "/api/v2/phenopackets/?page[after]=eyJpZCI6IjE0MiIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjE1OjAwWiJ9&page[size]=20"
+  }
+}
+```
+
+**Query Parameters:**
+
+*Pagination:*
+- `page[number]` - Page number (1-indexed, offset pagination)
+- `page[size]` - Items per page (default: 100, max: 1000)
+- `page[after]` - Cursor for next page (cursor pagination)
+- `page[before]` - Cursor for previous page (cursor pagination)
+
+*Filtering:*
+- `filter[sex]` - Filter by subject sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
+- `filter[has_variants]` - Filter by variant presence (true/false)
+
+*Sorting:*
+- `sort` - Comma-separated fields, prefix with `-` for descending
+  - Supported: `created_at`, `subject_id`, `subject_sex`
+  - Example: `sort=-created_at,subject_id` (newest first, then by ID)
+
+**When to Use Each Mode:**
+- **Offset pagination**: Use for displaying page numbers (e.g., "Page 2 of 44")
+- **Cursor pagination**: Use when data changes frequently or for infinite scroll
+
+**Performance:**
+- Offset pagination: O(n) with COUNT query (~150ms)
+- Cursor pagination: O(log n) with composite B-tree index (~120ms)
+- Index: `idx_phenopackets_cursor_pagination` on `(created_at DESC, id DESC)`
+
+**Backwards Compatibility:**
+- Legacy `skip`/`limit` parameters still work (deprecated)
+- Legacy parameters automatically converted to page-based pagination
+
 ### Database Schema (Phenopackets v2)
 
 PostgreSQL tables using JSONB storage for phenopackets:
