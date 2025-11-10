@@ -3,16 +3,24 @@
 Basic create, read, update, delete operations for phenopacket resources.
 """
 
+import base64
+import json
+import uuid
+from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.json_api import (
+    CursorLinksObject,
+    CursorMetaObject,
+    CursorPageMeta,
+    JsonApiCursorResponse,
     JsonApiResponse,
     LinksObject,
     MetaObject,
@@ -39,9 +47,20 @@ sanitizer = PhenopacketSanitizer()
 # Force reload to pick up JSON:API changes
 
 
-@router.get("/", response_model=JsonApiResponse[Dict])
+@router.get("/")
 async def list_phenopackets(
-    # JSON:API pagination parameters
+    # JSON:API cursor pagination parameters
+    page_after: Optional[str] = Query(
+        None,
+        alias="page[after]",
+        description="Cursor for next page (opaque token)",
+    ),
+    page_before: Optional[str] = Query(
+        None,
+        alias="page[before]",
+        description="Cursor for previous page (opaque token)",
+    ),
+    # JSON:API offset pagination parameters
     page_number: int = Query(
         1, alias="page[number]", ge=1, description="Page number (1-indexed)"
     ),
@@ -90,8 +109,20 @@ async def list_phenopackets(
     """List phenopackets with JSON:API pagination, filtering, and sorting.
 
     **Pagination (JSON:API standard):**
-    - `page[number]`: Page number (1-indexed, default: 1)
-    - `page[size]`: Items per page (default: 100, max: 1000)
+
+    Two pagination strategies are supported:
+
+    1. **Cursor-based pagination** (recommended for stable browsing):
+       - `page[after]`: Cursor token for next page
+       - `page[before]`: Cursor token for previous page
+       - `page[size]`: Items per page (default: 100, max: 1000)
+       - Returns stable results even when data changes
+       - Cursors are opaque tokens (do not parse)
+
+    2. **Offset-based pagination** (simple cases only):
+       - `page[number]`: Page number (1-indexed, default: 1)
+       - `page[size]`: Items per page (default: 100, max: 1000)
+       - May return inconsistent results if data changes during browsing
 
     **Filtering:**
     - `filter[sex]`: Filter by subject sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
@@ -105,11 +136,16 @@ async def list_phenopackets(
     **Response Format:**
     Returns JSON:API compliant response with:
     - `data`: Array of phenopacket documents
-    - `meta.page`: Pagination metadata (currentPage, pageSize, totalPages, totalRecords)
+    - `meta.page` or `meta.cursor`: Pagination metadata
     - `links`: Navigation links (self, first, prev, next, last)
 
     **Examples:**
     ```
+    # Cursor pagination (stable results)
+    GET /phenopackets?page[size]=20
+    GET /phenopackets?page[after]=eyJpZCI6ImFiYzEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9&page[size]=20
+
+    # Offset pagination (simple)
     GET /phenopackets?page[number]=1&page[size]=20
     GET /phenopackets?page[number]=2&page[size]=50&filter[sex]=MALE
     GET /phenopackets?page[number]=1&page[size]=100&sort=-created_at
@@ -132,6 +168,23 @@ async def list_phenopackets(
     if filter_has_variants is None:
         filter_has_variants = has_variants
 
+    # Detect pagination strategy: cursor-based vs offset-based
+    use_cursor_pagination = page_after is not None or page_before is not None
+
+    if use_cursor_pagination:
+        # Route to cursor-based pagination (stable, recommended)
+        return await _list_with_cursor_pagination(
+            page_after=page_after,
+            page_before=page_before,
+            page_size=page_size,
+            filter_sex=filter_sex,
+            filter_has_variants=filter_has_variants,
+            sort=sort,
+            db=db,
+            request=request,
+        )
+
+    # Otherwise, use offset-based pagination (legacy, simple cases)
     # Build query
     query = select(Phenopacket)
 
@@ -468,3 +521,298 @@ async def delete_phenopacket(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {"message": "Phenopacket deleted successfully"}
+
+
+# ===== Cursor Pagination Implementation =====
+
+
+async def _list_with_cursor_pagination(
+    page_after: Optional[str],
+    page_before: Optional[str],
+    page_size: int,
+    filter_sex: Optional[str],
+    filter_has_variants: Optional[bool],
+    sort: Optional[str],
+    db: AsyncSession,
+    request: Request,
+) -> JsonApiCursorResponse:
+    """Implement cursor-based pagination for stable browsing.
+
+    Cursor pagination prevents duplicate/missing records when data changes
+    during pagination (e.g., records added/deleted while user browses).
+
+    Args:
+        page_after: Cursor for next page (get records after this cursor)
+        page_before: Cursor for previous page (get records before this cursor)
+        page_size: Number of items per page
+        filter_sex: Filter by subject sex
+        filter_has_variants: Filter by variant presence
+        sort: Sort parameter (currently ignored, uses created_at for stability)
+        db: Database session
+        request: FastAPI request object
+
+    Returns:
+        JsonApiCursorResponse with data, metadata, and navigation links
+
+    Cursor format:
+        Base64-encoded JSON: {"id": UUID, "created_at": ISO-8601}
+        Example: {"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"}
+
+    Algorithm:
+        1. Decode cursor (if provided)
+        2. Build base query with filters
+        3. Add cursor WHERE condition (created_at/id comparison)
+        4. Apply stable sort (created_at ASC/DESC + id ASC/DESC)
+        5. Fetch page_size + 1 records (to detect next page)
+        6. Generate start/end cursors for current page
+        7. Build navigation links with cursors
+    """
+    # Decode cursor and determine direction
+    cursor_data = None
+    if page_after:
+        cursor_data = decode_cursor(page_after)
+        is_forward = True
+    elif page_before:
+        cursor_data = decode_cursor(page_before)
+        is_forward = False
+    else:
+        is_forward = True
+
+    # Build base query
+    query = select(Phenopacket)
+
+    # Apply filters
+    query = add_sex_filter(query, filter_sex)
+    query = add_has_variants_filter(query, filter_has_variants)
+
+    # Apply cursor condition for range-based pagination
+    if cursor_data:
+        cursor_created_at = cursor_data["created_at"]
+        cursor_id = cursor_data["id"]
+
+        if is_forward:
+            # page[after]: Get records AFTER cursor
+            # created_at > cursor.created_at OR (created_at = cursor.created_at AND id > cursor.id)
+            query = query.where(
+                or_(
+                    Phenopacket.created_at > cursor_created_at,
+                    and_(
+                        Phenopacket.created_at == cursor_created_at,
+                        Phenopacket.id > cursor_id,
+                    ),
+                )
+            )
+        else:
+            # page[before]: Get records BEFORE cursor
+            # created_at < cursor.created_at OR (created_at = cursor.created_at AND id < cursor.id)
+            query = query.where(
+                or_(
+                    Phenopacket.created_at < cursor_created_at,
+                    and_(
+                        Phenopacket.created_at == cursor_created_at,
+                        Phenopacket.id < cursor_id,
+                    ),
+                )
+            )
+
+    # Apply stable sort (cursor pagination requires deterministic order)
+    # Always sort by created_at + id for stability
+    if is_forward:
+        query = query.order_by(Phenopacket.created_at.asc(), Phenopacket.id.asc())
+    else:
+        # For page[before], reverse sort to get records before cursor
+        query = query.order_by(Phenopacket.created_at.desc(), Phenopacket.id.desc())
+
+    # Fetch one extra record to check if there's a next/prev page
+    query = query.limit(page_size + 1)
+
+    # Execute query
+    result = await db.execute(query)
+    phenopackets = result.scalars().all()
+
+    # Check for more pages
+    has_more = len(phenopackets) > page_size
+    if has_more:
+        phenopackets = phenopackets[:page_size]  # Remove the extra record
+
+    # Reverse results if page[before] was used (to maintain correct order)
+    if not is_forward:
+        phenopackets = list(reversed(phenopackets))
+
+    # Generate cursors for current page
+    start_cursor = None
+    end_cursor = None
+    if phenopackets:
+        start_cursor = encode_cursor(
+            {
+                "id": phenopackets[0].id,
+                "created_at": phenopackets[0].created_at.isoformat(),
+            }
+        )
+        end_cursor = encode_cursor(
+            {
+                "id": phenopackets[-1].id,
+                "created_at": phenopackets[-1].created_at.isoformat(),
+            }
+        )
+
+    # Build pagination metadata
+    meta = CursorMetaObject(
+        page=CursorPageMeta(
+            page_size=page_size,
+            # has_next: If forward pagination and we found extra record, there's a next page
+            has_next_page=has_more if is_forward else (cursor_data is not None),
+            # has_prev: If forward pagination and cursor exists, there's a prev page
+            has_previous_page=(cursor_data is not None) if is_forward else has_more,
+            start_cursor=start_cursor,
+            end_cursor=end_cursor,
+        )
+    )
+
+    # Build navigation links
+    base_url = str(request.url).split("?")[0] if request else "/api/v2/phenopackets/"
+    links = build_cursor_pagination_links(
+        base_url=base_url,
+        page_size=page_size,
+        start_cursor=start_cursor,
+        end_cursor=end_cursor,
+        has_next=meta.page.has_next_page,
+        has_prev=meta.page.has_previous_page,
+        filters={
+            "filter[sex]": filter_sex,
+            "filter[has_variants]": filter_has_variants,
+        },
+        sort=sort,
+    )
+
+    return JsonApiCursorResponse(
+        data=[p.phenopacket for p in phenopackets],
+        meta=meta,
+        links=links,
+    )
+
+
+# ===== Cursor Pagination Helper Functions =====
+
+
+def encode_cursor(data: dict) -> str:
+    """Encode cursor data to opaque Base64 token.
+
+    Args:
+        data: Dictionary containing cursor fields (e.g., {"id": UUID, "created_at": ISO-8601})
+
+    Returns:
+        Base64-encoded URL-safe string
+
+    Example:
+        >>> encode_cursor({"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"})
+        'eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9'
+    """
+    # Convert UUID objects to strings for JSON serialization
+    serializable_data = {}
+    for key, value in data.items():
+        if hasattr(value, "__str__"):
+            serializable_data[key] = str(value)
+        else:
+            serializable_data[key] = value
+
+    json_str = json.dumps(serializable_data, separators=(",", ":"))
+    return base64.urlsafe_b64encode(json_str.encode()).decode()
+
+
+def decode_cursor(cursor: str) -> dict:
+    """Decode cursor token to data dictionary.
+
+    Args:
+        cursor: Base64-encoded cursor string
+
+    Returns:
+        Dictionary with cursor data
+
+    Raises:
+        HTTPException: If cursor format is invalid
+
+    Example:
+        >>> decode_cursor('eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9')
+        {"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"}
+    """
+    try:
+        json_str = base64.urlsafe_b64decode(cursor.encode()).decode()
+        data = json.loads(json_str)
+
+        # Convert created_at string back to datetime
+        if "created_at" in data:
+            data["created_at"] = datetime.fromisoformat(
+                data["created_at"].replace("Z", "+00:00")
+            )
+
+        # Convert id string back to UUID
+        if "id" in data:
+            data["id"] = uuid.UUID(data["id"])
+
+        return data
+    except (ValueError, KeyError, json.JSONDecodeError) as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid cursor format: {str(e)}"
+        )
+
+
+def build_cursor_pagination_links(
+    base_url: str,
+    page_size: int,
+    start_cursor: Optional[str],
+    end_cursor: Optional[str],
+    has_next: bool,
+    has_prev: bool,
+    filters: dict,
+    sort: Optional[str] = None,
+) -> CursorLinksObject:
+    """Build cursor pagination links.
+
+    Args:
+        base_url: Base URL without query parameters
+        page_size: Number of items per page
+        start_cursor: Cursor for first record in current page
+        end_cursor: Cursor for last record in current page
+        has_next: Whether there's a next page
+        has_prev: Whether there's a previous page
+        filters: Dictionary of filter parameters to preserve
+        sort: Sort parameter to preserve
+
+    Returns:
+        CursorLinksObject with navigation links
+
+    Example:
+        >>> links = build_cursor_pagination_links(
+        ...     base_url="/api/v2/phenopackets/",
+        ...     page_size=20,
+        ...     start_cursor="eyJpZCI6MX0=",
+        ...     end_cursor="eyJpZCI6MjB9",
+        ...     has_next=True,
+        ...     has_prev=False,
+        ...     filters={"filter[sex]": "MALE"},
+        ...     sort="-created_at"
+        ... )
+    """
+
+    def build_url(
+        cursor_param: Optional[str] = None, cursor_value: Optional[str] = None
+    ) -> str:
+        params = {"page[size]": page_size}
+        if cursor_param and cursor_value:
+            params[cursor_param] = cursor_value
+        # Add filters (exclude None values)
+        for key, value in filters.items():
+            if value is not None:
+                params[key] = value
+        # Add sort
+        if sort:
+            params["sort"] = sort
+        return f"{base_url}?{urlencode(params)}"
+
+    return CursorLinksObject(
+        self=build_url(),
+        first=build_url(),
+        prev=build_url("page[before]", start_cursor) if has_prev else None,
+        next=build_url("page[after]", end_cursor) if has_next else None,
+    )
