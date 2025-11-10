@@ -7,7 +7,7 @@ import base64
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -103,7 +103,7 @@ async def list_phenopackets(
         deprecated=True,
         description="DEPRECATED: Use filter[has_variants]",
     ),
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]
     db: AsyncSession = Depends(get_db),
 ):
     """List phenopackets with JSON:API pagination, filtering, and sorting.
@@ -143,7 +143,7 @@ async def list_phenopackets(
     ```
     # Cursor pagination (stable results)
     GET /phenopackets?page[size]=20
-    GET /phenopackets?page[after]=eyJpZCI6ImFiYzEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9&page[size]=20
+    GET /phenopackets?page[after]=eyJpZCI6ImFiYzEyMyIsI...&page[size]=20
 
     # Offset pagination (simple)
     GET /phenopackets?page[number]=1&page[size]=20
@@ -194,7 +194,7 @@ async def list_phenopackets(
 
     # Count total records (with filters applied)
     count_query = select(func.count()).select_from(query.alias())
-    total_records = await db.scalar(count_query)
+    total_records = await db.scalar(count_query) or 0
 
     # Apply sorting
     if sort:
@@ -222,10 +222,10 @@ async def list_phenopackets(
     # Build response
     meta = MetaObject(
         page=PageMeta(
-            current_page=page_number,
-            page_size=page_size,
-            total_pages=total_pages,
-            total_records=total_records,
+            currentPage=page_number,
+            pageSize=page_size,
+            totalPages=total_pages,
+            totalRecords=total_records,
         )
     )
 
@@ -321,7 +321,7 @@ def build_pagination_links(
         LinksObject with self, first, prev, next, last links
     """
     def build_url(page: int) -> str:
-        params = {
+        params: dict[str, Any] = {
             "page[number]": page,
             "page[size]": page_size,
         }
@@ -556,7 +556,7 @@ async def _list_with_cursor_pagination(
 
     Cursor format:
         Base64-encoded JSON: {"id": UUID, "created_at": ISO-8601}
-        Example: {"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"}
+        Example: {"id": "123e4567-...", "created_at": "2025-01-01T..."}
 
     Algorithm:
         1. Decode cursor (if provided)
@@ -592,7 +592,8 @@ async def _list_with_cursor_pagination(
 
         if is_forward:
             # page[after]: Get records AFTER cursor
-            # created_at > cursor.created_at OR (created_at = cursor.created_at AND id > cursor.id)
+            # created_at > cursor.created_at OR
+            # (created_at = cursor.created_at AND id > cursor.id)
             query = query.where(
                 or_(
                     Phenopacket.created_at > cursor_created_at,
@@ -604,7 +605,8 @@ async def _list_with_cursor_pagination(
             )
         else:
             # page[before]: Get records BEFORE cursor
-            # created_at < cursor.created_at OR (created_at = cursor.created_at AND id < cursor.id)
+            # created_at < cursor.created_at OR
+            # (created_at = cursor.created_at AND id < cursor.id)
             query = query.where(
                 or_(
                     Phenopacket.created_at < cursor_created_at,
@@ -659,13 +661,13 @@ async def _list_with_cursor_pagination(
     # Build pagination metadata
     meta = CursorMetaObject(
         page=CursorPageMeta(
-            page_size=page_size,
-            # has_next: If forward pagination and we found extra record, there's a next page
-            has_next_page=has_more if is_forward else (cursor_data is not None),
+            pageSize=page_size,
+            # has_next: If forward and extra record found, there's next page
+            hasNextPage=has_more if is_forward else (cursor_data is not None),
             # has_prev: If forward pagination and cursor exists, there's a prev page
-            has_previous_page=(cursor_data is not None) if is_forward else has_more,
-            start_cursor=start_cursor,
-            end_cursor=end_cursor,
+            hasPreviousPage=(cursor_data is not None) if is_forward else has_more,
+            startCursor=start_cursor,
+            endCursor=end_cursor,
         )
     )
 
@@ -699,14 +701,15 @@ def encode_cursor(data: dict) -> str:
     """Encode cursor data to opaque Base64 token.
 
     Args:
-        data: Dictionary containing cursor fields (e.g., {"id": UUID, "created_at": ISO-8601})
+        data: Dictionary with cursor fields
+              (e.g., {"id": UUID, "created_at": ISO-8601})
 
     Returns:
         Base64-encoded URL-safe string
 
     Example:
-        >>> encode_cursor({"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"})
-        'eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9'
+        >>> encode_cursor({"id": "123e4567...", "created_at": "2025-01..."})
+        'eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCIsIm...'
     """
     # Convert UUID objects to strings for JSON serialization
     serializable_data = {}
@@ -733,8 +736,8 @@ def decode_cursor(cursor: str) -> dict:
         HTTPException: If cursor format is invalid
 
     Example:
-        >>> decode_cursor('eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxVDEyOjAwOjAwWiJ9')
-        {"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": "2025-01-01T12:00:00Z"}
+        >>> decode_cursor('eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LT...')
+        {"id": "123e4567-e89b-12d3-a456-426614174000", "created_at": ...}
     """
     try:
         json_str = base64.urlsafe_b64decode(cursor.encode()).decode()
@@ -798,7 +801,7 @@ def build_cursor_pagination_links(
     def build_url(
         cursor_param: Optional[str] = None, cursor_value: Optional[str] = None
     ) -> str:
-        params = {"page[size]": page_size}
+        params: dict[str, Any] = {"page[size]": page_size}
         if cursor_param and cursor_value:
             params[cursor_param] = cursor_value
         # Add filters (exclude None values)

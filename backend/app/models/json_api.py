@@ -10,7 +10,7 @@ References:
 
 from typing import Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Generic type for wrapped data
 T = TypeVar("T")
@@ -31,10 +31,7 @@ class PageMeta(BaseModel):
     total_pages: int = Field(..., alias="totalPages", ge=0)
     total_records: int = Field(..., alias="totalRecords", ge=0)
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MetaObject(BaseModel):
@@ -120,10 +117,7 @@ class CursorPageMeta(BaseModel):
     start_cursor: Optional[str] = Field(None, alias="startCursor")
     end_cursor: Optional[str] = Field(None, alias="endCursor")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CursorMetaObject(BaseModel):
