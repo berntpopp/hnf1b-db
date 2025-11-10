@@ -84,7 +84,7 @@
 <script>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { search } from '@/api/index.js';
+import { searchPhenopackets } from '@/api/index.js';
 
 /**
  * Formats the "matched" object into a display string.
@@ -170,7 +170,7 @@ export default {
       loading.value = true;
       try {
         // reduceDoc = true returns only minimal fields.
-        const { data: searchData } = await search(query, null, true);
+        const { data: searchData } = await searchPhenopackets({ query, reduce_doc: true });
         if (searchData && searchData.results) {
           results.value = searchData.results;
 

@@ -28,7 +28,7 @@
 <script>
 import { ref, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { search } from '@/api/index.js';
+import { searchPhenopackets } from '@/api/index.js';
 
 /**
  * Debounce function to limit how often a function is called.
@@ -179,7 +179,7 @@ export default {
 
       loading.value = true;
       try {
-        const { data: searchData } = await search(newVal, null, true);
+        const { data: searchData } = await searchPhenopackets({ query: newVal, reduce_doc: true });
         searchSuggestions.value = formatSearchResults(searchData);
 
         window.logService.debug('Autocomplete suggestions received', {

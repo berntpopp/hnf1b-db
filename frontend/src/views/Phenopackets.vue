@@ -33,7 +33,7 @@
               />
             </template>
             <span>
-              Enable cursor pagination for stable results<br>
+              Enable cursor pagination for stable results<br />
               (prevents duplicate/missing records when data changes)
             </span>
           </v-tooltip>

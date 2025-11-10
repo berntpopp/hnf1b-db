@@ -427,45 +427,6 @@ export const getDiabetesCases = () => apiClient.get('/clinical/diabetes');
  */
 export const getHypomagnesemiaCases = () => apiClient.get('/clinical/hypomagnesemia');
 
-/* ==================== LEGACY COMPATIBILITY (DEPRECATED) ==================== */
-
-/**
- * Helper to convert v1 pagination and warn about deprecation.
- * @private
- */
-function deprecatedPaginationWrapper(warningMsg, newFn, params) {
-  window.logService.warn('Deprecated API function called', {
-    message: warningMsg,
-    params: params,
-  });
-  const { page = 1, page_size = 10, ...rest } = params || {};
-  const { skip, limit } = pageToSkipLimit(page, page_size);
-  return newFn({ skip, limit, ...rest });
-}
-
-/**
- * Helper to warn about deprecation and call new function.
- * @private
- */
-function deprecatedWrapper(warningMsg, newFn, ...args) {
-  window.logService.warn('Deprecated API function called', {
-    message: warningMsg,
-    argsCount: args.length,
-  });
-  return newFn(...args);
-}
-
-/**
- * @deprecated Use getPhenopackets() instead.
- * Legacy compatibility wrapper for old API.
- */
-export const getIndividuals = (params) =>
-  deprecatedPaginationWrapper(
-    'getIndividuals() is deprecated. Use getPhenopackets() instead.',
-    getPhenopackets,
-    params
-  );
-
 /**
  * Get aggregated unique variants across all phenopackets with search and filters.
  * Implements backend search endpoint from Issue #64.
@@ -538,41 +499,5 @@ export const getVariants = async (params = {}) => {
     },
   };
 };
-
-/**
- * @deprecated Publications are now stored in phenopacket.metaData.externalReferences.
- * Legacy compatibility wrapper for old API.
- */
-export const getPublications = (params) =>
-  deprecatedPaginationWrapper(
-    'getPublications() is deprecated. Publications are in phenopacket.metaData.externalReferences.',
-    getPhenopackets,
-    params
-  );
-
-/**
- * @deprecated Use getSexDistribution() instead.
- */
-export const getIndividualsSexCount = () =>
-  deprecatedWrapper(
-    'getIndividualsSexCount() is deprecated. Use getSexDistribution() instead.',
-    getSexDistribution
-  );
-
-/**
- * @deprecated Use searchPhenopackets() instead.
- */
-export const search = (query, collection, reduceDoc = false) =>
-  deprecatedWrapper(
-    'search() is deprecated. Use searchPhenopackets() instead.',
-    searchPhenopackets,
-    { query, collection, reduce_doc: reduceDoc }
-  );
-
-/**
- * @deprecated Use getSummaryStats() instead.
- */
-export const getSummary = () =>
-  deprecatedWrapper('getSummary() is deprecated. Use getSummaryStats() instead.', getSummaryStats);
 
 export default apiClient;

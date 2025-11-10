@@ -17,9 +17,20 @@ export default defineConfig({
     // happy-dom for Vue component testing (faster than jsdom)
     environment: 'happy-dom',
 
-    // Use threads pool for CI/CD environments
-    // Note: In WSL development, forks may be more stable, but threads works in GitHub Actions
-    pool: 'threads',
+    // Use vmThreads pool for WSL2 compatibility
+    // Both 'threads' and 'forks' have known timeout issues in WSL2 environment
+    // vmThreads uses isolated contexts but runs in main process (no worker communication issues)
+    pool: process.env.CI ? 'threads' : 'vmThreads',
+
+    // Increase pool startup timeout for WSL2 (default is 10000ms)
+    poolOptions: {
+      vmThreads: {
+        memoryLimit: '512MB',
+      },
+      threads: {
+        singleThread: false,
+      },
+    },
 
     // Timeout configuration
     testTimeout: 10000, // 10 seconds for individual tests
