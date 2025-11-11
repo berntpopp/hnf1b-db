@@ -2,6 +2,7 @@
 
 Tests the cursor pagination implementation added in Phase 2 of issue #62.
 """
+
 import base64
 import json
 import uuid
@@ -231,7 +232,9 @@ async def test_cursor_pagination_with_filters(async_client: AsyncClient, db_sess
 
 
 @pytest.mark.asyncio
-async def test_cursor_pagination_navigation_links(async_client: AsyncClient, db_session):
+async def test_cursor_pagination_navigation_links(
+    async_client: AsyncClient, db_session
+):
     """Test that cursor pagination generates proper navigation links."""
     # Get some phenopackets
     query = select(Phenopacket).order_by(Phenopacket.created_at.desc()).limit(5)
@@ -271,7 +274,10 @@ async def test_cursor_pagination_navigation_links(async_client: AsyncClient, db_
     if data["meta"]["page"]["hasNextPage"]:
         assert "next" in data["links"]
         assert data["links"]["next"] is not None
-        assert "page[after]" in data["links"]["next"] or "page%5Bafter%5D" in data["links"]["next"]
+        assert (
+            "page[after]" in data["links"]["next"]
+            or "page%5Bafter%5D" in data["links"]["next"]
+        )
 
     if data["meta"]["page"]["hasPreviousPage"]:
         assert "prev" in data["links"]

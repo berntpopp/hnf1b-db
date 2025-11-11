@@ -185,8 +185,16 @@ class TestOffsetPagination:
         assert links["prev"] is None, "First page should have no prev link"
         assert links["next"] is not None, "First page should have next link"
         # Links may be URL-encoded
-        assert "page" in links["first"] and "number" in links["first"] and "1" in links["first"]
-        assert "page" in links["next"] and "number" in links["next"] and "2" in links["next"]
+        assert (
+            "page" in links["first"]
+            and "number" in links["first"]
+            and "1" in links["first"]
+        )
+        assert (
+            "page" in links["next"]
+            and "number" in links["next"]
+            and "2" in links["next"]
+        )
 
         # Check data
         assert len(data["data"]) == 20
@@ -213,8 +221,12 @@ class TestOffsetPagination:
         assert links["prev"] is not None, "Middle page should have prev link"
         assert links["next"] is not None, "Middle page should have next link"
         # URL-encoded format: page%5Bnumber%5D or unencoded page[number]
-        assert ("page[number]=1" in links["prev"] or "page%5Bnumber%5D=1" in links["prev"])
-        assert ("page[number]=3" in links["next"] or "page%5Bnumber%5D=3" in links["next"])
+        assert (
+            "page[number]=1" in links["prev"] or "page%5Bnumber%5D=1" in links["prev"]
+        )
+        assert (
+            "page[number]=3" in links["next"] or "page%5Bnumber%5D=3" in links["next"]
+        )
 
     @pytest.mark.asyncio
     async def test_last_page(
@@ -364,9 +376,7 @@ class TestFiltering:
         page_meta = data["meta"]["page"]
         # We have 30 phenopackets with variants in test data
         test_variant_count = sum(
-            1
-            for pp in sample_phenopackets
-            if pp.phenopacket.get("interpretations")
+            1 for pp in sample_phenopackets if pp.phenopacket.get("interpretations")
         )
         assert page_meta["totalRecords"] >= test_variant_count
 
@@ -389,14 +399,18 @@ class TestFiltering:
             assert "interpretations" in phenopacket
 
         # Check pagination works with filters
-        page_meta = data["meta"]["page"]
         links = data["links"]
 
         # Links should preserve filters (handle URL encoding)
         if links["next"]:
             next_link = links["next"]
-            assert ("filter[sex]=MALE" in next_link or "filter%5Bsex%5D=MALE" in next_link)
-            assert ("filter[has_variants]=" in next_link or "filter%5Bhas_variants%5D=" in next_link)
+            assert (
+                "filter[sex]=MALE" in next_link or "filter%5Bsex%5D=MALE" in next_link
+            )
+            assert (
+                "filter[has_variants]=" in next_link
+                or "filter%5Bhas_variants%5D=" in next_link
+            )
 
     @pytest.mark.asyncio
     async def test_filter_no_results(
@@ -413,7 +427,6 @@ class TestFiltering:
 
         # Should return empty data
         # Note: Might have other phenopackets from migrations, so check if our test data is filtered
-        page_meta = data["meta"]["page"]
         # All phenopackets with OTHER_SEX should not include our test data
         for phenopacket in data["data"]:
             assert not phenopacket["id"].startswith("test_pagination_")
@@ -439,9 +452,9 @@ class TestSorting:
         subject_ids = [pp["subject"]["id"] for pp in data["data"]]
 
         # Check they are in ascending order
-        assert subject_ids == sorted(
-            subject_ids
-        ), "Subject IDs should be in ascending order"
+        assert subject_ids == sorted(subject_ids), (
+            "Subject IDs should be in ascending order"
+        )
 
     @pytest.mark.asyncio
     async def test_sort_descending(
@@ -460,9 +473,9 @@ class TestSorting:
         subject_ids = [pp["subject"]["id"] for pp in data["data"]]
 
         # Check they are in descending order
-        assert subject_ids == sorted(
-            subject_ids, reverse=True
-        ), "Subject IDs should be in descending order"
+        assert subject_ids == sorted(subject_ids, reverse=True), (
+            "Subject IDs should be in descending order"
+        )
 
     @pytest.mark.asyncio
     async def test_sort_preserves_pagination(
@@ -597,7 +610,10 @@ class TestBackwardsCompatibility:
         page_meta = data["meta"]["page"]
         # Either new params take precedence OR legacy params work
         # The implementation converts skip/limit to page[number]/page[size]
-        assert page_meta["pageSize"] in [10, 20]  # Could be either depending on implementation
+        assert page_meta["pageSize"] in [
+            10,
+            20,
+        ]  # Could be either depending on implementation
 
 
 class TestPaginationMetadata:
@@ -721,7 +737,8 @@ class TestNavigationLinks:
                     "filter[sex]=MALE" in link_url or "filter%5Bsex%5D=MALE" in link_url
                 ), f"{link_name} link should preserve sex filter"
                 assert (
-                    "filter[has_variants]=" in link_url or "filter%5Bhas_variants%5D=" in link_url
+                    "filter[has_variants]=" in link_url
+                    or "filter%5Bhas_variants%5D=" in link_url
                 ), f"{link_name} link should preserve has_variants filter"
 
     @pytest.mark.asyncio
@@ -739,9 +756,9 @@ class TestNavigationLinks:
         self_link = data["links"]["self"]
 
         # Self link should contain current parameters (handle URL encoding)
-        assert ("page[number]=2" in self_link or "page%5Bnumber%5D=2" in self_link)
-        assert ("page[size]=25" in self_link or "page%5Bsize%5D=25" in self_link)
-        assert ("filter[sex]=MALE" in self_link or "filter%5Bsex%5D=MALE" in self_link)
+        assert "page[number]=2" in self_link or "page%5Bnumber%5D=2" in self_link
+        assert "page[size]=25" in self_link or "page%5Bsize%5D=25" in self_link
+        assert "filter[sex]=MALE" in self_link or "filter%5Bsex%5D=MALE" in self_link
 
 
 class TestEdgeCases:

@@ -6,15 +6,16 @@ This script tests cursor pagination by:
 2. Creating a cursor with real data
 3. Testing page[after] pagination
 """
+
 import asyncio
 import base64
 import json
 import sys
-from datetime import datetime
+
+from sqlalchemy import select
 
 from app.database import async_session_maker
 from app.phenopackets.models import Phenopacket
-from sqlalchemy import select
 
 
 async def test_cursor_pagination():
@@ -55,14 +56,19 @@ async def test_cursor_pagination():
 
         # Generate curl command
         print("Test cursor pagination with:")
-        print(f'  curl "http://localhost:8000/api/v2/phenopackets/?page%5Bafter%5D={cursor}&page%5Bsize%5D=2"')
+        print(
+            f'  curl "http://localhost:8000/api/v2/phenopackets/?page%5Bafter%5D={cursor}&page%5Bsize%5D=2"'
+        )
         print()
 
         if len(phenopackets) >= 2:
             second = phenopackets[1]
             print("Expected result:")
             print(f"  Should return records AFTER created_at={first.created_at}")
-            print(f"  Next record should be: {second.phenopacket_id} (created_at={second.created_at})")
+            print(
+                f"  Next record should be: {second.phenopacket_id} "
+                f"(created_at={second.created_at})"
+            )
 
         return True
 

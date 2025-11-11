@@ -111,13 +111,15 @@ class TestPaginationWorkflows:
             # Collect all IDs (including non-test data)
             for phenopacket in data["data"]:
                 phenopacket_id = phenopacket["id"]
-                assert (
-                    phenopacket_id not in all_ids
-                ), f"Duplicate phenopacket ID found: {phenopacket_id}"
+                assert phenopacket_id not in all_ids, (
+                    f"Duplicate phenopacket ID found: {phenopacket_id}"
+                )
                 all_ids.add(phenopacket_id)
 
         # Should have collected 60 unique records across 3 pages (20 per page)
-        assert len(all_ids) == 60, f"Expected 60 unique records across 3 pages, got {len(all_ids)}"
+        assert len(all_ids) == 60, (
+            f"Expected 60 unique records across 3 pages, got {len(all_ids)}"
+        )
 
     @pytest.mark.asyncio
     async def test_follow_navigation_links(
@@ -147,17 +149,21 @@ class TestPaginationWorkflows:
 
             # Check that records are different (test data only)
             page1_test_ids = {
-                p["id"] for p in page1_data["data"] if p["id"].startswith("test_integration_")
+                p["id"]
+                for p in page1_data["data"]
+                if p["id"].startswith("test_integration_")
             }
             page2_test_ids = {
-                p["id"] for p in page2_data["data"] if p["id"].startswith("test_integration_")
+                p["id"]
+                for p in page2_data["data"]
+                if p["id"].startswith("test_integration_")
             }
 
             # Only check if we have test data on both pages
             if page1_test_ids and page2_test_ids:
-                assert page1_test_ids.isdisjoint(
-                    page2_test_ids
-                ), "Pages should not have overlapping test records"
+                assert page1_test_ids.isdisjoint(page2_test_ids), (
+                    "Pages should not have overlapping test records"
+                )
 
             # Follow prev link back to page 1
             prev_url = page2_data["links"]["prev"]
@@ -225,9 +231,9 @@ class TestDataConsistency:
             for phenopacket in data["data"]:
                 phenopacket_id = phenopacket["id"]
                 if phenopacket_id.startswith("test_integration_"):
-                    assert (
-                        phenopacket_id not in all_ids
-                    ), f"Duplicate ID {phenopacket_id} found on page {page}"
+                    assert phenopacket_id not in all_ids, (
+                        f"Duplicate ID {phenopacket_id} found on page {page}"
+                    )
                     all_ids.add(phenopacket_id)
 
     @pytest.mark.asyncio
@@ -254,7 +260,9 @@ class TestDataConsistency:
                 all_male_ids.add(phenopacket["id"])
 
         # Should have some MALE records
-        assert len(all_male_ids) > 0, "Should have found at least some MALE phenopackets"
+        assert len(all_male_ids) > 0, (
+            "Should have found at least some MALE phenopackets"
+        )
 
     @pytest.mark.asyncio
     async def test_sorted_data_consistency(
@@ -279,15 +287,15 @@ class TestDataConsistency:
 
         # Combine and check global sort order
         all_ids = page1_ids + page2_ids
-        assert all_ids == sorted(
-            all_ids
-        ), "Records should be in ascending order across pages"
+        assert all_ids == sorted(all_ids), (
+            "Records should be in ascending order across pages"
+        )
 
         # Last ID of page 1 should be < first ID of page 2
         if page1_ids and page2_ids:
-            assert (
-                page1_ids[-1] < page2_ids[0]
-            ), "Page boundaries should maintain sort order"
+            assert page1_ids[-1] < page2_ids[0], (
+                "Page boundaries should maintain sort order"
+            )
 
 
 class TestFilteringConsistency:
@@ -342,11 +350,16 @@ class TestFilteringConsistency:
             # Verify all match both filters
             for phenopacket in data["data"]:
                 assert phenopacket["subject"]["sex"] == "MALE"
-                assert "interpretations" in phenopacket and len(phenopacket["interpretations"]) > 0
+                assert (
+                    "interpretations" in phenopacket
+                    and len(phenopacket["interpretations"]) > 0
+                )
                 all_filtered_ids.add(phenopacket["id"])
 
         # Should have found some records matching both filters
-        assert len(all_filtered_ids) > 0, "Should have found MALE phenopackets with variants"
+        assert len(all_filtered_ids) > 0, (
+            "Should have found MALE phenopackets with variants"
+        )
 
 
 class TestSortingConsistency:
@@ -379,7 +392,9 @@ class TestSortingConsistency:
             page += 1
 
         # All IDs should be in ascending order
-        assert all_ids == sorted(all_ids), "IDs should be in ascending order across all pages"
+        assert all_ids == sorted(all_ids), (
+            "IDs should be in ascending order across all pages"
+        )
 
     @pytest.mark.asyncio
     async def test_descending_sort_across_pages(
@@ -408,9 +423,9 @@ class TestSortingConsistency:
             page += 1
 
         # All IDs should be in descending order
-        assert all_ids == sorted(
-            all_ids, reverse=True
-        ), "IDs should be in descending order across all pages"
+        assert all_ids == sorted(all_ids, reverse=True), (
+            "IDs should be in descending order across all pages"
+        )
 
 
 class TestComplexScenarios:
@@ -474,12 +489,12 @@ class TestComplexScenarios:
                 total_records_expected = page_meta["totalRecords"]
             else:
                 # All pages should report same totals
-                assert (
-                    page_meta["totalPages"] == total_pages_expected
-                ), "totalPages should be consistent across pages"
-                assert (
-                    page_meta["totalRecords"] == total_records_expected
-                ), "totalRecords should be consistent across pages"
+                assert page_meta["totalPages"] == total_pages_expected, (
+                    "totalPages should be consistent across pages"
+                )
+                assert page_meta["totalRecords"] == total_records_expected, (
+                    "totalRecords should be consistent across pages"
+                )
 
             # Current page should match request
             assert page_meta["currentPage"] == page
@@ -512,13 +527,15 @@ class TestComplexScenarios:
         page2_ids = {p["id"] for p in page2_data["data"]}
 
         # No overlap
-        assert page1_ids.isdisjoint(page2_ids), "Pages should not have overlapping records"
+        assert page1_ids.isdisjoint(page2_ids), (
+            "Pages should not have overlapping records"
+        )
 
         # Check sorted order (last of page1 < first of page2)
         page1_subject_ids = [p["subject"]["id"] for p in page1_data["data"]]
         page2_subject_ids = [p["subject"]["id"] for p in page2_data["data"]]
 
         if page1_subject_ids and page2_subject_ids:
-            assert (
-                page1_subject_ids[-1] < page2_subject_ids[0]
-            ), "Page boundary should maintain sort order"
+            assert page1_subject_ids[-1] < page2_subject_ids[0], (
+                "Page boundary should maintain sort order"
+            )
