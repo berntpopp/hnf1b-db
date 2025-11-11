@@ -5,22 +5,20 @@ Revises: 72e990f17d42
 Create Date: 2025-11-10 15:38:08.691308
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
-revision: str = '8baf0de6a441'
-down_revision: Union[str, Sequence[str], None] = '72e990f17d42'
+revision: str = "8baf0de6a441"
+down_revision: Union[str, Sequence[str], None] = "72e990f17d42"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     """Upgrade schema: Add full-text search to phenopackets and HPO lookup table."""
-
     # 1. Add search_vector column (will be populated by trigger)
     op.execute("""
         ALTER TABLE phenopackets
@@ -121,13 +119,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema: Remove full-text search and HPO lookup table."""
-
     # Drop HPO lookup table and indexes
     op.execute("DROP INDEX IF EXISTS idx_hpo_lookup_label_trgm")
     op.execute("DROP TABLE IF EXISTS hpo_terms_lookup")
 
     # Drop full-text search infrastructure
-    op.execute("DROP TRIGGER IF EXISTS phenopackets_search_vector_trigger ON phenopackets")
+    op.execute(
+        "DROP TRIGGER IF EXISTS phenopackets_search_vector_trigger ON phenopackets"
+    )
     op.execute("DROP FUNCTION IF EXISTS phenopackets_search_vector_update()")
     op.execute("DROP INDEX IF EXISTS idx_phenopackets_fulltext_search")
     op.execute("ALTER TABLE phenopackets DROP COLUMN IF EXISTS search_vector")
