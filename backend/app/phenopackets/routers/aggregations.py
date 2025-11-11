@@ -26,9 +26,7 @@ from app.phenopackets.variant_search_validation import (
 )
 from app.utils.audit_logger import log_variant_search
 
-router = APIRouter(
-    prefix="/api/v2/phenopackets/aggregate", tags=["phenopackets-aggregations"]
-)
+router = APIRouter(prefix="/aggregate", tags=["phenopackets-aggregations"])
 
 
 @router.get("/by-feature", response_model=List[AggregationResult])

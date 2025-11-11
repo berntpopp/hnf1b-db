@@ -39,7 +39,7 @@ from app.phenopackets.query_builders import (
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 
-router = APIRouter(prefix="/api/v2/phenopackets", tags=["phenopackets-crud"])
+router = APIRouter(tags=["phenopackets-crud"])
 
 validator = PhenopacketValidator()
 sanitizer = PhenopacketSanitizer()
@@ -320,6 +320,7 @@ def build_pagination_links(
     Returns:
         LinksObject with self, first, prev, next, last links
     """
+
     def build_url(page: int) -> str:
         params: dict[str, Any] = {
             "page[number]": page,
@@ -755,9 +756,7 @@ def decode_cursor(cursor: str) -> dict:
 
         return data
     except (ValueError, KeyError, json.JSONDecodeError) as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid cursor format: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid cursor format: {str(e)}")
 
 
 def build_cursor_pagination_links(

@@ -9,6 +9,7 @@ from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.config import settings
 from app.database import engine
+from app.ontology import routers as ontology_router
 from app.phenopackets import clinical_endpoints
 from app.phenopackets.routers import router as phenopackets_router
 from app.publications import endpoints as publication_endpoints
@@ -43,16 +44,17 @@ app.add_middleware(
     allow_origins=settings.get_cors_origins_list(),  # Environment-specific origins
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],  # Specific methods
-    allow_headers=["Authorization", "Content-Type"],  # Specific headers
+    allow_headers=["Authorization", "Content-type"],  # Specific headers
 )
 
 # Include routers
-app.include_router(phenopackets_router)  # Already has /api/v2/phenopackets prefix
+app.include_router(phenopackets_router, prefix="/api/v2")
 app.include_router(clinical_endpoints.router)
 app.include_router(publication_endpoints.router)
 app.include_router(auth_endpoints.router)
 app.include_router(hpo_proxy.router)
 app.include_router(variant_validator_endpoint.router)
+app.include_router(ontology_router.router, prefix="/api/v2")
 
 
 # Root endpoint
