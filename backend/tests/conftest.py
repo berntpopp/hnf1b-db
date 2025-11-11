@@ -12,6 +12,8 @@ from app.auth.password import get_password_hash
 from app.config import settings
 from app.main import app
 from app.models.user import User
+from alembic import command
+from alembic.config import Config
 
 # Suppress known harmless asyncpg warning that occurs during interpreter shutdown
 # This is a known issue: https://github.com/sqlalchemy/sqlalchemy/issues/8145
