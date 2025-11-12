@@ -216,6 +216,18 @@ export const getPhenopacketsBatch = (phenopacketIds) =>
 export const searchPhenopackets = (params) => apiClient.get('/phenopackets/search', { params });
 
 /**
+ * Get facet counts for search filters based on current search criteria.
+ * @param {Object} params - Search criteria as query parameters
+ *   - q: Full-text search query (optional)
+ *   - hpo_id: HPO term ID (optional)
+ *   - sex: Subject sex (optional)
+ *   - gene: Gene symbol (optional)
+ *   - pmid: Publication PMID (optional)
+ * @returns {Promise} Axios promise with facet counts for filters
+ */
+export const getSearchFacets = (params) => apiClient.get('/phenopackets/search/facets', { params });
+
+/**
  * Get phenopackets filtered by sex.
  * @param {string} sex - Sex value (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
  * @param {Object} params - Additional query parameters
