@@ -158,18 +158,21 @@ import FacetedFilters from '@/components/FacetedFilters.vue';
 const route = useRoute();
 const router = useRouter();
 
-const filters = computed(() => route.query);
+const filters = computed(() => {
+  const { page, pageSize: size, sex, genes, phenotypes, ...textFilters } = route.query;
+  return textFilters;
+});
 const results = ref([]);
 const loading = ref(false);
 const totalResults = ref(0);
-const sortBy = ref('relevance');
-const currentPage = ref(1);
-const pageSize = ref(20);
+const sortBy = ref(route.query.sort || 'relevance');
+const currentPage = ref(parseInt(route.query.page) || 1);
+const pageSize = ref(parseInt(route.query.pageSize) || 20);
 const selectedFacets = ref({
-  sex: [],
-  pathogenicity: [],
-  genes: [],
-  phenotypes: [],
+  sex: route.query.sex ? (Array.isArray(route.query.sex) ? route.query.sex : [route.query.sex]) : [],
+  pathogenicity: route.query.pathogenicity ? (Array.isArray(route.query.pathogenicity) ? route.query.pathogenicity : [route.query.pathogenicity]) : [],
+  genes: route.query.genes ? (Array.isArray(route.query.genes) ? route.query.genes : [route.query.genes]) : [],
+  phenotypes: route.query.phenotypes ? (Array.isArray(route.query.phenotypes) ? route.query.phenotypes : [route.query.phenotypes]) : [],
 });
 
 const facets = ref({
@@ -202,6 +205,42 @@ const pageSizeOptions = [
   { title: '50 per page', value: 50 },
   { title: '100 per page', value: 100 },
 ];
+
+// Update URL with all search state
+const updateURL = () => {
+  const query = {
+    ...filters.value, // Keep text filters (q, hpo_id, gene, sex, pmid)
+  };
+
+  // Add sort if not default
+  if (sortBy.value !== 'relevance') {
+    query.sort = sortBy.value;
+  }
+
+  // Add pagination if not default
+  if (currentPage.value !== 1) {
+    query.page = currentPage.value;
+  }
+  if (pageSize.value !== 20) {
+    query.pageSize = pageSize.value;
+  }
+
+  // Add facet filters if selected
+  if (selectedFacets.value.sex.length > 0) {
+    query.sex = selectedFacets.value.sex;
+  }
+  if (selectedFacets.value.pathogenicity.length > 0) {
+    query.pathogenicity = selectedFacets.value.pathogenicity;
+  }
+  if (selectedFacets.value.genes.length > 0) {
+    query.genes = selectedFacets.value.genes;
+  }
+  if (selectedFacets.value.phenotypes.length > 0) {
+    query.phenotypes = selectedFacets.value.phenotypes;
+  }
+
+  router.replace({ query });
+};
 
 const fetchResults = async () => {
   loading.value = true;
@@ -285,18 +324,20 @@ const removeFilter = (key) => {
 const handleFilterChange = (newFilters) => {
   selectedFacets.value = newFilters;
   currentPage.value = 1; // Reset to first page when filters change
-  fetchResults();
+  updateURL();
   if (window.logService) {
     window.logService.info('Facet filters changed', {
       sex: newFilters.sex,
-      hasVariants: newFilters.hasVariants,
+      pathogenicity: newFilters.pathogenicity,
+      genes: newFilters.genes,
+      phenotypes: newFilters.phenotypes,
     });
   }
 };
 
 const handleSortChange = () => {
   currentPage.value = 1; // Reset to first page when sort changes
-  fetchResults();
+  updateURL();
   if (window.logService) {
     window.logService.info('Sort order changed', { sortBy: sortBy.value });
   }
@@ -304,7 +345,7 @@ const handleSortChange = () => {
 
 const handlePageChange = (page) => {
   currentPage.value = page;
-  fetchResults();
+  updateURL();
   if (window.logService) {
     window.logService.info('Page changed', { page: currentPage.value });
   }
@@ -312,7 +353,7 @@ const handlePageChange = (page) => {
 
 const handlePageSizeChange = () => {
   currentPage.value = 1; // Reset to first page when page size changes
-  fetchResults();
+  updateURL();
   if (window.logService) {
     window.logService.info('Page size changed', { pageSize: pageSize.value });
   }
@@ -416,10 +457,26 @@ onMounted(() => {
   fetchFacets();
 });
 
-// Watch for changes in query parameters and re-fetch
+// Watch for changes in query parameters and sync to state
 watch(
   () => route.query,
-  () => {
+  (newQuery) => {
+    // Sync sort
+    sortBy.value = newQuery.sort || 'relevance';
+
+    // Sync pagination
+    currentPage.value = parseInt(newQuery.page) || 1;
+    pageSize.value = parseInt(newQuery.pageSize) || 20;
+
+    // Sync facet filters
+    selectedFacets.value = {
+      sex: newQuery.sex ? (Array.isArray(newQuery.sex) ? newQuery.sex : [newQuery.sex]) : [],
+      pathogenicity: newQuery.pathogenicity ? (Array.isArray(newQuery.pathogenicity) ? newQuery.pathogenicity : [newQuery.pathogenicity]) : [],
+      genes: newQuery.genes ? (Array.isArray(newQuery.genes) ? newQuery.genes : [newQuery.genes]) : [],
+      phenotypes: newQuery.phenotypes ? (Array.isArray(newQuery.phenotypes) ? newQuery.phenotypes : [newQuery.phenotypes]) : [],
+    };
+
+    // Fetch with new parameters
     fetchResults();
     fetchFacets();
   },
