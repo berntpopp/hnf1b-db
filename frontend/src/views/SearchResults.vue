@@ -96,6 +96,7 @@
               :items="results"
               :items-length="totalResults"
               class="elevation-1"
+              hide-default-footer
               @click:row="navigateToPhenopacket"
             >
               <template #item.search_rank="{ item }">
@@ -113,6 +114,34 @@
                 </v-alert>
               </template>
             </v-data-table>
+
+            <!-- Pagination Controls -->
+            <div v-if="totalResults > 0" class="d-flex justify-space-between align-center mt-4">
+              <div class="d-flex align-center gap-2">
+                <v-select
+                  v-model="pageSize"
+                  :items="pageSizeOptions"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  style="max-width: 150px"
+                  @update:model-value="handlePageSizeChange"
+                />
+                <span class="text-caption text-grey">
+                  Showing {{ (currentPage - 1) * pageSize + 1 }}-{{
+                    Math.min(currentPage * pageSize, totalResults)
+                  }}
+                  of {{ totalResults }}
+                </span>
+              </div>
+
+              <v-pagination
+                v-model="currentPage"
+                :length="totalPages"
+                :total-visible="7"
+                @update:model-value="handlePageChange"
+              />
+            </div>
           </v-col>
         </v-row>
       </v-col>
@@ -134,6 +163,8 @@ const results = ref([]);
 const loading = ref(false);
 const totalResults = ref(0);
 const sortBy = ref('relevance');
+const currentPage = ref(1);
+const pageSize = ref(20);
 const selectedFacets = ref({
   sex: [],
   pathogenicity: [],
@@ -163,6 +194,15 @@ const headers = [
   { title: 'Relevance', value: 'search_rank', sortable: false },
 ];
 
+const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value));
+
+const pageSizeOptions = [
+  { title: '10 per page', value: 10 },
+  { title: '20 per page', value: 20 },
+  { title: '50 per page', value: 50 },
+  { title: '100 per page', value: 100 },
+];
+
 const fetchResults = async () => {
   loading.value = true;
   try {
@@ -170,6 +210,8 @@ const fetchResults = async () => {
     const searchParams = {
       ...filters.value,
       rank_by_relevance: sortBy.value === 'relevance',
+      skip: (currentPage.value - 1) * pageSize.value,
+      limit: pageSize.value,
     };
 
     // Add facet filters to search params
@@ -196,6 +238,8 @@ const fetchResults = async () => {
       window.logService.info('Search completed', {
         query: searchParams.q,
         results: totalResults.value,
+        page: currentPage.value,
+        pageSize: pageSize.value,
       });
     }
   } catch (error) {
@@ -240,6 +284,7 @@ const removeFilter = (key) => {
 
 const handleFilterChange = (newFilters) => {
   selectedFacets.value = newFilters;
+  currentPage.value = 1; // Reset to first page when filters change
   fetchResults();
   if (window.logService) {
     window.logService.info('Facet filters changed', {
@@ -250,9 +295,26 @@ const handleFilterChange = (newFilters) => {
 };
 
 const handleSortChange = () => {
+  currentPage.value = 1; // Reset to first page when sort changes
   fetchResults();
   if (window.logService) {
     window.logService.info('Sort order changed', { sortBy: sortBy.value });
+  }
+};
+
+const handlePageChange = (page) => {
+  currentPage.value = page;
+  fetchResults();
+  if (window.logService) {
+    window.logService.info('Page changed', { page: currentPage.value });
+  }
+};
+
+const handlePageSizeChange = () => {
+  currentPage.value = 1; // Reset to first page when page size changes
+  fetchResults();
+  if (window.logService) {
+    window.logService.info('Page size changed', { pageSize: pageSize.value });
   }
 };
 
