@@ -18,6 +18,20 @@
         <v-toolbar flat>
           <v-toolbar-title>Phenopackets</v-toolbar-title>
           <v-spacer />
+          <!-- Search Field -->
+          <v-text-field
+            v-model="searchQuery"
+            label="Search"
+            placeholder="Subject ID, Phenopacket ID, or Disease"
+            prepend-inner-icon="mdi-magnify"
+            clearable
+            hide-details
+            density="compact"
+            style="max-width: 350px"
+            class="mr-4"
+            @input="applySearch"
+            @click:clear="clearSearch"
+          />
           <!-- Cursor pagination toggle -->
           <v-tooltip location="bottom">
             <template #activator="{ props }">
@@ -139,9 +153,11 @@ export default {
   data() {
     return {
       phenopackets: [],
+      allPhenopackets: [], // Store all fetched phenopackets for client-side filtering
       loading: false,
       totalItems: 0,
       currentPage: 1,
+      searchQuery: '', // Search query for client-side filtering
       useCursorPagination: false, // Toggle for cursor vs offset pagination
       paginationMeta: null, // Store pagination metadata (offset or cursor)
       currentCursor: null, // Current page cursor for cursor pagination
@@ -308,13 +324,20 @@ export default {
         });
 
         // Transform response data (phenopackets are already GA4GH format)
-        this.phenopackets = phenopacketDocuments.map((pp) => this.transformPhenopacket(pp));
+        this.allPhenopackets = phenopacketDocuments.map((pp) => this.transformPhenopacket(pp));
+        this.phenopackets = this.allPhenopackets; // Initially show all
 
         window.logService.debug('Phenopackets data transformation complete', {
           rawDataCount: phenopacketDocuments.length,
-          transformedCount: this.phenopackets.length,
-          sampleStructure: this.phenopackets.length > 0 ? Object.keys(this.phenopackets[0]) : [],
+          transformedCount: this.allPhenopackets.length,
+          sampleStructure:
+            this.allPhenopackets.length > 0 ? Object.keys(this.allPhenopackets[0]) : [],
         });
+
+        // Apply search filter if query exists
+        if (this.searchQuery) {
+          this.applySearch();
+        }
 
         // Store pagination metadata
         this.paginationMeta = paginationMeta;
@@ -503,6 +526,34 @@ export default {
         subjectId: item.subject_id,
       });
       this.$router.push(`/phenopackets/${item.phenopacket_id}`);
+    },
+
+    applySearch() {
+      if (!this.searchQuery || this.searchQuery.trim() === '') {
+        this.phenopackets = this.allPhenopackets;
+        return;
+      }
+
+      const query = this.searchQuery.toLowerCase().trim();
+      this.phenopackets = this.allPhenopackets.filter((pp) => {
+        return (
+          pp.phenopacket_id?.toLowerCase().includes(query) ||
+          pp.subject_id?.toLowerCase().includes(query) ||
+          pp.primary_disease?.toLowerCase().includes(query)
+        );
+      });
+
+      window.logService.info('Applied phenopackets search filter', {
+        query: this.searchQuery,
+        matchedCount: this.phenopackets.length,
+        totalCount: this.allPhenopackets.length,
+      });
+    },
+
+    clearSearch() {
+      this.searchQuery = '';
+      this.phenopackets = this.allPhenopackets;
+      window.logService.info('Cleared phenopackets search filter');
     },
   },
 };

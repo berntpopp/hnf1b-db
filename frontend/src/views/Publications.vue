@@ -3,7 +3,7 @@
   <v-container>
     <v-data-table
       :headers="headers"
-      :items="publications"
+      :items="filteredPublications"
       :loading="loading"
       :sort-by="sortBy"
       class="elevation-1"
@@ -13,6 +13,19 @@
         <v-toolbar flat>
           <v-toolbar-title>Publications</v-toolbar-title>
           <v-spacer />
+          <!-- Search Field -->
+          <v-text-field
+            v-model="searchQuery"
+            label="Search"
+            placeholder="PMID or DOI"
+            prepend-inner-icon="mdi-magnify"
+            clearable
+            hide-details
+            density="compact"
+            style="max-width: 300px"
+            class="mr-4"
+            @click:clear="clearSearch"
+          />
         </v-toolbar>
       </template>
 
@@ -70,6 +83,7 @@ export default {
   data() {
     return {
       publications: [],
+      searchQuery: '', // Search query for filtering
       loading: false,
       sortBy: [{ key: 'phenopacket_count', order: 'desc' }],
       headers: [
@@ -101,6 +115,18 @@ export default {
       ],
     };
   },
+  computed: {
+    filteredPublications() {
+      if (!this.searchQuery || this.searchQuery.trim() === '') {
+        return this.publications;
+      }
+
+      const query = this.searchQuery.toLowerCase().trim();
+      return this.publications.filter((pub) => {
+        return pub.pmid?.toLowerCase().includes(query) || pub.doi?.toLowerCase().includes(query);
+      });
+    },
+  },
   mounted() {
     this.fetchPublications();
   },
@@ -127,6 +153,10 @@ export default {
         month: 'short',
         day: 'numeric',
       });
+    },
+    clearSearch() {
+      this.searchQuery = '';
+      window.logService.info('Cleared publications search filter');
     },
   },
 };
