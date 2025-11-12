@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Load NVM if it exists (fixes npm not found in PATH on Windows/WSL)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # Load nvm
+
 # Only run frontend checks if frontend files are staged
 STAGED_FILES=$(git diff --name-only --cached)
 HAS_FRONTEND_FILES=$(echo "$STAGED_FILES" | grep -c "^frontend/" || true)

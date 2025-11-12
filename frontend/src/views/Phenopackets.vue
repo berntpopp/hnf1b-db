@@ -22,16 +22,18 @@
           <v-text-field
             v-model="searchQuery"
             label="Search"
-            placeholder="Subject ID, Phenopacket ID, or Disease"
+            placeholder="Search across all phenopackets..."
             prepend-inner-icon="mdi-magnify"
             clearable
             hide-details
             density="compact"
             style="max-width: 350px"
-            class="mr-4"
-            @input="applySearch"
+            class="mr-2"
+            @keyup.enter="applySearch"
             @click:clear="clearSearch"
           />
+          <v-btn color="primary" :loading="loading" @click="applySearch"> Search </v-btn>
+          <v-spacer class="mx-2" />
           <!-- Cursor pagination toggle -->
           <v-tooltip location="bottom">
             <template #activator="{ props }">
@@ -140,7 +142,7 @@
 </template>
 
 <script>
-import { getPhenopackets } from '@/api';
+import { getPhenopackets, searchPhenopackets } from '@/api';
 import {
   buildSortParameter,
   buildPaginationParameters,
@@ -153,11 +155,11 @@ export default {
   data() {
     return {
       phenopackets: [],
-      allPhenopackets: [], // Store all fetched phenopackets for client-side filtering
+      allPhenopackets: [], // Store all fetched phenopackets (used when no search active)
       loading: false,
       totalItems: 0,
       currentPage: 1,
-      searchQuery: '', // Search query for client-side filtering
+      searchQuery: '', // Search query for backend full-text search
       useCursorPagination: false, // Toggle for cursor vs offset pagination
       paginationMeta: null, // Store pagination metadata (offset or cursor)
       currentCursor: null, // Current page cursor for cursor pagination
@@ -277,10 +279,20 @@ export default {
         itemsPerPage: this.options.itemsPerPage,
         sortBy: this.options.sortBy,
         useCursorPagination: this.useCursorPagination,
+        hasSearchQuery: !!this.searchQuery,
       });
 
       try {
-        const { itemsPerPage, sortBy } = this.options;
+        const { itemsPerPage } = this.options;
+
+        // If search query is active, use search API instead of regular list
+        if (this.searchQuery && this.searchQuery.trim()) {
+          await this.performSearch();
+          return;
+        }
+
+        // Regular listing without search
+        const { sortBy } = this.options;
 
         // Map frontend column keys to backend sort fields
         const sortFieldMap = {
@@ -325,7 +337,7 @@ export default {
 
         // Transform response data (phenopackets are already GA4GH format)
         this.allPhenopackets = phenopacketDocuments.map((pp) => this.transformPhenopacket(pp));
-        this.phenopackets = this.allPhenopackets; // Initially show all
+        this.phenopackets = this.allPhenopackets;
 
         window.logService.debug('Phenopackets data transformation complete', {
           rawDataCount: phenopacketDocuments.length,
@@ -333,11 +345,6 @@ export default {
           sampleStructure:
             this.allPhenopackets.length > 0 ? Object.keys(this.allPhenopackets[0]) : [],
         });
-
-        // Apply search filter if query exists
-        if (this.searchQuery) {
-          this.applySearch();
-        }
 
         // Store pagination metadata
         this.paginationMeta = paginationMeta;
@@ -528,32 +535,73 @@ export default {
       this.$router.push(`/phenopackets/${item.phenopacket_id}`);
     },
 
-    applySearch() {
-      if (!this.searchQuery || this.searchQuery.trim() === '') {
-        this.phenopackets = this.allPhenopackets;
-        return;
-      }
+    async performSearch() {
+      const { itemsPerPage } = this.options;
+      const skip = (this.currentPage - 1) * itemsPerPage;
 
-      const query = this.searchQuery.toLowerCase().trim();
-      this.phenopackets = this.allPhenopackets.filter((pp) => {
-        return (
-          pp.phenopacket_id?.toLowerCase().includes(query) ||
-          pp.subject_id?.toLowerCase().includes(query) ||
-          pp.primary_disease?.toLowerCase().includes(query)
-        );
-      });
-
-      window.logService.info('Applied phenopackets search filter', {
+      window.logService.debug('Performing backend search', {
         query: this.searchQuery,
-        matchedCount: this.phenopackets.length,
-        totalCount: this.allPhenopackets.length,
+        skip,
+        limit: itemsPerPage,
       });
+
+      try {
+        const response = await searchPhenopackets({
+          q: this.searchQuery.trim(),
+          skip,
+          limit: itemsPerPage,
+        });
+
+        // Extract search results
+        const searchResults = response.data?.data || [];
+        const totalResults = response.data?.meta?.total || 0;
+
+        window.logService.debug('Search results received', {
+          count: searchResults.length,
+          total: totalResults,
+        });
+
+        // Transform search results (they're already phenopackets from attributes)
+        this.phenopackets = searchResults.map((result) => {
+          // result.attributes contains the phenopacket, result.id is the ID
+          const phenopacket = result.attributes;
+          return {
+            ...this.transformPhenopacket(phenopacket),
+            search_rank: result.meta?.search_rank, // Include relevance score if available
+          };
+        });
+
+        this.allPhenopackets = this.phenopackets; // Store for consistency
+        this.totalItems = totalResults;
+
+        window.logService.info('Search completed successfully', {
+          query: this.searchQuery,
+          results: searchResults.length,
+          total: totalResults,
+        });
+      } catch (error) {
+        window.logService.error('Search failed', {
+          error: error.message,
+          status: error.response?.status,
+          query: this.searchQuery,
+        });
+        this.phenopackets = [];
+        this.totalItems = 0;
+      }
+    },
+
+    applySearch() {
+      // Trigger re-fetch with search query
+      // Reset to first page when starting new search
+      this.currentPage = 1;
+      this.fetchPhenopackets();
     },
 
     clearSearch() {
       this.searchQuery = '';
-      this.phenopackets = this.allPhenopackets;
-      window.logService.info('Cleared phenopackets search filter');
+      this.currentPage = 1;
+      this.fetchPhenopackets(); // Re-fetch without search
+      window.logService.info('Cleared phenopackets search');
     },
   },
 };
