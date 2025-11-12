@@ -26,11 +26,9 @@ from .search import router as search_router
 router = APIRouter(prefix="/phenopackets")
 
 # Include routers
+router.include_router(search_router)  # Include search_router first
 router.include_router(crud_router)
 router.include_router(aggregations_router)
-
-# Routers will be included as they are created
-router.include_router(search_router)
 # router.include_router(variants_router)
 # router.include_router(features_router)
 
