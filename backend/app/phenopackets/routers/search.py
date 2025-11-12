@@ -169,10 +169,10 @@ async def get_search_facets(
 
     # Get sex distribution
     sex_query = f"""
-        SELECT subject_sex AS value, COUNT(*) AS count
-        FROM phenopackets
+        SELECT p.subject_sex AS value, COUNT(*) AS count
+        FROM phenopackets p
         {where_clause if not sex else ""}
-        GROUP BY subject_sex
+        GROUP BY p.subject_sex
         ORDER BY count DESC
     """
     sex_result = await db.execute(text(sex_query), params)
@@ -185,11 +185,11 @@ async def get_search_facets(
     variants_query = f"""
         SELECT
             CASE
-                WHEN jsonb_array_length(phenopacket->'interpretations') > 0 THEN true
+                WHEN jsonb_array_length(p.phenopacket->'interpretations') > 0 THEN true
                 ELSE false
             END AS value,
             COUNT(*) AS count
-        FROM phenopackets
+        FROM phenopackets p
         {where_clause}
         GROUP BY value
         ORDER BY value DESC
