@@ -90,7 +90,7 @@
     </v-expansion-panels>
 
     <!-- Phenotypes Filter -->
-    <v-expansion-panels v-if="facets.phenotypes.length > 0" class="mb-3">
+    <v-expansion-panels class="mb-3">
       <v-expansion-panel>
         <v-expansion-panel-title>
           <div class="d-flex justify-space-between align-center" style="width: 100%">
@@ -101,25 +101,67 @@
           </div>
         </v-expansion-panel-title>
         <v-expansion-panel-text>
-          <v-checkbox
-            v-for="option in facets.phenotypes.slice(0, 10)"
-            :key="option.value"
-            v-model="selectedFilters.phenotypes"
-            :label="`${option.label} (${option.count})`"
-            :value="option.value"
+          <!-- HPO Autocomplete Search -->
+          <v-autocomplete
+            v-model="selectedPhenotype"
+            :items="phenotypeSuggestions"
+            :loading="loadingPhenotypes"
+            :search="phenotypeSearchQuery"
+            item-title="label"
+            item-value="hpo_id"
+            label="Search HPO terms..."
+            placeholder="e.g., stage 5 chronic kidney disease"
             density="compact"
+            variant="outlined"
+            clearable
             hide-details
-            @update:model-value="onFilterChange"
-          />
-          <v-btn
-            v-if="facets.phenotypes.length > 10"
-            variant="text"
-            size="small"
-            class="mt-2"
-            @click="showAllPhenotypes = !showAllPhenotypes"
+            class="mb-3"
+            @update:search="onPhenotypeSearch"
+            @update:model-value="onPhenotypeSelect"
           >
-            {{ showAllPhenotypes ? 'Show Less' : `Show ${facets.phenotypes.length - 10} More` }}
-          </v-btn>
+            <template #item="{ props, item }">
+              <v-list-item v-bind="props" :title="item.raw.label" :subtitle="item.raw.hpo_id" />
+            </template>
+          </v-autocomplete>
+
+          <!-- Selected Phenotypes as Chips -->
+          <div v-if="selectedFilters.phenotypes.length > 0" class="mb-3">
+            <v-chip
+              v-for="hpoId in selectedFilters.phenotypes"
+              :key="hpoId"
+              size="small"
+              closable
+              class="mr-1 mb-1"
+              @click:close="removePhenotype(hpoId)"
+            >
+              {{ getPhenotypeLabel(hpoId) }}
+            </v-chip>
+          </div>
+
+          <!-- Top Phenotypes from Facets -->
+          <div v-if="facets.phenotypes.length > 0">
+            <v-divider class="mb-2" />
+            <div class="text-caption text-grey mb-2">Top phenotypes in results:</div>
+            <v-checkbox
+              v-for="option in facets.phenotypes.slice(0, 10)"
+              :key="option.value"
+              v-model="selectedFilters.phenotypes"
+              :label="`${option.label} (${option.count})`"
+              :value="option.value"
+              density="compact"
+              hide-details
+              @update:model-value="onFilterChange"
+            />
+            <v-btn
+              v-if="facets.phenotypes.length > 10"
+              variant="text"
+              size="small"
+              class="mt-2"
+              @click="showAllPhenotypes = !showAllPhenotypes"
+            >
+              {{ showAllPhenotypes ? 'Show Less' : `Show ${facets.phenotypes.length - 10} More` }}
+            </v-btn>
+          </div>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -140,6 +182,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
+import { getHpoAutocomplete } from '@/api';
+import { debounce } from '@/utils/debounce';
 
 const props = defineProps({
   facets: {
@@ -167,6 +211,13 @@ const emit = defineEmits(['update:modelValue', 'filter-change']);
 
 const showAllGenes = ref(false);
 const showAllPhenotypes = ref(false);
+
+// HPO autocomplete state
+const selectedPhenotype = ref(null);
+const phenotypeSearchQuery = ref('');
+const phenotypeSuggestions = ref([]);
+const loadingPhenotypes = ref(false);
+const phenotypeLabels = ref(new Map());
 
 const selectedFilters = ref({
   sex: [],
@@ -197,10 +248,96 @@ const clearAllFilters = () => {
     genes: [],
     phenotypes: [],
   };
+  phenotypeLabels.value.clear();
   onFilterChange();
   if (window.logService) {
     window.logService.info('Cleared all faceted filters');
   }
+};
+
+// HPO autocomplete functions
+const fetchPhenotypeSuggestions = async (query) => {
+  if (!query || query.length < 2) {
+    phenotypeSuggestions.value = [];
+    return;
+  }
+
+  loadingPhenotypes.value = true;
+  try {
+    const response = await getHpoAutocomplete(query);
+    phenotypeSuggestions.value = response.data.data || [];
+    if (window.logService) {
+      window.logService.debug('HPO autocomplete results', {
+        query,
+        count: phenotypeSuggestions.value.length,
+      });
+    }
+  } catch (error) {
+    if (window.logService) {
+      window.logService.error('HPO autocomplete failed', { error: error.message });
+    }
+    phenotypeSuggestions.value = [];
+  } finally {
+    loadingPhenotypes.value = false;
+  }
+};
+
+const debouncedFetchPhenotypes = debounce(fetchPhenotypeSuggestions, 300);
+
+const onPhenotypeSearch = (query) => {
+  phenotypeSearchQuery.value = query;
+  debouncedFetchPhenotypes(query);
+};
+
+const onPhenotypeSelect = (hpoId) => {
+  if (!hpoId) return;
+
+  // Add to selected filters if not already present
+  if (!selectedFilters.value.phenotypes.includes(hpoId)) {
+    selectedFilters.value.phenotypes.push(hpoId);
+
+    // Store label for display
+    const suggestion = phenotypeSuggestions.value.find((s) => s.hpo_id === hpoId);
+    if (suggestion) {
+      phenotypeLabels.value.set(hpoId, suggestion.label);
+    }
+
+    onFilterChange();
+    if (window.logService) {
+      window.logService.info('Added phenotype filter', { hpoId, label: suggestion?.label });
+    }
+  }
+
+  // Clear autocomplete
+  selectedPhenotype.value = null;
+  phenotypeSearchQuery.value = '';
+  phenotypeSuggestions.value = [];
+};
+
+const removePhenotype = (hpoId) => {
+  selectedFilters.value.phenotypes = selectedFilters.value.phenotypes.filter((id) => id !== hpoId);
+  phenotypeLabels.value.delete(hpoId);
+  onFilterChange();
+  if (window.logService) {
+    window.logService.info('Removed phenotype filter', { hpoId });
+  }
+};
+
+const getPhenotypeLabel = (hpoId) => {
+  // First check stored labels
+  if (phenotypeLabels.value.has(hpoId)) {
+    return phenotypeLabels.value.get(hpoId);
+  }
+
+  // Then check facets
+  const facet = props.facets.phenotypes.find((p) => p.value === hpoId);
+  if (facet) {
+    phenotypeLabels.value.set(hpoId, facet.label);
+    return facet.label;
+  }
+
+  // Fallback to HPO ID
+  return hpoId;
 };
 
 // Watch for external changes to modelValue
