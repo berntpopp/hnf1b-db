@@ -1,79 +1,52 @@
-<!-- src/views/SearchResults.vue -->
 <template>
   <v-container>
     <v-row>
       <v-col cols="12">
-        <h2>Search Results for "{{ searchQuery }}"</h2>
+        <h2>Search Results</h2>
+        <v-chip-group v-if="Object.keys(filters).length > 0">
+          <v-chip v-if="filters.q" closeable @click:close="removeFilter('q')">
+            Text: {{ filters.q }}
+          </v-chip>
+          <v-chip v-if="filters.hpo_id" closeable @click:close="removeFilter('hpo_id')">
+            HPO: {{ filters.hpo_id }}
+          </v-chip>
+          <v-chip v-if="filters.gene" closeable @click:close="removeFilter('gene')">
+            Gene: {{ filters.gene }}
+          </v-chip>
+          <v-chip v-if="filters.sex" closeable @click:close="removeFilter('sex')">
+            Sex: {{ filters.sex }}
+          </v-chip>
+          <v-chip v-if="filters.pmid" closeable @click:close="removeFilter('pmid')">
+            PMID: {{ filters.pmid }}
+          </v-chip>
+        </v-chip-group>
+        <p v-else class="text-grey">No filters applied. Showing all phenopackets.</p>
       </v-col>
     </v-row>
 
-    <!-- Show a loading indicator -->
     <v-row v-if="loading">
-      <v-col cols="12">
-        <v-progress-circular color="primary" indeterminate />
-        <span>Loading...</span>
+      <v-col cols="12" class="text-center">
+        <v-progress-circular indeterminate color="primary" />
+        <p class="mt-2">Searching phenopackets...</p>
       </v-col>
     </v-row>
 
-    <!-- If no results found, display a message -->
-    <v-row v-else-if="allResultsEmpty">
-      <v-col cols="12">
-        <p>No results found for "{{ searchQuery }}"</p>
-      </v-col>
-    </v-row>
-
-    <!-- Otherwise, display the flattened results table -->
     <v-row v-else>
       <v-col cols="12">
         <v-data-table
-          :headers="tableHeaders"
-          :items="flattenedResults"
-          :items-per-page="10"
+          :headers="headers"
+          :items="results"
+          :items-length="totalResults"
           class="elevation-1"
+          @click:row="navigateToPhenopacket"
         >
-          <!-- Custom rendering for the ID column based on category -->
-          <template #item.id="{ item }">
-            <template v-if="item.category === 'Individuals'">
-              <v-chip
-                color="lime lighten-2"
-                class="ma-2"
-                small
-                link
-                :to="`/individuals/${item.id}`"
-              >
-                {{ item.id }}
-                <v-icon right> mdi-account </v-icon>
-              </v-chip>
-            </template>
-            <template v-else-if="item.category === 'Variants'">
-              <v-chip color="pink lighten-4" class="ma-2" small link :to="`/variants/${item.id}`">
-                {{ item.id }}
-                <v-icon right> mdi-dna </v-icon>
-              </v-chip>
-            </template>
-            <template v-else-if="item.category === 'Publications'">
-              <v-chip
-                color="cyan accent-2"
-                class="ma-2"
-                small
-                link
-                :to="`/publications/${item.id}`"
-              >
-                pub{{ item.id }}
-                <v-icon right> mdi-book-open-blank-variant </v-icon>
-              </v-chip>
-            </template>
-            <template v-else>
-              {{ item.id }}
-            </template>
+          <template #item.search_rank="{ item }">
+            <v-chip v-if="item.search_rank" color="green" small>
+              {{ (item.search_rank * 100).toFixed(1) }}% match
+            </v-chip>
           </template>
-
-          <!-- Render the Category and Matched Fields normally -->
-          <template #item.category="{ item }">
-            <span>{{ item.category }}</span>
-          </template>
-          <template #item.matchedDisplay="{ item }">
-            <span>{{ item.matchedDisplay }}</span>
+          <template #item.subject.id="{ item }">
+            <router-link :to="`/phenopackets/${item.id}`">{{ item.subject.id }}</router-link>
           </template>
         </v-data-table>
       </v-col>
@@ -81,142 +54,67 @@
   </v-container>
 </template>
 
-<script>
-import { ref, onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
-import { searchPhenopackets } from '@/api/index.js';
+<script setup>
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { searchPhenopackets } from '@/api';
 
-/**
- * Formats the "matched" object into a display string.
- *
- * @param {Object} matched - e.g. { hg38: "chr17-..." }
- * @returns {string} The formatted string.
- */
-function formatMatched(matched) {
-  if (!matched) return '';
-  return Object.entries(matched)
-    .map(([key, val]) => `${key}: ${val}`)
-    .join('; ');
-}
+const route = useRoute();
+const router = useRouter();
 
-export default {
-  name: 'SearchResults',
-  setup() {
-    const route = useRoute();
-    // Use consistent query parameter "q"
-    const searchQuery = ref(route.query.q || '');
-    const loading = ref(false);
+const filters = computed(() => route.query);
+const results = ref([]);
+const loading = ref(false);
+const totalResults = ref(0);
 
-    // Expected shape from the /api/search endpoint.
-    const results = ref({
-      individuals: { data: [] },
-      variants: { data: [] },
-      publications: { data: [] },
-    });
+const headers = [
+  { title: 'ID', value: 'subject.id' },
+  { title: 'Sex', value: 'subject.sex' },
+  { title: 'Relevance', value: 'search_rank' },
+];
 
-    // Compute arrays for each category with additional fields.
-    const individualsData = computed(() =>
-      results.value.individuals.data.map((item) => ({
-        ...item,
-        matchedDisplay: formatMatched(item.matched),
-        category: 'Individuals',
-      }))
-    );
-    const variantsData = computed(() =>
-      results.value.variants.data.map((item) => ({
-        ...item,
-        matchedDisplay: formatMatched(item.matched),
-        category: 'Variants',
-      }))
-    );
-    const publicationsData = computed(() =>
-      results.value.publications.data.map((item) => ({
-        ...item,
-        matchedDisplay: formatMatched(item.matched),
-        category: 'Publications',
-      }))
-    );
-
-    // Flatten all results into one array.
-    const flattenedResults = computed(() => [
-      ...individualsData.value,
-      ...variantsData.value,
-      ...publicationsData.value,
-    ]);
-
-    // Check if no results were found.
-    const allResultsEmpty = computed(() => flattenedResults.value.length === 0);
-
-    // Define table headers for the flattened table.
-    const tableHeaders = [
-      { title: 'Category', value: 'category' },
-      { title: 'ID', value: 'id' },
-      { title: 'Matched Fields', value: 'matchedDisplay' },
-    ];
-
-    /**
-     * Fetch search results using the query from the URL.
-     */
-    async function doSearch() {
-      const query = searchQuery.value.trim();
-      if (!query) return;
-
-      window.logService.debug('Starting search', {
-        query: query,
-        queryLength: query.length,
-        reduceDoc: true,
-      });
-
-      loading.value = true;
-      try {
-        // reduceDoc = true returns only minimal fields.
-        const { data: searchData } = await searchPhenopackets({ query, reduce_doc: true });
-        if (searchData && searchData.results) {
-          results.value = searchData.results;
-
-          window.logService.debug('Search results received', {
-            query: query,
-            individualsCount: searchData.results.individuals?.data?.length || 0,
-            variantsCount: searchData.results.variants?.data?.length || 0,
-            publicationsCount: searchData.results.publications?.data?.length || 0,
-          });
-
-          window.logService.info('Search completed successfully', {
-            query: query,
-            totalResults:
-              (searchData.results.individuals?.data?.length || 0) +
-              (searchData.results.variants?.data?.length || 0) +
-              (searchData.results.publications?.data?.length || 0),
-          });
-        }
-      } catch (err) {
-        window.logService.error('Search request failed', {
-          error: err.message,
-          query: query,
-          status: err.response?.status,
-        });
-      } finally {
-        loading.value = false;
-      }
+const fetchResults = async () => {
+  loading.value = true;
+  try {
+    const { data } = await searchPhenopackets(filters.value);
+    results.value = data.data.map((pp) => ({
+      ...pp.attributes,
+      id: pp.id, // include the top-level phenopacket ID
+      search_rank: pp.meta?.search_rank,
+    }));
+    totalResults.value = data.meta.total;
+  } catch (error) {
+    if (window.logService) {
+      window.logService.error('Search failed', { error: error.message });
+    } else {
+      console.error('Search failed', { error: error.message });
     }
-
-    // Trigger search when the component mounts.
-    onMounted(() => {
-      doSearch();
-    });
-
-    return {
-      searchQuery,
-      loading,
-      flattenedResults,
-      allResultsEmpty,
-      tableHeaders,
-      doSearch,
-    };
-  },
+  } finally {
+    loading.value = false;
+  }
 };
+
+const removeFilter = (key) => {
+  const newQuery = { ...route.query };
+  delete newQuery[key];
+  router.push({ query: newQuery });
+};
+
+const navigateToPhenopacket = (event, { item }) => {
+  if (item && item.id) {
+    router.push(`/phenopackets/${item.id}`);
+  }
+};
+
+// Fetch results on component mount
+onMounted(fetchResults);
+
+// Watch for changes in query parameters and re-fetch results
+watch(() => route.query, fetchResults, { deep: true });
 </script>
 
 <style scoped>
-/* Optional: add additional styling for table spacing, cursor pointers, etc. */
+.v-data-table :deep(tbody tr) {
+  cursor: pointer;
+}
 </style>

@@ -1,225 +1,118 @@
-<!-- src/components/SearchCard.vue -->
 <template>
   <v-card variant="flat" class="pa-8 mx-auto search-card" theme="light">
     <v-autocomplete
       v-model="selectedItem"
-      v-model:search="typedText"
-      :items="limitedSuggestions"
-      :item-title="getItemTitle"
-      item-value="id"
-      placeholder="Start typing to search publications, variants and individuals..."
+      v-model:search="searchQuery"
+      :items="suggestions"
+      :loading="loading"
+      placeholder="Search by HPO term, gene, or keyword..."
       append-inner-icon="mdi-magnify"
       density="comfortable"
       variant="solo"
       auto-select-first
+      clearable
       rounded
       full-width
-      :loading="loading"
-      :filter="filterFn"
       return-object
-      :menu-props="{ maxWidth: '100%' }"
-      @click:append-inner="searchAndNavigate"
-      @change="onAutocompleteChange"
-      @keyup.enter="onEnterPressed"
-    />
+      item-title="label"
+      item-value="hpo_id"
+      @update:search="debouncedSearch"
+      @update:model-value="onSelect"
+      @keyup.enter="onEnter"
+    >
+      <template #item="{ props, item }">
+        <v-list-item v-bind="props" :title="item.raw.label">
+          <v-list-item-subtitle>
+            {{ item.raw.hpo_id }} · {{ item.raw.phenopacket_count }} phenopackets
+          </v-list-item-subtitle>
+        </v-list-item>
+      </template>
+
+      <template v-if="recentSearches.length > 0" #prepend-item>
+        <v-list-subheader>Recent Searches</v-list-subheader>
+        <v-list-item
+          v-for="recent in recentSearches"
+          :key="recent"
+          @click="searchFromRecent(recent)"
+        >
+          <v-list-item-title>{{ recent }}</v-list-item-title>
+          <template #prepend>
+            <v-icon>mdi-history</v-icon>
+          </template>
+        </v-list-item>
+        <v-divider />
+      </template>
+    </v-autocomplete>
   </v-card>
 </template>
 
-<script>
-import { ref, watch, computed } from 'vue';
+<script setup>
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { searchPhenopackets } from '@/api/index.js';
+import { getHPOAutocomplete } from '@/api';
+import { addRecentSearch, getRecentSearches } from '@/utils/searchHistory';
+import { debounce } from '@/utils/debounce';
 
-/**
- * Debounce function to limit how often a function is called.
- *
- * @param {Function} func The function to debounce.
- * @param {number} wait The delay in milliseconds.
- * @returns {Function} The debounced function.
- */
-function debounce(func, wait) {
-  let timeout;
-  return function debounced(...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-}
+const router = useRouter();
+const searchQuery = ref('');
+const selectedItem = ref(null);
+const suggestions = ref([]);
+const loading = ref(false);
 
-export default {
-  name: 'SearchCard',
-  setup() {
-    const router = useRouter();
-    const selectedItem = ref(null);
-    const typedText = ref('');
-    const loading = ref(false);
-    const searchSuggestions = ref([]);
+const recentSearches = computed(() => getRecentSearches());
 
-    // Limit suggestions to the first 10 results.
-    const limitedSuggestions = computed(() => searchSuggestions.value.slice(0, 10));
+const fetchSuggestions = async (query) => {
+  if (!query || query.length < 2) {
+    suggestions.value = [];
+    return;
+  }
 
-    /**
-     * Formats the matched object into a semicolon-separated string.
-     *
-     * @param {Object} matched The matched object.
-     * @returns {string} A formatted string.
-     */
-    function formatMatched(matched) {
-      if (!matched) return '';
-      return Object.entries(matched)
-        .map(([key, val]) => `${key}: ${val}`)
-        .join('; ');
+  loading.value = true;
+  try {
+    const response = await getHPOAutocomplete(query);
+    suggestions.value = response.data;
+  } catch (error) {
+    if (window.logService) {
+      window.logService.error('HPO autocomplete failed', { error: error.message });
+    } else {
+      console.error('HPO autocomplete failed', { error: error.message });
     }
+  } finally {
+    loading.value = false;
+  }
+};
 
-    /**
-     * Returns a formatted title for a suggestion item.
-     *
-     * @param {Object} item A suggestion item.
-     * @returns {string} A formatted title.
-     */
-    function getItemTitle(item) {
-      if (!item) return '';
-      return `${item.id} [${item.collection}] - ${formatMatched(item.matched)}`;
-    }
+const debouncedSearch = debounce(fetchSuggestions, 300);
 
-    /**
-     * Flattens the API response into one array of suggestion items.
-     *
-     * @param {Object} apiData The API response.
-     * @returns {Array} The flattened array.
-     */
-    function formatSearchResults(apiData) {
-      if (!apiData || !apiData.results) return [];
-      const { individuals, variants, publications } = apiData.results;
-      return [
-        ...individuals.data.map((d) => ({ ...d, collection: 'individuals' })),
-        ...variants.data.map((d) => ({ ...d, collection: 'variants' })),
-        ...publications.data.map((d) => ({ ...d, collection: 'publications' })),
-      ];
-    }
+const onSelect = (item) => {
+  if (!item) return;
 
-    /**
-     * Navigates to the detail page by constructing the URL.
-     *
-     * @param {string} collection The collection name.
-     * @param {string} id The unique identifier.
-     */
-    function navigateToDetail(collection, id) {
-      if (!collection || !id) return;
-      router.push(`/${collection}/${id}`);
-    }
+  addRecentSearch(item.label);
+  router.push({
+    name: 'SearchResults',
+    query: { q: item.label, hpo_id: item.hpo_id },
+  });
+};
 
-    /**
-     * Handles autocomplete selection changes.
-     *
-     * @param {Object} item The item selected from the suggestions.
-     */
-    function onAutocompleteChange(item) {
-      if (item && item.collection && item.id) {
-        window.logService.info('Search autocomplete selection', {
-          collection: item.collection,
-          id: item.id,
-          query: typedText.value,
-        });
-        navigateToDetail(item.collection, item.id);
-      }
-    }
-
-    /**
-     * Called when the Enter key is pressed.
-     * Navigates to the detail page if a suggestion is selected or,
-     * if only one suggestion is available, or otherwise to the search results page.
-     */
-    function onEnterPressed() {
-      if (selectedItem.value && selectedItem.value.collection && selectedItem.value.id) {
-        navigateToDetail(selectedItem.value.collection, selectedItem.value.id);
-      } else if (searchSuggestions.value.length === 1) {
-        const onlyResult = searchSuggestions.value[0];
-        navigateToDetail(onlyResult.collection, onlyResult.id);
-      } else {
-        searchAndNavigate();
-      }
-    }
-
-    /**
-     * Navigates to the search results page using the current query.
-     */
-    function searchAndNavigate() {
-      const query = typedText.value.trim();
-      if (!query) return;
-
-      window.logService.info('Navigating to search results', {
-        query: query,
-        suggestionCount: searchSuggestions.value.length,
-      });
-
-      router.push({ name: 'SearchResults', query: { q: query } });
-    }
-
-    /**
-     * A no-op filter function.
-     *
-     * @returns {boolean} Always returns true.
-     */
-    function filterFn() {
-      return true;
-    }
-
-    // Debounced search function to limit API calls.
-    const debouncedSearch = debounce(async (newVal) => {
-      if (!newVal) {
-        searchSuggestions.value = [];
-        return;
-      }
-
-      window.logService.debug('Autocomplete search triggered', {
-        query: newVal,
-        queryLength: newVal.length,
-        debounceDelay: '300ms',
-      });
-
-      loading.value = true;
-      try {
-        const { data: searchData } = await searchPhenopackets({ query: newVal, reduce_doc: true });
-        searchSuggestions.value = formatSearchResults(searchData);
-
-        window.logService.debug('Autocomplete suggestions received', {
-          query: newVal,
-          totalSuggestions: searchSuggestions.value.length,
-          limitedTo: 10,
-          suggestionsByType: {
-            individuals: searchData.results?.individuals?.data?.length || 0,
-            variants: searchData.results?.variants?.data?.length || 0,
-            publications: searchData.results?.publications?.data?.length || 0,
-          },
-        });
-      } catch (err) {
-        window.logService.error('Search autocomplete failed', {
-          error: err.message,
-          query: newVal,
-          status: err.response?.status,
-        });
-      } finally {
-        loading.value = false;
-      }
-    }, 300);
-
-    watch(typedText, (newVal) => {
-      debouncedSearch(newVal);
+const onEnter = () => {
+  if (selectedItem.value) {
+    onSelect(selectedItem.value);
+  } else if (searchQuery.value) {
+    addRecentSearch(searchQuery.value);
+    router.push({
+      name: 'SearchResults',
+      query: { q: searchQuery.value },
     });
+  }
+};
 
-    return {
-      selectedItem,
-      typedText,
-      loading,
-      searchSuggestions,
-      limitedSuggestions,
-      onAutocompleteChange,
-      onEnterPressed,
-      searchAndNavigate,
-      getItemTitle,
-      filterFn,
-    };
-  },
+const searchFromRecent = (recentTerm) => {
+  searchQuery.value = recentTerm;
+  addRecentSearch(recentTerm);
+  router.push({
+    name: 'SearchResults',
+    query: { q: recentTerm },
+  });
 };
 </script>
 

@@ -203,17 +203,17 @@ export const getPhenopacketsBatch = (phenopacketIds) =>
   });
 
 /**
- * Search phenopackets with advanced filters.
- * @param {Object} searchQuery - Search criteria
- *   - query: Text search query (optional)
- *   - hpo_terms: Array of HPO term IDs (optional)
- *   - diseases: Array of disease IDs (optional)
- *   - sex: Sex filter (optional)
- *   - has_variants: Variant presence filter (optional)
+ * Search phenopackets with advanced filters using GET request.
+ * @param {Object} params - Search criteria as query parameters
+ *   - q: Full-text search query (optional)
+ *   - hpo_id: HPO term ID (optional)
+ *   - sex: Subject sex (optional)
+ *   - gene: Gene symbol (optional)
+ *   - pmid: Publication PMID (optional)
+ *   - rank_by_relevance: Sort by search rank (optional, default: true)
  * @returns {Promise} Axios promise with search results
  */
-export const searchPhenopackets = (searchQuery) =>
-  apiClient.post('/phenopackets/search', searchQuery);
+export const searchPhenopackets = (params) => apiClient.get('/phenopackets/search', { params });
 
 /**
  * Get phenopackets filtered by sex.
@@ -392,6 +392,18 @@ export const getCurrentUser = () => apiClient.get('/auth/me');
 export const logout = () => apiClient.post('/auth/logout');
 
 /* ==================== HPO AUTOCOMPLETE ==================== */
+
+/**
+ * Get HPO term suggestions for autocomplete.
+ * @param {string} query - Search query
+ * @param {number} limit - Max results
+ * @returns {Promise} Axios promise with HPO term suggestions
+ */
+export const getHPOAutocomplete = (query, limit = 10) => {
+  return apiClient.get('/ontology/hpo/autocomplete', {
+    params: { q: query, limit },
+  });
+};
 
 /**
  * Search HPO terms by query string.
