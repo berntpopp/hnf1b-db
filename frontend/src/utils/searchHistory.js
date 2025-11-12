@@ -37,3 +37,17 @@ export const addRecentSearch = (searchTerm) => {
     console.error('Failed to save recent search:', error);
   }
 };
+
+/**
+ * Clears all recent searches from localStorage.
+ */
+export const clearRecentSearches = () => {
+  try {
+    localStorage.removeItem(RECENT_SEARCHES_KEY);
+    if (window.logService) {
+      window.logService.info('Cleared recent searches');
+    }
+  } catch (error) {
+    console.error('Failed to clear recent searches:', error);
+  }
+};

@@ -29,7 +29,17 @@
       </template>
 
       <template v-if="recentSearches.length > 0" #prepend-item>
-        <v-list-subheader>Recent Searches</v-list-subheader>
+        <div class="d-flex justify-space-between align-center px-4 py-2">
+          <v-list-subheader class="px-0">Recent Searches</v-list-subheader>
+          <v-btn
+            variant="text"
+            size="x-small"
+            color="error"
+            @click.stop="handleClearRecentSearches"
+          >
+            Clear all
+          </v-btn>
+        </div>
         <v-list-item
           v-for="recent in recentSearches"
           :key="recent"
@@ -47,10 +57,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { getHPOAutocomplete } from '@/api';
-import { addRecentSearch, getRecentSearches } from '@/utils/searchHistory';
+import { addRecentSearch, getRecentSearches, clearRecentSearches } from '@/utils/searchHistory';
 import { debounce } from '@/utils/debounce';
 
 const router = useRouter();
@@ -58,8 +68,12 @@ const searchQuery = ref('');
 const selectedItem = ref(null);
 const suggestions = ref([]);
 const loading = ref(false);
+const recentSearches = ref([]);
 
-const recentSearches = computed(() => getRecentSearches());
+// Load recent searches on mount
+onMounted(() => {
+  recentSearches.value = getRecentSearches();
+});
 
 const fetchSuggestions = async (query) => {
   if (!query || query.length < 2) {
@@ -114,6 +128,14 @@ const searchFromRecent = (recentTerm) => {
     name: 'SearchResults',
     query: { q: recentTerm },
   });
+};
+
+const handleClearRecentSearches = () => {
+  clearRecentSearches();
+  recentSearches.value = [];
+  if (window.logService) {
+    window.logService.info('User cleared recent searches from SearchCard');
+  }
 };
 </script>
 

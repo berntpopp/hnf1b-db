@@ -182,7 +182,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { getHpoAutocomplete } from '@/api';
+import { getHPOAutocomplete } from '@/api';
 import { debounce } from '@/utils/debounce';
 
 const props = defineProps({
@@ -264,7 +264,7 @@ const fetchPhenotypeSuggestions = async (query) => {
 
   loadingPhenotypes.value = true;
   try {
-    const response = await getHpoAutocomplete(query);
+    const response = await getHPOAutocomplete(query);
     phenotypeSuggestions.value = response.data.data || [];
     if (window.logService) {
       window.logService.debug('HPO autocomplete results', {
