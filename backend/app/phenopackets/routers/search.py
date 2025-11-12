@@ -185,11 +185,11 @@ async def get_search_facets(
     variants_query = f"""
         SELECT
             CASE
-                WHEN jsonb_array_length(p.phenopacket->'interpretations') > 0 THEN true
+                WHEN jsonb_array_length(phenopacket->'interpretations') > 0 THEN true
                 ELSE false
             END AS value,
             COUNT(*) AS count
-        FROM phenopackets p
+        FROM phenopackets
         {where_clause}
         GROUP BY value
         ORDER BY value DESC
@@ -210,15 +210,17 @@ async def get_search_facets(
             gi.value->'variantInterpretation'->>
                 'acmgPathogenicityClassification' AS value,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p,
-             jsonb_array_elements(p.phenopacket->'interpretations') AS interp,
-             jsonb_array_elements(
-                interp.value->'diagnosis'->'genomicInterpretations'
-             ) AS gi
+        FROM phenopackets p
+        CROSS JOIN LATERAL jsonb_array_elements(
+            p.phenopacket->'interpretations'
+        ) AS interp
+        CROSS JOIN LATERAL jsonb_array_elements(
+            interp.value->'diagnosis'->'genomicInterpretations'
+        ) AS gi
         {where_clause}
-        GROUP BY value
-        HAVING gi.value->'variantInterpretation'->>
+        {"AND" if where_conditions else "WHERE"} gi.value->'variantInterpretation'->>
             'acmgPathogenicityClassification' IS NOT NULL
+        GROUP BY gi.value->'variantInterpretation'->>'acmgPathogenicityClassification'
         ORDER BY count DESC
         LIMIT 20
     """
@@ -234,15 +236,18 @@ async def get_search_facets(
             gi.value->'variantInterpretation'->
                 'variationDescriptor'->'geneContext'->>'symbol' AS value,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p,
-             jsonb_array_elements(p.phenopacket->'interpretations') AS interp,
-             jsonb_array_elements(
-                interp.value->'diagnosis'->'genomicInterpretations'
-             ) AS gi
+        FROM phenopackets p
+        CROSS JOIN LATERAL jsonb_array_elements(
+            p.phenopacket->'interpretations'
+        ) AS interp
+        CROSS JOIN LATERAL jsonb_array_elements(
+            interp.value->'diagnosis'->'genomicInterpretations'
+        ) AS gi
         {where_clause}
-        GROUP BY value
-        HAVING gi.value->'variantInterpretation'->
+        {"AND" if where_conditions else "WHERE"} gi.value->'variantInterpretation'->
             'variationDescriptor'->'geneContext'->>'symbol' IS NOT NULL
+        GROUP BY gi.value->'variantInterpretation'->
+            'variationDescriptor'->'geneContext'->>'symbol'
         ORDER BY count DESC
         LIMIT 20
     """
@@ -258,11 +263,13 @@ async def get_search_facets(
             pf.value->'type'->>'id' AS hpo_id,
             pf.value->'type'->>'label' AS label,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p,
-             jsonb_array_elements(p.phenopacket->'phenotypicFeatures') AS pf
+        FROM phenopackets p
+        CROSS JOIN LATERAL jsonb_array_elements(
+            p.phenopacket->'phenotypicFeatures'
+        ) AS pf
         {where_clause}
+        {"AND" if where_conditions else "WHERE"} pf.value->'type'->>'id' IS NOT NULL
         GROUP BY hpo_id, label
-        HAVING pf.value->'type'->>'id' IS NOT NULL
         ORDER BY count DESC
         LIMIT 20
     """

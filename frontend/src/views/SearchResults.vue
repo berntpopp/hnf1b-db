@@ -159,7 +159,14 @@ const route = useRoute();
 const router = useRouter();
 
 const filters = computed(() => {
-  const { page: _page, pageSize: _size, sex: _sex, genes: _genes, phenotypes: _phenotypes, ...textFilters } = route.query;
+  const {
+    page: _page,
+    pageSize: _size,
+    sex: _sex,
+    genes: _genes,
+    phenotypes: _phenotypes,
+    ...textFilters
+  } = route.query;
   return textFilters;
 });
 const results = ref([]);
@@ -169,17 +176,21 @@ const sortBy = ref(route.query.sort || 'relevance');
 const currentPage = ref(parseInt(route.query.page) || 1);
 const pageSize = ref(parseInt(route.query.pageSize) || 20);
 const selectedFacets = ref({
-  sex: route.query.sex ? (Array.isArray(route.query.sex) ? route.query.sex : [route.query.sex]) : [],
-  pathogenicity: route.query.pathogenicity ? (Array.isArray(route.query.pathogenicity) ? route.query.pathogenicity : [route.query.pathogenicity]) : [],
-  genes: route.query.genes ? (Array.isArray(route.query.genes) ? route.query.genes : [route.query.genes]) : [],
-  phenotypes: route.query.phenotypes ? (Array.isArray(route.query.phenotypes) ? route.query.phenotypes : [route.query.phenotypes]) : [],
+  sex: route.query.sex
+    ? Array.isArray(route.query.sex)
+      ? route.query.sex
+      : [route.query.sex]
+    : [],
+  pathogenicity: route.query.pathogenicity
+    ? Array.isArray(route.query.pathogenicity)
+      ? route.query.pathogenicity
+      : [route.query.pathogenicity]
+    : [],
 });
 
 const facets = ref({
   sex: [],
   pathogenicity: [],
-  genes: [],
-  phenotypes: [],
 });
 
 const sortOptions = [
@@ -232,12 +243,6 @@ const updateURL = () => {
   if (selectedFacets.value.pathogenicity.length > 0) {
     query.pathogenicity = selectedFacets.value.pathogenicity;
   }
-  if (selectedFacets.value.genes.length > 0) {
-    query.genes = selectedFacets.value.genes;
-  }
-  if (selectedFacets.value.phenotypes.length > 0) {
-    query.phenotypes = selectedFacets.value.phenotypes;
-  }
 
   router.replace({ query });
 };
@@ -257,12 +262,7 @@ const fetchResults = async () => {
     if (selectedFacets.value.sex.length > 0) {
       searchParams.sex = selectedFacets.value.sex[0]; // API accepts single sex value
     }
-    if (selectedFacets.value.genes.length > 0) {
-      searchParams.gene = selectedFacets.value.genes[0]; // API accepts single gene
-    }
-    if (selectedFacets.value.phenotypes.length > 0) {
-      searchParams.hpo_id = selectedFacets.value.phenotypes[0]; // API accepts single HPO
-    }
+    // Note: genes and phenotypes filters removed - genes are all HNF1B, phenotypes use main search
 
     const { data } = await searchPhenopackets(searchParams);
     results.value = data.data.map((pp) => ({
@@ -471,9 +471,11 @@ watch(
     // Sync facet filters
     selectedFacets.value = {
       sex: newQuery.sex ? (Array.isArray(newQuery.sex) ? newQuery.sex : [newQuery.sex]) : [],
-      pathogenicity: newQuery.pathogenicity ? (Array.isArray(newQuery.pathogenicity) ? newQuery.pathogenicity : [newQuery.pathogenicity]) : [],
-      genes: newQuery.genes ? (Array.isArray(newQuery.genes) ? newQuery.genes : [newQuery.genes]) : [],
-      phenotypes: newQuery.phenotypes ? (Array.isArray(newQuery.phenotypes) ? newQuery.phenotypes : [newQuery.phenotypes]) : [],
+      pathogenicity: newQuery.pathogenicity
+        ? Array.isArray(newQuery.pathogenicity)
+          ? newQuery.pathogenicity
+          : [newQuery.pathogenicity]
+        : [],
     };
 
     // Fetch with new parameters
