@@ -70,8 +70,9 @@ const fetchSuggestions = async (query) => {
   loading.value = true;
   try {
     const response = await getHPOAutocomplete(query);
-    suggestions.value = response.data;
+    suggestions.value = response.data.data || [];
   } catch (error) {
+    suggestions.value = [];
     if (window.logService) {
       window.logService.error('HPO autocomplete failed', { error: error.message });
     } else {
