@@ -103,9 +103,10 @@ const onSelect = (item) => {
   if (!item) return;
 
   addRecentSearch(item.label);
+  // When selecting from HPO autocomplete, only use hpo_id for precise results
   router.push({
     name: 'SearchResults',
-    query: { q: item.label, hpo_id: item.hpo_id },
+    query: { hpo_id: item.hpo_id },
   });
 };
 

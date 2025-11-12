@@ -159,7 +159,7 @@ const route = useRoute();
 const router = useRouter();
 
 const filters = computed(() => {
-  const { page, pageSize: size, sex, genes, phenotypes, ...textFilters } = route.query;
+  const { page: _page, pageSize: _size, sex: _sex, genes: _genes, phenotypes: _phenotypes, ...textFilters } = route.query;
   return textFilters;
 });
 const results = ref([]);
