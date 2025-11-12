@@ -136,7 +136,6 @@ const totalResults = ref(0);
 const sortBy = ref('relevance');
 const selectedFacets = ref({
   sex: [],
-  hasVariants: null,
   pathogenicity: [],
   genes: [],
   phenotypes: [],
@@ -144,7 +143,6 @@ const selectedFacets = ref({
 
 const facets = ref({
   sex: [],
-  hasVariants: [],
   pathogenicity: [],
   genes: [],
   phenotypes: [],
@@ -177,9 +175,6 @@ const fetchResults = async () => {
     // Add facet filters to search params
     if (selectedFacets.value.sex.length > 0) {
       searchParams.sex = selectedFacets.value.sex[0]; // API accepts single sex value
-    }
-    if (selectedFacets.value.hasVariants !== null) {
-      searchParams.has_variants = selectedFacets.value.hasVariants;
     }
     if (selectedFacets.value.genes.length > 0) {
       searchParams.gene = selectedFacets.value.genes[0]; // API accepts single gene

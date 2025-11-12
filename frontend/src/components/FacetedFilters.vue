@@ -28,35 +28,6 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <!-- Has Variants Filter -->
-    <v-expansion-panels class="mb-3">
-      <v-expansion-panel>
-        <v-expansion-panel-title>
-          <div class="d-flex justify-space-between align-center" style="width: 100%">
-            <span>Has Variants</span>
-            <v-chip v-if="selectedFilters.hasVariants !== null" size="small" color="primary">
-              1
-            </v-chip>
-          </div>
-        </v-expansion-panel-title>
-        <v-expansion-panel-text>
-          <v-radio-group
-            v-model="selectedFilters.hasVariants"
-            density="compact"
-            hide-details
-            @update:model-value="onFilterChange"
-          >
-            <v-radio
-              v-for="option in facets.hasVariants"
-              :key="option.value"
-              :label="`${option.label} (${option.count})`"
-              :value="option.value"
-            />
-          </v-radio-group>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
-    </v-expansion-panels>
-
     <!-- Pathogenicity Filter -->
     <v-expansion-panels v-if="facets.pathogenicity.length > 0" class="mb-3">
       <v-expansion-panel>
@@ -176,7 +147,6 @@ const props = defineProps({
     required: true,
     default: () => ({
       sex: [],
-      hasVariants: [],
       pathogenicity: [],
       genes: [],
       phenotypes: [],
@@ -186,7 +156,6 @@ const props = defineProps({
     type: Object,
     default: () => ({
       sex: [],
-      hasVariants: null,
       pathogenicity: [],
       genes: [],
       phenotypes: [],
@@ -201,7 +170,6 @@ const showAllPhenotypes = ref(false);
 
 const selectedFilters = ref({
   sex: [],
-  hasVariants: null,
   pathogenicity: [],
   genes: [],
   phenotypes: [],
@@ -211,7 +179,6 @@ const selectedFilters = ref({
 const hasActiveFilters = computed(() => {
   return (
     selectedFilters.value.sex.length > 0 ||
-    selectedFilters.value.hasVariants !== null ||
     selectedFilters.value.pathogenicity.length > 0 ||
     selectedFilters.value.genes.length > 0 ||
     selectedFilters.value.phenotypes.length > 0
@@ -226,7 +193,6 @@ const onFilterChange = () => {
 const clearAllFilters = () => {
   selectedFilters.value = {
     sex: [],
-    hasVariants: null,
     pathogenicity: [],
     genes: [],
     phenotypes: [],
