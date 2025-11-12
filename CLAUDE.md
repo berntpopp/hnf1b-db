@@ -879,6 +879,7 @@ The project handles specialized genomic data formats:
 
 **Key Features:**
 - HPO term autocomplete for phenotype selection
+- **Global Phenopacket Search**: A powerful, responsive search interface available in the main navigation. It supports full-text search across phenopackets, HPO term autocomplete with fuzzy matching, and advanced filtering by phenotype, disease, gene, and more. Recent searches are saved locally for user convenience.
 - Interactive D3.js visualizations
 - Material Design responsive UI
 - JWT authentication flow
