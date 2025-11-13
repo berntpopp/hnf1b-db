@@ -292,7 +292,7 @@ def parse_sort_parameter(sort: str) -> list:
 
         # Use numeric sorting for subject_id (cast string to integer)
         if field_name == "subject_id":
-            sort_column = cast(Phenopacket.subject_id, Integer)
+            sort_column = cast(Phenopacket.subject_id, Integer)  # type: ignore[assignment]
         else:
             sort_column = allowed_fields[field_name]
 
@@ -568,7 +568,7 @@ async def get_phenopackets_by_variant(
 
     # Return structured response with metadata and phenopacket data
     # Note: phenopacket['id'] is the internal ID, not database record ID
-    result = []
+    response_data = []
     for row in rows:
         item = {
             "phenopacket_id": row["phenopacket_id"],
@@ -578,8 +578,8 @@ async def get_phenopackets_by_variant(
             "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
             "schema_version": row["schema_version"],
         }
-        result.append(item)
-    return result
+        response_data.append(item)
+    return response_data
 
 
 # ===== Cursor Pagination Implementation =====
