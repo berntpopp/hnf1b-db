@@ -101,8 +101,8 @@ async def test_user(db_session):
 async def admin_user(db_session):
     """Create admin user for permission tests."""
     user = User(
-        username="admin",
-        email="admin@example.com",
+        username="testadmin",
+        email="testadmin@example.com",
         hashed_password=get_password_hash("AdminPass123!"),
         role="admin",
         is_active=True,
