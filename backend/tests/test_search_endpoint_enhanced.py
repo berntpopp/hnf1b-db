@@ -1,13 +1,12 @@
+import json
+from datetime import datetime, timedelta
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
-import json
 
 from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketSanitizer
-from sqlalchemy import text
-from app.main import app # Import the app object directly
 
 
 @pytest.fixture

@@ -230,7 +230,9 @@ const pageSizeOptions = [
 const pageStart = computed(() => (currentPage.value - 1) * pageSize.value + 1);
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, totalResults.value));
 const rangeText = computed(() =>
-  totalResults.value === 0 ? '0 of 0' : `${pageStart.value}-${pageEnd.value} of ${totalResults.value}`
+  totalResults.value === 0
+    ? '0 of 0'
+    : `${pageStart.value}-${pageEnd.value} of ${totalResults.value}`
 );
 const canGoToPrevious = computed(() => currentPage.value > 1);
 const canGoToNext = computed(() => currentPage.value < totalPages.value);
