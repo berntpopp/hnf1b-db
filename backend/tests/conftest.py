@@ -62,6 +62,7 @@ async def db_session():
             # Rollback any uncommitted changes
             await session.rollback()
         except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass  # Ignore errors during rollback
 
         # Close session explicitly
@@ -110,6 +111,7 @@ async def test_user(db_session):
         try:
             await db_session.rollback()
         except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 
@@ -150,6 +152,7 @@ async def admin_user(db_session):
         try:
             await db_session.rollback()
         except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 

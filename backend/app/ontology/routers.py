@@ -19,7 +19,14 @@ async def hpo_autocomplete(
 
     Uses trigram similarity for typo tolerance. Results are ranked by similarity
     score, then by the number of phenopackets associated with the term.
+
+    The similarity threshold is set to 0.15 (down from default 0.3) to allow
+    better fuzzy matching for typos and partial word matches.
     """
+    # Set lower similarity threshold for better fuzzy matching
+    # 0.15 allows matching of partial words (e.g., "magnesium" in "Hypomagnesemia")
+    await db.execute(text("SET pg_trgm.similarity_threshold = 0.15"))
+
     query = text(
         """
         SELECT hpo_id, label, phenopacket_count,

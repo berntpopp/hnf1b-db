@@ -112,6 +112,7 @@ async def large_phenopacket_set(db_session: AsyncSession):
         try:
             await db_session.rollback()
         except Exception:
+            # Ignore exceptions during rollback; session may be in unrecoverable state after failed test cleanup.
             pass
 
 

@@ -112,6 +112,7 @@ async def sample_phenopackets(db_session: AsyncSession):
         try:
             await db_session.rollback()
         except Exception:
+            # Ignore rollback errors during test fixture cleanup.
             pass
 
 
