@@ -293,7 +293,7 @@ def parse_sort_parameter(sort: str) -> list:
         # Note: Previously tried numeric casting for subject_id, but this fails
         # with non-numeric IDs like "integration_patient_000" in tests.
         # Alphabetic sorting works for both numeric and non-numeric IDs.
-        sort_column = allowed_fields[field_name]  # type: ignore[assignment]
+        sort_column = allowed_fields[field_name]
 
         # Apply sort direction
         if descending:

@@ -78,6 +78,16 @@ async def db_session():
 @pytest_asyncio.fixture
 async def test_user(db_session):
     """Create test user for authentication tests."""
+    # Pre-cleanup: Remove any leftover test users from failed previous runs
+    try:
+        await db_session.execute(delete(User).where(User.email == "test@example.com"))
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     user = User(
         username="testuser",
         email="test@example.com",
@@ -93,13 +103,31 @@ async def test_user(db_session):
     yield user
 
     # Cleanup
-    await db_session.execute(delete(User).where(User.id == user.id))
-    await db_session.commit()
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 @pytest_asyncio.fixture
 async def admin_user(db_session):
     """Create admin user for permission tests."""
+    # Pre-cleanup: Remove any leftover admin users from failed previous runs
+    try:
+        await db_session.execute(
+            delete(User).where(User.email == "testadmin@example.com")
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     user = User(
         username="testadmin",
         email="testadmin@example.com",
@@ -114,8 +142,15 @@ async def admin_user(db_session):
 
     yield user
 
-    await db_session.execute(delete(User).where(User.id == user.id))
-    await db_session.commit()
+    # Cleanup
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 @pytest_asyncio.fixture

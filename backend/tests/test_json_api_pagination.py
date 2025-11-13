@@ -23,7 +23,7 @@ from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketSanitizer
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def sample_phenopackets(db_session: AsyncSession):
     """Create sample phenopackets for pagination testing.
 
@@ -32,7 +32,17 @@ async def sample_phenopackets(db_session: AsyncSession):
     - 30 with variants, 20 without
     - Sequential IDs for sorting tests
     """
+    from sqlalchemy import delete
+
     sanitizer = PhenopacketSanitizer()
+
+    # Pre-cleanup: Remove any leftover test data from failed previous runs
+    await db_session.execute(
+        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test_pagination_%"))
+    )
+    await db_session.commit()
+    await db_session.rollback()  # Ensure fresh session
+
     phenopackets_data = []
 
     for i in range(50):
@@ -88,10 +98,21 @@ async def sample_phenopackets(db_session: AsyncSession):
 
     yield phenopackets_data
 
-    # Cleanup
-    for pp in phenopackets_data:
-        await db_session.delete(pp)
-    await db_session.commit()
+    # Cleanup: Use delete query instead of iterating over objects
+    try:
+        await db_session.rollback()  # Clear any pending transactions
+        await db_session.execute(
+            delete(Phenopacket).where(
+                Phenopacket.phenopacket_id.like("test_pagination_%")
+            )
+        )
+        await db_session.commit()
+    except Exception as e:
+        print(f"Warning: Cleanup failed: {e}")
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 class TestJsonApiResponseStructure:
