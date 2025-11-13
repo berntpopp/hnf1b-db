@@ -139,7 +139,7 @@ async def get_by_publication(
     skip: int = Query(0, ge=0, description="Pagination offset"),
     limit: int = Query(100, ge=1, le=500, description="Max records (max: 500)"),
     sex: Optional[str] = Query(
-        None, regex="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"
+        None, pattern="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"
     ),
     has_variants: Optional[bool] = Query(
         None, description="Filter by variant presence"
@@ -880,7 +880,7 @@ async def aggregate_sex_distribution(
 async def aggregate_variant_pathogenicity(
     count_mode: str = Query(
         "all",
-        regex="^(all|unique)$",
+        pattern="^(all|unique)$",
         description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants",
     ),
     db: AsyncSession = Depends(get_db),
@@ -945,7 +945,7 @@ async def aggregate_variant_pathogenicity(
 async def aggregate_variant_types(
     count_mode: str = Query(
         "all",
-        regex="^(all|unique)$",
+        pattern="^(all|unique)$",
         description="Count mode: 'all' (default) counts all variant instances, 'unique' counts distinct variants",
     ),
     db: AsyncSession = Depends(get_db),

@@ -88,6 +88,9 @@ make check         # Run all checks
 # Database
 make db-migrate    # Create migration
 make db-upgrade    # Apply migrations
+make db-reset      # Reset database (drop + recreate)
+make db-init       # Initialize (migrations + admin user)
+make db-create-admin  # Create/update admin user
 make phenopackets-migrate  # Import data
 
 # Cleanup
@@ -356,23 +359,66 @@ DEBUG=true
 # Start PostgreSQL and Redis containers
 make hybrid-up
 
-# Apply database schema
-make db-upgrade
+# Initialize database (migrations + admin user)
+make db-init
 
 # Verify services are running
 docker ps
 ```
 
-### 5. Run the Application
+### 5. Admin User Setup
+
+The `db-init` command automatically creates an admin user with credentials from `.env`:
+
+```bash
+# Default credentials (change in backend/.env before running):
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@hnf1b-db.local
+ADMIN_PASSWORD=ChangeMe!Admin2025
+
+# Or create/update admin user separately:
+make db-create-admin
+```
+
+**⚠️ Security:** Change the admin password immediately after first login!
+
+### 6. Run the Application
 
 ```bash
 # Start development server
 make server
 
 # API will be available at:
-# - http://localhost:8000 (API)  
+# - http://localhost:8000 (API)
 # - http://localhost:8000/docs (API documentation)
 ```
+
+## Database Reset & Reinitialize
+
+To completely reset and reinitialize the database with fresh data:
+
+```bash
+# 1. Stop all services
+make clean-all
+
+# 2. Start services
+make hybrid-up
+
+# 3. Reset database (drop all tables + reapply migrations)
+make db-reset
+
+# 4. Create admin user
+make db-create-admin
+
+# 5. Import phenopacket data
+make phenopackets-migrate
+
+# 6. Start backend and frontend
+make backend    # Terminal 1
+make frontend   # Terminal 2
+```
+
+This workflow gives you a clean database with all 864 phenopackets and a fresh admin user.
 
 ## Alternative Installation (without uv)
 
