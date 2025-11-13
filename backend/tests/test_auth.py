@@ -129,8 +129,20 @@ async def test_list_roles(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
-async def test_create_user_admin(async_client: AsyncClient, admin_headers):
+async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_session):
     """Test creating user as admin."""
+    # Pre-cleanup: Remove any leftover newuser from failed previous runs
+    from sqlalchemy import delete
+    from app.models.user import User
+
+    try:
+        await db_session.execute(
+            delete(User).where(User.email == "new@example.com")
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
     response = await async_client.post(
         "/api/v2/auth/users",
         headers=admin_headers,
@@ -146,6 +158,15 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers):
     data = response.json()
     assert data["username"] == "newuser"
     assert data["role"] == "curator"
+
+    # Cleanup: Remove the created user
+    try:
+        await db_session.execute(
+            delete(User).where(User.email == "new@example.com")
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
 
 
 @pytest.mark.asyncio

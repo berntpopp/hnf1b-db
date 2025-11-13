@@ -133,7 +133,7 @@ async def test_hpo_autocomplete_no_results(
 async def test_hpo_autocomplete_ranking(
     async_client: AsyncClient, populate_hpo_terms, auth_headers
 ):
-    """Test HPO autocomplete results are ranked by similarity and phenopacket count."""
+    """Test HPO autocomplete results are ranked by similarity first, then count."""
     response = await async_client.get(
         "/api/v2/ontology/hpo/autocomplete?q=magnesium", headers=auth_headers
     )
@@ -141,9 +141,9 @@ async def test_hpo_autocomplete_ranking(
     data = response.json()["data"]
     assert len(data) > 1
 
-    # Expect Hypomagnesemia (150) to rank higher than Magnesium deficiency (60)
-    # due to higher phenopacket_count, assuming similar similarity scores.
-    # This is a simplified check, actual ranking might be more complex.
+    # Expect Magnesium deficiency to rank higher than Hypomagnesemia because
+    # it has higher similarity (exact substring match) even though Hypomagnesemia
+    # has more phenopackets (150 vs 60). Similarity is prioritized over count.
     hypomagnesemia_index = -1
     magnesium_deficiency_index = -1
 
@@ -155,6 +155,6 @@ async def test_hpo_autocomplete_ranking(
 
     assert hypomagnesemia_index != -1
     assert magnesium_deficiency_index != -1
-    assert hypomagnesemia_index < magnesium_deficiency_index, (
-        "Hypomagnesemia should rank higher than Magnesium deficiency due to count"
+    assert magnesium_deficiency_index < hypomagnesemia_index, (
+        "Magnesium deficiency should rank higher due to better similarity match"
     )
