@@ -292,9 +292,9 @@ def parse_sort_parameter(sort: str) -> list:
 
         # Use numeric sorting for subject_id (cast string to integer)
         if field_name == "subject_id":
-            sort_column = cast(Phenopacket.subject_id, Integer)  # type: ignore[assignment]
+            sort_column = cast(Phenopacket.subject_id, Integer)
         else:
-            sort_column = allowed_fields[field_name]
+            sort_column = allowed_fields[field_name]  # type: ignore[assignment]
 
         # Apply sort direction
         if descending:
