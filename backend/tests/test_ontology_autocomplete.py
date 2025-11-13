@@ -7,6 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 @pytest.fixture
 async def populate_hpo_terms(db_session: AsyncSession):
     """Populate hpo_terms_lookup table with sample data."""
+    # Pre-cleanup: Remove any leftover test data
+    try:
+        await db_session.execute(
+            text("DELETE FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:000000%'")
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     hpo_terms_data = [
         ("HP:0000001", "Abnormality of the kidney", 100),
         ("HP:0000002", "Renal cyst", 50),
@@ -34,6 +46,21 @@ async def populate_hpo_terms(db_session: AsyncSession):
             {"hpo_id": hpo_id, "label": label, "count": count},
         )
     await db_session.commit()
+
+    yield
+
+    # Cleanup
+    try:
+        await db_session.rollback()
+        await db_session.execute(
+            text("DELETE FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:000000%'")
+        )
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 @pytest.mark.asyncio

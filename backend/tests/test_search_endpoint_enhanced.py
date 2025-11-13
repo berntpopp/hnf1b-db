@@ -9,10 +9,25 @@ from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketSanitizer
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def sample_phenopackets_for_search(db_session: AsyncSession):
     """Create sample phenopackets for enhanced search testing."""
+    from sqlalchemy import delete
+
     sanitizer = PhenopacketSanitizer()
+
+    # Pre-cleanup: Remove any leftover test data from failed previous runs
+    try:
+        await db_session.execute(
+            delete(Phenopacket).where(Phenopacket.phenopacket_id.like("search_pp_%"))
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     phenopackets_data = []
 
     # Phenopacket 1: Kidney disease, MALE, HNF1B gene, PMID:123
@@ -72,7 +87,9 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
                     "genomicInterpretations": [
                         {
                             "variantInterpretation": {
-                                "variationDescriptor": {"geneContext": {"symbol": "GCK"}}
+                                "variationDescriptor": {
+                                    "geneContext": {"symbol": "GCK"}
+                                }
                             }
                         }
                     ]
@@ -126,10 +143,19 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
 
     yield phenopackets_data
 
-    # Cleanup
-    for pp in phenopackets_data:
-        await db_session.delete(pp)
-    await db_session.commit()
+    # Cleanup: Use delete query instead of iterating over objects
+    try:
+        await db_session.rollback()  # Clear any pending transactions
+        await db_session.execute(
+            delete(Phenopacket).where(Phenopacket.phenopacket_id.like("search_pp_%"))
+        )
+        await db_session.commit()
+    except Exception as e:
+        print(f"Warning: Cleanup failed: {e}")
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 @pytest.mark.asyncio
