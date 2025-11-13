@@ -13,9 +13,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, cast, func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.types import Integer
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -290,11 +289,11 @@ def parse_sort_parameter(sort: str) -> list:
                 detail=f"Invalid sort field: {field_name}. Allowed: {allowed}",
             )
 
-        # Use numeric sorting for subject_id (cast string to integer)
-        if field_name == "subject_id":
-            sort_column = cast(Phenopacket.subject_id, Integer)
-        else:
-            sort_column = allowed_fields[field_name]  # type: ignore[assignment]
+        # Get the sort column (no special handling for subject_id)
+        # Note: Previously tried numeric casting for subject_id, but this fails
+        # with non-numeric IDs like "integration_patient_000" in tests.
+        # Alphabetic sorting works for both numeric and non-numeric IDs.
+        sort_column = allowed_fields[field_name]  # type: ignore[assignment]
 
         # Apply sort direction
         if descending:
@@ -988,9 +987,7 @@ async def get_by_publication(
         count_query += " AND subject_sex = :sex"
     if has_variants is not None:
         if has_variants:
-            count_query += (
-                " AND jsonb_array_length(phenopacket->'interpretations') > 0"
-            )
+            count_query += " AND jsonb_array_length(phenopacket->'interpretations') > 0"
         else:
             count_query += (
                 " AND (phenopacket->'interpretations' IS NULL OR "

@@ -20,13 +20,28 @@ from app.phenopackets.models import Phenopacket
 from app.phenopackets.validator import PhenopacketSanitizer
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def large_phenopacket_set(db_session: AsyncSession):
     """Create a larger set of phenopackets for integration testing.
 
     Creates 100 phenopackets to test pagination across multiple pages.
+
+    Scope: function - Each test gets a fresh set of data.
     """
+    from sqlalchemy import delete
+
     sanitizer = PhenopacketSanitizer()
+
+    # Clean up any leftover test data from failed previous runs
+    # This is critical because tests may have failed mid-execution
+    await db_session.execute(
+        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test_integration_%"))
+    )
+    await db_session.commit()
+
+    # Ensure the session is fresh
+    await db_session.rollback()
+
     phenopackets_data = []
 
     for i in range(100):
@@ -81,10 +96,23 @@ async def large_phenopacket_set(db_session: AsyncSession):
 
     yield phenopackets_data
 
-    # Cleanup
-    for pp in phenopackets_data:
-        await db_session.delete(pp)
-    await db_session.commit()
+    # Cleanup: Use delete query instead of iterating over objects
+    # This is robust even if the test fails or session is in bad state
+    try:
+        await db_session.rollback()  # Clear any pending transactions
+        await db_session.execute(
+            delete(Phenopacket).where(
+                Phenopacket.phenopacket_id.like("test_integration_%")
+            )
+        )
+        await db_session.commit()
+    except Exception as e:
+        # Log but don't fail - cleanup is best effort
+        print(f"Warning: Cleanup failed: {e}")
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 class TestPaginationWorkflows:
