@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Integer
 
@@ -525,6 +525,58 @@ async def delete_phenopacket(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {"message": "Phenopacket deleted successfully"}
+
+
+@router.get("/by-variant/{variant_id}")
+async def get_phenopackets_by_variant(
+    variant_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all phenopackets that contain a specific variant.
+
+    Args:
+        variant_id: The variant ID to search for
+        db: Database session
+
+    Returns:
+        List of phenopackets containing this variant
+    """
+    # Use raw SQL with ORM mapping for reliability
+    query = text(
+        """
+    SELECT id, phenopacket_id, version, phenopacket,
+           created_at, updated_at, schema_version
+    FROM phenopackets p
+    WHERE EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+             jsonb_array_elements(
+                 interp->'diagnosis'->'genomicInterpretations'
+             ) as gi
+        WHERE gi->'variantInterpretation'->'variationDescriptor'->>'id'
+              = :variant_id
+    )
+    ORDER BY p.created_at DESC
+    """
+    )
+
+    result = await db.execute(query, {"variant_id": variant_id})
+    rows = result.mappings().all()
+
+    # Return structured response with metadata and phenopacket data
+    # Note: phenopacket['id'] is the internal ID, not database record ID
+    result = []
+    for row in rows:
+        item = {
+            "phenopacket_id": row["phenopacket_id"],
+            "version": row["version"],
+            "phenopacket": row["phenopacket"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            "schema_version": row["schema_version"],
+        }
+        result.append(item)
+    return result
 
 
 # ===== Cursor Pagination Implementation =====

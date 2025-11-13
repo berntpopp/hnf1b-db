@@ -293,6 +293,7 @@
                     :to="`/phenopackets/${item.phenopacket_id}`"
                     color="teal-lighten-3"
                     size="small"
+                    variant="flat"
                     link
                   >
                     <v-icon left size="small"> mdi-card-account-details </v-icon>
