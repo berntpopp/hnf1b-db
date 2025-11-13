@@ -11,8 +11,9 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import Integer
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -276,25 +277,27 @@ def parse_sort_parameter(sort: str) -> list:
     order_clauses = []
     for field in sort.split(","):
         field = field.strip()
-        if field.startswith("-"):
-            # Descending
-            field_name = field[1:]
-            if field_name not in allowed_fields:
-                allowed = ", ".join(allowed_fields.keys())
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid sort field: {field_name}. Allowed: {allowed}",
-                )
-            order_clauses.append(allowed_fields[field_name].desc())
+        descending = field.startswith("-")
+        field_name = field[1:] if descending else field
+
+        if field_name not in allowed_fields:
+            allowed = ", ".join(allowed_fields.keys())
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sort field: {field_name}. Allowed: {allowed}",
+            )
+
+        # Use numeric sorting for subject_id (cast string to integer)
+        if field_name == "subject_id":
+            sort_column = cast(Phenopacket.subject_id, Integer)
         else:
-            # Ascending
-            if field not in allowed_fields:
-                allowed = ", ".join(allowed_fields.keys())
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid sort field: {field}. Allowed: {allowed}",
-                )
-            order_clauses.append(allowed_fields[field].asc())
+            sort_column = allowed_fields[field_name]
+
+        # Apply sort direction
+        if descending:
+            order_clauses.append(sort_column.desc())
+        else:
+            order_clauses.append(sort_column.asc())
 
     return order_clauses
 

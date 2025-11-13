@@ -99,14 +99,25 @@
               hide-default-footer
               @click:row="navigateToPhenopacket"
             >
-              <template #item.search_rank="{ item }">
-                <v-chip v-if="item.search_rank" color="green" size="small">
-                  {{ (item.search_rank * 100).toFixed(1) }}% match
-                </v-chip>
-                <span v-else>-</span>
-              </template>
               <template #item.subject.id="{ item }">
-                <router-link :to="`/phenopackets/${item.id}`">{{ item.subject.id }}</router-link>
+                <v-chip
+                  :to="`/phenopackets/${item.id}`"
+                  color="teal-lighten-3"
+                  size="small"
+                  variant="flat"
+                  link
+                >
+                  <v-icon left size="small">mdi-card-account-details</v-icon>
+                  {{ item.subject.id }}
+                </v-chip>
+              </template>
+              <template #item.subject.sex="{ item }">
+                <v-chip :color="getSexChipColor(item.subject.sex)" size="small" variant="flat">
+                  <v-icon left size="small">
+                    {{ getSexIcon(item.subject.sex) }}
+                  </v-icon>
+                  {{ formatSex(item.subject.sex) }}
+                </v-chip>
               </template>
               <template #no-data>
                 <v-alert type="info" variant="tonal" class="ma-4">
@@ -116,31 +127,29 @@
             </v-data-table>
 
             <!-- Pagination Controls -->
-            <div v-if="totalResults > 0" class="d-flex justify-space-between align-center mt-4">
-              <div class="d-flex align-center gap-2">
-                <v-select
-                  v-model="pageSize"
-                  :items="pageSizeOptions"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  style="max-width: 150px"
-                  @update:model-value="handlePageSizeChange"
-                />
-                <span class="text-caption text-grey">
-                  Showing {{ (currentPage - 1) * pageSize + 1 }}-{{
-                    Math.min(currentPage * pageSize, totalResults)
-                  }}
-                  of {{ totalResults }}
-                </span>
-              </div>
-
-              <v-pagination
-                v-model="currentPage"
-                :length="totalPages"
-                :total-visible="7"
-                @update:model-value="handlePageChange"
+            <div v-if="totalResults > 0" class="d-flex justify-end align-center mt-4">
+              <span class="mr-2 text-body-2">Rows per page:</span>
+              <v-select
+                v-model="pageSize"
+                :items="pageSizeOptions"
+                density="compact"
+                hide-details
+                style="max-width: 120px"
+                @update:model-value="handlePageSizeChange"
               />
+              <span class="mx-3 text-body-2">{{ rangeText }}</span>
+              <v-btn icon :disabled="!canGoToFirst" @click="goToFirstPage">
+                <v-icon>mdi-page-first</v-icon>
+              </v-btn>
+              <v-btn icon :disabled="!canGoToPrevious" @click="goToPreviousPage">
+                <v-icon>mdi-chevron-left</v-icon>
+              </v-btn>
+              <v-btn icon :disabled="!canGoToNext" @click="goToNextPage">
+                <v-icon>mdi-chevron-right</v-icon>
+              </v-btn>
+              <v-btn icon :disabled="!canGoToLast" @click="goToLastPage">
+                <v-icon>mdi-page-last</v-icon>
+              </v-btn>
             </div>
           </v-col>
         </v-row>
@@ -154,6 +163,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { searchPhenopackets, getSearchFacets } from '@/api';
 import FacetedFilters from '@/components/FacetedFilters.vue';
+import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 
 const route = useRoute();
 const router = useRouter();
@@ -203,9 +213,8 @@ const sortOptions = [
 ];
 
 const headers = [
-  { title: 'ID', value: 'subject.id', sortable: false },
+  { title: 'Subject ID', value: 'subject.id', sortable: false },
   { title: 'Sex', value: 'subject.sex', sortable: false },
-  { title: 'Relevance', value: 'search_rank', sortable: false },
 ];
 
 const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value));
@@ -216,6 +225,17 @@ const pageSizeOptions = [
   { title: '50 per page', value: 50 },
   { title: '100 per page', value: 100 },
 ];
+
+// Computed properties for pagination controls
+const pageStart = computed(() => (currentPage.value - 1) * pageSize.value + 1);
+const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, totalResults.value));
+const rangeText = computed(() =>
+  totalResults.value === 0 ? '0 of 0' : `${pageStart.value}-${pageEnd.value} of ${totalResults.value}`
+);
+const canGoToPrevious = computed(() => currentPage.value > 1);
+const canGoToNext = computed(() => currentPage.value < totalPages.value);
+const canGoToFirst = computed(() => currentPage.value > 1);
+const canGoToLast = computed(() => currentPage.value < totalPages.value);
 
 // Update URL with all search state
 const updateURL = () => {
@@ -343,19 +363,48 @@ const handleSortChange = () => {
   }
 };
 
-const handlePageChange = (page) => {
-  currentPage.value = page;
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Page changed', { page: currentPage.value });
-  }
-};
-
 const handlePageSizeChange = () => {
   currentPage.value = 1; // Reset to first page when page size changes
   updateURL();
   if (window.logService) {
     window.logService.info('Page size changed', { pageSize: pageSize.value });
+  }
+};
+
+// Pagination navigation functions
+const goToFirstPage = () => {
+  currentPage.value = 1;
+  updateURL();
+  if (window.logService) {
+    window.logService.info('Navigate to first page');
+  }
+};
+
+const goToPreviousPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+    updateURL();
+    if (window.logService) {
+      window.logService.info('Navigate to previous page', { page: currentPage.value });
+    }
+  }
+};
+
+const goToNextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+    updateURL();
+    if (window.logService) {
+      window.logService.info('Navigate to next page', { page: currentPage.value });
+    }
+  }
+};
+
+const goToLastPage = () => {
+  currentPage.value = totalPages.value;
+  updateURL();
+  if (window.logService) {
+    window.logService.info('Navigate to last page', { page: currentPage.value });
   }
 };
 
@@ -404,7 +453,6 @@ const exportAsCSV = () => {
       '-',
     'Phenotype Count': item.phenotypicFeatures?.length || 0,
     'Has Variants': item.interpretations?.length > 0 ? 'Yes' : 'No',
-    'Relevance Score': item.search_rank ? `${(item.search_rank * 100).toFixed(1)}%` : '-',
   }));
 
   // Convert to CSV string

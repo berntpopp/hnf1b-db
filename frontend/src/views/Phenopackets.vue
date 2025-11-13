@@ -84,25 +84,22 @@
         </v-toolbar>
       </template>
 
-      <!-- Render Phenopacket ID as a chip -->
-      <template #item.phenopacket_id="{ item }">
-        <v-chip color="lime-lighten-2" class="ma-2" small variant="flat">
-          {{ item.phenopacket_id }}
-          <v-icon right> mdi-file-document </v-icon>
+      <!-- Render subject ID with chip -->
+      <template #item.subject_id="{ item }">
+        <v-chip color="teal-lighten-3" size="small" variant="flat">
+          <v-icon left size="small">mdi-card-account-details</v-icon>
+          {{ item.subject_id || 'N/A' }}
         </v-chip>
       </template>
 
-      <!-- Render subject ID -->
-      <template #item.subject_id="{ item }">
-        <span>{{ item.subject_id || 'N/A' }}</span>
-      </template>
-
-      <!-- Render sex with icon -->
+      <!-- Render sex with chip -->
       <template #item.sex="{ item }">
-        <v-icon small :color="getSexColor(item.sex)" class="mr-1">
-          {{ getSexIcon(item.sex) }}
-        </v-icon>
-        {{ formatSex(item.sex) }}
+        <v-chip :color="getSexChipColor(item.sex)" size="small" variant="flat">
+          <v-icon left size="small">
+            {{ getSexIcon(item.sex) }}
+          </v-icon>
+          {{ formatSex(item.sex) }}
+        </v-chip>
       </template>
 
       <!-- Render primary disease -->
@@ -122,16 +119,24 @@
         <span v-else>N/A</span>
       </template>
 
-      <!-- Render features count with badge -->
+      <!-- Render phenotypes count with badge -->
       <template #item.features_count="{ item }">
-        <v-chip :color="item.features_count > 0 ? 'green' : 'grey'" small variant="flat">
+        <v-chip
+          :color="item.features_count > 0 ? 'green-lighten-3' : 'grey-lighten-2'"
+          size="small"
+          variant="flat"
+        >
           {{ item.features_count }}
         </v-chip>
       </template>
 
       <!-- Render variants count with badge -->
       <template #item.variants_count="{ item }">
-        <v-chip :color="item.variants_count > 0 ? 'blue' : 'grey'" small variant="flat">
+        <v-chip
+          :color="item.variants_count > 0 ? 'blue-lighten-3' : 'grey-lighten-2'"
+          size="small"
+          variant="flat"
+        >
           {{ item.variants_count }}
         </v-chip>
       </template>
@@ -149,6 +154,7 @@ import {
   buildCursorPaginationParameters,
   extractPaginationMeta,
 } from '@/utils/pagination';
+import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 
 export default {
   name: 'Phenopackets',
@@ -166,16 +172,10 @@ export default {
       paginationDirection: 'after', // Direction for cursor pagination ('after' or 'before')
       headers: [
         {
-          title: 'Phenopacket ID',
-          value: 'phenopacket_id',
-          sortable: true,
-          width: '180px',
-        },
-        {
           title: 'Subject ID',
           value: 'subject_id',
           sortable: true,
-          width: '150px',
+          width: '180px',
         },
         {
           title: 'Sex',
@@ -190,10 +190,10 @@ export default {
           width: '220px',
         },
         {
-          title: 'Features',
+          title: 'Phenotypes',
           value: 'features_count',
           sortable: false,
-          width: '100px',
+          width: '120px',
           align: 'center',
         },
         {
@@ -296,7 +296,6 @@ export default {
 
         // Map frontend column keys to backend sort fields
         const sortFieldMap = {
-          phenopacket_id: 'created_at', // Default to created_at for phenopacket_id
           subject_id: 'subject_id',
           sex: 'subject_sex',
         };
@@ -404,7 +403,19 @@ export default {
     },
 
     onOptionsUpdate(newOptions) {
+      const sortChanged =
+        this.options.sortBy !== newOptions.sortBy || this.options.sortDesc !== newOptions.sortDesc;
+
       this.options = { ...newOptions };
+
+      // Trigger server-side fetch when sorting changes
+      if (sortChanged) {
+        window.logService.info('Sort order changed', {
+          sortBy: newOptions.sortBy,
+          sortDesc: newOptions.sortDesc,
+        });
+        this.fetchPhenopackets();
+      }
     },
 
     onPaginationModeChange(useCursor) {
@@ -496,35 +507,10 @@ export default {
       this.fetchPhenopackets();
     },
 
-    getSexIcon(sex) {
-      const icons = {
-        MALE: 'mdi-gender-male',
-        FEMALE: 'mdi-gender-female',
-        OTHER_SEX: 'mdi-gender-non-binary',
-        UNKNOWN_SEX: 'mdi-help-circle',
-      };
-      return icons[sex] || 'mdi-help-circle';
-    },
-
-    getSexColor(sex) {
-      const colors = {
-        MALE: 'blue',
-        FEMALE: 'pink',
-        OTHER_SEX: 'purple',
-        UNKNOWN_SEX: 'grey',
-      };
-      return colors[sex] || 'grey';
-    },
-
-    formatSex(sex) {
-      const labels = {
-        MALE: 'Male',
-        FEMALE: 'Female',
-        OTHER_SEX: 'Other',
-        UNKNOWN_SEX: 'Unknown',
-      };
-      return labels[sex] || sex;
-    },
+    // Sex formatting functions imported from @/utils/sex
+    getSexIcon,
+    getSexChipColor,
+    formatSex,
 
     handleRowClick(event, { item }) {
       // Navigate to phenopacket detail page

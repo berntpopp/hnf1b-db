@@ -9,6 +9,13 @@ STAGED_FILES=$(git diff --name-only --cached)
 HAS_FRONTEND_FILES=$(echo "$STAGED_FILES" | grep -c "^frontend/" || true)
 
 if [ "$HAS_FRONTEND_FILES" -gt 0 ]; then
+  # Check if npm is available
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "⚠️  Warning: npm not found in PATH, skipping pre-commit linting"
+    echo "Please ensure you've run 'npm run lint' manually before committing"
+    exit 0
+  fi
+
   # Run from frontend directory (monorepo structure)
   cd frontend && npm run lint:staged
 fi
