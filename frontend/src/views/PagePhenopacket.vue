@@ -63,11 +63,6 @@
           <SubjectCard v-if="phenopacket.subject" :subject="phenopacket.subject" />
         </v-col>
 
-        <!-- Diseases Card -->
-        <v-col cols="12" md="6" class="py-1">
-          <DiseasesCard v-if="phenopacket.diseases" :diseases="phenopacket.diseases" />
-        </v-col>
-
         <!-- Phenotypic Features Card (if present) -->
         <v-col v-if="hasPhenotypicFeatures" cols="12" md="6" class="py-1">
           <PhenotypicFeaturesCard :features="phenopacket.phenotypicFeatures" />
@@ -101,7 +96,6 @@
 import { getPhenopacket } from '@/api';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
-import DiseasesCard from '@/components/phenopacket/DiseasesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
 import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
@@ -111,7 +105,6 @@ export default {
   components: {
     SubjectCard,
     PhenotypicFeaturesCard,
-    DiseasesCard,
     InterpretationsCard,
     MeasurementsCard,
     MetadataCard,

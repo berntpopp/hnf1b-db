@@ -29,11 +29,22 @@
                 <div v-if="gi.variantInterpretation">
                   <div v-if="gi.variantInterpretation.variationDescriptor">
                     <v-list-item class="px-0">
-                      <v-list-item-title class="font-weight-bold">
-                        Variant Label
-                      </v-list-item-title>
+                      <v-list-item-title class="font-weight-bold"> Variant </v-list-item-title>
                       <v-list-item-subtitle>
-                        {{ gi.variantInterpretation.variationDescriptor.label || 'N/A' }}
+                        <v-chip
+                          v-if="gi.variantInterpretation.variationDescriptor.id"
+                          :to="`/variants/${encodeURIComponent(gi.variantInterpretation.variationDescriptor.id)}`"
+                          color="blue-lighten-3"
+                          size="small"
+                          variant="flat"
+                          link
+                        >
+                          <v-icon left size="small">mdi-dna</v-icon>
+                          {{ gi.variantInterpretation.variationDescriptor.label || 'Variant' }}
+                        </v-chip>
+                        <span v-else>
+                          {{ gi.variantInterpretation.variationDescriptor.label || 'N/A' }}
+                        </span>
                       </v-list-item-subtitle>
                     </v-list-item>
 
