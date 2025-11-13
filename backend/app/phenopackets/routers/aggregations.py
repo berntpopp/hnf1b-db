@@ -26,9 +26,7 @@ from app.phenopackets.variant_search_validation import (
 )
 from app.utils.audit_logger import log_variant_search
 
-router = APIRouter(
-    prefix="/api/v2/phenopackets/aggregate", tags=["phenopackets-aggregations"]
-)
+router = APIRouter(prefix="/aggregate", tags=["phenopackets-aggregations"])
 
 
 @router.get("/by-feature", response_model=List[AggregationResult])
@@ -514,28 +512,32 @@ async def aggregate_all_variants(
 
     # Text search: Search across HGVS notations, variant IDs, and coordinates
     if validated_query:
-        where_clauses.append(
-            """(
-                vd->>'id' ILIKE :query
-                OR vd->>'label' ILIKE :query
-                OR vd->>'description' ILIKE :query
-                OR EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements(vd->'expressions') AS expr
-                    WHERE expr->>'value' ILIKE :query
-                )
-                OR COALESCE(
-                    NULLIF(CONCAT(
-                        COALESCE(vd->'vcfRecord'->>'chrom', ''), ':',
-                        COALESCE(vd->'vcfRecord'->>'pos', ''), ':',
-                        COALESCE(vd->'vcfRecord'->>'ref', ''), ':',
-                        COALESCE(vd->'vcfRecord'->>'alt', '')
-                    ), ':::'),
-                    ''
-                ) ILIKE :query
-            )"""
-        )
+        # If query starts with "var", we'll search by simple_id after the join
+        # Otherwise, search in JSONB fields
+        if not validated_query.lower().startswith("var"):
+            where_clauses.append(
+                """(
+                    vd->>'id' ILIKE :query
+                    OR vd->>'label' ILIKE :query
+                    OR vd->>'description' ILIKE :query
+                    OR EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(vd->'expressions') AS expr
+                        WHERE expr->>'value' ILIKE :query
+                    )
+                    OR COALESCE(
+                        NULLIF(CONCAT(
+                            COALESCE(vd->'vcfRecord'->>'chrom', ''), ':',
+                            COALESCE(vd->'vcfRecord'->>'pos', ''), ':',
+                            COALESCE(vd->'vcfRecord'->>'ref', ''), ':',
+                            COALESCE(vd->'vcfRecord'->>'alt', '')
+                        ), ':::'),
+                        ''
+                    ) ILIKE :query
+                )"""
+            )
         params["query"] = f"%{validated_query}%"
+        params["simple_id_query"] = f"%{validated_query}%"
 
     # Variant type filter
     # Filter logic must match frontend display in getVariantType()
@@ -965,6 +967,12 @@ async def aggregate_all_variants(
     )
     SELECT *
     FROM variant_with_stable_id
+    WHERE 1=1
+        {
+        "AND CONCAT('Var', simple_id::text) ILIKE :simple_id_query"
+        if validated_query and validated_query.lower().startswith("var")
+        else ""
+    }
     ORDER BY {order_by}
     LIMIT :limit
     OFFSET :offset

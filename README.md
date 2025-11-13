@@ -539,3 +539,4 @@ For detailed information:
 - Backend details: [backend/README.md](backend/README.md)
 - Frontend details: [frontend/README.md](frontend/README.md)
 - Migration guide: [PHENOPACKETS_MIGRATION_GUIDE.md](PHENOPACKETS_MIGRATION_GUIDE.md)
+- Color style guide: [docs/COLOR_STYLE_GUIDE.md](docs/COLOR_STYLE_GUIDE.md)

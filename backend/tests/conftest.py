@@ -62,6 +62,7 @@ async def db_session():
             # Rollback any uncommitted changes
             await session.rollback()
         except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass  # Ignore errors during rollback
 
         # Close session explicitly
@@ -78,6 +79,16 @@ async def db_session():
 @pytest_asyncio.fixture
 async def test_user(db_session):
     """Create test user for authentication tests."""
+    # Pre-cleanup: Remove any leftover test users from failed previous runs
+    try:
+        await db_session.execute(delete(User).where(User.email == "test@example.com"))
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     user = User(
         username="testuser",
         email="test@example.com",
@@ -93,16 +104,35 @@ async def test_user(db_session):
     yield user
 
     # Cleanup
-    await db_session.execute(delete(User).where(User.id == user.id))
-    await db_session.commit()
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
+            pass
 
 
 @pytest_asyncio.fixture
 async def admin_user(db_session):
     """Create admin user for permission tests."""
+    # Pre-cleanup: Remove any leftover admin users from failed previous runs
+    try:
+        await db_session.execute(
+            delete(User).where(User.email == "testadmin@example.com")
+        )
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+
+    # Ensure fresh session state
+    await db_session.rollback()
+
     user = User(
-        username="test_admin",
-        email="test_admin@example.com",
+        username="testadmin",
+        email="testadmin@example.com",
         hashed_password=get_password_hash("AdminPass123!"),
         role="admin",
         is_active=True,
@@ -114,8 +144,16 @@ async def admin_user(db_session):
 
     yield user
 
-    await db_session.execute(delete(User).where(User.id == user.id))
-    await db_session.commit()
+    # Cleanup
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
+            pass
 
 
 @pytest_asyncio.fixture

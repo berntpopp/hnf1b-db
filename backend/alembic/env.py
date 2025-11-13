@@ -44,7 +44,9 @@ try:
     target_metadata = Base.metadata
 except ImportError:
     # During initial setup, models might not exist yet
-    target_metadata = None
+    from app.database import Base
+
+    target_metadata = Base.metadata
 
 # Get database URL from environment variable
 database_url = os.getenv(
@@ -102,23 +104,38 @@ async def run_async_migrations() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = database_url
+    if configuration:
+        configuration["sqlalchemy.url"] = database_url
 
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+        connectable = async_engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
 
-    await connectable.dispose()
+        await connectable.dispose()
+    else:
+        # Handle the case where configuration is None, e.g., raise an error or log a warning
+        print("Alembic configuration section not found, cannot run async migrations.")
 
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    # Check if an event loop is already running
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # If a loop is running, run the async migrations in the existing loop
+        loop.run_until_complete(run_async_migrations())
+    else:
+        # Otherwise, create and run a new loop
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

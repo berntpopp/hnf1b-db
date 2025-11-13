@@ -287,27 +287,28 @@
                 :items-per-page="10"
                 class="elevation-0"
               >
-                <!-- Phenopacket ID as clickable chip -->
-                <template #item.phenopacket_id="{ item }">
+                <!-- Subject ID as clickable chip with icon -->
+                <template #item.subject_id="{ item }">
                   <v-chip
                     :to="`/phenopackets/${item.phenopacket_id}`"
-                    color="lime-lighten-2"
+                    color="teal-lighten-3"
                     size="small"
+                    variant="flat"
                     link
                   >
-                    {{ item.phenopacket_id }}
-                    <v-icon right size="small"> mdi-open-in-new </v-icon>
+                    <v-icon left size="small"> mdi-card-account-details </v-icon>
+                    {{ item.subject_id }}
                   </v-chip>
                 </template>
 
-                <!-- Sex with icon -->
+                <!-- Sex with icon as chip -->
                 <template #item.subject_sex="{ item }">
-                  <div class="d-flex align-center">
-                    <v-icon :color="getSexColor(item.subject_sex)" size="small" class="mr-1">
+                  <v-chip :color="getSexChipColor(item.subject_sex)" size="small" variant="flat">
+                    <v-icon left size="small">
                       {{ getSexIcon(item.subject_sex) }}
                     </v-icon>
                     {{ formatSex(item.subject_sex) }}
-                  </div>
+                  </v-chip>
                 </template>
               </v-data-table>
             </v-card-text>
@@ -330,6 +331,7 @@ import {
 } from '@/utils/hgvs';
 import { getPathogenicityColor } from '@/utils/colors';
 import { getVariantType, isCNV, getCNVDetails, getVariantSize } from '@/utils/variants';
+import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 
 export default {
   name: 'PageVariant',
@@ -348,8 +350,8 @@ export default {
       visualizationTab: 'gene', // Default to gene view
       headers: [
         {
-          title: 'Phenopacket ID',
-          value: 'phenopacket_id',
+          title: 'Subject ID',
+          value: 'subject_id',
           sortable: true,
         },
         {
@@ -464,6 +466,7 @@ export default {
         const phenopacketsResponse = await getPhenopacketsByVariant(variantId);
         this.phenopacketsWithVariant = phenopacketsResponse.data.map((pp) => ({
           phenopacket_id: pp.phenopacket_id,
+          subject_id: pp.phenopacket?.subject?.id || 'N/A',
           subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
           created_at: new Date(pp.created_at).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -750,33 +753,10 @@ export default {
       }
       return null;
     },
-    getSexIcon(sex) {
-      const sexIcons = {
-        MALE: 'mdi-gender-male',
-        FEMALE: 'mdi-gender-female',
-        OTHER_SEX: 'mdi-gender-transgender',
-        UNKNOWN_SEX: 'mdi-help-circle',
-      };
-      return sexIcons[sex] || 'mdi-help-circle';
-    },
-    getSexColor(sex) {
-      const sexColors = {
-        MALE: 'blue',
-        FEMALE: 'pink',
-        OTHER_SEX: 'purple',
-        UNKNOWN_SEX: 'grey',
-      };
-      return sexColors[sex] || 'grey';
-    },
-    formatSex(sex) {
-      const sexLabels = {
-        MALE: 'Male',
-        FEMALE: 'Female',
-        OTHER_SEX: 'Other',
-        UNKNOWN_SEX: 'Unknown',
-      };
-      return sexLabels[sex] || 'Unknown';
-    },
+    // Sex formatting functions imported from @/utils/sex
+    getSexIcon,
+    getSexChipColor,
+    formatSex,
   },
 };
 </script>

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import DateTime, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -35,6 +35,11 @@ class Phenopacket(Base):
     # Denormalized fields (computed from JSONB)
     subject_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     subject_sex: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+
+    # Full-text search vector
+    search_vector: Mapped[Optional[Any]] = mapped_column(
+        TSVECTOR, nullable=True, index=True
+    )
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(

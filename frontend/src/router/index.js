@@ -22,7 +22,7 @@ const routes = [
       import(/* webpackChunkName: "page-phenopacket" */ '../views/PagePhenopacket.vue'),
     meta: { title: 'Phenopacket Details' },
   },
-  // Legacy redirects for backward compatibility
+  // Redirects for backward compatibility (permanent)
   {
     path: '/individuals',
     redirect: '/phenopackets',

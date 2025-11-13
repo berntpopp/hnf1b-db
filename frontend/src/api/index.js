@@ -131,13 +131,56 @@ export function pageToSkipLimit(page, pageSize) {
 /* ==================== PHENOPACKETS ENDPOINTS ==================== */
 
 /**
- * Get a list of phenopackets with optional filters.
+ * Get a list of phenopackets with JSON:API pagination and filtering.
+ * Supports offset pagination, cursor pagination, and legacy skip/limit for backwards compatibility.
+ *
+ * **JSON:API Offset Pagination (Simple):**
  * @param {Object} params - Query parameters
- *   - skip: Number of records to skip (default: 0)
- *   - limit: Max records to return (default: 100, max: 1000)
- *   - sex: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
- *   - has_variants: Filter by variant presence (boolean)
- * @returns {Promise} Axios promise with phenopackets data
+ *   - page[number]: Page number (1-indexed, default: 1)
+ *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - filter[sex]: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
+ *   - filter[has_variants]: Filter by variant presence (boolean)
+ *   - sort: Comma-separated fields to sort by (prefix with '-' for descending)
+ *
+ * **JSON:API Cursor Pagination (Stable, Recommended):**
+ *   - page[after]: Cursor token for next page (opaque token from meta.page.endCursor)
+ *   - page[before]: Cursor token for previous page (opaque token from meta.page.startCursor)
+ *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - Cursors provide stable results even when data changes during browsing
+ *
+ * **Legacy Parameters (Deprecated, auto-converted to JSON:API):**
+ *   - skip: Number of records to skip (converted to page[number])
+ *   - limit: Max records to return (converted to page[size])
+ *   - sex: Filter by sex (converted to filter[sex])
+ *   - has_variants: Filter by variant presence (converted to filter[has_variants])
+ *
+ * **Response Format (JSON:API):**
+ * Returns { data, meta, links } where:
+ *   - data: Array of phenopacket documents
+ *   - meta.page: Offset pagination → { currentPage, pageSize, totalPages, totalRecords }
+ *   - meta.page: Cursor pagination → { pageSize, hasNextPage, hasPreviousPage, startCursor, endCursor }
+ *   - links: { self, first, prev, next, last } (or { self, first, prev, next } for cursor)
+ *
+ * @returns {Promise} Axios promise resolving to JSON:API response
+ *
+ * @example
+ * // Offset pagination (simple, may skip/duplicate records if data changes)
+ * getPhenopackets({
+ *   'page[number]': 1,
+ *   'page[size]': 20,
+ *   'filter[sex]': 'MALE',
+ *   'sort': '-created_at'
+ * })
+ *
+ * @example
+ * // Cursor pagination (stable, recommended for browsing)
+ * const response1 = await getPhenopackets({ 'page[size]': 20 })
+ * const nextCursor = response1.meta.page.endCursor
+ * const response2 = await getPhenopackets({ 'page[after]': nextCursor, 'page[size]': 20 })
+ *
+ * @example
+ * // Legacy style (auto-converted to JSON:API)
+ * getPhenopackets({ skip: 0, limit: 20, sex: 'MALE' })
  */
 export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { params });
 
@@ -160,17 +203,29 @@ export const getPhenopacketsBatch = (phenopacketIds) =>
   });
 
 /**
- * Search phenopackets with advanced filters.
- * @param {Object} searchQuery - Search criteria
- *   - query: Text search query (optional)
- *   - hpo_terms: Array of HPO term IDs (optional)
- *   - diseases: Array of disease IDs (optional)
- *   - sex: Sex filter (optional)
- *   - has_variants: Variant presence filter (optional)
+ * Search phenopackets with advanced filters using GET request.
+ * @param {Object} params - Search criteria as query parameters
+ *   - q: Full-text search query (optional)
+ *   - hpo_id: HPO term ID (optional)
+ *   - sex: Subject sex (optional)
+ *   - gene: Gene symbol (optional)
+ *   - pmid: Publication PMID (optional)
+ *   - rank_by_relevance: Sort by search rank (optional, default: true)
  * @returns {Promise} Axios promise with search results
  */
-export const searchPhenopackets = (searchQuery) =>
-  apiClient.post('/phenopackets/search', searchQuery);
+export const searchPhenopackets = (params) => apiClient.get('/phenopackets/search', { params });
+
+/**
+ * Get facet counts for search filters based on current search criteria.
+ * @param {Object} params - Search criteria as query parameters
+ *   - q: Full-text search query (optional)
+ *   - hpo_id: HPO term ID (optional)
+ *   - sex: Subject sex (optional)
+ *   - gene: Gene symbol (optional)
+ *   - pmid: Publication PMID (optional)
+ * @returns {Promise} Axios promise with facet counts for filters
+ */
+export const getSearchFacets = (params) => apiClient.get('/phenopackets/search/facets', { params });
 
 /**
  * Get phenopackets filtered by sex.
@@ -351,6 +406,18 @@ export const logout = () => apiClient.post('/auth/logout');
 /* ==================== HPO AUTOCOMPLETE ==================== */
 
 /**
+ * Get HPO term suggestions for autocomplete.
+ * @param {string} query - Search query
+ * @param {number} limit - Max results
+ * @returns {Promise} Axios promise with HPO term suggestions
+ */
+export const getHPOAutocomplete = (query, limit = 10) => {
+  return apiClient.get('/ontology/hpo/autocomplete', {
+    params: { q: query, limit },
+  });
+};
+
+/**
  * Search HPO terms by query string.
  * @param {string} query - Search query
  * @returns {Promise} Axios promise with HPO term suggestions
@@ -383,45 +450,6 @@ export const getDiabetesCases = () => apiClient.get('/clinical/diabetes');
  * @returns {Promise} Axios promise with clinical data
  */
 export const getHypomagnesemiaCases = () => apiClient.get('/clinical/hypomagnesemia');
-
-/* ==================== LEGACY COMPATIBILITY (DEPRECATED) ==================== */
-
-/**
- * Helper to convert v1 pagination and warn about deprecation.
- * @private
- */
-function deprecatedPaginationWrapper(warningMsg, newFn, params) {
-  window.logService.warn('Deprecated API function called', {
-    message: warningMsg,
-    params: params,
-  });
-  const { page = 1, page_size = 10, ...rest } = params || {};
-  const { skip, limit } = pageToSkipLimit(page, page_size);
-  return newFn({ skip, limit, ...rest });
-}
-
-/**
- * Helper to warn about deprecation and call new function.
- * @private
- */
-function deprecatedWrapper(warningMsg, newFn, ...args) {
-  window.logService.warn('Deprecated API function called', {
-    message: warningMsg,
-    argsCount: args.length,
-  });
-  return newFn(...args);
-}
-
-/**
- * @deprecated Use getPhenopackets() instead.
- * Legacy compatibility wrapper for old API.
- */
-export const getIndividuals = (params) =>
-  deprecatedPaginationWrapper(
-    'getIndividuals() is deprecated. Use getPhenopackets() instead.',
-    getPhenopackets,
-    params
-  );
 
 /**
  * Get aggregated unique variants across all phenopackets with search and filters.
@@ -495,41 +523,5 @@ export const getVariants = async (params = {}) => {
     },
   };
 };
-
-/**
- * @deprecated Publications are now stored in phenopacket.metaData.externalReferences.
- * Legacy compatibility wrapper for old API.
- */
-export const getPublications = (params) =>
-  deprecatedPaginationWrapper(
-    'getPublications() is deprecated. Publications are in phenopacket.metaData.externalReferences.',
-    getPhenopackets,
-    params
-  );
-
-/**
- * @deprecated Use getSexDistribution() instead.
- */
-export const getIndividualsSexCount = () =>
-  deprecatedWrapper(
-    'getIndividualsSexCount() is deprecated. Use getSexDistribution() instead.',
-    getSexDistribution
-  );
-
-/**
- * @deprecated Use searchPhenopackets() instead.
- */
-export const search = (query, collection, reduceDoc = false) =>
-  deprecatedWrapper(
-    'search() is deprecated. Use searchPhenopackets() instead.',
-    searchPhenopackets,
-    { query, collection, reduce_doc: reduceDoc }
-  );
-
-/**
- * @deprecated Use getSummaryStats() instead.
- */
-export const getSummary = () =>
-  deprecatedWrapper('getSummary() is deprecated. Use getSummaryStats() instead.', getSummaryStats);
 
 export default apiClient;

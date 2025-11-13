@@ -127,11 +127,23 @@ class PhenopacketBuilder:
         """Build subject section.
 
         When individual appears in multiple studies (multiple rows), this method:
+        - Uses report_id from first row as primary subject ID (sequential IDs without gaps)
+        - Stores individual_id, other report_ids, and IndividualIdentifier as alternateIds
         - Prioritizes non-UNKNOWN_SEX values across all rows
         - Uses latest reported age
-        - Collects all unique alternate IDs
+
+        Example:
+            If individual appears in 2 studies with report_id 1 and 940:
+            - subject.id = "1" (first report_id)
+            - alternateIds = ["1", "940", "IndividualIdentifier value"]
         """
         first_row = rows.iloc[0]
+
+        # Use report_id as primary subject ID (gives sequential IDs: 1, 2, 3, 4...)
+        # Falls back to individual_id if report_id not available
+        primary_id = self._safe_value(first_row.get("report_id"))
+        if not primary_id:
+            primary_id = individual_id
 
         # Prioritize non-UNKNOWN sex from any row
         sex = "UNKNOWN_SEX"
@@ -141,20 +153,38 @@ class PhenopacketBuilder:
                 sex = mapped_sex
                 break  # Use first non-UNKNOWN value found
 
-        # Collect all unique individual identifiers
-        identifiers = []
+        # Collect all unique alternate IDs:
+        # 1. individual_id (for deduplication tracking)
+        # 2. Other report_ids (if patient in multiple studies)
+        # 3. IndividualIdentifier (original source identifier)
+        alternate_ids = set()
+
+        # Add individual_id as alternate (links duplicate reports)
+        if individual_id != primary_id:
+            alternate_ids.add(str(individual_id))
+
+        # Add all report_ids from all rows (including first one for completeness)
+        for _, row in rows.iterrows():
+            report_id = self._safe_value(row.get("report_id"))
+            if report_id:
+                alternate_ids.add(str(report_id))
+
+        # Add IndividualIdentifier values if present (important source metadata)
         for _, row in rows.iterrows():
             identifier = self._safe_value(row.get("IndividualIdentifier"))
-            if identifier and identifier not in identifiers:
-                identifiers.append(identifier)
+            if identifier:
+                alternate_ids.add(identifier)
+
+        # Remove primary_id from alternates if it was added
+        alternate_ids.discard(str(primary_id))
 
         subject: Dict[str, Any] = {
-            "id": individual_id,
+            "id": str(primary_id),
             "sex": sex,
         }
 
-        if identifiers:
-            subject["alternateIds"] = identifiers
+        if alternate_ids:
+            subject["alternateIds"] = sorted(list(alternate_ids))
 
         # Use latest reported age (from most recent study)
         age_reported = self.age_parser.parse_age(first_row.get("AgeReported"))

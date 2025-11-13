@@ -1,5 +1,24 @@
-# Run from frontend directory (monorepo structure)
-cd frontend && npm run lint:staged
+#!/bin/sh
+
+# Load NVM if it exists (fixes npm not found in PATH on Windows/WSL)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # Load nvm
+
+# Only run frontend checks if frontend files are staged
+STAGED_FILES=$(git diff --name-only --cached)
+HAS_FRONTEND_FILES=$(echo "$STAGED_FILES" | grep -c "^frontend/" || true)
+
+if [ "$HAS_FRONTEND_FILES" -gt 0 ]; then
+  # Check if npm is available
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "⚠️  Warning: npm not found in PATH, skipping pre-commit linting"
+    echo "Please ensure you've run 'npm run lint' manually before committing"
+    exit 0
+  fi
+
+  # Run from frontend directory (monorepo structure)
+  cd frontend && npm run lint:staged
+fi
 
 # Ensure package.json and package-lock.json are committed together
 STAGED_FILES=$(git diff --name-only --cached)
