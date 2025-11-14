@@ -30,13 +30,14 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
 
     phenopackets_data = []
 
-    # Phenopacket 1: Kidney disease, MALE, HNF1B gene, PMID:123
+    # Phenopacket 1: UNIQUE test phenotype, MALE, HNF1B gene, PMID:123
+    # Use UNIQUE search terms to avoid conflicts with 864 real phenopackets
     pp1_data = {
         "id": "search_pp_001",
         "subject": {"id": "patient_001", "sex": "MALE"},
         "phenotypicFeatures": [
-            {"type": {"id": "HP:0000077", "label": "Abnormality of the kidney"}},
-            {"type": {"id": "HP:0000112", "label": "Kidney disease"}},
+            {"type": {"id": "HP:0000077", "label": "ZZTEST_UNIQUE_RENAL_ABNORMALITY"}},
+            {"type": {"id": "HP:0000112", "label": "ZZTEST_UNIQUE_NEPHROPATHY"}},
         ],
         "interpretations": [
             {
@@ -114,13 +115,13 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
     db_session.add(pp2)
     phenopackets_data.append(pp2)
 
-    # Phenopacket 3: Kidney disease, FEMALE, no gene, no PMID
+    # Phenopacket 3: UNIQUE test phenotype, FEMALE, no gene, no PMID
     pp3_data = {
         "id": "search_pp_003",
         "subject": {"id": "patient_003", "sex": "FEMALE"},
         "phenotypicFeatures": [
-            {"type": {"id": "HP:0000077", "label": "Abnormality of the kidney"}},
-            {"type": {"id": "HP:0000112", "label": "Kidney disease"}},
+            {"type": {"id": "HP:0000077", "label": "ZZTEST_UNIQUE_RENAL_ABNORMALITY"}},
+            {"type": {"id": "HP:0000112", "label": "ZZTEST_UNIQUE_NEPHROPATHY"}},
         ],
         "metaData": {
             "created": (datetime.now() - timedelta(days=1)).isoformat() + "Z",
@@ -163,13 +164,16 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
 async def test_search_full_text_query(
     async_client: AsyncClient, sample_phenopackets_for_search, auth_headers
 ):
-    """Test full-text search with a query string."""
+    """Test full-text search with a query string.
+
+    Uses unique search term (ZZTEST) to avoid conflicts with real data.
+    """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=kidney", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL", headers=auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) >= 2  # pp1 and pp3 should match
+    assert len(data) == 2  # Exactly pp1 and pp3 should match
     assert any(pp["id"] == "search_pp_001" for pp in data)
     assert any(pp["id"] == "search_pp_003" for pp in data)
     assert all(pp["meta"]["search_rank"] is not None for pp in data)
@@ -256,16 +260,19 @@ async def test_search_pmid_filter(
 async def test_search_combined_filters(
     async_client: AsyncClient, sample_phenopackets_for_search, auth_headers
 ):
-    """Test search with a combination of filters."""
+    """Test search with a combination of filters.
+
+    Uses unique search term to avoid conflicts with real data.
+    """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=kidney&sex=FEMALE", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&sex=FEMALE", headers=auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) >= 1  # pp3 should match
+    assert len(data) == 1  # Exactly pp3 should match
     assert any(pp["id"] == "search_pp_003" for pp in data)
     assert all(pp["attributes"]["subject"]["sex"] == "FEMALE" for pp in data)
-    assert all("Kidney disease" in json.dumps(pp["attributes"]) for pp in data)
+    assert all("ZZTEST_UNIQUE" in json.dumps(pp["attributes"]) for pp in data)
 
 
 @pytest.mark.asyncio
@@ -285,18 +292,21 @@ async def test_search_no_results(
 async def test_search_pagination(
     async_client: AsyncClient, sample_phenopackets_for_search, auth_headers
 ):
-    """Test search endpoint pagination."""
+    """Test search endpoint pagination.
+
+    Uses unique search term to ensure deterministic results.
+    """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=kidney&limit=1", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1", headers=auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
     meta = response.json()["meta"]
     assert len(data) == 1
-    assert meta["total"] >= 2  # pp1 and pp3 match "kidney"
+    assert meta["total"] == 2  # Exactly pp1 and pp3 match unique term
 
     response_page2 = await async_client.get(
-        "/api/v2/phenopackets/search?q=kidney&limit=1&skip=1", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1&skip=1", headers=auth_headers
     )
     assert response_page2.status_code == 200
     data_page2 = response_page2.json()["data"]
@@ -312,21 +322,21 @@ async def test_search_rank_by_relevance_false(
 
     This test verifies that the rank_by_relevance parameter works correctly
     by ensuring results are returned (sorted by created_at DESC instead of
-    relevance score when false).
+    relevance score when false). Uses unique search term for deterministic results.
     """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=kidney&rank_by_relevance=false&limit=100",
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&rank_by_relevance=false&limit=100",
         headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) >= 2
+    assert len(data) == 2  # Exactly 2 test phenopackets match unique term
 
     # Verify both test phenopackets are in the results
     test_pp_ids = [pp["id"] for pp in data if pp["id"] in ["search_pp_001", "search_pp_003"]]
     assert len(test_pp_ids) == 2, f"Expected to find both test phenopackets, found: {test_pp_ids}"
 
-    # Verify they both contain "kidney" term
+    # Verify they both contain unique test term
     test_pps = [pp for pp in data if pp["id"] in ["search_pp_001", "search_pp_003"]]
     for pp in test_pps:
-        assert "kidney" in json.dumps(pp["attributes"]).lower()
+        assert "zztest_unique" in json.dumps(pp["attributes"]).lower()
