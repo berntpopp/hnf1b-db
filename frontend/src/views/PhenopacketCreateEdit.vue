@@ -49,8 +49,12 @@
                 <v-col cols="12" md="6">
                   <v-select
                     v-model="phenopacket.subject.sex"
-                    :items="sexOptions"
+                    :items="vocabularies.sex.value"
+                    item-title="label"
+                    item-value="value"
                     label="Sex *"
+                    :loading="vocabularies.loading.value"
+                    :disabled="vocabularies.loading.value"
                     :rules="[rules.required]"
                     required
                   />
@@ -73,27 +77,11 @@
               >
                 <v-row>
                   <v-col cols="12" md="10">
-                    <v-autocomplete
-                      v-model="feature.type.id"
-                      v-model:search-input="hpoSearchQuery"
-                      :items="hpoTerms"
-                      :loading="hpoLoading"
-                      item-title="title"
-                      item-value="id"
+                    <HPOAutocomplete
+                      v-model="feature.type"
                       label="HPO Term *"
-                      placeholder="Start typing to search (e.g., renal cyst)"
-                      :rules="[rules.required]"
-                      clearable
-                      @update:search="searchHPO"
-                      @update:model-value="(val) => updateHPOLabel(index, val)"
-                    >
-                      <template #item="{ props, item }">
-                        <v-list-item v-bind="props">
-                          <v-list-item-title>{{ item.raw.label }}</v-list-item-title>
-                          <v-list-item-subtitle>{{ item.raw.id }}</v-list-item-subtitle>
-                        </v-list-item>
-                      </template>
-                    </v-autocomplete>
+                      :error-messages="!feature.type?.id && formSubmitted ? ['Required field'] : []"
+                    />
                   </v-col>
                   <v-col cols="12" md="2">
                     <v-btn
@@ -132,13 +120,17 @@
 
 <script>
 import { getPhenopacket, createPhenopacket, updatePhenopacket } from '@/api';
-import { useHPOAutocomplete } from '@/composables/useHPOAutocomplete';
+import { usePhenopacketVocabularies } from '@/composables/usePhenopacketVocabularies';
+import HPOAutocomplete from '@/components/HPOAutocomplete.vue';
 
 export default {
   name: 'PhenopacketCreateEdit',
+  components: {
+    HPOAutocomplete,
+  },
   setup() {
-    const { terms: hpoTerms, loading: hpoLoading, search: searchHPO } = useHPOAutocomplete();
-    return { hpoTerms, hpoLoading, searchHPO };
+    const vocabularies = usePhenopacketVocabularies();
+    return { vocabularies };
   },
   data() {
     return {
@@ -168,13 +160,7 @@ export default {
       loading: false,
       saving: false,
       error: null,
-      hpoSearchQuery: '',
-      sexOptions: [
-        { title: 'Male', value: 'MALE' },
-        { title: 'Female', value: 'FEMALE' },
-        { title: 'Other', value: 'OTHER_SEX' },
-        { title: 'Unknown', value: 'UNKNOWN_SEX' },
-      ],
+      formSubmitted: false,
       rules: {
         required: (value) => !!value || 'Required field',
       },
@@ -186,6 +172,15 @@ export default {
     },
   },
   async mounted() {
+    // Load controlled vocabularies from API
+    try {
+      await this.vocabularies.loadAll();
+      window.logService.info('Loaded phenopacket vocabularies for form');
+    } catch (err) {
+      window.logService.error('Failed to load vocabularies', { error: err.message });
+      this.error = 'Failed to load form vocabularies. Please refresh the page.';
+    }
+
     if (this.isEditing) {
       await this.loadPhenopacket();
     } else {
@@ -228,15 +223,8 @@ export default {
       this.phenopacket.phenotypicFeatures.splice(index, 1);
     },
 
-    updateHPOLabel(index, hpoId) {
-      if (!hpoId) return;
-      const term = this.hpoTerms.find((t) => t.id === hpoId);
-      if (term) {
-        this.phenopacket.phenotypicFeatures[index].type.label = term.label;
-      }
-    },
-
     async handleSubmit() {
+      this.formSubmitted = true;
       // Validate form
       const { valid } = await this.$refs.form.validate();
       if (!valid) {
