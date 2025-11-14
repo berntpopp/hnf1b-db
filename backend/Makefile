@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -82,6 +82,16 @@ phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
 
 phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
 	uv run python -m migration.direct_sheets_to_phenopackets --test --dry-run
+
+# VEP Enrichment Commands (Add VEP annotations to existing phenopackets)
+vep-enrich:  ## Enrich all phenopackets with VEP annotations (requires database + internet)
+	uv run python scripts/enrich_phenopackets_with_vep.py
+
+vep-enrich-dry:  ## Dry run VEP enrichment - shows what would be annotated without changes
+	uv run python scripts/enrich_phenopackets_with_vep.py --dry-run
+
+vep-enrich-test:  ## Enrich first 10 phenopackets with VEP (for testing)
+	uv run python scripts/enrich_phenopackets_with_vep.py --limit 10
 
 check: check-env lint typecheck test  ## Run all checks (lint, typecheck, test)
 
