@@ -1,24 +1,81 @@
-"""Molecular consequence computation from HGVS notation.
+"""Molecular consequence computation from HGVS notation and VEP annotations.
 
 This module provides functions to derive molecular consequences (Frameshift, Nonsense,
-Missense, etc.) from HGVS protein and transcript notations.
+Missense, etc.) from VEP annotations (primary) or HGVS protein and transcript notations
+(fallback).
 """
 
 import re
 from typing import Optional
+
+# VEP consequence to display name mapping
+# Maps Sequence Ontology terms to human-readable labels
+VEP_CONSEQUENCE_MAP = {
+    # High impact
+    "stop_gained": "Nonsense",
+    "frameshift_variant": "Frameshift",
+    "stop_lost": "Stop Lost",
+    "start_lost": "Start Lost",
+    "splice_acceptor_variant": "Splice Acceptor",
+    "splice_donor_variant": "Splice Donor",
+    # Moderate impact
+    "missense_variant": "Missense",
+    "inframe_deletion": "In-frame Deletion",
+    "inframe_insertion": "In-frame Insertion",
+    "splice_region_variant": "Splice Region",
+    "splice_donor_5th_base_variant": "Splice Donor (5th base)",
+    # Low impact
+    "synonymous_variant": "Synonymous",
+    "intron_variant": "Intronic Variant",
+    "5_prime_UTR_variant": "5' UTR Variant",
+    "3_prime_UTR_variant": "3' UTR Variant",
+    # Structural
+    "copy_number_loss": "Copy Number Loss",
+    "copy_number_gain": "Copy Number Gain",
+}
+
+
+def extract_vep_consequence(vep_extensions: Optional[list]) -> Optional[str]:
+    """Extract VEP most_severe_consequence from phenopacket extensions.
+
+    Args:
+        vep_extensions: List of extension objects from variationDescriptor
+
+    Returns:
+        Most severe consequence from VEP or None
+    """
+    if not vep_extensions:
+        return None
+
+    for ext in vep_extensions:
+        if ext.get("name") == "vep_annotation":
+            vep_data = ext.get("value", {})
+            vep_consequence = vep_data.get("most_severe_consequence")
+            if vep_consequence:
+                # Map VEP term to display name
+                return VEP_CONSEQUENCE_MAP.get(
+                    vep_consequence, vep_consequence.replace("_", " ").title()
+                )
+
+    return None
 
 
 def compute_molecular_consequence(
     transcript: Optional[str],
     protein: Optional[str],
     variant_type: Optional[str] = None,
+    vep_extensions: Optional[list] = None,
 ) -> Optional[str]:
-    """Compute molecular consequence from HGVS notations and variant type.
+    """Compute molecular consequence from VEP annotations or HGVS notations.
+
+    Uses VEP annotations as primary source (if available), falling back to
+    regex-based parsing of HGVS notations.
 
     Args:
         transcript: HGVS c. notation (e.g., "NM_000458.4:c.1654-2A>T")
         protein: HGVS p. notation (e.g., "NP_000449.3:p.Arg177Ter")
         variant_type: Structural variant type (deletion, duplication, etc.)
+        vep_extensions: List of extension objects from variationDescriptor
 
     Returns:
         Molecular consequence string or None
@@ -33,6 +90,11 @@ def compute_molecular_consequence(
         >>> compute_molecular_consequence(None, None, "deletion")
         "Copy Number Loss"
     """
+    # Try VEP annotation first (most accurate)
+    if vep_extensions:
+        vep_consequence = extract_vep_consequence(vep_extensions)
+        if vep_consequence:
+            return vep_consequence
     # Extract p. notation from full HGVS string first
     # IMPORTANT: Check protein-level consequences BEFORE structural type
     # A small deletion can be a frameshift, not just "Copy Number Loss"

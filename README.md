@@ -161,6 +161,12 @@ All endpoints use the **GA4GH Phenopackets v2** standard format.
 - `/api/v2/phenopackets/aggregate` - Data aggregation and statistics
 - `/api/v2/clinical` - Clinical feature-specific queries (renal, diabetes, etc.)
 
+### Variant Annotation Endpoints
+- `/api/v2/variants/validate` - Validate variant notations (HGVS, VCF, rsID)
+- `/api/v2/variants/annotate` - VEP annotations (consequences, CADD, gnomAD)
+- `/api/v2/variants/recode` - Convert between variant formats
+- `/api/v2/variants/suggest/{notation}` - Get notation suggestions
+
 ### Support Endpoints
 - `/api/v2/auth` - JWT authentication (login/token management)
 - `/api/v2/hpo` - HPO term search, validation, and autocomplete
@@ -526,6 +532,7 @@ The frontend includes:
 - HPO term autocomplete for phenotype selection
 - Phenopackets v2 CRUD operations
 - Real-time statistics and aggregations
+- Variant annotation and validation (VEP integration)
 
 See component documentation in `frontend/README.md` and `frontend/CLAUDE.md`.
 

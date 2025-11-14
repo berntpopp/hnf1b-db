@@ -1,14 +1,37 @@
 """Variant format validation for HGVS, VCF, VRS, and CNV notations."""
 
+import asyncio
+import logging
 import re
+import time
+from collections import OrderedDict
 from difflib import get_close_matches
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
 
 class VariantValidator:
     """Validates variant formats including HGVS, VCF, VRS, and CNV notations."""
+
+    def __init__(self):
+        """Initialize validator with configurable cache and rate limiting."""
+        # LRU cache with size limit (OrderedDict for simplicity)
+        self._vep_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+        self._cache_size_limit = settings.VEP_CACHE_SIZE_LIMIT
+
+        # Rate limiting state (configurable via settings)
+        self._last_request_time = 0.0
+        self._request_count = 0
+        self._requests_per_second = settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND
+
+        # Retry configuration
+        self._max_retries = settings.VEP_MAX_RETRIES
+        self._backoff_factor = settings.VEP_RETRY_BACKOFF_FACTOR
 
     async def validate_variant_with_vep(
         self, hgvs_notation: str
@@ -289,3 +312,416 @@ class VariantValidator:
             )
 
         return errors
+
+    async def annotate_variant_with_vep(
+        self,
+        variant: str,
+        include_annotations: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Annotate variant with VEP including CADD, gnomAD, consequences.
+
+        Supports both VCF and HGVS formats:
+        - VCF: "17-36459258-A-G" or "chr17-36459258-A-G"
+        - HGVS: "NM_000458.4:c.544+1G>A"
+
+        Args:
+            variant: Variant in VCF or HGVS format
+            include_annotations: Include CADD, gnomAD, etc.
+
+        Returns:
+            VEP annotation dict with:
+            - most_severe_consequence
+            - transcript_consequences (with CADD scores)
+            - colocated_variants (with gnomAD frequencies)
+            - assembly_name, seq_region_name, start, end, allele_string
+
+        Example:
+            annotation = await validator.annotate_variant_with_vep("17-36459258-A-G")
+            consequence = annotation["most_severe_consequence"]
+            cadd = annotation["transcript_consequences"][0]["cadd_phred"]
+            gnomad_af = annotation["colocated_variants"][0]["gnomad_af"]
+        """
+        # Check cache first (if enabled)
+        cache_key = f"{variant}:{include_annotations}"
+        if settings.VEP_CACHE_ENABLED and cache_key in self._vep_cache:
+            logger.debug(f"VEP cache hit for {variant}")
+            # Move to end (LRU)
+            self._vep_cache.move_to_end(cache_key)
+            return self._vep_cache[cache_key]
+
+        # Rate limiting (configurable per Ensembl guidelines)
+        await self._rate_limit()
+
+        # Determine format and build request
+        is_vcf = self._is_vcf_format(variant)
+
+        if is_vcf:
+            # VCF format: use POST /vep/human/region
+            vep_input = self._vcf_to_vep_format(variant)
+            if not vep_input:
+                logger.error(f"Failed to convert VCF variant: {variant}")
+                return None
+
+            endpoint = f"{settings.VEP_API_BASE_URL}/vep/human/region"
+            method = "POST"
+            json_data = {"variants": [vep_input]}
+        else:
+            # HGVS format: use GET /vep/human/hgvs
+            endpoint = f"{settings.VEP_API_BASE_URL}/vep/human/hgvs/{variant}"
+            method = "GET"
+            json_data = None
+
+        # Build query parameters
+        params = {}
+        if include_annotations:
+            params.update({
+                "CADD": "1",            # CADD scores
+                "hgvs": "1",            # HGVS notations
+                "mane": "1",            # MANE select transcripts
+                "gencode_primary": "1", # GENCODE primary (2025 best practice)
+            })
+
+        # Retry with exponential backoff
+        for attempt in range(self._max_retries):
+            try:
+                async with httpx.AsyncClient() as client:
+                    if method == "POST":
+                        response = await client.post(
+                            endpoint,
+                            json=json_data,
+                            params=params,
+                            headers={"Content-Type": "application/json"},
+                            timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                        )
+                    else:
+                        response = await client.get(
+                            endpoint,
+                            params=params,
+                            headers={"Content-Type": "application/json"},
+                            timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                        )
+
+                    # Check rate limit headers
+                    self._check_rate_limit_headers(response.headers)
+
+                    # Handle response
+                    if response.status_code == 200:
+                        result = response.json()
+                        annotation = result[0] if isinstance(result, list) else result
+
+                        # Cache successful result (LRU eviction)
+                        if settings.VEP_CACHE_ENABLED:
+                            self._cache_annotation(cache_key, annotation)
+
+                        logger.info(f"VEP annotation successful for {variant}")
+                        return annotation
+
+                    elif response.status_code == 429:
+                        # Rate limited - respect Retry-After header
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        logger.warning(f"Rate limited, waiting {retry_after}s")
+                        await asyncio.sleep(retry_after)
+                        continue  # Don't count as retry attempt
+
+                    elif response.status_code == 400:
+                        # Invalid variant format - don't retry
+                        logger.error(f"Invalid variant format: {variant}")
+                        return None
+
+                    elif response.status_code in (500, 502, 503, 504):
+                        # Server error - retry with backoff
+                        if attempt < self._max_retries - 1:
+                            backoff_time = self._backoff_factor ** attempt
+                            logger.warning(
+                                f"VEP API error {response.status_code}, "
+                                f"retrying in {backoff_time}s (attempt {attempt + 1}/{self._max_retries})"
+                            )
+                            await asyncio.sleep(backoff_time)
+                            continue
+                        else:
+                            logger.error(
+                                f"VEP API error {response.status_code} after {self._max_retries} retries"
+                            )
+                            return None
+
+                    else:
+                        logger.error(f"Unexpected VEP API error {response.status_code}")
+                        return None
+
+            except httpx.TimeoutException:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor ** attempt
+                    logger.warning(
+                        f"VEP API timeout, retrying in {backoff_time}s "
+                        f"(attempt {attempt + 1}/{self._max_retries})"
+                    )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error(f"VEP API timeout after {self._max_retries} retries")
+                    return None
+
+            except httpx.NetworkError as e:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor ** attempt
+                    logger.warning(
+                        f"VEP API network error: {e}, retrying in {backoff_time}s "
+                        f"(attempt {attempt + 1}/{self._max_retries})"
+                    )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error(f"VEP API network error after {self._max_retries} retries: {e}")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Unexpected VEP annotation error: {e}", exc_info=True)
+                return None
+
+        return None
+
+    def _cache_annotation(self, cache_key: str, annotation: Dict[str, Any]) -> None:
+        """Cache annotation with LRU eviction.
+
+        Args:
+            cache_key: Cache key
+            annotation: Annotation data to cache
+        """
+        # Add to cache
+        self._vep_cache[cache_key] = annotation
+
+        # LRU eviction if over limit
+        if len(self._vep_cache) > self._cache_size_limit:
+            # Remove oldest (first) item
+            self._vep_cache.popitem(last=False)
+            logger.debug(f"VEP cache evicted oldest entry (size: {len(self._vep_cache)})")
+
+    async def _rate_limit(self):
+        """Implement Ensembl rate limiting (15 requests/second).
+
+        Per Ensembl guidelines: https://github.com/Ensembl/ensembl-rest/wiki/Rate-Limits
+        - 55,000 requests per hour
+        - Average 15 requests per second
+        - Must respect Retry-After header on 429 responses
+        """
+        current_time = time.time()
+
+        # Reset counter every second
+        if current_time - self._last_request_time >= 1.0:
+            self._request_count = 0
+            self._last_request_time = current_time
+
+        # If at limit, wait until next second
+        if self._request_count >= self._requests_per_second:
+            sleep_time = 1.0 - (current_time - self._last_request_time)
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+            self._request_count = 0
+            self._last_request_time = time.time()
+
+        self._request_count += 1
+
+    def _check_rate_limit_headers(self, headers):
+        """Check X-RateLimit-* headers and warn if approaching limit."""
+        remaining = headers.get("X-RateLimit-Remaining")
+        limit = headers.get("X-RateLimit-Limit")
+
+        if remaining and limit:
+            remaining_int = int(remaining)
+            limit_int = int(limit)
+
+            # Warn if < 10% remaining
+            if remaining_int < limit_int * 0.1:
+                print(f"⚠️  Rate limit warning: {remaining}/{limit} requests remaining")
+
+    @staticmethod
+    def _is_vcf_format(variant: str) -> bool:
+        """Check if variant is VCF format (chr-pos-ref-alt)."""
+        return bool(re.match(r"^(chr)?[\dXYM]+-\d+-[ACGT]+-[ACGT]+$", variant, re.I))
+
+    @staticmethod
+    def _vcf_to_vep_format(vcf_variant: str) -> Optional[str]:
+        """Convert VCF variant to VEP POST format.
+
+        Input: "17-36459258-A-G" or "chr17-36459258-A-G"
+        Output: "17 36459258 . A G . . ."
+        """
+        # Remove "chr" prefix if present
+        vcf_variant = vcf_variant.replace("chr", "").replace("Chr", "").replace("CHR", "")
+
+        # Parse components
+        parts = vcf_variant.split("-")
+        if len(parts) != 4:
+            return None
+
+        chrom, pos, ref, alt = parts
+
+        # Validate
+        if not pos.isdigit():
+            return None
+
+        # Format for VEP: "chrom pos . ref alt . . ."
+        return f"{chrom} {pos} . {ref} {alt} . . ."
+
+    async def recode_variant_with_vep(
+        self, variant: str
+    ) -> Optional[Dict[str, Any]]:
+        """Recode variant to all possible representations using VEP Variant Recoder.
+
+        Converts between different variant representations:
+        - HGVS (c., p., g. notations)
+        - VCF (chr-pos-ref-alt)
+        - SPDI (genomic coordinates)
+        - Variant IDs (rsIDs)
+        - GA4GH VRS notation
+
+        Args:
+            variant: Variant in any supported format (HGVS, VCF, rsID, SPDI)
+
+        Returns:
+            Dict with all possible variant representations:
+            - hgvsg: Genomic HGVS (list)
+            - hgvsc: Coding HGVS (list)
+            - hgvsp: Protein HGVS (list)
+            - spdi: SPDI notation (dict)
+            - vcf_string: VCF representation (string)
+            - id: Variant IDs (rsIDs, etc.)
+
+        Example:
+            result = await validator.recode_variant_with_vep("17-36459258-A-G")
+            hgvsc = result["hgvsc"][0]  # ["NM_000458.4:c.544G>A"]
+        """
+        # Check cache first
+        cache_key = f"recode:{variant}"
+        if settings.VEP_CACHE_ENABLED and cache_key in self._vep_cache:
+            logger.debug(f"VEP recode cache hit for {variant}")
+            self._vep_cache.move_to_end(cache_key)
+            return self._vep_cache[cache_key]
+
+        # Rate limiting
+        await self._rate_limit()
+
+        # Convert VCF format to genomic HGVS for variant_recoder
+        # VEP variant_recoder doesn't accept our VCF format (17-pos-ref-alt)
+        # It needs HGVS or rsID
+        if self._is_vcf_format(variant):
+            # For VCF, we need to use the regular VEP API first to get HGVS
+            annotation = await self.annotate_variant_with_vep(variant)
+            if not annotation:
+                logger.error(f"Failed to annotate VCF variant: {variant}")
+                return None
+
+            # Extract genomic HGVS from annotation
+            input_variant = annotation.get("id")
+            if not input_variant:
+                logger.error(f"No variant ID in VEP response for: {variant}")
+                return None
+        else:
+            input_variant = variant
+
+        endpoint = f"{settings.VEP_API_BASE_URL}/variant_recoder/human/{input_variant}"
+
+        # Build query parameters
+        params = {
+            "fields": "id,hgvsg,hgvsc,hgvsp,spdi",
+            "gencode_primary": "1",  # Limit to primary transcripts
+        }
+
+        # Retry with exponential backoff
+        for attempt in range(self._max_retries):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        endpoint,
+                        params=params,
+                        headers={"Content-Type": "application/json"},
+                        timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                    )
+
+                    # Check rate limit headers
+                    self._check_rate_limit_headers(response.headers)
+
+                    # Handle response
+                    if response.status_code == 200:
+                        result = response.json()
+
+                        # VEP returns array of results
+                        if not result or not isinstance(result, list):
+                            logger.error(f"Invalid VEP recoder response for: {variant}")
+                            return None
+
+                        # Take first result
+                        recoded = result[0] if result else None
+
+                        if not recoded:
+                            logger.error(f"Empty VEP recoder response for: {variant}")
+                            return None
+
+                        # Cache successful result
+                        if settings.VEP_CACHE_ENABLED:
+                            self._cache_annotation(cache_key, recoded)
+
+                        logger.info(f"VEP recode successful for {variant}")
+                        return recoded
+
+                    elif response.status_code == 429:
+                        # Rate limited
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        logger.warning(f"Rate limited, waiting {retry_after}s")
+                        await asyncio.sleep(retry_after)
+                        continue
+
+                    elif response.status_code == 400:
+                        logger.error(f"Invalid variant format for recoding: {variant}")
+                        return None
+
+                    elif response.status_code in (500, 502, 503, 504):
+                        if attempt < self._max_retries - 1:
+                            backoff_time = self._backoff_factor ** attempt
+                            logger.warning(
+                                f"VEP recoder API error {response.status_code}, "
+                                f"retrying in {backoff_time}s"
+                            )
+                            await asyncio.sleep(backoff_time)
+                            continue
+                        else:
+                            logger.error(
+                                f"VEP recoder API error {response.status_code} after retries"
+                            )
+                            return None
+
+                    else:
+                        logger.error(
+                            f"Unexpected VEP recoder API error {response.status_code}"
+                        )
+                        return None
+
+            except httpx.TimeoutException:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor ** attempt
+                    logger.warning(
+                        f"VEP recoder API timeout, retrying in {backoff_time}s"
+                    )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error("VEP recoder API timeout after retries")
+                    return None
+
+            except httpx.NetworkError as e:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor ** attempt
+                    logger.warning(
+                        f"VEP recoder API network error: {e}, retrying in {backoff_time}s"
+                    )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error(f"VEP recoder API network error after retries: {e}")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Unexpected VEP recoder error: {e}", exc_info=True)
+                return None
+
+        return None

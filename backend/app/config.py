@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     # Development Settings
     DEBUG: bool = False
 
+    # Ensembl VEP API Configuration
+    VEP_API_BASE_URL: str = "https://rest.ensembl.org"
+    VEP_RATE_LIMIT_REQUESTS_PER_SECOND: int = 15
+    VEP_REQUEST_TIMEOUT_SECONDS: int = 30
+    VEP_MAX_RETRIES: int = 3
+    VEP_RETRY_BACKOFF_FACTOR: float = 2.0  # Exponential backoff: 1s, 2s, 4s, etc.
+    VEP_CACHE_ENABLED: bool = True
+    VEP_CACHE_SIZE_LIMIT: int = 1000  # Max cached variants
+
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:
