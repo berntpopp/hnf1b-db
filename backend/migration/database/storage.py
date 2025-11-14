@@ -25,6 +25,19 @@ class PhenopacketStorage:
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
 
+    def async_session(self):
+        """Get an async database session context manager.
+
+        Returns:
+            Async session context manager
+
+        Example:
+            >>> async with storage.async_session() as db:
+            ...     result = await db.execute(query)
+            ...     await db.commit()
+        """
+        return self.session_maker()
+
     async def store_phenopackets(self, phenopackets: List[Dict[str, Any]]) -> int:
         """Store phenopackets in the database.
 
