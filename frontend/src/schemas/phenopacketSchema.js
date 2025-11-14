@@ -13,10 +13,9 @@ export const subjectSchema = yup.object({
     .required('Subject ID is required')
     .matches(/^[A-Za-z0-9_-]+$/, 'Subject ID must be alphanumeric'),
 
-  sex: yup
-    .string()
-    .required('Sex is required')
-    .oneOf(['MALE', 'FEMALE', 'OTHER_SEX', 'UNKNOWN_SEX'], 'Invalid sex value'),
+  sex: yup.string().required('Sex is required'),
+  // Note: Valid values fetched from API via usePhenopacketVocabularies()
+  // Backend validates against authoritative database values
 
   timeAtLastEncounter: yup.object({
     age: yup.object({
@@ -54,9 +53,9 @@ export const phenotypicFeatureSchema = yup.object({
 export const interpretationSchema = yup.object({
   id: yup.string().required('Interpretation ID is required'),
 
-  progressStatus: yup
-    .string()
-    .oneOf(['SOLVED', 'UNSOLVED', 'IN_PROGRESS', 'UNKNOWN'], 'Invalid progress status'),
+  progressStatus: yup.string(),
+  // Note: Valid values fetched from API via usePhenopacketVocabularies()
+  // Backend validates against authoritative database values
 
   diagnosis: yup.object({
     disease: yup.object({
@@ -69,20 +68,17 @@ export const interpretationSchema = yup.object({
     genomicInterpretations: yup.array().of(
       yup.object({
         subjectOrBiosampleId: yup.string().required('Subject ID is required'),
-        interpretationStatus: yup
-          .string()
-          .oneOf(
-            ['CAUSATIVE', 'CONTRIBUTORY', 'CANDIDATE', 'UNCERTAIN_SIGNIFICANCE', 'REJECTED'],
-            'Invalid interpretation status'
-          ),
+        interpretationStatus: yup.string(),
+        // Note: Valid values fetched from API via usePhenopacketVocabularies()
+        // Backend validates against authoritative database values
         variantInterpretation: yup.object({
           variationDescriptor: yup.object({
             id: yup.string().required('Variant ID is required'),
             variation: yup.object().required('Variant details are required'),
             label: yup.string().required('Variant label is required'),
-            moleculeContext: yup
-              .string()
-              .oneOf(['genomic', 'transcript', 'protein'], 'Invalid molecule context'),
+            moleculeContext: yup.string(),
+            // Note: Valid values fetched from API via usePhenopacketVocabularies()
+            // Backend validates against authoritative database values
           }),
         }),
       })
