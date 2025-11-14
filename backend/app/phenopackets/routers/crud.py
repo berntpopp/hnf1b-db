@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import require_curator
 from app.database import get_db
 from app.models.json_api import (
     CursorLinksObject,
@@ -413,9 +413,9 @@ async def get_phenopacket(
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_curator),
 ):
-    """Create a new phenopacket.
+    """Create a new phenopacket (requires curator role).
 
     Returns:
         201: Phenopacket created successfully
@@ -468,9 +468,9 @@ async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_curator),
 ):
-    """Update an existing phenopacket."""
+    """Update an existing phenopacket (requires curator role)."""
     result = await db.execute(
         select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
     )
@@ -507,9 +507,9 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_curator),
 ):
-    """Delete a phenopacket."""
+    """Delete a phenopacket (requires curator role)."""
     result = await db.execute(
         select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
     )

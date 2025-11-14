@@ -389,8 +389,7 @@ class VRSBuilder:
                 expressions.append(expr)
                 break
 
-        # Add label with protein change if available
-        if p_dot:
-            variant_descriptor["label"] += f" ({p_dot})"
+        # Note: Protein notation already added to label at line 343-344
+        # No need to add again here (fixes Issue #103 - duplicate protein notation)
 
         return variant_descriptor
