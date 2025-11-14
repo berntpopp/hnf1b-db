@@ -44,6 +44,29 @@
               >
                 Download JSON
               </v-btn>
+              <!-- Edit button (curator/admin only) -->
+              <v-btn
+                v-if="canEdit"
+                class="ml-2"
+                color="success"
+                prepend-icon="mdi-pencil"
+                variant="tonal"
+                @click="navigateToEdit"
+              >
+                Edit
+              </v-btn>
+              <!-- Delete button (curator/admin only) -->
+              <v-btn
+                v-if="canDelete"
+                class="ml-2"
+                color="error"
+                prepend-icon="mdi-delete"
+                variant="tonal"
+                @click="confirmDelete"
+              >
+                Delete
+              </v-btn>
+              <v-spacer />
               <v-btn
                 class="ml-2"
                 prepend-icon="mdi-arrow-left"
@@ -93,7 +116,8 @@
 </template>
 
 <script>
-import { getPhenopacket } from '@/api';
+import { getPhenopacket, deletePhenopacket } from '@/api';
+import { useAuthStore } from '@/stores/authStore';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
@@ -125,6 +149,16 @@ export default {
     },
     hasMeasurements() {
       return this.phenopacket?.measurements && this.phenopacket.measurements.length > 0;
+    },
+    canEdit() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      return userRole === 'curator' || userRole === 'admin';
+    },
+    canDelete() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      return userRole === 'curator' || userRole === 'admin';
     },
   },
   mounted() {
@@ -202,6 +236,47 @@ export default {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+    },
+
+    navigateToEdit() {
+      if (!this.phenopacket) return;
+      window.logService.info('Navigating to edit phenopacket', {
+        phenopacketId: this.phenopacket.id,
+      });
+      this.$router.push(`/phenopackets/${this.phenopacket.id}/edit`);
+    },
+
+    async confirmDelete() {
+      if (!this.phenopacket) return;
+
+      const confirmed = window.confirm(
+        `Are you sure you want to delete phenopacket "${this.phenopacket.id}"?\n\n` +
+          `Subject: ${this.phenopacket.subject?.id || 'N/A'}\n\n` +
+          `This action cannot be undone.`
+      );
+
+      if (!confirmed) {
+        window.logService.debug('Delete cancelled by user');
+        return;
+      }
+
+      try {
+        await deletePhenopacket(this.phenopacket.id);
+
+        window.logService.info('Phenopacket deleted successfully', {
+          phenopacketId: this.phenopacket.id,
+        });
+
+        // Show success message and navigate back to list
+        alert('Phenopacket deleted successfully');
+        this.$router.push('/phenopackets');
+      } catch (error) {
+        window.logService.error('Failed to delete phenopacket', {
+          phenopacketId: this.phenopacket.id,
+          error: error.message,
+        });
+        alert('Failed to delete phenopacket: ' + error.message);
+      }
     },
   },
 };

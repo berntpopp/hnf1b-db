@@ -192,6 +192,30 @@ export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { par
 export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${id}`);
 
 /**
+ * Create a new phenopacket (requires curator role).
+ * @param {Object} phenopacketData - Phenopacket data following GA4GH Phenopackets v2 standard
+ * @returns {Promise} Axios promise with created phenopacket
+ */
+export const createPhenopacket = (phenopacketData) =>
+  apiClient.post('/phenopackets/', phenopacketData);
+
+/**
+ * Update an existing phenopacket (requires curator role).
+ * @param {string} id - Phenopacket ID
+ * @param {Object} phenopacketData - Updated phenopacket data
+ * @returns {Promise} Axios promise with updated phenopacket
+ */
+export const updatePhenopacket = (id, phenopacketData) =>
+  apiClient.put(`/phenopackets/${id}`, phenopacketData);
+
+/**
+ * Delete a phenopacket (requires curator role).
+ * @param {string} id - Phenopacket ID
+ * @returns {Promise} Axios promise with deletion confirmation
+ */
+export const deletePhenopacket = (id) => apiClient.delete(`/phenopackets/${id}`);
+
+/**
  * Get multiple phenopackets by IDs in a single request.
  * Prevents N+1 query problem.
  * @param {Array<string>} phenopacketIds - Array of phenopacket IDs

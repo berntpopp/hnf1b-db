@@ -17,6 +17,16 @@
       <template #top>
         <v-toolbar flat>
           <v-toolbar-title>Phenopackets</v-toolbar-title>
+          <!-- Create button (curator/admin only) -->
+          <v-btn
+            v-if="canCreatePhenopacket"
+            color="success"
+            class="ml-4"
+            prepend-icon="mdi-plus"
+            @click="navigateToCreate"
+          >
+            Create Phenopacket
+          </v-btn>
           <v-spacer />
           <!-- Search Field -->
           <v-text-field
@@ -155,6 +165,7 @@ import {
   extractPaginationMeta,
 } from '@/utils/pagination';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { useAuthStore } from '@/stores/authStore';
 
 export default {
   name: 'Phenopackets',
@@ -260,6 +271,12 @@ export default {
         return false; // Cannot jump to last with cursor pagination
       }
       return this.currentPage < this.totalPages;
+    },
+    canCreatePhenopacket() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      // Allow curators and admins to create phenopackets
+      return userRole === 'curator' || userRole === 'admin';
     },
   },
   watch: {
@@ -511,6 +528,11 @@ export default {
     getSexIcon,
     getSexChipColor,
     formatSex,
+
+    navigateToCreate() {
+      window.logService.info('Navigating to create phenopacket');
+      this.$router.push('/phenopackets/create');
+    },
 
     handleRowClick(event, { item }) {
       // Navigate to phenopacket detail page

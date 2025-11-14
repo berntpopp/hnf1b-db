@@ -29,7 +29,8 @@ async def hpo_autocomplete(
 
     query = text(
         """
-        SELECT hpo_id, label, phenopacket_count,
+        SELECT hpo_id, label, category, description, synonyms,
+               recommendation, "group", phenopacket_count,
                similarity(label, :search_term) AS similarity_score
         FROM hpo_terms_lookup
         WHERE label ILIKE :prefix OR label % :search_term

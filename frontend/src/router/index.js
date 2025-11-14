@@ -16,6 +16,24 @@ const routes = [
     meta: { title: 'Phenopackets' },
   },
   {
+    path: '/phenopackets/create',
+    name: 'CreatePhenopacket',
+    component: () =>
+      import(
+        /* webpackChunkName: "phenopacket-create-edit" */ '../views/PhenopacketCreateEdit.vue'
+      ),
+    meta: { title: 'Create Phenopacket', requiresAuth: true },
+  },
+  {
+    path: '/phenopackets/:phenopacket_id/edit',
+    name: 'EditPhenopacket',
+    component: () =>
+      import(
+        /* webpackChunkName: "phenopacket-create-edit" */ '../views/PhenopacketCreateEdit.vue'
+      ),
+    meta: { title: 'Edit Phenopacket', requiresAuth: true },
+  },
+  {
     path: '/phenopackets/:phenopacket_id',
     name: 'PagePhenopacket',
     component: () =>
