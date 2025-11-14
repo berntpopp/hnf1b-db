@@ -14,7 +14,6 @@ Related: Issue #117, #100
 
 import asyncio
 import time
-from collections import OrderedDict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -256,7 +255,7 @@ class TestVEPAnnotation:
 
             # Capture print output
             with patch("builtins.print") as mock_print:
-                result = await validator.annotate_variant_with_vep("NM_000458.4:c.544G>A")
+                await validator.annotate_variant_with_vep("NM_000458.4:c.544G>A")
 
                 # Should print rate limit warning
                 mock_print.assert_called_once()
@@ -460,7 +459,7 @@ class TestCaching:
         validator._vep_cache["variant2:True"] = {"data": 2}
 
         # Access variant1 (should move to end)
-        cached_data = validator._vep_cache["variant1:True"]
+        validator._vep_cache["variant1:True"]
         validator._vep_cache.move_to_end("variant1:True")
 
         # variant1 should now be most recently used
@@ -509,7 +508,7 @@ class TestErrorHandling:
 
             with patch("asyncio.sleep") as mock_sleep:
                 # Test annotation
-                result = await validator.annotate_variant_with_vep("17-36459258-A-G")
+                await validator.annotate_variant_with_vep("17-36459258-A-G")
 
                 # Should respect Retry-After header
                 mock_sleep.assert_called()
@@ -683,7 +682,7 @@ class TestVariantRecoding:
 
             with patch("asyncio.sleep") as mock_sleep:
                 # Test recoding HGVS variant (no annotation step)
-                result = await validator.recode_variant_with_vep("NM_000458.4:c.544G>A")
+                await validator.recode_variant_with_vep("NM_000458.4:c.544G>A")
 
                 # Should have tried to wait for Retry-After
                 mock_sleep.assert_called_with(1)
@@ -750,7 +749,7 @@ class TestVariantRecoding:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            with patch("asyncio.sleep") as mock_sleep:
+            with patch("asyncio.sleep"):
                 # Test recoding
                 result = await validator.recode_variant_with_vep("NM_000458.4:c.544G>A")
 
