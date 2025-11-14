@@ -83,6 +83,37 @@ Comprehensive API for phenopacket operations, variant search, and clinical queri
 
 **Variant Search API:** [docs/api/VARIANT_SEARCH.md](../docs/api/VARIANT_SEARCH.md)
 
+### Variant Annotation Module
+
+Comprehensive VEP-powered variant annotation, validation, and recoding system.
+
+**Module Documentation:** [app/phenopackets/validation/variant_validator.py](app/phenopackets/validation/variant_validator.py)
+
+**Key Features:**
+- **Variant Validation** - Validate HGVS, VCF, and rsID notations
+- **VEP Annotation** - Rich annotations from Ensembl VEP (consequences, CADD, gnomAD)
+- **Variant Recoding** - Convert between formats (HGVS ↔ VCF ↔ rsID)
+- **Notation Suggestions** - Smart suggestions for fixing invalid notations
+- **Rate Limiting** - Token bucket algorithm (15 req/sec)
+- **LRU Caching** - 1000-variant cache for performance
+- **Format Support** - HGVS, VCF, rsID, genomic/coding/protein
+
+**API Endpoints:**
+- `POST /api/v2/variants/validate` - Validate variant notation
+- `POST /api/v2/variants/annotate` - Get VEP annotations
+- `POST /api/v2/variants/recode` - Convert between formats
+- `GET /api/v2/variants/suggest/{notation}` - Get notation suggestions
+
+**Documentation:**
+- **API Reference:** [docs/api/variant-annotation.md](../docs/api/variant-annotation.md)
+- **User Guide:** [docs/user-guide/variant-annotation.md](../docs/user-guide/variant-annotation.md)
+- **Developer Guide:** [docs/variant-annotation-implementation-plan.md](../docs/variant-annotation-implementation-plan.md)
+
+**Test Coverage:**
+- 83 unit tests + 18 integration tests
+- 99% code coverage (332/337 lines)
+- Tests run in ~7 seconds
+
 ### Interactive API Docs
 
 When the server is running, visit:
@@ -102,6 +133,8 @@ make check            # Run lint + typecheck + tests
 
 **Key Test Files:**
 - `test_variant_search.py` - Variant search validation (40+ tests)
+- `test_variant_validator_enhanced.py` - Variant annotation unit tests (83 tests, 99% coverage)
+- `test_variant_validator_api_integration.py` - Variant annotation API tests (18 tests)
 - `test_batch_endpoints.py` - Batch endpoint performance
 - `test_jsonb_indexes.py` - Database index verification
 - `test_phenopackets.py` - Core CRUD operations
