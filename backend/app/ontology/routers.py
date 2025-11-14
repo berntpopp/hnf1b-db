@@ -79,18 +79,6 @@ async def get_progress_status_values(db: AsyncSession = Depends(get_db)):
     return {"data": [dict(row._mapping) for row in result.fetchall()]}
 
 
-@router.get("/vocabularies/molecule-context")
-async def get_molecule_context_values(db: AsyncSession = Depends(get_db)):
-    """Get all valid molecule context values for variant representation."""
-    query = text(
-        """SELECT value, label, description
-           FROM molecule_context_values
-           ORDER BY sort_order"""
-    )
-    result = await db.execute(query)
-    return {"data": [dict(row._mapping) for row in result.fetchall()]}
-
-
 @router.get("/vocabularies/allelic-state")
 async def get_allelic_state_values(db: AsyncSession = Depends(get_db)):
     """Get all valid allelic state values (GENO ontology)."""

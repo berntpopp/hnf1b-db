@@ -11,7 +11,6 @@
  *   sex: Ref<Array>,
  *   interpretationStatus: Ref<Array>,
  *   progressStatus: Ref<Array>,
- *   moleculeContext: Ref<Array>,
  *   allelicState: Ref<Array>,
  *   evidenceCode: Ref<Array>,
  *   loading: Ref<boolean>,
@@ -45,7 +44,6 @@ export function usePhenopacketVocabularies() {
   const sex = ref([]);
   const interpretationStatus = ref([]);
   const progressStatus = ref([]);
-  const moleculeContext = ref([]);
   const allelicState = ref([]);
   const evidenceCode = ref([]);
 
@@ -84,7 +82,6 @@ export function usePhenopacketVocabularies() {
         loadVocabulary('sex', sex),
         loadVocabulary('interpretation-status', interpretationStatus),
         loadVocabulary('progress-status', progressStatus),
-        loadVocabulary('molecule-context', moleculeContext),
         loadVocabulary('allelic-state', allelicState),
         loadVocabulary('evidence-code', evidenceCode),
       ]);
@@ -94,7 +91,6 @@ export function usePhenopacketVocabularies() {
           sex: sex.value.length,
           interpretationStatus: interpretationStatus.value.length,
           progressStatus: progressStatus.value.length,
-          moleculeContext: moleculeContext.value.length,
           allelicState: allelicState.value.length,
           evidenceCode: evidenceCode.value.length,
         },
@@ -115,7 +111,6 @@ export function usePhenopacketVocabularies() {
     sex,
     interpretationStatus,
     progressStatus,
-    moleculeContext,
     allelicState,
     evidenceCode,
 
