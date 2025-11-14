@@ -1,9 +1,9 @@
 """Variant validation and suggestion endpoint."""
 
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.phenopackets.validator import PhenopacketValidator
@@ -114,6 +114,171 @@ async def validate_variant(request: VariantValidationRequest):
         vep_annotation=None,
         standardized_formats=None,
     )
+
+
+@router.post("/annotate")
+async def annotate_variant(
+    variant: str = Query(..., description="Variant in VCF or HGVS format")
+) -> Dict[str, Any]:
+    """Annotate variant with VEP including functional predictions.
+
+    This endpoint provides:
+    - Consequence predictions (missense, splice_donor, etc.)
+    - Impact severity (HIGH, MODERATE, LOW, MODIFIER)
+    - CADD pathogenicity scores
+    - gnomAD population frequencies
+    - Gene context and transcript information
+
+    Args:
+        variant: Variant in VCF (17-36459258-A-G) or
+            HGVS (NM_000458.4:c.544+1G>A) format
+
+    Returns:
+        Dictionary with annotation data
+
+    Raises:
+        HTTPException: If annotation fails
+    """
+    # Get VEP annotation
+    annotation = await validator.variant_validator.annotate_variant_with_vep(
+        variant
+    )
+
+    if not annotation:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Variant annotation failed. Check format: "
+                "VCF (17-36459258-A-G) or HGVS (NM_000458.4:c.544+1G>A)"
+            ),
+        )
+
+    # Extract key information
+    primary_consequence = None
+    cadd_score = None
+    gnomad_af = None
+
+    # Get primary transcript consequence (MANE select preferred)
+    transcript_consequences = annotation.get("transcript_consequences", [])
+    for tc in transcript_consequences:
+        if tc.get("mane_select"):
+            primary_consequence = tc
+            break
+
+    if not primary_consequence and transcript_consequences:
+        # Fallback to canonical
+        for tc in transcript_consequences:
+            if tc.get("canonical"):
+                primary_consequence = tc
+                break
+
+    if not primary_consequence and transcript_consequences:
+        # Fallback to first transcript
+        primary_consequence = transcript_consequences[0]
+
+    # Extract CADD score
+    if primary_consequence:
+        cadd_score = primary_consequence.get("cadd_phred")
+
+    # Extract gnomAD frequency
+    colocated_variants = annotation.get("colocated_variants", [])
+    if colocated_variants:
+        gnomad_af = colocated_variants[0].get("gnomad_af")
+
+    # Build response
+    return {
+        "input": variant,
+        "assembly": annotation.get("assembly_name", "GRCh38"),
+        "chromosome": annotation.get("seq_region_name"),
+        "position": annotation.get("start"),
+        "allele_string": annotation.get("allele_string"),
+        "most_severe_consequence": annotation.get("most_severe_consequence"),
+        "impact": (
+            primary_consequence.get("impact") if primary_consequence else None
+        ),
+        "gene_symbol": (
+            primary_consequence.get("gene_symbol")
+            if primary_consequence
+            else None
+        ),
+        "gene_id": (
+            primary_consequence.get("gene_id") if primary_consequence else None
+        ),
+        "transcript_id": (
+            primary_consequence.get("transcript_id")
+            if primary_consequence
+            else None
+        ),
+        "hgvsc": (
+            primary_consequence.get("hgvsc") if primary_consequence else None
+        ),
+        "hgvsp": (
+            primary_consequence.get("hgvsp") if primary_consequence else None
+        ),
+        "cadd_score": cadd_score,
+        "gnomad_af": gnomad_af,
+        "full_annotation": annotation,  # Include full response for advanced users
+    }
+
+
+@router.post("/recode")
+async def recode_variant(
+    variant: str = Query(..., description="Variant in any supported format")
+) -> Dict[str, Any]:
+    """Recode variant to all possible representations (HGVS, VCF, SPDI, rsID).
+
+    This endpoint converts between different variant notations:
+    - HGVS c./p./g. notations (coding, protein, genomic)
+    - VCF format (chr-pos-ref-alt)
+    - SPDI notation (genomic coordinates)
+    - Variant IDs (rsIDs, ClinVar IDs)
+
+    Useful for:
+    - Converting user input c. notation to VCF for database queries
+    - Getting all equivalent representations for a variant
+    - Standardizing variant nomenclature
+
+    Args:
+        variant: Variant in any format (e.g., "NM_000458.4:c.544G>A",
+            "17-36459258-A-G", "rs56116432")
+
+    Returns:
+        Dictionary with all available variant representations
+
+    Example Response:
+        {
+            "input": "NM_000458.4:c.544G>A",
+            "hgvsg": ["NC_000017.11:g.36459258A>G"],
+            "hgvsc": ["NM_000458.4:c.544G>A"],
+            "hgvsp": ["NP_000449.3:p.Gly182Ser"],
+            "spdi": {...},
+            "vcf_string": "17:36459258-36459258:A:G",
+            "id": ["rs56116432"]
+        }
+    """
+    # Get variant recoding
+    recoded = await validator.variant_validator.recode_variant_with_vep(variant)
+
+    if not recoded:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Variant recoding failed. Supported formats: "
+                "HGVS (NM_000458.4:c.544G>A), VCF (17-36459258-A-G), rsID (rs56116432)"
+            ),
+        )
+
+    # Build clean response
+    return {
+        "input": variant,
+        "hgvsg": recoded.get("hgvsg", []),
+        "hgvsc": recoded.get("hgvsc", []),
+        "hgvsp": recoded.get("hgvsp", []),
+        "spdi": recoded.get("spdi", {}),
+        "vcf_string": recoded.get("vcf_string"),
+        "id": recoded.get("id", []),
+        "full_response": recoded,  # Include complete VEP response
+    }
 
 
 @router.get("/suggest/{partial_notation}")
