@@ -920,6 +920,7 @@ async def aggregate_all_variants(
                 WHERE elem->>'syntax' = 'hgvs.p'
                 LIMIT 1
             ) as protein,
+            vd->'extensions' as vep_extensions,
             p.id as phenopacket_id
         FROM
             phenopackets p,
@@ -944,6 +945,7 @@ async def aggregate_all_variants(
             MAX(hg38) as hg38,
             MAX(transcript) as transcript,
             MAX(protein) as protein,
+            (ARRAY_AGG(vep_extensions))[1] as vep_extensions,
             COUNT(DISTINCT phenopacket_id) as phenopacket_count
         FROM variant_raw
         GROUP BY variant_id
@@ -961,7 +963,8 @@ async def aggregate_all_variants(
             va.phenopacket_count,
             va.hg38,
             va.transcript,
-            va.protein
+            va.protein,
+            va.vep_extensions
         FROM variant_agg va
         INNER JOIN all_variants_with_stable_id avwsi ON va.variant_id = avwsi.variant_id
     )
@@ -1057,6 +1060,7 @@ async def aggregate_all_variants(
                 transcript=row.transcript,
                 protein=row.protein,
                 variant_type=row.structural_type,
+                vep_extensions=row.vep_extensions if row.vep_extensions else None,
             ),
         }
         for row in rows
