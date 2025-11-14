@@ -139,7 +139,9 @@ async def get_by_publication(
     skip: int = Query(0, ge=0, description="Pagination offset"),
     limit: int = Query(100, ge=1, le=500, description="Max records (max: 500)"),
     sex: Optional[str] = Query(
-        None, pattern="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$", description="Filter by sex"
+        None,
+        pattern="^(MALE|FEMALE|OTHER_SEX|UNKNOWN_SEX)$",
+        description="Filter by sex",
     ),
     has_variants: Optional[bool] = Query(
         None, description="Filter by variant presence"

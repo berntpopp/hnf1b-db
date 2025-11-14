@@ -5,13 +5,14 @@ Revises: c22e647d6cff
 Create Date: 2025-11-13 17:50:33.014490
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'f74b2759f2a9'
-down_revision: Union[str, Sequence[str], None] = 'c22e647d6cff'
+revision: str = "f74b2759f2a9"
+down_revision: Union[str, Sequence[str], None] = "c22e647d6cff"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

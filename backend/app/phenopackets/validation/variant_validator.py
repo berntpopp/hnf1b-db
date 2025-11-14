@@ -374,12 +374,14 @@ class VariantValidator:
         # Build query parameters
         params = {}
         if include_annotations:
-            params.update({
-                "CADD": "1",            # CADD scores
-                "hgvs": "1",            # HGVS notations
-                "mane": "1",            # MANE select transcripts
-                "gencode_primary": "1", # GENCODE primary (2025 best practice)
-            })
+            params.update(
+                {
+                    "CADD": "1",  # CADD scores
+                    "hgvs": "1",  # HGVS notations
+                    "mane": "1",  # MANE select transcripts
+                    "gencode_primary": "1",  # GENCODE primary (2025 best practice)
+                }
+            )
 
         # Retry with exponential backoff
         for attempt in range(self._max_retries):
@@ -431,7 +433,7 @@ class VariantValidator:
                     elif response.status_code in (500, 502, 503, 504):
                         # Server error - retry with backoff
                         if attempt < self._max_retries - 1:
-                            backoff_time = self._backoff_factor ** attempt
+                            backoff_time = self._backoff_factor**attempt
                             logger.warning(
                                 f"VEP API error {response.status_code}, "
                                 f"retrying in {backoff_time}s (attempt {attempt + 1}/{self._max_retries})"
@@ -450,7 +452,7 @@ class VariantValidator:
 
             except httpx.TimeoutException:
                 if attempt < self._max_retries - 1:
-                    backoff_time = self._backoff_factor ** attempt
+                    backoff_time = self._backoff_factor**attempt
                     logger.warning(
                         f"VEP API timeout, retrying in {backoff_time}s "
                         f"(attempt {attempt + 1}/{self._max_retries})"
@@ -463,7 +465,7 @@ class VariantValidator:
 
             except httpx.NetworkError as e:
                 if attempt < self._max_retries - 1:
-                    backoff_time = self._backoff_factor ** attempt
+                    backoff_time = self._backoff_factor**attempt
                     logger.warning(
                         f"VEP API network error: {e}, retrying in {backoff_time}s "
                         f"(attempt {attempt + 1}/{self._max_retries})"
@@ -471,7 +473,9 @@ class VariantValidator:
                     await asyncio.sleep(backoff_time)
                     continue
                 else:
-                    logger.error(f"VEP API network error after {self._max_retries} retries: {e}")
+                    logger.error(
+                        f"VEP API network error after {self._max_retries} retries: {e}"
+                    )
                     return None
 
             except Exception as e:
@@ -494,7 +498,9 @@ class VariantValidator:
         if len(self._vep_cache) > self._cache_size_limit:
             # Remove oldest (first) item
             self._vep_cache.popitem(last=False)
-            logger.debug(f"VEP cache evicted oldest entry (size: {len(self._vep_cache)})")
+            logger.debug(
+                f"VEP cache evicted oldest entry (size: {len(self._vep_cache)})"
+            )
 
     async def _rate_limit(self):
         """Implement Ensembl rate limiting (15 requests/second).
@@ -547,7 +553,9 @@ class VariantValidator:
         Output: "17 36459258 . A G . . ."
         """
         # Remove "chr" prefix if present
-        vcf_variant = vcf_variant.replace("chr", "").replace("Chr", "").replace("CHR", "")
+        vcf_variant = (
+            vcf_variant.replace("chr", "").replace("Chr", "").replace("CHR", "")
+        )
 
         # Parse components
         parts = vcf_variant.split("-")
@@ -563,9 +571,7 @@ class VariantValidator:
         # Format for VEP: "chrom pos . ref alt . . ."
         return f"{chrom} {pos} . {ref} {alt} . . ."
 
-    async def recode_variant_with_vep(
-        self, variant: str
-    ) -> Optional[Dict[str, Any]]:
+    async def recode_variant_with_vep(self, variant: str) -> Optional[Dict[str, Any]]:
         """Recode variant to all possible representations using VEP Variant Recoder.
 
         Converts between different variant representations:
@@ -677,7 +683,7 @@ class VariantValidator:
 
                     elif response.status_code in (500, 502, 503, 504):
                         if attempt < self._max_retries - 1:
-                            backoff_time = self._backoff_factor ** attempt
+                            backoff_time = self._backoff_factor**attempt
                             logger.warning(
                                 f"VEP recoder API error {response.status_code}, "
                                 f"retrying in {backoff_time}s"
@@ -698,7 +704,7 @@ class VariantValidator:
 
             except httpx.TimeoutException:
                 if attempt < self._max_retries - 1:
-                    backoff_time = self._backoff_factor ** attempt
+                    backoff_time = self._backoff_factor**attempt
                     logger.warning(
                         f"VEP recoder API timeout, retrying in {backoff_time}s"
                     )
@@ -710,7 +716,7 @@ class VariantValidator:
 
             except httpx.NetworkError as e:
                 if attempt < self._max_retries - 1:
-                    backoff_time = self._backoff_factor ** attempt
+                    backoff_time = self._backoff_factor**attempt
                     logger.warning(
                         f"VEP recoder API network error: {e}, retrying in {backoff_time}s"
                     )

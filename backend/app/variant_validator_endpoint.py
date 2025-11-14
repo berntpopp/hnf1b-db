@@ -270,7 +270,7 @@ async def annotate_variant(
         ...,
         description="Variant in HGVS, VCF, or rsID format",
         example="NM_000458.4:c.544+1G>A",
-    )
+    ),
 ) -> Dict[str, Any]:
     """Annotate variant with VEP including functional predictions.
 
@@ -292,9 +292,7 @@ async def annotate_variant(
         HTTPException: If annotation fails
     """
     # Get VEP annotation
-    annotation = await validator.variant_validator.annotate_variant_with_vep(
-        variant
-    )
+    annotation = await validator.variant_validator.annotate_variant_with_vep(variant)
 
     if not annotation:
         raise HTTPException(
@@ -345,28 +343,18 @@ async def annotate_variant(
         "position": annotation.get("start"),
         "allele_string": annotation.get("allele_string"),
         "most_severe_consequence": annotation.get("most_severe_consequence"),
-        "impact": (
-            primary_consequence.get("impact") if primary_consequence else None
-        ),
+        "impact": (primary_consequence.get("impact") if primary_consequence else None),
         "gene_symbol": (
-            primary_consequence.get("gene_symbol")
-            if primary_consequence
-            else None
+            primary_consequence.get("gene_symbol") if primary_consequence else None
         ),
         "gene_id": (
             primary_consequence.get("gene_id") if primary_consequence else None
         ),
         "transcript_id": (
-            primary_consequence.get("transcript_id")
-            if primary_consequence
-            else None
+            primary_consequence.get("transcript_id") if primary_consequence else None
         ),
-        "hgvsc": (
-            primary_consequence.get("hgvsc") if primary_consequence else None
-        ),
-        "hgvsp": (
-            primary_consequence.get("hgvsp") if primary_consequence else None
-        ),
+        "hgvsc": (primary_consequence.get("hgvsc") if primary_consequence else None),
+        "hgvsp": (primary_consequence.get("hgvsp") if primary_consequence else None),
         "cadd_score": cadd_score,
         "gnomad_af": gnomad_af,
         "full_annotation": annotation,  # Include full response for advanced users
@@ -448,7 +436,7 @@ async def recode_variant(
         ...,
         description="Variant in any supported format",
         example="rs56116432",
-    )
+    ),
 ) -> Dict[str, Any]:
     """Recode variant to all possible representations (HGVS, VCF, SPDI, rsID).
 

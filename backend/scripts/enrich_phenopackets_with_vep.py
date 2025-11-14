@@ -60,9 +60,7 @@ def extract_vcf_from_phenopacket(pk_data: Dict[str, Any]) -> Optional[str]:
             return None
 
         genomic_interps = (
-            interpretations[0]
-            .get("diagnosis", {})
-            .get("genomicInterpretations", [])
+            interpretations[0].get("diagnosis", {}).get("genomicInterpretations", [])
         )
         if not genomic_interps:
             return None
@@ -121,11 +119,9 @@ def add_vep_to_phenopacket(
     """
     try:
         # Navigate to variation descriptor
-        variant_desc = (
-            pk_data["interpretations"][0]["diagnosis"]["genomicInterpretations"][0][
-                "variantInterpretation"
-            ]["variationDescriptor"]
-        )
+        variant_desc = pk_data["interpretations"][0]["diagnosis"][
+            "genomicInterpretations"
+        ][0]["variantInterpretation"]["variationDescriptor"]
 
         # Initialize extensions array if doesn't exist
         if "extensions" not in variant_desc:
@@ -181,11 +177,9 @@ def has_vep_annotation(pk_data: Dict[str, Any]) -> bool:
         True if VEP annotation exists
     """
     try:
-        variant_desc = (
-            pk_data["interpretations"][0]["diagnosis"]["genomicInterpretations"][0][
-                "variantInterpretation"
-            ]["variationDescriptor"]
-        )
+        variant_desc = pk_data["interpretations"][0]["diagnosis"][
+            "genomicInterpretations"
+        ][0]["variantInterpretation"]["variationDescriptor"]
         extensions = variant_desc.get("extensions", [])
         return any(ext.get("name") == "vep_annotation" for ext in extensions)
     except (KeyError, IndexError):

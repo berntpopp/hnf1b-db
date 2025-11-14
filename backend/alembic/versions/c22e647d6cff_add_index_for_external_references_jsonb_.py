@@ -11,8 +11,8 @@ from typing import Sequence, Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'c22e647d6cff'
-down_revision: Union[str, Sequence[str], None] = '93b3e6984a6c'
+revision: str = "c22e647d6cff"
+down_revision: Union[str, Sequence[str], None] = "93b3e6984a6c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,6 +38,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove GIN index for external references."""
-    op.execute(
-        "DROP INDEX IF EXISTS idx_phenopackets_external_references"
-    )
+    op.execute("DROP INDEX IF EXISTS idx_phenopackets_external_references")
