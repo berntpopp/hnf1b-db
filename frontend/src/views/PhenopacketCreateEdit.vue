@@ -63,14 +63,47 @@
             </v-card-text>
           </v-card>
 
+          <!-- Publications/Citations -->
+          <v-card variant="outlined" class="mb-4">
+            <v-card-title class="bg-orange-lighten-5">
+              <v-icon left>mdi-book-open-variant</v-icon>
+              Publications
+            </v-card-title>
+            <v-card-text>
+              <div v-for="(pub, index) in phenopacket.publications" :key="index" class="mb-3">
+                <v-row>
+                  <v-col cols="12" md="10">
+                    <v-text-field
+                      v-model="pub.pmid"
+                      label="PubMed ID (PMID)"
+                      hint="Enter numeric PMID (e.g., 12345678)"
+                      persistent-hint
+                    />
+                  </v-col>
+                  <v-col cols="12" md="2" class="d-flex align-center">
+                    <v-btn
+                      color="error"
+                      icon="mdi-delete"
+                      variant="text"
+                      @click="removePublication(index)"
+                    />
+                  </v-col>
+                </v-row>
+              </div>
+              <v-btn color="primary" prepend-icon="mdi-plus" @click="addPublication">
+                Add Publication
+              </v-btn>
+            </v-card-text>
+          </v-card>
+
+          <!-- Variant Information -->
+          <VariantAnnotationForm v-model="phenopacket.variants" />
+
           <!-- Phenotypic Features Section -->
           <PhenotypicFeaturesSection
             v-model="phenopacket.phenotypicFeatures"
             :form-submitted="formSubmitted"
           />
-
-          <!-- Variant Information -->
-          <VariantAnnotationForm v-model="phenopacket.variants" />
 
           <!-- Error Display -->
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
@@ -118,6 +151,7 @@ export default {
         phenotypicFeatures: [],
         variants: [],
         interpretations: [],
+        publications: [],
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'HNF1B-DB Curation Interface',
@@ -184,6 +218,16 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+
+    addPublication() {
+      this.phenopacket.publications.push({
+        pmid: '',
+      });
+    },
+
+    removePublication(index) {
+      this.phenopacket.publications.splice(index, 1);
     },
 
     async handleSubmit() {
