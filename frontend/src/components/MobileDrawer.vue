@@ -29,6 +29,19 @@
 
     <v-divider />
 
+    <!-- Curate Menu (curator/admin only) -->
+    <v-list v-if="canCurate" density="compact">
+      <v-list-subheader>Curate</v-list-subheader>
+      <v-list-item
+        prepend-icon="mdi-account-plus"
+        title="Create Phenopacket"
+        to="/phenopackets/create"
+        @click="closeDrawer"
+      />
+    </v-list>
+
+    <v-divider v-if="canCurate" />
+
     <!-- User Menu (authenticated) -->
     <v-list v-if="isAuthenticated" density="compact">
       <v-list-subheader>Account</v-list-subheader>
@@ -52,7 +65,7 @@
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { navigationItems } from '@/config/navigationItems';
-import { authStatus, removeToken } from '@/utils/auth';
+import { useAuthStore } from '@/stores/authStore';
 
 const props = defineProps({
   modelValue: {
@@ -65,6 +78,7 @@ const emit = defineEmits(['update:modelValue']);
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 
 /**
  * Two-way binding for drawer open/close state
@@ -77,7 +91,15 @@ const isOpen = computed({
 /**
  * Reactive authentication status
  */
-const isAuthenticated = computed(() => authStatus.value);
+const isAuthenticated = computed(() => authStore.isAuthenticated);
+
+/**
+ * Check if user can curate (curator or admin)
+ */
+const canCurate = computed(() => {
+  const userRole = authStore.user?.role;
+  return userRole === 'curator' || userRole === 'admin';
+});
 
 /**
  * Check if a route is currently active
@@ -104,9 +126,9 @@ const navigateHome = () => {
 /**
  * Log out user, close drawer, and redirect to home
  */
-const handleLogout = () => {
+const handleLogout = async () => {
   closeDrawer();
-  removeToken();
+  await authStore.logout();
   router.push('/');
 };
 </script>
