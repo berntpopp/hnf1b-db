@@ -54,7 +54,29 @@
               {{ group.name }}
             </div>
 
-            <v-list density="compact" class="mb-2">
+            <!-- CKD Stages: Dropdown Select (mutually exclusive) -->
+            <v-select
+              v-if="group.name === 'CKD Stages'"
+              :model-value="getSelectedCKDStage(group.terms)"
+              :items="group.terms"
+              item-title="label"
+              item-value="hpo_id"
+              label="Select CKD Stage"
+              density="compact"
+              clearable
+              @update:model-value="selectCKDStage(group.terms, $event)"
+            >
+              <template #item="{ item, props: itemProps }">
+                <v-list-item v-bind="itemProps">
+                  <v-list-item-subtitle class="text-caption">
+                    {{ item.raw.hpo_id }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </template>
+            </v-select>
+
+            <!-- Regular phenotypes: Tri-state icons -->
+            <v-list v-else density="compact" class="mb-2">
               <v-list-item v-for="term in group.terms" :key="term.hpo_id" class="phenotype-item">
                 <template #prepend>
                   <v-btn
@@ -116,6 +138,7 @@ const filterOptions = [
 const SYSTEM_COLORS = {
   Kidney: '#1976D2',
   'Urinary tract': '#1976D2',
+  'CKD Stages': '#1976D2',
   Liver: '#388E3C',
   Pancreas: '#7B1FA2',
   Hormones: '#7B1FA2',
@@ -128,6 +151,7 @@ const SYSTEM_COLORS = {
 const SYSTEM_ICONS = {
   Kidney: 'mdi-kidney',
   'Urinary tract': 'mdi-water',
+  'CKD Stages': 'mdi-format-list-numbered',
   Liver: 'mdi-bacteria-outline',
   Pancreas: 'mdi-stomach',
   Hormones: 'mdi-test-tube',
@@ -211,6 +235,31 @@ const cycleState = (term) => {
   } else {
     // Excluded -> Unknown (remove)
     updated.splice(index, 1);
+  }
+
+  emit('update:modelValue', updated);
+};
+
+// Get the currently selected CKD stage (only one can be selected at a time)
+const getSelectedCKDStage = (ckdStages) => {
+  const ckdIds = ckdStages.map((s) => s.hpo_id);
+  const selected = props.modelValue.find((f) => ckdIds.includes(f.type?.id) && !f.excluded);
+  return selected?.type?.id || null;
+};
+
+// Select a CKD stage (remove all other CKD stages, add the selected one)
+const selectCKDStage = (ckdStages, selectedId) => {
+  const ckdIds = ckdStages.map((s) => s.hpo_id);
+  // Remove all CKD stages from the selection
+  let updated = props.modelValue.filter((f) => !ckdIds.includes(f.type?.id));
+
+  // If a stage was selected (not cleared), add it
+  if (selectedId) {
+    const selectedStage = ckdStages.find((s) => s.hpo_id === selectedId);
+    updated.push({
+      type: { id: selectedStage.hpo_id, label: selectedStage.label },
+      excluded: false,
+    });
   }
 
   emit('update:modelValue', updated);

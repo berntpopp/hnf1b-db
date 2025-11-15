@@ -100,22 +100,56 @@ async def hpo_grouped(
     result = await db.execute(query, params)
     terms = result.fetchall()
 
-    # Group terms by organ system
+    # CKD stage HPO IDs (mutually exclusive group)
+    CKD_STAGE_IDS = {
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
+    }
+
+    # Group terms by organ system, with special handling for CKD stages
     groups = {}
     for row in terms:
         term_dict = dict(row._mapping)
-        group_name = term_dict.get("group") or "Other"
+        hpo_id = term_dict.get("hpo_id")
+
+        # Move CKD stages to their own group
+        if hpo_id in CKD_STAGE_IDS:
+            group_name = "CKD Stages"
+        else:
+            group_name = term_dict.get("group") or "Other"
 
         if group_name not in groups:
             groups[group_name] = []
 
         groups[group_name].append(term_dict)
 
+    # Ensure groups appear in desired order (Genital and Urinary tract consecutive)
+    group_order = [
+        "Brain",
+        "Electrolytes and uric acid",
+        "Genital",
+        "Urinary tract",
+        "Hormones",
+        "Kidney",
+        "CKD Stages",
+        "Liver",
+        "Pancreas",
+        "Other",
+    ]
+    ordered_groups = {k: groups[k] for k in group_order if k in groups}
+    # Add any remaining groups not in the predefined order
+    for k in groups:
+        if k not in ordered_groups:
+            ordered_groups[k] = groups[k]
+
     return {
         "data": {
-            "groups": groups,
+            "groups": ordered_groups,
             "total_terms": len(terms),
-            "total_groups": len(groups),
+            "total_groups": len(ordered_groups),
         }
     }
 
