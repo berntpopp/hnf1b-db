@@ -126,15 +126,17 @@ async def hpo_grouped(
 
         groups[group_name].append(term_dict)
 
-    # Ensure groups appear in desired order (Genital and Urinary tract consecutive)
+    # Ensure groups appear in desired order
+    # Left column: Brain, Electrolytes, Genital, Urinary tract, Hormones
+    # Right column: CKD Stages, Kidney, Liver, Pancreas, Other
     group_order = [
         "Brain",
         "Electrolytes and uric acid",
         "Genital",
         "Urinary tract",
         "Hormones",
-        "Kidney",
         "CKD Stages",
+        "Kidney",
         "Liver",
         "Pancreas",
         "Other",
