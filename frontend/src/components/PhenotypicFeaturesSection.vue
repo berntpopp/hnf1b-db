@@ -179,10 +179,12 @@ const filteredGroups = computed(() => {
   return filtered;
 });
 
-// Split groups into two columns for better layout
+// Split groups into two columns
+// Fixed split at index 5: Left column gets first 5 groups (Brain, Electrolytes, Genital, Urinary tract, Hormones)
+// Right column gets remaining groups (CKD Stages, Kidney, Liver, Pancreas, Other)
 const groupedByColumns = computed(() => {
   const groupNames = Object.keys(filteredGroups.value);
-  const midpoint = Math.ceil(groupNames.length / 2);
+  const midpoint = 5; // Fixed split point per user requirement
 
   return {
     left: groupNames.slice(0, midpoint).map((name) => ({
