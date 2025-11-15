@@ -64,7 +64,13 @@
           </v-card>
 
           <!-- Phenotypic Features Section -->
-          <PhenotypicFeaturesSection v-model="phenopacket.phenotypicFeatures" />
+          <PhenotypicFeaturesSection
+            v-model="phenopacket.phenotypicFeatures"
+            :form-submitted="formSubmitted"
+          />
+
+          <!-- Variant Information -->
+          <VariantAnnotationForm v-model="phenopacket.variants" />
 
           <!-- Error Display -->
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
@@ -89,11 +95,13 @@
 import { getPhenopacket, createPhenopacket, updatePhenopacket } from '@/api';
 import { usePhenopacketVocabularies } from '@/composables/usePhenopacketVocabularies';
 import PhenotypicFeaturesSection from '@/components/PhenotypicFeaturesSection.vue';
+import VariantAnnotationForm from '@/components/VariantAnnotationForm.vue';
 
 export default {
   name: 'PhenopacketCreateEdit',
   components: {
     PhenotypicFeaturesSection,
+    VariantAnnotationForm,
   },
   setup() {
     const vocabularies = usePhenopacketVocabularies();
@@ -108,6 +116,7 @@ export default {
           sex: 'UNKNOWN_SEX',
         },
         phenotypicFeatures: [],
+        variants: [],
         interpretations: [],
         metaData: {
           created: new Date().toISOString(),
