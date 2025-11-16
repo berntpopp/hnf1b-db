@@ -249,16 +249,25 @@ export default {
       this.error = null;
 
       try {
-        const apiCall = this.isEditing ? updatePhenopacket : createPhenopacket;
-        const result = await apiCall(this.phenopacket.id, this.phenopacket);
+        // Backend expects request body: { phenopacket: {...}, created_by: "..." }
+        const requestBody = {
+          phenopacket: this.phenopacket,
+        };
+        // DEBUG: Log the payload being sent
+        console.log('Sending phenopacket:', JSON.stringify(requestBody, null, 2));
+
+        // createPhenopacket(data) vs updatePhenopacket(id, data) - different signatures!
+        const result = this.isEditing
+          ? await updatePhenopacket(this.phenopacket.id, requestBody)
+          : await createPhenopacket(requestBody);
 
         window.logService.info('Phenopacket saved successfully', {
-          phenopacketId: result.data.id,
+          phenopacketId: result.data.phenopacket_id,
           mode: this.isEditing ? 'update' : 'create',
         });
 
-        // Navigate to detail page
-        this.$router.push(`/phenopackets/${result.data.id}`);
+        // Navigate to detail page using phenopacket_id (not database id)
+        this.$router.push(`/phenopackets/${result.data.phenopacket_id}`);
       } catch (err) {
         this.error = 'Failed to save phenopacket: ' + err.message;
         window.logService.error('Failed to save phenopacket', {

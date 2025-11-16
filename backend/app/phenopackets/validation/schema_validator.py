@@ -17,12 +17,12 @@ class SchemaValidator:
         """Get the phenopacket JSON schema.
 
         Returns:
-            GA4GH Phenopackets v2 JSON schema
+            GA4GH Phenopackets v2 JSON schema (camelCase format)
         """
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "required": ["id", "subject", "meta_data"],
+            "required": ["id", "subject", "metaData"],
             "properties": {
                 "id": {"type": "string", "minLength": 1},
                 "subject": {
@@ -30,10 +30,10 @@ class SchemaValidator:
                     "required": ["id"],
                     "properties": {
                         "id": {"type": "string"},
-                        "alternate_ids": {"type": "array", "items": {"type": "string"}},
-                        "date_of_birth": {"type": "string"},
-                        "time_at_last_encounter": {"type": "object"},
-                        "vital_status": {"type": "object"},
+                        "alternateIds": {"type": "array", "items": {"type": "string"}},
+                        "dateOfBirth": {"type": "string"},
+                        "timeAtLastEncounter": {"type": "object"},
+                        "vitalStatus": {"type": "object"},
                         "sex": {
                             "type": "string",
                             "enum": [
@@ -43,14 +43,14 @@ class SchemaValidator:
                                 "OTHER_SEX",
                             ],
                         },
-                        "karyotypic_sex": {"type": "string"},
-                        "gender": {"$ref": "#/definitions/ontology_class"},
-                        "taxonomy": {"$ref": "#/definitions/ontology_class"},
+                        "karyotypicSex": {"type": "string"},
+                        "gender": {"$ref": "#/definitions/ontologyClass"},
+                        "taxonomy": {"$ref": "#/definitions/ontologyClass"},
                     },
                 },
-                "phenotypic_features": {
+                "phenotypicFeatures": {
                     "type": "array",
-                    "items": {"$ref": "#/definitions/phenotypic_feature"},
+                    "items": {"$ref": "#/definitions/phenotypicFeature"},
                 },
                 "measurements": {
                     "type": "array",
@@ -65,32 +65,32 @@ class SchemaValidator:
                     "type": "array",
                     "items": {"$ref": "#/definitions/disease"},
                 },
-                "medical_actions": {
+                "medicalActions": {
                     "type": "array",
-                    "items": {"$ref": "#/definitions/medical_action"},
+                    "items": {"$ref": "#/definitions/medicalAction"},
                 },
                 "files": {"type": "array", "items": {"$ref": "#/definitions/file"}},
-                "meta_data": {
+                "metaData": {
                     "type": "object",
-                    "required": ["created", "created_by", "resources"],
+                    "required": ["created", "createdBy", "resources"],
                     "properties": {
                         "created": {"type": "string"},
-                        "created_by": {"type": "string"},
-                        "submitted_by": {"type": "string"},
+                        "createdBy": {"type": "string"},
+                        "submittedBy": {"type": "string"},
                         "resources": {
                             "type": "array",
                             "items": {
                                 "type": "object",
-                                "required": ["id", "name", "namespace_prefix"],
+                                "required": ["id", "name", "namespacePrefix"],
                             },
                         },
-                        "phenopacket_schema_version": {"type": "string"},
-                        "external_references": {"type": "array"},
+                        "phenopacketSchemaVersion": {"type": "string"},
+                        "externalReferences": {"type": "array"},
                     },
                 },
             },
             "definitions": {
-                "ontology_class": {
+                "ontologyClass": {
                     "type": "object",
                     "required": ["id"],
                     "properties": {
@@ -98,19 +98,19 @@ class SchemaValidator:
                         "label": {"type": "string"},
                     },
                 },
-                "phenotypic_feature": {
+                "phenotypicFeature": {
                     "type": "object",
                     "required": ["type"],
                     "properties": {
-                        "type": {"$ref": "#/definitions/ontology_class"},
+                        "type": {"$ref": "#/definitions/ontologyClass"},
                         "excluded": {"type": "boolean"},
-                        "severity": {"$ref": "#/definitions/ontology_class"},
+                        "severity": {"$ref": "#/definitions/ontologyClass"},
                         "modifiers": {
                             "type": "array",
-                            "items": {"$ref": "#/definitions/ontology_class"},
+                            "items": {"$ref": "#/definitions/ontologyClass"},
                         },
-                        "onset": {"$ref": "#/definitions/time_element"},
-                        "resolution": {"$ref": "#/definitions/time_element"},
+                        "onset": {"$ref": "#/definitions/timeElement"},
+                        "resolution": {"$ref": "#/definitions/timeElement"},
                         "evidence": {
                             "type": "array",
                             "items": {"$ref": "#/definitions/evidence"},
@@ -121,38 +121,38 @@ class SchemaValidator:
                     "type": "object",
                     "required": ["assay", "value"],
                     "properties": {
-                        "assay": {"$ref": "#/definitions/ontology_class"},
+                        "assay": {"$ref": "#/definitions/ontologyClass"},
                         "value": {"type": "object"},
-                        "time_observed": {"$ref": "#/definitions/time_element"},
+                        "timeObserved": {"$ref": "#/definitions/timeElement"},
                         "procedure": {"type": "object"},
-                        "interpretation": {"$ref": "#/definitions/ontology_class"},
+                        "interpretation": {"$ref": "#/definitions/ontologyClass"},
                     },
                 },
                 "disease": {
                     "type": "object",
                     "required": ["term"],
                     "properties": {
-                        "term": {"$ref": "#/definitions/ontology_class"},
+                        "term": {"$ref": "#/definitions/ontologyClass"},
                         "excluded": {"type": "boolean"},
-                        "onset": {"$ref": "#/definitions/time_element"},
-                        "resolution": {"$ref": "#/definitions/time_element"},
-                        "disease_stage": {
+                        "onset": {"$ref": "#/definitions/timeElement"},
+                        "resolution": {"$ref": "#/definitions/timeElement"},
+                        "diseaseStage": {
                             "type": "array",
-                            "items": {"$ref": "#/definitions/ontology_class"},
+                            "items": {"$ref": "#/definitions/ontologyClass"},
                         },
-                        "clinical_tnm_finding": {
+                        "clinicalTnmFinding": {
                             "type": "array",
-                            "items": {"$ref": "#/definitions/ontology_class"},
+                            "items": {"$ref": "#/definitions/ontologyClass"},
                         },
-                        "primary_site": {"$ref": "#/definitions/ontology_class"},
+                        "primarySite": {"$ref": "#/definitions/ontologyClass"},
                     },
                 },
                 "interpretation": {
                     "type": "object",
-                    "required": ["id", "progress_status"],
+                    "required": ["id", "progressStatus"],
                     "properties": {
                         "id": {"type": "string"},
-                        "progress_status": {
+                        "progressStatus": {
                             "type": "string",
                             "enum": [
                                 "UNKNOWN",
@@ -165,23 +165,23 @@ class SchemaValidator:
                         "diagnosis": {
                             "type": "object",
                             "properties": {
-                                "disease": {"$ref": "#/definitions/ontology_class"},
-                                "genomic_interpretations": {
+                                "disease": {"$ref": "#/definitions/ontologyClass"},
+                                "genomicInterpretations": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/genomic_interpretation"
+                                        "$ref": "#/definitions/genomicInterpretation"
                                     },
                                 },
                             },
                         },
                     },
                 },
-                "genomic_interpretation": {
+                "genomicInterpretation": {
                     "type": "object",
-                    "required": ["subject_or_biosample_id", "interpretation_status"],
+                    "required": ["subjectOrBiosampleId", "interpretationStatus"],
                     "properties": {
-                        "subject_or_biosample_id": {"type": "string"},
-                        "interpretation_status": {
+                        "subjectOrBiosampleId": {"type": "string"},
+                        "interpretationStatus": {
                             "type": "string",
                             "enum": [
                                 "UNKNOWN",
@@ -192,21 +192,21 @@ class SchemaValidator:
                                 "BENIGN",
                             ],
                         },
-                        "variant_interpretation": {
+                        "variantInterpretation": {
                             "type": "object",
                             "properties": {
-                                "acmg_pathogenicity_classification": {"type": "string"},
-                                "therapeutic_actionability": {"type": "string"},
-                                "variation_descriptor": {
+                                "acmgPathogenicityClassification": {"type": "string"},
+                                "therapeuticActionability": {"type": "string"},
+                                "variationDescriptor": {
                                     "type": "object",
                                     "properties": {
                                         "id": {"type": "string"},
                                         "variation": {"type": "object"},
                                         "label": {"type": "string"},
-                                        "gene_context": {"type": "object"},
-                                        "molecule_context": {"type": "string"},
-                                        "allelic_state": {
-                                            "$ref": "#/definitions/ontology_class"
+                                        "geneContext": {"type": "object"},
+                                        "moleculeContext": {"type": "string"},
+                                        "allelicState": {
+                                            "$ref": "#/definitions/ontologyClass"
                                         },
                                     },
                                 },
@@ -214,24 +214,24 @@ class SchemaValidator:
                         },
                     },
                 },
-                "medical_action": {
+                "medicalAction": {
                     "type": "object",
                     "properties": {
                         "treatment": {"$ref": "#/definitions/treatment"},
                         "procedure": {"type": "object"},
-                        "radiation_therapy": {"type": "object"},
-                        "therapeutic_regimen": {"$ref": "#/definitions/ontology_class"},
-                        "treatment_target": {"$ref": "#/definitions/ontology_class"},
-                        "treatment_intent": {"$ref": "#/definitions/ontology_class"},
-                        "response_to_treatment": {
-                            "$ref": "#/definitions/ontology_class"
+                        "radiationTherapy": {"type": "object"},
+                        "therapeuticRegimen": {"$ref": "#/definitions/ontologyClass"},
+                        "treatmentTarget": {"$ref": "#/definitions/ontologyClass"},
+                        "treatmentIntent": {"$ref": "#/definitions/ontologyClass"},
+                        "responseToTreatment": {
+                            "$ref": "#/definitions/ontologyClass"
                         },
-                        "adverse_events": {
+                        "adverseEvents": {
                             "type": "array",
-                            "items": {"$ref": "#/definitions/ontology_class"},
+                            "items": {"$ref": "#/definitions/ontologyClass"},
                         },
-                        "treatment_termination_reason": {
-                            "$ref": "#/definitions/ontology_class"
+                        "treatmentTerminationReason": {
+                            "$ref": "#/definitions/ontologyClass"
                         },
                     },
                 },
@@ -239,15 +239,15 @@ class SchemaValidator:
                     "type": "object",
                     "required": ["agent"],
                     "properties": {
-                        "agent": {"$ref": "#/definitions/ontology_class"},
-                        "route_of_administration": {
-                            "$ref": "#/definitions/ontology_class"
+                        "agent": {"$ref": "#/definitions/ontologyClass"},
+                        "routeOfAdministration": {
+                            "$ref": "#/definitions/ontologyClass"
                         },
-                        "dose_intervals": {
+                        "doseIntervals": {
                             "type": "array",
                             "items": {"type": "object"},
                         },
-                        "drug_type": {"type": "string"},
+                        "drugType": {"type": "string"},
                     },
                 },
                 "file": {
@@ -255,25 +255,25 @@ class SchemaValidator:
                     "required": ["uri"],
                     "properties": {
                         "uri": {"type": "string"},
-                        "individual_to_file_identifiers": {"type": "object"},
-                        "file_attributes": {"type": "object"},
+                        "individualToFileIdentifiers": {"type": "object"},
+                        "fileAttributes": {"type": "object"},
                     },
                 },
-                "time_element": {
+                "timeElement": {
                     "type": "object",
                     "properties": {
                         "age": {"type": "object"},
-                        "age_range": {"type": "object"},
-                        "ontology_class": {"$ref": "#/definitions/ontology_class"},
+                        "ageRange": {"type": "object"},
+                        "ontologyClass": {"$ref": "#/definitions/ontologyClass"},
                         "timestamp": {"type": "string"},
                         "interval": {"type": "object"},
                     },
                 },
                 "evidence": {
                     "type": "object",
-                    "required": ["evidence_code"],
+                    "required": ["evidenceCode"],
                     "properties": {
-                        "evidence_code": {"$ref": "#/definitions/ontology_class"},
+                        "evidenceCode": {"$ref": "#/definitions/ontologyClass"},
                         "reference": {"type": "object"},
                     },
                 },

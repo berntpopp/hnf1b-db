@@ -628,12 +628,26 @@ async def create_phenopacket(
         409: Phenopacket with this ID already exists
         500: Database error
     """
+    # Log incoming payload structure for debugging
+    logger.info(
+        f"Creating phenopacket: top-level keys: {list(phenopacket_data.phenopacket.keys())}"
+    )
+    if "metaData" in phenopacket_data.phenopacket:
+        logger.debug(
+            f"metaData keys: {list(phenopacket_data.phenopacket['metaData'].keys())}"
+        )
+    elif "meta_data" in phenopacket_data.phenopacket:
+        logger.warning(
+            "Received snake_case 'meta_data' instead of camelCase 'metaData' - will fail validation"
+        )
+
     # Sanitize the phenopacket
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
 
     # Validate phenopacket structure
     errors = validator.validate(sanitized)
     if errors:
+        logger.error(f"Phenopacket validation failed: {errors}")
         raise HTTPException(status_code=400, detail={"validation_errors": errors})
 
     # Create new phenopacket
