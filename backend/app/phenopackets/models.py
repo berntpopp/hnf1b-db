@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,13 @@ from app.database import Base
 
 # SQLAlchemy Models
 class Phenopacket(Base):
-    """Core phenopacket storage model."""
+    """Core phenopacket storage model.
+
+    Fields:
+        - version: GA4GH Phenopackets schema version (String, e.g., "2.0")
+        - schema_version: Detailed schema version (String, e.g., "2.0.0")
+        - revision: Optimistic locking counter (Integer, increments on update)
+    """
 
     __tablename__ = "phenopackets"
 
@@ -29,8 +35,20 @@ class Phenopacket(Base):
     phenopacket_id: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True
     )
-    version: Mapped[str] = mapped_column(String(10), default="2.0")
+    version: Mapped[str] = mapped_column(
+        String(10),
+        default="2.0",
+        comment="GA4GH Phenopackets schema version (e.g., '2.0', '2.1')",
+    )
     phenopacket: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    # Optimistic locking
+    revision: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False,
+        comment="Revision counter for optimistic locking (increments on each update)",
+    )
 
     # Denormalized fields (computed from JSONB)
     subject_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
@@ -138,6 +156,8 @@ class PhenopacketAudit(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     change_reason: Mapped[Optional[str]] = mapped_column(Text)
+    change_patch: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
+    change_summary: Mapped[Optional[str]] = mapped_column(Text)
 
 
 # Pydantic Schemas for API
@@ -344,11 +364,19 @@ class PhenopacketResponse(BaseModel):
 
     id: str
     phenopacket_id: str
-    version: str
+    version: str  # GA4GH schema version
+    revision: int  # Optimistic locking counter
     phenopacket: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
     schema_version: str
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+
+    class Config:
+        """Pydantic config for ORM mode."""
+
+        from_attributes = True
 
 
 class PhenopacketSearchQuery(BaseModel):

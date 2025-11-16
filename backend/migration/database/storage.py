@@ -38,11 +38,18 @@ class PhenopacketStorage:
         """
         return self.session_maker()
 
-    async def store_phenopackets(self, phenopackets: List[Dict[str, Any]]) -> int:
-        """Store phenopackets in the database.
+    async def store_phenopackets(
+        self,
+        phenopackets: List[Dict[str, Any]],
+        reviewer_mapper=None,
+        create_audit: bool = False,
+    ) -> int:
+        """Store phenopackets in the database with proper attribution.
 
         Args:
             phenopackets: List of phenopacket dictionaries
+            reviewer_mapper: ReviewerMapper instance for curator attribution
+            create_audit: Whether to create audit trail entries (default: False for backward compat)
 
         Returns:
             Number of successfully stored phenopackets
@@ -56,15 +63,39 @@ class PhenopacketStorage:
                     subject_id = phenopacket.get("subject", {}).get("id")
                     subject_sex = phenopacket.get("subject", {}).get("sex")
 
-                    # Insert phenopacket with extracted subject data
+                    # Get curator attribution from phenopacket metadata
+                    created_by = "data_migration_system"  # Default fallback
+                    if reviewer_mapper and "_migration_metadata" in phenopacket:
+                        reviewer_email = phenopacket["_migration_metadata"].get(
+                            "reviewer_email"
+                        )
+                        if reviewer_email:
+                            created_by = reviewer_mapper.generate_username(
+                                reviewer_email
+                            )
+                            logger.debug(
+                                f"Mapped reviewer {reviewer_email} → {created_by} "
+                                f"for phenopacket {phenopacket['id']}"
+                            )
+
+                    # Remove migration metadata before storing
+                    phenopacket_clean = {
+                        k: v for k, v in phenopacket.items() if k != "_migration_metadata"
+                    }
+
+                    # Insert phenopacket with proper attribution and revision
                     query = text("""
                         INSERT INTO phenopackets
-                        (id, phenopacket_id, version, phenopacket, subject_id, subject_sex, created_by, schema_version)
-                        VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket, :subject_id, :subject_sex, :created_by, :schema_version)
+                        (id, phenopacket_id, version, phenopacket, subject_id, subject_sex,
+                         created_by, schema_version, revision)
+                        VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket,
+                                :subject_id, :subject_sex, :created_by, :schema_version, :revision)
                         ON CONFLICT (phenopacket_id) DO UPDATE
                         SET phenopacket = EXCLUDED.phenopacket,
                             subject_id = EXCLUDED.subject_id,
                             subject_sex = EXCLUDED.subject_sex,
+                            updated_by = 'data_reimport',
+                            revision = EXCLUDED.revision,
                             updated_at = CURRENT_TIMESTAMP
                     """)
 
@@ -73,13 +104,49 @@ class PhenopacketStorage:
                         {
                             "phenopacket_id": phenopacket["id"],
                             "version": "2.0",
-                            "phenopacket": json.dumps(phenopacket),
+                            "phenopacket": json.dumps(phenopacket_clean),
                             "subject_id": subject_id,
                             "subject_sex": subject_sex,
-                            "created_by": "direct_sheets_migration",
+                            "created_by": created_by,
                             "schema_version": "2.0.0",
+                            "revision": 1,  # All imports start at revision 1
                         },
                     )
+
+                    # Create audit entry if requested
+                    if create_audit:
+                        audit_query = text("""
+                            INSERT INTO phenopacket_audit
+                            (id, phenopacket_id, action, old_value, new_value,
+                             changed_by, change_reason, change_summary)
+                            VALUES (gen_random_uuid(), :phenopacket_id, :action, :old_value,
+                                    :new_value, :changed_by, :change_reason, :change_summary)
+                        """)
+
+                        # Generate change summary
+                        phenotype_count = len(
+                            phenopacket_clean.get("phenotypicFeatures", [])
+                        )
+                        variant_count = len(
+                            phenopacket_clean.get("interpretations", [])
+                        )
+                        change_summary = (
+                            f"Initial import: {phenotype_count} phenotype(s), "
+                            f"{variant_count} variant(s)"
+                        )
+
+                        await session.execute(
+                            audit_query,
+                            {
+                                "phenopacket_id": phenopacket["id"],
+                                "action": "CREATE",
+                                "old_value": None,
+                                "new_value": json.dumps(phenopacket_clean),
+                                "changed_by": created_by,
+                                "change_reason": "Initial import from Google Sheets",
+                                "change_summary": change_summary,
+                            },
+                        )
 
                     stored_count += 1
 
@@ -87,6 +154,7 @@ class PhenopacketStorage:
                     logger.error(
                         f"Error storing phenopacket {phenopacket.get('id')}: {e}"
                     )
+                    logger.exception(e)  # Full traceback for debugging
                     continue
 
             await session.commit()

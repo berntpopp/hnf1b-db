@@ -121,6 +121,16 @@ class PhenopacketBuilder:
         if all_interpretations:
             phenopacket["interpretations"] = all_interpretations
 
+        # Attach migration metadata for attribution
+        # This will be used by storage layer, then removed before DB insert
+        reviewer_email = first_row.get("ReviewBy") or first_row.get("review_by")
+        if reviewer_email and not pd.isna(reviewer_email):
+            phenopacket["_migration_metadata"] = {
+                "reviewer_email": str(reviewer_email).strip(),
+                "sheet_row_number": first_row.name if hasattr(first_row, "name") else None,
+                "import_date": datetime.utcnow().isoformat(),
+            }
+
         return self._clean_empty_fields(phenopacket)
 
     def _build_subject(self, individual_id: str, rows: pd.DataFrame) -> Dict[str, Any]:

@@ -321,8 +321,13 @@ class DirectSheetsToPhenopackets:
                     json.dump(phenopackets, f, indent=2)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
-                # Store phenopackets in database
-                await self.storage.store_phenopackets(phenopackets)
+                # Store phenopackets in database with reviewer attribution
+                # TODO: Enable audit trail after adding change_reason column migration
+                await self.storage.store_phenopackets(
+                    phenopackets=phenopackets,
+                    reviewer_mapper=self.reviewer_mapper,
+                    create_audit=False,  # Temporarily disabled - missing change_reason column
+                )
 
             # Generate summary report
             self.generate_summary(phenopackets)
