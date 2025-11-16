@@ -70,6 +70,18 @@ class Phenopacket(Base):
     updated_by: Mapped[Optional[str]] = mapped_column(String(100))
     schema_version: Mapped[str] = mapped_column(String(20), default="2.0.0")
 
+    # Soft delete fields
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when record was soft-deleted (NULL if active)",
+    )
+    deleted_by: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Username who performed the soft delete",
+    )
+
 
 class Family(Base):
     """Family relationships model."""
