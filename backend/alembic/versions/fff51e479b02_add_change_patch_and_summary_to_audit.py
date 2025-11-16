@@ -1,8 +1,13 @@
-"""add_change_patch_and_summary_to_audit
+"""add_change_patch_and_change_reason_to_audit
 
 Revision ID: fff51e479b02
 Revises: 2e28b299e3b6
 Create Date: 2025-11-16 19:02:07.763762
+
+Changes:
+- Add change_patch column for JSON Patch (RFC 6902) format
+- Add change_reason column for explaining why changes were made
+- NOTE: change_summary already exists in initial migration, so not added here
 
 """
 from typing import Sequence, Union
@@ -27,14 +32,14 @@ def upgrade() -> None:
         sa.Column('change_patch', JSONB, nullable=True)
     )
 
-    # Add change_summary column for human-readable summary
+    # Add change_reason column for explaining why changes were made
     op.add_column(
         'phenopacket_audit',
-        sa.Column('change_summary', sa.Text, nullable=True)
+        sa.Column('change_reason', sa.Text, nullable=True)
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('phenopacket_audit', 'change_summary')
+    op.drop_column('phenopacket_audit', 'change_reason')
     op.drop_column('phenopacket_audit', 'change_patch')
