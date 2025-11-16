@@ -1158,6 +1158,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "ga4gh-vrs" },
     { name = "httpx" },
+    { name = "jsonpatch" },
     { name = "jsonpath-ng" },
     { name = "jsonschema" },
     { name = "pandas" },
@@ -1210,6 +1211,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.116.1" },
     { name = "ga4gh-vrs", specifier = ">=2.1.3" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jsonpatch", specifier = ">=1.33" },
     { name = "jsonpath-ng", specifier = ">=1.6.0" },
     { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "pandas", specifier = ">=2.3.2" },
@@ -1501,6 +1503,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/35/87/bcda8e46c88d0e34cad2f09ee2d0c7f5957bccdb9791b0b934ec84d84be4/jsonlines-4.0.0.tar.gz", hash = "sha256:0c6d2c09117550c089995247f605ae4cf77dd1533041d366351f6f298822ea74", size = 11359, upload-time = "2023-09-01T12:34:44.187Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/62/d9ba6323b9202dd2fe166beab8a86d29465c41a0288cbe229fac60c1ab8d/jsonlines-4.0.0-py3-none-any.whl", hash = "sha256:185b334ff2ca5a91362993f42e83588a360cf95ce4b71a73548502bda52a7c55", size = 8701, upload-time = "2023-09-01T12:34:42.563Z" },
+]
+
+[[package]]
+name = "jsonpatch"
+version = "1.33"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonpointer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/42/78/18813351fe5d63acad16aec57f94ec2b70a09e53ca98145589e185423873/jsonpatch-1.33.tar.gz", hash = "sha256:9fcd4009c41e6d12348b4a0ff2563ba56a2923a7dfee731d004e212e1ee5030c", size = 21699, upload-time = "2023-06-26T12:07:29.144Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/07/02e16ed01e04a374e644b575638ec7987ae846d25ad97bcc9945a3ee4b0e/jsonpatch-1.33-py2.py3-none-any.whl", hash = "sha256:0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade", size = 12898, upload-time = "2023-06-16T21:01:28.466Z" },
 ]
 
 [[package]]

@@ -365,10 +365,18 @@ class PhenopacketCreate(BaseModel):
 
 
 class PhenopacketUpdate(BaseModel):
-    """Request model for updating a phenopacket."""
+    """Request model for updating a phenopacket.
+
+    Includes optimistic locking support via revision field and
+    audit trail support via change_reason field.
+    """
 
     phenopacket: Dict[str, Any]
     updated_by: Optional[str] = None
+    revision: int = Field(..., description="Current revision for optimistic locking")
+    change_reason: str = Field(
+        ..., min_length=1, description="Reason for the change (audit trail)"
+    )
 
 
 class PhenopacketResponse(BaseModel):

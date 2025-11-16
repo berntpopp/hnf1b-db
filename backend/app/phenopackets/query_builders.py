@@ -93,10 +93,13 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
         id=str(pp.id),
         phenopacket_id=pp.phenopacket_id,
         version=pp.version,
+        revision=pp.revision,
         phenopacket=pp.phenopacket,
         created_at=pp.created_at,
         updated_at=pp.updated_at,
         schema_version=pp.schema_version,
+        created_by=pp.created_by,
+        updated_by=pp.updated_by,
     )
 
 

@@ -40,6 +40,7 @@ from app.phenopackets.query_builders import (
     build_phenopacket_response,
 )
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
+from app.utils.audit import create_audit_entry
 
 router = APIRouter(tags=["phenopackets-crud"])
 
@@ -188,8 +189,8 @@ async def list_phenopackets(
         )
 
     # Otherwise, use offset-based pagination (legacy, simple cases)
-    # Build query
-    query = select(Phenopacket)
+    # Build query (exclude soft-deleted records)
+    query = select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
 
     # Apply filters using query builder utilities
     query = add_sex_filter(query, filter_sex)
@@ -377,9 +378,14 @@ async def get_phenopackets_batch(
     if not ids:
         return []
 
-    # Single query for all phenopackets (no N+1)
+    # Single query for all phenopackets (no N+1, exclude soft-deleted)
     result = await db.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id.in_(ids))
+        select(Phenopacket).where(
+            and_(
+                Phenopacket.phenopacket_id.in_(ids),
+                Phenopacket.deleted_at.is_(None),
+            )
+        )
     )
     phenopackets = result.scalars().all()
 
@@ -397,9 +403,14 @@ async def get_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single phenopacket by ID."""
+    """Get a single phenopacket by ID (excludes soft-deleted)."""
     result = await db.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+        select(Phenopacket).where(
+            and_(
+                Phenopacket.phenopacket_id == phenopacket_id,
+                Phenopacket.deleted_at.is_(None),
+            )
+        )
     )
     phenopacket = result.scalar_one_or_none()
 
@@ -470,14 +481,60 @@ async def update_phenopacket(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_curator),
 ):
-    """Update an existing phenopacket (requires curator role)."""
+    """Update an existing phenopacket with optimistic locking and audit trail.
+
+    Implements:
+    - Optimistic locking via revision field (prevents lost updates)
+    - Complete audit trail with JSON Patch
+    - Conflict detection for concurrent edits
+    - Soft-deleted records are filtered out
+
+    Args:
+        phenopacket_id: Phenopacket identifier
+        phenopacket_data: Updated phenopacket with revision and change_reason
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        Updated phenopacket with incremented revision
+
+    Raises:
+        404: Phenopacket not found or soft-deleted
+        409: Conflict - revision mismatch (concurrent edit detected)
+        400: Validation error
+    """
+    # Fetch existing phenopacket (exclude soft-deleted)
     result = await db.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+        select(Phenopacket).where(
+            and_(
+                Phenopacket.phenopacket_id == phenopacket_id,
+                Phenopacket.deleted_at.is_(None),
+            )
+        )
     )
     existing = result.scalar_one_or_none()
 
     if not existing:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    # Optimistic locking check
+    if existing.revision != phenopacket_data.revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Conflict detected",
+                "message": (
+                    f"Phenopacket was modified by another user. "
+                    f"Expected revision {phenopacket_data.revision}, "
+                    f"but current revision is {existing.revision}"
+                ),
+                "current_revision": existing.revision,
+                "expected_revision": phenopacket_data.revision,
+            },
+        )
+
+    # Store old value for audit trail
+    old_phenopacket = existing.phenopacket.copy()
 
     # Sanitize the updated phenopacket
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
@@ -492,12 +549,25 @@ async def update_phenopacket(
     existing.subject_id = sanitized["subject"]["id"]
     existing.subject_sex = sanitized["subject"].get("sex", "UNKNOWN_SEX")
     existing.updated_by = phenopacket_data.updated_by or current_user.username
+    existing.revision += 1  # Increment revision
 
     try:
+        # Create audit entry
+        await create_audit_entry(
+            db=db,
+            phenopacket_id=phenopacket_id,
+            action="UPDATE",
+            old_value=old_phenopacket,
+            new_value=sanitized,
+            changed_by=existing.updated_by,
+            change_reason=phenopacket_data.change_reason,
+        )
+
         await db.commit()
         await db.refresh(existing)
     except Exception as e:
         await db.rollback()
+        logger.error(f"Failed to update phenopacket {phenopacket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return build_phenopacket_response(existing)
@@ -506,27 +576,79 @@ async def update_phenopacket(
 @router.delete("/{phenopacket_id}")
 async def delete_phenopacket(
     phenopacket_id: str,
+    change_reason: str = Query(
+        ..., min_length=1, description="Reason for deletion (required for audit)"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_curator),
 ):
-    """Delete a phenopacket (requires curator role)."""
+    """Soft delete a phenopacket with audit trail (requires curator role).
+
+    Implements soft delete pattern to preserve research data integrity.
+    Records are marked as deleted but remain in the database for audit purposes.
+
+    Args:
+        phenopacket_id: Phenopacket identifier
+        change_reason: Reason for deletion (required for audit trail)
+        db: Database session
+        current_user: Authenticated user
+
+    Returns:
+        Success message with deletion details
+
+    Raises:
+        404: Phenopacket not found or already deleted
+        500: Database error
+    """
+    from datetime import datetime, timezone
+
+    # Fetch phenopacket (only non-deleted)
     result = await db.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+        select(Phenopacket).where(
+            and_(
+                Phenopacket.phenopacket_id == phenopacket_id,
+                Phenopacket.deleted_at.is_(None),
+            )
+        )
     )
     phenopacket = result.scalar_one_or_none()
 
     if not phenopacket:
-        raise HTTPException(status_code=404, detail="Phenopacket not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Phenopacket not found or already deleted",
+        )
 
-    await db.delete(phenopacket)
+    # Store phenopacket data for audit trail before soft delete
+    old_phenopacket = phenopacket.phenopacket.copy()
+
+    # Soft delete: set deleted_at and deleted_by
+    phenopacket.deleted_at = datetime.now(timezone.utc)
+    phenopacket.deleted_by = current_user.username
 
     try:
+        # Create audit entry
+        await create_audit_entry(
+            db=db,
+            phenopacket_id=phenopacket_id,
+            action="DELETE",
+            old_value=old_phenopacket,
+            new_value=None,
+            changed_by=current_user.username,
+            change_reason=change_reason,
+        )
+
         await db.commit()
     except Exception as e:
         await db.rollback()
+        logger.error(f"Failed to delete phenopacket {phenopacket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    return {"message": "Phenopacket deleted successfully"}
+    return {
+        "message": f"Phenopacket {phenopacket_id} deleted successfully",
+        "deleted_at": phenopacket.deleted_at.isoformat(),
+        "deleted_by": phenopacket.deleted_by,
+    }
 
 
 @router.get("/by-variant/{variant_id}")
@@ -636,8 +758,8 @@ async def _list_with_cursor_pagination(
     else:
         is_forward = True
 
-    # Build base query
-    query = select(Phenopacket)
+    # Build base query (exclude soft-deleted)
+    query = select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
 
     # Apply filters
     query = add_sex_filter(query, filter_sex)
@@ -947,13 +1069,14 @@ async def get_by_publication(
     # SECURITY: Cap limit to prevent excessive data exposure
     limit = min(limit, 500)
 
-    # Build query with JSONB filtering
+    # Build query with JSONB filtering (exclude soft-deleted)
     query = """
         SELECT
             phenopacket_id,
             phenopacket
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
+        AND deleted_at IS NULL
     """
 
     # Build JSONB filter for PMID (parameterized - safe from injection)
@@ -975,11 +1098,12 @@ async def get_by_publication(
                 "jsonb_array_length(phenopacket->'interpretations') = 0)"
             )
 
-    # Count query (same filters)
+    # Count query (same filters, exclude soft-deleted)
     count_query = """
         SELECT COUNT(*)
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
+        AND deleted_at IS NULL
     """
 
     # Add same filters to count query
