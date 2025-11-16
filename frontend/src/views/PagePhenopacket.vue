@@ -112,6 +112,16 @@
         </v-col>
       </v-row>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <DeleteConfirmationDialog
+      v-model="showDeleteDialog"
+      :phenopacket-id="phenopacket?.id"
+      :subject-id="phenopacket?.subject?.id"
+      :loading="deleteLoading"
+      @confirm="handleDeleteConfirm"
+      @cancel="showDeleteDialog = false"
+    />
   </v-container>
 </template>
 
@@ -123,6 +133,7 @@ import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesC
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
 import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
+import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
 
 export default {
   name: 'PagePhenopacket',
@@ -132,12 +143,15 @@ export default {
     InterpretationsCard,
     MeasurementsCard,
     MetadataCard,
+    DeleteConfirmationDialog,
   },
   data() {
     return {
       phenopacket: null,
       loading: false,
       error: null,
+      showDeleteDialog: false,
+      deleteLoading: false,
     };
   },
   computed: {
@@ -246,36 +260,46 @@ export default {
       this.$router.push(`/phenopackets/${this.phenopacket.id}/edit`);
     },
 
-    async confirmDelete() {
+    confirmDelete() {
+      if (!this.phenopacket) return;
+      this.showDeleteDialog = true;
+    },
+
+    async handleDeleteConfirm(deleteReason) {
       if (!this.phenopacket) return;
 
-      const confirmed = window.confirm(
-        `Are you sure you want to delete phenopacket "${this.phenopacket.id}"?\n\n` +
-          `Subject: ${this.phenopacket.subject?.id || 'N/A'}\n\n` +
-          `This action cannot be undone.`
-      );
+      this.deleteLoading = true;
 
-      if (!confirmed) {
-        window.logService.debug('Delete cancelled by user');
-        return;
-      }
+      window.logService.info('Deleting phenopacket', {
+        phenopacketId: this.phenopacket.id,
+        reasonLength: deleteReason.length,
+      });
 
       try {
-        await deletePhenopacket(this.phenopacket.id);
+        await deletePhenopacket(this.phenopacket.id, deleteReason);
 
         window.logService.info('Phenopacket deleted successfully', {
           phenopacketId: this.phenopacket.id,
         });
 
-        // Show success message and navigate back to list
-        alert('Phenopacket deleted successfully');
-        this.$router.push('/phenopackets');
+        this.showDeleteDialog = false;
+
+        // Navigate back to list with success message
+        this.$router.push({
+          path: '/phenopackets',
+          query: { deleted: this.phenopacket.id },
+        });
       } catch (error) {
         window.logService.error('Failed to delete phenopacket', {
           phenopacketId: this.phenopacket.id,
           error: error.message,
+          status: error.response?.status,
         });
-        alert('Failed to delete phenopacket: ' + error.message);
+
+        // Show error in dialog or alert
+        alert(`Failed to delete phenopacket: ${error.response?.data?.detail || error.message}`);
+      } finally {
+        this.deleteLoading = false;
       }
     },
   },
