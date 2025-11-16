@@ -30,6 +30,8 @@ from app.models.json_api import (
 )
 from app.phenopackets.models import (
     Phenopacket,
+    PhenopacketAudit,
+    PhenopacketAuditResponse,
     PhenopacketCreate,
     PhenopacketResponse,
     PhenopacketUpdate,
@@ -649,6 +651,76 @@ async def delete_phenopacket(
         "deleted_at": phenopacket.deleted_at.isoformat(),
         "deleted_by": phenopacket.deleted_by,
     }
+
+
+@router.get("/{phenopacket_id}/audit", response_model=List[PhenopacketAuditResponse])
+async def get_phenopacket_audit_history(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_curator),
+):
+    """Get audit history for a phenopacket.
+
+    Returns all audit trail entries for the specified phenopacket,
+    ordered by timestamp (most recent first).
+
+    Args:
+        phenopacket_id: Phenopacket identifier
+        db: Database session
+        current_user: Authenticated curator/admin user
+
+    Returns:
+        List of audit entries with change history, ordered by changed_at DESC
+
+    Example response:
+        [
+            {
+                "id": "uuid",
+                "phenopacket_id": "HNF1B-001",
+                "action": "UPDATE",
+                "changed_by": "curator@example.com",
+                "changed_at": "2024-11-16T20:00:00Z",
+                "change_reason": "Updated patient sex",
+                "change_summary": "Changed subject.sex: UNKNOWN_SEX → FEMALE",
+                "change_patch": [
+                    {"op": "replace", "path": "/subject/sex", "value": "FEMALE"}
+                ]
+            }
+        ]
+    """
+    # Verify phenopacket exists (even if soft-deleted, we still want audit history)
+    result = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    )
+    phenopacket = result.scalar_one_or_none()
+
+    if not phenopacket:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    # Fetch audit entries, ordered by most recent first
+    audit_result = await db.execute(
+        select(PhenopacketAudit)
+        .where(PhenopacketAudit.phenopacket_id == phenopacket_id)
+        .order_by(PhenopacketAudit.changed_at.desc())
+    )
+    audit_entries = audit_result.scalars().all()
+
+    # Convert to response models
+    return [
+        PhenopacketAuditResponse(
+            id=str(audit.id),
+            phenopacket_id=audit.phenopacket_id,
+            action=audit.action,
+            changed_by=audit.changed_by,
+            changed_at=audit.changed_at,
+            change_reason=audit.change_reason,
+            change_summary=audit.change_summary,
+            change_patch=audit.change_patch,
+            old_value=audit.old_value,
+            new_value=audit.new_value,
+        )
+        for audit in audit_entries
+    ]
 
 
 @router.get("/by-variant/{variant_id}")

@@ -505,3 +505,132 @@ async def test_update_soft_deleted_phenopacket(
     # Cleanup
     await db_session.delete(test_phenopacket)
     await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_audit_history(
+    async_client, db_session, admin_user, admin_headers, cleanup_test_phenopackets
+):
+    """Test retrieving audit history for a phenopacket."""
+    from app.phenopackets.models import Phenopacket
+
+    # Create test phenopacket directly in DB (like other tests)
+    test_phenopacket = Phenopacket(
+        phenopacket_id="test-audit-001",
+        version="2.0",
+        phenopacket={
+            "id": "test-audit-001",
+            "subject": {"id": "patient-audit-001", "sex": "UNKNOWN_SEX"},
+            "phenotypicFeatures": [],
+            "interpretations": [],
+            "metaData": {
+                "created": "2025-01-01T00:00:00Z",
+                "createdBy": admin_user.username,
+                "phenopacketSchemaVersion": "2.0.0",
+                "resources": [
+                    {
+                        "id": "hp",
+                        "name": "Human Phenotype Ontology",
+                        "url": "http://purl.obolibrary.org/obo/hp.owl",
+                        "version": "2024-04-26",
+                        "namespacePrefix": "HP",
+                        "iriPrefix": "http://purl.obolibrary.org/obo/HP_",
+                    }
+                ],
+            },
+        },
+        subject_id="patient-audit-001",
+        subject_sex="UNKNOWN_SEX",
+        created_by=admin_user.username,
+        updated_by=admin_user.username,
+    )
+    db_session.add(test_phenopacket)
+    await db_session.commit()
+    await db_session.refresh(test_phenopacket)
+
+    # Update phenopacket twice to create audit trail
+    update1_data = {
+        "phenopacket": {
+            "id": "test-audit-001",
+            "subject": {"id": "patient-audit-001", "sex": "FEMALE"},
+            "phenotypicFeatures": [],
+            "interpretations": [],
+            "metaData": test_phenopacket.phenopacket["metaData"],
+        },
+        "revision": 1,
+        "change_reason": "Updated sex to FEMALE",
+    }
+
+    update1_response = await async_client.put(
+        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
+        json=update1_data,
+        headers=admin_headers,
+    )
+    assert update1_response.status_code == 200
+    updated1 = update1_response.json()
+
+    update2_data = {
+        "phenopacket": {
+            "id": "test-audit-001",
+            "subject": {"id": "patient-audit-001", "sex": "MALE"},
+            "phenotypicFeatures": [],
+            "interpretations": [],
+            "metaData": test_phenopacket.phenopacket["metaData"],
+        },
+        "revision": updated1["revision"],
+        "change_reason": "Updated sex to MALE",
+    }
+
+    update2_response = await async_client.put(
+        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
+        json=update2_data,
+        headers=admin_headers,
+    )
+    assert update2_response.status_code == 200
+
+    # Test audit history endpoint
+    audit_response = await async_client.get(
+        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}/audit",
+        headers=admin_headers,
+    )
+
+    assert audit_response.status_code == 200
+    audit_entries = audit_response.json()
+
+    # Should have 2 UPDATE entries
+    assert len(audit_entries) == 2
+
+    # Check most recent entry (should be UPDATE to MALE)
+    latest_entry = audit_entries[0]
+    assert latest_entry["action"] == "UPDATE"
+    assert latest_entry["change_reason"] == "Updated sex to MALE"
+    assert latest_entry["phenopacket_id"] == test_phenopacket.phenopacket_id
+    assert latest_entry["changed_by"] == admin_user.username
+    assert latest_entry["change_summary"] is not None
+    assert "changed sex to MALE" in latest_entry["change_summary"]
+
+    # Verify change_patch exists and is a list
+    assert latest_entry["change_patch"] is not None
+    assert isinstance(latest_entry["change_patch"], list)
+    assert len(latest_entry["change_patch"]) > 0
+
+    # Verify entries are ordered by timestamp (most recent first)
+    for i in range(len(audit_entries) - 1):
+        current_time = audit_entries[i]["changed_at"]
+        next_time = audit_entries[i + 1]["changed_at"]
+        assert current_time >= next_time
+
+    # Cleanup
+    await db_session.delete(test_phenopacket)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_audit_history_not_found(async_client, admin_headers):
+    """Test getting audit history for non-existent phenopacket."""
+    response = await async_client.get(
+        "/api/v2/phenopackets/nonexistent/audit",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 404

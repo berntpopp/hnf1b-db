@@ -419,6 +419,26 @@ class PhenopacketSearchQuery(BaseModel):
     max_age: Optional[int] = Field(None, description="Maximum age in years")
 
 
+class PhenopacketAuditResponse(BaseModel):
+    """Response model for phenopacket audit trail entries."""
+
+    id: str
+    phenopacket_id: str
+    action: str
+    changed_by: Optional[str] = None
+    changed_at: datetime
+    change_reason: Optional[str] = None
+    change_summary: Optional[str] = None
+    change_patch: Optional[Any] = None  # JSONB can store arrays or objects
+    old_value: Optional[Dict[str, Any]] = None
+    new_value: Optional[Dict[str, Any]] = None
+
+    class Config:
+        """Pydantic config for ORM mode."""
+
+        from_attributes = True
+
+
 class AggregationResult(BaseModel):
     """Result of aggregation queries."""
 
