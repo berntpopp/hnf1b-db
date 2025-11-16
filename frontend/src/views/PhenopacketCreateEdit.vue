@@ -97,7 +97,10 @@
           </v-card>
 
           <!-- Variant Information -->
-          <VariantAnnotationForm v-model="phenopacket.variants" />
+          <VariantAnnotationForm
+            v-model="phenopacket.interpretations"
+            :subject-id="phenopacket.subject.id"
+          />
 
           <!-- Phenotypic Features Section -->
           <PhenotypicFeaturesSection
@@ -149,7 +152,6 @@ export default {
           sex: 'UNKNOWN_SEX',
         },
         phenotypicFeatures: [],
-        variants: [],
         interpretations: [],
         publications: [],
         metaData: {
