@@ -108,6 +108,35 @@
             :form-submitted="formSubmitted"
           />
 
+          <!-- Change Reason (Edit Mode Only) -->
+          <v-card v-if="isEditing" variant="outlined" class="mb-4">
+            <v-card-title class="bg-yellow-lighten-4">
+              <v-icon left>mdi-pencil-box-outline</v-icon>
+              Reason for Change
+            </v-card-title>
+            <v-card-text>
+              <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+                All changes are tracked in the audit trail. Please provide a clear explanation for
+                this update.
+              </v-alert>
+              <v-textarea
+                v-model="changeReason"
+                label="Change Reason *"
+                placeholder="e.g., Adding new phenotype data, Correcting variant information, Updated diagnosis"
+                variant="outlined"
+                rows="3"
+                :rules="[rules.required, rules.minLength]"
+                hint="Required for audit trail. Minimum 5 characters."
+                persistent-hint
+                required
+              >
+                <template #prepend-inner>
+                  <v-icon>mdi-text-box</v-icon>
+                </template>
+              </v-textarea>
+            </v-card-text>
+          </v-card>
+
           <!-- Error Display -->
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
             {{ error }}
@@ -173,8 +202,11 @@ export default {
       saving: false,
       error: null,
       formSubmitted: false,
+      revision: null, // For optimistic locking
+      changeReason: '', // For audit trail
       rules: {
         required: (value) => !!value || 'Required field',
+        minLength: (value) => (value && value.length >= 5) || 'Must be at least 5 characters',
       },
     };
   },
@@ -207,10 +239,16 @@ export default {
 
       try {
         const response = await getPhenopacket(this.$route.params.phenopacket_id);
-        this.phenopacket = response.data;
+
+        // Extract revision for optimistic locking
+        this.revision = response.data.revision;
+
+        // Extract the GA4GH phenopacket object
+        this.phenopacket = response.data.phenopacket;
 
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
+          revision: this.revision,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
@@ -247,34 +285,61 @@ export default {
         return;
       }
 
+      // Validate change reason for edits
+      if (this.isEditing && (!this.changeReason || this.changeReason.length < 5)) {
+        this.error = 'Change reason is required for updates (minimum 5 characters)';
+        return;
+      }
+
       this.saving = true;
       this.error = null;
 
       try {
-        // Backend expects request body: { phenopacket: {...}, created_by: "..." }
-        const requestBody = {
-          phenopacket: this.phenopacket,
-        };
-        // DEBUG: Log the payload being sent
-        console.log('Sending phenopacket:', JSON.stringify(requestBody, null, 2));
+        let result;
 
-        // createPhenopacket(data) vs updatePhenopacket(id, data) - different signatures!
-        const result = this.isEditing
-          ? await updatePhenopacket(this.phenopacket.id, requestBody)
-          : await createPhenopacket(requestBody);
+        if (this.isEditing) {
+          // Update existing phenopacket with optimistic locking and audit trail
+          result = await updatePhenopacket(this.phenopacket.id, {
+            phenopacket: this.phenopacket,
+            revision: this.revision,
+            change_reason: this.changeReason,
+          });
 
-        window.logService.info('Phenopacket saved successfully', {
-          phenopacketId: result.data.phenopacket_id,
-          mode: this.isEditing ? 'update' : 'create',
-        });
+          window.logService.info('Phenopacket updated successfully', {
+            phenopacketId: result.data.phenopacket_id,
+            revision: this.revision,
+            changeReasonLength: this.changeReason.length,
+          });
+        } else {
+          // Create new phenopacket
+          result = await createPhenopacket({
+            phenopacket: this.phenopacket,
+          });
+
+          window.logService.info('Phenopacket created successfully', {
+            phenopacketId: result.data.phenopacket_id,
+          });
+        }
 
         // Navigate to detail page using phenopacket_id (not database id)
         this.$router.push(`/phenopackets/${result.data.phenopacket_id}`);
       } catch (err) {
-        this.error = 'Failed to save phenopacket: ' + err.message;
-        window.logService.error('Failed to save phenopacket', {
-          error: err.message,
-        });
+        // Handle concurrent edit conflicts (409 Conflict)
+        if (err.response?.status === 409) {
+          this.error =
+            'This phenopacket was modified by another user. Please refresh the page to see the latest version and try again.';
+          window.logService.warn('Concurrent edit detected', {
+            phenopacketId: this.phenopacket.id,
+            revision: this.revision,
+            status: err.response?.status,
+          });
+        } else {
+          this.error = 'Failed to save phenopacket: ' + (err.response?.data?.detail || err.message);
+          window.logService.error('Failed to save phenopacket', {
+            error: err.message,
+            status: err.response?.status,
+          });
+        }
       } finally {
         this.saving = false;
       }
