@@ -33,6 +33,7 @@ from app.phenopackets.models import (
     PhenopacketAudit,
     PhenopacketAuditResponse,
     PhenopacketCreate,
+    PhenopacketDelete,
     PhenopacketResponse,
     PhenopacketUpdate,
 )
@@ -581,9 +582,7 @@ async def update_phenopacket(
 @router.delete("/{phenopacket_id}")
 async def delete_phenopacket(
     phenopacket_id: str,
-    change_reason: str = Query(
-        ..., min_length=1, description="Reason for deletion (required for audit)"
-    ),
+    delete_request: PhenopacketDelete,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_curator),
 ):
@@ -594,7 +593,8 @@ async def delete_phenopacket(
 
     Args:
         phenopacket_id: Phenopacket identifier
-        change_reason: Reason for deletion (required for audit trail)
+        delete_request: Delete request with change_reason
+            (uses body to avoid URL length limits)
         db: Database session
         current_user: Authenticated user
 
@@ -640,7 +640,7 @@ async def delete_phenopacket(
             old_value=old_phenopacket,
             new_value=None,
             changed_by=current_user.username,
-            change_reason=change_reason,
+            change_reason=delete_request.change_reason,
         )
 
         await db.commit()

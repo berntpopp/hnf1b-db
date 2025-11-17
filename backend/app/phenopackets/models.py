@@ -384,6 +384,17 @@ class PhenopacketUpdate(BaseModel):
     )
 
 
+class PhenopacketDelete(BaseModel):
+    """Request model for deleting a phenopacket.
+
+    Uses request body to avoid URL length limitations with query parameters.
+    """
+
+    change_reason: str = Field(
+        ..., min_length=1, description="Reason for deletion (audit trail)"
+    )
+
+
 class PhenopacketResponse(BaseModel):
     """Response model for phenopacket queries."""
 

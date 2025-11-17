@@ -261,9 +261,17 @@ export default {
         // Enable optimistic locking by capturing current revision
         this.revision = response.data.revision;
 
+        // Load existing publications from metaData.externalReferences
+        this.publications = (this.phenopacket.metaData?.externalReferences || [])
+          .filter((ref) => ref.id?.startsWith('PMID:'))
+          .map((ref) => ({
+            pmid: ref.id.replace('PMID:', ''),
+          }));
+
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
           revision: this.revision,
+          publicationsLoaded: this.publications.length,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
