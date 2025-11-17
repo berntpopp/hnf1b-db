@@ -153,6 +153,17 @@
           <!-- Error Display -->
           <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
             {{ error }}
+            <template v-if="error.includes('Concurrent edit')">
+              <v-btn
+                color="white"
+                variant="outlined"
+                class="mt-2"
+                prepend-icon="mdi-refresh"
+                @click="loadPhenopacket"
+              >
+                Reload Latest Version
+              </v-btn>
+            </template>
           </v-alert>
 
           <!-- Actions -->
@@ -349,11 +360,22 @@ export default {
       } catch (err) {
         // Handle concurrent edit conflicts (409 Conflict)
         if (err.response?.status === 409) {
-          this.error =
-            'This phenopacket was modified by another user. Please refresh the page to see the latest version and try again.';
+          const errorDetail = err.response?.data?.detail;
+          const currentRev = errorDetail?.current_revision;
+          const expectedRev = errorDetail?.expected_revision;
+
+          if (currentRev && expectedRev) {
+            this.error = `Concurrent edit detected: This phenopacket was modified by another user. Your revision ${expectedRev} conflicts with the current revision ${currentRev}. Click "Reload" to get the latest version.`;
+          } else {
+            this.error =
+              'This phenopacket was modified by another user. Click "Reload" to see the latest version and try again.';
+          }
+
           window.logService.warn('Concurrent edit detected', {
             phenopacketId: this.phenopacket.id,
             revision: this.revision,
+            currentRevision: currentRev,
+            expectedRevision: expectedRev,
             status: err.response?.status,
           });
         } else {
