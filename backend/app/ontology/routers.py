@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,7 +112,7 @@ async def hpo_grouped(
     }
 
     # Group terms by organ system, with special handling for CKD stages
-    groups = {}
+    groups: dict[str, list[dict[str, Any]]] = {}
     for row in terms:
         term_dict = dict(row._mapping)
         hpo_id = term_dict.get("hpo_id")

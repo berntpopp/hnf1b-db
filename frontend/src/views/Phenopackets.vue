@@ -16,8 +16,6 @@
     >
       <template #top>
         <v-toolbar flat>
-          <v-toolbar-title>Phenopackets</v-toolbar-title>
-          <v-spacer />
           <!-- Search Field -->
           <v-text-field
             v-model="searchQuery"
@@ -145,20 +143,19 @@
     </v-data-table-server>
 
     <!-- Floating Action Button (FAB) for Create - Curator/Admin only -->
-    <v-fab
-      v-if="canCreatePhenopacket"
-      icon="mdi-plus"
-      color="success"
-      location="bottom end"
-      size="large"
-      app
-      @click="navigateToCreate"
-    >
-      <template #default>
-        <v-icon>mdi-plus</v-icon>
+    <v-tooltip v-if="canCreatePhenopacket" text="Create New Phenopacket" location="left">
+      <template #activator="{ props }">
+        <v-fab
+          v-bind="props"
+          icon="mdi-plus"
+          color="success"
+          location="bottom end"
+          size="large"
+          app
+          @click="navigateToCreate"
+        />
       </template>
-      <v-tooltip activator="parent" location="left">Create New Phenopacket</v-tooltip>
-    </v-fab>
+    </v-tooltip>
   </v-container>
 </template>
 
