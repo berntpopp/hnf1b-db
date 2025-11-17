@@ -400,12 +400,12 @@ async def get_phenopackets_batch(
     ]
 
 
-@router.get("/{phenopacket_id}", response_model=Dict)
+@router.get("/{phenopacket_id}", response_model=PhenopacketResponse)
 async def get_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single phenopacket by ID (excludes soft-deleted)."""
+    """Get a single phenopacket by ID with metadata (excludes soft-deleted)."""
     result = await db.execute(
         select(Phenopacket).where(
             and_(
@@ -419,7 +419,7 @@ async def get_phenopacket(
     if not phenopacket:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
-    return phenopacket.phenopacket
+    return build_phenopacket_response(phenopacket)
 
 
 @router.post("/", response_model=PhenopacketResponse)

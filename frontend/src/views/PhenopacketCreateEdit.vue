@@ -255,14 +255,15 @@ export default {
       try {
         const response = await getPhenopacket(this.$route.params.phenopacket_id);
 
-        // Backend returns the phenopacket directly
-        this.phenopacket = response.data;
+        // Backend returns full phenopacket response with metadata
+        this.phenopacket = response.data.phenopacket;
 
-        // Optimistic locking disabled - don't set revision
-        this.revision = null;
+        // Enable optimistic locking by capturing current revision
+        this.revision = response.data.revision;
 
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
+          revision: this.revision,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
