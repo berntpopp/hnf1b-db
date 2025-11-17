@@ -273,9 +273,11 @@ async def test_delete_phenopacket_soft_delete(
     await db_session.refresh(test_phenopacket)
 
     # Soft delete
-    response = await async_client.delete(
-        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}?change_reason=Test deletion",
+    response = await async_client.request(
+        "DELETE",
+        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         headers=admin_headers,
+        json={"change_reason": "Test deletion"},
     )
 
     assert response.status_code == 200
@@ -413,9 +415,11 @@ async def test_delete_already_deleted(
     await db_session.refresh(test_phenopacket)
 
     # Attempt to delete again
-    response = await async_client.delete(
-        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}?change_reason=Delete again",
+    response = await async_client.request(
+        "DELETE",
+        f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         headers=admin_headers,
+        json={"change_reason": "Delete again"},
     )
 
     # Should return 404 (not found because soft-deleted records are filtered)
