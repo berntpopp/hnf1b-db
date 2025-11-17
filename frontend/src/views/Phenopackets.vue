@@ -145,14 +145,13 @@
     <!-- Floating Action Button (FAB) for Create - Curator/Admin only -->
     <v-tooltip v-if="canCreatePhenopacket" text="Create New Phenopacket" location="left">
       <template #activator="{ props }">
-        <v-fab
+        <v-btn
           v-bind="props"
           icon="mdi-plus"
           color="success"
-          location="bottom end"
-          size="large"
-          :offset-y="80"
-          app
+          size="x-large"
+          elevation="6"
+          class="create-fab"
           @click="navigateToCreate"
         />
       </template>
@@ -620,6 +619,15 @@ export default {
 </script>
 
 <style scoped>
+/* Floating Action Button for Create */
+.create-fab {
+  position: fixed !important;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  border-radius: 50% !important;
+}
+
 .font-weight-bold {
   font-weight: bold;
 }
