@@ -112,25 +112,7 @@
               stroke-width="4"
             />
 
-            <!-- Amino acid scale markers -->
-            <g v-for="marker in scaleMarkers" :key="`marker-${marker}`">
-              <line
-                :x1="scaleAAPosition(marker)"
-                :y1="backboneY"
-                :x2="scaleAAPosition(marker)"
-                :y2="backboneY + 10"
-                stroke="#757575"
-                stroke-width="1"
-              />
-              <text
-                :x="scaleAAPosition(marker)"
-                :y="backboneY + 25"
-                text-anchor="middle"
-                class="scale-label"
-              >
-                {{ marker }}
-              </text>
-            </g>
+            <!-- Amino acid scale markers removed - using domain boundaries instead -->
 
             <!-- Protein domains -->
             <g v-for="(domain, index) in domains" :key="`domain-${index}`">
@@ -158,14 +140,34 @@
               >
                 {{ domain.shortName }}
               </text>
+              <!-- Domain start position label (replaces scale markers) -->
+              <text
+                :x="scaleAAPosition(domain.start)"
+                :y="backboneY + 25"
+                text-anchor="middle"
+                class="domain-boundary-label"
+              >
+                {{ domain.start }}
+              </text>
+              <!-- Domain end position label (replaces scale markers) -->
+              <text
+                :x="scaleAAPosition(domain.end)"
+                :y="backboneY + 25"
+                text-anchor="middle"
+                class="domain-boundary-label"
+              >
+                {{ domain.end }}
+              </text>
             </g>
 
             <!-- Lollipop stems and circles for variants -->
             <g v-for="(group, position) in groupedVariants" :key="`lollipop-${position}`">
               <!-- Stem (line from protein to lollipop) -->
+              <!-- If variant is in a domain, stem starts from top of domain box -->
+              <!-- If variant is outside domains, stem starts from backbone center -->
               <line
                 :x1="scaleAAPosition(parseInt(position))"
-                :y1="backboneY - domainHeight / 2"
+                :y1="isPositionInDomain(position) ? backboneY - domainHeight / 2 : backboneY"
                 :x2="scaleAAPosition(parseInt(position))"
                 :y2="backboneY - domainHeight / 2 - getLollipopHeight(group)"
                 :stroke="getGroupColor(group)"
@@ -304,35 +306,38 @@ export default {
       // D3 zoom properties
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
+      // Domain coordinates verified from UniProt P35680 (2025-01-17)
+      // Source: https://www.uniprot.org/uniprotkb/P35680/entry
+      // RefSeq: NP_000449.1
       domains: [
         {
           name: 'Dimerization Domain',
           shortName: 'Dim',
           start: 1,
-          end: 32,
+          end: 31, // Corrected from 32
           color: '#FFB74D',
           function: 'Mediates homodimer or heterodimer formation',
         },
         {
           name: 'POU-Specific Domain',
           shortName: 'POU-S',
-          start: 101,
-          end: 157,
+          start: 8, // Corrected from 101
+          end: 173, // Corrected from 157
           color: '#64B5F6',
-          function: 'DNA binding (part 1)',
+          function: 'DNA binding (part 1) - IPR000327',
         },
         {
           name: 'POU Homeodomain',
           shortName: 'POU-H',
-          start: 183,
-          end: 243,
+          start: 232, // Corrected from 183
+          end: 305, // Corrected from 243
           color: '#4FC3F7',
-          function: 'DNA binding (part 2)',
+          function: 'DNA binding (part 2) - IPR001356',
         },
         {
           name: 'Transactivation Domain',
           shortName: 'TAD',
-          start: 400,
+          start: 314, // Corrected from 400
           end: 557,
           color: '#81C784',
           function: 'Transcriptional activation',
@@ -459,6 +464,11 @@ export default {
     isCNV(variant) {
       if (!variant || !variant.hg38) return false;
       return /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
+    },
+    isPositionInDomain(position) {
+      // Check if the amino acid position falls within any protein domain
+      const pos = parseInt(position);
+      return this.domains.some((domain) => pos >= domain.start && pos <= domain.end);
     },
     getLollipopHeight(variantGroup) {
       // Stack height based on number of variants at this position
@@ -669,6 +679,13 @@ export default {
   font-size: 11px;
   font-weight: 600;
   fill: #424242;
+  pointer-events: none;
+}
+
+.domain-boundary-label {
+  font-size: 9px;
+  font-weight: 500;
+  fill: #1565c0;
   pointer-events: none;
 }
 
