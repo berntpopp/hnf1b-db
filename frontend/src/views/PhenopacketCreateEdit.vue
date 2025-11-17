@@ -10,16 +10,23 @@
       </v-card-title>
 
       <v-card-text>
-        <!-- Loading State -->
-        <v-row v-if="loading && isEditing" justify="center">
-          <v-col cols="12" class="text-center">
-            <v-progress-circular indeterminate color="primary" size="64" />
-            <div class="mt-4">Loading phenopacket...</div>
-          </v-col>
-        </v-row>
+        <!-- Error State -->
+        <v-alert v-if="error" type="error" variant="tonal" prominent class="mb-4">
+          <v-alert-title>Error</v-alert-title>
+          {{ error }}
+        </v-alert>
+
+        <!-- Loading State (Edit Mode) -->
+        <div v-if="loading && isEditing">
+          <v-skeleton-loader type="article, article" class="mb-4" />
+          <div class="text-center mt-4">
+            <v-progress-circular indeterminate color="primary" size="48" />
+            <div class="mt-3 text-medium-emphasis">Loading phenopacket data...</div>
+          </div>
+        </div>
 
         <!-- Form -->
-        <v-form v-else ref="form" @submit.prevent="handleSubmit">
+        <v-form v-else-if="!error" ref="form" @submit.prevent="handleSubmit">
           <!-- Phenopacket ID (read-only for edit) -->
           <v-text-field
             v-model="phenopacket.id"
@@ -204,8 +211,7 @@ export default {
           ],
         },
       },
-      phenopacketResponse: null, // Store full response with metadata
-      loading: false,
+      loading: true, // Start with loading true to prevent form flash
       saving: false,
       error: null,
       formSubmitted: false,
@@ -235,6 +241,8 @@ export default {
     if (this.isEditing) {
       await this.loadPhenopacket();
     } else {
+      // Create mode - hide loader and show empty form
+      this.loading = false;
       // Leave ID empty for user to specify (required field will enforce entry)
       this.phenopacket.id = '';
     }
