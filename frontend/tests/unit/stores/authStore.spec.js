@@ -31,7 +31,8 @@ const localStorageMock = (() => {
   return {
     getItem: vi.fn((key) => store[key] || null),
     setItem: vi.fn((key, value) => {
-      store[key] = value.toString();
+      // Handle undefined/null values gracefully
+      store[key] = value != null ? value.toString() : '';
     }),
     removeItem: vi.fn((key) => {
       delete store[key];
@@ -62,6 +63,10 @@ describe('Auth Store', () => {
     // Clear mocks
     vi.clearAllMocks();
     localStorageMock.clear();
+
+    // Reset API client mocks explicitly
+    apiClient.post.mockReset();
+    apiClient.get.mockReset();
   });
 
   afterEach(() => {
@@ -376,11 +381,10 @@ describe('Auth Store', () => {
       authStore.accessToken = 'old_token';
       authStore.user = { username: 'test' };
 
-      apiClient.post
-        .mockRejectedValueOnce(new Error('Invalid refresh token')) // refresh call fails
-        .mockResolvedValueOnce({ data: {} }); // logout call succeeds
+      // Mock the refresh call to fail
+      apiClient.post.mockRejectedValueOnce(new Error('Invalid refresh token'));
 
-      await expect(authStore.refreshAccessToken()).rejects.toThrow();
+      await expect(authStore.refreshAccessToken()).rejects.toThrow('Invalid refresh token');
 
       // Should clear auth state on refresh failure
       expect(authStore.accessToken).toBeNull();
