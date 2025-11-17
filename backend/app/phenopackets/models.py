@@ -367,13 +367,16 @@ class PhenopacketCreate(BaseModel):
 class PhenopacketUpdate(BaseModel):
     """Request model for updating a phenopacket.
 
-    Includes optimistic locking support via revision field and
+    Includes optional optimistic locking support via revision field and
     audit trail support via change_reason field.
     """
 
     phenopacket: Dict[str, Any]
     updated_by: Optional[str] = None
-    revision: int = Field(..., description="Current revision for optimistic locking")
+    revision: Optional[int] = Field(
+        None,
+        description="Optional revision for optimistic locking (disabled if not provided)",
+    )
     change_reason: str = Field(
         ..., min_length=1, description="Reason for the change (audit trail)"
     )

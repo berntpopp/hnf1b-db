@@ -519,8 +519,11 @@ async def update_phenopacket(
     if not existing:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
-    # Optimistic locking check
-    if existing.revision != phenopacket_data.revision:
+    # Optimistic locking check (skip if revision not provided)
+    if (
+        phenopacket_data.revision is not None
+        and existing.revision != phenopacket_data.revision
+    ):
         raise HTTPException(
             status_code=409,
             detail={

@@ -204,6 +204,7 @@ export default {
           ],
         },
       },
+      phenopacketResponse: null, // Store full response with metadata
       loading: false,
       saving: false,
       error: null,
@@ -246,15 +247,14 @@ export default {
       try {
         const response = await getPhenopacket(this.$route.params.phenopacket_id);
 
-        // Backend returns the GA4GH phenopacket object directly
+        // Backend returns the phenopacket directly
         this.phenopacket = response.data;
 
-        // Initialize revision to 1 (optimistic locking disabled for now)
-        this.revision = 1;
+        // Optimistic locking disabled - don't set revision
+        this.revision = null;
 
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
-          revision: this.revision,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
