@@ -79,6 +79,13 @@
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
+          <!-- Create Button - Curator/Admin only -->
+          <v-divider v-if="canCreatePhenopacket" vertical class="mx-4" />
+          <v-tooltip v-if="canCreatePhenopacket" text="Create New Phenopacket" location="bottom">
+            <template #activator="{ props }">
+              <v-btn v-bind="props" icon="mdi-plus" color="success" @click="navigateToCreate" />
+            </template>
+          </v-tooltip>
         </v-toolbar>
       </template>
 
@@ -141,21 +148,6 @@
 
       <template #no-data> No phenopackets found. </template>
     </v-data-table-server>
-
-    <!-- Floating Action Button (FAB) for Create - Curator/Admin only -->
-    <v-tooltip v-if="canCreatePhenopacket" text="Create New Phenopacket" location="left">
-      <template #activator="{ props }">
-        <v-btn
-          v-bind="props"
-          icon="mdi-plus"
-          color="success"
-          size="x-large"
-          elevation="6"
-          class="create-fab"
-          @click="navigateToCreate"
-        />
-      </template>
-    </v-tooltip>
   </v-container>
 </template>
 
@@ -619,15 +611,6 @@ export default {
 </script>
 
 <style scoped>
-/* Floating Action Button for Create */
-.create-fab {
-  position: fixed !important;
-  bottom: 24px;
-  right: 24px;
-  z-index: 1000;
-  border-radius: 50% !important;
-}
-
 .font-weight-bold {
   font-weight: bold;
 }
