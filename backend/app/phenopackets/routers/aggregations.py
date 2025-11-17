@@ -986,6 +986,7 @@ async def aggregate_all_variants(
 
     # Get total count of variants (without limit/offset)
     # Reuse the same CTEs but only count final results
+    # IMPORTANT: Must include simple_id filter to match main query
     count_query = f"""
     WITH all_variants_unfiltered AS (
         SELECT DISTINCT ON (vd->>'id', p.id)
@@ -1010,6 +1011,15 @@ async def aggregate_all_variants(
         FROM all_variants_unfiltered
         GROUP BY variant_id
     ),
+    all_variants_with_stable_id AS (
+        -- Assign stable IDs to ALL variants based on unfiltered dataset
+        SELECT
+            ROW_NUMBER() OVER (
+                ORDER BY phenopacket_count DESC, gene_symbol ASC, variant_id ASC
+            ) as simple_id,
+            variant_id
+        FROM all_variants_agg
+    ),
     variant_raw AS (
         SELECT DISTINCT ON (vd->>'id', p.id)
             vd->>'id' as variant_id,
@@ -1031,9 +1041,23 @@ async def aggregate_all_variants(
             COUNT(DISTINCT phenopacket_id) as phenopacket_count
         FROM variant_raw
         GROUP BY variant_id
+    ),
+    variant_with_stable_id AS (
+        -- Join filtered results with pre-calculated stable IDs
+        SELECT
+            avwsi.simple_id,
+            va.variant_id
+        FROM variant_agg va
+        INNER JOIN all_variants_with_stable_id avwsi ON va.variant_id = avwsi.variant_id
     )
     SELECT COUNT(*) as total
-    FROM variant_agg
+    FROM variant_with_stable_id
+    WHERE 1=1
+        {
+        "AND CONCAT('Var', simple_id::text) ILIKE :simple_id_query"
+        if validated_query and validated_query.lower().startswith("var")
+        else ""
+    }
     """
 
     # Create a copy of params without limit/offset for count query

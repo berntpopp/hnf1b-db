@@ -324,7 +324,7 @@ import { getVariants } from '@/api';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
-import { buildSortParameter, buildPaginationParameters } from '@/utils/pagination';
+import { buildSortParameter } from '@/utils/pagination';
 
 export default {
   name: 'Variants',
@@ -524,11 +524,11 @@ export default {
 
         // Build sort and pagination parameters using utility functions
         const sortParam = buildSortParameter(sortBy, sortFieldMap);
-        const paginationParams = buildPaginationParameters(page, itemsPerPage);
 
         // Build request params with pagination, search, and filters
         const requestParams = {
-          ...paginationParams,
+          page,
+          page_size: itemsPerPage,
           ...(sortParam && { sort: sortParam }),
         };
 
@@ -692,22 +692,26 @@ export default {
 
     goToFirstPage() {
       this.options.page = 1;
+      this.fetchVariants();
     },
 
     goToPreviousPage() {
       if (this.options.page > 1) {
         this.options.page--;
+        this.fetchVariants();
       }
     },
 
     goToNextPage() {
       if (this.options.page < this.totalPages) {
         this.options.page++;
+        this.fetchVariants();
       }
     },
 
     goToLastPage() {
       this.options.page = this.totalPages;
+      this.fetchVariants();
     },
 
     handleRowClick(event, row) {
