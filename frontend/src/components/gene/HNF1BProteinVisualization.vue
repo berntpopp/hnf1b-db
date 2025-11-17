@@ -100,89 +100,95 @@
           class="protein-visualization"
           @mouseleave="hideTooltip"
         >
-          <!-- Protein backbone line -->
-          <line
-            :x1="margin.left"
-            :y1="backboneY"
-            :x2="svgWidth - margin.right"
-            :y2="backboneY"
-            stroke="#424242"
-            stroke-width="4"
-          />
-
-          <!-- Amino acid scale markers -->
-          <g v-for="marker in scaleMarkers" :key="`marker-${marker}`">
+          <!-- Zoom Group: All visualization content that should zoom/pan -->
+          <g id="zoom-group">
+            <!-- Protein backbone line -->
             <line
-              :x1="scaleAAPosition(marker)"
+              :x1="margin.left"
               :y1="backboneY"
-              :x2="scaleAAPosition(marker)"
-              :y2="backboneY + 10"
-              stroke="#757575"
-              stroke-width="1"
-            />
-            <text
-              :x="scaleAAPosition(marker)"
-              :y="backboneY + 25"
-              text-anchor="middle"
-              class="scale-label"
-            >
-              {{ marker }}
-            </text>
-          </g>
-
-          <!-- Protein domains -->
-          <g v-for="(domain, index) in domains" :key="`domain-${index}`">
-            <rect
-              :x="scaleAAPosition(domain.start)"
-              :y="backboneY - domainHeight / 2"
-              :width="Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1)"
-              :height="domainHeight"
-              :fill="domain.color"
-              :opacity="0.7"
+              :x2="svgWidth - margin.right"
+              :y2="backboneY"
               stroke="#424242"
-              stroke-width="1.5"
-              class="domain-rect"
-              @mouseenter="showDomainTooltip($event, domain)"
-              @mousemove="updateTooltipPosition($event)"
+              stroke-width="4"
             />
-            <text
-              :x="
-                scaleAAPosition(domain.start) +
-                Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1) / 2
-              "
-              :y="backboneY + 5"
-              text-anchor="middle"
-              class="domain-label"
-            >
-              {{ domain.shortName }}
-            </text>
-          </g>
 
-          <!-- Lollipop stems and circles for variants -->
-          <g v-for="(group, position) in groupedVariants" :key="`lollipop-${position}`">
-            <!-- Stem (line from protein to lollipop) -->
-            <line
-              :x1="scaleAAPosition(parseInt(position))"
-              :y1="backboneY - domainHeight / 2"
-              :x2="scaleAAPosition(parseInt(position))"
-              :y2="backboneY - domainHeight / 2 - getLollipopHeight(group)"
-              :stroke="getGroupColor(group)"
-              :stroke-width="2"
-            />
-            <!-- Lollipop circles (stacked if multiple) -->
-            <g v-for="(variant, vIndex) in group" :key="`variant-${variant.variant_id}-${vIndex}`">
-              <circle
-                :cx="scaleAAPosition(parseInt(position))"
-                :cy="backboneY - domainHeight / 2 - getLollipopHeight(group.slice(0, vIndex + 1))"
-                :r="8"
-                :fill="getVariantColor(variant)"
-                :stroke="'#424242'"
-                :stroke-width="1.5"
-                class="lollipop-circle"
-                @mouseenter="showVariantTooltip($event, variant)"
-                @mousemove="updateTooltipPosition($event)"
-                @click="handleVariantClick(variant)"
+            <!-- Amino acid scale markers -->
+            <g v-for="marker in scaleMarkers" :key="`marker-${marker}`">
+              <line
+                :x1="scaleAAPosition(marker)"
+                :y1="backboneY"
+                :x2="scaleAAPosition(marker)"
+                :y2="backboneY + 10"
+                stroke="#757575"
+                stroke-width="1"
               />
+              <text
+                :x="scaleAAPosition(marker)"
+                :y="backboneY + 25"
+                text-anchor="middle"
+                class="scale-label"
+              >
+                {{ marker }}
+              </text>
+            </g>
+
+            <!-- Protein domains -->
+            <g v-for="(domain, index) in domains" :key="`domain-${index}`">
+              <rect
+                :x="scaleAAPosition(domain.start)"
+                :y="backboneY - domainHeight / 2"
+                :width="Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1)"
+                :height="domainHeight"
+                :fill="domain.color"
+                :opacity="0.7"
+                stroke="#424242"
+                stroke-width="1.5"
+                class="domain-rect"
+                @mouseenter="showDomainTooltip($event, domain)"
+                @mousemove="updateTooltipPosition($event)"
+              />
+              <text
+                :x="
+                  scaleAAPosition(domain.start) +
+                  Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1) / 2
+                "
+                :y="backboneY + 5"
+                text-anchor="middle"
+                class="domain-label"
+              >
+                {{ domain.shortName }}
+              </text>
+            </g>
+
+            <!-- Lollipop stems and circles for variants -->
+            <g v-for="(group, position) in groupedVariants" :key="`lollipop-${position}`">
+              <!-- Stem (line from protein to lollipop) -->
+              <line
+                :x1="scaleAAPosition(parseInt(position))"
+                :y1="backboneY - domainHeight / 2"
+                :x2="scaleAAPosition(parseInt(position))"
+                :y2="backboneY - domainHeight / 2 - getLollipopHeight(group)"
+                :stroke="getGroupColor(group)"
+                :stroke-width="2"
+              />
+              <!-- Lollipop circles (stacked if multiple) -->
+              <g
+                v-for="(variant, vIndex) in group"
+                :key="`variant-${variant.variant_id}-${vIndex}`"
+              >
+                <circle
+                  :cx="scaleAAPosition(parseInt(position))"
+                  :cy="backboneY - domainHeight / 2 - getLollipopHeight(group.slice(0, vIndex + 1))"
+                  :r="8"
+                  :fill="getVariantColor(variant)"
+                  :stroke="'#424242'"
+                  :stroke-width="1.5"
+                  class="lollipop-circle"
+                  @mouseenter="showVariantTooltip($event, variant)"
+                  @mousemove="updateTooltipPosition($event)"
+                  @click="handleVariantClick(variant)"
+                />
+              </g>
             </g>
           </g>
         </svg>
@@ -267,6 +273,7 @@
 </template>
 
 <script>
+import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 
 export default {
@@ -294,6 +301,9 @@ export default {
       tooltipY: 0,
       tooltipContent: null,
       zoomLevel: 1,
+      // D3 zoom properties
+      d3Zoom: null, // D3 zoom behavior instance
+      d3Transform: null, // Current D3 zoom transform
       domains: [
         {
           name: 'Dimerization Domain',
@@ -402,9 +412,12 @@ export default {
   mounted() {
     this.updateSVGWidth();
     window.addEventListener('resize', this.updateSVGWidth);
+    this.initializeD3Zoom();
+    window.addEventListener('keydown', this.handleKeyboardShortcuts);
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.updateSVGWidth);
+    window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
     updateSVGWidth() {
@@ -522,13 +535,63 @@ export default {
       this.$emit('variant-clicked', variant);
     },
     zoomIn() {
-      this.zoomLevel = Math.min(this.zoomLevel * 1.3, 5);
+      if (this.d3Zoom && this.$refs.proteinSvg) {
+        const svg = d3.select(this.$refs.proteinSvg);
+        this.d3Zoom.scaleBy(svg.transition().duration(300), 1.3);
+      }
     },
     zoomOut() {
-      this.zoomLevel = Math.max(this.zoomLevel / 1.3, 1);
+      if (this.d3Zoom && this.$refs.proteinSvg) {
+        const svg = d3.select(this.$refs.proteinSvg);
+        this.d3Zoom.scaleBy(svg.transition().duration(300), 1 / 1.3);
+      }
     },
     resetZoom() {
-      this.zoomLevel = 1;
+      if (this.d3Zoom && this.$refs.proteinSvg) {
+        const svg = d3.select(this.$refs.proteinSvg);
+        this.d3Zoom.transform(svg.transition().duration(500), d3.zoomIdentity);
+      }
+    },
+    initializeD3Zoom() {
+      if (!this.$refs.proteinSvg) return;
+
+      const svg = d3.select(this.$refs.proteinSvg);
+      const g = svg.select('#zoom-group');
+
+      // Create zoom behavior with constraints
+      this.d3Zoom = d3
+        .zoom()
+        .scaleExtent([1, 10]) // Min 1x, Max 10x zoom
+        .on('zoom', (event) => {
+          this.d3Transform = event.transform;
+          g.attr('transform', event.transform);
+          this.zoomLevel = event.transform.k; // Update zoomLevel for display
+        });
+
+      // Apply zoom behavior to SVG
+      svg.call(this.d3Zoom);
+
+      // Constrain panning to prevent scrolling off-canvas
+      this.d3Zoom.translateExtent([
+        [0, 0],
+        [this.svgWidth, this.svgHeight],
+      ]);
+    },
+    handleKeyboardShortcuts(event) {
+      // Only trigger if focused on body or SVG (not in input fields)
+      const target = event.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        this.zoomIn();
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        this.zoomOut();
+      } else if (event.key === '0') {
+        event.preventDefault();
+        this.resetZoom();
+      }
     },
   },
 };
