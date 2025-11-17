@@ -17,16 +17,6 @@
       <template #top>
         <v-toolbar flat>
           <v-toolbar-title>Phenopackets</v-toolbar-title>
-          <!-- Create button (curator/admin only) -->
-          <v-btn
-            v-if="canCreatePhenopacket"
-            color="success"
-            class="ml-4"
-            prepend-icon="mdi-plus"
-            @click="navigateToCreate"
-          >
-            Create Phenopacket
-          </v-btn>
           <v-spacer />
           <!-- Search Field -->
           <v-text-field
@@ -37,7 +27,7 @@
             clearable
             hide-details
             density="compact"
-            style="max-width: 350px"
+            style="max-width: 400px"
             class="mr-2"
             @keyup.enter="applySearch"
             @click:clear="clearSearch"
@@ -153,6 +143,22 @@
 
       <template #no-data> No phenopackets found. </template>
     </v-data-table-server>
+
+    <!-- Floating Action Button (FAB) for Create - Curator/Admin only -->
+    <v-fab
+      v-if="canCreatePhenopacket"
+      icon="mdi-plus"
+      color="success"
+      location="bottom end"
+      size="large"
+      app
+      @click="navigateToCreate"
+    >
+      <template #default>
+        <v-icon>mdi-plus</v-icon>
+      </template>
+      <v-tooltip activator="parent" location="left">Create New Phenopacket</v-tooltip>
+    </v-fab>
   </v-container>
 </template>
 

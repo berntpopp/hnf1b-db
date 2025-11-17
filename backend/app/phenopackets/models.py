@@ -375,7 +375,9 @@ class PhenopacketUpdate(BaseModel):
     updated_by: Optional[str] = None
     revision: Optional[int] = Field(
         None,
-        description="Optional revision for optimistic locking (disabled if not provided)",
+        description=(
+            "Optional revision for optimistic locking (disabled if not provided)"
+        ),
     )
     change_reason: str = Field(
         ..., min_length=1, description="Reason for the change (audit trail)"

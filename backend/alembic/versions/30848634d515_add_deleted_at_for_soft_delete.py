@@ -14,9 +14,9 @@ but are filtered from queries. Critical for research data integrity.
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '30848634d515'
