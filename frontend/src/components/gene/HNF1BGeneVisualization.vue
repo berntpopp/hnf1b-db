@@ -1231,13 +1231,43 @@ export default {
     zoomIn() {
       if (this.d3Zoom && this.$refs.geneSvg) {
         const svg = d3.select(this.$refs.geneSvg);
-        this.d3Zoom.scaleBy(svg.transition().duration(300), 1.3);
+        const centerX = this.svgWidth / 2;
+        const centerY = this.dynamicSvgHeight / 2;
+
+        // Get current transform
+        const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
+
+        // Calculate new scale
+        const newScale = Math.min(currentTransform.k * 1.3, 10);
+
+        // Calculate new transform centered on the viewport center
+        const transform = d3.zoomIdentity
+          .translate(centerX, centerY)
+          .scale(newScale)
+          .translate(-centerX, -centerY);
+
+        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
       }
     },
     zoomOut() {
       if (this.d3Zoom && this.$refs.geneSvg) {
         const svg = d3.select(this.$refs.geneSvg);
-        this.d3Zoom.scaleBy(svg.transition().duration(300), 1 / 1.3);
+        const centerX = this.svgWidth / 2;
+        const centerY = this.dynamicSvgHeight / 2;
+
+        // Get current transform
+        const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
+
+        // Calculate new scale
+        const newScale = Math.max(currentTransform.k / 1.3, 1);
+
+        // Calculate new transform centered on the viewport center
+        const transform = d3.zoomIdentity
+          .translate(centerX, centerY)
+          .scale(newScale)
+          .translate(-centerX, -centerY);
+
+        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
       }
     },
     resetZoom() {
