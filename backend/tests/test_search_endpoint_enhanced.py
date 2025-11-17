@@ -265,7 +265,8 @@ async def test_search_combined_filters(
     Uses unique search term to avoid conflicts with real data.
     """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&sex=FEMALE", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&sex=FEMALE",
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -297,7 +298,8 @@ async def test_search_pagination(
     Uses unique search term to ensure deterministic results.
     """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1",
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -306,7 +308,8 @@ async def test_search_pagination(
     assert meta["total"] == 2  # Exactly pp1 and pp3 match unique term
 
     response_page2 = await async_client.get(
-        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1&skip=1", headers=auth_headers
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1&skip=1",
+        headers=auth_headers,
     )
     assert response_page2.status_code == 200
     data_page2 = response_page2.json()["data"]
@@ -333,8 +336,12 @@ async def test_search_rank_by_relevance_false(
     assert len(data) == 2  # Exactly 2 test phenopackets match unique term
 
     # Verify both test phenopackets are in the results
-    test_pp_ids = [pp["id"] for pp in data if pp["id"] in ["search_pp_001", "search_pp_003"]]
-    assert len(test_pp_ids) == 2, f"Expected to find both test phenopackets, found: {test_pp_ids}"
+    test_pp_ids = [
+        pp["id"] for pp in data if pp["id"] in ["search_pp_001", "search_pp_003"]
+    ]
+    assert len(test_pp_ids) == 2, (
+        f"Expected to find both test phenopackets, found: {test_pp_ids}"
+    )
 
     # Verify they both contain unique test term
     test_pps = [pp for pp in data if pp["id"] in ["search_pp_001", "search_pp_003"]]

@@ -200,3 +200,34 @@ async def admin_headers(admin_user, async_client):
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def cleanup_test_phenopackets(db_session):
+    """Cleanup test phenopackets before and after tests."""
+    from app.phenopackets.models import Phenopacket, PhenopacketAudit
+
+    # Pre-cleanup: Remove leftover test data from failed previous runs
+    await db_session.execute(
+        delete(PhenopacketAudit).where(
+            PhenopacketAudit.phenopacket_id.like("test-%")
+        )
+    )
+    await db_session.execute(
+        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
+    )
+    await db_session.commit()
+
+    # Yield control to test
+    yield
+
+    # Post-cleanup: Clean up after test
+    await db_session.execute(
+        delete(PhenopacketAudit).where(
+            PhenopacketAudit.phenopacket_id.like("test-%")
+        )
+    )
+    await db_session.execute(
+        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
+    )
+    await db_session.commit()

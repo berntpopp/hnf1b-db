@@ -44,6 +44,29 @@
               >
                 Download JSON
               </v-btn>
+              <!-- Edit button (curator/admin only) -->
+              <v-btn
+                v-if="canEdit"
+                class="ml-2"
+                color="success"
+                prepend-icon="mdi-pencil"
+                variant="tonal"
+                @click="navigateToEdit"
+              >
+                Edit
+              </v-btn>
+              <!-- Delete button (curator/admin only) -->
+              <v-btn
+                v-if="canDelete"
+                class="ml-2"
+                color="error"
+                prepend-icon="mdi-delete"
+                variant="tonal"
+                @click="confirmDelete"
+              >
+                Delete
+              </v-btn>
+              <v-spacer />
               <v-btn
                 class="ml-2"
                 prepend-icon="mdi-arrow-left"
@@ -89,16 +112,29 @@
         </v-col>
       </v-row>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <DeleteConfirmationDialog
+      v-if="phenopacket"
+      v-model="showDeleteDialog"
+      :phenopacket-id="phenopacket.id"
+      :subject-id="phenopacket.subject?.id"
+      :loading="deleteLoading"
+      @confirm="handleDeleteConfirm"
+      @cancel="showDeleteDialog = false"
+    />
   </v-container>
 </template>
 
 <script>
-import { getPhenopacket } from '@/api';
+import { getPhenopacket, deletePhenopacket } from '@/api';
+import { useAuthStore } from '@/stores/authStore';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
 import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
+import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
 
 export default {
   name: 'PagePhenopacket',
@@ -108,12 +144,15 @@ export default {
     InterpretationsCard,
     MeasurementsCard,
     MetadataCard,
+    DeleteConfirmationDialog,
   },
   data() {
     return {
       phenopacket: null,
       loading: false,
       error: null,
+      showDeleteDialog: false,
+      deleteLoading: false,
     };
   },
   computed: {
@@ -125,6 +164,16 @@ export default {
     },
     hasMeasurements() {
       return this.phenopacket?.measurements && this.phenopacket.measurements.length > 0;
+    },
+    canEdit() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      return userRole === 'curator' || userRole === 'admin';
+    },
+    canDelete() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      return userRole === 'curator' || userRole === 'admin';
     },
   },
   mounted() {
@@ -143,6 +192,7 @@ export default {
 
       try {
         const response = await getPhenopacket(phenopacketId);
+        // Backend returns the GA4GH phenopacket object directly
         this.phenopacket = response.data;
 
         window.logService.debug('Phenopacket data received', {
@@ -202,6 +252,57 @@ export default {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+    },
+
+    navigateToEdit() {
+      if (!this.phenopacket) return;
+      window.logService.info('Navigating to edit phenopacket', {
+        phenopacketId: this.phenopacket.id,
+      });
+      this.$router.push(`/phenopackets/${this.phenopacket.id}/edit`);
+    },
+
+    confirmDelete() {
+      if (!this.phenopacket) return;
+      this.showDeleteDialog = true;
+    },
+
+    async handleDeleteConfirm(deleteReason) {
+      if (!this.phenopacket) return;
+
+      this.deleteLoading = true;
+
+      window.logService.info('Deleting phenopacket', {
+        phenopacketId: this.phenopacket.id,
+        reasonLength: deleteReason.length,
+      });
+
+      try {
+        await deletePhenopacket(this.phenopacket.id, deleteReason);
+
+        window.logService.info('Phenopacket deleted successfully', {
+          phenopacketId: this.phenopacket.id,
+        });
+
+        this.showDeleteDialog = false;
+
+        // Navigate back to list with success message
+        this.$router.push({
+          path: '/phenopackets',
+          query: { deleted: this.phenopacket.id },
+        });
+      } catch (error) {
+        window.logService.error('Failed to delete phenopacket', {
+          phenopacketId: this.phenopacket.id,
+          error: error.message,
+          status: error.response?.status,
+        });
+
+        // Show error in dialog or alert
+        alert(`Failed to delete phenopacket: ${error.response?.data?.detail || error.message}`);
+      } finally {
+        this.deleteLoading = false;
+      }
     },
   },
 };

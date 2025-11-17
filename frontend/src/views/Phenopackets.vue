@@ -16,8 +16,6 @@
     >
       <template #top>
         <v-toolbar flat>
-          <v-toolbar-title>Phenopackets</v-toolbar-title>
-          <v-spacer />
           <!-- Search Field -->
           <v-text-field
             v-model="searchQuery"
@@ -27,7 +25,7 @@
             clearable
             hide-details
             density="compact"
-            style="max-width: 350px"
+            style="max-width: 400px"
             class="mr-2"
             @keyup.enter="applySearch"
             @click:clear="clearSearch"
@@ -81,6 +79,13 @@
               <v-icon>mdi-page-last</v-icon>
             </v-btn>
           </div>
+          <!-- Create Button - Curator/Admin only -->
+          <v-divider v-if="canCreatePhenopacket" vertical class="mx-4" />
+          <v-tooltip v-if="canCreatePhenopacket" text="Create New Phenopacket" location="bottom">
+            <template #activator="{ props }">
+              <v-btn v-bind="props" icon="mdi-plus" color="success" @click="navigateToCreate" />
+            </template>
+          </v-tooltip>
         </v-toolbar>
       </template>
 
@@ -155,6 +160,7 @@ import {
   extractPaginationMeta,
 } from '@/utils/pagination';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { useAuthStore } from '@/stores/authStore';
 
 export default {
   name: 'Phenopackets',
@@ -260,6 +266,12 @@ export default {
         return false; // Cannot jump to last with cursor pagination
       }
       return this.currentPage < this.totalPages;
+    },
+    canCreatePhenopacket() {
+      const authStore = useAuthStore();
+      const userRole = authStore.user?.role;
+      // Allow curators and admins to create phenopackets
+      return userRole === 'curator' || userRole === 'admin';
     },
   },
   watch: {
@@ -511,6 +523,11 @@ export default {
     getSexIcon,
     getSexChipColor,
     formatSex,
+
+    navigateToCreate() {
+      window.logService.info('Navigating to create phenopacket');
+      this.$router.push('/phenopackets/create');
+    },
 
     handleRowClick(event, { item }) {
       // Navigate to phenopacket detail page

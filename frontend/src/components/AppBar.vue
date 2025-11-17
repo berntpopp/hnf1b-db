@@ -36,6 +36,26 @@
         >
           {{ item.label }}
         </v-btn>
+
+        <!-- Curate Menu (curator/admin only) -->
+        <v-menu v-if="canCurate" location="bottom">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              prepend-icon="mdi-pencil-plus"
+              variant="text"
+              aria-label="Curation menu"
+            >
+              Curate
+              <v-icon right size="small">mdi-menu-down</v-icon>
+            </v-btn>
+          </template>
+          <v-list>
+            <v-list-item prepend-icon="mdi-account-plus" @click="navigateToCreatePhenopacket">
+              <v-list-item-title>Create Phenopacket</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
       </div>
 
       <v-spacer />
@@ -113,6 +133,14 @@ const getRoleColor = computed(() => {
 });
 
 /**
+ * Check if user can curate (curator or admin)
+ */
+const canCurate = computed(() => {
+  const userRole = authStore.user?.role;
+  return userRole === 'curator' || userRole === 'admin';
+});
+
+/**
  * Check if a route is currently active
  */
 const isActiveRoute = (routePath) => {
@@ -131,6 +159,13 @@ const navigateHome = () => {
  */
 const goToUser = () => {
   router.push({ name: 'User' });
+};
+
+/**
+ * Navigate to create phenopacket page
+ */
+const navigateToCreatePhenopacket = () => {
+  router.push({ name: 'CreatePhenopacket' });
 };
 
 /**

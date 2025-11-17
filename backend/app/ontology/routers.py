@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +31,8 @@ async def hpo_autocomplete(
 
     query = text(
         """
-        SELECT hpo_id, label, phenopacket_count,
+        SELECT hpo_id, label, category, description, synonyms,
+               recommendation, "group", phenopacket_count,
                similarity(label, :search_term) AS similarity_score
         FROM hpo_terms_lookup
         WHERE label ILIKE :prefix OR label % :search_term
@@ -44,3 +47,168 @@ async def hpo_autocomplete(
 
     terms = result.fetchall()
     return {"data": [dict(row._mapping) for row in terms]}
+
+
+@router.get("/hpo/grouped")
+async def hpo_grouped(
+    recommendation: str | None = Query(
+        None, description="Filter by recommendation level (required, recommended)"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get HPO terms grouped by organ system for phenotype curation UI.
+
+    Returns all curated HNF1B-related HPO terms organized by anatomical/organ
+    system groups. Used for building the system-grouped phenotype selection interface.
+
+    Each term includes:
+    - hpo_id: HPO identifier (e.g., HP:0000107)
+    - label: Human-readable term name
+    - group: Organ system (e.g., Kidney, Liver, Pancreas)
+    - category: Specific subcategory
+    - recommendation: Clinical recommendation level (required, recommended)
+    - description: Detailed term description
+    - phenopacket_count: Number of phenopackets with this term
+
+    Returns data structure:
+    {
+        "groups": {
+            "Kidney": [...terms...],
+            "Liver": [...terms...],
+            ...
+        },
+        "total_terms": N,
+        "total_groups": M
+    }
+    """
+    # Build query with optional recommendation filter
+    where_clause = ""
+    params = {}
+
+    if recommendation:
+        where_clause = "WHERE recommendation = :recommendation"
+        params["recommendation"] = recommendation
+
+    query = text(
+        f"""
+        SELECT hpo_id, label, "group", category, recommendation,
+               description, phenopacket_count
+        FROM hpo_terms_lookup
+        {where_clause}
+        ORDER BY "group", recommendation DESC, phenopacket_count DESC, label
+    """
+    )
+
+    result = await db.execute(query, params)
+    terms = result.fetchall()
+
+    # CKD stage HPO IDs (mutually exclusive group)
+    CKD_STAGE_IDS = {
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
+    }
+
+    # Group terms by organ system, with special handling for CKD stages
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in terms:
+        term_dict = dict(row._mapping)
+        hpo_id = term_dict.get("hpo_id")
+
+        # Move CKD stages to their own group
+        if hpo_id in CKD_STAGE_IDS:
+            group_name = "CKD Stages"
+        else:
+            group_name = term_dict.get("group") or "Other"
+
+        if group_name not in groups:
+            groups[group_name] = []
+
+        groups[group_name].append(term_dict)
+
+    # Ensure groups appear in desired order
+    # Left column: Brain, Electrolytes, Genital, Urinary tract, Hormones
+    # Right column: CKD Stages, Kidney, Liver, Pancreas, Other
+    group_order = [
+        "Brain",
+        "Electrolytes and uric acid",
+        "Genital",
+        "Urinary tract",
+        "Hormones",
+        "CKD Stages",
+        "Kidney",
+        "Liver",
+        "Pancreas",
+        "Other",
+    ]
+    ordered_groups = {k: groups[k] for k in group_order if k in groups}
+    # Add any remaining groups not in the predefined order
+    for k in groups:
+        if k not in ordered_groups:
+            ordered_groups[k] = groups[k]
+
+    return {
+        "data": {
+            "groups": ordered_groups,
+            "total_terms": len(terms),
+            "total_groups": len(ordered_groups),
+        }
+    }
+
+
+@router.get("/vocabularies/sex")
+async def get_sex_values(db: AsyncSession = Depends(get_db)):
+    """Get all valid sex values from controlled vocabulary."""
+    query = text("SELECT value, label, description FROM sex_values ORDER BY sort_order")
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+@router.get("/vocabularies/interpretation-status")
+async def get_interpretation_status_values(db: AsyncSession = Depends(get_db)):
+    """Get all valid interpretation status values (ACMG classification)."""
+    query = text(
+        """SELECT value, label, description, category
+           FROM interpretation_status_values
+           ORDER BY sort_order"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+@router.get("/vocabularies/progress-status")
+async def get_progress_status_values(db: AsyncSession = Depends(get_db)):
+    """Get all valid progress status values for case interpretation."""
+    query = text(
+        """SELECT value, label, description
+           FROM progress_status_values
+           ORDER BY sort_order"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+@router.get("/vocabularies/allelic-state")
+async def get_allelic_state_values(db: AsyncSession = Depends(get_db)):
+    """Get all valid allelic state values (GENO ontology)."""
+    query = text(
+        """SELECT id, label, description
+           FROM allelic_state_values
+           ORDER BY sort_order"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+@router.get("/vocabularies/evidence-code")
+async def get_evidence_code_values(db: AsyncSession = Depends(get_db)):
+    """Get all valid evidence code values (ECO ontology)."""
+    query = text(
+        """SELECT id, label, description, category
+           FROM evidence_code_values
+           ORDER BY sort_order"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}

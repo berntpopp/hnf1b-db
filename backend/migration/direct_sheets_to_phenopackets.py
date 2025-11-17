@@ -24,6 +24,7 @@ from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
+from migration.phenopackets.reviewer_mapper import ReviewerMapper
 
 # Load environment variables
 load_dotenv()
@@ -67,12 +68,14 @@ class DirectSheetsToPhenopackets:
         # Use provided mapper or default to HPOMapper (concrete implementation)
         self.ontology_mapper = ontology_mapper if ontology_mapper else HPOMapper()
         self.publication_mapper: Optional[PublicationMapper] = None
+        self.reviewer_mapper: Optional[ReviewerMapper] = None
         self.phenopacket_builder: Optional[PhenopacketBuilder] = None
 
         # Data storage
         self.individuals_df: Optional[pd.DataFrame] = None
         self.phenotypes_df: Optional[pd.DataFrame] = None
         self.publications_df: Optional[pd.DataFrame] = None
+        self.reviewers_df: Optional[pd.DataFrame] = None
 
     async def load_data(self) -> None:
         """Load all data from Google Sheets."""
@@ -101,10 +104,92 @@ class DirectSheetsToPhenopackets:
         else:
             logger.warning("No publication data loaded")
 
+        # Load reviewers (for curation attribution)
+        self.reviewers_df = self.sheets_loader.load_sheet("reviewers")
+        if self.reviewers_df is not None:
+            self.reviewer_mapper = ReviewerMapper(self.reviewers_df)
+            logger.info(f"Loaded {len(self.reviewers_df)} reviewers")
+        else:
+            logger.warning("No reviewer data loaded - curation attribution will be skipped")
+
         # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(
             self.ontology_mapper, self.publication_mapper
         )
+
+    async def import_reviewers_as_users(self) -> Dict[str, int]:
+        """Import reviewers from Google Sheets as user accounts.
+
+        Creates user accounts for all reviewers in the Reviewers sheet,
+        enabling proper curation attribution via the reviewed_by FK.
+
+        Returns:
+            Dictionary mapping reviewer email -> user ID
+
+        Raises:
+            ValueError: If reviewer data not loaded or database session unavailable
+        """
+        if self.reviewers_df is None or self.reviewer_mapper is None:
+            logger.warning("No reviewer data available - skipping user import")
+            return {}
+
+        logger.info("Importing reviewers as user accounts...")
+
+        # Import UserImportService here to avoid circular imports
+        from app.auth.user_import_service import UserImportService
+
+        # Prepare reviewer data for batch import
+        reviewer_data_list = []
+
+        for _, reviewer_row in self.reviewers_df.iterrows():
+            email = reviewer_row.get("email")
+            if not email or pd.isna(email):
+                logger.warning("Skipping reviewer with missing email")
+                continue
+
+            # Generate username from email
+            username = self.reviewer_mapper.generate_username(email)
+
+            # Get full name
+            full_name = self.reviewer_mapper.get_full_name(email)
+
+            # Get role
+            role = self.reviewer_mapper.get_role(email)
+
+            # Get ORCID
+            orcid = self.reviewer_mapper.get_orcid(email)
+
+            reviewer_data_list.append(
+                {
+                    "email": email,
+                    "username": username,
+                    "full_name": full_name,
+                    "role": role,
+                    "orcid": orcid,
+                }
+            )
+
+        # Import users using the storage's database session
+        email_to_user_id = {}
+
+        # Get database session from storage
+        async with self.storage.async_session() as db:
+            users = await UserImportService.create_or_update_curator_batch(
+                db=db, reviewer_data_list=reviewer_data_list
+            )
+
+            # Commit the transaction
+            await db.commit()
+
+            # Build email -> user ID mapping
+            for user in users:
+                email_to_user_id[user.email] = user.id
+
+        logger.info(
+            f"Successfully imported {len(email_to_user_id)} reviewers as user accounts"
+        )
+
+        return email_to_user_id
 
     def _is_valid_id(self, value: Any) -> bool:
         """Check if an ID value is valid (not NaN, empty, or whitespace)."""
@@ -216,6 +301,16 @@ class DirectSheetsToPhenopackets:
             # Load all data
             await self.load_data()
 
+            # Import reviewers as user accounts (before building phenopackets)
+            # This ensures users exist before we link phenopackets to them
+            if not dry_run:
+                email_to_user_id = await self.import_reviewers_as_users()
+                logger.info(
+                    f"Reviewer import complete: {len(email_to_user_id)} users created/updated"
+                )
+            else:
+                logger.info("Dry run mode - skipping reviewer import")
+
             # Build phenopackets
             phenopackets = self.build_phenopackets(limit=limit)
 
@@ -226,8 +321,12 @@ class DirectSheetsToPhenopackets:
                     json.dump(phenopackets, f, indent=2)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
-                # Store phenopackets in database
-                await self.storage.store_phenopackets(phenopackets)
+                # Store phenopackets in database with reviewer attribution and audit trail
+                await self.storage.store_phenopackets(
+                    phenopackets=phenopackets,
+                    reviewer_mapper=self.reviewer_mapper,
+                    create_audit=True,  # Create audit entries for initial import
+                )
 
             # Generate summary report
             self.generate_summary(phenopackets)

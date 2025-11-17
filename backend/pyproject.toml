@@ -28,6 +28,7 @@ dependencies = [
     "phenopackets>=2.0.0", # GA4GH Phenopackets schema
     "protobuf>=4.25.0", # For phenopackets serialization
     "jsonschema>=4.20.0", # For phenopacket validation
+    "jsonpatch>=1.33", # For RFC 6902 JSON Patch (audit trail)
     "pronto>=2.5.0", # For parsing OBO ontologies (HPO, MONDO)
     "jsonpath-ng>=1.6.0", # For complex JSON queries
     "httpx>=0.28.1",

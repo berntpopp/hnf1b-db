@@ -74,7 +74,9 @@ class TestValidateEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/validate",
                     json={"notation": "NM_000458.4:c.544G>A"},
@@ -98,7 +100,9 @@ class TestValidateEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/validate",
                     json={"notation": "invalid_notation"},
@@ -113,7 +117,9 @@ class TestValidateEndpoint:
     @pytest.mark.asyncio
     async def test_validate_missing_notation(self):
         """Test validation with missing notation field."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.post(
                 "/api/v2/variants/validate",
                 json={},  # Missing variant_notation
@@ -135,7 +141,9 @@ class TestValidateEndpoint:
             mock_post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/validate",
                     json={"notation": "17-36459258-A-G"},
@@ -162,7 +170,9 @@ class TestAnnotateEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/annotate?variant=NM_000458.4:c.544G>A",
                 )
@@ -188,7 +198,9 @@ class TestAnnotateEndpoint:
             mock_post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/annotate?variant=17-36459258-A-G",
                 )
@@ -211,7 +223,9 @@ class TestAnnotateEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/annotate?variant=invalid_variant",
                 )
@@ -237,7 +251,9 @@ class TestRecodeEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/recode?variant=rs56116432",
                 )
@@ -263,7 +279,9 @@ class TestRecodeEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/recode?variant=NM_000458.4:c.544G>A",
                 )
@@ -301,7 +319,9 @@ class TestRecodeEndpoint:
             mock_client.return_value.__aenter__.return_value.post = mock_post
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/recode?variant=17-36459258-A-G",
                 )
@@ -323,7 +343,9 @@ class TestRecodeEndpoint:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/recode?variant=invalid_variant",
                 )
@@ -339,10 +361,10 @@ class TestSuggestEndpoint:
     @pytest.mark.asyncio
     async def test_suggest_missing_dot(self):
         """Test getting suggestions for notation missing dot."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get(
-                "/api/v2/variants/suggest/c."
-            )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/api/v2/variants/suggest/c.")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -354,10 +376,10 @@ class TestSuggestEndpoint:
     @pytest.mark.asyncio
     async def test_suggest_missing_transcript(self):
         """Test getting suggestions for notation missing transcript."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get(
-                "/api/v2/variants/suggest/c.123G>A"
-            )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/api/v2/variants/suggest/c.123G>A")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -369,10 +391,10 @@ class TestSuggestEndpoint:
     @pytest.mark.asyncio
     async def test_suggest_vcf_format(self):
         """Test getting suggestions for VCF-like notation."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get(
-                "/api/v2/variants/suggest/17:36459258:A:G"
-            )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/api/v2/variants/suggest/17:36459258:A:G")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -385,10 +407,10 @@ class TestSuggestEndpoint:
     @pytest.mark.asyncio
     async def test_suggest_empty_notation(self):
         """Test suggestions with empty notation."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get(
-                "/api/v2/variants/suggest/"
-            )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/api/v2/variants/suggest/")
 
         # Should return 404 for missing path parameter
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -398,7 +420,9 @@ class TestEndpointErrorHandling:
     """Test error handling across all endpoints."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Error handling behavior may vary with fallback validation")
+    @pytest.mark.xfail(
+        reason="Error handling behavior may vary with fallback validation"
+    )
     async def test_validate_vep_service_unavailable(self):
         """Test handling when VEP service is unavailable."""
         with patch("httpx.AsyncClient") as mock_client:
@@ -410,7 +434,9 @@ class TestEndpointErrorHandling:
             mock_get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/validate",
                     json={"notation": "NM_000458.4:c.544G>A"},
@@ -423,7 +449,9 @@ class TestEndpointErrorHandling:
             assert "suggestions" in data
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Error handling behavior may vary with fallback validation")
+    @pytest.mark.xfail(
+        reason="Error handling behavior may vary with fallback validation"
+    )
     async def test_annotate_vep_timeout(self):
         """Test handling VEP API timeout."""
         with patch("httpx.AsyncClient") as mock_client:
@@ -433,7 +461,9 @@ class TestEndpointErrorHandling:
             mock_get = AsyncMock(side_effect=httpx.TimeoutException("Request timeout"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/annotate?variant=NM_000458.4:c.544G>A",
                 )
@@ -441,7 +471,9 @@ class TestEndpointErrorHandling:
             assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Error handling behavior may vary with fallback validation")
+    @pytest.mark.xfail(
+        reason="Error handling behavior may vary with fallback validation"
+    )
     async def test_recode_network_error(self):
         """Test handling network errors during recoding."""
         with patch("httpx.AsyncClient") as mock_client:
@@ -451,7 +483,9 @@ class TestEndpointErrorHandling:
             mock_get = AsyncMock(side_effect=httpx.NetworkError("Connection failed"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v2/variants/recode?variant=rs56116432",
                 )

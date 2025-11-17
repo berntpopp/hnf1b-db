@@ -140,9 +140,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep(
-                "NM_000458.4:c.544+1G>A"
-            )
+            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
 
             assert result is not None
             assert result["most_severe_consequence"] == "splice_donor_variant"

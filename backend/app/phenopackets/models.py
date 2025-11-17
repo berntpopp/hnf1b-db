@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,13 @@ from app.database import Base
 
 # SQLAlchemy Models
 class Phenopacket(Base):
-    """Core phenopacket storage model."""
+    """Core phenopacket storage model.
+
+    Fields:
+        - version: GA4GH Phenopackets schema version (String, e.g., "2.0")
+        - schema_version: Detailed schema version (String, e.g., "2.0.0")
+        - revision: Optimistic locking counter (Integer, increments on update)
+    """
 
     __tablename__ = "phenopackets"
 
@@ -29,8 +35,20 @@ class Phenopacket(Base):
     phenopacket_id: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True
     )
-    version: Mapped[str] = mapped_column(String(10), default="2.0")
+    version: Mapped[str] = mapped_column(
+        String(10),
+        default="2.0",
+        comment="GA4GH Phenopackets schema version (e.g., '2.0', '2.1')",
+    )
     phenopacket: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    # Optimistic locking
+    revision: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False,
+        comment="Revision counter for optimistic locking (increments on each update)",
+    )
 
     # Denormalized fields (computed from JSONB)
     subject_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
@@ -51,6 +69,18 @@ class Phenopacket(Base):
     created_by: Mapped[Optional[str]] = mapped_column(String(100))
     updated_by: Mapped[Optional[str]] = mapped_column(String(100))
     schema_version: Mapped[str] = mapped_column(String(20), default="2.0.0")
+
+    # Soft delete fields
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when record was soft-deleted (NULL if active)",
+    )
+    deleted_by: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Username who performed the soft delete",
+    )
 
 
 class Family(Base):
@@ -138,6 +168,8 @@ class PhenopacketAudit(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     change_reason: Mapped[Optional[str]] = mapped_column(Text)
+    change_patch: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
+    change_summary: Mapped[Optional[str]] = mapped_column(Text)
 
 
 # Pydantic Schemas for API
@@ -333,10 +365,34 @@ class PhenopacketCreate(BaseModel):
 
 
 class PhenopacketUpdate(BaseModel):
-    """Request model for updating a phenopacket."""
+    """Request model for updating a phenopacket.
+
+    Includes optional optimistic locking support via revision field and
+    audit trail support via change_reason field.
+    """
 
     phenopacket: Dict[str, Any]
     updated_by: Optional[str] = None
+    revision: Optional[int] = Field(
+        None,
+        description=(
+            "Optional revision for optimistic locking (disabled if not provided)"
+        ),
+    )
+    change_reason: str = Field(
+        ..., min_length=1, description="Reason for the change (audit trail)"
+    )
+
+
+class PhenopacketDelete(BaseModel):
+    """Request model for deleting a phenopacket.
+
+    Uses request body to avoid URL length limitations with query parameters.
+    """
+
+    change_reason: str = Field(
+        ..., min_length=1, description="Reason for deletion (audit trail)"
+    )
 
 
 class PhenopacketResponse(BaseModel):
@@ -344,11 +400,19 @@ class PhenopacketResponse(BaseModel):
 
     id: str
     phenopacket_id: str
-    version: str
+    version: str  # GA4GH schema version
+    revision: int  # Optimistic locking counter
     phenopacket: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
     schema_version: str
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+
+    class Config:
+        """Pydantic config for ORM mode."""
+
+        from_attributes = True
 
 
 class PhenopacketSearchQuery(BaseModel):
@@ -369,6 +433,26 @@ class PhenopacketSearchQuery(BaseModel):
     sex: Optional[str] = Field(None, description="Subject sex filter")
     min_age: Optional[int] = Field(None, description="Minimum age in years")
     max_age: Optional[int] = Field(None, description="Maximum age in years")
+
+
+class PhenopacketAuditResponse(BaseModel):
+    """Response model for phenopacket audit trail entries."""
+
+    id: str
+    phenopacket_id: str
+    action: str
+    changed_by: Optional[str] = None
+    changed_at: datetime
+    change_reason: Optional[str] = None
+    change_summary: Optional[str] = None
+    change_patch: Optional[Any] = None  # JSONB can store arrays or objects
+    old_value: Optional[Dict[str, Any]] = None
+    new_value: Optional[Dict[str, Any]] = None
+
+    class Config:
+        """Pydantic config for ORM mode."""
+
+        from_attributes = True
 
 
 class AggregationResult(BaseModel):

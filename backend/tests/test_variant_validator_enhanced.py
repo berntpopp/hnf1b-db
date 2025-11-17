@@ -57,12 +57,23 @@ class TestVariantFormatDetection:
         validator = VariantValidator()
 
         # Standard VCF
-        assert validator._vcf_to_vep_format("17-36459258-A-G") == "17 36459258 . A G . . ."
+        assert (
+            validator._vcf_to_vep_format("17-36459258-A-G") == "17 36459258 . A G . . ."
+        )
 
         # With chr prefix (should be removed)
-        assert validator._vcf_to_vep_format("chr17-36459258-A-G") == "17 36459258 . A G . . ."
-        assert validator._vcf_to_vep_format("Chr17-36459258-A-G") == "17 36459258 . A G . . ."
-        assert validator._vcf_to_vep_format("CHR17-36459258-A-G") == "17 36459258 . A G . . ."
+        assert (
+            validator._vcf_to_vep_format("chr17-36459258-A-G")
+            == "17 36459258 . A G . . ."
+        )
+        assert (
+            validator._vcf_to_vep_format("Chr17-36459258-A-G")
+            == "17 36459258 . A G . . ."
+        )
+        assert (
+            validator._vcf_to_vep_format("CHR17-36459258-A-G")
+            == "17 36459258 . A G . . ."
+        )
 
         # Sex chromosomes
         assert validator._vcf_to_vep_format("X-123456-G-C") == "X 123456 . G C . . ."
@@ -246,7 +257,7 @@ class TestVEPAnnotation:
             mock_response.json.return_value = [{"id": "test"}]
             mock_response.headers = {
                 "X-RateLimit-Remaining": "5",  # 5 remaining
-                "X-RateLimit-Limit": "100",    # out of 100 (5% remaining)
+                "X-RateLimit-Limit": "100",  # out of 100 (5% remaining)
             }
 
             mock_client.return_value.__aenter__.return_value.get = AsyncMock(
@@ -577,7 +588,9 @@ class TestErrorHandling:
             mock_success_response.json = MagicMock(return_value=[mock_success_data])
             mock_success_response.headers = {}
 
-            mock_post = AsyncMock(side_effect=[mock_fail_response, mock_success_response])
+            mock_post = AsyncMock(
+                side_effect=[mock_fail_response, mock_success_response]
+            )
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
             with patch("asyncio.sleep"):
@@ -785,9 +798,7 @@ class TestVariantRecoding:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock network exception
-            mock_get = AsyncMock(
-                side_effect=httpx.NetworkError("Connection failed")
-            )
+            mock_get = AsyncMock(side_effect=httpx.NetworkError("Connection failed"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
             with patch("asyncio.sleep") as mock_sleep:
@@ -1105,7 +1116,10 @@ class TestPhenopacketValidation:
         variant_descriptor = {
             "id": "var-1",
             "expressions": [
-                {"syntax": "vcf", "value": "17:36459258:A:G"},  # Colons instead of dashes
+                {
+                    "syntax": "vcf",
+                    "value": "17:36459258:A:G",
+                },  # Colons instead of dashes
             ],
         }
 
@@ -1233,8 +1247,7 @@ class TestPhenopacketValidation:
         errors = validator.validate_variant_formats(variant_descriptor)
 
         assert any(
-            "state must be LiteralSequenceExpression or ReferenceLengthExpression"
-            in e
+            "state must be LiteralSequenceExpression or ReferenceLengthExpression" in e
             for e in errors
         )
 
@@ -1269,7 +1282,9 @@ class TestPhenopacketValidation:
         errors = validator.validate_variant_formats(variant_descriptor)
 
         # Should not have CNV notation error since ISCN is present
-        assert not any("Structural variant missing valid CNV notation" in e for e in errors)
+        assert not any(
+            "Structural variant missing valid CNV notation" in e for e in errors
+        )
 
     def test_validate_variants_in_phenopacket(self):
         """Test validate_variants_in_phenopacket validates all variants."""
@@ -1288,7 +1303,10 @@ class TestPhenopacketValidation:
                                     "variationDescriptor": {
                                         "id": "var-1",
                                         "expressions": [
-                                            {"syntax": "hgvs.c", "value": "c123G>A"},  # Invalid
+                                            {
+                                                "syntax": "hgvs.c",
+                                                "value": "c123G>A",
+                                            },  # Invalid
                                         ],
                                     }
                                 },
@@ -1337,7 +1355,9 @@ class TestNotationSuggestions:
         # Should provide suggestions (even if just generic format examples)
         assert len(suggestions) > 0
         # Should contain general notation format guidance
-        assert any("NM_" in s or "chr" in s or "format" in s.lower() for s in suggestions)
+        assert any(
+            "NM_" in s or "chr" in s or "format" in s.lower() for s in suggestions
+        )
 
     def test_get_notation_suggestions_vcf_format(self):
         """Test suggestions for VCF-like format."""
@@ -1347,7 +1367,9 @@ class TestNotationSuggestions:
 
         # Should suggest VCF or genomic formats
         assert len(suggestions) > 0
-        assert any("chr" in s.lower() or "vcf" in s.lower() or "NC_" in s for s in suggestions)
+        assert any(
+            "chr" in s.lower() or "vcf" in s.lower() or "NC_" in s for s in suggestions
+        )
 
     def test_get_notation_suggestions_cnv_format(self):
         """Test suggestions for CNV-related input."""
@@ -1422,8 +1444,12 @@ class TestValidationMethods:
         assert validator._validate_hgvs_c("NM_000458.4:c.544+1G>A") is True  # Intronic
         assert validator._validate_hgvs_c("c.123_456del") is True  # Deletion
         assert validator._validate_hgvs_c("c.123_456dup") is True  # Duplication
-        assert validator._validate_hgvs_c("c.123delATCG") is True  # Deletion with sequence
-        assert validator._validate_hgvs_c("c.123dupATCG") is True  # Duplication with sequence
+        assert (
+            validator._validate_hgvs_c("c.123delATCG") is True
+        )  # Deletion with sequence
+        assert (
+            validator._validate_hgvs_c("c.123dupATCG") is True
+        )  # Duplication with sequence
         assert validator._validate_hgvs_c("c.123_456insATCG") is True  # Insertion
         assert validator._validate_hgvs_c("c.544-2A>G") is True  # Intronic with minus
 
@@ -1433,7 +1459,9 @@ class TestValidationMethods:
 
         # Invalid HGVS c. notations
         assert validator._validate_hgvs_c("c123G>A") is False  # Missing dot
-        assert validator._validate_hgvs_c("NM_000458.4:p.Arg181*") is False  # Wrong type
+        assert (
+            validator._validate_hgvs_c("NM_000458.4:p.Arg181*") is False
+        )  # Wrong type
         assert validator._validate_hgvs_c("m.123A>G") is False  # Mitochondrial (not c.)
 
     def test_validate_hgvs_p_valid(self):
@@ -1469,7 +1497,9 @@ class TestValidationMethods:
 
         # Invalid HGVS g. notations
         assert validator._validate_hgvs_g("chr17:g.36459258A>G") is False  # chr prefix
-        assert validator._validate_hgvs_g("NC_000017.11:g.36459258del") is False  # Not substitution
+        assert (
+            validator._validate_hgvs_g("NC_000017.11:g.36459258del") is False
+        )  # Not substitution
 
     def test_validate_spdi_valid(self):
         """Test SPDI notation validation with valid inputs."""
@@ -1519,8 +1549,12 @@ class TestValidationMethods:
         validator = VariantValidator()
 
         # Invalid CNV notations
-        assert validator._is_ga4gh_cnv_notation("17-36459258-37832869-DEL") is False  # Dashes
-        assert validator._is_ga4gh_cnv_notation("17:36459258:DEL") is False  # Missing end
+        assert (
+            validator._is_ga4gh_cnv_notation("17-36459258-37832869-DEL") is False
+        )  # Dashes
+        assert (
+            validator._is_ga4gh_cnv_notation("17:36459258:DEL") is False
+        )  # Missing end
 
 
 class TestConfigurableSettings:
@@ -1528,7 +1562,9 @@ class TestConfigurableSettings:
 
     def test_custom_rate_limit(self):
         """Test rate limiter uses configurable setting."""
-        with patch("app.phenopackets.validation.variant_validator.settings") as mock_settings:
+        with patch(
+            "app.phenopackets.validation.variant_validator.settings"
+        ) as mock_settings:
             mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 10
             mock_settings.VEP_CACHE_ENABLED = True
             mock_settings.VEP_CACHE_SIZE_LIMIT = 1000
@@ -1542,7 +1578,9 @@ class TestConfigurableSettings:
 
     def test_custom_cache_size(self):
         """Test cache uses configurable size limit."""
-        with patch("app.phenopackets.validation.variant_validator.settings") as mock_settings:
+        with patch(
+            "app.phenopackets.validation.variant_validator.settings"
+        ) as mock_settings:
             mock_settings.VEP_CACHE_SIZE_LIMIT = 500
             mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 15
             mock_settings.VEP_CACHE_ENABLED = True
@@ -1556,7 +1594,9 @@ class TestConfigurableSettings:
 
     def test_custom_retry_config(self):
         """Test retry uses configurable max attempts and backoff."""
-        with patch("app.phenopackets.validation.variant_validator.settings") as mock_settings:
+        with patch(
+            "app.phenopackets.validation.variant_validator.settings"
+        ) as mock_settings:
             mock_settings.VEP_MAX_RETRIES = 5
             mock_settings.VEP_RETRY_BACKOFF_FACTOR = 3.0
             mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 15

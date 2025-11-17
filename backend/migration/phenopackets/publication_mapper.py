@@ -1,43 +1,41 @@
 """Publication reference mapping for phenopackets."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
+from migration.phenopackets.base_mapper import SheetMapper
+
 logger = logging.getLogger(__name__)
 
 
-class PublicationMapper:
-    """Maps publication IDs to external references."""
+class PublicationMapper(SheetMapper):
+    """Maps publication IDs to external references.
 
-    def __init__(self, publications_df: Optional[pd.DataFrame] = None):
-        """Initialize publication mapper.
+    Extends SheetMapper to provide publication-specific functionality
+    for creating ExternalReference objects with PMID/DOI metadata.
+    """
 
-        Args:
-            publications_df: DataFrame containing publication data
+    def _get_map_name(self) -> str:
+        """Get human-readable name for logging.
+
+        Returns:
+            "publication"
         """
-        self.publication_map: Dict[str, Any] = {}
-        if publications_df is not None and not publications_df.empty:
-            self._build_publication_map(publications_df)
+        return "publication"
 
-    def _build_publication_map(self, publications_df: pd.DataFrame) -> None:
-        """Build publication map from DataFrame.
+    def _get_key_columns(self) -> List[str]:
+        """Get columns to use as lookup keys.
 
-        Args:
-            publications_df: DataFrame containing publication data
+        Publications are indexed by both publication_id and publication_alias
+        to support lookup by either identifier.
+
+        Returns:
+            ["publication_id", "publication_alias"]
         """
-        for _, pub_row in publications_df.iterrows():
-            # Map by both publication_id and publication_alias
-            pub_id = pub_row.get("publication_id")
-            pub_alias = pub_row.get("publication_alias")
-            if pub_id:
-                self.publication_map[str(pub_id)] = pub_row
-            if pub_alias:
-                self.publication_map[str(pub_alias)] = pub_row
-
-        logger.info(f"Created publication map with {len(self.publication_map)} entries")
+        return ["publication_id", "publication_alias"]
 
     def create_publication_reference(
         self, publication_id: str
@@ -50,16 +48,13 @@ class PublicationMapper:
         Returns:
             ExternalReference dict with PMID/DOI if available, None otherwise
         """
-        if not publication_id or not self.publication_map:
+        if not publication_id or not self:
             return None
 
-        pub_data = self.publication_map.get(str(publication_id))
+        # Use base class method for lookup
+        pub_data = self.get_as_dict(publication_id)
         if pub_data is None:
             return None
-
-        # Convert Series to dict if needed (when pub_data is a pandas Series)
-        if hasattr(pub_data, "to_dict"):
-            pub_data = pub_data.to_dict()
 
         # Build proper ExternalReference with PMID/DOI
         external_ref = {}

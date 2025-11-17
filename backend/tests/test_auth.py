@@ -137,9 +137,7 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_se
     from app.models.user import User
 
     try:
-        await db_session.execute(
-            delete(User).where(User.email == "new@example.com")
-        )
+        await db_session.execute(delete(User).where(User.email == "new@example.com"))
         await db_session.commit()
     except Exception:
         await db_session.rollback()
@@ -162,9 +160,7 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_se
 
     # Cleanup: Remove the created user
     try:
-        await db_session.execute(
-            delete(User).where(User.email == "new@example.com")
-        )
+        await db_session.execute(delete(User).where(User.email == "new@example.com"))
         await db_session.commit()
     except Exception:
         await db_session.rollback()

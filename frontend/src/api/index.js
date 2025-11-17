@@ -192,6 +192,48 @@ export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { par
 export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${id}`);
 
 /**
+ * Create a new phenopacket (requires curator role).
+ * @param {Object} phenopacketData - Phenopacket data following GA4GH Phenopackets v2 standard
+ * @returns {Promise} Axios promise with created phenopacket
+ */
+export const createPhenopacket = (phenopacketData) =>
+  apiClient.post('/phenopackets/', phenopacketData);
+
+/**
+ * Update an existing phenopacket (requires curator role).
+ * @param {string} id - Phenopacket ID
+ * @param {Object} data - Update data object
+ * @param {Object} data.phenopacket - Updated phenopacket data
+ * @param {number} data.revision - Current revision for optimistic locking
+ * @param {string} data.change_reason - Reason for the change (audit trail)
+ * @returns {Promise} Axios promise with updated phenopacket
+ */
+export const updatePhenopacket = (id, data) =>
+  apiClient.put(`/phenopackets/${id}`, {
+    phenopacket: data.phenopacket,
+    revision: data.revision,
+    change_reason: data.change_reason,
+  });
+
+/**
+ * Delete a phenopacket (soft delete, requires curator role).
+ * @param {string} id - Phenopacket ID
+ * @param {string} changeReason - Reason for deletion (required for audit trail)
+ * @returns {Promise} Axios promise with deletion confirmation
+ */
+export const deletePhenopacket = (id, changeReason) =>
+  apiClient.delete(`/phenopackets/${id}`, {
+    params: { change_reason: changeReason },
+  });
+
+/**
+ * Get audit history for a phenopacket.
+ * @param {string} id - Phenopacket ID
+ * @returns {Promise} Axios promise with array of audit entries
+ */
+export const getPhenopacketAuditHistory = (id) => apiClient.get(`/phenopackets/${id}/audit`);
+
+/**
  * Get multiple phenopackets by IDs in a single request.
  * Prevents N+1 query problem.
  * @param {Array<string>} phenopacketIds - Array of phenopacket IDs

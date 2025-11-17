@@ -51,17 +51,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function logout() {
+  async function logout(skipBackendCall = false) {
     isLoading.value = true;
 
-    try {
-      // Call backend logout endpoint
-      await apiClient.post('/auth/logout');
-    } catch (err) {
-      // Continue with logout even if backend call fails
-      window.logService.warn('Logout API call failed, continuing with local logout', {
-        error: err.message,
-      });
+    // Only call backend logout if we have a valid token and not skipping
+    if (!skipBackendCall && accessToken.value) {
+      try {
+        await apiClient.post('/auth/logout');
+      } catch (err) {
+        // Continue with logout even if backend call fails
+        window.logService.warn('Logout API call failed, continuing with local logout', {
+          error: err.message,
+        });
+      }
     }
 
     // Clear state
@@ -99,9 +101,9 @@ export const useAuthStore = defineStore('auth', () => {
         error: err.message,
       });
 
-      // If token is invalid, clear auth state
+      // If token is invalid, clear auth state (skip backend logout call since token is already invalid)
       if (err.response?.status === 401) {
-        await logout();
+        await logout(true);
       }
 
       throw err;
@@ -136,8 +138,8 @@ export const useAuthStore = defineStore('auth', () => {
         error: err.message,
       });
 
-      // If refresh fails, logout user
-      await logout();
+      // If refresh fails, logout user (skip backend call since token is already invalid)
+      await logout(true);
       throw err;
     }
   }
