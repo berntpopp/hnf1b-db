@@ -151,6 +151,7 @@
           color="success"
           location="bottom end"
           size="large"
+          :offset-y="80"
           app
           @click="navigateToCreate"
         />
