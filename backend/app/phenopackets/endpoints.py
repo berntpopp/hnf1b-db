@@ -265,12 +265,16 @@ async def get_by_publication(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{phenopacket_id}", response_model=Dict)
+@router.get("/{phenopacket_id}", response_model=PhenopacketResponse)
 async def get_phenopacket(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single phenopacket by ID (excludes soft-deleted records)."""
+    """Get a single phenopacket by ID with metadata (excludes soft-deleted records).
+
+    Returns the full PhenopacketResponse including revision number for optimistic locking
+    when editing.
+    """
     result = await db.execute(
         select(Phenopacket).where(
             and_(
@@ -284,7 +288,7 @@ async def get_phenopacket(
     if not phenopacket:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
-    return phenopacket.phenopacket
+    return build_phenopacket_response(phenopacket)
 
 
 @router.post("/search", response_model=List[PhenopacketResponse])

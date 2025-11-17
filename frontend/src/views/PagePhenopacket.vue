@@ -115,9 +115,10 @@
 
     <!-- Delete Confirmation Dialog -->
     <DeleteConfirmationDialog
+      v-if="phenopacket"
       v-model="showDeleteDialog"
-      :phenopacket-id="phenopacket?.id"
-      :subject-id="phenopacket?.subject?.id"
+      :phenopacket-id="phenopacket.id"
+      :subject-id="phenopacket.subject?.id"
       :loading="deleteLoading"
       @confirm="handleDeleteConfirm"
       @cancel="showDeleteDialog = false"
@@ -191,6 +192,7 @@ export default {
 
       try {
         const response = await getPhenopacket(phenopacketId);
+        // Backend returns the GA4GH phenopacket object directly
         this.phenopacket = response.data;
 
         window.logService.debug('Phenopacket data received', {

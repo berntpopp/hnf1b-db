@@ -23,10 +23,16 @@
           <!-- Phenopacket ID (read-only for edit) -->
           <v-text-field
             v-model="phenopacket.id"
-            label="Phenopacket ID"
+            label="Phenopacket ID *"
             :readonly="isEditing"
-            :hint="isEditing ? 'Cannot change ID when editing' : 'Auto-generated if empty'"
+            :rules="[rules.required]"
+            :hint="
+              isEditing
+                ? 'Cannot change ID when editing'
+                : 'Enter a unique identifier (e.g., CASE001, HNF1B-P001)'
+            "
             persistent-hint
+            required
             class="mb-4"
           />
 
@@ -99,7 +105,7 @@
           <!-- Variant Information -->
           <VariantAnnotationForm
             v-model="phenopacket.interpretations"
-            :subject-id="phenopacket.subject.id"
+            :subject-id="phenopacket.subject?.id || ''"
           />
 
           <!-- Phenotypic Features Section -->
@@ -228,8 +234,8 @@ export default {
     if (this.isEditing) {
       await this.loadPhenopacket();
     } else {
-      // Generate ID for new phenopacket
-      this.phenopacket.id = `phenopacket-${Date.now()}`;
+      // Leave ID empty for user to specify (required field will enforce entry)
+      this.phenopacket.id = '';
     }
   },
   methods: {
@@ -240,11 +246,11 @@ export default {
       try {
         const response = await getPhenopacket(this.$route.params.phenopacket_id);
 
-        // Extract revision for optimistic locking
-        this.revision = response.data.revision;
+        // Backend returns the GA4GH phenopacket object directly
+        this.phenopacket = response.data;
 
-        // Extract the GA4GH phenopacket object
-        this.phenopacket = response.data.phenopacket;
+        // Initialize revision to 1 (optimistic locking disabled for now)
+        this.revision = 1;
 
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
