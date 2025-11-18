@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ReferenceGenomeSchema(BaseModel):
@@ -122,17 +122,13 @@ class GeneSchema(BaseModel):
     source_version: Optional[str] = Field(None, description="Source database version")
     source_url: Optional[str] = Field(None, description="URL to source record")
     extra_data: Optional[Dict[str, Any]] = None
-    genome_build: str = Field(
-        ..., description="Genome assembly name", alias="genome.name"
-    )
     created_at: datetime
     updated_at: datetime
 
     class Config:
-        """Pydantic configuration with aliasing."""
+        """Pydantic configuration."""
 
         from_attributes = True
-        populate_by_name = True
 
 
 class GeneDetailSchema(GeneSchema):

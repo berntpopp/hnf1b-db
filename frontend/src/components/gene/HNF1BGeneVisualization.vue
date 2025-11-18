@@ -960,24 +960,42 @@ export default {
         const response = await getReferenceGenomicRegion('17:36000000-39900000', 'GRCh38');
 
         if (response.data && response.data.genes && response.data.genes.length > 0) {
-          // Map API gene data to component format
-          this.chr17q12Genes = response.data.genes.map((gene) => ({
-            symbol: gene.symbol,
-            name: gene.name,
-            start: gene.start,
-            end: gene.end,
-            size: gene.end - gene.start,
-            strand: gene.strand,
-            transcriptId: gene.extra_data?.transcript_id || null,
-            mim: gene.extra_data?.mim || null,
-            function: gene.extra_data?.function || null,
-            phenotype: gene.extra_data?.phenotype || null,
-            clinicalSignificance: gene.extra_data?.clinical_significance || 'unknown',
-            color: gene.extra_data?.color || '#90CAF9',
-          }));
+          // Map API gene data to component format and filter for clinical relevance
+          const MIN_GENE_SIZE = 10000; // 10kb minimum size
 
-          window.logService.info('Successfully loaded chr17q12 genes from API', {
-            geneCount: this.chr17q12Genes.length,
+          this.chr17q12Genes = response.data.genes
+            .map((gene) => ({
+              symbol: gene.symbol,
+              name: gene.name,
+              start: gene.start,
+              end: gene.end,
+              size: gene.end - gene.start,
+              strand: gene.strand,
+              biotype: gene.extra_data?.biotype || 'protein_coding',
+              transcriptId: gene.extra_data?.transcript_id || null,
+              mim: gene.extra_data?.mim || null,
+              function: gene.extra_data?.function || null,
+              phenotype: gene.extra_data?.phenotype || null,
+              clinicalSignificance: gene.extra_data?.clinical_significance || 'unknown',
+              color: gene.extra_data?.color || '#90CAF9',
+            }))
+            .filter((gene) => {
+              // Filter 1: Protein-coding genes only (exclude lncRNA, miRNA, etc.)
+              const isProteinCoding = gene.biotype === 'protein_coding';
+
+              // Filter 2: Has approved gene symbol (not ENSG* novel transcript)
+              const hasApprovedSymbol = !gene.symbol.startsWith('ENSG');
+
+              // Filter 3: Minimum size of 10kb to reduce clutter
+              const meetsMinSize = gene.size >= MIN_GENE_SIZE;
+
+              return isProteinCoding && hasApprovedSymbol && meetsMinSize;
+            });
+
+          window.logService.info('Successfully loaded chr17q12 genes from API (filtered)', {
+            totalGenes: response.data.genes.length,
+            filteredGenes: this.chr17q12Genes.length,
+            filter: 'protein-coding, approved symbols, >10kb',
           });
         } else {
           window.logService.warn('No genes returned from API for 17q12 region');
