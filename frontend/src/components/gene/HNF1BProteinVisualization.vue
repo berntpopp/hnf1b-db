@@ -277,6 +277,7 @@
 <script>
 import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
+import { getReferenceGeneDomains } from '@/api';
 
 export default {
   name: 'HNF1BProteinVisualization',
@@ -306,7 +307,11 @@ export default {
       // D3 zoom properties
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
-      // Domain coordinates verified from UniProt P35680 (2025-01-17)
+      // Loading state for API data
+      loading: false,
+      apiError: null,
+      // Domain coordinates - fallback data (verified from UniProt P35680 2025-01-17)
+      // Will be replaced with API data if available
       // Source: https://www.uniprot.org/uniprotkb/P35680/entry
       // RefSeq: NP_000449.1
       domains: [
@@ -414,17 +419,69 @@ export default {
       return currentVariant?.transcript || '';
     },
   },
-  mounted() {
+  async mounted() {
     this.updateSVGWidth();
     window.addEventListener('resize', this.updateSVGWidth);
     this.initializeD3Zoom();
     window.addEventListener('keydown', this.handleKeyboardShortcuts);
+
+    // Fetch protein domains from API
+    await this.fetchProteinDomains();
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.updateSVGWidth);
     window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
+    async fetchProteinDomains() {
+      try {
+        this.loading = true;
+        this.apiError = null;
+
+        window.logService.info('Fetching HNF1B protein domains from API');
+        const response = await getReferenceGeneDomains('HNF1B', 'GRCh38');
+
+        if (response.data && response.data.domains && response.data.domains.length > 0) {
+          // Map API domain data to component format
+          this.domains = response.data.domains.map((domain) => ({
+            name: domain.name,
+            shortName: domain.short_name || domain.name.substring(0, 5),
+            start: domain.start,
+            end: domain.end,
+            color: this.getDomainColor(domain.name),
+            function: domain.function || '',
+          }));
+
+          // Update protein length from API if available
+          if (response.data.length) {
+            this.proteinLength = response.data.length;
+          }
+
+          window.logService.info('Successfully loaded protein domains from API', {
+            domainCount: this.domains.length,
+            proteinLength: this.proteinLength,
+          });
+        }
+      } catch (error) {
+        this.apiError = error.message;
+        window.logService.warn('Failed to fetch protein domains from API, using fallback data', {
+          error: error.message,
+        });
+        // Keep fallback domains from data()
+      } finally {
+        this.loading = false;
+      }
+    },
+    getDomainColor(domainName) {
+      // Map domain names to colors matching the original hardcoded values
+      const colorMap = {
+        'Dimerization Domain': '#FFB74D',
+        'POU-Specific Domain': '#64B5F6',
+        'POU Homeodomain': '#4FC3F7',
+        'Transactivation Domain': '#81C784',
+      };
+      return colorMap[domainName] || '#9E9E9E'; // Default gray for unknown domains
+    },
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
