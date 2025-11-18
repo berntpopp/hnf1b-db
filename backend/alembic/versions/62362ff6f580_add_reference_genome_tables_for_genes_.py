@@ -16,10 +16,10 @@ Create Date: 2025-11-18 11:23:10.491848
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '62362ff6f580'
@@ -30,7 +30,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema - create reference genome tables."""
-
     # 1. Create reference_genomes table
     op.create_table(
         'reference_genomes',

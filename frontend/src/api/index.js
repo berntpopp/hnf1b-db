@@ -516,6 +516,7 @@ export const getVariants = async (params = {}) => {
     variant_type,
     classification,
     consequence,
+    domain,
     pathogenicity,
     sort,
   } = params;
@@ -529,6 +530,7 @@ export const getVariants = async (params = {}) => {
       variant_type,
       classification: classification || pathogenicity, // Support both new and legacy params
       consequence,
+      domain,
       sort,
     },
   });

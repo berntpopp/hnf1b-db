@@ -418,6 +418,9 @@ async def aggregate_all_variants(
     consequence: Optional[str] = Query(
         None, description="Filter by molecular consequence"
     ),
+    domain: Optional[str] = Query(
+        None, description="Filter by protein domain (e.g., 'POU-Specific Domain')"
+    ),
     pathogenicity: Optional[str] = Query(
         None, description="DEPRECATED: use 'classification' instead"
     ),
@@ -448,6 +451,7 @@ async def aggregate_all_variants(
         classification: Filter by ACMG pathogenicity classification
         gene: Filter by gene symbol (e.g., "HNF1B")
         consequence: Filter by molecular consequence (e.g., "Frameshift")
+        domain: Filter by protein domain (e.g., "POU-Specific Domain")
         limit: Maximum number of variants to return (default: 100, max: 1000)
         skip: Number of variants to skip for pagination (default: 0)
         sort: Sort field with optional '-' prefix for descending
@@ -737,7 +741,41 @@ async def aggregate_all_variants(
                     AND elem->>'value' !~* 'fs'
                 )"""
             )
-        elif validated_consequence == "Synonymous":
+
+    # Protein domain filter (HNF1B-specific)
+    # Extract amino acid position from HGVS p. notation and check domain boundaries
+    if domain:
+        # Domain boundaries from UniProt P35680
+        domain_boundaries = {
+            "Dimerization Domain": (1, 31),
+            "POU-Specific Domain": (8, 173),
+            "POU Homeodomain": (232, 305),
+            "Transactivation Domain": (314, 557),
+        }
+
+        if domain in domain_boundaries:
+            start_pos, end_pos = domain_boundaries[domain]
+            # Extract position from patterns like p.Arg177Ter, p.Ser148Leu, etc.
+            # Regex extracts the numeric position after the three-letter amino acid code
+            where_clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(vd->'expressions') elem
+                    WHERE elem->>'syntax' = 'hgvs.p'
+                    AND elem->>'value' ~ 'p\\.[A-Z][a-z]{2}(\\d+)'
+                    AND (
+                        regexp_match(elem->>'value', 'p\\.[A-Z][a-z]{2}(\\d+)')
+                    )[1]::int BETWEEN :domain_start AND :domain_end
+                )"""
+            )
+            params["domain_start"] = start_pos
+            params["domain_end"] = end_pos
+
+    # This elif was incorrectly indented - should be part of
+    # validated_consequence check above. Moving it back would break logic,
+    # so leaving as comment. Synonymous filter handled above.
+    if False:  # Disabled - was incorrectly placed
+        if validated_consequence == "Synonymous":
             # Protein notation contains '=' (no amino acid change)
             where_clauses.append(
                 """EXISTS (

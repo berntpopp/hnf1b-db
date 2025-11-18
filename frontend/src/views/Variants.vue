@@ -88,11 +88,26 @@
           </v-col>
 
           <!-- Molecular Consequence Filter -->
-          <v-col cols="12" md="4">
+          <v-col cols="12" md="3">
             <v-select
               v-model="filterConsequence"
               :items="consequences"
               label="Consequence"
+              clearable
+              :disabled="loading"
+              hide-details
+              @update:model-value="applyFilters"
+            />
+          </v-col>
+
+          <!-- Protein Domain Filter -->
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="filterDomain"
+              :items="domainFilterOptions"
+              item-title="label"
+              item-value="value"
+              label="Protein Domain"
               clearable
               :disabled="loading"
               hide-details
@@ -148,6 +163,17 @@
               >
                 <v-icon start size="small"> mdi-molecule </v-icon>
                 {{ filterConsequence }}
+              </v-chip>
+              <v-chip
+                v-if="filterDomain"
+                closable
+                color="teal"
+                size="small"
+                variant="flat"
+                @click:close="clearDomainFilter"
+              >
+                <v-icon start size="small"> mdi-protein </v-icon>
+                {{ filterDomain }}
               </v-chip>
               <v-chip color="error" size="small" variant="outlined" @click="clearAllFilters">
                 <v-icon start size="small"> mdi-close </v-icon>
@@ -320,7 +346,7 @@
 
 <script>
 import debounce from 'just-debounce-it';
-import { getVariants } from '@/api';
+import { getVariants, getReferenceGeneDomains } from '@/api';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
@@ -335,6 +361,7 @@ export default {
       filterType: null,
       filterClassification: null,
       filterConsequence: null,
+      filterDomain: null,
 
       // Table data
       variants: [],
@@ -342,6 +369,10 @@ export default {
       totalItems: 0,
       totalPages: 0,
       filteredCount: 0,
+
+      // Protein domain data (for filter dropdown options)
+      proteinDomains: [],
+      domainsLoading: false,
 
       // Initialization flag to prevent double loading
       // See: https://github.com/vuetifyjs/vuetify/issues/16878
@@ -451,8 +482,17 @@ export default {
         this.searchQuery ||
         this.filterType ||
         this.filterClassification ||
-        this.filterConsequence
+        this.filterConsequence ||
+        this.filterDomain
       );
+    },
+
+    // Domain filter options for dropdown
+    domainFilterOptions() {
+      return this.proteinDomains.map((domain) => ({
+        label: `${domain.name} (${domain.start}-${domain.end})`,
+        value: domain.name,
+      }));
     },
 
     // Calculate the starting item index for the current page
@@ -491,11 +531,37 @@ export default {
       deep: true,
     },
   },
-  created() {
+  async created() {
     // Debounce search to prevent excessive API calls (300ms delay)
     this.debouncedSearch = debounce(this.searchVariants, 300);
+
+    // Fetch protein domains for domain filtering
+    await this.fetchProteinDomains();
   },
   methods: {
+    async fetchProteinDomains() {
+      try {
+        this.domainsLoading = true;
+        window.logService.info('Fetching HNF1B protein domains for filtering');
+
+        const response = await getReferenceGeneDomains('HNF1B', 'GRCh38');
+
+        if (response.data && response.data.domains && response.data.domains.length > 0) {
+          this.proteinDomains = response.data.domains;
+          window.logService.info('Successfully loaded protein domains', {
+            domainCount: this.proteinDomains.length,
+          });
+        }
+      } catch (error) {
+        window.logService.warn('Failed to fetch protein domains', {
+          error: error.message,
+        });
+        // Domain filtering will be disabled if domains can't be loaded
+      } finally {
+        this.domainsLoading = false;
+      }
+    },
+
     async fetchVariants() {
       this.loading = true;
       window.logService.debug('Starting variant fetch', {
@@ -546,6 +612,9 @@ export default {
         }
         if (this.filterConsequence) {
           requestParams.consequence = this.filterConsequence;
+        }
+        if (this.filterDomain) {
+          requestParams.domain = this.filterDomain;
         }
 
         const response = await getVariants(requestParams);
@@ -625,11 +694,17 @@ export default {
       this.applyFilters();
     },
 
+    clearDomainFilter() {
+      this.filterDomain = null;
+      this.applyFilters();
+    },
+
     clearAllFilters() {
       this.searchQuery = '';
       this.filterType = null;
       this.filterClassification = null;
       this.filterConsequence = null;
+      this.filterDomain = null;
       this.applyFilters();
     },
 
