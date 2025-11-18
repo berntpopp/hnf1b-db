@@ -13,6 +13,7 @@ from app.ontology import routers as ontology_router
 from app.phenopackets import clinical_endpoints
 from app.phenopackets.routers import router as phenopackets_router
 from app.publications import endpoints as publication_endpoints
+from app.reference import router as reference_router
 
 
 @asynccontextmanager
@@ -55,6 +56,7 @@ app.include_router(auth_endpoints.router)
 app.include_router(hpo_proxy.router)
 app.include_router(variant_validator_endpoint.router)
 app.include_router(ontology_router.router, prefix="/api/v2")
+app.include_router(reference_router.router, prefix="/api/v2")
 
 
 # Root endpoint
@@ -69,6 +71,7 @@ async def root():
         "endpoints": {
             "phenopackets": "/api/v2/phenopackets",
             "clinical": "/api/v2/clinical",
+            "reference": "/api/v2/reference",
         },
         "standards": {
             "phenopackets": "GA4GH Phenopackets v2.0",
@@ -129,6 +132,10 @@ async def api_info():
             {
                 "path": "/api/v2/clinical",
                 "description": "Clinical feature-specific queries",
+            },
+            {
+                "path": "/api/v2/reference",
+                "description": "Reference genome data (genes, transcripts, domains)",
             },
         ],
     }
