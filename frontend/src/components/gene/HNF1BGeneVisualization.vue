@@ -635,9 +635,9 @@
 
 <script>
 import * as d3 from 'd3';
-import chr17q12Data from '@/data/chr17q12_genes.json';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getCNVDetails } from '@/utils/variants';
+import { getReferenceGenomicRegion } from '@/api';
 
 export default {
   name: 'HNF1BGeneVisualization',
@@ -672,8 +672,20 @@ export default {
       zoomLevel: 1,
       zoomedExon: null, // Track which exon is zoomed in
       viewMode: 'gene', // 'gene' or 'cnv'
-      chr17q12Region: chr17q12Data.region,
-      chr17q12Genes: chr17q12Data.genes,
+      // Loading state for API data
+      loading: false,
+      apiError: null,
+      // Chr17q12 region data - fallback values
+      chr17q12Region: {
+        chromosome: '17',
+        cytoBand: '17q12',
+        start: 36000000,
+        end: 39900000,
+        size: 3900000,
+        name: '17q12 extended region (chr17:36.0-39.9 Mb)',
+        assembly: 'GRCh38/hg38',
+      },
+      chr17q12Genes: [], // Will be populated from API
       // D3 zoom properties
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
@@ -923,17 +935,63 @@ export default {
       });
     },
   },
-  mounted() {
+  async mounted() {
     this.updateSVGWidth();
     window.addEventListener('resize', this.updateSVGWidth);
     this.initializeD3Zoom();
     window.addEventListener('keydown', this.handleKeyboardShortcuts);
+
+    // Fetch chr17q12 genes from API
+    await this.fetchChr17q12Genes();
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.updateSVGWidth);
     window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
+    async fetchChr17q12Genes() {
+      try {
+        this.loading = true;
+        this.apiError = null;
+
+        window.logService.info('Fetching chr17q12 genes from API');
+
+        // Fetch genes in the 17q12 region (36.0-39.9 Mb)
+        const response = await getReferenceGenomicRegion('17:36000000-39900000', 'GRCh38');
+
+        if (response.data && response.data.genes && response.data.genes.length > 0) {
+          // Map API gene data to component format
+          this.chr17q12Genes = response.data.genes.map((gene) => ({
+            symbol: gene.symbol,
+            name: gene.name,
+            start: gene.start,
+            end: gene.end,
+            size: gene.end - gene.start,
+            strand: gene.strand,
+            transcriptId: gene.extra_data?.transcript_id || null,
+            mim: gene.extra_data?.mim || null,
+            function: gene.extra_data?.function || null,
+            phenotype: gene.extra_data?.phenotype || null,
+            clinicalSignificance: gene.extra_data?.clinical_significance || 'unknown',
+            color: gene.extra_data?.color || '#90CAF9',
+          }));
+
+          window.logService.info('Successfully loaded chr17q12 genes from API', {
+            geneCount: this.chr17q12Genes.length,
+          });
+        } else {
+          window.logService.warn('No genes returned from API for 17q12 region');
+        }
+      } catch (error) {
+        this.apiError = error.message;
+        window.logService.warn('Failed to fetch chr17q12 genes from API, using empty array', {
+          error: error.message,
+        });
+        // Keep empty array - component will still work but CNV mode won't show genes
+      } finally {
+        this.loading = false;
+      }
+    },
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;

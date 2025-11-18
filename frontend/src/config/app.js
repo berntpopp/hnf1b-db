@@ -65,16 +65,6 @@ export const VIZ_CONFIG = {
    * Default SVG width for gene/protein visualizations.
    */
   DEFAULT_SVG_WIDTH: 1000,
-
-  /**
-   * Gene coordinate range for HNF1B (GRCh38/hg38).
-   */
-  HNF1B_GENE: {
-    chromosome: '17',
-    start: 37680000,
-    end: 37750000,
-    strand: '-',
-  },
 };
 
 export default {
