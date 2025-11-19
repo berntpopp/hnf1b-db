@@ -66,6 +66,9 @@
               </v-chip>
               <span class="text-caption">
                 {{ ref.description }}
+                <span v-if="publicationYears[ref.id]" class="text-grey-darken-1">
+                  ({{ publicationYears[ref.id] }})
+                </span>
                 <v-chip
                   v-if="ref.reference"
                   color="purple-lighten-4"
@@ -156,6 +159,14 @@ export default {
       required: true,
     },
   },
+  data() {
+    return {
+      publicationYears: {}, // Map of PMID -> year
+    };
+  },
+  mounted() {
+    this.fetchPublicationYears();
+  },
   computed: {
     filteredUpdates() {
       if (!this.metaData.updates) return [];
@@ -234,6 +245,59 @@ export default {
     getPmidNumber(pmidId) {
       // Extract number from "PMID:12345" → "12345"
       return pmidId.replace('PMID:', '');
+    },
+
+    async fetchPublicationYears() {
+      // Extract PMIDs from external references
+      if (!this.metaData.externalReferences) return;
+
+      const pmidRefs = this.metaData.externalReferences.filter(
+        (ref) => ref.id && ref.id.startsWith('PMID:')
+      );
+
+      if (pmidRefs.length === 0) return;
+
+      // Fetch years for all PMIDs (batch request)
+      const pmidNumbers = pmidRefs.map((ref) => this.getPmidNumber(ref.id));
+
+      try {
+        const response = await fetch(
+          `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmidNumbers.join(',')}&retmode=json`
+        );
+
+        if (!response.ok) {
+          window.logService.warn('Failed to fetch publication years from PubMed', {
+            status: response.status,
+          });
+          return;
+        }
+
+        const data = await response.json();
+
+        // Extract years from response
+        const years = {};
+        pmidRefs.forEach((ref) => {
+          const pmidNum = this.getPmidNumber(ref.id);
+          const pubmedData = data.result?.[pmidNum];
+
+          if (pubmedData?.pubdate) {
+            const yearMatch = pubmedData.pubdate.match(/^\d{4}/);
+            if (yearMatch) {
+              years[ref.id] = yearMatch[0];
+            }
+          }
+        });
+
+        this.publicationYears = years;
+
+        window.logService.debug('Fetched publication years', {
+          count: Object.keys(years).length,
+        });
+      } catch (error) {
+        window.logService.error('Failed to fetch publication years', {
+          error: error.message,
+        });
+      }
     },
   },
 };
