@@ -72,6 +72,46 @@
                       />
                     </v-col>
                   </v-row>
+
+                  <!-- Summary Statistics Panel -->
+                  <v-row v-if="stackedBarStats" class="pa-3 pt-0">
+                    <v-col cols="12">
+                      <v-card outlined>
+                        <v-card-title class="text-subtitle-1 py-2 bg-blue-lighten-5">
+                          <v-icon left color="primary" size="small"> mdi-chart-box </v-icon>
+                          Summary Statistics
+                        </v-card-title>
+                        <v-card-text class="pa-3">
+                          <v-row dense>
+                            <v-col cols="6" sm="3">
+                              <div class="text-caption text-grey">Total Features</div>
+                              <div class="text-h6">{{ stackedBarStats.totalFeatures }}</div>
+                            </v-col>
+                            <v-col cols="6" sm="3">
+                              <div class="text-caption text-grey">Most Common</div>
+                              <div class="text-body-2">
+                                {{ stackedBarStats.mostCommon.label }}
+                              </div>
+                              <div class="text-caption">
+                                {{ stackedBarStats.mostCommon.penetrance }}% penetrance
+                              </div>
+                            </v-col>
+                            <v-col cols="6" sm="3">
+                              <div class="text-caption text-grey">Avg. Penetrance</div>
+                              <div class="text-h6">{{ stackedBarStats.avgPenetrance }}%</div>
+                              <div class="text-caption">(when reported)</div>
+                            </v-col>
+                            <v-col cols="6" sm="3">
+                              <div class="text-caption text-grey">Data Completeness</div>
+                              <div class="text-h6">{{ stackedBarStats.reportingRate }}%</div>
+                              <div class="text-caption">reporting rate</div>
+                            </v-col>
+                          </v-row>
+                        </v-card-text>
+                      </v-card>
+                    </v-col>
+                  </v-row>
+
                   <StackedBarChart
                     :chart-data="stackedBarChartData"
                     :display-limit="stackedBarDisplayLimit"
@@ -190,6 +230,76 @@ export default {
         // Only show "Top N" if we have more than N features
         return totalFeatures > option.threshold;
       });
+    },
+    stackedBarStats() {
+      if (!this.stackedBarChartData || this.stackedBarChartData.length === 0) {
+        return null;
+      }
+
+      const data = this.stackedBarChartData;
+
+      // Calculate total features
+      const totalFeatures = data.length;
+
+      // Calculate most common feature (highest present count)
+      const mostCommon = data.reduce((max, feature) => {
+        const present = feature.details?.present_count || 0;
+        const maxPresent = max.details?.present_count || 0;
+        return present > maxPresent ? feature : max;
+      }, data[0]);
+
+      const mostCommonPresent = mostCommon.details?.present_count || 0;
+      const mostCommonAbsent = mostCommon.details?.absent_count || 0;
+      const mostCommonReported = mostCommonPresent + mostCommonAbsent;
+      const mostCommonPenetrance =
+        mostCommonReported > 0
+          ? ((mostCommonPresent / mostCommonReported) * 100).toFixed(1)
+          : '0.0';
+
+      // Calculate average penetrance across all features
+      let totalPenetrance = 0;
+      let featuresWithReports = 0;
+
+      data.forEach((feature) => {
+        const present = feature.details?.present_count || 0;
+        const absent = feature.details?.absent_count || 0;
+        const reported = present + absent;
+
+        if (reported > 0) {
+          totalPenetrance += (present / reported) * 100;
+          featuresWithReports++;
+        }
+      });
+
+      const avgPenetrance =
+        featuresWithReports > 0 ? (totalPenetrance / featuresWithReports).toFixed(1) : '0.0';
+
+      // Calculate data completeness (reporting rate)
+      let totalPresent = 0;
+      let totalAbsent = 0;
+      let totalNotReported = 0;
+
+      data.forEach((feature) => {
+        totalPresent += feature.details?.present_count || 0;
+        totalAbsent += feature.details?.absent_count || 0;
+        totalNotReported += feature.details?.not_reported_count || 0;
+      });
+
+      const totalDataPoints = totalPresent + totalAbsent + totalNotReported;
+      const reportingRate =
+        totalDataPoints > 0
+          ? (((totalPresent + totalAbsent) / totalDataPoints) * 100).toFixed(1)
+          : '0.0';
+
+      return {
+        totalFeatures,
+        mostCommon: {
+          label: mostCommon.label || 'N/A',
+          penetrance: mostCommonPenetrance,
+        },
+        avgPenetrance,
+        reportingRate,
+      };
     },
   },
   watch: {

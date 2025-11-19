@@ -160,7 +160,10 @@ export default {
         .style('background-color', 'white')
         .style('border', '1px solid #ccc')
         .style('padding', '10px')
-        .style('border-radius', '5px');
+        .style('border-radius', '5px')
+        .style('pointer-events', 'none')
+        .style('z-index', '1000')
+        .style('box-shadow', '0 2px 4px rgba(0,0,0,0.2)');
 
       // Show the horizontal bars.
       svg
@@ -182,9 +185,16 @@ export default {
           const subgroupName = d3.select(this.parentNode).datum().key;
           const subgroupValue = d.data[subgroupName];
           const subgroupLabel = subgroupLabels[subgroupName];
+
+          // Calculate penetrance (present / (present + absent))
+          const present = d.data.present;
+          const absent = d.data.absent;
+          const totalReported = present + absent;
+          const penetrance = totalReported > 0 ? ((present / totalReported) * 100).toFixed(1) : 'N/A';
+
           tooltip
             .html(
-              `<strong>${d.data.group}</strong><br/>${subgroupLabel}: <strong>${subgroupValue}</strong><br/><em>${d.data.hpo_id}</em>`
+              `<strong>${d.data.group}</strong><br/>${subgroupLabel}: <strong>${subgroupValue}</strong><br/>Penetrance: <strong>${penetrance}%</strong> (${present}/${totalReported} reported)<br/><em>${d.data.hpo_id}</em>`
             )
             .transition()
             .duration(200)
@@ -281,6 +291,7 @@ export default {
   max-width: 1200px;
   width: 100%;
   margin: auto;
+  position: relative;
 }
 .tooltip {
   pointer-events: none;
