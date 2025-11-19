@@ -12,6 +12,7 @@ from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.extractors import PhenotypeExtractor, VariantExtractor
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
+from migration.phenopackets.reviewer_mapper import ReviewerMapper
 
 
 class PhenopacketBuilder:
@@ -25,15 +26,18 @@ class PhenopacketBuilder:
         self,
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
+        reviewer_mapper: Optional[ReviewerMapper] = None,
     ):
         """Initialize phenopacket builder.
 
         Args:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
+            reviewer_mapper: Reviewer name mapper for resolving emails to full names
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
+        self.reviewer_mapper = reviewer_mapper
         self.age_parser = AgeParser()
         self.mondo_mappings = self._init_mondo_mappings()
 
@@ -534,6 +538,26 @@ class PhenopacketBuilder:
             "phenopacketSchemaVersion": "2.0.0",
         }
 
+        # Add comment from individuals sheet (custom metadata field)
+        first_row = rows.iloc[0]
+        comment = self._safe_value(first_row.get("Comment"))
+        if comment:
+            metadata["comment"] = comment
+
+        # Add reviewer from ReviewBy column (custom metadata field)
+        # Resolve email to full name using reviewer_mapper
+        reviewer_email = self._safe_value(first_row.get("ReviewBy"))
+        if reviewer_email and self.reviewer_mapper:
+            reviewer_name = self.reviewer_mapper.get_full_name(reviewer_email)
+            if reviewer_name:
+                metadata["reviewer"] = reviewer_name
+            else:
+                # Fallback to email if name not found
+                metadata["reviewer"] = reviewer_email
+        elif reviewer_email:
+            # No mapper available, use email
+            metadata["reviewer"] = reviewer_email
+
         # Add update history
         if len(rows) > 1:
             updates = []
@@ -551,20 +575,30 @@ class PhenopacketBuilder:
                 updates.sort(key=lambda x: x["timestamp"])
                 metadata["updates"] = updates
 
-        # Add publication references
+        # Add publication references with publication type
         if self.publication_mapper:
             external_refs = []
-            pub_ids = set()
+            pub_data = {}  # Map pub_id -> (pub_ref, publication_type)
 
             for _, row in rows.iterrows():
                 pub_val = row.get("Publication")
                 if pub_val and pd.notna(pub_val):
-                    pub_ids.add(str(pub_val))
+                    pub_id = str(pub_val)
+                    if pub_id not in pub_data:
+                        pub_ref = self.publication_mapper.create_publication_reference(
+                            pub_id
+                        )
+                        if pub_ref:
+                            # Get PublicationType from this row
+                            pub_type = self._safe_value(row.get("PublicationType"))
+                            pub_data[pub_id] = (pub_ref, pub_type)
 
-            for pub_id in sorted(pub_ids):
-                pub_ref = self.publication_mapper.create_publication_reference(pub_id)
-                if pub_ref:
-                    external_refs.append(pub_ref)
+            for pub_id in sorted(pub_data.keys()):
+                pub_ref, pub_type = pub_data[pub_id]
+                # Add publication type as 'reference' field if available
+                if pub_type:
+                    pub_ref["reference"] = pub_type
+                external_refs.append(pub_ref)
 
             if external_refs:
                 metadata["externalReferences"] = external_refs

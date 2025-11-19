@@ -116,7 +116,7 @@ class DirectSheetsToPhenopackets:
 
         # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(
-            self.ontology_mapper, self.publication_mapper
+            self.ontology_mapper, self.publication_mapper, self.reviewer_mapper
         )
 
     async def import_reviewers_as_users(self) -> Dict[str, int]:

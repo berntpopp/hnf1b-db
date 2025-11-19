@@ -17,6 +17,20 @@
           </v-list-item-subtitle>
         </v-list-item>
 
+        <v-list-item v-if="metaData.reviewer">
+          <v-list-item-title class="font-weight-bold"> Reviewed By </v-list-item-title>
+          <v-list-item-subtitle>
+            {{ metaData.reviewer }}
+          </v-list-item-subtitle>
+        </v-list-item>
+
+        <v-list-item v-if="metaData.comment">
+          <v-list-item-title class="font-weight-bold"> Comment </v-list-item-title>
+          <v-list-item-subtitle class="text-wrap">
+            {{ metaData.comment }}
+          </v-list-item-subtitle>
+        </v-list-item>
+
         <v-list-item v-if="metaData.phenopacketSchemaVersion">
           <v-list-item-title class="font-weight-bold"> Schema Version </v-list-item-title>
           <v-list-item-subtitle>
@@ -50,7 +64,18 @@
                 <v-icon left size="small"> mdi-open-in-new </v-icon>
                 {{ ref.id }}
               </v-chip>
-              <span class="text-caption">{{ ref.description }}</span>
+              <span class="text-caption">
+                {{ ref.description }}
+                <v-chip
+                  v-if="ref.reference"
+                  color="purple-lighten-4"
+                  size="x-small"
+                  variant="flat"
+                  class="ml-2"
+                >
+                  {{ ref.reference }}
+                </v-chip>
+              </span>
             </v-list-item>
           </v-list>
         </v-list-item>
