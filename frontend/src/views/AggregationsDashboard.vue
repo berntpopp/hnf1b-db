@@ -7,6 +7,7 @@
           <v-card>
             <v-tabs v-model="tab" bg-color="primary">
               <v-tab value="Donut Chart"> Donut Chart </v-tab>
+              <v-tab value="Stacked Bar Chart"> Stacked Bar Chart </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -20,7 +21,7 @@
                     >
                       <v-select
                         v-model="selectedCategory"
-                        :items="categories"
+                        :items="donutCategories"
                         item-title="label"
                         item-value="label"
                         label="Category"
@@ -56,6 +57,28 @@
                   </v-row>
                   <component :is="donutChartProps.content" v-bind="donutChartProps.props" />
                 </v-tabs-window-item>
+
+                <!-- Stacked Bar Chart Tab -->
+                <v-tabs-window-item value="Stacked Bar Chart">
+                  <v-row class="pa-3">
+                    <v-col cols="12" md="6">
+                      <v-select
+                        v-model="stackedBarDisplayLimit"
+                        :items="displayLimitOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Number of Features to Display"
+                        @change="fetchStackedBarData"
+                      />
+                    </v-col>
+                  </v-row>
+                  <StackedBarChart
+                    :chart-data="stackedBarChartData"
+                    :display-limit="stackedBarDisplayLimit"
+                    :width="1000"
+                    :height="600"
+                  />
+                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -68,17 +91,21 @@
 <script>
 import { markRaw } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
+import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import * as API from '@/api';
 
 export default {
   name: 'AggregationsDashboard',
   components: {
     DonutChart,
+    StackedBarChart,
   },
   data() {
     return {
       tab: 'Donut Chart',
       chartData: {},
+      stackedBarChartData: [],
+      stackedBarDisplayLimit: 20,
       items: [
         {
           tab: 'Donut Chart',
@@ -86,23 +113,13 @@ export default {
           props: { exportable: true, width: 600, height: 500 },
         },
       ],
-      categories: [
+      donutCategories: [
         {
           label: 'Phenopackets',
           aggregations: [
             { label: 'Sex Distribution', value: 'getSexDistribution' },
             { label: 'Age of Onset', value: 'getAgeOfOnsetAggregation' },
             { label: 'Kidney Disease Stages', value: 'getKidneyStages' },
-          ],
-        },
-        {
-          label: 'Phenotypic Features',
-          aggregations: [
-            {
-              label: 'Top 20 HPO Terms',
-              value: 'getPhenotypicFeaturesAggregation',
-              params: { limit: 20 },
-            },
           ],
         },
         {
@@ -136,6 +153,13 @@ export default {
         { label: 'All Variant Instances', value: 'all' },
         { label: 'Unique Variants', value: 'unique' },
       ],
+      displayLimitOptions: [
+        { label: 'Top 10', value: 10 },
+        { label: 'Top 20', value: 20 },
+        { label: 'Top 30', value: 30 },
+        { label: 'Top 50', value: 50 },
+        { label: 'All Features', value: 9999 },
+      ],
     };
   },
   computed: {
@@ -146,11 +170,11 @@ export default {
       };
     },
     selectedAggregations() {
-      const category = this.categories.find((cat) => cat.label === this.selectedCategory);
+      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
       return category ? category.aggregations : [];
     },
     isVariantAggregation() {
-      const category = this.categories.find((cat) => cat.label === this.selectedCategory);
+      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
       const aggregation = category?.aggregations.find(
         (agg) => agg.value === this.selectedAggregation
       );
@@ -176,10 +200,29 @@ export default {
   },
   mounted() {
     this.fetchAggregationData();
+    this.fetchStackedBarData();
   },
   methods: {
+    fetchStackedBarData() {
+      window.logService.debug('Fetching stacked bar chart data');
+
+      API.getPhenotypicFeaturesAggregation()
+        .then((response) => {
+          window.logService.info('Stacked bar chart data loaded', {
+            count: response.data?.length,
+          });
+
+          this.stackedBarChartData = response.data || [];
+        })
+        .catch((error) => {
+          window.logService.error('Error fetching stacked bar chart data', {
+            error: error.message,
+          });
+        });
+    },
+
     fetchAggregationData() {
-      const category = this.categories.find((cat) => cat.label === this.selectedCategory);
+      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
       const aggregation = category?.aggregations.find(
         (agg) => agg.value === this.selectedAggregation
       );
@@ -264,10 +307,12 @@ export default {
             };
           })
           .catch((error) => {
-            console.error('Error fetching donut chart data:', error);
+            window.logService.error('Error fetching donut chart data', {
+              error: error.message,
+            });
           });
       } else {
-        console.error('API function not found:', funcName);
+        window.logService.error('API function not found', { funcName });
       }
     },
     onCategoryChange() {
