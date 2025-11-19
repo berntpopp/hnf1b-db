@@ -1228,3 +1228,186 @@ async def get_by_publication(
     except Exception as e:
         logger.error(f"Error fetching phenopackets for PMID {pmid}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{phenopacket_id}/timeline", response_model=Dict[str, Any])
+async def get_phenotype_timeline(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get temporal timeline data for phenotypic features.
+
+    Extracts phenotypic features with onset ages and evidence timestamps,
+    suitable for rendering a timeline visualization.
+
+    Args:
+        phenopacket_id: Phenopacket identifier
+        db: Database session
+
+    Returns:
+        Dictionary with timeline data:
+        {
+            "subject_id": "123",
+            "current_age": "P45Y6M",
+            "features": [
+                {
+                    "hpo_id": "HP:0000107",
+                    "label": "Renal cyst",
+                    "onset_age": "P5Y",
+                    "onset_label": "Congenital onset",
+                    "category": "Renal",
+                    "severity": null,
+                    "excluded": false,
+                    "evidence": [...]
+                }
+            ]
+        }
+    """
+    # Query phenopacket
+    result = await db.execute(
+        select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    )
+    phenopacket_record = result.scalar_one_or_none()
+
+    if not phenopacket_record:
+        raise HTTPException(
+            status_code=404, detail=f"Phenopacket '{phenopacket_id}' not found"
+        )
+
+    phenopacket_data = phenopacket_record.phenopacket
+
+    # Extract subject info
+    subject = phenopacket_data.get("subject", {})
+    subject_id = subject.get("id")
+
+    # Try to get current age from timeAtLastEncounter
+    current_age = None
+    current_age_years = None
+    if "timeAtLastEncounter" in subject:
+        time_at_last = subject["timeAtLastEncounter"]
+        if isinstance(time_at_last, dict) and "age" in time_at_last:
+            age_obj = time_at_last["age"]
+            if isinstance(age_obj, dict):
+                current_age = age_obj.get("iso8601duration")
+                # Parse to years for use as default onset
+                if current_age:
+                    try:
+                        # Simple parser for ISO8601 duration
+                        match = re.match(
+                            r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?", current_age
+                        )
+                        if match:
+                            years = int(match.group(1) or 0)
+                            months = int(match.group(2) or 0)
+                            days = int(match.group(3) or 0)
+                            current_age_years = years + (months / 12) + (days / 365)
+                    except (ValueError, AttributeError):
+                        pass
+
+    # Extract phenotypic features with temporal data
+    features = []
+    phenotypic_features = phenopacket_data.get("phenotypicFeatures", [])
+
+    for feature in phenotypic_features:
+        feature_type = feature.get("type", {})
+        hpo_id = feature_type.get("id")
+        label = feature_type.get("label", "Unknown")
+
+        # Extract onset information
+        onset = feature.get("onset")
+        onset_age = None
+        onset_label = None
+
+        if onset:
+            # Handle age field - can be string or object
+            if "age" in onset:
+                age_value = onset["age"]
+                if isinstance(age_value, str):
+                    # Direct ISO8601 duration string
+                    onset_age = age_value
+                elif isinstance(age_value, dict):
+                    # Object with iso8601duration field
+                    onset_age = age_value.get("iso8601duration")
+
+            # Handle direct iso8601duration field (alternative format)
+            if not onset_age and "iso8601duration" in onset:
+                onset_age = onset["iso8601duration"]
+
+            # Handle ontology class for categorical onset
+            if "ontologyClass" in onset:
+                onset_class = onset["ontologyClass"]
+                if isinstance(onset_class, dict):
+                    onset_label = onset_class.get("label")
+
+        # If no onset specified but feature is not excluded,
+        # use subject's current age as the observation/report age
+        # This represents when the feature was observed, not
+        # necessarily when it began
+        if not onset_age and not onset_label and not feature.get("excluded", False):
+            if current_age:
+                onset_age = current_age
+                if current_age_years:
+                    onset_label = f"Observed at age {int(current_age_years)}y"
+                else:
+                    onset_label = "Observed"
+
+        # Extract severity
+        severity = None
+        if "severity" in feature:
+            severity_obj = feature.get("severity", {})
+            if isinstance(severity_obj, dict):
+                severity = severity_obj.get("label")
+
+        # Extract evidence with publications
+        evidence_list = []
+        evidence = feature.get("evidence", [])
+
+        for ev in evidence:
+            evidence_code = ev.get("evidenceCode", {})
+            reference = ev.get("reference", {})
+
+            evidence_item = {
+                "evidence_code": evidence_code.get("label"),
+                "pmid": None,
+                "description": None,
+                "recorded_at": None,
+            }
+
+            if reference:
+                ref_id = reference.get("id", "")
+                if ref_id.startswith("PMID:"):
+                    evidence_item["pmid"] = ref_id.replace("PMID:", "")
+
+                evidence_item["description"] = reference.get("description")
+                evidence_item["recorded_at"] = reference.get("recordedAt")
+
+            evidence_list.append(evidence_item)
+
+        # Determine category (simplified - could use HPO hierarchy)
+        category = "other"
+        if hpo_id:
+            if any(x in hpo_id for x in ["HP:0000107", "HP:0003111"]):
+                category = "renal"
+            elif "HP:0004904" in hpo_id:
+                category = "diabetes"
+            elif "HP:0000079" in hpo_id or "HP:0000119" in hpo_id:
+                category = "genital"
+
+        features.append(
+            {
+                "hpo_id": hpo_id,
+                "label": label,
+                "onset_age": onset_age,
+                "onset_label": onset_label,
+                "category": category,
+                "severity": severity,
+                "excluded": feature.get("excluded", False),
+                "evidence": evidence_list,
+            }
+        )
+
+    return {
+        "subject_id": subject_id,
+        "current_age": current_age,
+        "features": features,
+    }
