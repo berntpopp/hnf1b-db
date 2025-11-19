@@ -39,35 +39,296 @@ GET /api/v2/phenopackets/aggregate/by-feature?limit=20
 
 ---
 
-## Issue #43: feat(frontend): add publication timeline visualization
+## Issue #43: feat(frontend): add timeline visualizations
 
 ### Overview
-D3.js timeline showing phenopackets added over time by publication.
+Two complementary D3.js timeline visualizations using shared display logic:
+1. **Publication Timeline** (aggregate view): Phenopackets added over time by publication
+2. **Phenotype Timeline** (individual view): When phenotypic features emerged for each patient
 
-### Visualization
+Both timelines share similar visual design patterns and D3.js implementation logic.
+
+---
+
+### 43a. Publication Timeline (Aggregate View)
+
+**Goal:** Show cumulative phenopackets added over time across all publications.
+
+#### Visualization
 ```
-2018 ●●●●
-2019 ●●●●●●●●
-2020 ●●●●●●●●●●●●
-2021 ●●●●●●●●●●●●●●●●
-2022 ●●●●●●●●●●
-2023 ●●●●●●
-2024 ●●●●
+Cumulative Count
+ 500 │                                 ●
+ 400 │                           ●────╯
+ 300 │                     ●────╯
+ 200 │               ●────╯
+ 100 │         ●────╯
+   0 └────────────────────────────────
+     2018   2019   2020   2021   2022
+          Publication Year
 ```
 
-### Implementation
+#### Features
 - X-axis: Year
 - Y-axis: Cumulative count
-- Hover: Show publication details
-- Click: Navigate to publication detail
+- Hover: Show publication details (count added that year)
+- Click: Navigate to publication detail page
+- Interactive: Zoom into date ranges
 
-### Endpoint
+#### Endpoint
 ```http
 GET /api/v2/phenopackets/aggregate/publications-timeline
+
+Response:
+{
+  "timeline": [
+    { "year": 2018, "count": 4, "cumulative": 4 },
+    { "year": 2019, "count": 8, "cumulative": 12 },
+    { "year": 2020, "count": 12, "cumulative": 24 }
+  ]
+}
 ```
 
-### Timeline: 6 hours (1 day)
-### Labels: `frontend`, `charts`, `visualization`, `p2`
+#### Integration Point
+Add to **Aggregations Dashboard** as a new tab.
+
+---
+
+### 43b. Phenotype Timeline (Individual View)
+
+**Goal:** Display temporal progression of phenotypic features for an individual, showing when each phenotype was first observed (onset) and documented (publication date).
+
+#### User Story
+As a clinician/researcher, I want to see a **temporal timeline** of when phenotypic features emerged for an individual, so that I can:
+- Identify patterns in disease progression
+- Understand the sequence of symptom onset
+- See which features were documented in which publications
+- Track how the clinical picture evolved over time
+
+#### Data Structure
+Each `phenotypicFeature` contains temporal data:
+
+```json
+{
+  "type": { "id": "HP:0000107", "label": "Renal cyst" },
+  "excluded": false,
+  "onset": {
+    "age": { "iso8601duration": "P5Y" },  // 5 years old
+    "ontologyClass": { "id": "HP:0003577", "label": "Congenital onset" }
+  },
+  "evidence": [
+    {
+      "evidenceCode": { "id": "ECO:0000033", "label": "author statement" },
+      "reference": {
+        "id": "PMID:12345678",
+        "description": "Smith et al., 2020...",
+        "recordedAt": "2024-01-15T10:30:00Z"
+      }
+    }
+  ]
+}
+```
+
+#### Visualization
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Phenotypic Features Timeline - Subject ID: 123                │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Birth  1y   5y   10y  15y  20y  25y  30y  35y  40y  45y  50y │
+│  ├──────┼────┼────┼────┼────┼────┼────┼────┼────┼────┼────┤   │
+│  │      │    ●────┐    │    │    │    │    │    │    │    │   │
+│  │      │    │Renal cyst (PMID:12345678)                    │   │
+│  │      │    │    │    │    ●────┐    │    │    │    │    │   │
+│  │      │    │    │    │    │MODY (PMID:23456789)          │   │
+│  │      ●────┐    │    │    │    │    │    │    │    │    │   │
+│  │   Bilateral │  │    │    │    │    │    │    │    │    │   │
+│  │   absence   │  │    │    │    │    │    │    │    │    │   │
+│  └──────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘   │
+│                                                                 │
+│  Legend:                                                        │
+│  ● Onset age    PMID - Publication                            │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### Features
+1. **X-axis**: Age timeline (birth to current age)
+2. **Y-axis**: Phenotypic features (grouped by organ system)
+3. **Data Points**: 
+   - Circle/marker at onset age
+   - Connecting line to current age (if ongoing)
+   - Label with HPO term and PMID
+4. **Color Coding**: By organ system (renal=blue, diabetes=orange, genital=purple)
+5. **Interactive**:
+   - Hover: Full details (HPO ID, severity, modifiers, evidence)
+   - Click: Link to publication or HPO term
+   - Filter: Show/hide by organ system
+   - Zoom: Focus on specific age ranges
+
+#### Backend Endpoint
+```python
+# backend/app/phenopackets/routers/timeline.py
+
+@router.get("/{phenopacket_id}/timeline")
+async def get_phenotype_timeline(
+    phenopacket_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns:
+        {
+            "subject_id": "123",
+            "current_age": "P45Y6M",
+            "features": [
+                {
+                    "hpo_id": "HP:0000107",
+                    "label": "Renal cyst",
+                    "onset_age": "P5Y",  # ISO8601 duration
+                    "onset_label": "Congenital onset",
+                    "category": "Renal",
+                    "severity": "Moderate",
+                    "excluded": false,
+                    "evidence": [
+                        {
+                            "pmid": "12345678",
+                            "recorded_at": "2024-01-15",
+                            "description": "Smith et al., 2020"
+                        }
+                    ]
+                }
+            ]
+        }
+    """
+```
+
+#### Frontend Component
+```vue
+<!-- frontend/src/components/phenopacket/PhenotypeTimeline.vue -->
+<template>
+  <v-card variant="outlined" class="mb-4">
+    <v-card-title class="bg-blue-lighten-5">
+      <v-icon left>mdi-timeline-clock</v-icon>
+      Phenotypic Features Timeline
+    </v-card-title>
+    
+    <v-card-text>
+      <!-- Filters -->
+      <v-row class="mb-4">
+        <v-col cols="12" md="6">
+          <v-select
+            v-model="selectedCategories"
+            :items="categories"
+            label="Filter by organ system"
+            multiple
+            chips
+            dense
+          />
+        </v-col>
+        <v-col cols="12" md="6">
+          <v-checkbox
+            v-model="showExcluded"
+            label="Show excluded features"
+            dense
+          />
+        </v-col>
+      </v-row>
+      
+      <!-- D3.js Timeline -->
+      <div ref="timeline" class="timeline-container"></div>
+      
+      <!-- Legend -->
+      <div class="legend mt-4">
+        <v-chip
+          v-for="category in categories"
+          :key="category.value"
+          :color="category.color"
+          size="small"
+          class="mr-2"
+        >
+          {{ category.label }}
+        </v-chip>
+      </div>
+    </v-card-text>
+  </v-card>
+</template>
+```
+
+#### Age Parsing Utility
+```javascript
+// Shared utility for both timelines
+function parseAge(iso8601duration) {
+  // Convert "P5Y6M" to 5.5 years
+  const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?/;
+  const matches = iso8601duration.match(regex);
+  if (!matches) return 0;
+  
+  const years = parseInt(matches[1] || 0);
+  const months = parseInt(matches[2] || 0);
+  const days = parseInt(matches[3] || 0);
+  
+  return years + (months / 12) + (days / 365);
+}
+
+// Handle ontology classes
+const onsetMapping = {
+  "HP:0003577": 0,         // Congenital onset → age 0
+  "HP:0003623": 0,         // Neonatal onset → age 0
+  "HP:0003581": 18,        // Adult onset → age 18+
+};
+```
+
+#### Integration Point
+Add **Timeline tab** to individual phenopacket detail page (`PagePhenopacket.vue`).
+
+---
+
+### Shared Implementation Components
+
+Both timelines can reuse:
+- **D3.js scales**: `d3.scaleTime()` for X-axis
+- **Tooltip component**: Shared hover behavior
+- **Zoom behavior**: `d3.zoom()` for both views
+- **Color schemes**: Consistent color palette
+- **Responsive sizing**: Same breakpoint logic
+- **Loading states**: Shared skeleton loader
+
+### Data Handling Considerations
+
+#### Missing Data
+- **No onset age**: Show as "Unknown onset" at bottom
+- **No evidence**: Show feature with note "Undocumented"
+- **Excluded features**: Dashed line, gray color
+- **Prenatal/Congenital**: Show at birth (age 0)
+
+---
+
+### Implementation Plan
+
+#### Phase 1: Shared Infrastructure (1 day)
+- ✅ Create `TimelineBase.vue` component with D3.js setup
+- ✅ Age parsing utility (`utils/ageParser.js`)
+- ✅ Timeline color scheme constants
+- ✅ Shared tooltip component
+
+#### Phase 2: Publication Timeline (1 day)
+- ✅ Backend: `/aggregate/publications-timeline` endpoint
+- ✅ Frontend: `PublicationTimeline.vue` component
+- ✅ Integration: Add to Aggregations Dashboard
+
+#### Phase 3: Phenotype Timeline (2-3 days)
+- ✅ Backend: `/{phenopacket_id}/timeline` endpoint
+- ✅ Frontend: `PhenotypeTimeline.vue` component
+- ✅ Filtering by organ system
+- ✅ Click handlers (HPO/PMID links)
+- ✅ Integration: Add tab to individual detail page
+
+#### Phase 4: Polish (1 day)
+- ✅ Responsive design
+- ✅ Loading/error states
+- ✅ Empty state handling
+- ✅ Documentation
+
+### Total Timeline: 5-6 days
+### Labels: `frontend`, `charts`, `visualization`, `timeline`, `p2`
 
 ---
 
