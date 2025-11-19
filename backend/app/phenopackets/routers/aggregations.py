@@ -53,8 +53,10 @@ async def aggregate_by_feature(
     SELECT
         feature->'type'->>'id' as hpo_id,
         feature->'type'->>'label' as label,
-        SUM(CASE WHEN NOT COALESCE((feature->>'excluded')::boolean, false) THEN 1 ELSE 0 END) as present_count,
-        SUM(CASE WHEN COALESCE((feature->>'excluded')::boolean, false) THEN 1 ELSE 0 END) as absent_count
+        SUM(CASE WHEN NOT COALESCE((feature->>'excluded')::boolean, false)
+            THEN 1 ELSE 0 END) as present_count,
+        SUM(CASE WHEN COALESCE((feature->>'excluded')::boolean, false)
+            THEN 1 ELSE 0 END) as absent_count
     FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
@@ -75,12 +77,16 @@ async def aggregate_by_feature(
         AggregationResult(
             label=row.label or row.hpo_id,
             count=int(row._mapping["present_count"]),
-            percentage=(int(row._mapping["present_count"]) / total * 100) if total > 0 else 0,
+            percentage=(int(row._mapping["present_count"]) / total * 100)
+            if total > 0
+            else 0,
             details={
                 "hpo_id": row.hpo_id,
                 "present_count": int(row._mapping["present_count"]),
                 "absent_count": int(row._mapping["absent_count"]),
-                "not_reported_count": total_phenopackets - int(row._mapping["present_count"]) - int(row._mapping["absent_count"]),
+                "not_reported_count": total_phenopackets
+                - int(row._mapping["present_count"])
+                - int(row._mapping["absent_count"]),
             },
         )
         for row in rows
@@ -1323,3 +1329,80 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         "female": female,
         "unknown_sex": unknown_sex,
     }
+
+
+@router.get("/publications-timeline", response_model=List[Dict])
+async def get_publications_timeline(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get timeline of phenopackets added over time by publication year.
+
+    Extracts publication years from external references and returns
+    cumulative counts of phenopackets added each year.
+
+    Returns:
+        List of timeline points with year, count, and cumulative total:
+        [
+            {
+                "year": 2018,
+                "count": 4,
+                "cumulative": 4,
+                "publications": ["PMID:12345678", "PMID:87654321"]
+            },
+            ...
+        ]
+    """
+    query = """
+    WITH publication_years AS (
+        SELECT
+            p.phenopacket_id,
+            p.created_at,
+            ext_ref->>'id' as pmid,
+            COALESCE(
+                NULLIF(
+                    regexp_replace(
+                        ext_ref->>'description',
+                        '.*[, ](\\d{4}).*',
+                        '\\1'
+                    ),
+                    ext_ref->>'description'
+                )::integer,
+                EXTRACT(YEAR FROM p.created_at)::integer
+            ) as pub_year
+        FROM phenopackets p,
+            jsonb_array_elements(
+                p.phenopacket->'metaData'->'externalReferences'
+            ) as ext_ref
+        WHERE ext_ref->>'id' LIKE 'PMID:%'
+    ),
+    year_counts AS (
+        SELECT
+            pub_year as year,
+            COUNT(DISTINCT phenopacket_id) as count,
+            array_agg(DISTINCT pmid ORDER BY pmid) as publications
+        FROM publication_years
+        WHERE pub_year IS NOT NULL
+        GROUP BY pub_year
+        ORDER BY pub_year
+    )
+    SELECT
+        year,
+        count,
+        SUM(count) OVER (ORDER BY year) as cumulative,
+        publications
+    FROM year_counts
+    ORDER BY year
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    return [
+        {
+            "year": int(row.year),
+            "count": int(row.count),
+            "cumulative": int(row.cumulative),
+            "publications": row.publications or [],
+        }
+        for row in rows
+    ]
