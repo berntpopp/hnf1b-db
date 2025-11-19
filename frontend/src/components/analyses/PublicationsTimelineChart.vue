@@ -1,8 +1,20 @@
 <template>
   <v-card flat>
-    <v-card-title class="text-h6 d-flex align-center">
-      <v-icon class="mr-2">mdi-chart-line</v-icon>
-      Publications by Type Over Years
+    <v-card-title class="text-h6 d-flex align-center justify-space-between">
+      <div class="d-flex align-center">
+        <v-icon class="mr-2">mdi-chart-line</v-icon>
+        Publications by Type Over Years
+      </div>
+      <v-btn-toggle v-model="chartMode" mandatory dense color="primary">
+        <v-btn value="annual" size="small">
+          <v-icon left size="small">mdi-chart-line</v-icon>
+          Annual
+        </v-btn>
+        <v-btn value="cumulative" size="small">
+          <v-icon left size="small">mdi-chart-timeline-variant</v-icon>
+          Cumulative
+        </v-btn>
+      </v-btn-toggle>
     </v-card-title>
 
     <v-card-text>
@@ -49,12 +61,25 @@ export default {
     return {
       loading: false,
       error: null,
+      chartMode: 'annual', // 'annual' or 'cumulative'
       chartData: {
         labels: [],
         datasets: [],
       },
+      rawPublications: [], // Store raw data for mode switching
       chart: null,
     };
+  },
+  watch: {
+    chartMode() {
+      // Re-process and render chart when mode changes
+      if (this.rawPublications.length > 0) {
+        this.processChartData(this.rawPublications);
+        this.$nextTick(() => {
+          this.renderChart();
+        });
+      }
+    },
   },
   mounted() {
     window.logService.debug('PublicationsTimelineChart mounted, fetching data');
@@ -86,6 +111,9 @@ export default {
         await this.enrichWithYears(publications);
 
         window.logService.debug('Finished enriching with years, processing chart data');
+
+        // Store raw data for mode switching
+        this.rawPublications = publications;
 
         // Process data for chart
         this.processChartData(publications);
@@ -201,13 +229,27 @@ export default {
       };
 
       const datasets = Array.from(publicationTypes).map((type) => {
+        let data;
+
+        if (this.chartMode === 'cumulative') {
+          // Calculate cumulative totals
+          let cumulative = 0;
+          data = years.map((year) => {
+            cumulative += yearTypeMap[year][type] || 0;
+            return cumulative;
+          });
+        } else {
+          // Annual data (default)
+          data = years.map((year) => yearTypeMap[year][type] || 0);
+        }
+
         return {
           label: type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-          data: years.map((year) => yearTypeMap[year][type] || 0),
+          data: data,
           borderColor: typeColors[type] || '#757575',
           backgroundColor: typeColors[type] || '#757575',
           borderWidth: 2,
-          fill: false,
+          fill: false, // Don't fill - keep all lines visible
           tension: 0.1,
         };
       });
@@ -237,7 +279,9 @@ export default {
           plugins: {
             title: {
               display: true,
-              text: 'Number of Phenopackets by Publication Type Over Years',
+              text: this.chartMode === 'cumulative'
+                ? 'Cumulative Phenopackets by Publication Type Over Years'
+                : 'Number of Phenopackets by Publication Type Over Years',
               font: {
                 size: 16,
               },
@@ -264,7 +308,9 @@ export default {
             y: {
               title: {
                 display: true,
-                text: 'Number of Phenopackets',
+                text: this.chartMode === 'cumulative'
+                  ? 'Cumulative Phenopackets'
+                  : 'Number of Phenopackets',
                 font: {
                   size: 14,
                 },
@@ -273,6 +319,7 @@ export default {
               ticks: {
                 precision: 0,
               },
+              stacked: false, // Don't stack in cumulative mode (lines show individual totals)
             },
           },
           interaction: {
