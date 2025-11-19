@@ -192,8 +192,8 @@ export default {
 
       try {
         const response = await getPhenopacket(phenopacketId);
-        // Backend returns the GA4GH phenopacket object directly
-        this.phenopacket = response.data;
+        // Backend returns the GA4GH phenopacket object nested under 'phenopacket' key
+        this.phenopacket = response.data.phenopacket;
 
         window.logService.debug('Phenopacket data received', {
           phenopacketId: phenopacketId,

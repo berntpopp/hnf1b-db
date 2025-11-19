@@ -3,15 +3,15 @@
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-green-lighten-5">
       <v-icon left color="success" size="small"> mdi-medical-bag </v-icon>
-      Phenotypic Features ({{ features.length }})
+      Phenotypic Features ({{ presentFeatures.length }})
     </v-card-title>
     <v-card-text class="pa-2">
-      <v-alert v-if="features.length === 0" type="info" density="compact">
+      <v-alert v-if="presentFeatures.length === 0" type="info" density="compact">
         No phenotypic features recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item v-for="(feature, index) in features" :key="index" class="mb-2">
+        <v-list-item v-for="(feature, index) in presentFeatures" :key="index" class="mb-2">
           <template #prepend>
             <v-chip
               :href="getHpoUrl(feature.type.id)"
@@ -61,6 +61,13 @@ export default {
     features: {
       type: Array,
       default: () => [],
+    },
+  },
+  computed: {
+    // Filter out excluded phenotypes (those marked as "No" or absent)
+    // Only show features that are actually present (excluded !== true)
+    presentFeatures() {
+      return this.features.filter((feature) => !feature.excluded);
     },
   },
   methods: {
