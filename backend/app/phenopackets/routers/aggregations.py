@@ -1406,3 +1406,50 @@ async def get_publications_timeline(
         }
         for row in rows
     ]
+
+
+@router.get("/publications-by-type", response_model=List[Dict])
+async def get_publications_by_type(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get publication counts grouped by PMID and type.
+
+    Returns publication information with PMID, type, and phenopacket count.
+    Frontend can enrich with publication years from PubMed API.
+
+    Returns:
+        List of publications with type and count:
+        [
+            {
+                "pmid": "PMID:30791938",
+                "publication_type": "review_and_cases",
+                "phenopacket_count": 1
+            },
+            ...
+        ]
+    """
+    query = """
+    SELECT
+        ext_ref->>'id' as pmid,
+        COALESCE(ext_ref->>'reference', 'unknown') as publication_type,
+        COUNT(DISTINCT p.phenopacket_id) as phenopacket_count
+    FROM phenopackets p,
+        jsonb_array_elements(
+            p.phenopacket->'metaData'->'externalReferences'
+        ) as ext_ref
+    WHERE ext_ref->>'id' LIKE 'PMID:%'
+    GROUP BY ext_ref->>'id', ext_ref->>'reference'
+    ORDER BY pmid
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    return [
+        {
+            "pmid": row.pmid,
+            "publication_type": row.publication_type,
+            "phenopacket_count": int(row.phenopacket_count),
+        }
+        for row in rows
+    ]

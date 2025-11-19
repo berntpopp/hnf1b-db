@@ -8,6 +8,7 @@
             <v-tabs v-model="tab" bg-color="primary">
               <v-tab value="Donut Chart"> Donut Chart </v-tab>
               <v-tab value="Stacked Bar Chart"> Stacked Bar Chart </v-tab>
+              <v-tab value="Publications Timeline"> Publications Timeline </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -119,6 +120,11 @@
                     :height="600"
                   />
                 </v-tabs-window-item>
+
+                <!-- Publications Timeline Tab -->
+                <v-tabs-window-item value="Publications Timeline">
+                  <PublicationsTimelineChart />
+                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -132,12 +138,14 @@
 import { markRaw } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
 import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
+import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
 import * as API from '@/api';
 
 export default {
   name: 'AggregationsDashboard',
   components: {
     DonutChart,
+    PublicationsTimelineChart,
     StackedBarChart,
   },
   data() {

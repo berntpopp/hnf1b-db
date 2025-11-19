@@ -403,6 +403,14 @@ export const getPublicationsAggregation = () =>
   apiClient.get('/phenopackets/aggregate/publications');
 
 /**
+ * Get publications by type (for line chart visualization).
+ * Returns publications with PMID, type, and phenopacket count.
+ * @returns {Promise} Axios promise with publications array
+ */
+export const getPublicationsByType = () =>
+  apiClient.get('/phenopackets/aggregate/publications-by-type');
+
+/**
  * Get age of onset distribution.
  * @returns {Promise} Axios promise with age of onset data
  */
@@ -706,6 +714,7 @@ export default {
   getKidneyStages,
   getVariantTypes,
   getPublicationsAggregation,
+  getPublicationsByType,
   getAgeOfOnsetAggregation,
   getSmallVariants,
   
