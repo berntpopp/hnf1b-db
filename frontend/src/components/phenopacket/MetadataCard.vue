@@ -17,17 +17,20 @@
           </v-list-item-subtitle>
         </v-list-item>
 
-        <v-list-item v-if="metaData.reviewer">
+        <v-list-item v-if="allReviewers.length > 0">
           <v-list-item-title class="font-weight-bold"> Reviewed By </v-list-item-title>
           <v-list-item-subtitle>
-            {{ metaData.reviewer }}
-          </v-list-item-subtitle>
-        </v-list-item>
-
-        <v-list-item v-if="metaData.comment">
-          <v-list-item-title class="font-weight-bold"> Comment </v-list-item-title>
-          <v-list-item-subtitle class="text-wrap">
-            {{ metaData.comment }}
+            <v-chip
+              v-for="(reviewer, index) in allReviewers"
+              :key="index"
+              size="small"
+              color="purple-lighten-4"
+              variant="flat"
+              class="mr-1 mb-1"
+            >
+              <v-icon left size="x-small">mdi-account-check</v-icon>
+              {{ reviewer }}
+            </v-chip>
           </v-list-item-subtitle>
         </v-list-item>
 
@@ -85,35 +88,48 @@
 
         <v-divider v-if="metaData.updates && metaData.updates.length > 0" class="my-2" />
 
-        <v-list-item v-if="filteredUpdates.length > 0">
+        <v-list-item v-if="enhancedUpdates.length > 0">
           <v-list-item-title class="font-weight-bold mb-2">
-            Data Updates ({{ filteredUpdates.length }})
+            Publication Timeline ({{ enhancedUpdates.length }})
           </v-list-item-title>
-          <v-timeline density="compact" side="end">
+          <v-timeline density="compact" side="end" align="start">
             <v-timeline-item
-              v-for="(update, index) in filteredUpdates"
+              v-for="(update, index) in enhancedUpdates"
               :key="index"
-              dot-color="blue"
+              dot-color="primary"
               size="small"
             >
               <template #opposite>
-                <span class="text-caption">{{ formatDate(update.timestamp) }}</span>
+                <div class="text-caption text-grey">
+                  {{ formatDate(update.timestamp) }}
+                </div>
               </template>
               <div>
-                <div v-if="update.pmid" class="text-body-2">
-                  Data from
+                <!-- Publication Info -->
+                <div v-if="update.pmid" class="mb-2">
                   <v-chip
-                    :to="`/publications/${getPmidNumber(update.pmid.id)}`"
-                    color="blue"
+                    :to="`/publications/${update.pmid.number}`"
+                    color="blue-lighten-4"
                     size="small"
                     variant="flat"
-                    class="mx-1"
+                    link
                   >
-                    <v-icon left size="x-small"> mdi-file-document </v-icon>
+                    <v-icon left size="x-small">mdi-file-document</v-icon>
                     {{ update.pmid.id }}
+                    <span v-if="publicationYears[update.pmid.id]" class="ml-1">
+                      ({{ publicationYears[update.pmid.id] }})
+                    </span>
                   </v-chip>
                 </div>
-                <div v-else class="text-body-2">
+
+                <!-- Reviewer Info -->
+                <div v-if="update.reviewer" class="text-caption text-grey mb-1">
+                  <v-icon size="x-small" class="mr-1">mdi-account-edit</v-icon>
+                  Reviewed by {{ update.reviewer }}
+                </div>
+
+                <!-- Comment -->
+                <div v-if="update.comment" class="text-body-2 mt-1">
                   {{ update.comment }}
                 </div>
               </div>
@@ -168,47 +184,42 @@ export default {
     this.fetchPublicationYears();
   },
   computed: {
-    filteredUpdates() {
+    allReviewers() {
+      // Collect all unique reviewers from updates
+      if (!this.metaData.updates || this.metaData.updates.length === 0) {
+        return [];
+      }
+
+      const reviewers = new Set();
+      this.metaData.updates.forEach((update) => {
+        if (update.reviewer) {
+          reviewers.add(update.reviewer);
+        }
+      });
+
+      return Array.from(reviewers);
+    },
+
+    enhancedUpdates() {
       if (!this.metaData.updates) return [];
 
-      // Get list of PMIDs from external references
+      // Get all PMIDs from external references (sorted)
       const pmids = (this.metaData.externalReferences || [])
         .filter((ref) => ref.id && ref.id.startsWith('PMID:'))
         .map((ref) => ({
           id: ref.id,
-          url: ref.reference,
+          number: this.getPmidNumber(ref.id),
         }));
 
+      // Map updates with their corresponding PMID by array index
+      // Backend creates both arrays in same iteration order (sorted chronologically)
       return this.metaData.updates.map((update, index) => {
-        /**
-         * Map updates to PMIDs using array index.
-         *
-         * Backend migration creates updates and externalReferences in the same order,
-         * so we can use array index to match them.
-         *
-         * Format: update.comment = "Data from pub123" → maps to pmids[index]
-         *
-         * This approach works because:
-         * 1. Backend creates both arrays in the same iteration
-         * 2. Order is preserved in database
-         * 3. Handles cases where pub number doesn't match PMID number
-         */
-
-        // Map update to corresponding PMID by array index
-        const pmid = pmids[index] || null;
-
-        // Fallback: If no PMID found by index, try pattern matching (for backwards compatibility)
-        if (!pmid && process.env.NODE_ENV === 'development') {
-          const pubMatch = update.comment?.match(/pub(\d+)/i);
-          console.debug(
-            `No PMID found at index ${index} for update: ${update.comment}`,
-            `Pattern match: ${pubMatch ? pubMatch[0] : 'none'}`
-          );
-        }
-
         return {
-          ...update,
-          pmid: pmid || null,
+          timestamp: update.timestamp,
+          comment: update.comment,
+          reviewer: update.reviewer,
+          publication: update.publication,
+          pmid: pmids[index] || null,
         };
       });
     },
