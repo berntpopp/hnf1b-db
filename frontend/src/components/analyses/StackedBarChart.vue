@@ -61,6 +61,9 @@ export default {
       },
       deep: true,
     },
+    displayLimit() {
+      this.renderChart();
+    },
   },
   mounted() {
     this.renderChart();

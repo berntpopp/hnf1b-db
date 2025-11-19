@@ -153,12 +153,12 @@ export default {
         { label: 'All Variant Instances', value: 'all' },
         { label: 'Unique Variants', value: 'unique' },
       ],
-      displayLimitOptions: [
-        { label: 'Top 10', value: 10 },
-        { label: 'Top 20', value: 20 },
-        { label: 'Top 30', value: 30 },
-        { label: 'Top 50', value: 50 },
-        { label: 'All Features', value: 9999 },
+      allDisplayLimitOptions: [
+        { label: 'Top 10', value: 10, threshold: 10 },
+        { label: 'Top 20', value: 20, threshold: 20 },
+        { label: 'Top 30', value: 30, threshold: 30 },
+        { label: 'Top 50', value: 50, threshold: 50 },
+        { label: 'All Features', value: 9999, threshold: 0 },
       ],
     };
   },
@@ -179,6 +179,17 @@ export default {
         (agg) => agg.value === this.selectedAggregation
       );
       return aggregation?.supportsCountMode || false;
+    },
+    displayLimitOptions() {
+      // Filter options based on available data
+      // Only show "Top N" if we have more than N features
+      const totalFeatures = this.stackedBarChartData.length;
+      return this.allDisplayLimitOptions.filter((option) => {
+        // Always show "All Features" option
+        if (option.threshold === 0) return true;
+        // Only show "Top N" if we have more than N features
+        return totalFeatures > option.threshold;
+      });
     },
   },
   watch: {
