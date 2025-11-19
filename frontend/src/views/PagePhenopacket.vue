@@ -79,36 +79,82 @@
         </v-col>
       </v-row>
 
-      <!-- Content Cards in Compact Layout -->
-      <v-row dense>
-        <!-- Subject Card -->
-        <v-col cols="12" md="6" class="py-1">
-          <SubjectCard v-if="phenopacket.subject" :subject="phenopacket.subject" />
-        </v-col>
+      <!-- Tabs for different views -->
+      <v-row>
+        <v-col cols="12">
+          <v-card>
+            <v-tabs v-model="activeTab" bg-color="primary">
+              <v-tab value="overview">Overview</v-tab>
+              <v-tab value="timeline">Timeline</v-tab>
+              <v-tab value="raw">Raw JSON</v-tab>
+            </v-tabs>
 
-        <!-- Phenotypic Features Card (if present) -->
-        <v-col v-if="hasPhenotypicFeatures" cols="12" md="6" class="py-1">
-          <PhenotypicFeaturesCard :features="phenopacket.phenotypicFeatures" />
-        </v-col>
+            <v-card-text>
+              <v-tabs-window v-model="activeTab">
+                <!-- Overview Tab - existing cards -->
+                <v-tabs-window-item value="overview">
+                  <v-row dense>
+                    <!-- Subject Card -->
+                    <v-col cols="12" md="6" class="py-1">
+                      <SubjectCard v-if="phenopacket.subject" :subject="phenopacket.subject" />
+                    </v-col>
 
-        <!-- Interpretations Card (if present) -->
-        <v-col
-          v-if="hasInterpretations"
-          cols="12"
-          :md="hasPhenotypicFeatures ? 6 : 12"
-          class="py-1"
-        >
-          <InterpretationsCard :interpretations="phenopacket.interpretations" />
-        </v-col>
+                    <!-- Phenotypic Features Card (if present) -->
+                    <v-col v-if="hasPhenotypicFeatures" cols="12" md="6" class="py-1">
+                      <PhenotypicFeaturesCard :features="phenopacket.phenotypicFeatures" />
+                    </v-col>
 
-        <!-- Measurements Card (if present) -->
-        <v-col v-if="hasMeasurements" cols="12" md="6" class="py-1">
-          <MeasurementsCard :measurements="phenopacket.measurements" />
-        </v-col>
+                    <!-- Interpretations Card (if present) -->
+                    <v-col
+                      v-if="hasInterpretations"
+                      cols="12"
+                      :md="hasPhenotypicFeatures ? 6 : 12"
+                      class="py-1"
+                    >
+                      <InterpretationsCard :interpretations="phenopacket.interpretations" />
+                    </v-col>
 
-        <!-- Metadata Card (full width) -->
-        <v-col cols="12" class="py-1">
-          <MetadataCard v-if="phenopacket.metaData" :meta-data="phenopacket.metaData" />
+                    <!-- Measurements Card (if present) -->
+                    <v-col v-if="hasMeasurements" cols="12" md="6" class="py-1">
+                      <MeasurementsCard :measurements="phenopacket.measurements" />
+                    </v-col>
+
+                    <!-- Metadata Card (full width) -->
+                    <v-col cols="12" class="py-1">
+                      <MetadataCard v-if="phenopacket.metaData" :meta-data="phenopacket.metaData" />
+                    </v-col>
+                  </v-row>
+                </v-tabs-window-item>
+
+                <!-- Timeline Tab -->
+                <v-tabs-window-item value="timeline">
+                  <PhenotypeTimeline :phenopacket-id="phenopacket.id" />
+                </v-tabs-window-item>
+
+                <!-- Raw JSON Tab -->
+                <v-tabs-window-item value="raw">
+                  <v-card variant="outlined">
+                    <v-card-title class="d-flex align-center">
+                      <v-icon class="mr-2">mdi-code-json</v-icon>
+                      Raw Phenopacket JSON
+                      <v-spacer></v-spacer>
+                      <v-btn
+                        size="small"
+                        color="primary"
+                        prepend-icon="mdi-content-copy"
+                        @click="copyToClipboard"
+                      >
+                        Copy
+                      </v-btn>
+                    </v-card-title>
+                    <v-card-text>
+                      <pre class="json-display">{{ JSON.stringify(phenopacket, null, 2) }}</pre>
+                    </v-card-text>
+                  </v-card>
+                </v-tabs-window-item>
+              </v-tabs-window>
+            </v-card-text>
+          </v-card>
         </v-col>
       </v-row>
     </div>
@@ -135,6 +181,7 @@ import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vu
 import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
+import PhenotypeTimeline from '@/components/timeline/PhenotypeTimeline.vue';
 
 export default {
   name: 'PagePhenopacket',
@@ -145,6 +192,7 @@ export default {
     MeasurementsCard,
     MetadataCard,
     DeleteConfirmationDialog,
+    PhenotypeTimeline,
   },
   data() {
     return {
@@ -153,6 +201,7 @@ export default {
       error: null,
       showDeleteDialog: false,
       deleteLoading: false,
+      activeTab: 'overview',
     };
   },
   computed: {
@@ -254,6 +303,22 @@ export default {
       window.URL.revokeObjectURL(url);
     },
 
+    copyToClipboard() {
+      if (!this.phenopacket) return;
+
+      const jsonString = JSON.stringify(this.phenopacket, null, 2);
+      navigator.clipboard.writeText(jsonString).then(() => {
+        window.logService.info('Phenopacket JSON copied to clipboard', {
+          phenopacketId: this.phenopacket.id,
+        });
+        // Could add a toast notification here
+      }).catch(err => {
+        window.logService.error('Failed to copy JSON to clipboard', {
+          error: err.message,
+        });
+      });
+    },
+
     navigateToEdit() {
       if (!this.phenopacket) return;
       window.logService.info('Navigating to edit phenopacket', {
@@ -308,6 +373,19 @@ export default {
 };
 </script>
 
+<style scoped>
+.json-display {
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 16px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  max-height: 600px;
+  overflow-y: auto;
+}
+</style>
 <style scoped>
 /* Add any custom styles here if needed */
 </style>

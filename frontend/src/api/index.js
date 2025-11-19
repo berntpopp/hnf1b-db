@@ -192,6 +192,17 @@ export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { par
 export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${id}`);
 
 /**
+ * Get phenotype timeline for an individual phenopacket.
+ * Returns temporal data for phenotypic features with onset ages and evidence.
+ * @param {string} id - Phenopacket ID
+ * @returns {Promise} Axios promise with timeline data
+ *   - subject_id: Subject identifier
+ *   - current_age: Current age (ISO8601 duration)
+ *   - features: Array of phenotypic features with onset/evidence
+ */
+export const getPhenotypeTimeline = (id) => apiClient.get(`/phenopackets/${id}/timeline`);
+
+/**
  * Create a new phenopacket (requires curator role).
  * @param {Object} phenopacketData - Phenopacket data following GA4GH Phenopackets v2 standard
  * @returns {Promise} Axios promise with created phenopacket
@@ -664,4 +675,72 @@ export const annotateVariant = (variant) =>
     params: { variant },
   });
 
-export default apiClient;
+// Default export with all API methods
+export default {
+  // Phenopackets CRUD
+  getPhenopackets,
+  getPhenopacket,
+  getPhenotypeTimeline,
+  createPhenopacket,
+  updatePhenopacket,
+  deletePhenopacket,
+  getPhenopacketAuditHistory,
+  
+  // Phenopackets Batch & Search
+  getPhenopacketsBatch,
+  searchPhenopackets,
+  getSearchFacets,
+  getPhenopacketsBySex,
+  getPhenopacketsWithVariants,
+  getPhenopacketsByPublication,
+  getPhenotypicFeaturesBatch,
+  getVariantsBatch,
+  getPhenopacketsByVariant,
+  
+  // Aggregations
+  getSummaryStats,
+  getSexDistribution,
+  getPhenotypicFeaturesAggregation,
+  getDiseaseAggregation,
+  getVariantPathogenicity,
+  getKidneyStages,
+  getVariantTypes,
+  getPublicationsAggregation,
+  getAgeOfOnsetAggregation,
+  getSmallVariants,
+  
+  // Publications
+  getPublicationMetadata,
+  
+  // Authentication
+  login,
+  getCurrentUser,
+  logout,
+  
+  // HPO
+  getHPOAutocomplete,
+  searchHPOTerms,
+  
+  // Clinical endpoints
+  getRenalInsufficiencyCases,
+  getGenitalAbnormalitiesCases,
+  getDiabetesCases,
+  getHypomagnesemiaCases,
+  
+  // Variants
+  getVariants,
+  
+  // Reference
+  getReferenceGenomes,
+  getReferenceGenes,
+  getReferenceGene,
+  getReferenceGeneTranscripts,
+  getReferenceGeneDomains,
+  getReferenceGenomicRegion,
+  
+  // Variant annotation
+  annotateVariant,
+  
+  // Axios client for custom requests
+  client: apiClient,
+};
