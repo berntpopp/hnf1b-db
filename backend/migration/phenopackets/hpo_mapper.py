@@ -29,7 +29,7 @@ class HPOMapper(OntologyMapper):
         """Initialize default HPO term mappings for phenotypes."""
         return {
             # Kidney phenotypes
-            "renalinsufficiency": {"id": "HP:0000083", "label": "Renal insufficiency"},
+            # NOTE: "renalinsufficiency" removed - let cell values map to specific CKD stages from Phenotypes sheet
             "chronic kidney disease": {
                 "id": "HP:0012622",
                 "label": "Chronic kidney disease",
@@ -170,6 +170,15 @@ class HPOMapper(OntologyMapper):
                     "id": hpo_id,
                     "label": hpo_label if pd.notna(hpo_label) else category,
                 }
+
+                # ALSO add mapping for the phenotype_name (e.g., "Stage 1 chronic kidney disease")
+                # This allows cell values like "Stage 1" or "Stage 1 chronic kidney disease" to be looked up
+                if pd.notna(hpo_label):
+                    normalized_label = self._normalize_column_name(hpo_label)
+                    self.hpo_mappings[normalized_label] = {
+                        "id": hpo_id,
+                        "label": hpo_label,
+                    }
 
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
         logger.info(f"Phenotype categories: {list(self.hpo_mappings.keys())[:10]}...")

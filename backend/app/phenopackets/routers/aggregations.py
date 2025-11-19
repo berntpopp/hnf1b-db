@@ -33,35 +33,55 @@ router = APIRouter(prefix="/aggregate", tags=["phenopackets-aggregations"])
 async def aggregate_by_feature(
     db: AsyncSession = Depends(get_db),
 ):
-    """Aggregate phenopackets by phenotypic features."""
+    """Aggregate phenopackets by phenotypic features.
+
+    Returns phenotypic features with three counts:
+    - present_count: Features reported as present (excluded=false)
+    - absent_count: Features reported as absent (excluded=true)
+    - not_reported_count: Phenopackets without this feature reported
+
+    The main 'count' field represents present_count for backwards compatibility.
+    """
+    # First, get total number of phenopackets
+    total_phenopackets_result = await db.execute(
+        text("SELECT COUNT(*) as total FROM phenopackets")
+    )
+    total_phenopackets = total_phenopackets_result.scalar()
+
+    # Query to get both present and absent counts for each HPO term
     query = """
     SELECT
         feature->'type'->>'id' as hpo_id,
         feature->'type'->>'label' as label,
-        COUNT(*) as count
+        SUM(CASE WHEN NOT COALESCE((feature->>'excluded')::boolean, false) THEN 1 ELSE 0 END) as present_count,
+        SUM(CASE WHEN COALESCE((feature->>'excluded')::boolean, false) THEN 1 ELSE 0 END) as absent_count
     FROM
         phenopackets,
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
-    WHERE
-        NOT COALESCE((feature->>'excluded')::boolean, false)
     GROUP BY
         feature->'type'->>'id',
         feature->'type'->>'label'
     ORDER BY
-        count DESC
+        present_count DESC
     """
 
     result = await db.execute(text(query))
     rows = result.fetchall()
 
-    total = sum(int(row._mapping["count"]) for row in rows)
+    # Calculate total for percentage (sum of all present counts)
+    total = sum(int(row._mapping["present_count"]) for row in rows)
 
     return [
         AggregationResult(
             label=row.label or row.hpo_id,
-            count=int(row._mapping["count"]),
-            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
-            details={"hpo_id": row.hpo_id},
+            count=int(row._mapping["present_count"]),
+            percentage=(int(row._mapping["present_count"]) / total * 100) if total > 0 else 0,
+            details={
+                "hpo_id": row.hpo_id,
+                "present_count": int(row._mapping["present_count"]),
+                "absent_count": int(row._mapping["absent_count"]),
+                "not_reported_count": total_phenopackets - int(row._mapping["present_count"]) - int(row._mapping["absent_count"]),
+            },
         )
         for row in rows
     ]

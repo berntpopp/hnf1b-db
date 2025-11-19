@@ -72,7 +72,9 @@ class PhenotypeExtractor:
                 original_col = normalized_cols[pheno_key]
                 value = self._safe_value(row[original_col])
 
-                if value and value.lower() not in ["no", "not reported", "unknown", ""]:
+                # Skip only "not reported", "unknown", and empty values
+                # Process both "yes" (present) and "no" (excluded) values
+                if value and value.lower() not in ["not reported", "unknown", ""]:
                     # Special handling for KidneyBiopsy with specific diagnoses
                     if pheno_key == "kidneybiopsy":
                         self._handle_kidney_biopsy(
@@ -80,17 +82,40 @@ class PhenotypeExtractor:
                         )
                         continue
 
-                    # Determine if phenotype is present
-                    excluded = False
-                    if value.lower() in ["absent", "negative", "none"]:
-                        excluded = True
+                    # Special handling for RenalInsufficancy: map cell value (e.g., "Stage 5") to HPO term
+                    # instead of using column name. This allows proper CKD stage assignment.
+                    # NOTE: The column name has a typo in Google Sheets: "RenalInsufficancy"
+                    if pheno_key == "renalinsufficancy":
+                        # Look up the cell value (e.g., "Stage 5") in ontology mapper
+                        value_normalized = self.ontology_mapper.normalize_key(value)
+                        stage_hpo = self.ontology_mapper.get_hpo_term(value_normalized)
 
-                    phenotype = {
-                        "type": {"id": hpo_info["id"], "label": hpo_info["label"]},
-                        "excluded": excluded,
-                    }
+                        if stage_hpo:
+                            # Found a specific stage mapping in Phenotypes sheet
+                            phenotype = {
+                                "type": {"id": stage_hpo["id"], "label": stage_hpo["label"]},
+                                "excluded": False,
+                            }
+                        elif value.lower() in ["no", "absent", "negative", "none"]:
+                            # Explicit absence - skip this phenotype (don't create entry)
+                            continue
+                        else:
+                            # Value not found in mappings and not explicitly absent - skip
+                            continue
+                    else:
+                        # Standard handling: use column name to look up HPO term
+                        # Determine if phenotype is present or explicitly absent
+                        excluded = False
+                        if value.lower() in ["no", "absent", "negative", "none"]:
+                            excluded = True
+
+                        phenotype = {
+                            "type": {"id": hpo_info["id"], "label": hpo_info["label"]},
+                            "excluded": excluded,
+                        }
 
                     # Add onset information - prenatal/postnatal takes priority
+                    excluded = bool(phenotype.get("excluded", False))
                     if not excluded:
                         if age_onset_class:
                             # Use prenatal/postnatal as primary onset
