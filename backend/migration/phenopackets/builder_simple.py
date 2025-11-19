@@ -538,42 +538,67 @@ class PhenopacketBuilder:
             "phenopacketSchemaVersion": "2.0.0",
         }
 
-        # Add comment from individuals sheet (custom metadata field)
-        first_row = rows.iloc[0]
-        comment = self._safe_value(first_row.get("Comment"))
-        if comment:
-            metadata["comment"] = comment
+        # Build update history with per-publication metadata
+        # This preserves comments and reviewers from ALL publications
+        updates = []
+        for _, row in rows.iterrows():
+            timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
+            if timestamp:
+                pub_id = self._safe_value(row.get("Publication"))
+                update_entry = {
+                    "timestamp": timestamp,
+                    "updatedBy": f"Publication: {pub_id or 'Unknown'}",
+                }
 
-        # Add reviewer from ReviewBy column (custom metadata field)
-        # Resolve email to full name using reviewer_mapper
-        reviewer_email = self._safe_value(first_row.get("ReviewBy"))
-        if reviewer_email and self.reviewer_mapper:
-            reviewer_name = self.reviewer_mapper.get_full_name(reviewer_email)
-            if reviewer_name:
-                metadata["reviewer"] = reviewer_name
-            else:
-                # Fallback to email if name not found
+                # Add publication-specific comment if available
+                row_comment = self._safe_value(row.get("Comment"))
+                if row_comment:
+                    update_entry["comment"] = row_comment
+                else:
+                    update_entry["comment"] = f"Data from {pub_id or 'Unknown source'}"
+
+                # Add publication-specific reviewer if available
+                row_reviewer_email = self._safe_value(row.get("ReviewBy"))
+                if row_reviewer_email:
+                    if self.reviewer_mapper:
+                        row_reviewer_name = self.reviewer_mapper.get_full_name(
+                            row_reviewer_email
+                        )
+                        update_entry["reviewer"] = (
+                            row_reviewer_name or row_reviewer_email
+                        )
+                    else:
+                        update_entry["reviewer"] = row_reviewer_email
+
+                # Add publication ID for easy reference
+                if pub_id:
+                    update_entry["publication"] = pub_id
+
+                updates.append(update_entry)
+
+        if updates:
+            updates.sort(key=lambda x: x["timestamp"])
+            metadata["updates"] = updates
+
+            # Set top-level comment and reviewer from most recent publication
+            most_recent_update = updates[-1]  # Last item after sorting
+            if "comment" in most_recent_update:
+                metadata["comment"] = most_recent_update["comment"]
+            if "reviewer" in most_recent_update:
+                metadata["reviewer"] = most_recent_update["reviewer"]
+        else:
+            # Fallback for single publication with no ReviewDate
+            first_row = rows.iloc[0]
+            comment = self._safe_value(first_row.get("Comment"))
+            if comment:
+                metadata["comment"] = comment
+
+            reviewer_email = self._safe_value(first_row.get("ReviewBy"))
+            if reviewer_email and self.reviewer_mapper:
+                reviewer_name = self.reviewer_mapper.get_full_name(reviewer_email)
+                metadata["reviewer"] = reviewer_name or reviewer_email
+            elif reviewer_email:
                 metadata["reviewer"] = reviewer_email
-        elif reviewer_email:
-            # No mapper available, use email
-            metadata["reviewer"] = reviewer_email
-
-        # Add update history
-        if len(rows) > 1:
-            updates = []
-            for _, row in rows.iterrows():
-                timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
-                if timestamp:
-                    updates.append(
-                        {
-                            "timestamp": timestamp,
-                            "updatedBy": f"Publication: {row.get('Publication', 'Unknown')}",
-                            "comment": f"Data from {row.get('Publication', 'Unknown source')}",
-                        }
-                    )
-            if updates:
-                updates.sort(key=lambda x: x["timestamp"])
-                metadata["updates"] = updates
 
         # Add publication references with publication type
         if self.publication_mapper:
