@@ -93,7 +93,10 @@ class PhenotypeExtractor:
                         if stage_hpo:
                             # Found a specific stage mapping in Phenotypes sheet
                             phenotype = {
-                                "type": {"id": stage_hpo["id"], "label": stage_hpo["label"]},
+                                "type": {
+                                    "id": stage_hpo["id"],
+                                    "label": stage_hpo["label"],
+                                },
                                 "excluded": False,
                             }
                         elif value.lower() in ["no", "absent", "negative", "none"]:

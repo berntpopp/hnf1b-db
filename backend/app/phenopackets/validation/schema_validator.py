@@ -223,9 +223,7 @@ class SchemaValidator:
                         "therapeuticRegimen": {"$ref": "#/definitions/ontologyClass"},
                         "treatmentTarget": {"$ref": "#/definitions/ontologyClass"},
                         "treatmentIntent": {"$ref": "#/definitions/ontologyClass"},
-                        "responseToTreatment": {
-                            "$ref": "#/definitions/ontologyClass"
-                        },
+                        "responseToTreatment": {"$ref": "#/definitions/ontologyClass"},
                         "adverseEvents": {
                             "type": "array",
                             "items": {"$ref": "#/definitions/ontologyClass"},

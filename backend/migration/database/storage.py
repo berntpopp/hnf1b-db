@@ -80,7 +80,9 @@ class PhenopacketStorage:
 
                     # Remove migration metadata before storing
                     phenopacket_clean = {
-                        k: v for k, v in phenopacket.items() if k != "_migration_metadata"
+                        k: v
+                        for k, v in phenopacket.items()
+                        if k != "_migration_metadata"
                     }
 
                     # Insert phenopacket with proper attribution and revision

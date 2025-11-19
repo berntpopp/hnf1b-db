@@ -10,6 +10,7 @@ Changes:
 - Keep 'version' as String for GA4GH schema version
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -17,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'db5aee5fe183'
-down_revision: Union[str, Sequence[str], None] = 'fff51e479b02'
+revision: str = "db5aee5fe183"
+down_revision: Union[str, Sequence[str], None] = "fff51e479b02"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -27,17 +28,17 @@ def upgrade() -> None:
     """Upgrade schema."""
     # Add revision column for optimistic locking
     op.add_column(
-        'phenopackets',
+        "phenopackets",
         sa.Column(
-            'revision',
+            "revision",
             sa.Integer,
             nullable=False,
-            server_default='1',
-            comment='Revision counter for optimistic locking'
-        )
+            server_default="1",
+            comment="Revision counter for optimistic locking",
+        ),
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('phenopackets', 'revision')
+    op.drop_column("phenopackets", "revision")

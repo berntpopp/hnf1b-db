@@ -19,9 +19,7 @@ async def test_update_phenopacket_success(
         phenopacket={
             "id": "test-update-001",
             "subject": {"id": "patient-001", "sex": "MALE"},
-            "phenotypicFeatures": [
-                {"type": {"id": "HP:0000001", "label": "All"}}
-            ],
+            "phenotypicFeatures": [{"type": {"id": "HP:0000001", "label": "All"}}],
             "metaData": {
                 "created": "2025-01-01T00:00:00Z",
                 "createdBy": "test",

@@ -10,6 +10,7 @@ Changes:
 - NOTE: change_summary already exists in initial migration, so not added here
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -18,8 +19,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'fff51e479b02'
-down_revision: Union[str, Sequence[str], None] = '2e28b299e3b6'
+revision: str = "fff51e479b02"
+down_revision: Union[str, Sequence[str], None] = "2e28b299e3b6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -27,19 +28,15 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # Add change_patch column for JSON Patch (RFC 6902) format
-    op.add_column(
-        'phenopacket_audit',
-        sa.Column('change_patch', JSONB, nullable=True)
-    )
+    op.add_column("phenopacket_audit", sa.Column("change_patch", JSONB, nullable=True))
 
     # Add change_reason column for explaining why changes were made
     op.add_column(
-        'phenopacket_audit',
-        sa.Column('change_reason', sa.Text, nullable=True)
+        "phenopacket_audit", sa.Column("change_reason", sa.Text, nullable=True)
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('phenopacket_audit', 'change_reason')
-    op.drop_column('phenopacket_audit', 'change_patch')
+    op.drop_column("phenopacket_audit", "change_reason")
+    op.drop_column("phenopacket_audit", "change_patch")

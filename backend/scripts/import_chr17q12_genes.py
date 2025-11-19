@@ -16,7 +16,6 @@ Usage:
 
 import asyncio
 import sys
-import time
 import uuid
 from pathlib import Path
 
@@ -30,7 +29,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.reference.models import Gene, ReferenceGenome
-
 
 # Ensembl REST API settings
 ENSEMBL_API = "https://rest.ensembl.org"
@@ -54,7 +52,7 @@ async def fetch_genes_from_ensembl(region: str, timeout: int = 30) -> list[dict]
     params = {"feature": "gene", "content-type": "application/json"}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        print(f"📡 Fetching genes from Ensembl API...")
+        print("📡 Fetching genes from Ensembl API...")
         print(f"   URL: {url}")
         print(f"   Region: {region}")
         print()
@@ -294,9 +292,7 @@ async def get_gene_by_symbol(
     """
     from sqlalchemy import and_, select
 
-    stmt = select(Gene).where(
-        and_(Gene.symbol == symbol, Gene.genome_id == genome_id)
-    )
+    stmt = select(Gene).where(and_(Gene.symbol == symbol, Gene.genome_id == genome_id))
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 

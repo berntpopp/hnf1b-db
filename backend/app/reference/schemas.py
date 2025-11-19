@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 
 class ReferenceGenomeSchema(BaseModel):

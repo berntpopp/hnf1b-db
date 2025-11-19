@@ -272,8 +272,7 @@ class SheetsStructureVerifier:
         best_join = max(results.keys(), key=lambda k: results[k]["match_rate"])
         best_rate = results[best_join]["match_rate"]
         logger.info(
-            f"\n✅ Best join column: '{best_join}' "
-            f"({best_rate:.1f}% match rate)"
+            f"\n✅ Best join column: '{best_join}' ({best_rate:.1f}% match rate)"
         )
 
         return {

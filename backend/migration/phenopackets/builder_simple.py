@@ -127,7 +127,9 @@ class PhenopacketBuilder:
         if reviewer_email and not pd.isna(reviewer_email):
             phenopacket["_migration_metadata"] = {
                 "reviewer_email": str(reviewer_email).strip(),
-                "sheet_row_number": first_row.name if hasattr(first_row, "name") else None,
+                "sheet_row_number": first_row.name
+                if hasattr(first_row, "name")
+                else None,
                 "import_date": datetime.utcnow().isoformat(),
             }
 

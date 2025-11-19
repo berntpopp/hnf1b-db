@@ -67,12 +67,8 @@ async def list_genomes(
 @router.get("/genes", response_model=List[GeneSchema])
 async def list_genes(
     response: Response,
-    symbol: Optional[str] = Query(
-        None, description="Filter by gene symbol"
-    ),
-    chromosome: Optional[str] = Query(
-        None, description="Filter by chromosome"
-    ),
+    symbol: Optional[str] = Query(None, description="Filter by gene symbol"),
+    chromosome: Optional[str] = Query(None, description="Filter by chromosome"),
     genome_build: Optional[str] = Query(
         None, description="Genome assembly name (default: GRCh38)"
     ),

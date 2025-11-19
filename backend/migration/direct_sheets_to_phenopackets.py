@@ -110,7 +110,9 @@ class DirectSheetsToPhenopackets:
             self.reviewer_mapper = ReviewerMapper(self.reviewers_df)
             logger.info(f"Loaded {len(self.reviewers_df)} reviewers")
         else:
-            logger.warning("No reviewer data loaded - curation attribution will be skipped")
+            logger.warning(
+                "No reviewer data loaded - curation attribution will be skipped"
+            )
 
         # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(

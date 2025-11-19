@@ -84,7 +84,9 @@ class TestGenerateJsonPatch:
         )
         assert patch == []
 
-    def test_simple_field_change(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
+    def test_simple_field_change(
+        self, sample_phenopacket_minimal: Dict[str, Any]
+    ) -> None:
         """Test patch for simple field modification."""
         old = copy.deepcopy(sample_phenopacket_minimal)
         new = copy.deepcopy(sample_phenopacket_minimal)
@@ -114,9 +116,7 @@ class TestGenerateJsonPatch:
             "/phenotypicFeatures" in p for p in paths
         )
 
-    def test_multiple_changes(
-        self, sample_phenopacket_minimal: Dict[str, Any]
-    ) -> None:
+    def test_multiple_changes(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
         """Test patch with multiple simultaneous changes."""
         old = copy.deepcopy(sample_phenopacket_minimal)
         new = copy.deepcopy(sample_phenopacket_minimal)
@@ -325,9 +325,7 @@ class TestComparePhenopackets:
         assert result["has_conflicts"] is True
         conflicts_list = result["conflicts"]
         assert isinstance(conflicts_list, list)
-        assert any(
-            "Modified critical field: /subject/id" in c for c in conflicts_list
-        )
+        assert any("Modified critical field: /subject/id" in c for c in conflicts_list)
 
     def test_conflict_schema_version_change(
         self, sample_phenopacket_minimal: Dict[str, Any]
