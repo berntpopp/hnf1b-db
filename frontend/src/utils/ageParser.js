@@ -113,31 +113,148 @@ export const ORGAN_SYSTEMS = [
  * @returns {string} Organ system category
  */
 export function getOrganSystem(hpoId) {
-  // Basic mapping - can be expanded with HPO hierarchy
-  const prefixMapping = {
-    'HP:0000079': 'genital',       // Abnormality of the genital system
-    'HP:0000107': 'renal',          // Renal cyst
-    'HP:0000119': 'genital',       // Abnormality of the genitourinary system
-    'HP:0000822': 'cardiovascular', // Hypertension
-    'HP:0001507': 'skeletal',      // Growth abnormality
-    'HP:0001627': 'cardiovascular', // Abnormal heart morphology
-    'HP:0001871': 'other',         // Abnormality of blood and blood-forming tissues
-    'HP:0002086': 'renal',         // Abnormality of the respiratory system
-    'HP:0002242': 'hepatic',       // Abnormality of the hepatobiliary system
-    'HP:0002595': 'hepatic',       // Abnormality of the hepatic vasculature
-    'HP:0003111': 'renal',         // Abnormal blood electrolyte concentration
-    'HP:0004322': 'skeletal',      // Short stature
-    'HP:0004904': 'diabetes',      // Maturity-onset diabetes of the young (MODY)
-    'HP:0100543': 'neurological',  // Cognitive impairment
-  };
-  
-  // Check for exact match first
-  for (const [prefix, system] of Object.entries(prefixMapping)) {
-    if (hpoId.startsWith(prefix)) {
-      return system;
-    }
+  if (!hpoId) return 'other';
+
+  // Handle non-HPO identifiers (e.g., ORPHA)
+  if (!hpoId.startsWith('HP:')) {
+    return 'other';
   }
-  
+
+  // Extract numeric part for range-based categorization
+  const numericId = parseInt(hpoId.replace('HP:', ''));
+
+  // Renal/Urinary System
+  // HP:0000077 - Abnormality of the kidney (and all descendants)
+  // HP:0000119 - Abnormality of the genitourinary system
+  if (
+    (numericId >= 77 && numericId <= 140) ||      // Kidney abnormalities
+    (numericId >= 795 && numericId <= 850) ||     // Ureter/bladder/urethra
+    numericId === 3 ||                             // Multicystic kidney dysplasia
+    numericId === 2149 ||                          // Hyperuricemia
+    numericId === 2900 ||                          // Hypokalemia
+    numericId === 2917 ||                          // Hypomagnesemia
+    numericId === 3111 ||                          // Abnormal blood electrolyte
+    (numericId >= 3774 && numericId <= 3780) ||   // Stage 5 CKD
+    (numericId >= 12210 && numericId <= 12213) || // Abnormal renal morphology/physiology
+    (numericId >= 12622 && numericId <= 12626) || // CKD stages
+    numericId === 33133 ||                         // Renal cortical hyperechogenicity
+    numericId === 100611                           // Multiple glomerular cysts
+  ) {
+    return 'renal';
+  }
+
+  // Genital System
+  // HP:0000078-0080 - Abnormality of the genital system
+  if ((numericId >= 78 && numericId <= 80) || (numericId >= 811 && numericId <= 815)) {
+    return 'genital';
+  }
+
+  // Neurological/Neurodevelopmental
+  // HP:0000707-0750 - Nervous system abnormalities
+  // HP:0001250-0001300 - Seizures and neurological
+  // HP:0012443 - Brain morphology
+  // HP:0012758 - Neurodevelopmental delay
+  if (
+    (numericId >= 707 && numericId <= 750) ||
+    (numericId >= 1250 && numericId <= 1300) ||
+    (numericId >= 2011 && numericId <= 2100) ||
+    numericId === 12443 ||
+    (numericId >= 12758 && numericId <= 12760) ||
+    numericId === 100543
+  ) {
+    return 'neurological';
+  }
+
+  // Hepatic System
+  // HP:0001392 - Abnormality of the liver
+  // HP:0002910 - Elevated hepatic transaminase
+  // HP:0031865 - Abnormal liver physiology
+  if (
+    (numericId >= 1392 && numericId <= 1410) ||
+    (numericId >= 2242 && numericId <= 2250) ||
+    (numericId >= 2595 && numericId <= 2600) ||
+    numericId === 2910 ||
+    numericId === 31865
+  ) {
+    return 'hepatic';
+  }
+
+  // Pancreatic System
+  // HP:0001732 - Abnormality of the pancreas
+  // HP:0001738 - Exocrine pancreatic insufficiency
+  // HP:0002594 - Pancreatic hypoplasia
+  if (
+    (numericId >= 1732 && numericId <= 1740) ||
+    (numericId >= 2037 && numericId <= 2040) ||
+    numericId === 2594 ||
+    numericId === 5233 ||
+    numericId === 6280 ||
+    numericId === 8388 ||
+    numericId === 11026 ||
+    numericId === 12090 ||
+    numericId === 100732
+  ) {
+    return 'pancreatic';
+  }
+
+  // Endocrine System (including diabetes)
+  // HP:0000818 - Abnormality of the endocrine system
+  // HP:0000819 - Diabetes mellitus
+  // HP:0000843 - Hyperparathyroidism
+  // HP:0004904 - MODY
+  if (
+    (numericId >= 818 && numericId <= 875) ||
+    numericId === 2893 ||
+    numericId === 3072 ||
+    numericId === 3510 ||
+    numericId === 4904 ||
+    numericId === 4905 ||
+    numericId === 8221 ||
+    (numericId >= 11732 && numericId <= 11790) ||
+    numericId === 12049 ||
+    numericId === 30088
+  ) {
+    return 'endocrine';
+  }
+
+  // Cardiovascular System
+  // HP:0001626 - Abnormality of the cardiovascular system
+  // HP:0001627 - Abnormal heart morphology
+  if ((numericId >= 1626 && numericId <= 1680) || numericId === 1997) {
+    // HP:0001997 - Gout (related to cardiovascular risk)
+    return 'cardiovascular';
+  }
+
+  // Skeletal/Musculoskeletal System
+  // HP:0000924 - Abnormality of the skeletal system
+  // HP:0004322 - Short stature
+  // HP:0033127 - Abnormality of the musculoskeletal system
+  if (
+    (numericId >= 924 && numericId <= 945) ||
+    (numericId >= 3011 && numericId <= 3020) ||
+    numericId === 4322 ||
+    numericId === 33127
+  ) {
+    return 'skeletal';
+  }
+
+  // Eye abnormalities - keep as 'other' (not organ-specific)
+  if (numericId >= 478 && numericId <= 590) {
+    return 'other';
+  }
+
+  // Facial abnormalities - keep as 'other'
+  if ((numericId >= 271 && numericId <= 350) || numericId === 1999) {
+    return 'other';
+  }
+
+  // Prenatal/birth abnormalities - keep as 'other'
+  // HP:0001622 - Premature birth
+  if (numericId === 1622) {
+    return 'other';
+  }
+
+  // Default to 'other' for unmapped terms
   return 'other';
 }
 

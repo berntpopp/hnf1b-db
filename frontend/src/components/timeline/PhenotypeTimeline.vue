@@ -1,20 +1,20 @@
 <template>
   <v-card variant="outlined" class="mb-4">
-    <v-card-title class="bg-blue-lighten-5 d-flex align-center">
+    <v-card-title class="bg-green-lighten-5 d-flex align-center">
       <v-icon class="mr-2">mdi-timeline-clock</v-icon>
       Phenotypic Features Timeline
       <v-spacer></v-spacer>
-      <v-chip v-if="timelineData" color="primary" size="small">
-        {{ filteredFeatures.length }} Features
+      <v-chip v-if="timelineData" color="success" size="small">
+        {{ presentFeatures.length }} Features
       </v-chip>
     </v-card-title>
 
     <v-card-text>
-      <div v-if="loading" class="d-flex justify-center align-center" style="height: 400px;">
+      <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 200px;">
         <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
       </div>
 
-      <div v-else-if="error" class="d-flex flex-column align-center justify-center" style="height: 400px;">
+      <div v-else-if="error" class="d-flex flex-column align-center justify-center" style="min-height: 200px;">
         <v-icon size="64" color="error" class="mb-4">mdi-alert-circle</v-icon>
         <div class="text-h6 text-error mb-2">Failed to load timeline</div>
         <div class="text-body-2 text-grey">{{ error }}</div>
@@ -24,88 +24,117 @@
         </v-btn>
       </div>
 
-      <div v-else-if="!timelineData || timelineData.features.length === 0" class="d-flex flex-column align-center justify-center" style="height: 400px;">
+      <div v-else-if="!timelineData || presentFeatures.length === 0" class="d-flex flex-column align-center justify-center" style="min-height: 200px;">
         <v-icon size="64" color="grey-lighten-1" class="mb-4">mdi-timeline-alert</v-icon>
         <div class="text-h6 text-grey mb-2">No timeline data available</div>
         <div class="text-body-2 text-grey">No phenotypic features with onset information found.</div>
       </div>
 
       <div v-else>
-        <!-- Timeline visualization -->
-        <div ref="chartContainer" class="timeline-chart"></div>
+        <!-- Timeline visualization using Vuetify timeline -->
+        <v-timeline density="compact" side="end" align="start">
+          <v-timeline-item
+            v-for="(group, index) in groupedFeatures"
+            :key="index"
+            dot-color="success"
+            size="small"
+          >
+            <template #opposite>
+              <div class="text-caption text-grey font-weight-bold">
+                {{ group.onsetLabel }}
+              </div>
+            </template>
+            <div>
+              <!-- Onset period header -->
+              <div class="text-subtitle-2 font-weight-bold mb-2">
+                {{ group.onsetLabel }}
+                <v-chip size="x-small" color="success" variant="flat" class="ml-2">
+                  {{ group.features.length }} feature{{ group.features.length !== 1 ? 's' : '' }}
+                </v-chip>
+              </div>
 
-        <!-- Legend -->
-        <v-row class="mt-4">
-          <v-col>
-            <div class="d-flex flex-wrap gap-2">
-              <v-chip
-                v-for="category in ORGAN_SYSTEMS"
-                :key="category.value"
-                :color="category.color"
-                size="small"
-              >
-                {{ category.label }}
-              </v-chip>
-            </div>
-          </v-col>
-        </v-row>
-
-        <!-- Feature list -->
-        <v-expansion-panels class="mt-4">
-          <v-expansion-panel>
-            <v-expansion-panel-title>
-              <v-icon class="mr-2">mdi-format-list-bulleted</v-icon>
-              Feature Details ({{ filteredFeatures.length }})
-            </v-expansion-panel-title>
-            <v-expansion-panel-text>
-              <v-list dense>
+              <!-- Features in this onset period -->
+              <v-list density="compact">
                 <v-list-item
-                  v-for="(feature, idx) in filteredFeatures"
-                  :key="idx"
-                  :class="{ 'excluded-feature': feature.excluded }"
+                  v-for="(feature, fIndex) in group.features"
+                  :key="fIndex"
+                  class="px-0"
                 >
                   <template #prepend>
-                    <v-avatar :color="getCategoryColor(feature.category)" size="32">
-                      <v-icon size="small" color="white">
-                        {{ feature.excluded ? 'mdi-minus-circle' : 'mdi-check-circle' }}
-                      </v-icon>
+                    <v-avatar :color="feature.categoryColor" size="24">
+                      <v-icon size="x-small" color="white">mdi-check-circle</v-icon>
                     </v-avatar>
                   </template>
-                  <v-list-item-title>{{ feature.label }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ feature.hpo_id }}
-                    <span v-if="feature.onset_age"> • Onset: {{ formatAge(parseAge(feature.onset_age)) }}</span>
-                    <span v-if="feature.onset_label"> ({{ feature.onset_label }})</span>
-                    <span v-if="feature.severity"> • Severity: {{ feature.severity }}</span>
-                  </v-list-item-subtitle>
-                  <template #append v-if="feature.evidence && feature.evidence.length > 0">
-                    <v-chip size="x-small" color="blue-lighten-4">
-                      {{ feature.evidence.length }} evidence
+
+                  <v-list-item-title class="text-body-2">
+                    {{ feature.label }}
+                  </v-list-item-title>
+
+                  <v-list-item-subtitle class="text-caption">
+                    <v-chip
+                      :href="`https://hpo.jax.org/app/browse/term/${feature.hpo_id}`"
+                      target="_blank"
+                      color="green-lighten-4"
+                      size="x-small"
+                      variant="flat"
+                      link
+                      class="mr-1"
+                    >
+                      <v-icon left size="x-small">mdi-open-in-new</v-icon>
+                      {{ feature.hpo_id }}
                     </v-chip>
-                  </template>
+
+                    <span v-if="feature.severity" class="ml-1">
+                      • Severity: {{ feature.severity }}
+                    </span>
+
+                    <!-- Evidence sources -->
+                    <span v-if="feature.evidence && feature.evidence.length > 0" class="ml-1">
+                      • Sources:
+                      <v-chip
+                        v-for="(ev, evIndex) in feature.evidence"
+                        :key="evIndex"
+                        :to="ev.pmid ? `/publications/${ev.pmid}` : undefined"
+                        size="x-small"
+                        color="blue-lighten-4"
+                        variant="flat"
+                        :link="!!ev.pmid"
+                        class="ml-1"
+                      >
+                        <v-icon v-if="ev.pmid" left size="x-small">mdi-file-document</v-icon>
+                        PMID:{{ ev.pmid || 'Unknown' }}
+                      </v-chip>
+                    </span>
+                  </v-list-item-subtitle>
                 </v-list-item>
               </v-list>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
+            </div>
+          </v-timeline-item>
+        </v-timeline>
+
+        <!-- Legend -->
+        <v-divider class="my-4" />
+        <div class="text-caption text-grey mb-2">Organ System Categories:</div>
+        <div class="d-flex flex-wrap gap-2">
+          <v-chip
+            v-for="category in ORGAN_SYSTEMS"
+            :key="category.value"
+            :color="category.color"
+            size="small"
+            variant="flat"
+          >
+            {{ category.label }}
+          </v-chip>
+        </div>
       </div>
     </v-card-text>
-
-    <!-- Tooltip -->
-    <TimelineTooltip
-      :visible="tooltip.visible"
-      :data="tooltip.data"
-      :position="tooltip.position"
-    />
   </v-card>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import * as d3 from 'd3';
+import { ref, computed, onMounted, watch } from 'vue';
 import API from '@/api';
-import TimelineTooltip from './TimelineTooltip.vue';
-import { parseAge, formatAge, getCategoryColor, onsetClassToAge, ORGAN_SYSTEMS } from '@/utils/ageParser';
+import { parseAge, formatAge, getCategoryColor, onsetClassToAge, getOrganSystem, ORGAN_SYSTEMS } from '@/utils/ageParser';
 
 const props = defineProps({
   phenopacketId: {
@@ -117,30 +146,112 @@ const props = defineProps({
 const loading = ref(true);
 const error = ref(null);
 const timelineData = ref(null);
-const chartContainer = ref(null);
-const selectedCategories = ref([]);
-const tooltip = ref({
-  visible: false,
-  data: null,
-  position: { x: 0, y: 0 }
+
+// Filter out excluded features (absent phenotypes)
+const presentFeatures = computed(() => {
+  if (!timelineData.value) return [];
+  return timelineData.value.features.filter(f => !f.excluded);
 });
 
-let resizeObserver = null;
+// Group features by onset period
+const groupedFeatures = computed(() => {
+  if (!presentFeatures.value || presentFeatures.value.length === 0) return [];
 
-const filteredFeatures = computed(() => {
-  if (!timelineData.value) return [];
-  
-  let features = timelineData.value.features;
-  
-  // Always filter out excluded features (absent phenotypes)
-  features = features.filter(f => !f.excluded);
-  
-  // Filter by category
-  if (selectedCategories.value.length > 0) {
-    features = features.filter(f => selectedCategories.value.includes(f.category));
-  }
-  
-  return features;
+  // Parse ages and assign onset labels
+  const featuresWithAges = presentFeatures.value.map(f => {
+    let age = null;
+    let onsetLabel = 'Unknown onset';
+    let sortOrder = 999; // For unknown/unspecified
+
+    if (f.onset_age) {
+      age = parseAge(f.onset_age);
+    } else if (f.onset_label) {
+      age = onsetClassToAge(f.onset_label);
+    }
+
+    // Determine onset label and sort order
+    if (f.onset_label) {
+      onsetLabel = f.onset_label;
+
+      // Assign sort order based on onset classification
+      if (onsetLabel.toLowerCase().includes('prenatal') || onsetLabel.toLowerCase().includes('fetal')) {
+        sortOrder = 0;
+      } else if (onsetLabel.toLowerCase().includes('congenital') || onsetLabel.toLowerCase().includes('birth')) {
+        sortOrder = 1;
+      } else if (onsetLabel.toLowerCase().includes('neonatal')) {
+        sortOrder = 2;
+      } else if (onsetLabel.toLowerCase().includes('infantile') || onsetLabel.toLowerCase().includes('infant')) {
+        sortOrder = 3;
+      } else if (onsetLabel.toLowerCase().includes('childhood') || onsetLabel.toLowerCase().includes('child')) {
+        sortOrder = 4;
+      } else if (onsetLabel.toLowerCase().includes('juvenile')) {
+        sortOrder = 5;
+      } else if (onsetLabel.toLowerCase().includes('adult')) {
+        sortOrder = 6;
+      } else if (onsetLabel.toLowerCase().includes('late')) {
+        sortOrder = 7;
+      } else if (onsetLabel.toLowerCase().includes('postnatal')) {
+        sortOrder = 8; // Postnatal is general, comes after specific periods
+      }
+    } else if (age !== null) {
+      // If we only have age, create a label
+      if (age < 0) {
+        onsetLabel = 'Prenatal onset';
+        sortOrder = 0;
+      } else if (age === 0) {
+        onsetLabel = 'Birth';
+        sortOrder = 1;
+      } else if (age < 1/12) {
+        onsetLabel = 'Neonatal onset';
+        sortOrder = 2;
+      } else if (age < 1) {
+        onsetLabel = 'Infantile onset';
+        sortOrder = 3;
+      } else if (age < 5) {
+        onsetLabel = 'Childhood onset';
+        sortOrder = 4;
+      } else if (age < 16) {
+        onsetLabel = 'Juvenile onset';
+        sortOrder = 5;
+      } else {
+        onsetLabel = 'Adult onset';
+        sortOrder = 6;
+      }
+    }
+
+    // Determine proper organ system category from HPO ID
+    const category = getOrganSystem(f.hpo_id);
+    const categoryColor = getCategoryColor(category);
+
+    return {
+      ...f,
+      age,
+      onsetLabel,
+      sortOrder,
+      category,
+      categoryColor
+    };
+  });
+
+  // Group by onset label
+  const groups = {};
+  featuresWithAges.forEach(feature => {
+    const key = feature.onsetLabel;
+    if (!groups[key]) {
+      groups[key] = {
+        onsetLabel: key,
+        sortOrder: feature.sortOrder,
+        features: []
+      };
+    }
+    groups[key].features.push(feature);
+  });
+
+  // Convert to array and sort by onset order
+  const groupedArray = Object.values(groups);
+  groupedArray.sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return groupedArray;
 });
 
 async function fetchData() {
@@ -149,324 +260,46 @@ async function fetchData() {
   try {
     const response = await API.getPhenotypeTimeline(props.phenopacketId);
     timelineData.value = response.data;
-    console.log('Timeline data received:', timelineData.value);
-    console.log('Total features:', timelineData.value.features?.length);
-    console.log('Features with onset_age:', timelineData.value.features?.filter(f => f.onset_age).length);
-    console.log('Features with onset_label:', timelineData.value.features?.filter(f => f.onset_label).length);
-    console.log('Sample feature:', timelineData.value.features?.[0]);
-    await nextTick();
-    renderChart();
+    window.logService.debug('Phenotype timeline data received', {
+      totalFeatures: timelineData.value.features?.length,
+      presentFeatures: presentFeatures.value.length,
+    });
+
+    // Debug will be logged after computed properties run
   } catch (err) {
-    console.error('Error fetching timeline:', err);
+    window.logService.error('Error fetching phenotype timeline', {
+      error: err.message,
+    });
     error.value = err.message || 'An error occurred while fetching data';
   } finally {
     loading.value = false;
   }
 }
 
-function renderChart() {
-  if (!chartContainer.value || !filteredFeatures.value || filteredFeatures.value.length === 0) {
-    console.log('Render chart skipped. Conditions not met:', {
-      hasChartContainer: !!chartContainer.value,
-      filteredFeaturesCount: filteredFeatures.value?.length || 0
-    });
-    return;
-  }
-
-  // Clear existing chart
-  d3.select(chartContainer.value).selectAll('*').remove();
-
-  const container = chartContainer.value;
-  const containerWidth = container.clientWidth;
-  const margin = { top: 20, right: 30, bottom: 50, left: 200 };
-  const width = containerWidth - margin.left - margin.right;
-  const rowHeight = 40;
-  const height = Math.max(300, filteredFeatures.value.length * rowHeight);
-
-  // Create SVG
-  const svg = d3.select(container)
-    .append('svg')
-    .attr('width', containerWidth)
-    .attr('height', height + margin.top + margin.bottom)
-    .append('g')
-    .attr('transform', `translate(${margin.left},${margin.top})`);
-
-  // Process features with ages
-  const featuresWithAges = filteredFeatures.value.map((f, index) => {
-    let age = null;
-    if (f.onset_age) {
-      age = parseAge(f.onset_age);
-      console.log(`Feature "${f.label}" has onset_age: ${f.onset_age} -> parsed to ${age} years`);
-    } else if (f.onset_label) {
-      // Try to infer age from onset label using HPO onset class
-      const inferredAge = onsetClassToAge(f.onset_label);
-      if (inferredAge !== null) {
-        age = inferredAge;
-        console.log(`Feature "${f.label}" has onset_label: ${f.onset_label} -> inferred age ${age} years`);
-      }
+// Debug watcher to log category assignments
+watch(groupedFeatures, (groups) => {
+  if (groups && groups.length > 0) {
+    const firstGroup = groups[0];
+    if (firstGroup.features && firstGroup.features.length > 0) {
+      const sampleFeatures = firstGroup.features.slice(0, 3).map(f => ({
+        hpo_id: f.hpo_id,
+        label: f.label,
+        category: f.category,
+        categoryColor: f.categoryColor
+      }));
+      window.logService.debug('Sample feature categories from first onset group', {
+        onsetLabel: firstGroup.onsetLabel,
+        sampleFeatures
+      });
     }
-    return { ...f, age, originalIndex: index };
-  });
-  
-  console.log('Features processed:', featuresWithAges.length);
-  console.log('Features with ages:', featuresWithAges.filter(f => f.age !== null).length);
-  console.log('Features without ages:', featuresWithAges.filter(f => f.age === null).length);
-
-  // Separate features with and without ages
-  const withAges = featuresWithAges.filter(f => f.age !== null);
-  const withoutAges = featuresWithAges.filter(f => f.age === null);
-
-  if (featuresWithAges.length === 0) {
-    svg.append('text')
-      .attr('x', width / 2)
-      .attr('y', height / 2)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '14px')
-      .style('fill', '#999')
-      .text('No features available');
-    return;
   }
-
-  // Scales
-  const maxAge = d3.max(withAges, d => d.age) || 50;
-  const xScale = d3.scaleLinear()
-    .domain([0, Math.max(maxAge * 1.1, 10)])
-    .range([0, width]);
-
-  const yScale = d3.scaleBand()
-    .domain(featuresWithAges.map((f, i) => i))
-    .range([0, featuresWithAges.length * rowHeight])
-    .padding(0.2);
-
-  // X-axis
-  const xAxis = d3.axisBottom(xScale)
-    .ticks(10)
-    .tickFormat(d => `${d}y`);
-
-  svg.append('g')
-    .attr('class', 'x-axis')
-    .attr('transform', `translate(0,${featuresWithAges.length * rowHeight})`)
-    .call(xAxis)
-    .append('text')
-    .attr('x', width / 2)
-    .attr('y', 40)
-    .attr('fill', 'black')
-    .attr('text-anchor', 'middle')
-    .style('font-size', '12px')
-    .text(withAges.length > 0 ? 'Age at Onset (years)' : 'No temporal information available');
-
-  // Y-axis labels (feature names)
-  featuresWithAges.forEach((feature, i) => {
-    const y = yScale(i) + yScale.bandwidth() / 2;
-    
-    svg.append('text')
-      .attr('x', -10)
-      .attr('y', y)
-      .attr('text-anchor', 'end')
-      .attr('dominant-baseline', 'middle')
-      .style('font-size', '11px')
-      .style('fill', feature.excluded ? '#999' : '#333')
-      .style('text-decoration', feature.excluded ? 'line-through' : 'none')
-      .text(feature.label.length > 30 ? feature.label.substring(0, 27) + '...' : feature.label);
-  });
-
-  // Draw timeline points and lines for features WITH ages
-  withAges.forEach((feature, i) => {
-    const idx = feature.originalIndex;
-    const y = yScale(idx) + yScale.bandwidth() / 2;
-    const xOnset = xScale(feature.age);
-    const xEnd = width; // Line extends to the right edge (continuing to present)
-    const color = getCategoryColor(feature.category);
-
-    // Line from onset to present (continuing forward)
-    svg.append('line')
-      .attr('x1', xOnset)
-      .attr('y1', y)
-      .attr('x2', xEnd)
-      .attr('y2', y)
-      .attr('stroke', feature.excluded ? '#E0E0E0' : color)
-      .attr('stroke-width', 2)
-      .attr('stroke-dasharray', feature.excluded ? '5,5' : 'none')
-      .attr('opacity', 0.6);
-
-    // Onset marker (circle at the start of the line)
-    svg.append('circle')
-      .attr('cx', xOnset)
-      .attr('cy', y)
-      .attr('r', 6)
-      .attr('fill', feature.excluded ? '#E0E0E0' : color)
-      .attr('stroke', 'white')
-      .attr('stroke-width', 2)
-      .style('cursor', 'pointer')
-      .on('mouseover', function(event) {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .attr('r', 8);
-        
-        tooltip.value = {
-          visible: true,
-          data: {
-            label: feature.label,
-            hpoId: feature.hpo_id,
-            age: feature.age,
-            onsetLabel: feature.onset_label,
-            category: feature.category,
-            severity: feature.severity,
-            excluded: feature.excluded,
-            evidence: feature.evidence.map(ev => ({
-              pmid: ev.pmid,
-              description: ev.description,
-              recordedAt: ev.recorded_at
-            })),
-            clickHint: 'Click to view HPO term'
-          },
-          position: {
-            x: event.pageX + 10,
-            y: event.pageY - 10
-          }
-        };
-      })
-      .on('mouseout', function() {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .attr('r', 6);
-        
-        tooltip.value.visible = false;
-      })
-      .on('click', () => {
-        window.open(`https://hpo.jax.org/app/browse/term/${feature.hpo_id}`, '_blank');
-      });
-  });
-
-  // Draw markers for features WITHOUT ages (at the right edge with a different symbol)
-  withoutAges.forEach((feature) => {
-    const idx = feature.originalIndex;
-    const y = yScale(idx) + yScale.bandwidth() / 2;
-    const x = width - 30; // Position near right edge
-    const color = getCategoryColor(feature.category);
-
-    // Dashed line to indicate unknown onset
-    svg.append('line')
-      .attr('x1', 0)
-      .attr('y1', y)
-      .attr('x2', x)
-      .attr('y2', y)
-      .attr('stroke', feature.excluded ? '#E0E0E0' : color)
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '2,4')
-      .attr('opacity', 0.3);
-
-    // Question mark symbol for unknown onset
-    svg.append('text')
-      .attr('x', x)
-      .attr('y', y)
-      .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'central')
-      .style('font-size', '14px')
-      .style('font-weight', 'bold')
-      .style('fill', feature.excluded ? '#999' : color)
-      .style('cursor', 'pointer')
-      .text('?')
-      .on('mouseover', function(event) {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .style('font-size', '18px');
-        
-        tooltip.value = {
-          visible: true,
-          data: {
-            label: feature.label,
-            hpoId: feature.hpo_id,
-            age: null,
-            onsetLabel: feature.onset_label || 'Unknown',
-            category: feature.category,
-            severity: feature.severity,
-            excluded: feature.excluded,
-            evidence: feature.evidence.map(ev => ({
-              pmid: ev.pmid,
-              description: ev.description,
-              recordedAt: ev.recorded_at
-            })),
-            clickHint: 'Click to view HPO term (onset age unknown)'
-          },
-          position: {
-            x: event.pageX + 10,
-            y: event.pageY - 10
-          }
-        };
-      })
-      .on('mouseout', function() {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .style('font-size', '14px');
-        
-        tooltip.value.visible = false;
-      })
-      .on('click', () => {
-        window.open(`https://hpo.jax.org/app/browse/term/${feature.hpo_id}`, '_blank');
-      });
-  });
-
-  // Add grid lines
-  svg.append('g')
-    .attr('class', 'grid')
-    .attr('opacity', 0.1)
-    .call(d3.axisBottom(xScale)
-      .tickSize(featuresWithAges.length * rowHeight)
-      .tickFormat('')
-    );
-}
-
-function handleResize() {
-  if (timelineData.value && filteredFeatures.value.length > 0) {
-    renderChart();
-  }
-}
-
-watch([selectedCategories], () => {
-  console.log('Filters changed, filtered features:', JSON.stringify(filteredFeatures.value, null, 2));
-  nextTick(() => renderChart());
-});
+}, { immediate: true });
 
 onMounted(async () => {
   await fetchData();
-  
-  // Setup resize observer
-  if (chartContainer.value) {
-    resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(chartContainer.value);
-  }
-});
-
-onUnmounted(() => {
-  if (resizeObserver && chartContainer.value) {
-    resizeObserver.unobserve(chartContainer.value);
-  }
 });
 </script>
 
 <style scoped>
-.timeline-chart {
-  min-height: 300px;
-  width: 100%;
-  overflow-x: auto;
-}
-
-.excluded-feature {
-  opacity: 0.6;
-}
-
-:deep(.x-axis text) {
-  font-size: 11px;
-  fill: #666;
-}
-
-:deep(.x-axis line),
-:deep(.x-axis path) {
-  stroke: #ccc;
-}
+/* Add any custom styles here if needed */
 </style>
