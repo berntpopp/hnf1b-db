@@ -161,13 +161,20 @@ async def compare_variant_types(
     sort_by: Literal["p_value", "effect_size", "prevalence_diff"] = Query(
         "p_value", description="Sort phenotypes by this metric"
     ),
+    reporting_mode: Literal["all_cases", "reported_only"] = Query(
+        "all_cases",
+        description=(
+            "all_cases: Include unreported phenotypes as absent (assumes not-reported = absent). "
+            "reported_only: Only count explicitly reported present/absent cases"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """Compare phenotype distributions between variant type groups.
 
     Performs statistical comparison of phenotype presence/absence between:
     1. Truncating vs Non-truncating variants
-    2. CNVs (17q deletions/duplications) vs Point mutations
+    2. CNVs (17q deletions/duplications) vs Non-CNV variants
 
     **Truncating variants:**
     - Frameshift (p. notation contains 'fs')
@@ -183,8 +190,10 @@ async def compare_variant_types(
     - Large deletions (17q deletion, identified by :DEL in variant ID)
     - Large duplications (identified by :DUP in variant ID)
 
-    **Point mutations:**
-    - SNVs, small indels (not CNVs)
+    **Non-CNV variants:**
+    - SNVs (single nucleotide variants)
+    - Small indels (insertions/deletions)
+    - Other sequence-level variants
 
     Args:
         comparison: Type of comparison to perform
@@ -241,17 +250,28 @@ async def compare_variant_types(
         """
         # noqa: E501
         group2_condition = """
-            -- Point mutations: NOT CNVs
+            -- Non-CNVs: All other variants (SNVs, indels, etc.)
             interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
         """
         group1_name = "CNVs (17q del/dup)"
-        group2_name = "Point mutations"
+        group2_name = "Non-CNV variants"
 
     else:
         raise ValueError(f"Unknown comparison type: {comparison}")
 
+    # Determine calculation mode based on reporting_mode
+    if reporting_mode == "reported_only":
+        # Only count explicitly reported cases
+        absent_calc = "explicit_absent_count"
+        total_calc = "present_count + explicit_absent_count"
+    else:  # all_cases
+        # Include unreported as absent
+        absent_calc = "group_size - present_count"
+        total_calc = "group_size"
+
     # Query to get phenotype distributions for both groups
     # Use string concatenation to avoid escaping all JSONB curly braces
+    # Use __ABSENT_CALC__ and __TOTAL_CALC__ as placeholders to avoid conflicts with JSONB {}
     query = (
         """
     WITH variant_classification AS (
@@ -318,22 +338,23 @@ async def compare_variant_types(
             MAX(hpo_label) as hpo_label,
             MAX(CASE WHEN variant_group = 'group1' THEN present_count ELSE 0 END)
                 as group1_present,
-            -- noqa: E501
-            MAX(CASE WHEN variant_group = 'group1' THEN group_size - present_count ELSE 0 END)
+            -- Absent count depends on reporting mode
+            -- all_cases: group_size - present_count (includes unreported as absent)
+            -- reported_only: explicit_absent_count (only explicitly reported absent)
+            MAX(CASE WHEN variant_group = 'group1' THEN __ABSENT_CALC__ ELSE 0 END)
                 as group1_absent,
-            MAX(CASE WHEN variant_group = 'group1' THEN group_size ELSE 0 END)
+            MAX(CASE WHEN variant_group = 'group1' THEN __TOTAL_CALC__ ELSE 0 END)
                 as group1_total,
             MAX(CASE WHEN variant_group = 'group2' THEN present_count ELSE 0 END)
                 as group2_present,
-            -- noqa: E501
-            MAX(CASE WHEN variant_group = 'group2' THEN group_size - present_count ELSE 0 END)
+            MAX(CASE WHEN variant_group = 'group2' THEN __ABSENT_CALC__ ELSE 0 END)
                 as group2_absent,
-            MAX(CASE WHEN variant_group = 'group2' THEN group_size ELSE 0 END)
+            MAX(CASE WHEN variant_group = 'group2' THEN __TOTAL_CALC__ ELSE 0 END)
                 as group2_total
         FROM phenotype_counts
         GROUP BY hpo_id
-        HAVING MAX(CASE WHEN variant_group = 'group1' THEN group_size ELSE 0 END) > 0
-           AND MAX(CASE WHEN variant_group = 'group2' THEN group_size ELSE 0 END) > 0
+        HAVING MAX(CASE WHEN variant_group = 'group1' THEN __TOTAL_CALC__ ELSE 0 END) > 0
+           AND MAX(CASE WHEN variant_group = 'group2' THEN __TOTAL_CALC__ ELSE 0 END) > 0
     )
     SELECT
         hpo_id,
@@ -356,6 +377,10 @@ async def compare_variant_types(
     ORDER BY hpo_id
     """
     )
+
+    # Replace placeholders with reporting mode calculations
+    query = query.replace("__ABSENT_CALC__", absent_calc)
+    query = query.replace("__TOTAL_CALC__", total_calc)
 
     result = await db.execute(text(query), {"min_prevalence": min_prevalence})
     rows = result.fetchall()

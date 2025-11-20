@@ -9,6 +9,7 @@
               <v-tab value="Donut Chart"> Donut Chart </v-tab>
               <v-tab value="Stacked Bar Chart"> Stacked Bar Chart </v-tab>
               <v-tab value="Publications Timeline"> Publications Timeline </v-tab>
+              <v-tab value="Variant Comparison"> Variant Comparison </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -125,6 +126,98 @@
                 <v-tabs-window-item value="Publications Timeline">
                   <PublicationsTimelineChart />
                 </v-tabs-window-item>
+
+                <!-- Variant Comparison Tab -->
+                <v-tabs-window-item value="Variant Comparison">
+                  <v-row class="pa-3">
+                    <v-col cols="12" md="4">
+                      <v-select
+                        v-model="comparisonType"
+                        :items="comparisonTypes"
+                        item-title="label"
+                        item-value="value"
+                        label="Comparison Type"
+                      />
+                    </v-col>
+                    <v-col cols="12" md="3">
+                      <v-select
+                        v-model="comparisonLimit"
+                        :items="comparisonLimitOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Number of Phenotypes"
+                      />
+                    </v-col>
+                    <v-col cols="12" md="3">
+                      <v-select
+                        v-model="minPrevalence"
+                        :items="prevalenceOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Minimum Prevalence"
+                        hint="Minimum prevalence in at least one group"
+                        persistent-hint
+                      />
+                    </v-col>
+                    <v-col cols="12" md="2">
+                      <v-select
+                        v-model="sortBy"
+                        :items="sortByOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Sort By"
+                      />
+                    </v-col>
+                  </v-row>
+
+                  <!-- Reporting Mode Toggle -->
+                  <v-row class="pa-3">
+                    <v-col cols="12">
+                      <v-select
+                        v-model="reportingMode"
+                        :items="reportingModeOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Reporting Mode"
+                        hint="Choose how to handle phenotypes that were not explicitly documented"
+                        persistent-hint
+                      >
+                        <template v-slot:item="{ props, item }">
+                          <v-list-item v-bind="props">
+                            <v-list-item-subtitle>
+                              {{ item.raw.description }}
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                      </v-select>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Loading indicator -->
+                  <v-row v-if="comparisonLoading" class="pa-3">
+                    <v-col cols="12" class="text-center">
+                      <v-progress-circular indeterminate color="primary" />
+                      <p class="mt-2">Loading comparison data...</p>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Error message -->
+                  <v-row v-else-if="comparisonError" class="pa-3">
+                    <v-col cols="12">
+                      <v-alert type="error" variant="tonal">
+                        {{ comparisonError }}
+                      </v-alert>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Chart -->
+                  <VariantComparisonChart
+                    v-else-if="comparisonData"
+                    :comparison-data="comparisonData"
+                    :width="1200"
+                    :height="Math.max(400, comparisonData.phenotypes.length * 50 + 150)"
+                  />
+                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -139,6 +232,7 @@ import { markRaw } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
 import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
+import VariantComparisonChart from '@/components/analyses/VariantComparisonChart.vue';
 import * as API from '@/api';
 
 export default {
@@ -147,6 +241,7 @@ export default {
     DonutChart,
     PublicationsTimelineChart,
     StackedBarChart,
+    VariantComparisonChart,
   },
   data() {
     return {
@@ -208,6 +303,50 @@ export default {
         { label: 'Top 50', value: 50, threshold: 50 },
         { label: 'All Features', value: 9999, threshold: 0 },
       ],
+      // Variant Comparison data
+      comparisonType: 'truncating_vs_non_truncating',
+      comparisonLimit: 20,
+      minPrevalence: 0.05,
+      sortBy: 'p_value',
+      reportingMode: 'all_cases',
+      comparisonData: null,
+      comparisonLoading: false,
+      comparisonError: null,
+      comparisonTypes: [
+        { label: 'Truncating vs Non-truncating', value: 'truncating_vs_non_truncating' },
+        { label: 'CNVs vs Non-CNV variants', value: 'cnv_vs_point_mutation' },
+      ],
+      allComparisonLimitOptions: [
+        { label: 'Top 10', value: 10, threshold: 0 },
+        { label: 'Top 20', value: 20, threshold: 0 },
+        { label: 'Top 30', value: 30, threshold: 0 },
+        { label: 'Top 50', value: 50, threshold: 50 },
+        { label: 'All', value: 9999, threshold: 0 },
+      ],
+      prevalenceOptions: [
+        { label: '1% (0.01)', value: 0.01 },
+        { label: '5% (0.05)', value: 0.05 },
+        { label: '10% (0.10)', value: 0.1 },
+        { label: '20% (0.20)', value: 0.2 },
+        { label: '30% (0.30)', value: 0.3 },
+      ],
+      sortByOptions: [
+        { label: 'P-value (most significant first)', value: 'p_value' },
+        { label: 'Effect size (largest first)', value: 'effect_size' },
+        { label: 'Prevalence difference', value: 'prevalence_diff' },
+      ],
+      reportingModeOptions: [
+        {
+          label: 'All cases (assumes unreported = absent)',
+          value: 'all_cases',
+          description: 'Includes all patients; unreported phenotypes counted as absent',
+        },
+        {
+          label: 'Reported only (excludes unreported)',
+          value: 'reported_only',
+          description: 'Only patients with explicit present/absent reporting',
+        },
+      ],
     };
   },
   computed: {
@@ -237,6 +376,17 @@ export default {
         if (option.threshold === 0) return true;
         // Only show "Top N" if we have more than N features
         return totalFeatures > option.threshold;
+      });
+    },
+    comparisonLimitOptions() {
+      // Filter options based on available comparison data
+      // Only show "Top N" if we have more than N phenotypes
+      const totalPhenotypes = this.comparisonData?.phenotypes?.length || 0;
+      return this.allComparisonLimitOptions.filter((option) => {
+        // Always show options with threshold 0 (Top 10, 20, 30, All)
+        if (option.threshold === 0) return true;
+        // Only show "Top 50" if we have more than 50 phenotypes
+        return totalPhenotypes > option.threshold;
       });
     },
     stackedBarStats() {
@@ -325,6 +475,38 @@ export default {
     },
     variantCountMode() {
       this.fetchAggregationData();
+    },
+    tab(newTab) {
+      // Auto-fetch comparison data when switching to Variant Comparison tab
+      if (newTab === 'Variant Comparison' && !this.comparisonData) {
+        this.fetchComparisonData();
+      }
+    },
+    // Watch comparison parameters and refetch data
+    comparisonType() {
+      if (this.tab === 'Variant Comparison') {
+        this.fetchComparisonData();
+      }
+    },
+    comparisonLimit() {
+      if (this.tab === 'Variant Comparison') {
+        this.fetchComparisonData();
+      }
+    },
+    minPrevalence() {
+      if (this.tab === 'Variant Comparison') {
+        this.fetchComparisonData();
+      }
+    },
+    sortBy() {
+      if (this.tab === 'Variant Comparison') {
+        this.fetchComparisonData();
+      }
+    },
+    reportingMode() {
+      if (this.tab === 'Variant Comparison') {
+        this.fetchComparisonData();
+      }
     },
   },
   mounted() {
@@ -446,6 +628,47 @@ export default {
     },
     onCategoryChange() {
       // Handled by watcher.
+    },
+
+    async fetchComparisonData() {
+      this.comparisonLoading = true;
+      this.comparisonError = null;
+
+      window.logService.debug('Fetching variant comparison data', {
+        comparisonType: this.comparisonType,
+        limit: this.comparisonLimit,
+        minPrevalence: this.minPrevalence,
+        sortBy: this.sortBy,
+        reportingMode: this.reportingMode,
+      });
+
+      try {
+        const response = await API.compareVariantTypes({
+          comparison: this.comparisonType,
+          limit: this.comparisonLimit,
+          min_prevalence: this.minPrevalence,
+          sort_by: this.sortBy,
+          reporting_mode: this.reportingMode,
+        });
+
+        this.comparisonData = response.data;
+
+        window.logService.info('Variant comparison data loaded', {
+          groupNames: `${response.data.group1_name} vs ${response.data.group2_name}`,
+          group1Count: response.data.group1_count,
+          group2Count: response.data.group2_count,
+          phenotypesCount: response.data.phenotypes?.length || 0,
+          significantCount: response.data.metadata?.significant_count || 0,
+        });
+      } catch (error) {
+        window.logService.error('Error fetching variant comparison data', {
+          error: error.message,
+        });
+        this.comparisonError =
+          error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
+      } finally {
+        this.comparisonLoading = false;
+      }
     },
   },
 };

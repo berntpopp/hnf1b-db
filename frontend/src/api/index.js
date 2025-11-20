@@ -417,6 +417,18 @@ export const getPublicationsByType = () =>
 export const getAgeOfOnsetAggregation = () => apiClient.get('/phenopackets/aggregate/age-of-onset');
 
 /**
+ * Compare phenotype distributions between variant type groups.
+ * @param {Object} params - Query parameters
+ * @param {string} params.comparison - Type of comparison ('truncating_vs_non_truncating' or 'cnv_vs_point_mutation')
+ * @param {number} params.limit - Maximum number of phenotypes to return (default: 20, max: 100)
+ * @param {number} params.min_prevalence - Minimum prevalence (0-1) in at least one group (default: 0.05)
+ * @param {string} params.sort_by - Sort by 'p_value', 'effect_size', or 'prevalence_diff' (default: 'p_value')
+ * @returns {Promise} Axios promise with comparison results
+ */
+export const compareVariantTypes = (params) =>
+  apiClient.get('/phenopackets/compare/variant-types', { params });
+
+/**
  * Get small variants (SNVs) for protein plot visualization.
  * @returns {Promise} Axios promise with small variants data
  */
@@ -693,7 +705,7 @@ export default {
   updatePhenopacket,
   deletePhenopacket,
   getPhenopacketAuditHistory,
-  
+
   // Phenopackets Batch & Search
   getPhenopacketsBatch,
   searchPhenopackets,
@@ -704,7 +716,7 @@ export default {
   getPhenotypicFeaturesBatch,
   getVariantsBatch,
   getPhenopacketsByVariant,
-  
+
   // Aggregations
   getSummaryStats,
   getSexDistribution,
@@ -717,28 +729,28 @@ export default {
   getPublicationsByType,
   getAgeOfOnsetAggregation,
   getSmallVariants,
-  
+
   // Publications
   getPublicationMetadata,
-  
+
   // Authentication
   login,
   getCurrentUser,
   logout,
-  
+
   // HPO
   getHPOAutocomplete,
   searchHPOTerms,
-  
+
   // Clinical endpoints
   getRenalInsufficiencyCases,
   getGenitalAbnormalitiesCases,
   getDiabetesCases,
   getHypomagnesemiaCases,
-  
+
   // Variants
   getVariants,
-  
+
   // Reference
   getReferenceGenomes,
   getReferenceGenes,
@@ -746,10 +758,10 @@ export default {
   getReferenceGeneTranscripts,
   getReferenceGeneDomains,
   getReferenceGenomicRegion,
-  
+
   // Variant annotation
   annotateVariant,
-  
+
   // Axios client for custom requests
   client: apiClient,
 };
