@@ -251,15 +251,21 @@ async def compare_variant_types(
         raise ValueError(f"Unknown comparison type: {comparison}")
 
     # Query to get phenotype distributions for both groups
-    query = f"""
+    # Use string concatenation to avoid escaping all JSONB curly braces
+    query = (
+        """
     WITH variant_classification AS (
         -- Classify each phenopacket into group 1 or group 2
         SELECT DISTINCT
             p.phenopacket_id,
             p.id as phenopacket_internal_id,
             CASE
-                WHEN {group1_condition} THEN 'group1'
-                WHEN {group2_condition} THEN 'group2'
+                WHEN """
+        + group1_condition
+        + """ THEN 'group1'
+                WHEN """
+        + group2_condition
+        + """ THEN 'group2'
                 ELSE NULL
             END as variant_group
         FROM phenopackets p,
@@ -278,8 +284,8 @@ async def compare_variant_types(
     phenotype_counts AS (
         -- Count phenotype presence/absence in each group
         SELECT
-            pf.value#>>'{type, id}' as hpo_id,  -- noqa: F821
-            pf.value#>>'{type, label}' as hpo_label,  -- noqa: F821
+            pf.value#>>'{type, id}' as hpo_id,
+            pf.value#>>'{type, label}' as hpo_label,
             vc.variant_group,
             -- Count present (not excluded)
             SUM(CASE
@@ -299,7 +305,7 @@ async def compare_variant_types(
              jsonb_array_elements(p.phenopacket->'phenotypicFeatures') AS pf
         WHERE vc.variant_group = gs.variant_group
           AND vc.variant_group IS NOT NULL
-        GROUP BY  -- noqa: E501, F821
+        GROUP BY
             pf.value#>>'{type, id}',
             pf.value#>>'{type, label}',
             vc.variant_group,
@@ -349,6 +355,7 @@ async def compare_variant_types(
            OR group2_present::float / NULLIF(group2_total, 0) >= :min_prevalence)
     ORDER BY hpo_id
     """
+    )
 
     result = await db.execute(text(query), {"min_prevalence": min_prevalence})
     rows = result.fetchall()
