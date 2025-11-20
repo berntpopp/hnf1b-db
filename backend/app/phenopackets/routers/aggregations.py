@@ -1453,3 +1453,519 @@ async def get_publications_by_type(
         }
         for row in rows
     ]
+
+
+@router.get("/survival-data", response_model=Dict[str, Any])
+async def get_survival_data(
+    comparison: str = Query(
+        ...,
+        description="Comparison type: variant_type, disease_subtype, or pathogenicity",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get Kaplan-Meier survival data for renal failure (Stage 5 CKD).
+
+    Compares survival curves using different grouping strategies:
+    - variant_type: CNV vs Truncating vs Non-truncating
+    - disease_subtype: CAKUT vs CAKUT+MODY vs MODY
+    - pathogenicity: P/LP vs VUS vs LB
+
+    Returns:
+        Survival curves with Kaplan-Meier estimates and log-rank tests
+    """
+    from app.phenopackets.survival_analysis import (
+        calculate_kaplan_meier,
+        calculate_log_rank_test,
+        parse_iso8601_age,
+        parse_onset_ontology,
+    )
+
+    # Stage 5 CKD (ESRD) HPO term
+    STAGE_5_CKD_HPO = "HP:0003774"
+
+    if comparison == "variant_type":
+        # Query for CNV vs Truncating vs Non-truncating
+        query = """
+        WITH variant_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    -- CNVs: Large deletions or duplications
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        THEN 'CNV'
+                    -- Truncating: Frameshift, Nonsense, or Splice site
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE (
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                            OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                        )
+                    ) THEN 'Truncating'
+                    ELSE 'Non-truncating'
+                END AS variant_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
+                p.phenopacket as phenopacket_data
+            FROM phenopackets p,
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+            WHERE p.deleted_at IS NULL
+        ),
+        esrd_cases AS (
+            SELECT
+                vc.phenopacket_id,
+                vc.variant_group,
+                vc.current_age,
+                pf->'onset' as onset,
+                pf->'onset'->>'age' as onset_age
+            FROM variant_classification vc,
+                jsonb_array_elements(vc.phenopacket_data->'phenotypicFeatures') as pf
+            WHERE pf->'type'->>'id' = :stage_5_hpo
+                AND COALESCE((pf->>'excluded')::boolean, false) = false
+        )
+        SELECT
+            variant_group,
+            current_age,
+            onset_age,
+            onset
+        FROM esrd_cases
+        """
+
+        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
+        rows = result.fetchall()
+
+        # Group data by variant type
+        groups = {"CNV": [], "Truncating": [], "Non-truncating": []}
+        censored_by_group = {"CNV": [], "Truncating": [], "Non-truncating": []}
+
+        for row in rows:
+            variant_group = row.variant_group
+
+            # Parse onset age
+            onset_age = None
+            if row.onset_age:
+                onset_age = parse_iso8601_age(row.onset_age)
+            elif row.onset:
+                onset_age = parse_onset_ontology(dict(row.onset))
+
+            if onset_age is not None:
+                groups[variant_group].append((onset_age, True))
+
+        # Get censored patients (no Stage 5 CKD but have current age)
+        censored_query = """
+        WITH variant_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        THEN 'CNV'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE (
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                            OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                        )
+                    ) THEN 'Truncating'
+                    ELSE 'Non-truncating'
+                END AS variant_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
+            FROM phenopackets p,
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+            WHERE p.deleted_at IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :stage_5_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                )
+                AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
+        )
+        SELECT variant_group, current_age
+        FROM variant_classification
+        """
+
+        censored_result = await db.execute(
+            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
+        )
+        censored_rows = censored_result.fetchall()
+
+        for row in censored_rows:
+            current_age = parse_iso8601_age(row.current_age)
+            if current_age is not None:
+                groups[row.variant_group].append((current_age, False))
+
+        # Calculate Kaplan-Meier curves for each group
+        survival_curves = {}
+        for group_name, event_times in groups.items():
+            if event_times:
+                survival_curves[group_name] = calculate_kaplan_meier(event_times)
+            else:
+                survival_curves[group_name] = []
+
+        # Perform pairwise log-rank tests
+        statistical_tests = []
+        group_names = list(groups.keys())
+        for i in range(len(group_names)):
+            for j in range(i + 1, len(group_names)):
+                group1 = group_names[i]
+                group2 = group_names[j]
+                if groups[group1] and groups[group2]:
+                    test_result = calculate_log_rank_test(
+                        groups[group1], groups[group2]
+                    )
+                    statistical_tests.append(
+                        {
+                            "group1": group1,
+                            "group2": group2,
+                            **test_result,
+                        }
+                    )
+
+        return {
+            "comparison_type": "variant_type",
+            "endpoint": "Stage 5 CKD (ESRD)",
+            "groups": [
+                {
+                    "name": group_name,
+                    "n": len(event_times),
+                    "events": sum(1 for _, event in event_times if event),
+                    "survival_data": survival_curves[group_name],
+                }
+                for group_name, event_times in groups.items()
+            ],
+            "statistical_tests": statistical_tests,
+        }
+
+    elif comparison == "pathogenicity":
+        # Query for P/LP vs VUS vs LB
+        query = """
+        WITH pathogenicity_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        THEN 'P/LP'
+                    WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
+                        THEN 'VUS'
+                    WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
+                        THEN 'LB'
+                    ELSE 'Unknown'
+                END AS pathogenicity_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
+                p.phenopacket as phenopacket_data
+            FROM phenopackets p,
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+            WHERE p.deleted_at IS NULL
+        ),
+        esrd_cases AS (
+            SELECT
+                pc.phenopacket_id,
+                pc.pathogenicity_group,
+                pc.current_age,
+                pf->'onset' as onset,
+                pf->'onset'->>'age' as onset_age
+            FROM pathogenicity_classification pc,
+                jsonb_array_elements(pc.phenopacket_data->'phenotypicFeatures') as pf
+            WHERE pf->'type'->>'id' = :stage_5_hpo
+                AND COALESCE((pf->>'excluded')::boolean, false) = false
+        )
+        SELECT
+            pathogenicity_group,
+            current_age,
+            onset_age,
+            onset
+        FROM esrd_cases
+        WHERE pathogenicity_group != 'Unknown'
+        """
+
+        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
+        rows = result.fetchall()
+
+        # Group data by pathogenicity
+        groups = {"P/LP": [], "VUS": [], "LB": []}
+
+        for row in rows:
+            pathogenicity_group = row.pathogenicity_group
+
+            # Parse onset age
+            onset_age = None
+            if row.onset_age:
+                onset_age = parse_iso8601_age(row.onset_age)
+            elif row.onset:
+                onset_age = parse_onset_ontology(dict(row.onset))
+
+            if onset_age is not None:
+                groups[pathogenicity_group].append((onset_age, True))
+
+        # Get censored patients
+        censored_query = """
+        WITH pathogenicity_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        THEN 'P/LP'
+                    WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
+                        THEN 'VUS'
+                    WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
+                        THEN 'LB'
+                    ELSE 'Unknown'
+                END AS pathogenicity_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
+            FROM phenopackets p,
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+            WHERE p.deleted_at IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :stage_5_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                )
+                AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
+        )
+        SELECT pathogenicity_group, current_age
+        FROM pathogenicity_classification
+        WHERE pathogenicity_group != 'Unknown'
+        """
+
+        censored_result = await db.execute(
+            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
+        )
+        censored_rows = censored_result.fetchall()
+
+        for row in censored_rows:
+            current_age = parse_iso8601_age(row.current_age)
+            if current_age is not None:
+                groups[row.pathogenicity_group].append((current_age, False))
+
+        # Calculate Kaplan-Meier curves
+        survival_curves = {}
+        for group_name, event_times in groups.items():
+            if event_times:
+                survival_curves[group_name] = calculate_kaplan_meier(event_times)
+            else:
+                survival_curves[group_name] = []
+
+        # Perform pairwise log-rank tests
+        statistical_tests = []
+        group_names = [g for g in groups.keys() if groups[g]]
+        for i in range(len(group_names)):
+            for j in range(i + 1, len(group_names)):
+                group1 = group_names[i]
+                group2 = group_names[j]
+                test_result = calculate_log_rank_test(groups[group1], groups[group2])
+                statistical_tests.append(
+                    {
+                        "group1": group1,
+                        "group2": group2,
+                        **test_result,
+                    }
+                )
+
+        return {
+            "comparison_type": "pathogenicity",
+            "endpoint": "Stage 5 CKD (ESRD)",
+            "groups": [
+                {
+                    "name": group_name,
+                    "n": len(event_times),
+                    "events": sum(1 for _, event in event_times if event),
+                    "survival_data": survival_curves[group_name],
+                }
+                for group_name, event_times in groups.items()
+                if event_times
+            ],
+            "statistical_tests": statistical_tests,
+        }
+
+    elif comparison == "disease_subtype":
+        # Query for CAKUT vs CAKUT+MODY vs MODY
+        # CAKUT: Renal/urinary tract abnormalities (HP:0000077 or related)
+        # MODY: Diabetes (HP:0000819)
+        query = """
+        WITH disease_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'CAKUT+MODY'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'CAKUT'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'MODY'
+                    ELSE 'Other'
+                END AS disease_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
+                p.phenopacket as phenopacket_data
+            FROM phenopackets p
+            WHERE p.deleted_at IS NULL
+        ),
+        esrd_cases AS (
+            SELECT
+                dc.phenopacket_id,
+                dc.disease_group,
+                dc.current_age,
+                pf->'onset' as onset,
+                pf->'onset'->>'age' as onset_age
+            FROM disease_classification dc,
+                jsonb_array_elements(dc.phenopacket_data->'phenotypicFeatures') as pf
+            WHERE pf->'type'->>'id' = :stage_5_hpo
+                AND COALESCE((pf->>'excluded')::boolean, false) = false
+        )
+        SELECT
+            disease_group,
+            current_age,
+            onset_age,
+            onset
+        FROM esrd_cases
+        WHERE disease_group != 'Other'
+        """
+
+        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
+        rows = result.fetchall()
+
+        # Group data by disease subtype
+        groups = {"CAKUT": [], "CAKUT+MODY": [], "MODY": []}
+
+        for row in rows:
+            disease_group = row.disease_group
+
+            # Parse onset age
+            onset_age = None
+            if row.onset_age:
+                onset_age = parse_iso8601_age(row.onset_age)
+            elif row.onset:
+                onset_age = parse_onset_ontology(dict(row.onset))
+
+            if onset_age is not None:
+                groups[disease_group].append((onset_age, True))
+
+        # Get censored patients
+        censored_query = """
+        WITH disease_classification AS (
+            SELECT DISTINCT
+                p.phenopacket_id,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'CAKUT+MODY'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'CAKUT'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) THEN 'MODY'
+                    ELSE 'Other'
+                END AS disease_group,
+                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
+            FROM phenopackets p
+            WHERE p.deleted_at IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :stage_5_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                )
+                AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
+        )
+        SELECT disease_group, current_age
+        FROM disease_classification
+        WHERE disease_group != 'Other'
+        """
+
+        censored_result = await db.execute(
+            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
+        )
+        censored_rows = censored_result.fetchall()
+
+        for row in censored_rows:
+            current_age = parse_iso8601_age(row.current_age)
+            if current_age is not None:
+                groups[row.disease_group].append((current_age, False))
+
+        # Calculate Kaplan-Meier curves
+        survival_curves = {}
+        for group_name, event_times in groups.items():
+            if event_times:
+                survival_curves[group_name] = calculate_kaplan_meier(event_times)
+            else:
+                survival_curves[group_name] = []
+
+        # Perform pairwise log-rank tests
+        statistical_tests = []
+        group_names = [g for g in groups.keys() if groups[g]]
+        for i in range(len(group_names)):
+            for j in range(i + 1, len(group_names)):
+                group1 = group_names[i]
+                group2 = group_names[j]
+                test_result = calculate_log_rank_test(groups[group1], groups[group2])
+                statistical_tests.append(
+                    {
+                        "group1": group1,
+                        "group2": group2,
+                        **test_result,
+                    }
+                )
+
+        return {
+            "comparison_type": "disease_subtype",
+            "endpoint": "Stage 5 CKD (ESRD)",
+            "groups": [
+                {
+                    "name": group_name,
+                    "n": len(event_times),
+                    "events": sum(1 for _, event in event_times if event),
+                    "survival_data": survival_curves[group_name],
+                }
+                for group_name, event_times in groups.items()
+                if event_times
+            ],
+            "statistical_tests": statistical_tests,
+        }
+
+    else:
+        raise ValueError(
+            f"Unknown comparison type: {comparison}. "
+            "Valid options: variant_type, disease_subtype, pathogenicity"
+        )
