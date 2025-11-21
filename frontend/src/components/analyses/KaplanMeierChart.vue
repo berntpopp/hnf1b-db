@@ -181,6 +181,69 @@ export default {
         });
       });
 
+      // Add median survival lines (50% survival point) for each group
+      groups.forEach((group, groupIndex) => {
+        const color = colorScale(groupIndex);
+        const data = group.survival_data;
+
+        // Find the first time point where survival drops to or below 50%
+        const medianPoint = data.find((d) => d.survival_probability <= 0.5);
+
+        if (medianPoint) {
+          const medianTime = medianPoint.time;
+
+          // Draw vertical dotted line from x-axis to the curve
+          svg
+            .append('line')
+            .attr('class', `median-vertical-${groupIndex}`)
+            .attr('x1', x(medianTime))
+            .attr('x2', x(medianTime))
+            .attr('y1', y(0))
+            .attr('y2', y(0.5))
+            .attr('stroke', color)
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '5,5')
+            .attr('opacity', 0.7);
+
+          // Draw horizontal dotted line from y-axis to the curve
+          svg
+            .append('line')
+            .attr('class', `median-horizontal-${groupIndex}`)
+            .attr('x1', 0)
+            .attr('x2', x(medianTime))
+            .attr('y1', y(0.5))
+            .attr('y2', y(0.5))
+            .attr('stroke', color)
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '5,5')
+            .attr('opacity', 0.7);
+
+          // Add small circle at the intersection point
+          svg
+            .append('circle')
+            .attr('class', `median-point-${groupIndex}`)
+            .attr('cx', x(medianTime))
+            .attr('cy', y(0.5))
+            .attr('r', 4)
+            .attr('fill', color)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1.5)
+            .attr('opacity', 0.8);
+
+          // Add text label showing the median time (positioned above the point)
+          svg
+            .append('text')
+            .attr('class', `median-label-${groupIndex}`)
+            .attr('x', x(medianTime))
+            .attr('y', y(0.5) - 10)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', '11px')
+            .attr('font-weight', 'bold')
+            .attr('fill', color)
+            .text(`${medianTime.toFixed(1)}y`);
+        }
+      });
+
       // Draw all event markers on top layer (after all curves are drawn)
       // This ensures they're always accessible for hovering
       allEventMarkers.forEach(({ data: d, color, groupIndex, groupName }) => {
