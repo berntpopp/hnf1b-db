@@ -185,12 +185,16 @@ async def compare_variant_types(
     - HIGH impact → Truncating
     - MODERATE impact → Non-truncating
 
-    Priority 2: Pathogenicity fallback
-    - LOW/MODIFIER/missing impact + PATHOGENIC/LIKELY_PATHOGENIC → Truncating
+    Priority 2: VEP LOW/MODIFIER + Pathogenic
+    - LOW/MODIFIER impact + PATHOGENIC/LIKELY_PATHOGENIC → Truncating
     - This handles edge cases where VEP impact may be incorrect but clinical
       interpretation identifies the variant as pathogenic (e.g., cryptic splice effects)
 
-    Priority 3: HGVS pattern fallback (when VEP unavailable or IMPACT != MODERATE)
+    Priority 3: CNVs (17q deletions/duplications)
+    - All CNVs (DEL/DUP) + PATHOGENIC/LIKELY_PATHOGENIC → Truncating
+    - Matches R: is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T" (CNVs have no IMPACT)
+
+    Priority 4: HGVS pattern fallback (when VEP unavailable or IMPACT != MODERATE)
     - Frameshift: p. notation contains 'fs'
     - Nonsense: p. notation contains 'Ter' or '*'
     - Splice site: c. notation contains +1 to +6 or -1 to -3
@@ -240,57 +244,65 @@ async def compare_variant_types(
         # 5. Default → Non-truncating
         group1_condition = """
             -- Truncating variants (multi-tier classification)
+            -- NOW WORKS ON gen_interp (already expanded genomic interpretation)
             (
                 -- Priority 1: VEP IMPACT = HIGH
                 EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(
-                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
                     ) AS ext
                     WHERE ext->>'name' = 'vep_annotation'
                       AND ext#>>'{value,impact}' = 'HIGH'
                 )
                 OR
-                -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic
                 (
-                    (
-                        EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(
-                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                            ) AS ext
-                            WHERE ext->>'name' = 'vep_annotation'
-                              AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                        )
-                        OR NOT EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(
-                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                            ) AS ext
-                            WHERE ext->>'name' = 'vep_annotation'
-                              AND ext#>>'{value,impact}' IS NOT NULL
-                        )
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                     )
                     AND
-                    interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                    gen_interp.value->>'interpretationStatus'
                         IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 )
                 OR
-                -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT = MODERATE)
+                -- Priority 3: CNVs (17q deletions/duplications) - Always Truncating
+                -- Matches R: is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T" (CNVs have no IMPACT)
+                (
+                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 4: Missing VEP IMPACT + HGVS pattern indicates truncating
+                -- Matches R: is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T"
+                -- For point mutations without VEP that show frameshift, nonsense, or splice site
                 (
                     NOT EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(
-                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
                         ) AS ext
                         WHERE ext->>'name' = 'vep_annotation'
-                          AND ext#>>'{value,impact}' = 'MODERATE'
+                          AND ext#>>'{value,impact}' IS NOT NULL
                     )
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    AND
+                    -- Exclude CNVs (already handled above)
+                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
                     AND
                     EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(
-                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,expressions}'
                         ) AS expr
                         WHERE (
                             -- Frameshift: contains 'fs' in protein notation
@@ -304,6 +316,9 @@ async def compare_variant_types(
                             OR
                             -- Splice acceptor: -1 to -3 in transcript notation
                             (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                            OR
+                            -- Start loss: Met1 changes (affects start codon)
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'Met1')
                         )
                     )
                 )
@@ -325,12 +340,12 @@ async def compare_variant_types(
         # noqa: E501
         group1_condition = """
             -- CNVs: Large deletions or duplications
-            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+            gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
         """
         # noqa: E501
         group2_condition = """
             -- Non-CNVs: All other variants (SNVs, indels, etc.)
-            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+            gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
         """
         group1_name = "CNVs (17q del/dup)"
         group2_name = "Non-CNV variants"
@@ -342,13 +357,13 @@ async def compare_variant_types(
             -- 17q Deletions
             (
                 -- Method 1: Variant ID contains :DEL
-                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':DEL'
                 OR
                 -- Method 2: VEP consequence is transcript_ablation
                 EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(
-                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
                     ) AS ext
                     WHERE ext->>'name' = 'vep_annotation'
                       AND ext#>>'{value,most_severe_consequence}' = 'transcript_ablation'
@@ -359,13 +374,13 @@ async def compare_variant_types(
             -- 17q Duplications
             (
                 -- Method 1: Variant ID contains :DUP
-                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':DUP'
                 OR
                 -- Method 2: VEP consequence is transcript_amplification
                 EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(
-                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
                     ) AS ext
                     WHERE ext->>'name' = 'vep_annotation'
                       AND ext#>>'{value,most_severe_consequence}' = 'transcript_amplification'
@@ -378,26 +393,19 @@ async def compare_variant_types(
     else:
         raise ValueError(f"Unknown comparison type: {comparison}")
 
-    # Determine calculation mode based on reporting_mode
-    if reporting_mode == "reported_only":
-        # Only count explicitly reported cases
-        absent_calc = "explicit_absent_count"
-        total_calc = "present_count + explicit_absent_count"
-    else:  # all_cases
-        # Include unreported as absent
-        absent_calc = "group_size - present_count"
-        total_calc = "group_size"
-
     # Query to get phenotype distributions for both groups
     # Use string concatenation to avoid escaping all JSONB curly braces
-    # Use __ABSENT_CALC__ and __TOTAL_CALC__ as placeholders to avoid conflicts with JSONB {}
+    # Variant-level counting: Each variant either has the phenotype (present) or doesn't (absent)
+
     query = (
         """
     WITH variant_classification AS (
-        -- Classify each phenopacket into group 1 or group 2
-        SELECT DISTINCT
+        -- Classify each VARIANT (not phenopacket) into group 1 or group 2
+        -- Matches R: one row per variant per individual (variant-level counting)
+        SELECT
             p.phenopacket_id,
             p.id as phenopacket_internal_id,
+            gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' as variant_id,
             CASE
                 WHEN """
         + group1_condition
@@ -408,72 +416,64 @@ async def compare_variant_types(
                 ELSE NULL
             END as variant_group
         FROM phenopackets p,
-             jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+             jsonb_array_elements(p.phenopacket->'interpretations') AS interp,
+             jsonb_array_elements(interp.value#>'{diagnosis,genomicInterpretations}') AS gen_interp
         WHERE p.deleted_at IS NULL
+          AND gen_interp.value->>'interpretationStatus'
+              IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
     ),
-    group_sizes AS (
-        -- Count total individuals in each group
+    variant_phenotype_matrix AS (
+        -- Create a matrix of: variant_id x phenotype x present/absent
+        -- Each row represents one variant observation with one phenotype
+        -- CRITICAL: Each variant (genomic_interpretation) creates separate rows
+        -- Matches R: For each variant, check if phenotype is present or absent
         SELECT
-            variant_group,
-            COUNT(DISTINCT phenopacket_internal_id) as group_size
-        FROM variant_classification
-        WHERE variant_group IS NOT NULL
-        GROUP BY variant_group
-    ),
-    phenotype_counts AS (
-        -- Count phenotype presence/absence in each group
-        SELECT
+            ROW_NUMBER() OVER (ORDER BY vc.phenopacket_internal_id, vc.variant_id) as variant_phenotype_id,
+            vc.phenopacket_internal_id,
+            vc.variant_id,
+            vc.variant_group,
             pf.value#>>'{type, id}' as hpo_id,
             pf.value#>>'{type, label}' as hpo_label,
-            vc.variant_group,
-            -- Count present (not excluded)
-            SUM(CASE
-                WHEN NOT COALESCE((pf.value->>'excluded')::boolean, false)
-                THEN 1 ELSE 0
-            END) as present_count,
-            -- Count explicitly absent (excluded = true)
-            SUM(CASE
-                WHEN COALESCE((pf.value->>'excluded')::boolean, false)
-                THEN 1 ELSE 0
-            END) as explicit_absent_count,
-            -- Total individuals in this group
-            MAX(gs.group_size) as group_size
+            NOT COALESCE((pf.value->>'excluded')::boolean, false) as is_present,
+            COALESCE((pf.value->>'excluded')::boolean, false) as is_absent
         FROM variant_classification vc
-        CROSS JOIN group_sizes gs
         JOIN phenopackets p ON p.id = vc.phenopacket_internal_id,
              jsonb_array_elements(p.phenopacket->'phenotypicFeatures') AS pf
-        WHERE vc.variant_group = gs.variant_group
-          AND vc.variant_group IS NOT NULL
-        GROUP BY
-            pf.value#>>'{type, id}',
-            pf.value#>>'{type, label}',
-            vc.variant_group,
-            gs.variant_group
+        WHERE vc.variant_group IS NOT NULL
     ),
-    phenotype_aggregated AS (
-        -- Aggregate both groups for each phenotype
-        SELECT  -- noqa: E501
+    phenotype_counts AS (
+        -- Count for each phenotype: how many variants have it (yes) vs don't have it (no)
+        -- Grouped by variant_group (T/nT) and hpo_id
+        -- Matches R: group_by(phenotype_name, described, impact_groups) %>% summarise(count = n())
+        SELECT
             hpo_id,
             MAX(hpo_label) as hpo_label,
-            MAX(CASE WHEN variant_group = 'group1' THEN present_count ELSE 0 END)
-                as group1_present,
-            -- Absent count depends on reporting mode
-            -- all_cases: group_size - present_count (includes unreported as absent)
-            -- reported_only: explicit_absent_count (only explicitly reported absent)
-            MAX(CASE WHEN variant_group = 'group1' THEN __ABSENT_CALC__ ELSE 0 END)
-                as group1_absent,
-            MAX(CASE WHEN variant_group = 'group1' THEN __TOTAL_CALC__ ELSE 0 END)
-                as group1_total,
-            MAX(CASE WHEN variant_group = 'group2' THEN present_count ELSE 0 END)
-                as group2_present,
-            MAX(CASE WHEN variant_group = 'group2' THEN __ABSENT_CALC__ ELSE 0 END)
-                as group2_absent,
-            MAX(CASE WHEN variant_group = 'group2' THEN __TOTAL_CALC__ ELSE 0 END)
-                as group2_total
+            variant_group,
+            -- Count variants where phenotype is PRESENT (yes.T or yes.nT in R)
+            SUM(CASE WHEN is_present THEN 1 ELSE 0 END) as present_count,
+            -- Count variants where phenotype is ABSENT (no.T or no.nT in R)
+            SUM(CASE WHEN is_absent THEN 1 ELSE 0 END) as absent_count
+        FROM variant_phenotype_matrix
+        GROUP BY hpo_id, variant_group
+    ),
+    phenotype_aggregated AS (
+        -- Pivot to get yes.T, no.T, yes.nT, no.nT for each phenotype
+        -- Matches R: pivot_wider(names_from = c(described, impact_groups), values_from = count)
+        SELECT
+            hpo_id,
+            MAX(hpo_label) as hpo_label,
+            -- Group 1 (T): present = yes.T, absent = no.T
+            MAX(CASE WHEN variant_group = 'group1' THEN present_count ELSE 0 END) as group1_present,
+            MAX(CASE WHEN variant_group = 'group1' THEN absent_count ELSE 0 END) as group1_absent,
+            MAX(CASE WHEN variant_group = 'group1' THEN present_count + absent_count ELSE 0 END) as group1_total,
+            -- Group 2 (nT): present = yes.nT, absent = no.nT
+            MAX(CASE WHEN variant_group = 'group2' THEN present_count ELSE 0 END) as group2_present,
+            MAX(CASE WHEN variant_group = 'group2' THEN absent_count ELSE 0 END) as group2_absent,
+            MAX(CASE WHEN variant_group = 'group2' THEN present_count + absent_count ELSE 0 END) as group2_total
         FROM phenotype_counts
         GROUP BY hpo_id
-        HAVING MAX(CASE WHEN variant_group = 'group1' THEN __TOTAL_CALC__ ELSE 0 END) > 0
-           AND MAX(CASE WHEN variant_group = 'group2' THEN __TOTAL_CALC__ ELSE 0 END) > 0
+        HAVING MAX(CASE WHEN variant_group = 'group1' THEN present_count + absent_count ELSE 0 END) > 0
+           AND MAX(CASE WHEN variant_group = 'group2' THEN present_count + absent_count ELSE 0 END) > 0
     )
     SELECT
         hpo_id,
@@ -496,10 +496,6 @@ async def compare_variant_types(
     ORDER BY hpo_id
     """
     )
-
-    # Replace placeholders with reporting mode calculations
-    query = query.replace("__ABSENT_CALC__", absent_calc)
-    query = query.replace("__TOTAL_CALC__", total_calc)
 
     result = await db.execute(text(query), {"min_prevalence": min_prevalence})
     rows = result.fetchall()
@@ -555,8 +551,10 @@ async def compare_variant_types(
     phenotypes = phenotypes[:limit]
 
     # Get group sizes for metadata
-    group1_count = phenotypes[0].group1_total if phenotypes else 0
-    group2_count = phenotypes[0].group2_total if phenotypes else 0
+    # Note: These are the maximum totals seen across phenotypes, not necessarily all variants
+    # since filtering by min_prevalence may exclude some phenotypes
+    group1_count = max((p.group1_total for p in phenotypes), default=0)
+    group2_count = max((p.group2_total for p in phenotypes), default=0)
 
     return ComparisonResult(
         group1_name=group1_name,

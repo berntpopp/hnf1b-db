@@ -1570,25 +1570,15 @@ async def get_survival_data(
                                   AND ext#>>'{value,impact}' = 'HIGH'
                             )
                             OR
-                            -- Priority 2: LOW/MODIFIER/missing IMPACT + Pathogenic → Truncating
+                            -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
                             (
-                                (
-                                    EXISTS (
-                                        SELECT 1
-                                        FROM jsonb_array_elements(
-                                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                        ) AS ext
-                                        WHERE ext->>'name' = 'vep_annotation'
-                                          AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                                    )
-                                    OR NOT EXISTS (
-                                        SELECT 1
-                                        FROM jsonb_array_elements(
-                                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                        ) AS ext
-                                        WHERE ext->>'name' = 'vep_annotation'
-                                          AND ext#>>'{value,impact}' IS NOT NULL
-                                    )
+                                EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                                 )
                                 AND
                                 interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
@@ -1711,25 +1701,15 @@ async def get_survival_data(
                               AND ext#>>'{value,impact}' = 'HIGH'
                         )
                         OR
-                        -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                        -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
                         (
-                            (
-                                EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                    ) AS ext
-                                    WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                                )
-                                OR NOT EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                    ) AS ext
-                                    WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' IS NOT NULL
-                                )
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                             )
                             AND
                             interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
@@ -1830,25 +1810,15 @@ async def get_survival_data(
                               AND ext#>>'{value,impact}' = 'HIGH'
                         )
                         OR
-                        -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                        -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
                         (
-                            (
-                                EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                    ) AS ext
-                                    WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                                )
-                                OR NOT EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                    ) AS ext
-                                    WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' IS NOT NULL
-                                )
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                             )
                             AND
                             interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
