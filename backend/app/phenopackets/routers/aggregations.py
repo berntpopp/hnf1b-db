@@ -1555,18 +1555,69 @@ async def get_survival_data(
                 SELECT DISTINCT
                     p.phenopacket_id,
                     CASE
+                        -- CNVs: Large deletions or duplications
                         WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
                             THEN 'CNV'
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(
-                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                            ) AS expr
-                            WHERE (
-                                (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                                OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                        -- Truncating variants (VEP IMPACT-based with pathogenicity fallback)
+                        WHEN (
+                            -- Priority 1: VEP IMPACT HIGH → Truncating
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' = 'HIGH'
+                            )
+                            OR
+                            -- Priority 2: LOW/MODIFIER/missing IMPACT + Pathogenic → Truncating
+                            (
+                                (
+                                    EXISTS (
+                                        SELECT 1
+                                        FROM jsonb_array_elements(
+                                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                        ) AS ext
+                                        WHERE ext->>'name' = 'vep_annotation'
+                                          AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                                    )
+                                    OR NOT EXISTS (
+                                        SELECT 1
+                                        FROM jsonb_array_elements(
+                                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                        ) AS ext
+                                        WHERE ext->>'name' = 'vep_annotation'
+                                          AND ext#>>'{value,impact}' IS NOT NULL
+                                    )
+                                )
+                                AND
+                                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                                    IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                            )
+                            OR
+                            -- Priority 3: HGVS pattern fallback (when not MODERATE)
+                            (
+                                NOT EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' = 'MODERATE'
+                                )
+                                AND
+                                EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                                    ) AS expr
+                                    WHERE (
+                                        (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                        OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                        OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                        OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                                    )
+                                )
                             )
                         ) THEN 'Truncating'
                         ELSE 'Non-truncating'
@@ -1649,16 +1700,66 @@ async def get_survival_data(
                 CASE
                     WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
                         THEN 'CNV'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(
-                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                        ) AS expr
-                        WHERE (
-                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                            OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                    WHEN (
+                        -- Priority 1: VEP IMPACT = HIGH
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' = 'HIGH'
+                        )
+                        OR
+                        -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                        (
+                            (
+                                EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                                )
+                                OR NOT EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' IS NOT NULL
+                                )
+                            )
+                            AND
+                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                                IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        )
+                        OR
+                        -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT != MODERATE)
+                        (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' = 'MODERATE'
+                            )
+                            AND
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                                ) AS expr
+                                WHERE (
+                                    -- Frameshift, Nonsense, Splice site patterns
+                                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                    OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                                )
+                            )
                         )
                     ) THEN 'Truncating'
                     ELSE 'Non-truncating'
@@ -1696,7 +1797,6 @@ async def get_survival_data(
 
         # Group data by variant type
         groups = {"CNV": [], "Truncating": [], "Non-truncating": []}
-        censored_by_group = {"CNV": [], "Truncating": [], "Non-truncating": []}
 
         for row in rows:
             variant_group = row.variant_group
@@ -1719,16 +1819,66 @@ async def get_survival_data(
                 CASE
                     WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
                         THEN 'CNV'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(
-                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                        ) AS expr
-                        WHERE (
-                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                            OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                    WHEN (
+                        -- Priority 1: VEP IMPACT = HIGH
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' = 'HIGH'
+                        )
+                        OR
+                        -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                        (
+                            (
+                                EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                                )
+                                OR NOT EXISTS (
+                                    SELECT 1
+                                    FROM jsonb_array_elements(
+                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                    ) AS ext
+                                    WHERE ext->>'name' = 'vep_annotation'
+                                      AND ext#>>'{value,impact}' IS NOT NULL
+                                )
+                            )
+                            AND
+                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                                IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        )
+                        OR
+                        -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT != MODERATE)
+                        (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' = 'MODERATE'
+                            )
+                            AND
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                                ) AS expr
+                                WHERE (
+                                    -- Frameshift, Nonsense, Splice site patterns
+                                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                    OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                                )
+                            )
                         )
                     ) THEN 'Truncating'
                     ELSE 'Non-truncating'
@@ -1802,7 +1952,9 @@ async def get_survival_data(
         }
 
     elif comparison == "pathogenicity":
-        print(f"DEBUG: pathogenicity comparison, endpoint={endpoint}, endpoint_hpo_terms={endpoint_hpo_terms}")
+        print(
+            f"DEBUG: pathogenicity comparison, endpoint={endpoint}, endpoint_hpo_terms={endpoint_hpo_terms}"
+        )
         # Check for special current_age endpoint
         if endpoint_hpo_terms is None:
             print("DEBUG: Using current_age endpoint for pathogenicity")

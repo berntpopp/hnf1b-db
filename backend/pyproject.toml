@@ -117,6 +117,7 @@ convention = "google"
 "app/phenopackets/clinical_endpoints.py" = ["E501"]  # JSONPath queries
 "app/phenopackets/clinical_queries.py" = ["E501"]  # JSONPath and SQL queries
 "app/phenopackets/endpoints.py" = ["E501", "D417"]  # SQL queries and API param descriptions
+"app/phenopackets/routers/aggregations.py" = ["E501"]  # Complex SQL queries with VEP classification
 "app/phenopackets/validation/variant_validator.py" = ["E501"]  # Long regex patterns
 "app/phenopackets/variant_search_validation.py" = ["E501"]  # Long comments
 "app/publications/endpoints.py" = ["E501", "D106"]  # Long strings and nested Config class
