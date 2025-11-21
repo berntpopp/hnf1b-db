@@ -1461,17 +1461,30 @@ async def get_survival_data(
         ...,
         description="Comparison type: variant_type, disease_subtype, or pathogenicity",
     ),
+    endpoint: str = Query(
+        "ckd_stage_3_plus",
+        description=(
+            "Clinical endpoint: ckd_stage_3_plus (default), "
+            "stage_5_ckd, any_ckd, current_age"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get Kaplan-Meier survival data for renal failure (Stage 5 CKD).
+    """Get Kaplan-Meier survival data with configurable clinical endpoints.
 
     Compares survival curves using different grouping strategies:
     - variant_type: CNV vs Truncating vs Non-truncating
     - disease_subtype: CAKUT vs CAKUT+MODY vs MODY
     - pathogenicity: P/LP vs VUS vs LB
 
+    Supports multiple clinical endpoints:
+    - ckd_stage_3_plus: CKD Stage 3+ (GFR <60)
+    - stage_5_ckd: Stage 5 CKD (ESRD)
+    - any_ckd: Any CKD diagnosis
+    - current_age: Age at last follow-up (universal endpoint)
+
     Returns:
-        Survival curves with Kaplan-Meier estimates and log-rank tests
+        Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
     from app.phenopackets.survival_analysis import (
         calculate_kaplan_meier,
@@ -1480,20 +1493,155 @@ async def get_survival_data(
         parse_onset_ontology,
     )
 
-    # Stage 5 CKD (ESRD) HPO term
-    STAGE_5_CKD_HPO = "HP:0003774"
+    # CAKUT HPO terms (from R script lines 171-203)
+    CAKUT_HPO_TERMS = [
+        "HP:0000107",  # Renal cyst
+        "HP:0000003",  # Multicystic kidney dysplasia
+        "HP:0000089",  # Renal hypoplasia
+        "HP:0000122",  # Unilateral renal agenesis
+        "HP:0012210",  # Abnormal renal morphology
+    ]
+
+    # MODY HPO term (from R script line 193)
+    MODY_HPO = "HP:0004904"  # Maturity-onset diabetes of the young
+
+    # Endpoint configuration
+    endpoint_config = {
+        "ckd_stage_3_plus": {
+            "hpo_terms": [
+                "HP:0012623",  # Stage 3 chronic kidney disease
+                "HP:0012624",  # Stage 4 chronic kidney disease
+                "HP:0003774",  # Stage 5 chronic kidney disease
+            ],
+            "label": "CKD Stage 3+ (GFR <60)",
+        },
+        "stage_5_ckd": {
+            "hpo_terms": ["HP:0003774"],  # Stage 5 chronic kidney disease
+            "label": "Stage 5 CKD (ESRD)",
+        },
+        "any_ckd": {
+            "hpo_terms": ["HP:0012622"],  # Chronic kidney disease
+            "label": "Any CKD",
+        },
+        "current_age": {
+            "hpo_terms": None,  # Special case: use current age
+            "label": "Age at Last Follow-up",
+        },
+    }
+
+    if endpoint not in endpoint_config:
+        valid_options = ", ".join(endpoint_config.keys())
+        raise ValueError(
+            f"Unknown endpoint: {endpoint}. Valid options: {valid_options}"
+        )
+
+    config = endpoint_config[endpoint]
+    endpoint_hpo_terms = config["hpo_terms"]
+    endpoint_label = config["label"]
 
     if comparison == "variant_type":
-        # Query for CNV vs Truncating vs Non-truncating
+        # Check for special current_age endpoint
+        if endpoint_hpo_terms is None:
+            # For current_age: all patients are included, kidney_failure is event
+            query = """
+            WITH variant_classification AS (
+                SELECT DISTINCT
+                    p.phenopacket_id,
+                    CASE
+                        WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                            THEN 'CNV'
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                            ) AS expr
+                            WHERE (
+                                (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                            )
+                        ) THEN 'Truncating'
+                        ELSE 'Non-truncating'
+                    END AS variant_group,
+                    p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_kidney_failure
+                FROM phenopackets p,
+                    jsonb_array_elements(p.phenopacket->'interpretations') as interp
+                WHERE p.deleted_at IS NULL
+                    AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+            )
+            SELECT variant_group, current_age, has_kidney_failure
+            FROM variant_classification
+            """
+
+            result = await db.execute(text(query))
+            rows = result.fetchall()
+
+            groups = {"CNV": [], "Truncating": [], "Non-truncating": []}
+
+            for row in rows:
+                current_age = parse_iso8601_age(row.current_age)
+                if current_age is not None:
+                    is_event = row.has_kidney_failure
+                    groups[row.variant_group].append((current_age, is_event))
+
+            # Calculate Kaplan-Meier curves
+            survival_curves = {}
+            for group_name, event_times in groups.items():
+                if event_times:
+                    survival_curves[group_name] = calculate_kaplan_meier(event_times)
+                else:
+                    survival_curves[group_name] = []
+
+            # Perform pairwise log-rank tests
+            statistical_tests = []
+            group_names = list(groups.keys())
+            for i in range(len(group_names)):
+                for j in range(i + 1, len(group_names)):
+                    group1 = group_names[i]
+                    group2 = group_names[j]
+                    if groups[group1] and groups[group2]:
+                        test_result = calculate_log_rank_test(
+                            groups[group1], groups[group2]
+                        )
+                        statistical_tests.append(
+                            {
+                                "group1": group1,
+                                "group2": group2,
+                                **test_result,
+                            }
+                        )
+
+            return {
+                "comparison_type": "variant_type",
+                "endpoint": endpoint_label,
+                "groups": [
+                    {
+                        "name": group_name,
+                        "n": len(event_times),
+                        "events": sum(1 for _, event in event_times if event),
+                        "survival_data": survival_curves[group_name],
+                    }
+                    for group_name, event_times in groups.items()
+                    if event_times
+                ],
+                "statistical_tests": statistical_tests,
+            }
+
+        # Standard CKD endpoint
         query = """
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
                 CASE
-                    -- CNVs: Large deletions or duplications
                     WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
                         THEN 'CNV'
-                    -- Truncating: Frameshift, Nonsense, or Splice site
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(
@@ -1514,7 +1662,7 @@ async def get_survival_data(
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
             WHERE p.deleted_at IS NULL
         ),
-        esrd_cases AS (
+        endpoint_cases AS (
             SELECT
                 vc.phenopacket_id,
                 vc.variant_group,
@@ -1523,7 +1671,7 @@ async def get_survival_data(
                 pf->'onset'->>'age' as onset_age
             FROM variant_classification vc,
                 jsonb_array_elements(vc.phenopacket_data->'phenotypicFeatures') as pf
-            WHERE pf->'type'->>'id' = :stage_5_hpo
+            WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                 AND COALESCE((pf->>'excluded')::boolean, false) = false
         )
         SELECT
@@ -1531,10 +1679,12 @@ async def get_survival_data(
             current_age,
             onset_age,
             onset
-        FROM esrd_cases
+        FROM endpoint_cases
         """
 
-        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
+        result = await db.execute(
+            text(query), {"endpoint_hpo_terms": endpoint_hpo_terms}
+        )
         rows = result.fetchall()
 
         # Group data by variant type
@@ -1554,7 +1704,7 @@ async def get_survival_data(
             if onset_age is not None:
                 groups[variant_group].append((onset_age, True))
 
-        # Get censored patients (no Stage 5 CKD but have current age)
+        # Get censored patients
         censored_query = """
         WITH variant_classification AS (
             SELECT DISTINCT
@@ -1583,7 +1733,7 @@ async def get_survival_data(
                 AND NOT EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                    WHERE pf->'type'->>'id' = :stage_5_hpo
+                    WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 )
                 AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
@@ -1593,7 +1743,7 @@ async def get_survival_data(
         """
 
         censored_result = await db.execute(
-            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
+            text(censored_query), {"endpoint_hpo_terms": endpoint_hpo_terms}
         )
         censored_rows = censored_result.fetchall()
 
@@ -1631,7 +1781,7 @@ async def get_survival_data(
 
         return {
             "comparison_type": "variant_type",
-            "endpoint": "Stage 5 CKD (ESRD)",
+            "endpoint": endpoint_label,
             "groups": [
                 {
                     "name": group_name,
@@ -1645,108 +1795,160 @@ async def get_survival_data(
         }
 
     elif comparison == "pathogenicity":
-        # Query for P/LP vs VUS vs LB
-        query = """
-        WITH pathogenicity_classification AS (
-            SELECT DISTINCT
-                p.phenopacket_id,
-                CASE
-                    WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
-                        THEN 'P/LP'
-                    WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
-                        THEN 'VUS'
-                    WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
-                        THEN 'LB'
-                    ELSE 'Unknown'
-                END AS pathogenicity_group,
-                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
-                p.phenopacket as phenopacket_data
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
-                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
-        ),
-        esrd_cases AS (
+        print(f"DEBUG: pathogenicity comparison, endpoint={endpoint}, endpoint_hpo_terms={endpoint_hpo_terms}")
+        # Check for special current_age endpoint
+        if endpoint_hpo_terms is None:
+            print("DEBUG: Using current_age endpoint for pathogenicity")
+            # Special case: current_age endpoint (Age at Last Follow-up)
+            # Use report_age as time axis, kidney_failure as event
+            query = """
+            WITH pathogenicity_classification AS (
+                SELECT DISTINCT
+                    p.phenopacket_id,
+                    CASE
+                        WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                            THEN 'P/LP'
+                        WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
+                            THEN 'VUS'
+                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
+                            THEN 'LB'
+                        ELSE 'Unknown'
+                    END AS pathogenicity_group,
+                    p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_kidney_failure
+                FROM phenopackets p,
+                    jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                    jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+                WHERE p.deleted_at IS NULL
+                    AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+            )
+            SELECT pathogenicity_group, current_age, has_kidney_failure
+            FROM pathogenicity_classification
+            WHERE pathogenicity_group != 'Unknown'
+            """  # noqa: E501
+
+            result = await db.execute(text(query))
+            rows = result.fetchall()
+
+            groups = {"P/LP": [], "VUS": [], "LB": []}
+
+            for row in rows:
+                current_age = parse_iso8601_age(row.current_age)
+                if current_age is not None:
+                    # Per R script: event is kidney_failure, not reaching current age
+                    is_event = row.has_kidney_failure
+                    groups[row.pathogenicity_group].append((current_age, is_event))
+
+        else:
+            # Standard endpoint: match any of the specified HPO terms
+            query = """
+            WITH pathogenicity_classification AS (
+                SELECT DISTINCT
+                    p.phenopacket_id,
+                    CASE
+                        WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                            THEN 'P/LP'
+                        WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
+                            THEN 'VUS'
+                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
+                            THEN 'LB'
+                        ELSE 'Unknown'
+                    END AS pathogenicity_group,
+                    p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
+                    p.phenopacket as phenopacket_data
+                FROM phenopackets p,
+                    jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                    jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+                WHERE p.deleted_at IS NULL
+            ),
+            endpoint_cases AS (
+                SELECT
+                    pc.phenopacket_id,
+                    pc.pathogenicity_group,
+                    pc.current_age,
+                    pf->'onset' as onset,
+                    pf->'onset'->>'age' as onset_age
+                FROM pathogenicity_classification pc,
+                    jsonb_array_elements(pc.phenopacket_data->'phenotypicFeatures') as pf
+                WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
+                    AND COALESCE((pf->>'excluded')::boolean, false) = false
+            )
             SELECT
-                pc.phenopacket_id,
-                pc.pathogenicity_group,
-                pc.current_age,
-                pf->'onset' as onset,
-                pf->'onset'->>'age' as onset_age
-            FROM pathogenicity_classification pc,
-                jsonb_array_elements(pc.phenopacket_data->'phenotypicFeatures') as pf
-            WHERE pf->'type'->>'id' = :stage_5_hpo
-                AND COALESCE((pf->>'excluded')::boolean, false) = false
-        )
-        SELECT
-            pathogenicity_group,
-            current_age,
-            onset_age,
-            onset
-        FROM esrd_cases
-        WHERE pathogenicity_group != 'Unknown'
-        """
+                pathogenicity_group,
+                current_age,
+                onset_age,
+                onset
+            FROM endpoint_cases
+            WHERE pathogenicity_group != 'Unknown'
+            """
 
-        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
-        rows = result.fetchall()
+            result = await db.execute(
+                text(query), {"endpoint_hpo_terms": endpoint_hpo_terms}
+            )
+            rows = result.fetchall()
 
-        # Group data by pathogenicity
-        groups = {"P/LP": [], "VUS": [], "LB": []}
+            # Group data by pathogenicity
+            groups = {"P/LP": [], "VUS": [], "LB": []}
 
-        for row in rows:
-            pathogenicity_group = row.pathogenicity_group
+            for row in rows:
+                pathogenicity_group = row.pathogenicity_group
 
-            # Parse onset age
-            onset_age = None
-            if row.onset_age:
-                onset_age = parse_iso8601_age(row.onset_age)
-            elif row.onset:
-                onset_age = parse_onset_ontology(dict(row.onset))
+                # Parse onset age
+                onset_age = None
+                if row.onset_age:
+                    onset_age = parse_iso8601_age(row.onset_age)
+                elif row.onset:
+                    onset_age = parse_onset_ontology(dict(row.onset))
 
-            if onset_age is not None:
-                groups[pathogenicity_group].append((onset_age, True))
+                if onset_age is not None:
+                    groups[pathogenicity_group].append((onset_age, True))
 
-        # Get censored patients
-        censored_query = """
-        WITH pathogenicity_classification AS (
-            SELECT DISTINCT
-                p.phenopacket_id,
-                CASE
-                    WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
-                        THEN 'P/LP'
-                    WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
-                        THEN 'VUS'
-                    WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
-                        THEN 'LB'
-                    ELSE 'Unknown'
-                END AS pathogenicity_group,
-                p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
-                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                    WHERE pf->'type'->>'id' = :stage_5_hpo
-                        AND COALESCE((pf->>'excluded')::boolean, false) = false
-                )
-                AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
-        )
-        SELECT pathogenicity_group, current_age
-        FROM pathogenicity_classification
-        WHERE pathogenicity_group != 'Unknown'
-        """
+            # Get censored patients
+            censored_query = """
+            WITH pathogenicity_classification AS (
+                SELECT DISTINCT
+                    p.phenopacket_id,
+                    CASE
+                        WHEN gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                            THEN 'P/LP'
+                        WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
+                            THEN 'VUS'
+                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
+                            THEN 'LB'
+                        ELSE 'Unknown'
+                    END AS pathogenicity_group,
+                    p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
+                FROM phenopackets p,
+                    jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                    jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+                WHERE p.deleted_at IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    )
+                    AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
+            )
+            SELECT pathogenicity_group, current_age
+            FROM pathogenicity_classification
+            WHERE pathogenicity_group != 'Unknown'
+            """
 
-        censored_result = await db.execute(
-            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
-        )
-        censored_rows = censored_result.fetchall()
+            censored_result = await db.execute(
+                text(censored_query), {"endpoint_hpo_terms": endpoint_hpo_terms}
+            )
+            censored_rows = censored_result.fetchall()
 
-        for row in censored_rows:
-            current_age = parse_iso8601_age(row.current_age)
-            if current_age is not None:
-                groups[row.pathogenicity_group].append((current_age, False))
+            for row in censored_rows:
+                current_age = parse_iso8601_age(row.current_age)
+                if current_age is not None:
+                    groups[row.pathogenicity_group].append((current_age, False))
 
         # Calculate Kaplan-Meier curves
         survival_curves = {}
@@ -1774,7 +1976,7 @@ async def get_survival_data(
 
         return {
             "comparison_type": "pathogenicity",
-            "endpoint": "Stage 5 CKD (ESRD)",
+            "endpoint": endpoint_label,
             "groups": [
                 {
                     "name": group_name,
@@ -1789,9 +1991,119 @@ async def get_survival_data(
         }
 
     elif comparison == "disease_subtype":
-        # Query for CAKUT vs CAKUT+MODY vs MODY
-        # CAKUT: Renal/urinary tract abnormalities (HP:0000077 or related)
-        # MODY: Diabetes (HP:0000819)
+        # Check for special current_age endpoint
+        if endpoint_hpo_terms is None:
+            # Special case: current_age endpoint (Age at Last Follow-up)
+            # Use report_age as time axis, kidney_failure as event
+            # Per R script lines 229-233: "Other" has status=0 (censored)
+            query = """
+            WITH disease_classification AS (
+                SELECT DISTINCT
+                    p.phenopacket_id,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                            WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
+                                AND COALESCE((pf->>'excluded')::boolean, false) = false
+                        ) AND EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                            WHERE pf->'type'->>'id' = :mody_hpo
+                                AND COALESCE((pf->>'excluded')::boolean, false) = false
+                        ) THEN 'CAKUT/MODY'
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                            WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
+                                AND COALESCE((pf->>'excluded')::boolean, false) = false
+                        ) THEN 'CAKUT'
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                            WHERE pf->'type'->>'id' = :mody_hpo
+                                AND COALESCE((pf->>'excluded')::boolean, false) = false
+                        ) THEN 'MODY'
+                        ELSE 'Other'
+                    END AS disease_group,
+                    p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_kidney_failure
+                FROM phenopackets p
+                WHERE p.deleted_at IS NULL
+                    AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+            )
+            SELECT disease_group, current_age, has_kidney_failure
+            FROM disease_classification
+            WHERE disease_group != 'Other'
+            """
+
+            result = await db.execute(
+                text(query),
+                {
+                    "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                    "mody_hpo": MODY_HPO,
+                },
+            )
+            rows = result.fetchall()
+
+            groups = {"CAKUT": [], "CAKUT/MODY": [], "MODY": []}
+
+            for row in rows:
+                current_age = parse_iso8601_age(row.current_age)
+                if current_age is not None:
+                    # Per R script: event is kidney_failure, not reaching current age
+                    is_event = row.has_kidney_failure
+                    groups[row.disease_group].append((current_age, is_event))
+
+            # Calculate Kaplan-Meier curves
+            survival_curves = {}
+            for group_name, event_times in groups.items():
+                if event_times:
+                    survival_curves[group_name] = calculate_kaplan_meier(event_times)
+                else:
+                    survival_curves[group_name] = []
+
+            # Perform pairwise log-rank tests
+            statistical_tests = []
+            group_names = [g for g in groups.keys() if groups[g]]
+            for i in range(len(group_names)):
+                for j in range(i + 1, len(group_names)):
+                    group1 = group_names[i]
+                    group2 = group_names[j]
+                    test_result = calculate_log_rank_test(
+                        groups[group1], groups[group2]
+                    )
+                    statistical_tests.append(
+                        {
+                            "group1": group1,
+                            "group2": group2,
+                            **test_result,
+                        }
+                    )
+
+            return {
+                "comparison_type": "disease_subtype",
+                "endpoint": endpoint_label,
+                "groups": [
+                    {
+                        "name": group_name,
+                        "n": len(event_times),
+                        "events": sum(1 for _, event in event_times if event),
+                        "survival_data": survival_curves[group_name],
+                    }
+                    for group_name, event_times in groups.items()
+                    if event_times
+                ],
+                "statistical_tests": statistical_tests,
+            }
+
+        # Standard CKD endpoint (not current_age)
+        # Query for CAKUT vs CAKUT/MODY vs MODY (R script lines 197-214)
         query = """
         WITH disease_classification AS (
             SELECT DISTINCT
@@ -1800,24 +2112,24 @@ async def get_survival_data(
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) AND EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                        WHERE pf->'type'->>'id' = :mody_hpo
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT+MODY'
+                    ) THEN 'CAKUT/MODY'
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) THEN 'CAKUT'
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                        WHERE pf->'type'->>'id' = :mody_hpo
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) THEN 'MODY'
                     ELSE 'Other'
@@ -1827,7 +2139,7 @@ async def get_survival_data(
             FROM phenopackets p
             WHERE p.deleted_at IS NULL
         ),
-        esrd_cases AS (
+        endpoint_cases AS (
             SELECT
                 dc.phenopacket_id,
                 dc.disease_group,
@@ -1836,7 +2148,7 @@ async def get_survival_data(
                 pf->'onset'->>'age' as onset_age
             FROM disease_classification dc,
                 jsonb_array_elements(dc.phenopacket_data->'phenotypicFeatures') as pf
-            WHERE pf->'type'->>'id' = :stage_5_hpo
+            WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                 AND COALESCE((pf->>'excluded')::boolean, false) = false
         )
         SELECT
@@ -1844,15 +2156,22 @@ async def get_survival_data(
             current_age,
             onset_age,
             onset
-        FROM esrd_cases
+        FROM endpoint_cases
         WHERE disease_group != 'Other'
         """
 
-        result = await db.execute(text(query), {"stage_5_hpo": STAGE_5_CKD_HPO})
+        result = await db.execute(
+            text(query),
+            {
+                "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                "mody_hpo": MODY_HPO,
+                "endpoint_hpo_terms": endpoint_hpo_terms,
+            },
+        )
         rows = result.fetchall()
 
         # Group data by disease subtype
-        groups = {"CAKUT": [], "CAKUT+MODY": [], "MODY": []}
+        groups = {"CAKUT": [], "CAKUT/MODY": [], "MODY": []}
 
         for row in rows:
             disease_group = row.disease_group
@@ -1876,24 +2195,24 @@ async def get_survival_data(
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) AND EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                        WHERE pf->'type'->>'id' = :mody_hpo
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT+MODY'
+                    ) THEN 'CAKUT/MODY'
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE (pf->'type'->>'id' LIKE 'HP:00000%' OR pf->'type'->>'label' ~* 'renal|kidney|urinary')
+                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) THEN 'CAKUT'
                     WHEN EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = 'HP:0000819'
+                        WHERE pf->'type'->>'id' = :mody_hpo
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) THEN 'MODY'
                     ELSE 'Other'
@@ -1904,7 +2223,7 @@ async def get_survival_data(
                 AND NOT EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                    WHERE pf->'type'->>'id' = :stage_5_hpo
+                    WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 )
                 AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
@@ -1915,7 +2234,12 @@ async def get_survival_data(
         """
 
         censored_result = await db.execute(
-            text(censored_query), {"stage_5_hpo": STAGE_5_CKD_HPO}
+            text(censored_query),
+            {
+                "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                "mody_hpo": MODY_HPO,
+                "endpoint_hpo_terms": endpoint_hpo_terms,
+            },
         )
         censored_rows = censored_result.fetchall()
 
@@ -1950,7 +2274,7 @@ async def get_survival_data(
 
         return {
             "comparison_type": "disease_subtype",
-            "endpoint": "Stage 5 CKD (ESRD)",
+            "endpoint": endpoint_label,
             "groups": [
                 {
                     "name": group_name,

@@ -2,10 +2,11 @@
 
 This module provides utilities for:
 - Parsing ISO8601 age durations
-- Calculating Kaplan-Meier survival estimates
+- Calculating Kaplan-Meier survival estimates with confidence intervals
 - Computing log-rank test statistics
 """
 
+import math
 import re
 from typing import Optional
 
@@ -97,7 +98,10 @@ def parse_onset_ontology(ontology_class: dict) -> Optional[float]:
 
 
 def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
-    """Calculate Kaplan-Meier survival estimates.
+    """Calculate Kaplan-Meier survival estimates with 95% confidence intervals.
+
+    Uses Greenwood's formula for variance estimation and log-log transformation
+    for confidence interval calculation (more accurate for extreme probabilities).
 
     Args:
         event_times: List of (time, event_occurred) tuples
@@ -110,6 +114,8 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
             {
                 "time": 0.0,
                 "survival_probability": 1.0,
+                "ci_lower": 1.0,
+                "ci_upper": 1.0,
                 "at_risk": 100,
                 "events": 0,
                 "censored": 0
@@ -121,6 +127,8 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
         >>> data = [(25.0, True), (30.0, False), (35.0, True), (40.0, False)]
         >>> result = calculate_kaplan_meier(data)
         >>> len(result) > 0
+        True
+        >>> all('ci_lower' in r and 'ci_upper' in r for r in result)
         True
     """
     if not event_times:
@@ -143,12 +151,15 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
     result = []
     n_at_risk = len(event_times)
     survival_prob = 1.0
+    greenwood_variance = 0.0  # Cumulative variance using Greenwood's formula
 
     # Start at time 0
     result.append(
         {
             "time": 0.0,
             "survival_probability": 1.0,
+            "ci_lower": 1.0,
+            "ci_upper": 1.0,
             "at_risk": n_at_risk,
             "events": 0,
             "censored": 0,
@@ -164,10 +175,40 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
         if events > 0:
             survival_prob *= (n_at_risk - events) / n_at_risk
 
+            # Update Greenwood's variance: Var(S(t)) = S(t)^2 * sum(d_i / (n_i * (n_i - d_i)))
+            if n_at_risk > events:
+                greenwood_variance += events / (n_at_risk * (n_at_risk - events))
+
+        # Calculate 95% confidence interval using log-log transformation
+        # More accurate for extreme probabilities than plain Greenwood
+        ci_lower = 1.0
+        ci_upper = 1.0
+
+        if survival_prob > 0 and survival_prob < 1 and greenwood_variance > 0:
+            se = survival_prob * math.sqrt(greenwood_variance)  # Standard error
+            z = 1.96  # 95% CI
+
+            # Log-log transformation for better CI at extreme probabilities
+            if survival_prob > 0:
+                log_log_s = math.log(-math.log(survival_prob))
+                se_log_log = se / (survival_prob * abs(math.log(survival_prob)))
+
+                ci_lower_ll = log_log_s - z * se_log_log
+                ci_upper_ll = log_log_s + z * se_log_log
+
+                ci_lower = math.exp(-math.exp(ci_upper_ll))  # Note: swap for correct bounds
+                ci_upper = math.exp(-math.exp(ci_lower_ll))
+
+                # Clip to valid probability range
+                ci_lower = max(0.0, min(1.0, ci_lower))
+                ci_upper = max(0.0, min(1.0, ci_upper))
+
         result.append(
             {
                 "time": round(time, 2),
                 "survival_probability": round(survival_prob, 4),
+                "ci_lower": round(ci_lower, 4),
+                "ci_upper": round(ci_upper, 4),
                 "at_risk": n_at_risk,
                 "events": events,
                 "censored": censored,

@@ -417,6 +417,15 @@ export const getPublicationsByType = () =>
 export const getAgeOfOnsetAggregation = () => apiClient.get('/phenopackets/aggregate/age-of-onset');
 
 /**
+ * Get survival analysis data (Kaplan-Meier curves).
+ * @param {Object} params - Query parameters
+ * @param {string} params.comparison - Comparison type ('variant_type', 'pathogenicity', 'disease_subtype')
+ * @returns {Promise} Axios promise with survival data including groups and statistical tests
+ */
+export const getSurvivalData = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/survival-data', { params });
+
+/**
  * Compare phenotype distributions between variant type groups.
  * @param {Object} params - Query parameters
  * @param {string} params.comparison - Type of comparison ('truncating_vs_non_truncating' or 'cnv_vs_point_mutation')
@@ -728,6 +737,7 @@ export default {
   getPublicationsAggregation,
   getPublicationsByType,
   getAgeOfOnsetAggregation,
+  getSurvivalData,
   getSmallVariants,
 
   // Publications

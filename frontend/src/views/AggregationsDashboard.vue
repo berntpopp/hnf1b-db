@@ -10,6 +10,7 @@
               <v-tab value="Stacked Bar Chart"> Stacked Bar Chart </v-tab>
               <v-tab value="Publications Timeline"> Publications Timeline </v-tab>
               <v-tab value="Variant Comparison"> Variant Comparison </v-tab>
+              <v-tab value="Survival Curves"> Survival Curves </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -218,6 +219,75 @@
                     :height="Math.max(400, comparisonData.phenotypes.length * 50 + 150)"
                   />
                 </v-tabs-window-item>
+
+                <!-- Survival Curves Tab -->
+                <v-tabs-window-item value="Survival Curves">
+                  <v-row class="pa-3">
+                    <v-col cols="12" md="6">
+                      <v-select
+                        v-model="survivalComparison"
+                        :items="survivalComparisonTypes"
+                        item-title="label"
+                        item-value="value"
+                        label="Comparison Type"
+                        hint="Choose how to group patients for survival analysis"
+                        persistent-hint
+                      >
+                        <template v-slot:item="{ props, item }">
+                          <v-list-item v-bind="props">
+                            <v-list-item-subtitle>
+                              {{ item.raw.description }}
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                      </v-select>
+                    </v-col>
+                    <v-col cols="12" md="6">
+                      <v-select
+                        v-model="survivalEndpoint"
+                        :items="survivalEndpointOptions"
+                        item-title="label"
+                        item-value="value"
+                        label="Clinical Endpoint"
+                        hint="Choose the clinical outcome to measure"
+                        persistent-hint
+                      >
+                        <template v-slot:item="{ props, item }">
+                          <v-list-item v-bind="props">
+                            <v-list-item-subtitle>
+                              {{ item.raw.description }}
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                      </v-select>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Loading indicator -->
+                  <v-row v-if="survivalLoading" class="pa-3">
+                    <v-col cols="12" class="text-center">
+                      <v-progress-circular indeterminate color="primary" />
+                      <p class="mt-2">Loading survival data...</p>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Error message -->
+                  <v-row v-else-if="survivalError" class="pa-3">
+                    <v-col cols="12">
+                      <v-alert type="error" variant="tonal">
+                        {{ survivalError }}
+                      </v-alert>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Chart -->
+                  <KaplanMeierChart
+                    v-else-if="survivalData"
+                    :survival-data="survivalData"
+                    :width="1200"
+                    :height="700"
+                  />
+                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -233,6 +303,7 @@ import DonutChart from '@/components/analyses/DonutChart.vue';
 import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
 import VariantComparisonChart from '@/components/analyses/VariantComparisonChart.vue';
+import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
 import * as API from '@/api';
 
 export default {
@@ -242,6 +313,7 @@ export default {
     PublicationsTimelineChart,
     StackedBarChart,
     VariantComparisonChart,
+    KaplanMeierChart,
   },
   data() {
     return {
@@ -312,6 +384,51 @@ export default {
       comparisonData: null,
       comparisonLoading: false,
       comparisonError: null,
+      // Survival Curves data
+      survivalComparison: 'variant_type',
+      survivalEndpoint: 'ckd_stage_3_plus',
+      survivalData: null,
+      survivalLoading: false,
+      survivalError: null,
+      survivalComparisonTypes: [
+        {
+          label: 'Variant Type',
+          value: 'variant_type',
+          description: 'Compare CNV vs Truncating vs Non-truncating variants',
+        },
+        {
+          label: 'Pathogenicity',
+          value: 'pathogenicity',
+          description: 'Compare Pathogenic/Likely Pathogenic vs VUS vs Likely Benign',
+        },
+        {
+          label: 'Disease Subtype',
+          value: 'disease_subtype',
+          description: 'Compare CAKUT vs CAKUT+MODY vs MODY phenotypes',
+        },
+      ],
+      survivalEndpointOptions: [
+        {
+          label: 'CKD Stage 3+ (GFR <60)',
+          value: 'ckd_stage_3_plus',
+          description: 'Time to CKD Stage 3 or higher (composite endpoint)',
+        },
+        {
+          label: 'Stage 5 CKD (ESRD)',
+          value: 'stage_5_ckd',
+          description: 'Time to End-Stage Renal Disease (historical endpoint)',
+        },
+        {
+          label: 'Any CKD',
+          value: 'any_ckd',
+          description: 'Time to any chronic kidney disease diagnosis',
+        },
+        {
+          label: 'Age at Last Follow-up',
+          value: 'current_age',
+          description: 'Current/reported age (universal endpoint)',
+        },
+      ],
       comparisonTypes: [
         { label: 'Truncating vs Non-truncating', value: 'truncating_vs_non_truncating' },
         { label: 'CNVs vs Non-CNV variants', value: 'cnv_vs_point_mutation' },
@@ -481,6 +598,10 @@ export default {
       if (newTab === 'Variant Comparison' && !this.comparisonData) {
         this.fetchComparisonData();
       }
+      // Auto-fetch survival data when switching to Survival Curves tab
+      if (newTab === 'Survival Curves' && !this.survivalData) {
+        this.fetchSurvivalData();
+      }
     },
     // Watch comparison parameters and refetch data
     comparisonType() {
@@ -501,6 +622,17 @@ export default {
     sortBy() {
       if (this.tab === 'Variant Comparison') {
         this.fetchComparisonData();
+      }
+    },
+    // Watch survival parameters and refetch data
+    survivalComparison() {
+      if (this.tab === 'Survival Curves') {
+        this.fetchSurvivalData();
+      }
+    },
+    survivalEndpoint() {
+      if (this.tab === 'Survival Curves') {
+        this.fetchSurvivalData();
       }
     },
     reportingMode() {
@@ -668,6 +800,40 @@ export default {
           error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
       } finally {
         this.comparisonLoading = false;
+      }
+    },
+
+    async fetchSurvivalData() {
+      this.survivalLoading = true;
+      this.survivalError = null;
+
+      window.logService.debug('Fetching survival data', {
+        comparison: this.survivalComparison,
+        endpoint: this.survivalEndpoint,
+      });
+
+      try {
+        const response = await API.getSurvivalData({
+          comparison: this.survivalComparison,
+          endpoint: this.survivalEndpoint,
+        });
+
+        this.survivalData = response.data;
+
+        window.logService.info('Survival data loaded', {
+          comparisonType: response.data.comparison_type,
+          endpoint: response.data.endpoint,
+          groupsCount: response.data.groups?.length || 0,
+          statisticalTestsCount: response.data.statistical_tests?.length || 0,
+        });
+      } catch (error) {
+        window.logService.error('Error fetching survival data', {
+          error: error.message,
+        });
+        this.survivalError =
+          error.response?.data?.detail || 'Failed to load survival data. Please try again.';
+      } finally {
+        this.survivalLoading = false;
       }
     },
   },
