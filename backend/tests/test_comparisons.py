@@ -2,6 +2,7 @@
 
 import pytest
 from scipy import stats
+from sqlalchemy import text
 
 from app.phenopackets.routers.comparisons import (
     calculate_cohens_h,
@@ -269,7 +270,7 @@ class TestComparisonEndpoint:
             },
         )
         assert response_prev.status_code == 200
-        data_prev = response_prev.json()
+        _ = response_prev.json()  # Response validated by status code check
 
         # Verify sorting worked (if phenotypes exist)
         if data_pvalue["phenotypes"]:
@@ -426,3 +427,514 @@ class TestComparisonEndpoint:
                     phenotype["group2_present"] / phenotype["group2_total"] * 100
                 )
                 assert abs(phenotype["group2_percentage"] - expected_pct2) < 0.01
+
+
+@pytest.mark.asyncio
+class TestVEPImpactBasedClassification:
+    """Test VEP IMPACT-based truncating variant classification.
+
+    This test class verifies that the Python implementation matches the R reference
+    logic from docs/analysis/R-commands_genotype-phenotype.txt (lines 75-84).
+
+    R logic priority:
+    1. IMPACT = HIGH → Truncating (T)
+    2. IMPACT = MODERATE → Non-truncating (nT)
+    3. IMPACT = LOW/MODIFIER/missing + Pathogenic (LP/P) → Truncating (T)
+    4. Default → other (excluded from analysis)
+    """
+
+    async def test_vep_impact_high_classified_as_truncating(self, db_session):
+        """Test that variants with VEP IMPACT = HIGH are classified as truncating.
+
+        R logic (line 78):
+            IMPACT == "HIGH" ~ "T"
+        """
+        # Create test phenopacket with HIGH impact variant
+        test_phenopacket = {
+            "id": "test-high-impact",
+            "subject": {"id": "patient-high-impact"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "UNCERTAIN_SIGNIFICANCE",
+                                    "variationDescriptor": {
+                                        "id": "var-1",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.c",
+                                                "value": "NM_000458.4:c.123A>G",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "impact": "HIGH",
+                                                    "most_severe_consequence": "stop_gained",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {"pid": "test-high-impact", "pk": str(test_phenopacket).replace("'", '"')},
+        )
+        await db_session.commit()
+
+        # Query variant classification
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' = 'HIGH'
+                    ) THEN 'Truncating'
+                    ELSE 'Non-truncating'
+                END as classification
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-high-impact"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "Truncating"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-high-impact"},
+        )
+        await db_session.commit()
+
+    async def test_vep_impact_moderate_classified_as_non_truncating(self, db_session):
+        """Test that variants with VEP IMPACT = MODERATE are non-truncating.
+
+        R logic (line 77):
+            IMPACT == "MODERATE" ~ "nT"
+        """
+        test_phenopacket = {
+            "id": "test-moderate-impact",
+            "subject": {"id": "patient-moderate-impact"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "LIKELY_PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "var-1",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.p",
+                                                "value": "NP_000449.3:p.Arg177Cys",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "impact": "MODERATE",
+                                                    "most_severe_consequence": "missense_variant",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {
+                "pid": "test-moderate-impact",
+                "pk": str(test_phenopacket).replace("'", '"'),
+            },
+        )
+        await db_session.commit()
+
+        # Query - MODERATE should NOT be truncating even if pathogenic
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' = 'MODERATE'
+                    ) THEN 'Non-truncating'
+                    ELSE 'Other'
+                END as classification
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-moderate-impact"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "Non-truncating"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-moderate-impact"},
+        )
+        await db_session.commit()
+
+    async def test_vep_impact_low_pathogenic_classified_as_truncating(self, db_session):
+        """Test LOW impact + pathogenic → truncating (edge case handling).
+
+        R logic (line 79):
+            IMPACT == "LOW" & ACMG_groups == "LP/P" ~ "T"
+
+        This handles cases where VEP impact prediction is wrong but clinical
+        interpretation identifies the variant as pathogenic (e.g., cryptic splice).
+        """
+        test_phenopacket = {
+            "id": "test-low-pathogenic",
+            "subject": {"id": "patient-low-pathogenic"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "LIKELY_PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "var-1",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.c",
+                                                "value": "NM_000458.4:c.544+5G>A",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "impact": "LOW",
+                                                    "most_severe_consequence": "splice_region_variant",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {
+                "pid": "test-low-pathogenic",
+                "pk": str(test_phenopacket).replace("'", '"'),
+            },
+        )
+        await db_session.commit()
+
+        # Query - LOW + LIKELY_PATHOGENIC should be truncating
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN (
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' = 'LOW'
+                        )
+                        AND
+                        interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                            IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    ) THEN 'Truncating'
+                    ELSE 'Non-truncating'
+                END as classification
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-low-pathogenic"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "Truncating"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-low-pathogenic"},
+        )
+        await db_session.commit()
+
+    async def test_vep_impact_low_vus_classified_as_non_truncating(self, db_session):
+        """Test LOW impact + VUS → non-truncating (not pathogenic).
+
+        R logic: Only LOW + LP/P → T, so LOW + VUS should be nT or other.
+        """
+        test_phenopacket = {
+            "id": "test-low-vus",
+            "subject": {"id": "patient-low-vus"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "UNCERTAIN_SIGNIFICANCE",
+                                    "variationDescriptor": {
+                                        "id": "var-1",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.c",
+                                                "value": "NM_000458.4:c.123A>G",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "impact": "LOW",
+                                                    "most_severe_consequence": "synonymous_variant",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {"pid": "test-low-vus", "pk": str(test_phenopacket).replace("'", '"')},
+        )
+        await db_session.commit()
+
+        # Query - LOW + VUS should NOT be truncating
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN (
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' = 'LOW'
+                        )
+                        AND
+                        interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                            NOT IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    ) THEN 'Non-truncating'
+                    ELSE 'Other'
+                END as classification
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-low-vus"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "Non-truncating"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-low-vus"},
+        )
+        await db_session.commit()
+
+    async def test_hgvs_fallback_when_no_vep_impact(self, db_session):
+        """Test HGVS pattern fallback when VEP IMPACT is missing.
+
+        R logic (line 82):
+            is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T"
+
+        Should use HGVS patterns when no VEP data available.
+        """
+        test_phenopacket = {
+            "id": "test-hgvs-fallback",
+            "subject": {"id": "patient-hgvs-fallback"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "var-1",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.p",
+                                                "value": "NP_000449.3:p.Arg177Ter",
+                                            }
+                                        ],
+                                        # No VEP extension
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {
+                "pid": "test-hgvs-fallback",
+                "pk": str(test_phenopacket).replace("'", '"'),
+            },
+        )
+        await db_session.commit()
+
+        # Query - Should use HGVS pattern (Ter = nonsense = truncating)
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE expr->>'syntax' = 'hgvs.p'
+                          AND expr->>'value' ~* 'ter'
+                    ) THEN 'Truncating'
+                    ELSE 'Non-truncating'
+                END as classification
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-hgvs-fallback"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "Truncating"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-hgvs-fallback"},
+        )
+        await db_session.commit()

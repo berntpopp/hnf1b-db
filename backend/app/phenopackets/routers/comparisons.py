@@ -176,10 +176,21 @@ async def compare_variant_types(
     1. Truncating vs Non-truncating variants
     2. CNVs (17q deletions/duplications) vs Non-CNV variants
 
-    **Truncating variants:**
-    - Frameshift (p. notation contains 'fs')
-    - Nonsense (p. notation contains 'Ter' or '*')
-    - Splice site mutations (c. notation contains +1 to +6 or -1 to -3)
+    **Truncating variants (multi-tier classification matching R reference logic):**
+
+    Priority 1: VEP IMPACT score
+    - HIGH impact → Truncating
+    - MODERATE impact → Non-truncating
+
+    Priority 2: Pathogenicity fallback
+    - LOW/MODIFIER/missing impact + PATHOGENIC/LIKELY_PATHOGENIC → Truncating
+    - This handles edge cases where VEP impact may be incorrect but clinical
+      interpretation identifies the variant as pathogenic (e.g., cryptic splice effects)
+
+    Priority 3: HGVS pattern fallback (when VEP unavailable or IMPACT != MODERATE)
+    - Frameshift: p. notation contains 'fs'
+    - Nonsense: p. notation contains 'Ter' or '*'
+    - Splice site: c. notation contains +1 to +6 or -1 to -3
 
     **Non-truncating variants:**
     - Missense mutations (amino acid substitutions)
@@ -200,39 +211,99 @@ async def compare_variant_types(
         min_prevalence: Minimum prevalence (0-1) to include phenotype
         limit: Maximum number of phenotypes to return
         sort_by: Sort phenotypes by p_value, effect_size, or prevalence_diff
+        reporting_mode: How to count absent phenotypes
         db: Database session
 
     Returns:
         ComparisonResult with statistical tests for each phenotype
+
+    Note:
+        This implementation matches the R reference logic from
+        docs/analysis/R-commands_genotype-phenotype.txt (lines 75-84)
     """
     # Define variant classification SQL fragments
     if comparison == "truncating_vs_non_truncating":
-        # Classify based on molecular consequence
+        # Classify based on VEP IMPACT with pathogenicity fallback (matches R logic)
+        # Priority:
+        # 1. VEP IMPACT HIGH → Truncating
+        # 2. VEP IMPACT MODERATE → Non-truncating
+        # 3. VEP IMPACT LOW/MODIFIER/missing + Pathogenic → Truncating
+        # 4. HGVS pattern fallback → Truncating (fs, Ter, splice site)
+        # 5. Default → Non-truncating
         group1_condition = """
-            -- Truncating: Frameshift, Nonsense, or Splice site
-            EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(
-                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                ) AS expr
-                WHERE (
-                    -- Frameshift: contains 'fs' in protein notation
-                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                    OR
-                    -- Nonsense: contains 'Ter' or '*' in protein notation  # noqa: E501
-                    (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                    OR
-                    -- Splice donor: +1 to +6 in transcript notation
-                    (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                    OR
-                    -- Splice acceptor: -1 to -3 in transcript notation
-                    (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+            -- Truncating variants (multi-tier classification)
+            (
+                -- Priority 1: VEP IMPACT = HIGH
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                    ) AS ext
+                    WHERE ext->>'name' = 'vep_annotation'
+                      AND ext#>>'{value,impact}' = 'HIGH'
+                )
+                OR
+                -- Priority 2: VEP IMPACT = LOW/MODIFIER/missing + Pathogenic
+                (
+                    (
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                        )
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' IS NOT NULL
+                        )
+                    )
+                    AND
+                    interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT = MODERATE)
+                (
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' = 'MODERATE'
+                    )
+                    AND
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE (
+                            -- Frameshift: contains 'fs' in protein notation
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                            OR
+                            -- Nonsense: contains 'Ter' or '*' in protein notation
+                            (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                            OR
+                            -- Splice donor: +1 to +6 in transcript notation
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                            OR
+                            -- Splice acceptor: -1 to -3 in transcript notation
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                        )
+                    )
                 )
             )
         """
         group2_condition = (
             """
-            -- Non-truncating: All other variants (primarily missense)
+            -- Non-truncating: All other variants
             NOT ("""
             + group1_condition
             + ")"
