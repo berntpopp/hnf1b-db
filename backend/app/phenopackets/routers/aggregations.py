@@ -1810,8 +1810,6 @@ async def get_survival_data(
                             THEN 'P/LP'
                         WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
                             THEN 'VUS'
-                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
-                            THEN 'LB'
                         ELSE 'Unknown'
                     END AS pathogenicity_group,
                     p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
@@ -1829,13 +1827,13 @@ async def get_survival_data(
             )
             SELECT pathogenicity_group, current_age, has_kidney_failure
             FROM pathogenicity_classification
-            WHERE pathogenicity_group != 'Unknown'
+            WHERE pathogenicity_group IN ('P/LP', 'VUS')
             """  # noqa: E501
 
             result = await db.execute(text(query))
             rows = result.fetchall()
 
-            groups = {"P/LP": [], "VUS": [], "LB": []}
+            groups = {"P/LP": [], "VUS": []}
 
             for row in rows:
                 current_age = parse_iso8601_age(row.current_age)
@@ -1855,8 +1853,6 @@ async def get_survival_data(
                             THEN 'P/LP'
                         WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
                             THEN 'VUS'
-                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
-                            THEN 'LB'
                         ELSE 'Unknown'
                     END AS pathogenicity_group,
                     p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
@@ -1884,7 +1880,7 @@ async def get_survival_data(
                 onset_age,
                 onset
             FROM endpoint_cases
-            WHERE pathogenicity_group != 'Unknown'
+            WHERE pathogenicity_group IN ('P/LP', 'VUS')
             """
 
             result = await db.execute(
@@ -1893,7 +1889,7 @@ async def get_survival_data(
             rows = result.fetchall()
 
             # Group data by pathogenicity
-            groups = {"P/LP": [], "VUS": [], "LB": []}
+            groups = {"P/LP": [], "VUS": []}
 
             for row in rows:
                 pathogenicity_group = row.pathogenicity_group
@@ -1918,8 +1914,6 @@ async def get_survival_data(
                             THEN 'P/LP'
                         WHEN gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'
                             THEN 'VUS'
-                        WHEN gi->>'interpretationStatus' = 'LIKELY_BENIGN'
-                            THEN 'LB'
                         ELSE 'Unknown'
                     END AS pathogenicity_group,
                     p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
@@ -1937,7 +1931,7 @@ async def get_survival_data(
             )
             SELECT pathogenicity_group, current_age
             FROM pathogenicity_classification
-            WHERE pathogenicity_group != 'Unknown'
+            WHERE pathogenicity_group IN ('P/LP', 'VUS')
             """
 
             censored_result = await db.execute(

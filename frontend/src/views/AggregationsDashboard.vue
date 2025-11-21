@@ -399,7 +399,7 @@ export default {
         {
           label: 'Pathogenicity',
           value: 'pathogenicity',
-          description: 'Compare Pathogenic/Likely Pathogenic vs VUS vs Likely Benign',
+          description: 'Compare Pathogenic/Likely Pathogenic vs VUS',
         },
         {
           label: 'Disease Subtype',
