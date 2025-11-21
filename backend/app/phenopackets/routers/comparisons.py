@@ -142,7 +142,9 @@ def calculate_cohens_h(p1: float, p2: float) -> float:
 @router.get("/variant-types", response_model=ComparisonResult)
 async def compare_variant_types(
     comparison: Literal[
-        "truncating_vs_non_truncating", "cnv_vs_point_mutation"
+        "truncating_vs_non_truncating",
+        "cnv_vs_point_mutation",
+        "cnv_deletion_vs_duplication",
     ] = Query(
         "truncating_vs_non_truncating",
         description="Type of variant comparison to perform",
@@ -175,6 +177,7 @@ async def compare_variant_types(
     Performs statistical comparison of phenotype presence/absence between:
     1. Truncating vs Non-truncating variants
     2. CNVs (17q deletions/duplications) vs Non-CNV variants
+    3. CNV deletions (17qDel) vs CNV duplications (17qDup)
 
     **Truncating variants (multi-tier classification matching R reference logic):**
 
@@ -197,9 +200,14 @@ async def compare_variant_types(
     - In-frame deletions/insertions
     - Other variants not classified as truncating
 
-    **CNVs:**
+    **CNVs (copy number variants):**
     - Large deletions (17q deletion, identified by :DEL in variant ID)
-    - Large duplications (identified by :DUP in variant ID)
+    - Large duplications (17q duplication, identified by :DUP in variant ID)
+
+    **CNV classification methods:**
+    1. Variant ID suffix: :DEL or :DUP
+    2. VEP consequence: transcript_ablation (deletion) or transcript_amplification (duplication)
+    3. Coordinate range pattern in variant ID (e.g., 17:36459258-37832869:DEL)
 
     **Non-CNV variants:**
     - SNVs (single nucleotide variants)
@@ -326,6 +334,46 @@ async def compare_variant_types(
         """
         group1_name = "CNVs (17q del/dup)"
         group2_name = "Non-CNV variants"
+
+    elif comparison == "cnv_deletion_vs_duplication":
+        # Classify CNVs into deletions vs duplications (matches R logic lines 87-88)
+        # Uses multiple detection methods for robustness
+        group1_condition = """
+            -- 17q Deletions
+            (
+                -- Method 1: Variant ID contains :DEL
+                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                OR
+                -- Method 2: VEP consequence is transcript_ablation
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                    ) AS ext
+                    WHERE ext->>'name' = 'vep_annotation'
+                      AND ext#>>'{value,most_severe_consequence}' = 'transcript_ablation'
+                )
+            )
+        """
+        group2_condition = """
+            -- 17q Duplications
+            (
+                -- Method 1: Variant ID contains :DUP
+                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                OR
+                -- Method 2: VEP consequence is transcript_amplification
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                    ) AS ext
+                    WHERE ext->>'name' = 'vep_annotation'
+                      AND ext#>>'{value,most_severe_consequence}' = 'transcript_amplification'
+                )
+            )
+        """
+        group1_name = "17q Deletion"
+        group2_name = "17q Duplication"
 
     else:
         raise ValueError(f"Unknown comparison type: {comparison}")

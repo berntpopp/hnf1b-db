@@ -938,3 +938,400 @@ class TestVEPImpactBasedClassification:
             {"pid": "test-hgvs-fallback"},
         )
         await db_session.commit()
+
+
+@pytest.mark.asyncio
+class TestCNVSubtypeClassification:
+    """Test CNV subtype classification (17q deletion vs duplication).
+
+    This test class verifies that the Python implementation can distinguish
+    between deletions and duplications, matching R logic from
+    docs/analysis/R-commands_genotype-phenotype.txt (lines 87-88):
+        EFFECT == "transcript_ablation" ~ "17qDel"
+        EFFECT == "transcript_amplification" ~ "17qDup"
+    """
+
+    async def test_cnv_deletion_classified_by_variant_id(self, db_session):
+        """Test that CNVs with :DEL suffix are classified as deletions."""
+        test_phenopacket = {
+            "id": "test-cnv-del",
+            "subject": {"id": "patient-cnv-del"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "17:36459258-37832869:DEL",
+                                        "expressions": [
+                                            {
+                                                "syntax": "spdi",
+                                                "value": "17:36459258:1373611:0",
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {"pid": "test-cnv-del", "pk": str(test_phenopacket).replace("'", '"')},
+        )
+        await db_session.commit()
+
+        # Query - Should be classified as deletion
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                        THEN '17q Deletion'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                        THEN '17q Duplication'
+                    ELSE 'Other'
+                END as cnv_subtype
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-cnv-del"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "17q Deletion"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-cnv-del"},
+        )
+        await db_session.commit()
+
+    async def test_cnv_duplication_classified_by_variant_id(self, db_session):
+        """Test that CNVs with :DUP suffix are classified as duplications."""
+        test_phenopacket = {
+            "id": "test-cnv-dup",
+            "subject": {"id": "patient-cnv-dup"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "17:36459258-37832869:DUP",
+                                        "expressions": [
+                                            {
+                                                "syntax": "spdi",
+                                                "value": "17:36459258:0:1373611",
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {"pid": "test-cnv-dup", "pk": str(test_phenopacket).replace("'", '"')},
+        )
+        await db_session.commit()
+
+        # Query - Should be classified as duplication
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                        THEN '17q Deletion'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                        THEN '17q Duplication'
+                    ELSE 'Other'
+                END as cnv_subtype
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-cnv-dup"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "17q Duplication"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-cnv-dup"},
+        )
+        await db_session.commit()
+
+    async def test_cnv_deletion_classified_by_vep_consequence(self, db_session):
+        """Test deletion classification by VEP consequence (transcript_ablation).
+
+        R logic (line 87):
+            EFFECT == "transcript_ablation" ~ "17qDel"
+        """
+        test_phenopacket = {
+            "id": "test-cnv-del-vep",
+            "subject": {"id": "patient-cnv-del-vep"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "var-cnv-del",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.g",
+                                                "value": "NC_000017.11:g.36459258_37832869del",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "most_severe_consequence": "transcript_ablation",
+                                                    "impact": "HIGH",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {
+                "pid": "test-cnv-del-vep",
+                "pk": str(test_phenopacket).replace("'", '"'),
+            },
+        )
+        await db_session.commit()
+
+        # Query - Should be classified as deletion by VEP consequence
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,most_severe_consequence}' = 'transcript_ablation'
+                    ) THEN '17q Deletion'
+                    ELSE 'Other'
+                END as cnv_subtype
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-cnv-del-vep"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "17q Deletion"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-cnv-del-vep"},
+        )
+        await db_session.commit()
+
+    async def test_cnv_duplication_classified_by_vep_consequence(self, db_session):
+        """Test duplication classification by VEP consequence (transcript_amplification).
+
+        R logic (line 88):
+            EFFECT == "transcript_amplification" ~ "17qDup"
+        """
+        test_phenopacket = {
+            "id": "test-cnv-dup-vep",
+            "subject": {"id": "patient-cnv-dup-vep"},
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "variantInterpretation": {
+                                    "interpretationStatus": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": "var-cnv-dup",
+                                        "expressions": [
+                                            {
+                                                "syntax": "hgvs.g",
+                                                "value": "NC_000017.11:g.36459258_37832869dup",
+                                            }
+                                        ],
+                                        "extensions": [
+                                            {
+                                                "name": "vep_annotation",
+                                                "value": {
+                                                    "most_severe_consequence": "transcript_amplification",
+                                                    "impact": "HIGH",
+                                                },
+                                            }
+                                        ],
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            ],
+            "phenotypicFeatures": [
+                {
+                    "type": {"id": "HP:0000107", "label": "Renal cyst"},
+                    "excluded": False,
+                }
+            ],
+        }
+
+        # Insert test phenopacket
+        await db_session.execute(
+            text(
+                """
+            INSERT INTO phenopackets (phenopacket_id, phenopacket)
+            VALUES (:pid, :pk::jsonb)
+        """
+            ),
+            {
+                "pid": "test-cnv-dup-vep",
+                "pk": str(test_phenopacket).replace("'", '"'),
+            },
+        )
+        await db_session.commit()
+
+        # Query - Should be classified as duplication by VEP consequence
+        result = await db_session.execute(
+            text(
+                """
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,most_severe_consequence}' = 'transcript_amplification'
+                    ) THEN '17q Duplication'
+                    ELSE 'Other'
+                END as cnv_subtype
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') AS interp
+            WHERE p.phenopacket_id = :pid
+        """
+            ),
+            {"pid": "test-cnv-dup-vep"},
+        )
+
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "17q Duplication"
+
+        # Cleanup
+        await db_session.execute(
+            text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
+            {"pid": "test-cnv-dup-vep"},
+        )
+        await db_session.commit()
+
+    async def test_compare_cnv_deletion_vs_duplication_endpoint(
+        self, async_client, db_session
+    ):
+        """Test the CNV deletion vs duplication comparison endpoint."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/compare/variant-types",
+            params={
+                "comparison": "cnv_deletion_vs_duplication",
+                "limit": 10,
+                "min_prevalence": 0.01,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check response structure
+        assert "group1_name" in data
+        assert "group2_name" in data
+        assert "phenotypes" in data
+        assert "metadata" in data
+
+        # Check group names
+        assert data["group1_name"] == "17q Deletion"
+        assert data["group2_name"] == "17q Duplication"
+
+        # Check metadata
+        assert data["metadata"]["comparison_type"] == "cnv_deletion_vs_duplication"
