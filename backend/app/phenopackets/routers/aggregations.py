@@ -1509,8 +1509,8 @@ async def get_survival_data(
     endpoint_config = {
         "ckd_stage_3_plus": {
             "hpo_terms": [
-                "HP:0012623",  # Stage 3 chronic kidney disease
-                "HP:0012624",  # Stage 4 chronic kidney disease
+                "HP:0012625",  # Stage 3 chronic kidney disease
+                "HP:0012626",  # Stage 4 chronic kidney disease
                 "HP:0003774",  # Stage 5 chronic kidney disease
             ],
             "label": "CKD Stage 3+ (GFR <60)",
@@ -1520,7 +1520,14 @@ async def get_survival_data(
             "label": "Stage 5 CKD (ESRD)",
         },
         "any_ckd": {
-            "hpo_terms": ["HP:0012622"],  # Chronic kidney disease
+            "hpo_terms": [
+                "HP:0012622",  # Chronic kidney disease (unspecified)
+                "HP:0012623",  # Stage 1 chronic kidney disease
+                "HP:0012624",  # Stage 2 chronic kidney disease
+                "HP:0012625",  # Stage 3 chronic kidney disease
+                "HP:0012626",  # Stage 4 chronic kidney disease
+                "HP:0003774",  # Stage 5 chronic kidney disease
+            ],
             "label": "Any CKD",
         },
         "current_age": {
