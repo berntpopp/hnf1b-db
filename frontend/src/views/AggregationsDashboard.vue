@@ -171,26 +171,18 @@
                     </v-col>
                   </v-row>
 
-                  <!-- Reporting Mode Toggle -->
+                  <!-- Organ System Filter -->
                   <v-row class="pa-3">
-                    <v-col cols="12">
+                    <v-col cols="12" md="6">
                       <v-select
-                        v-model="reportingMode"
-                        :items="reportingModeOptions"
+                        v-model="organSystemFilter"
+                        :items="organSystemOptions"
                         item-title="label"
                         item-value="value"
-                        label="Reporting Mode"
-                        hint="Choose how to handle phenotypes that were not explicitly documented"
+                        label="Organ System Filter"
+                        hint="Filter phenotypes by affected organ system"
                         persistent-hint
-                      >
-                        <template v-slot:item="{ props, item }">
-                          <v-list-item v-bind="props">
-                            <v-list-item-subtitle>
-                              {{ item.raw.description }}
-                            </v-list-item-subtitle>
-                          </v-list-item>
-                        </template>
-                      </v-select>
+                      />
                     </v-col>
                   </v-row>
 
@@ -215,8 +207,10 @@
                   <VariantComparisonChart
                     v-else-if="comparisonData"
                     :comparison-data="comparisonData"
+                    :comparison-type="comparisonType"
+                    :organ-system-filter="organSystemFilter"
                     :width="1200"
-                    :height="Math.max(400, comparisonData.phenotypes.length * 50 + 150)"
+                    :height="600"
                   />
                 </v-tabs-window-item>
 
@@ -380,7 +374,7 @@ export default {
       comparisonLimit: 20,
       minPrevalence: 0.05,
       sortBy: 'p_value',
-      reportingMode: 'all_cases',
+      reportingMode: 'reported_only',
       comparisonData: null,
       comparisonLoading: false,
       comparisonError: null,
@@ -452,17 +446,17 @@ export default {
         { label: 'Effect size (largest first)', value: 'effect_size' },
         { label: 'Prevalence difference', value: 'prevalence_diff' },
       ],
-      reportingModeOptions: [
-        {
-          label: 'All cases (assumes unreported = absent)',
-          value: 'all_cases',
-          description: 'Includes all patients; unreported phenotypes counted as absent',
-        },
-        {
-          label: 'Reported only (excludes unreported)',
-          value: 'reported_only',
-          description: 'Only patients with explicit present/absent reporting',
-        },
+      organSystemFilter: 'all',
+      organSystemOptions: [
+        { label: 'All Systems', value: 'all' },
+        { label: 'Renal/Urinary', value: 'renal' },
+        { label: 'Metabolic/Endocrine', value: 'metabolic' },
+        { label: 'Digestive/Hepatic', value: 'digestive' },
+        { label: 'Cardiovascular', value: 'cardiovascular' },
+        { label: 'Nervous System', value: 'nervous' },
+        { label: 'Musculoskeletal', value: 'musculoskeletal' },
+        { label: 'Growth/Development', value: 'growth' },
+        { label: 'Genitourinary', value: 'genital' },
       ],
     };
   },
@@ -633,11 +627,6 @@ export default {
     survivalEndpoint() {
       if (this.tab === 'Survival Curves') {
         this.fetchSurvivalData();
-      }
-    },
-    reportingMode() {
-      if (this.tab === 'Variant Comparison') {
-        this.fetchComparisonData();
       }
     },
   },
