@@ -54,6 +54,8 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.renderChart);
+    // Clean up tooltip appended to body
+    d3.selectAll('.variant-comparison-tooltip').remove();
   },
   methods: {
     getShortLabels() {
@@ -114,6 +116,8 @@ export default {
     },
     renderChart() {
       d3.select(this.$refs.chart).selectAll('*').remove();
+      // Clean up any existing tooltips from previous renders
+      d3.selectAll('.variant-comparison-tooltip').remove();
 
       if (
         !this.comparisonData ||
@@ -162,11 +166,12 @@ export default {
       const group1Name = this.comparisonData.group1_name;
       const group2Name = this.comparisonData.group2_name;
 
-      // Tooltip div
+      // Tooltip div - positioned to the right of cursor to avoid cutoff
       const tooltip = d3
-        .select(this.$refs.chart)
+        .select('body')
         .append('div')
-        .style('position', 'absolute')
+        .attr('class', 'variant-comparison-tooltip')
+        .style('position', 'fixed')
         .style('background-color', 'white')
         .style('border', '1px solid #ddd')
         .style('border-radius', '4px')
@@ -175,7 +180,8 @@ export default {
         .style('opacity', 0)
         .style('font-size', '12px')
         .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
-        .style('z-index', 1000);
+        .style('z-index', 10000)
+        .style('max-width', '250px');
 
       // Color scale for yes/no only
       const colorYes = '#FF9800'; // Orange for phenotype present
@@ -219,11 +225,11 @@ export default {
                   `Count: <strong>${d.group1_present}</strong> / ${d.group1_total}<br/>` +
                   `Percentage: <strong>${d.group1_percentage.toFixed(1)}%</strong>`
               )
-              .style('left', event.pageX + 10 + 'px')
-              .style('top', event.pageY - 28 + 'px');
+              .style('left', event.clientX + 15 + 'px')
+              .style('top', event.clientY - 10 + 'px');
           })
           .on('mouseout', () => {
-            tooltip.transition().duration(500).style('opacity', 0);
+            tooltip.transition().duration(200).style('opacity', 0);
           });
 
         // Group 1 - "No" segment (on top of yes segment)
@@ -248,11 +254,11 @@ export default {
                   `Count: <strong>${noCount}</strong> / ${d.group1_total}<br/>` +
                   `Percentage: <strong>${noPercentage.toFixed(1)}%</strong>`
               )
-              .style('left', event.pageX + 10 + 'px')
-              .style('top', event.pageY - 28 + 'px');
+              .style('left', event.clientX + 15 + 'px')
+              .style('top', event.clientY - 10 + 'px');
           })
           .on('mouseout', () => {
-            tooltip.transition().duration(500).style('opacity', 0);
+            tooltip.transition().duration(200).style('opacity', 0);
           });
 
         // Group 2 (e.g., Non-truncating) - "Yes" segment
@@ -275,11 +281,11 @@ export default {
                   `Count: <strong>${d.group2_present}</strong> / ${d.group2_total}<br/>` +
                   `Percentage: <strong>${d.group2_percentage.toFixed(1)}%</strong>`
               )
-              .style('left', event.pageX + 10 + 'px')
-              .style('top', event.pageY - 28 + 'px');
+              .style('left', event.clientX + 15 + 'px')
+              .style('top', event.clientY - 10 + 'px');
           })
           .on('mouseout', () => {
-            tooltip.transition().duration(500).style('opacity', 0);
+            tooltip.transition().duration(200).style('opacity', 0);
           });
 
         // Group 2 - "No" segment
@@ -304,11 +310,11 @@ export default {
                   `Count: <strong>${noCount}</strong> / ${d.group2_total}<br/>` +
                   `Percentage: <strong>${noPercentage.toFixed(1)}%</strong>`
               )
-              .style('left', event.pageX + 10 + 'px')
-              .style('top', event.pageY - 28 + 'px');
+              .style('left', event.clientX + 15 + 'px')
+              .style('top', event.clientY - 10 + 'px');
           })
           .on('mouseout', () => {
-            tooltip.transition().duration(500).style('opacity', 0);
+            tooltip.transition().duration(200).style('opacity', 0);
           });
 
         // Add group labels below each bar pair
@@ -364,15 +370,17 @@ export default {
       });
 
       // Add p-value and effect size annotations above each bar pair
-      // Only show when there are few enough phenotypes to avoid overlap
-      const showAnnotations = data.length <= 15;
+      // Adapt display based on number of phenotypes
+      const showAllAnnotations = data.length <= 15;
+      const showDiagonal = data.length > 10; // Use diagonal layout when many phenotypes
+
       data.forEach((d) => {
         const xPos = x(d.hpo_label);
         const centerX = xPos + barGroupWidth / 2;
 
         // Only show p-value annotations for significant results when many phenotypes
         // or all annotations when few phenotypes
-        if (!showAnnotations && !d.significant) return;
+        if (!showAllAnnotations && !d.significant) return;
 
         // P-value text - use FDR-corrected p-value for display (matches R script)
         // The significance labeling uses qfdr (FDR-adjusted) not raw pfisher
@@ -381,37 +389,54 @@ export default {
         if (pFdr === null || pFdr === undefined) {
           pValueText = 'N/A';
         } else if (pFdr < 0.001) {
-          pValueText = 'p<0.001***';
+          pValueText = showDiagonal ? '***' : 'p<0.001***';
         } else if (pFdr < 0.01) {
-          pValueText = `p=${pFdr.toFixed(3)}**`;
+          pValueText = showDiagonal ? '**' : `p=${pFdr.toFixed(3)}**`;
         } else if (pFdr < 0.05) {
-          pValueText = `p=${pFdr.toFixed(3)}*`;
+          pValueText = showDiagonal ? '*' : `p=${pFdr.toFixed(3)}*`;
         } else {
-          pValueText = `p=${pFdr.toFixed(3)}`;
+          pValueText = showDiagonal ? '' : `p=${pFdr.toFixed(3)}`;
         }
 
-        svg
-          .append('text')
-          .attr('x', centerX)
-          .attr('y', -20)
-          .attr('text-anchor', 'middle')
-          .attr('font-size', '9px')
-          .attr('fill', d.significant ? '#D32F2F' : '#666')
-          .attr('font-weight', d.significant ? 'bold' : 'normal')
-          .text(pValueText);
+        // Skip non-significant results in diagonal mode (no label to show)
+        if (showDiagonal && pValueText === '') return;
 
-        // Effect size (Cohen's h) - only show when few phenotypes
-        if (d.effect_size !== null && showAnnotations) {
-          const h = d.effect_size;
-          const label = h < 0.2 ? 'small' : h < 0.5 ? 'medium' : 'large';
+        if (showDiagonal) {
+          // Diagonal layout for many phenotypes - larger font, positioned above bars
           svg
             .append('text')
             .attr('x', centerX)
-            .attr('y', -8)
+            .attr('y', -10)
             .attr('text-anchor', 'middle')
-            .attr('font-size', '8px')
-            .attr('fill', '#666')
-            .text(`h=${h.toFixed(2)} (${label})`);
+            .attr('font-size', '14px')
+            .attr('fill', '#D32F2F')
+            .attr('font-weight', 'bold')
+            .text(pValueText);
+        } else {
+          // Horizontal layout for few phenotypes
+          svg
+            .append('text')
+            .attr('x', centerX)
+            .attr('y', -20)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', '9px')
+            .attr('fill', d.significant ? '#D32F2F' : '#666')
+            .attr('font-weight', d.significant ? 'bold' : 'normal')
+            .text(pValueText);
+
+          // Effect size (Cohen's h) - only show when few phenotypes
+          if (d.effect_size !== null) {
+            const h = d.effect_size;
+            const label = h < 0.2 ? 'small' : h < 0.5 ? 'medium' : 'large';
+            svg
+              .append('text')
+              .attr('x', centerX)
+              .attr('y', -8)
+              .attr('text-anchor', 'middle')
+              .attr('font-size', '8px')
+              .attr('fill', '#666')
+              .text(`h=${h.toFixed(2)} (${label})`);
+          }
         }
       });
 
