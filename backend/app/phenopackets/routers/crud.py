@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import Integer, and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_curator
@@ -209,8 +209,9 @@ async def list_phenopackets(
         for order_clause in order_clauses:
             query = query.order_by(order_clause)
     else:
-        # Default sort by created_at DESC
-        query = query.order_by(Phenopacket.created_at.desc())
+        # Default sort by subject_id with natural sorting (Var1, Var2, ..., Var10)
+        for order_clause in get_natural_sort_clauses(Phenopacket.subject_id, False):
+            query = query.order_by(order_clause)
 
     # Apply pagination
     offset = (page_number - 1) * page_size
@@ -293,19 +294,57 @@ def parse_sort_parameter(sort: str) -> list:
                 detail=f"Invalid sort field: {field_name}. Allowed: {allowed}",
             )
 
-        # Get the sort column (no special handling for subject_id)
-        # Note: Previously tried numeric casting for subject_id, but this fails
-        # with non-numeric IDs like "integration_patient_000" in tests.
-        # Alphabetic sorting works for both numeric and non-numeric IDs.
         sort_column = allowed_fields[field_name]
 
-        # Apply sort direction
-        if descending:
-            order_clauses.append(sort_column.desc())
+        # Apply natural sorting for subject_id to handle IDs like
+        # "Var1", "Var2", "Var10" - extracts numeric suffix and sorts numerically
+        if field_name == "subject_id":
+            order_clauses.extend(
+                get_natural_sort_clauses(Phenopacket.subject_id, descending)
+            )
         else:
-            order_clauses.append(sort_column.asc())
+            # Apply sort direction
+            if descending:
+                order_clauses.append(sort_column.desc())
+            else:
+                order_clauses.append(sort_column.asc())
 
     return order_clauses
+
+
+def get_natural_sort_clauses(column, descending: bool = False) -> list:
+    """Generate SQLAlchemy order clauses for natural sorting.
+
+    Natural sorting ensures "Var2" comes before "Var10" by:
+    1. Sorting by the text prefix (e.g., "Var")
+    2. Sorting by the numeric suffix as an integer (e.g., 2, 10)
+
+    Args:
+        column: SQLAlchemy column to sort
+        descending: Whether to sort in descending order
+
+    Returns:
+        List of SQLAlchemy order clauses
+    """
+    # Extract text prefix (everything before the trailing digits)
+    # regexp_replace removes trailing digits to get the prefix
+    text_prefix = func.regexp_replace(column, r"[0-9]+$", "", "g")
+
+    # Extract numeric suffix using substring with regex
+    # This extracts the trailing digits and casts to integer
+    # COALESCE handles cases with no trailing numbers (returns 0)
+    numeric_suffix = func.coalesce(
+        func.cast(
+            func.substring(column, r"([0-9]+)$"),
+            Integer,
+        ),
+        0,
+    )
+
+    if descending:
+        return [text_prefix.desc(), numeric_suffix.desc()]
+    else:
+        return [text_prefix.asc(), numeric_suffix.asc()]
 
 
 def build_pagination_links(
