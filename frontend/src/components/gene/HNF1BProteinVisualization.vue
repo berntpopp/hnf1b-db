@@ -27,42 +27,114 @@
     </v-card-title>
 
     <v-card-text>
-      <!-- Legend -->
+      <!-- Legend - Clickable filters -->
       <v-row class="mb-2">
         <v-col cols="12">
           <div class="legend-container">
-            <v-chip size="small" color="orange-lighten-2">
+            <!-- Domain filters -->
+            <v-chip
+              size="small"
+              color="orange-lighten-2"
+              :variant="activeFilter === 'domain:Dimerization' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('domain:Dimerization')"
+            >
               <v-icon left size="small"> mdi-square </v-icon>
               Dimerization
             </v-chip>
-            <v-chip size="small" color="blue-lighten-2">
+            <v-chip
+              size="small"
+              color="blue-lighten-2"
+              :variant="activeFilter === 'domain:POU-Specific' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('domain:POU-Specific')"
+            >
               <v-icon left size="small"> mdi-square </v-icon>
               POU-Specific
             </v-chip>
-            <v-chip size="small" color="cyan-lighten-2">
+            <v-chip
+              size="small"
+              color="cyan-lighten-2"
+              :variant="activeFilter === 'domain:POU-Homeodomain' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('domain:POU-Homeodomain')"
+            >
               <v-icon left size="small"> mdi-square </v-icon>
               POU-Homeodomain
             </v-chip>
-            <v-chip size="small" color="green-lighten-2">
+            <v-chip
+              size="small"
+              color="green-lighten-2"
+              :variant="activeFilter === 'domain:Transactivation' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('domain:Transactivation')"
+            >
               <v-icon left size="small"> mdi-square </v-icon>
               Transactivation
             </v-chip>
-            <v-chip size="small" color="red-lighten-3">
+            <!-- Pathogenicity filters -->
+            <v-chip
+              size="small"
+              color="red-lighten-3"
+              :variant="activeFilter === 'pathogenicity:PATHOGENIC' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('pathogenicity:PATHOGENIC')"
+            >
               <v-icon left size="small"> mdi-circle </v-icon>
               Pathogenic
             </v-chip>
-            <v-chip size="small" color="orange-lighten-3">
+            <v-chip
+              size="small"
+              color="orange-lighten-3"
+              :variant="activeFilter === 'pathogenicity:LIKELY_PATHOGENIC' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('pathogenicity:LIKELY_PATHOGENIC')"
+            >
               <v-icon left size="small"> mdi-circle </v-icon>
               Likely Pathogenic
             </v-chip>
-            <v-chip size="small" color="yellow-darken-1">
+            <v-chip
+              size="small"
+              color="yellow-darken-1"
+              :variant="activeFilter === 'pathogenicity:VUS' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('pathogenicity:VUS')"
+            >
               <v-icon left size="small"> mdi-circle </v-icon>
               VUS
             </v-chip>
-            <v-chip size="small" color="light-green-lighten-3">
+            <v-chip
+              size="small"
+              color="light-green-lighten-3"
+              :variant="activeFilter === 'pathogenicity:LIKELY_BENIGN' ? 'elevated' : 'tonal'"
+              class="legend-chip"
+              @click="toggleFilter('pathogenicity:LIKELY_BENIGN')"
+            >
               <v-icon left size="small"> mdi-circle </v-icon>
               Likely Benign
             </v-chip>
+            <!-- Reset filter button -->
+            <v-chip
+              v-if="activeFilter"
+              size="small"
+              color="grey"
+              variant="outlined"
+              class="legend-chip"
+              closable
+              @click:close="clearFilter"
+              @click="clearFilter"
+            >
+              <v-icon left size="small"> mdi-filter-off </v-icon>
+              Reset
+            </v-chip>
+          </div>
+          <!-- Active filter indicator -->
+          <div v-if="activeFilter" class="filter-indicator mt-2">
+            <v-icon size="small" color="primary" class="mr-1"> mdi-filter </v-icon>
+            <span class="text-body-2">
+              Showing {{ filteredSnvVariants.length }} of {{ snvVariants.length }} variants
+              <strong>({{ activeFilterLabel }})</strong>
+            </span>
           </div>
         </v-col>
       </v-row>
@@ -122,12 +194,13 @@
                 :width="Math.max(scaleAAPosition(domain.end) - scaleAAPosition(domain.start), 1)"
                 :height="domainHeight"
                 :fill="domain.color"
-                :opacity="0.7"
-                stroke="#424242"
-                stroke-width="1.5"
+                :opacity="isDomainActive(domain) ? 1 : 0.7"
+                :stroke="isDomainActive(domain) ? '#1976D2' : '#424242'"
+                :stroke-width="isDomainActive(domain) ? 3 : 1.5"
                 class="domain-rect"
                 @mouseenter="showDomainTooltip($event, domain)"
                 @mousemove="updateTooltipPosition($event)"
+                @click="handleDomainClick(domain)"
               />
               <text
                 :x="
@@ -244,6 +317,10 @@
             <div v-if="tooltipContent.data.function" class="text-body-2 mt-1">
               <strong>Function:</strong> {{ tooltipContent.data.function }}
             </div>
+            <div class="text-caption mt-2 text-grey">
+              <v-icon size="small" left> mdi-filter </v-icon>
+              Click to filter variants in this domain
+            </div>
           </div>
           <div v-else-if="tooltipContent.type === 'variant'">
             <div class="text-h6 mb-2">
@@ -304,6 +381,8 @@ export default {
       tooltipY: 0,
       tooltipContent: null,
       zoomLevel: 1,
+      // Filter state
+      activeFilter: null, // Format: 'domain:DomainName' or 'pathogenicity:CLASS'
       // D3 zoom properties
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
@@ -386,10 +465,102 @@ export default {
     cnvVariants() {
       return this.variantsWithPositions.filter((v) => v.isCNV);
     },
+    filteredSnvVariants() {
+      // Apply active filter to SNV variants
+      if (!this.activeFilter) {
+        return this.snvVariants;
+      }
+
+      const [filterType, filterValue] = this.activeFilter.split(':');
+
+      if (filterType === 'pathogenicity') {
+        return this.snvVariants.filter((v) => {
+          const classification = v.classificationVerdict?.toUpperCase() || '';
+          if (filterValue === 'PATHOGENIC') {
+            return classification.includes('PATHOGENIC') && !classification.includes('LIKELY');
+          }
+          if (filterValue === 'LIKELY_PATHOGENIC') {
+            return (
+              classification.includes('LIKELY_PATHOGENIC') ||
+              classification.includes('LIKELY PATHOGENIC')
+            );
+          }
+          if (filterValue === 'VUS') {
+            return classification.includes('UNCERTAIN') || classification.includes('VUS');
+          }
+          if (filterValue === 'LIKELY_BENIGN') {
+            return classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN');
+          }
+          if (filterValue === 'BENIGN') {
+            return (
+              classification.includes('BENIGN') &&
+              !classification.includes('LIKELY')
+            );
+          }
+          return true;
+        });
+      }
+
+      if (filterType === 'domain') {
+        return this.snvVariants.filter((v) => {
+          const pos = v.aaPosition;
+          // Find matching domain
+          const domain = this.domains.find((d) => {
+            const shortNameMatch =
+              d.shortName === filterValue ||
+              d.name.toLowerCase().includes(filterValue.toLowerCase());
+            // Map filter names to actual domain boundaries
+            const domainMap = {
+              Dimerization: { start: 1, end: 31 },
+              'POU-Specific': { start: 8, end: 173 },
+              'POU-Homeodomain': { start: 232, end: 305 },
+              Transactivation: { start: 314, end: 557 },
+            };
+            const mappedDomain = domainMap[filterValue];
+            if (mappedDomain) {
+              return pos >= mappedDomain.start && pos <= mappedDomain.end;
+            }
+            return shortNameMatch && pos >= d.start && pos <= d.end;
+          });
+          // For domain filter, check if position is within domain boundaries
+          const domainMap = {
+            Dimerization: { start: 1, end: 31 },
+            'POU-Specific': { start: 8, end: 173 },
+            'POU-Homeodomain': { start: 232, end: 305 },
+            Transactivation: { start: 314, end: 557 },
+          };
+          const mappedDomain = domainMap[filterValue];
+          if (mappedDomain) {
+            return pos >= mappedDomain.start && pos <= mappedDomain.end;
+          }
+          return domain !== undefined;
+        });
+      }
+
+      return this.snvVariants;
+    },
+    activeFilterLabel() {
+      if (!this.activeFilter) return '';
+      const [filterType, filterValue] = this.activeFilter.split(':');
+      if (filterType === 'pathogenicity') {
+        const labels = {
+          PATHOGENIC: 'Pathogenic',
+          LIKELY_PATHOGENIC: 'Likely Pathogenic',
+          VUS: 'VUS',
+          LIKELY_BENIGN: 'Likely Benign',
+          BENIGN: 'Benign',
+        };
+        return labels[filterValue] || filterValue;
+      }
+      if (filterType === 'domain') {
+        return `${filterValue} domain`;
+      }
+      return filterValue;
+    },
     groupedVariants() {
-      // Group variants by amino acid position
+      // Group filtered variants by amino acid position
       const groups = {};
-      this.snvVariants.forEach((variant) => {
+      this.filteredSnvVariants.forEach((variant) => {
         const pos = variant.aaPosition;
         if (!groups[pos]) {
           groups[pos] = [];
@@ -433,6 +604,42 @@ export default {
     window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
+    toggleFilter(filter) {
+      // Toggle filter: if same filter clicked, clear it; otherwise set it
+      if (this.activeFilter === filter) {
+        this.activeFilter = null;
+      } else {
+        this.activeFilter = filter;
+      }
+    },
+    clearFilter() {
+      this.activeFilter = null;
+    },
+    handleDomainClick(domain) {
+      // Map domain name to filter value
+      const domainFilterMap = {
+        'Dimerization Domain': 'Dimerization',
+        'POU-Specific Domain': 'POU-Specific',
+        'POU Homeodomain': 'POU-Homeodomain',
+        'Transactivation Domain': 'Transactivation',
+      };
+      const filterValue = domainFilterMap[domain.name] || domain.shortName;
+      this.toggleFilter(`domain:${filterValue}`);
+    },
+    isDomainActive(domain) {
+      if (!this.activeFilter) return false;
+      const [filterType, filterValue] = this.activeFilter.split(':');
+      if (filterType !== 'domain') return false;
+      // Check if this domain matches the filter
+      const domainFilterMap = {
+        'Dimerization Domain': 'Dimerization',
+        'POU-Specific Domain': 'POU-Specific',
+        'POU Homeodomain': 'POU-Homeodomain',
+        'Transactivation Domain': 'Transactivation',
+      };
+      const domainFilterValue = domainFilterMap[domain.name] || domain.shortName;
+      return filterValue === domainFilterValue;
+    },
     async fetchProteinDomains() {
       try {
         this.loading = true;
@@ -706,6 +913,22 @@ export default {
   align-items: center;
 }
 
+.legend-chip {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.legend-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.filter-indicator {
+  display: flex;
+  align-items: center;
+  color: #1976d2;
+}
+
 .svg-container {
   width: 100%;
   overflow-x: hidden; /* Prevent horizontal scrolling - SVG fits container */
@@ -724,7 +947,7 @@ export default {
 }
 
 .domain-rect {
-  cursor: help;
+  cursor: pointer;
   transition: opacity 0.2s;
 }
 
