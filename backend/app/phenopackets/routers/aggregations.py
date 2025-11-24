@@ -294,13 +294,32 @@ async def aggregate_variant_types(
         db: Database session dependency
     """
     # Variant type detection logic:
-    # - CNV: structuralType is 'deletion' or 'duplication' (large structural variants)
-    # - SNV/small indels: structuralType is NULL, detect from c. notation
+    # - Copy Number Loss/Gain: Large structural variants >= 0.1 Mb
+    # - Deletion/Duplication: Smaller variants (structural <0.1 Mb or from c. notation)
+    # - Insertion/Indel/SNV: From c. notation patterns
+    # Size threshold: 0.1 Mb (100kb) distinguishes CNVs from smaller variants
     variant_type_case = """
         CASE
-            -- CNV: Large structural variants have structuralType set
-            WHEN vd->'structuralType'->>'label' IN ('deletion', 'duplication')
-            THEN 'CNV'
+            -- Large structural variants: parse size from label (e.g., "1.37Mb del")
+            WHEN vd->'structuralType'->>'label' IN ('deletion', 'duplication') THEN
+                CASE
+                    WHEN COALESCE(
+                        NULLIF(
+                            regexp_replace(vd->>'label', '^([0-9.]+)Mb.*', '\\1'),
+                            vd->>'label'
+                        )::numeric,
+                        0
+                    ) >= 0.1 THEN
+                        CASE
+                            WHEN vd->'structuralType'->>'label' = 'deletion'
+                                THEN 'Copy Number Loss'
+                            ELSE 'Copy Number Gain'
+                        END
+                    -- Smaller structural variants (<0.1 Mb)
+                    WHEN vd->'structuralType'->>'label' = 'deletion'
+                        THEN 'Deletion'
+                    ELSE 'Duplication'
+                END
             -- Small variants: detect type from c. notation
             WHEN vd->'structuralType'->>'label' IS NULL THEN
                 CASE
@@ -334,9 +353,9 @@ async def aggregate_variant_types(
                         WHERE elem->>'syntax' = 'hgvs.c'
                         AND elem->>'value' ~ '>[ACGT]'
                     ) THEN 'SNV'
-                    ELSE 'Other'
+                    ELSE 'NA'
                 END
-            ELSE INITCAP(vd->'structuralType'->>'label')
+            ELSE 'NA'
         END
     """
 
