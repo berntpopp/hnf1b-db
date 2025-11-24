@@ -172,7 +172,25 @@
           class="protein-visualization"
           @mouseleave="hideTooltip"
         >
-          <!-- Zoom Group: All visualization content that should zoom/pan -->
+          <!-- Visible range coordinate labels -->
+          <text
+            :x="margin.left"
+            :y="svgHeight - 10"
+            text-anchor="start"
+            class="coordinate-label"
+          >
+            {{ visibleStart }} aa
+          </text>
+          <text
+            :x="svgWidth - margin.right"
+            :y="svgHeight - 10"
+            text-anchor="end"
+            class="coordinate-label"
+          >
+            {{ visibleEnd }} aa
+          </text>
+
+          <!-- Zoom Group: All visualization content -->
           <g id="zoom-group">
             <!-- Protein backbone line -->
             <line
@@ -273,6 +291,9 @@
       <v-row class="mt-3">
         <v-col cols="12" class="text-center">
           <v-btn-group density="compact">
+            <v-btn size="small" :disabled="visibleStart <= 1" @click="panLeft">
+              <v-icon>mdi-chevron-left</v-icon>
+            </v-btn>
             <v-btn size="small" @click="zoomIn">
               <v-icon>mdi-magnify-plus</v-icon>
             </v-btn>
@@ -283,7 +304,15 @@
               <v-icon>mdi-magnify</v-icon>
               Reset
             </v-btn>
+            <v-btn size="small" :disabled="visibleEnd >= proteinLength" @click="panRight">
+              <v-icon>mdi-chevron-right</v-icon>
+            </v-btn>
           </v-btn-group>
+          <div v-if="zoomLevel > 1" class="zoom-indicator mt-1">
+            <span class="text-caption text-grey">
+              Viewing aa {{ visibleStart }}-{{ visibleEnd }} ({{ Math.round(zoomLevel * 10) / 10 }}x zoom)
+            </span>
+          </div>
         </v-col>
       </v-row>
     </v-card-text>
@@ -381,9 +410,12 @@ export default {
       tooltipY: 0,
       tooltipContent: null,
       zoomLevel: 1,
+      // Visible range for semantic zoom (amino acid positions)
+      visibleStart: 1,
+      visibleEnd: 557,
       // Filter state
       activeFilter: null, // Format: 'domain:DomainName' or 'pathogenicity:CLASS'
-      // D3 zoom properties
+      // D3 zoom properties (kept for panning support)
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
       // Loading state for API data
@@ -723,8 +755,10 @@ export default {
       }
     },
     scaleAAPosition(aaPosition) {
+      // Scale position based on visible range (for semantic zoom)
       const svgLength = this.svgWidth - this.margin.left - this.margin.right;
-      const relativePosition = aaPosition / this.proteinLength;
+      const visibleRange = this.visibleEnd - this.visibleStart;
+      const relativePosition = (aaPosition - this.visibleStart) / visibleRange;
       return this.margin.left + relativePosition * svgLength;
     },
     extractAAPosition(variant) {
@@ -835,77 +869,121 @@ export default {
       this.$emit('variant-clicked', variant);
     },
     zoomIn() {
-      if (this.d3Zoom && this.$refs.proteinSvg) {
-        const svg = d3.select(this.$refs.proteinSvg);
-        const centerX = this.svgWidth / 2;
-        const centerY = this.svgHeight / 2;
+      // Semantic zoom: reduce visible range to spread out variants
+      const currentRange = this.visibleEnd - this.visibleStart;
+      const center = (this.visibleStart + this.visibleEnd) / 2;
+      const newRange = Math.max(currentRange / 1.5, 50); // Min 50 AA visible
 
-        // Get current transform
-        const currentTransform = d3.zoomTransform(this.$refs.proteinSvg);
-
-        // Calculate new scale
-        const newScale = Math.min(currentTransform.k * 1.3, 10);
-
-        // Calculate new transform centered on the viewport center
-        const transform = d3.zoomIdentity
-          .translate(centerX, centerY)
-          .scale(newScale)
-          .translate(-centerX, -centerY);
-
-        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
-      }
+      this.visibleStart = Math.max(1, Math.round(center - newRange / 2));
+      this.visibleEnd = Math.min(this.proteinLength, Math.round(center + newRange / 2));
+      this.zoomLevel = this.proteinLength / (this.visibleEnd - this.visibleStart);
     },
     zoomOut() {
-      if (this.d3Zoom && this.$refs.proteinSvg) {
-        const svg = d3.select(this.$refs.proteinSvg);
-        const centerX = this.svgWidth / 2;
-        const centerY = this.svgHeight / 2;
+      // Semantic zoom: increase visible range
+      const currentRange = this.visibleEnd - this.visibleStart;
+      const center = (this.visibleStart + this.visibleEnd) / 2;
+      const newRange = Math.min(currentRange * 1.5, this.proteinLength);
 
-        // Get current transform
-        const currentTransform = d3.zoomTransform(this.$refs.proteinSvg);
+      this.visibleStart = Math.max(1, Math.round(center - newRange / 2));
+      this.visibleEnd = Math.min(this.proteinLength, Math.round(center + newRange / 2));
+      this.zoomLevel = this.proteinLength / (this.visibleEnd - this.visibleStart);
 
-        // Calculate new scale
-        const newScale = Math.max(currentTransform.k / 1.3, 1);
-
-        // Calculate new transform centered on the viewport center
-        const transform = d3.zoomIdentity
-          .translate(centerX, centerY)
-          .scale(newScale)
-          .translate(-centerX, -centerY);
-
-        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
+      // If we're near full range, snap to full
+      if (this.visibleEnd - this.visibleStart > this.proteinLength * 0.9) {
+        this.visibleStart = 1;
+        this.visibleEnd = this.proteinLength;
+        this.zoomLevel = 1;
       }
     },
     resetZoom() {
-      if (this.d3Zoom && this.$refs.proteinSvg) {
-        const svg = d3.select(this.$refs.proteinSvg);
-        this.d3Zoom.transform(svg.transition().duration(500), d3.zoomIdentity);
+      // Reset to full protein view
+      this.visibleStart = 1;
+      this.visibleEnd = this.proteinLength;
+      this.zoomLevel = 1;
+    },
+    panLeft() {
+      // Pan left (toward N-terminus)
+      const range = this.visibleEnd - this.visibleStart;
+      const panAmount = Math.round(range * 0.2);
+      if (this.visibleStart > 1) {
+        this.visibleStart = Math.max(1, this.visibleStart - panAmount);
+        this.visibleEnd = this.visibleStart + range;
+      }
+    },
+    panRight() {
+      // Pan right (toward C-terminus)
+      const range = this.visibleEnd - this.visibleStart;
+      const panAmount = Math.round(range * 0.2);
+      if (this.visibleEnd < this.proteinLength) {
+        this.visibleEnd = Math.min(this.proteinLength, this.visibleEnd + panAmount);
+        this.visibleStart = this.visibleEnd - range;
       }
     },
     initializeD3Zoom() {
       if (!this.$refs.proteinSvg) return;
 
       const svg = d3.select(this.$refs.proteinSvg);
-      const g = svg.select('#zoom-group');
+      let dragStartX = null;
+      let dragStartVisibleStart = null;
+      let dragStartVisibleEnd = null;
 
-      // Create zoom behavior with constraints
-      this.d3Zoom = d3
-        .zoom()
-        .scaleExtent([1, 10]) // Min 1x, Max 10x zoom
-        .on('zoom', (event) => {
-          this.d3Transform = event.transform;
-          g.attr('transform', event.transform);
-          this.zoomLevel = event.transform.k; // Update zoomLevel for display
+      // Create drag behavior for panning
+      const drag = d3
+        .drag()
+        .on('start', (event) => {
+          dragStartX = event.x;
+          dragStartVisibleStart = this.visibleStart;
+          dragStartVisibleEnd = this.visibleEnd;
+          svg.style('cursor', 'grabbing');
+        })
+        .on('drag', (event) => {
+          if (dragStartX === null) return;
+
+          // Calculate how much to pan based on drag distance
+          const svgLength = this.svgWidth - this.margin.left - this.margin.right;
+          const visibleRange = dragStartVisibleEnd - dragStartVisibleStart;
+          const pixelsPerAA = svgLength / visibleRange;
+          const dragDelta = dragStartX - event.x; // Invert: drag left = move right in sequence
+          const aaDelta = Math.round(dragDelta / pixelsPerAA);
+
+          // Apply pan with bounds checking
+          let newStart = dragStartVisibleStart + aaDelta;
+          let newEnd = dragStartVisibleEnd + aaDelta;
+
+          // Clamp to protein bounds
+          if (newStart < 1) {
+            newStart = 1;
+            newEnd = newStart + visibleRange;
+          }
+          if (newEnd > this.proteinLength) {
+            newEnd = this.proteinLength;
+            newStart = newEnd - visibleRange;
+          }
+
+          this.visibleStart = Math.max(1, newStart);
+          this.visibleEnd = Math.min(this.proteinLength, newEnd);
+        })
+        .on('end', () => {
+          dragStartX = null;
+          dragStartVisibleStart = null;
+          dragStartVisibleEnd = null;
+          svg.style('cursor', 'grab');
         });
 
-      // Apply zoom behavior to SVG
-      svg.call(this.d3Zoom);
+      // Apply drag behavior
+      svg.call(drag);
+      svg.style('cursor', 'grab');
 
-      // Constrain panning to prevent scrolling off-canvas
-      this.d3Zoom.translateExtent([
-        [0, 0],
-        [this.svgWidth, this.svgHeight],
-      ]);
+      // Add wheel zoom handler separately
+      svg.on('wheel.zoom', (event) => {
+        event.preventDefault();
+        const direction = event.deltaY < 0 ? 'in' : 'out';
+        if (direction === 'in') {
+          this.zoomIn();
+        } else {
+          this.zoomOut();
+        }
+      });
     },
     handleKeyboardShortcuts(event) {
       // Only trigger if focused on body or SVG (not in input fields)
@@ -921,6 +999,12 @@ export default {
       } else if (event.key === '0') {
         event.preventDefault();
         this.resetZoom();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.panLeft();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.panRight();
       }
     },
   },
@@ -965,11 +1049,26 @@ export default {
   border-radius: 4px;
   background-color: #fafafa;
   display: block;
+  cursor: grab;
+}
+
+.protein-visualization:active {
+  cursor: grabbing;
 }
 
 .scale-label {
   font-size: 10px;
   fill: #757575;
+}
+
+.coordinate-label {
+  font-size: 11px;
+  fill: #757575;
+  font-weight: 500;
+}
+
+.zoom-indicator {
+  text-align: center;
 }
 
 .domain-rect {
