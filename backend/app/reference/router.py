@@ -111,31 +111,7 @@ async def list_genes(
     result = await db.execute(stmt)
     genes = result.scalars().all()
 
-    # Convert genes to schema format
-    gene_schemas = []
-    for gene in genes:
-        gene_dict = {
-            "id": gene.id,
-            "symbol": gene.symbol,
-            "name": gene.name,
-            "chromosome": gene.chromosome,
-            "start": gene.start,
-            "end": gene.end,
-            "strand": gene.strand,
-            "ensembl_id": gene.ensembl_id,
-            "ncbi_gene_id": gene.ncbi_gene_id,
-            "hgnc_id": gene.hgnc_id,
-            "omim_id": gene.omim_id,
-            "source": gene.source,
-            "source_version": gene.source_version,
-            "source_url": gene.source_url,
-            "extra_data": gene.extra_data,
-            "created_at": gene.created_at,
-            "updated_at": gene.updated_at,
-        }
-        gene_schemas.append(gene_dict)
-
-    return gene_schemas
+    return list(genes)
 
 
 @router.get("/genes/{symbol}", response_model=GeneDetailSchema)

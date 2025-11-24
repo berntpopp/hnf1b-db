@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from scipy import stats
+from scipy import stats  # type: ignore[import-untyped]
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -100,7 +100,7 @@ def calculate_fisher_exact_test(
 
     total = group1_present + group1_absent + group2_present + group2_absent
     if total == 0:
-        return (1.0, None)  # Return None for undefined odds ratio (JSON-safe)
+        return (1.0, float("nan"))  # Return NaN for undefined odds ratio
 
     # Fisher's exact test - matches R: fisher.test(rbind(c(yes.T, no.T), c(yes.nT, no.nT)))
     odds_ratio, p_value = stats.fisher_exact(contingency_table)

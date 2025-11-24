@@ -46,7 +46,7 @@ async def aggregate_by_feature(
     total_phenopackets_result = await db.execute(
         text("SELECT COUNT(*) as total FROM phenopackets")
     )
-    total_phenopackets = total_phenopackets_result.scalar()
+    total_phenopackets = total_phenopackets_result.scalar() or 0
 
     # Query to get both present and absent counts for each HPO term
     query = """
@@ -1487,7 +1487,7 @@ async def get_publications_timeline(
     return [
         {
             "year": int(row.year),
-            "count": int(row.count),
+            "count": int(row._mapping["count"]),
             "cumulative": int(row.cumulative),
             "publications": row.publications or [],
         }
@@ -1593,7 +1593,7 @@ async def get_survival_data(
     MODY_HPO = "HP:0004904"  # Maturity-onset diabetes of the young
 
     # Endpoint configuration
-    endpoint_config = {
+    endpoint_config: dict[str, dict[str, Optional[list[str]] | str]] = {
         "ckd_stage_3_plus": {
             "hpo_terms": [
                 "HP:0012625",  # Stage 3 chronic kidney disease
@@ -1632,6 +1632,10 @@ async def get_survival_data(
     config = endpoint_config[endpoint]
     endpoint_hpo_terms = config["hpo_terms"]
     endpoint_label = config["label"]
+
+    # Type assertions for mypy
+    assert isinstance(endpoint_label, str)
+    assert endpoint_hpo_terms is None or isinstance(endpoint_hpo_terms, list)
 
     if comparison == "variant_type":
         # Check for special current_age endpoint
@@ -1718,7 +1722,11 @@ async def get_survival_data(
             result = await db.execute(text(query))
             rows = result.fetchall()
 
-            groups = {"CNV": [], "Truncating": [], "Non-truncating": []}
+            groups: dict[str, list[tuple[float, bool]]] = {
+                "CNV": [],
+                "Truncating": [],
+                "Non-truncating": [],
+            }
 
             for row in rows:
                 current_age = parse_iso8601_age(row.current_age)

@@ -94,6 +94,8 @@ def parse_onset_ontology(ontology_class: dict) -> Optional[float]:
     }
 
     hpo_id = ontology_class.get("id")
+    if hpo_id is None:
+        return None
     return onset_mapping.get(hpo_id)
 
 
@@ -175,7 +177,8 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
         if events > 0:
             survival_prob *= (n_at_risk - events) / n_at_risk
 
-            # Update Greenwood's variance: Var(S(t)) = S(t)^2 * sum(d_i / (n_i * (n_i - d_i)))
+            # Update Greenwood's variance:
+            # Var(S(t)) = S(t)^2 * sum(d_i / (n_i * (n_i - d_i)))
             if n_at_risk > events:
                 greenwood_variance += events / (n_at_risk * (n_at_risk - events))
 
@@ -196,7 +199,8 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
                 ci_lower_ll = log_log_s - z * se_log_log
                 ci_upper_ll = log_log_s + z * se_log_log
 
-                ci_lower = math.exp(-math.exp(ci_upper_ll))  # Note: swap for correct bounds
+                # Note: swap for correct bounds
+                ci_lower = math.exp(-math.exp(ci_upper_ll))
                 ci_upper = math.exp(-math.exp(ci_lower_ll))
 
                 # Clip to valid probability range
@@ -249,13 +253,15 @@ def calculate_log_rank_test(
     observed_minus_expected = 0.0
     variance = 0.0
 
-    # Number at risk in each group at start
-    n1 = len(group1_times)
-    n2 = len(group2_times)
-
     # Create lookup for events at each time
-    g1_events = {t: sum(1 for time, event in group1_times if time == t and event) for t in all_times}
-    g2_events = {t: sum(1 for time, event in group2_times if time == t and event) for t in all_times}
+    g1_events = {
+        t: sum(1 for time, event in group1_times if time == t and event)
+        for t in all_times
+    }
+    g2_events = {
+        t: sum(1 for time, event in group2_times if time == t and event)
+        for t in all_times
+    }
 
     for time in sorted(all_times):
         # Number still at risk at this time
