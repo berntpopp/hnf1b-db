@@ -7,6 +7,7 @@ with Chi-square/Fisher's exact tests for significance.
 
 # ruff: noqa: E501, F821
 
+import math
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -34,13 +35,19 @@ class PhenotypeComparison(BaseModel):
     group2_total: int = Field(..., description="Total individuals in group 2")
     group2_percentage: float = Field(..., description="Percentage present in group 2")
     p_value: Optional[float] = Field(
-        None, description="P-value from Chi-square or Fisher's exact test"
+        None, description="Raw p-value from Fisher's exact test"
+    )
+    p_value_fdr: Optional[float] = Field(
+        None, description="FDR-adjusted p-value (Benjamini-Hochberg correction)"
+    )
+    odds_ratio: Optional[float] = Field(
+        None, description="Odds ratio from Fisher's exact test"
     )
     test_used: Optional[str] = Field(
-        None, description="Statistical test used (chi_square or fisher_exact)"
+        None, description="Statistical test used (fisher_exact)"
     )
     significant: bool = Field(
-        ..., description="Whether difference is statistically significant (p < 0.05)"
+        ..., description="Whether difference is statistically significant (FDR < 0.05)"
     )
     effect_size: Optional[float] = Field(
         None, description="Effect size (Cohen's h for proportions)"
@@ -62,57 +69,81 @@ class ComparisonResult(BaseModel):
     )
 
 
-def calculate_statistical_test(
+def calculate_fisher_exact_test(
     group1_present: int,
     group1_absent: int,
     group2_present: int,
     group2_absent: int,
-) -> tuple[float, str]:
-    """Calculate appropriate statistical test for 2x2 contingency table.
+) -> tuple[float, float]:
+    """Calculate Fisher's exact test for 2x2 contingency table.
 
-    Uses Chi-square test if expected frequencies >= 5 in all cells,
-    otherwise uses Fisher's exact test.
+    Always uses Fisher's exact test to match R reference implementation.
+    This is more appropriate for small sample sizes and provides exact p-values.
+
+    Contingency table layout (matches R script):
+        [[yes.T, no.T],
+         [yes.nT, no.nT]]
 
     Args:
-        group1_present: Count of present phenotype in group 1
-        group1_absent: Count of absent phenotype in group 1
-        group2_present: Count of present phenotype in group 2
-        group2_absent: Count of absent phenotype in group 2
+        group1_present: Count of present phenotype in group 1 (yes.T)
+        group1_absent: Count of absent phenotype in group 1 (no.T)
+        group2_present: Count of present phenotype in group 2 (yes.nT)
+        group2_absent: Count of absent phenotype in group 2 (no.nT)
 
     Returns:
-        Tuple of (p_value, test_name)
+        Tuple of (p_value, odds_ratio)
     """
     contingency_table = [
         [group1_present, group1_absent],
         [group2_present, group2_absent],
     ]
 
-    # Check expected frequencies for Chi-square test validity
-    # Rule: all expected frequencies should be >= 5
     total = group1_present + group1_absent + group2_present + group2_absent
     if total == 0:
-        return (1.0, "none")
+        return (1.0, None)  # Return None for undefined odds ratio (JSON-safe)
 
-    row1_total = group1_present + group1_absent
-    row2_total = group2_present + group2_absent
-    col1_total = group1_present + group2_present
-    col2_total = group1_absent + group2_absent
+    # Fisher's exact test - matches R: fisher.test(rbind(c(yes.T, no.T), c(yes.nT, no.nT)))
+    odds_ratio, p_value = stats.fisher_exact(contingency_table)
 
-    expected_freqs = [
-        (row1_total * col1_total) / total,
-        (row1_total * col2_total) / total,
-        (row2_total * col1_total) / total,
-        (row2_total * col2_total) / total,
-    ]
-
-    # Use Chi-square if all expected frequencies >= 5
-    if all(freq >= 5 for freq in expected_freqs):
-        chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
-        return (float(p_value), "chi_square")
+    # Handle non-finite odds ratios (inf, -inf, nan) - convert to None for JSON safety
+    if not math.isfinite(odds_ratio):
+        odds_ratio = None
     else:
-        # Use Fisher's exact test for small sample sizes
-        oddsratio, p_value = stats.fisher_exact(contingency_table)
-        return (float(p_value), "fisher_exact")
+        odds_ratio = float(odds_ratio)
+
+    return (float(p_value), odds_ratio)
+
+
+def calculate_fdr_correction(p_values: list[float]) -> list[float]:
+    """Apply Benjamini-Hochberg FDR correction for multiple testing.
+
+    Matches R: p.adjust(pfisher, method="fdr")
+
+    Args:
+        p_values: List of raw p-values
+
+    Returns:
+        List of FDR-adjusted p-values (q-values)
+    """
+    n = len(p_values)
+    if n == 0:
+        return []
+
+    # Sort p-values and keep track of original indices
+    indexed_pvals = sorted(enumerate(p_values), key=lambda x: x[1])
+
+    # Apply Benjamini-Hochberg procedure
+    fdr_values = [0.0] * n
+    cummin = 1.0  # Running minimum for monotonicity
+
+    for rank_from_end, (original_idx, pval) in enumerate(reversed(indexed_pvals)):
+        rank = n - rank_from_end  # 1-based rank from smallest
+        # BH formula: p * n / rank, but we process in reverse for cumulative minimum
+        adjusted = pval * n / rank
+        cummin = min(cummin, adjusted)
+        fdr_values[original_idx] = min(cummin, 1.0)  # Cap at 1.0
+
+    return fdr_values
 
 
 def calculate_cohens_h(p1: float, p2: float) -> float:
@@ -500,10 +531,14 @@ async def compare_variant_types(
     result = await db.execute(text(query), {"min_prevalence": min_prevalence})
     rows = result.fetchall()
 
-    # Calculate statistical tests and effect sizes for each phenotype
-    phenotypes: List[PhenotypeComparison] = []
+    # First pass: Calculate Fisher's exact test for all phenotypes
+    # We need all p-values before we can apply FDR correction
+    preliminary_data: list[dict] = []
+    raw_p_values: list[float] = []
+
     for row in rows:
-        p_value, test_used = calculate_statistical_test(
+        # Fisher's exact test (matches R script)
+        p_value, odds_ratio = calculate_fisher_exact_test(
             row.group1_present,
             row.group1_absent,
             row.group2_present,
@@ -515,6 +550,23 @@ async def compare_variant_types(
         p2 = row.group2_present / row.group2_total if row.group2_total > 0 else 0.0
         effect_size = calculate_cohens_h(p1, p2)
 
+        preliminary_data.append(
+            {
+                "row": row,
+                "p_value": p_value,
+                "odds_ratio": odds_ratio,
+                "effect_size": effect_size,
+            }
+        )
+        raw_p_values.append(p_value)
+
+    # Apply FDR correction (Benjamini-Hochberg) - matches R: p.adjust(method="fdr")
+    fdr_p_values = calculate_fdr_correction(raw_p_values)
+
+    # Second pass: Build final phenotype objects with FDR-corrected p-values
+    phenotypes: List[PhenotypeComparison] = []
+    for i, data in enumerate(preliminary_data):
+        row = data["row"]
         phenotypes.append(
             PhenotypeComparison(
                 hpo_id=row.hpo_id,
@@ -527,14 +579,17 @@ async def compare_variant_types(
                 group2_absent=row.group2_absent,
                 group2_total=row.group2_total,
                 group2_percentage=float(row.group2_percentage),
-                p_value=p_value,
-                test_used=test_used,
-                significant=(p_value < 0.05) if p_value is not None else False,
-                effect_size=effect_size,
+                p_value=data["p_value"],
+                p_value_fdr=fdr_p_values[i],
+                odds_ratio=data["odds_ratio"],
+                test_used="fisher_exact",
+                # Significance based on FDR-corrected p-value (matches R script)
+                significant=(fdr_p_values[i] < 0.05),
+                effect_size=data["effect_size"],
             )
         )
 
-    # Sort phenotypes by requested metric
+    # Sort phenotypes by requested metric (using raw p-value for sorting)
     if sort_by == "p_value":
         phenotypes.sort(key=lambda x: (x.p_value if x.p_value is not None else 1.0))
     elif sort_by == "effect_size":

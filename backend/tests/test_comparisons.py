@@ -6,93 +6,119 @@ from sqlalchemy import text
 
 from app.phenopackets.routers.comparisons import (
     calculate_cohens_h,
-    calculate_statistical_test,
+    calculate_fdr_correction,
+    calculate_fisher_exact_test,
 )
 
 
 class TestStatisticalFunctions:
     """Test statistical calculation functions."""
 
-    def test_calculate_statistical_test_chi_square(self):
-        """Test Chi-square test is used when expected frequencies >= 5."""
-        # Large sample sizes should use Chi-square
-        # Example: 100 present vs 50 absent in group1, 80 present vs 60 absent in group2
-        p_value, test_used = calculate_statistical_test(
+    def test_calculate_fisher_exact_test_small_samples(self):
+        """Test Fisher's exact test with small samples."""
+        # Small sample sizes
+        # Example: 3 present vs 2 absent in group1, 1 present vs 4 absent in group2
+        p_value, odds_ratio = calculate_fisher_exact_test(
+            group1_present=3, group1_absent=2, group2_present=1, group2_absent=4
+        )
+
+        assert isinstance(p_value, float)
+        assert isinstance(odds_ratio, float)
+        assert 0.0 <= p_value <= 1.0
+
+        # Manually verify with scipy
+        contingency_table = [[3, 2], [1, 4]]
+        expected_or, expected_p = stats.fisher_exact(contingency_table)
+        assert abs(p_value - expected_p) < 0.0001
+        assert abs(odds_ratio - expected_or) < 0.0001
+
+    def test_calculate_fisher_exact_test_large_samples(self):
+        """Test Fisher's exact test with large samples (always uses Fisher now)."""
+        # Large sample sizes - should still use Fisher's exact
+        p_value, odds_ratio = calculate_fisher_exact_test(
             group1_present=100,
             group1_absent=50,
             group2_present=80,
             group2_absent=60,
         )
 
-        assert test_used == "chi_square"
         assert isinstance(p_value, float)
+        assert isinstance(odds_ratio, float)
         assert 0.0 <= p_value <= 1.0
 
-        # Manually verify with scipy
+        # Manually verify with scipy Fisher's exact
         contingency_table = [[100, 50], [80, 60]]
-        expected_chi2, expected_p, _, _ = stats.chi2_contingency(contingency_table)
+        expected_or, expected_p = stats.fisher_exact(contingency_table)
         assert abs(p_value - expected_p) < 0.0001
+        assert abs(odds_ratio - expected_or) < 0.0001
 
-    def test_calculate_statistical_test_fisher_exact(self):
-        """Test Fisher's exact test is used for small samples."""
-        # Small sample sizes should use Fisher's exact
-        # Example: 3 present vs 2 absent in group1, 1 present vs 4 absent in group2
-        p_value, test_used = calculate_statistical_test(
-            group1_present=3, group1_absent=2, group2_present=1, group2_absent=4
-        )
-
-        assert test_used == "fisher_exact"
-        assert isinstance(p_value, float)
-        assert 0.0 <= p_value <= 1.0
-
-        # Manually verify with scipy
-        contingency_table = [[3, 2], [1, 4]]
-        _, expected_p = stats.fisher_exact(contingency_table)
-        assert abs(p_value - expected_p) < 0.0001
-
-    def test_calculate_statistical_test_edge_case_all_zeros(self):
+    def test_calculate_fisher_exact_test_edge_case_all_zeros(self):
         """Test handling of edge case with all zeros."""
-        p_value, test_used = calculate_statistical_test(
+        p_value, odds_ratio = calculate_fisher_exact_test(
             group1_present=0, group1_absent=0, group2_present=0, group2_absent=0
         )
 
-        assert test_used == "none"
         assert p_value == 1.0
+        assert odds_ratio is None  # Undefined odds ratio returns None for JSON safety
 
-    def test_calculate_statistical_test_boundary_expected_freq(self):
-        """Test boundary case where expected frequency is exactly 5."""
-        # Design a case where expected frequencies are at the threshold
-        # Total = 100, row1 = 60, row2 = 40, col1 = 50, col2 = 50
-        # Expected: (60*50)/100 = 30, (60*50)/100 = 30, (40*50)/100 = 20, (40*50)/100 = 20
-        # All >= 5, so should use Chi-square
-        p_value, test_used = calculate_statistical_test(
-            group1_present=30, group1_absent=30, group2_present=20, group2_absent=20
-        )
-
-        assert test_used == "chi_square"
-
-    def test_calculate_statistical_test_significant_difference(self):
+    def test_calculate_fisher_exact_test_significant_difference(self):
         """Test with data that should show significant difference."""
         # Very different proportions: 90% vs 10%
-        p_value, test_used = calculate_statistical_test(
+        p_value, odds_ratio = calculate_fisher_exact_test(
             group1_present=90,
             group1_absent=10,
             group2_present=10,
             group2_absent=90,
         )
 
-        assert test_used == "chi_square"
         assert p_value < 0.001  # Should be highly significant
+        assert odds_ratio > 1  # Group 1 has higher odds of "present"
 
-    def test_calculate_statistical_test_no_difference(self):
+    def test_calculate_fisher_exact_test_no_difference(self):
         """Test with identical proportions (should not be significant)."""
         # Identical proportions: 50% vs 50%
-        p_value, test_used = calculate_statistical_test(
+        p_value, odds_ratio = calculate_fisher_exact_test(
             group1_present=50, group1_absent=50, group2_present=50, group2_absent=50
         )
 
-        assert test_used == "chi_square"
         assert p_value > 0.05  # Should not be significant
+        assert abs(odds_ratio - 1.0) < 0.0001  # Odds ratio should be ~1
+
+    def test_calculate_fdr_correction_basic(self):
+        """Test FDR correction with known p-values."""
+        # Test with a simple set of p-values
+        p_values = [0.01, 0.04, 0.03, 0.005]
+        fdr_values = calculate_fdr_correction(p_values)
+
+        assert len(fdr_values) == len(p_values)
+        # All FDR values should be >= raw p-values
+        for raw, fdr in zip(p_values, fdr_values):
+            assert fdr >= raw
+        # All FDR values should be <= 1.0
+        for fdr in fdr_values:
+            assert fdr <= 1.0
+
+    def test_calculate_fdr_correction_empty(self):
+        """Test FDR correction with empty list."""
+        fdr_values = calculate_fdr_correction([])
+        assert fdr_values == []
+
+    def test_calculate_fdr_correction_single_value(self):
+        """Test FDR correction with single p-value."""
+        p_values = [0.03]
+        fdr_values = calculate_fdr_correction(p_values)
+        assert len(fdr_values) == 1
+        assert fdr_values[0] == 0.03  # Single value unchanged
+
+    def test_calculate_fdr_correction_monotonicity(self):
+        """Test that FDR-corrected values maintain order."""
+        # Sorted p-values should give sorted FDR values
+        p_values = [0.001, 0.01, 0.02, 0.05, 0.1]
+        fdr_values = calculate_fdr_correction(p_values)
+
+        # FDR values should be monotonically increasing for sorted p-values
+        for i in range(len(fdr_values) - 1):
+            assert fdr_values[i] <= fdr_values[i + 1]
 
     def test_calculate_cohens_h_identical_proportions(self):
         """Test Cohen's h with identical proportions."""
@@ -217,7 +243,12 @@ class TestComparisonEndpoint:
             assert isinstance(phenotype["group1_percentage"], float)
             assert isinstance(phenotype["p_value"], (float, type(None)))
             assert isinstance(phenotype["significant"], bool)
-            assert phenotype["test_used"] in ["chi_square", "fisher_exact", "none"]
+            assert phenotype["test_used"] == "fisher_exact"
+            # Check new fields are present
+            assert "p_value_fdr" in phenotype
+            assert "odds_ratio" in phenotype
+            assert isinstance(phenotype["p_value_fdr"], (float, type(None)))
+            assert isinstance(phenotype["odds_ratio"], (float, type(None)))
 
             # Validate percentages are in valid range
             assert 0.0 <= phenotype["group1_percentage"] <= 100.0
