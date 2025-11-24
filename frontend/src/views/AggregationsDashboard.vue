@@ -140,48 +140,24 @@
                         label="Comparison Type"
                       />
                     </v-col>
-                    <v-col cols="12" md="3">
+                    <v-col cols="12" md="4">
                       <v-select
-                        v-model="comparisonLimit"
-                        :items="comparisonLimitOptions"
+                        v-model="organSystemFilter"
+                        :items="organSystemOptions"
                         item-title="label"
                         item-value="value"
-                        label="Number of Phenotypes"
-                      />
-                    </v-col>
-                    <v-col cols="12" md="3">
-                      <v-select
-                        v-model="minPrevalence"
-                        :items="prevalenceOptions"
-                        item-title="label"
-                        item-value="value"
-                        label="Minimum Prevalence"
-                        hint="Minimum prevalence in at least one group"
+                        label="Organ System"
+                        hint="Filter phenotypes by affected organ system"
                         persistent-hint
                       />
                     </v-col>
-                    <v-col cols="12" md="2">
+                    <v-col cols="12" md="4">
                       <v-select
                         v-model="sortBy"
                         :items="sortByOptions"
                         item-title="label"
                         item-value="value"
                         label="Sort By"
-                      />
-                    </v-col>
-                  </v-row>
-
-                  <!-- Organ System Filter -->
-                  <v-row class="pa-3">
-                    <v-col cols="12" md="6">
-                      <v-select
-                        v-model="organSystemFilter"
-                        :items="organSystemOptions"
-                        item-title="label"
-                        item-value="value"
-                        label="Organ System Filter"
-                        hint="Filter phenotypes by affected organ system"
-                        persistent-hint
                       />
                     </v-col>
                   </v-row>
@@ -371,10 +347,7 @@ export default {
       ],
       // Variant Comparison data
       comparisonType: 'truncating_vs_non_truncating',
-      comparisonLimit: 20,
-      minPrevalence: 0.05,
       sortBy: 'p_value',
-      reportingMode: 'reported_only',
       comparisonData: null,
       comparisonLoading: false,
       comparisonError: null,
@@ -427,20 +400,6 @@ export default {
         { label: 'Truncating vs Non-truncating', value: 'truncating_vs_non_truncating' },
         { label: 'CNVs vs Non-CNV variants', value: 'cnv_vs_point_mutation' },
       ],
-      allComparisonLimitOptions: [
-        { label: 'Top 10', value: 10, threshold: 0 },
-        { label: 'Top 20', value: 20, threshold: 0 },
-        { label: 'Top 30', value: 30, threshold: 0 },
-        { label: 'Top 50', value: 50, threshold: 50 },
-        { label: 'All', value: 9999, threshold: 0 },
-      ],
-      prevalenceOptions: [
-        { label: '1% (0.01)', value: 0.01 },
-        { label: '5% (0.05)', value: 0.05 },
-        { label: '10% (0.10)', value: 0.1 },
-        { label: '20% (0.20)', value: 0.2 },
-        { label: '30% (0.30)', value: 0.3 },
-      ],
       sortByOptions: [
         { label: 'P-value (most significant first)', value: 'p_value' },
         { label: 'Effect size (largest first)', value: 'effect_size' },
@@ -449,14 +408,11 @@ export default {
       organSystemFilter: 'all',
       organSystemOptions: [
         { label: 'All Systems', value: 'all' },
-        { label: 'Renal/Urinary', value: 'renal' },
-        { label: 'Metabolic/Endocrine', value: 'metabolic' },
-        { label: 'Digestive/Hepatic', value: 'digestive' },
-        { label: 'Cardiovascular', value: 'cardiovascular' },
-        { label: 'Nervous System', value: 'nervous' },
-        { label: 'Musculoskeletal', value: 'musculoskeletal' },
-        { label: 'Growth/Development', value: 'growth' },
-        { label: 'Genitourinary', value: 'genital' },
+        { label: 'Renal', value: 'renal' },
+        { label: 'Metabolic', value: 'metabolic' },
+        { label: 'Neurological', value: 'neurological' },
+        { label: 'Pancreatic/Endocrine', value: 'pancreatic' },
+        { label: 'Other', value: 'other' },
       ],
     };
   },
@@ -487,17 +443,6 @@ export default {
         if (option.threshold === 0) return true;
         // Only show "Top N" if we have more than N features
         return totalFeatures > option.threshold;
-      });
-    },
-    comparisonLimitOptions() {
-      // Filter options based on available comparison data
-      // Only show "Top N" if we have more than N phenotypes
-      const totalPhenotypes = this.comparisonData?.phenotypes?.length || 0;
-      return this.allComparisonLimitOptions.filter((option) => {
-        // Always show options with threshold 0 (Top 10, 20, 30, All)
-        if (option.threshold === 0) return true;
-        // Only show "Top 50" if we have more than 50 phenotypes
-        return totalPhenotypes > option.threshold;
       });
     },
     stackedBarStats() {
@@ -599,16 +544,6 @@ export default {
     },
     // Watch comparison parameters and refetch data
     comparisonType() {
-      if (this.tab === 'Variant Comparison') {
-        this.fetchComparisonData();
-      }
-    },
-    comparisonLimit() {
-      if (this.tab === 'Variant Comparison') {
-        this.fetchComparisonData();
-      }
-    },
-    minPrevalence() {
       if (this.tab === 'Variant Comparison') {
         this.fetchComparisonData();
       }
@@ -757,19 +692,17 @@ export default {
 
       window.logService.debug('Fetching variant comparison data', {
         comparisonType: this.comparisonType,
-        limit: this.comparisonLimit,
-        minPrevalence: this.minPrevalence,
         sortBy: this.sortBy,
-        reportingMode: this.reportingMode,
       });
 
       try {
+        // Fetch all phenotypes (limit=100 is max allowed by API)
+        // Client-side organ system filtering handles the display
         const response = await API.compareVariantTypes({
           comparison: this.comparisonType,
-          limit: this.comparisonLimit,
-          min_prevalence: this.minPrevalence,
+          limit: 100,
+          min_prevalence: 0,
           sort_by: this.sortBy,
-          reporting_mode: this.reportingMode,
         });
 
         this.comparisonData = response.data;

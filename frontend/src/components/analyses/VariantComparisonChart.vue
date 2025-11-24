@@ -32,7 +32,7 @@ export default {
     },
     margin: {
       type: Object,
-      default: () => ({ top: 80, right: 150, bottom: 80, left: 80 }),
+      default: () => ({ top: 120, right: 30, bottom: 180, left: 80 }),
     },
   },
   watch: {
@@ -66,43 +66,50 @@ export default {
       return labelMap[this.comparisonType] || { group1: 'G1', group2: 'G2' };
     },
     getOrganSystemKeywords(system) {
-      // Map organ systems to HPO term keywords for filtering
+      // Map organ systems to keyword patterns for flexible filtering
+      // Uses general anatomical terms rather than exact phenotype names
       const keywordMap = {
-        renal: ['renal', 'kidney', 'nephro', 'urinary'],
-        metabolic: [
-          'diabetes',
-          'hyperglycemia',
-          'hyperuricemia',
-          'hypomagnesemia',
-          'hypokalemia',
-          'hypocalcemia',
-          'metabolic',
-          'gout',
-        ],
-        digestive: ['pancrea', 'hepatic', 'liver', 'transaminase', 'exocrine', 'digestive'],
-        cardiovascular: ['heart', 'cardiac', 'cardio', 'vascular'],
-        nervous: [
-          'neuro',
-          'brain',
-          'seizure',
-          'cognitive',
-          'developmental delay',
-          'intellectual disability',
-        ],
-        musculoskeletal: ['skeletal', 'bone', 'joint', 'muscul'],
-        growth: ['growth', 'stature', 'short stature', 'tall stature'],
-        genital: ['genital', 'gonad', 'reproductive'],
+        renal: ['renal', 'kidney', 'nephro', 'urinary', 'glomerular', 'chronic kidney disease'],
+        metabolic: ['magnesemia', 'kalemia', 'uricemia', 'gout'],
+        neurological: ['brain', 'neuro', 'behavioral', 'behaviour', 'seizure', 'cognitive'],
+        pancreatic: ['pancrea', 'diabetes', 'mody', 'parathyroid', 'exocrine'],
       };
       return keywordMap[system] || [];
+    },
+    matchesOrganSystem(label, system) {
+      // Check if a phenotype label matches keywords for an organ system
+      const keywords = this.getOrganSystemKeywords(system);
+      const lowerLabel = label.toLowerCase();
+      return keywords.some((keyword) => lowerLabel.includes(keyword));
     },
     filterPhenotypesByOrganSystem(phenotypes, system) {
       if (system === 'all') return phenotypes;
 
-      const keywords = this.getOrganSystemKeywords(system);
+      // Special handling for "other" - phenotypes that don't match any defined system
+      if (system === 'other') {
+        const systems = ['renal', 'metabolic', 'neurological', 'pancreatic'];
+        return phenotypes.filter((p) => {
+          // Include phenotype if it doesn't match ANY organ system
+          return !systems.some((sys) => this.matchesOrganSystem(p.hpo_label, sys));
+        });
+      }
+
+      return phenotypes.filter((p) => this.matchesOrganSystem(p.hpo_label, system));
+    },
+    filterUninformativePhenotypes(phenotypes) {
+      // Remove CKD stage phenotypes - these are only reported for specific cases
+      // and always have p=1 which is not informative for comparison
+      const ckdStagePatterns = [
+        'stage 1 chronic kidney disease',
+        'stage 2 chronic kidney disease',
+        'stage 3 chronic kidney disease',
+        'stage 4 chronic kidney disease',
+        'stage 5 chronic kidney disease',
+        'chronic kidney disease, not specified',
+      ];
       return phenotypes.filter((p) => {
-        const label = p.hpo_label.toLowerCase();
-        const id = p.hpo_id.toLowerCase();
-        return keywords.some((keyword) => label.includes(keyword) || id.includes(keyword));
+        const lowerLabel = p.hpo_label.toLowerCase();
+        return !ckdStagePatterns.some((pattern) => lowerLabel.includes(pattern));
       });
     },
     renderChart() {
@@ -136,9 +143,10 @@ export default {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
-      // Apply organ system filtering
+      // Apply filtering: first remove uninformative phenotypes, then filter by organ system
       const allPhenotypes = this.comparisonData.phenotypes;
-      const data = this.filterPhenotypesByOrganSystem(allPhenotypes, this.organSystemFilter);
+      const informativePhenotypes = this.filterUninformativePhenotypes(allPhenotypes);
+      const data = this.filterPhenotypesByOrganSystem(informativePhenotypes, this.organSystemFilter);
 
       // If no phenotypes match the filter, show a message
       if (data.length === 0) {
@@ -178,7 +186,7 @@ export default {
         .scaleBand()
         .domain(data.map((d) => d.hpo_label))
         .range([0, svgWidth])
-        .padding(0.2);
+        .padding(0.1);
 
       // Y scale for percentages (0-100) - now vertical axis
       const y = d3.scaleLinear().domain([0, 100]).range([svgHeight, 0]);
@@ -356,9 +364,15 @@ export default {
       });
 
       // Add p-value and effect size annotations above each bar pair
+      // Only show when there are few enough phenotypes to avoid overlap
+      const showAnnotations = data.length <= 15;
       data.forEach((d) => {
         const xPos = x(d.hpo_label);
         const centerX = xPos + barGroupWidth / 2;
+
+        // Only show p-value annotations for significant results when many phenotypes
+        // or all annotations when few phenotypes
+        if (!showAnnotations && !d.significant) return;
 
         // P-value text
         let pValueText = '';
@@ -377,21 +391,21 @@ export default {
         svg
           .append('text')
           .attr('x', centerX)
-          .attr('y', -35)
+          .attr('y', -20)
           .attr('text-anchor', 'middle')
           .attr('font-size', '9px')
           .attr('fill', d.significant ? '#D32F2F' : '#666')
           .attr('font-weight', d.significant ? 'bold' : 'normal')
           .text(pValueText);
 
-        // Effect size (Cohen's h)
-        if (d.effect_size !== null) {
+        // Effect size (Cohen's h) - only show when few phenotypes
+        if (d.effect_size !== null && showAnnotations) {
           const h = d.effect_size;
           const label = h < 0.2 ? 'small' : h < 0.5 ? 'medium' : 'large';
           svg
             .append('text')
             .attr('x', centerX)
-            .attr('y', -22)
+            .attr('y', -8)
             .attr('text-anchor', 'middle')
             .attr('font-size', '8px')
             .attr('fill', '#666')
@@ -408,13 +422,10 @@ export default {
       xAxis
         .selectAll('text')
         .style('font-size', '10px')
-        .style('text-anchor', 'middle')
-        .each(function (d) {
-          const phenotype = data.find((p) => p.hpo_label === d);
-          if (phenotype) {
-            d3.select(this).text(`${d} (${phenotype.hpo_id})`);
-          }
-        });
+        .style('text-anchor', 'end')
+        .attr('transform', 'rotate(-45)')
+        .attr('dx', '-0.5em')
+        .attr('dy', '0.5em');
 
       // Y axis (percentage)
       svg
@@ -432,7 +443,7 @@ export default {
       svg
         .append('text')
         .attr('x', svgWidth / 2)
-        .attr('y', -55)
+        .attr('y', -90)
         .attr('text-anchor', 'middle')
         .style('font-size', '18px')
         .style('font-weight', 'bold')
@@ -442,7 +453,7 @@ export default {
       svg
         .append('text')
         .attr('x', svgWidth / 2)
-        .attr('y', -35)
+        .attr('y', -70)
         .attr('text-anchor', 'middle')
         .style('font-size', '13px')
         .style('fill', '#666')
@@ -461,49 +472,26 @@ export default {
         .style('font-weight', 'bold')
         .text('Prevalence (%)');
 
-      // Legend
-      const legend = svg.append('g').attr('transform', `translate(${svgWidth + 20}, 0)`);
-
-      legend
-        .append('text')
-        .attr('x', 0)
-        .attr('y', 0)
-        .style('font-size', '12px')
-        .style('font-weight', 'bold')
-        .text('Legend');
-
-      // Yes/No colors
-      legend.append('rect').attr('x', 0).attr('y', 15).attr('width', 15).attr('height', 15).attr('fill', colorYes);
-
-      legend.append('text').attr('x', 20).attr('y', 27).style('font-size', '11px').text('Present');
-
-      legend.append('rect').attr('x', 0).attr('y', 40).attr('width', 15).attr('height', 15).attr('fill', colorNo);
-
-      legend.append('text').attr('x', 20).attr('y', 52).style('font-size', '11px').text('Absent');
-
-      // T/nT explanation
-      legend
-        .append('text')
-        .attr('x', 0)
-        .attr('y', 80)
-        .style('font-size', '12px')
-        .style('font-weight', 'bold')
-        .text('Bar Labels');
+      // Legend - two-row layout above the chart (below subtitle)
+      const legend = svg.append('g').attr('transform', `translate(${svgWidth / 2 - 150}, -50)`);
 
       const shortLabels = this.getShortLabels();
-      legend
-        .append('text')
-        .attr('x', 0)
-        .attr('y', 98)
-        .style('font-size', '11px')
-        .text(shortLabels.group1 + ' = ' + group1Name);
 
+      // Row 1: Present/Absent indicators (centered)
+      legend.append('rect').attr('x', 0).attr('y', 0).attr('width', 12).attr('height', 12).attr('fill', colorYes);
+      legend.append('text').attr('x', 16).attr('y', 10).style('font-size', '11px').text('Present');
+
+      legend.append('rect').attr('x', 100).attr('y', 0).attr('width', 12).attr('height', 12).attr('fill', colorNo);
+      legend.append('text').attr('x', 116).attr('y', 10).style('font-size', '11px').text('Absent');
+
+      // Row 2: Bar label explanations (on separate line to avoid overlap)
       legend
         .append('text')
-        .attr('x', 0)
-        .attr('y', 113)
-        .style('font-size', '11px')
-        .text(shortLabels.group2 + ' = ' + group2Name);
+        .attr('x', 200)
+        .attr('y', 10)
+        .style('font-size', '10px')
+        .style('fill', '#666')
+        .text(`${shortLabels.group1} = ${group1Name}  |  ${shortLabels.group2} = ${group2Name}`);
     },
   },
 };
