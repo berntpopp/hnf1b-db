@@ -13,12 +13,12 @@
  * Based on ACMG/AMP guidelines for variant interpretation.
  */
 const PATHOGENICITY_COLORS = {
-  PATHOGENIC: 'red-lighten-3',
-  LIKELY_PATHOGENIC: 'orange-lighten-3',
-  UNCERTAIN_SIGNIFICANCE: 'yellow-darken-1',
-  VUS: 'yellow-darken-1', // Variant of Uncertain Significance
-  LIKELY_BENIGN: 'light-green-lighten-3',
-  BENIGN: 'green-lighten-3',
+  PATHOGENIC: 'red', // Red for pathogenic
+  LIKELY_PATHOGENIC: 'orange', // Orange for likely pathogenic
+  UNCERTAIN_SIGNIFICANCE: 'yellow-darken-1', // Yellow for VUS
+  VUS: 'yellow-darken-1', // Variant of Uncertain Significance (alias)
+  LIKELY_BENIGN: 'light-green', // Light green for likely benign
+  BENIGN: 'green', // Green for benign
 };
 
 /**

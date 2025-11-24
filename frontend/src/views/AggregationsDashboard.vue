@@ -291,6 +291,35 @@ export default {
       chartData: {},
       stackedBarChartData: [],
       stackedBarDisplayLimit: 20,
+      // Semantic color maps for specific aggregations
+      colorMaps: {
+        // Pathogenicity: red=pathogenic, orange=LP, yellow=VUS, green=benign
+        getVariantPathogenicity: {
+          Pathogenic: '#D32F2F', // Red
+          'Likely Pathogenic': '#FF9800', // Orange
+          'Uncertain Significance': '#FDD835', // Bright yellow for VUS
+          'Likely Benign': '#81C784', // Light green
+          Benign: '#388E3C', // Dark green
+        },
+        // Variant types
+        getVariantTypes: {
+          'Copy Number Loss': '#D32F2F', // Red
+          'Copy Number Gain': '#1976D2', // Blue
+          SNV: '#388E3C', // Green
+          Deletion: '#FF9800', // Orange
+          Duplication: '#9C27B0', // Purple
+          Insertion: '#00BCD4', // Cyan
+          Indel: '#E91E63', // Pink
+          NA: '#9E9E9E', // Grey
+        },
+        // Sex distribution
+        getSexDistribution: {
+          MALE: '#1976D2', // Blue
+          FEMALE: '#E91E63', // Pink
+          OTHER_SEX: '#9C27B0', // Purple
+          UNKNOWN_SEX: '#9E9E9E', // Grey
+        },
+      },
       items: [
         {
           tab: 'Donut Chart',
@@ -418,9 +447,11 @@ export default {
   },
   computed: {
     donutChartProps() {
+      // Get the color map for the current aggregation if available
+      const colorMap = this.colorMaps[this.selectedAggregation] || null;
       return {
         content: this.items[0].content,
-        props: { ...this.items[0].props, chartData: this.chartData },
+        props: { ...this.items[0].props, chartData: this.chartData, colorMap },
       };
     },
     selectedAggregations() {
@@ -570,6 +601,19 @@ export default {
     this.fetchStackedBarData();
   },
   methods: {
+    /**
+     * Format API labels to human-readable display labels.
+     * Converts UPPER_SNAKE_CASE to Title Case (e.g., LIKELY_PATHOGENIC -> Likely Pathogenic)
+     */
+    formatLabel(label) {
+      if (!label) return 'Unknown';
+      // Replace underscores with spaces and convert to title case
+      return label
+        .split('_')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+    },
+
     fetchStackedBarData() {
       window.logService.debug('Fetching stacked bar chart data');
 
@@ -647,9 +691,9 @@ export default {
                 othersCount: othersCount,
               });
 
-              // Build grouped counts
+              // Build grouped counts with formatted labels
               groupedCounts = topItems.map((item) => ({
-                _id: item.label || 'Unknown',
+                _id: this.formatLabel(item.label),
                 count: item.count || 0,
               }));
 
@@ -661,9 +705,9 @@ export default {
                 });
               }
             } else {
-              // No limit, show all items
+              // No limit, show all items with formatted labels
               groupedCounts = data.map((item) => ({
-                _id: item.label || 'Unknown',
+                _id: this.formatLabel(item.label),
                 count: item.count || 0,
               }));
             }
