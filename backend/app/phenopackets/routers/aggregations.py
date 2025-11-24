@@ -293,24 +293,60 @@ async def aggregate_variant_types(
               variant ID)
         db: Database session dependency
     """
+    # Variant type detection logic:
+    # - CNV: structuralType is 'deletion' or 'duplication' (large structural variants)
+    # - SNV/small indels: structuralType is NULL, detect from c. notation
+    variant_type_case = """
+        CASE
+            -- CNV: Large structural variants have structuralType set
+            WHEN vd->'structuralType'->>'label' IN ('deletion', 'duplication')
+            THEN 'CNV'
+            -- Small variants: detect type from c. notation
+            WHEN vd->'structuralType'->>'label' IS NULL THEN
+                CASE
+                    -- Indel: delins pattern
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'delins'
+                    ) THEN 'Indel'
+                    -- Small deletion
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'del'
+                    ) THEN 'Deletion'
+                    -- Duplication
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'dup'
+                    ) THEN 'Duplication'
+                    -- Insertion
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ 'ins'
+                    ) THEN 'Insertion'
+                    -- SNV: substitution pattern
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
+                        WHERE elem->>'syntax' = 'hgvs.c'
+                        AND elem->>'value' ~ '>[ACGT]'
+                    ) THEN 'SNV'
+                    ELSE 'Other'
+                END
+            ELSE INITCAP(vd->'structuralType'->>'label')
+        END
+    """
+
     if count_mode == "unique":
-        # Count unique variants by variant ID using structuralType field
-        query = """
+        # Count unique variants by variant ID
+        query = f"""
         WITH variant_types AS (
             SELECT DISTINCT
                 vd->>'id' as variant_id,
-                CASE
-                    WHEN COALESCE(
-                        vd->'structuralType'->>'label',
-                        vd->'molecularConsequences'->0->>'label',
-                        'Other'
-                    ) = 'SNV' THEN 'SNV'
-                    ELSE INITCAP(COALESCE(
-                        vd->'structuralType'->>'label',
-                        vd->'molecularConsequences'->0->>'label',
-                        'Other'
-                    ))
-                END as variant_type
+                {variant_type_case} as variant_type
             FROM
                 phenopackets,
                 jsonb_array_elements(phenopacket->'interpretations') as interp,
@@ -331,21 +367,10 @@ async def aggregate_variant_types(
         ORDER BY count DESC
         """
     else:
-        # Count all variant instances using structuralType field
-        query = """
+        # Count all variant instances
+        query = f"""
         SELECT
-            CASE
-                WHEN COALESCE(
-                    vd->'structuralType'->>'label',
-                    vd->'molecularConsequences'->0->>'label',
-                    'Other'
-                ) = 'SNV' THEN 'SNV'
-                ELSE INITCAP(COALESCE(
-                    vd->'structuralType'->>'label',
-                    vd->'molecularConsequences'->0->>'label',
-                    'Other'
-                ))
-            END as variant_type,
+            {variant_type_case} as variant_type,
             COUNT(*) as count
         FROM
             phenopackets,
