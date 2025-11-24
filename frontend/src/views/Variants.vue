@@ -379,7 +379,10 @@ export default {
       loadingInitialized: false,
 
       // Filter options
-      variantTypes: ['SNV', 'insertion', 'indel', 'deletion', 'duplication'],
+      // CNV = large structural variants (whole gene deletions/duplications)
+      // SNV = single nucleotide variants
+      // Small indels: deletion, insertion, duplication, indel (delins)
+      variantTypes: ['SNV', 'CNV', 'deletion', 'duplication', 'insertion', 'indel'],
       classifications: [
         'PATHOGENIC',
         'LIKELY_PATHOGENIC',
