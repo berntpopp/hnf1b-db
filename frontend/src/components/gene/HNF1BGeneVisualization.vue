@@ -1307,8 +1307,6 @@ export default {
     zoomIn() {
       if (this.d3Zoom && this.$refs.geneSvg) {
         const svg = d3.select(this.$refs.geneSvg);
-        const centerX = this.svgWidth / 2;
-        const centerY = this.dynamicSvgHeight / 2;
 
         // Get current transform
         const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
@@ -1316,11 +1314,22 @@ export default {
         // Calculate new scale
         const newScale = Math.min(currentTransform.k * 1.3, 10);
 
-        // Calculate new transform centered on the viewport center
-        const transform = d3.zoomIdentity
-          .translate(centerX, centerY)
-          .scale(newScale)
-          .translate(-centerX, -centerY);
+        // Viewport center in screen coordinates
+        const viewportCenterX = this.svgWidth / 2;
+        const viewportCenterY = this.dynamicSvgHeight / 2;
+
+        // Calculate the point in data coordinates that's currently at viewport center
+        // currentTransform: x' = k * x + tx, so x = (x' - tx) / k
+        const dataCenterX = (viewportCenterX - currentTransform.x) / currentTransform.k;
+        const dataCenterY = (viewportCenterY - currentTransform.y) / currentTransform.k;
+
+        // New transform: keep the same data point at viewport center with new scale
+        // viewportCenterX = newScale * dataCenterX + newTx
+        // newTx = viewportCenterX - newScale * dataCenterX
+        const newTx = viewportCenterX - newScale * dataCenterX;
+        const newTy = viewportCenterY - newScale * dataCenterY;
+
+        const transform = d3.zoomIdentity.translate(newTx, newTy).scale(newScale);
 
         svg.transition().duration(300).call(this.d3Zoom.transform, transform);
       }
@@ -1328,8 +1337,6 @@ export default {
     zoomOut() {
       if (this.d3Zoom && this.$refs.geneSvg) {
         const svg = d3.select(this.$refs.geneSvg);
-        const centerX = this.svgWidth / 2;
-        const centerY = this.dynamicSvgHeight / 2;
 
         // Get current transform
         const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
@@ -1337,11 +1344,19 @@ export default {
         // Calculate new scale
         const newScale = Math.max(currentTransform.k / 1.3, 1);
 
-        // Calculate new transform centered on the viewport center
-        const transform = d3.zoomIdentity
-          .translate(centerX, centerY)
-          .scale(newScale)
-          .translate(-centerX, -centerY);
+        // Viewport center in screen coordinates
+        const viewportCenterX = this.svgWidth / 2;
+        const viewportCenterY = this.dynamicSvgHeight / 2;
+
+        // Calculate the point in data coordinates that's currently at viewport center
+        const dataCenterX = (viewportCenterX - currentTransform.x) / currentTransform.k;
+        const dataCenterY = (viewportCenterY - currentTransform.y) / currentTransform.k;
+
+        // New transform: keep the same data point at viewport center with new scale
+        const newTx = viewportCenterX - newScale * dataCenterX;
+        const newTy = viewportCenterY - newScale * dataCenterY;
+
+        const transform = d3.zoomIdentity.translate(newTx, newTy).scale(newScale);
 
         svg.transition().duration(300).call(this.d3Zoom.transform, transform);
       }
