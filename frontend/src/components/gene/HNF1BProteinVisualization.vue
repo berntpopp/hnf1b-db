@@ -216,7 +216,7 @@
               <!-- Domain start position label (replaces scale markers) -->
               <text
                 :x="scaleAAPosition(domain.start)"
-                :y="backboneY + 25"
+                :y="backboneY + 25 + getBoundaryLabelOffset(domain, 'start')"
                 text-anchor="middle"
                 class="domain-boundary-label"
               >
@@ -225,7 +225,7 @@
               <!-- Domain end position label (replaces scale markers) -->
               <text
                 :x="scaleAAPosition(domain.end)"
-                :y="backboneY + 25"
+                :y="backboneY + 25 + getBoundaryLabelOffset(domain, 'end')"
                 text-anchor="middle"
                 class="domain-boundary-label"
               >
@@ -639,6 +639,32 @@ export default {
       };
       const domainFilterValue = domainFilterMap[domain.name] || domain.shortName;
       return filterValue === domainFilterValue;
+    },
+    getBoundaryLabelOffset(domain, boundaryType) {
+      // Check if this boundary label would overlap with an adjacent domain's label
+      // and return a vertical offset to stagger them
+      // Only offset the START label of the later domain to avoid both being offset
+      const OVERLAP_THRESHOLD = 30; // Minimum AA distance to avoid overlap
+
+      // Only offset start labels, not end labels
+      if (boundaryType !== 'start') {
+        return 0;
+      }
+
+      const currentPos = domain.start;
+
+      for (const otherDomain of this.domains) {
+        if (otherDomain.name === domain.name) continue;
+
+        // Check if current start is close to another domain's end
+        const distance = currentPos - otherDomain.end;
+        if (distance > 0 && distance < OVERLAP_THRESHOLD) {
+          // This start label is close to another domain's end - offset it down
+          return 12;
+        }
+      }
+
+      return 0; // No offset needed
     },
     async fetchProteinDomains() {
       try {
