@@ -374,18 +374,20 @@ export default {
         // or all annotations when few phenotypes
         if (!showAnnotations && !d.significant) return;
 
-        // P-value text
+        // P-value text - use FDR-corrected p-value for display (matches R script)
+        // The significance labeling uses qfdr (FDR-adjusted) not raw pfisher
+        const pFdr = d.p_value_fdr;
         let pValueText = '';
-        if (d.p_value === null) {
+        if (pFdr === null || pFdr === undefined) {
           pValueText = 'N/A';
-        } else if (d.p_value < 0.001) {
+        } else if (pFdr < 0.001) {
           pValueText = 'p<0.001***';
-        } else if (d.p_value < 0.01) {
-          pValueText = `p=${d.p_value.toFixed(3)}**`;
-        } else if (d.p_value < 0.05) {
-          pValueText = `p=${d.p_value.toFixed(3)}*`;
+        } else if (pFdr < 0.01) {
+          pValueText = `p=${pFdr.toFixed(3)}**`;
+        } else if (pFdr < 0.05) {
+          pValueText = `p=${pFdr.toFixed(3)}*`;
         } else {
-          pValueText = `p=${d.p_value.toFixed(3)}`;
+          pValueText = `p=${pFdr.toFixed(3)}`;
         }
 
         svg
