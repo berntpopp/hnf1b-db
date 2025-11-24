@@ -469,6 +469,49 @@ async def aggregate_publications(
     ]
 
 
+@router.get("/publication-types", response_model=List[AggregationResult])
+async def aggregate_publication_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distribution of publication types.
+
+    Aggregates phenopackets by publication type (case_series, research, case_report, etc.).
+    Publication type is stored in metaData.externalReferences.reference field.
+
+    Returns:
+        List of aggregation results with publication type labels and counts
+    """
+    query = """
+    SELECT
+        ext_ref->>'reference' as pub_type,
+        COUNT(DISTINCT p.id) as count
+    FROM
+        phenopackets p,
+        jsonb_array_elements(p.phenopacket->'metaData'->'externalReferences') as ext_ref
+    WHERE
+        ext_ref->>'reference' IS NOT NULL
+        AND ext_ref->>'reference' != ''
+    GROUP BY
+        ext_ref->>'reference'
+    ORDER BY
+        count DESC
+    """
+
+    result = await db.execute(text(query))
+    rows = result.fetchall()
+
+    total = sum(int(row._mapping["count"]) for row in rows)
+
+    return [
+        AggregationResult(
+            label=row.pub_type,
+            count=int(row._mapping["count"]),
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+        )
+        for row in rows
+    ]
+
+
 @router.get("/all-variants")
 async def aggregate_all_variants(
     request: Request,

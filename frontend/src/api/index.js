@@ -411,6 +411,14 @@ export const getPublicationsByType = () =>
   apiClient.get('/phenopackets/aggregate/publications-by-type');
 
 /**
+ * Get publication type distribution (for donut chart).
+ * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
+ * @returns {Promise} Axios promise with publication type aggregation
+ */
+export const getPublicationTypes = () =>
+  apiClient.get('/phenopackets/aggregate/publication-types');
+
+/**
  * Get age of onset distribution.
  * @returns {Promise} Axios promise with age of onset data
  */
@@ -736,6 +744,7 @@ export default {
   getVariantTypes,
   getPublicationsAggregation,
   getPublicationsByType,
+  getPublicationTypes,
   getAgeOfOnsetAggregation,
   getSurvivalData,
   getSmallVariants,

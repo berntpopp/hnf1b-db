@@ -319,6 +319,15 @@ export default {
           OTHER_SEX: '#9C27B0', // Purple
           UNKNOWN_SEX: '#9E9E9E', // Grey
         },
+        // Publication types
+        getPublicationTypes: {
+          'Case Series': '#1976D2', // Blue
+          Research: '#4CAF50', // Green
+          'Case Report': '#FF9800', // Orange
+          'Review And Cases': '#9C27B0', // Purple
+          'Screening Multiple': '#00BCD4', // Cyan
+          Review: '#F44336', // Red
+        },
       },
       items: [
         {
@@ -337,10 +346,6 @@ export default {
           ],
         },
         {
-          label: 'Diseases',
-          aggregations: [{ label: 'Disease Frequency', value: 'getDiseaseAggregation' }],
-        },
-        {
           label: 'Variants',
           aggregations: [
             {
@@ -357,7 +362,7 @@ export default {
         },
         {
           label: 'Publications',
-          aggregations: [{ label: 'Publication Statistics', value: 'getPublicationsAggregation' }],
+          aggregations: [{ label: 'Publication Types', value: 'getPublicationTypes' }],
         },
       ],
       selectedCategory: 'Phenopackets',
