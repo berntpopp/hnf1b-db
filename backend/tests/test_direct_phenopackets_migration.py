@@ -25,9 +25,11 @@ class TestDirectPhenopacketsMigration:
     def test_hpo_mapping_initialization(self, hpo_mapper):
         """Test that HPO mappings are properly initialized."""
         # Check key mappings exist (note: uses hpo_mappings attribute)
-        assert "renalinsufficiency" in hpo_mapper.hpo_mappings
+        # NOTE: "renalinsufficiency" was removed - now maps to specific CKD stages
+        # via the phenotypes sheet during migration
         assert "mody" in hpo_mapper.hpo_mappings  # Diabetes is mapped as "mody"
         assert "hypomagnesemia" in hpo_mapper.hpo_mappings
+        assert "renalcysts" in hpo_mapper.hpo_mappings
 
         # Check correct HPO terms are used
         assert hpo_mapper.hpo_mappings["mentaldisease"]["id"] == "HP:0000708"

@@ -1,5 +1,7 @@
 """Tests for variant type comparison endpoints and statistical calculations."""
 
+import json
+
 import pytest
 from scipy import stats
 from sqlalchemy import text
@@ -266,7 +268,7 @@ class TestComparisonEndpoint:
 
         # Check group names
         assert data["group1_name"] == "CNVs (17q del/dup)"
-        assert data["group2_name"] == "Point mutations"
+        assert data["group2_name"] == "Non-CNV variants"
 
         # Check metadata
         assert data["metadata"]["comparison_type"] == "cnv_vs_point_mutation"
@@ -525,14 +527,20 @@ class TestVEPImpactBasedClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
-            {"pid": "test-high-impact", "pk": str(test_phenopacket).replace("'", '"')},
+            {
+                "pid": "test-high-impact",
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-high-impact",
+                "sex": "UNKNOWN_SEX",
+            },
         )
         await db_session.commit()
 
@@ -621,16 +629,19 @@ class TestVEPImpactBasedClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
             {
                 "pid": "test-moderate-impact",
-                "pk": str(test_phenopacket).replace("'", '"'),
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-moderate-impact",
+                "sex": "UNKNOWN_SEX",
             },
         )
         await db_session.commit()
@@ -723,16 +734,19 @@ class TestVEPImpactBasedClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
             {
                 "pid": "test-low-pathogenic",
-                "pk": str(test_phenopacket).replace("'", '"'),
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-low-pathogenic",
+                "sex": "UNKNOWN_SEX",
             },
         )
         await db_session.commit()
@@ -826,14 +840,20 @@ class TestVEPImpactBasedClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
-            {"pid": "test-low-vus", "pk": str(test_phenopacket).replace("'", '"')},
+            {
+                "pid": "test-low-vus",
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-low-vus",
+                "sex": "UNKNOWN_SEX",
+            },
         )
         await db_session.commit()
 
@@ -921,16 +941,19 @@ class TestVEPImpactBasedClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
             {
                 "pid": "test-hgvs-fallback",
-                "pk": str(test_phenopacket).replace("'", '"'),
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-hgvs-fallback",
+                "sex": "UNKNOWN_SEX",
             },
         )
         await db_session.commit()
@@ -1019,26 +1042,33 @@ class TestCNVSubtypeClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
-            {"pid": "test-cnv-del", "pk": str(test_phenopacket).replace("'", '"')},
+            {
+                "pid": "test-cnv-del",
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-cnv-del",
+                "sex": "UNKNOWN_SEX",
+            },
         )
         await db_session.commit()
 
         # Query - Should be classified as deletion
+        # Use raw string and escape : to prevent SQLAlchemy bind parameter interpretation
         result = await db_session.execute(
             text(
-                """
+                r"""
             SELECT
                 CASE
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DEL'
                         THEN '17q Deletion'
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DUP'
                         THEN '17q Duplication'
                     ELSE 'Other'
                 END as cnv_subtype
@@ -1098,26 +1128,33 @@ class TestCNVSubtypeClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
-            {"pid": "test-cnv-dup", "pk": str(test_phenopacket).replace("'", '"')},
+            {
+                "pid": "test-cnv-dup",
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-cnv-dup",
+                "sex": "UNKNOWN_SEX",
+            },
         )
         await db_session.commit()
 
         # Query - Should be classified as duplication
+        # Use raw string and escape : to prevent SQLAlchemy bind parameter interpretation
         result = await db_session.execute(
             text(
-                """
+                r"""
             SELECT
                 CASE
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DEL'
                         THEN '17q Deletion'
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DUP'
                         THEN '17q Duplication'
                     ELSE 'Other'
                 END as cnv_subtype
@@ -1190,16 +1227,19 @@ class TestCNVSubtypeClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
             {
                 "pid": "test-cnv-del-vep",
-                "pk": str(test_phenopacket).replace("'", '"'),
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-cnv-del-vep",
+                "sex": "UNKNOWN_SEX",
             },
         )
         await db_session.commit()
@@ -1289,16 +1329,19 @@ class TestCNVSubtypeClassification:
         }
 
         # Insert test phenopacket
+        # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
         await db_session.execute(
             text(
                 """
-            INSERT INTO phenopackets (phenopacket_id, phenopacket)
-            VALUES (:pid, :pk::jsonb)
+            INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
+            VALUES (gen_random_uuid(), :pid, CAST(:pk AS jsonb), :sid, :sex, 1)
         """
             ),
             {
                 "pid": "test-cnv-dup-vep",
-                "pk": str(test_phenopacket).replace("'", '"'),
+                "pk": json.dumps(test_phenopacket),
+                "sid": "patient-cnv-dup-vep",
+                "sex": "UNKNOWN_SEX",
             },
         )
         await db_session.commit()

@@ -164,14 +164,15 @@ class TestClassificationConsistency:
     async def test_cnv_del_never_classified_as_dup(self, db_session):
         """Verify that deletion CNVs are never misclassified as duplications."""
         # Get variants with :DEL in ID
+        # Use backslash escape to prevent SQLAlchemy from treating :DEL as bind parameter
         del_result = await db_session.execute(
             text(
-                """
+                r"""
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
             FROM phenopackets p,
                  jsonb_array_elements(p.phenopacket->'interpretations') AS interp
             WHERE p.deleted_at IS NULL
-              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DEL'
         """
             )
         )
@@ -180,13 +181,13 @@ class TestClassificationConsistency:
         # Check if any are also classified as DUP (should be 0)
         both_result = await db_session.execute(
             text(
-                """
+                r"""
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
             FROM phenopackets p,
                  jsonb_array_elements(p.phenopacket->'interpretations') AS interp
             WHERE p.deleted_at IS NULL
-              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
-              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DEL'
+              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DUP'
         """
             )
         )
@@ -280,14 +281,15 @@ class TestDistributionReasonableness:
     async def test_cnv_distribution_if_present(self, db_session):
         """Test CNV distribution is reasonable if CNVs exist."""
         # Get CNV counts
+        # Use backslash escape to prevent SQLAlchemy from treating :DEL/:DUP as bind parameters
         result = await db_session.execute(
             text(
-                """
+                r"""
             SELECT
                 CASE
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DEL'
                         THEN '17qDel'
-                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                    WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:DUP'
                         THEN '17qDup'
                     ELSE 'Other'
                 END as cnv_type,
@@ -295,7 +297,7 @@ class TestDistributionReasonableness:
             FROM phenopackets p,
                  jsonb_array_elements(p.phenopacket->'interpretations') AS interp
             WHERE p.deleted_at IS NULL
-              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+              AND interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ '\:(DEL|DUP)'
             GROUP BY cnv_type
         """
             )

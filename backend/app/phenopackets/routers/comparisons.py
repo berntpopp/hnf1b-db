@@ -100,7 +100,8 @@ def calculate_fisher_exact_test(
 
     total = group1_present + group1_absent + group2_present + group2_absent
     if total == 0:
-        return (1.0, float("nan"))  # Return NaN for undefined odds ratio
+        # Return None for undefined odds ratio (JSON safety, matches rest of function)
+        return (1.0, None)  # type: ignore[return-value]
 
     # Fisher's exact test - matches R: fisher.test(rbind(c(yes.T, no.T), c(yes.nT, no.nT)))
     odds_ratio, p_value = stats.fisher_exact(contingency_table)
@@ -305,7 +306,8 @@ async def compare_variant_types(
                 -- Priority 3: CNVs (17q deletions/duplications) - Always Truncating
                 -- Matches R: is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T" (CNVs have no IMPACT)
                 (
-                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                    (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                     OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
                     AND
                     gen_interp.value->>'interpretationStatus'
                         IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -328,7 +330,8 @@ async def compare_variant_types(
                         IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                     AND
                     -- Exclude CNVs (already handled above)
-                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DEL$'
+                    AND gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DUP$'
                     AND
                     EXISTS (
                         SELECT 1
@@ -370,13 +373,15 @@ async def compare_variant_types(
         # Classify based on structural type
         # noqa: E501
         group1_condition = """
-            -- CNVs: Large deletions or duplications
-            gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+            -- CNVs: Large deletions or duplications (match DEL$ or DUP$ to avoid bind param issue)
+            (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+             OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
         """
         # noqa: E501
         group2_condition = """
             -- Non-CNVs: All other variants (SNVs, indels, etc.)
-            gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+            (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DEL$'
+             AND gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DUP$')
         """
         group1_name = "CNVs (17q del/dup)"
         group2_name = "Non-CNV variants"
@@ -387,8 +392,8 @@ async def compare_variant_types(
         group1_condition = """
             -- 17q Deletions
             (
-                -- Method 1: Variant ID contains :DEL
-                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':DEL'
+                -- Method 1: Variant ID ends with DEL suffix
+                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
                 OR
                 -- Method 2: VEP consequence is transcript_ablation
                 EXISTS (
@@ -404,8 +409,8 @@ async def compare_variant_types(
         group2_condition = """
             -- 17q Duplications
             (
-                -- Method 1: Variant ID contains :DUP
-                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ ':DUP'
+                -- Method 1: Variant ID ends with DUP suffix
+                gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$'
                 OR
                 -- Method 2: VEP consequence is transcript_amplification
                 EXISTS (
