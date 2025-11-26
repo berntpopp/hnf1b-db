@@ -1,7 +1,7 @@
 // src/api/index.js - Complete rewrite for v2 API (GA4GH Phenopackets)
 import axios from 'axios';
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   // Use Vite proxy in development (avoids CORS), direct URL in production
   baseURL: import.meta.env.VITE_API_URL || '/api/v2',
   timeout: 10000,
@@ -415,8 +415,7 @@ export const getPublicationsByType = () =>
  * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
  * @returns {Promise} Axios promise with publication type aggregation
  */
-export const getPublicationTypes = () =>
-  apiClient.get('/phenopackets/aggregate/publication-types');
+export const getPublicationTypes = () => apiClient.get('/phenopackets/aggregate/publication-types');
 
 /**
  * Get age of onset distribution.

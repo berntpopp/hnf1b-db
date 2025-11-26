@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import api from '@/api';
+import { apiClient } from '@/api';
 
 /**
  * Composable for variant annotation using VEP
@@ -22,7 +22,7 @@ export function useVariantAnnotation() {
     validation.value = null;
 
     try {
-      const response = await api.post('/variants/validate', {
+      const response = await apiClient.post('/variants/validate', {
         notation,
         notation_type: notationType,
       });
@@ -58,7 +58,7 @@ export function useVariantAnnotation() {
     annotation.value = null;
 
     try {
-      const response = await api.post('/variants/annotate', null, {
+      const response = await apiClient.post('/variants/annotate', null, {
         params: { variant },
       });
 
@@ -93,7 +93,7 @@ export function useVariantAnnotation() {
     error.value = null;
 
     try {
-      const response = await api.post('/variants/recode', null, {
+      const response = await apiClient.post('/variants/recode', null, {
         params: { variant },
       });
 
@@ -126,7 +126,7 @@ export function useVariantAnnotation() {
     }
 
     try {
-      const response = await api.get(`/variants/suggest/${encodeURIComponent(partial)}`);
+      const response = await apiClient.get(`/variants/suggest/${encodeURIComponent(partial)}`);
       return response.data.suggestions || [];
     } catch (err) {
       window.logService.warn('Failed to get variant suggestions', {

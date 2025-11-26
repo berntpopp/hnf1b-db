@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import api from '@/api';
+import { apiClient } from '@/api';
 
 /**
  * Composable for fetching HPO terms grouped by organ system
@@ -26,7 +26,7 @@ export function useGroupedHPO() {
         params.recommendation = recommendation;
       }
 
-      const response = await api.get('/ontology/hpo/grouped', { params });
+      const response = await apiClient.get('/ontology/hpo/grouped', { params });
 
       groups.value = response.data.data.groups || {};
       totalTerms.value = response.data.data.total_terms || 0;
