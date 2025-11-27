@@ -100,8 +100,16 @@ class PhenotypeExtractor:
                                 "excluded": False,
                             }
                         elif value.lower() in ["no", "absent", "negative", "none"]:
-                            # Explicit absence - skip this phenotype (don't create entry)
-                            continue
+                            # Explicit absence - create excluded entry for CKD
+                            # This is important for survival analysis: patients evaluated
+                            # for CKD but found negative should be included as censored
+                            phenotype = {
+                                "type": {
+                                    "id": "HP:0012622",
+                                    "label": "Chronic kidney disease",
+                                },
+                                "excluded": True,
+                            }
                         else:
                             # Value not found in mappings and not explicitly absent - skip
                             continue
@@ -167,11 +175,51 @@ class PhenotypeExtractor:
         review_timestamp: Optional[str],
         phenotypes: List[Dict[str, Any]],
     ) -> None:
-        """Handle special kidney biopsy findings."""
-        value_lower = value.lower()
+        """Handle special kidney biopsy findings.
 
-        # Map specific kidney biopsy findings to their HPO/ORPHA terms
-        if "oligomeganephronia" in value_lower:
+        KidneyBiopsy column can have values like:
+        - "No" or "no" → Biopsy done, no findings (excluded=true for all biopsy phenotypes)
+        - "Oligomeganephronia" → specific finding present
+        - "Multiple glomerular cysts" or "glomerular cyst" → specific finding present
+        - Other text with findings → parse for specific terms
+
+        This ensures we capture both present AND absent biopsy findings,
+        which is critical for accurate phenotype penetrance calculations.
+        """
+        value_lower = value.lower().strip()
+
+        # Define biopsy-related phenotypes that should be tracked
+        biopsy_phenotypes = [
+            {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
+            {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
+        ]
+
+        # Case 1: "No" means biopsy was done but findings were negative
+        # Mark all biopsy phenotypes as excluded (absent)
+        if value_lower == "no":
+            for pheno_info in biopsy_phenotypes:
+                phenotype = {
+                    "type": {"id": pheno_info["id"], "label": pheno_info["label"]},
+                    "excluded": True,
+                }
+                evidence = self.evidence_builder.build_evidence(
+                    publication_id=row.get("Publication"),
+                    review_timestamp=review_timestamp,
+                )
+                if evidence:
+                    phenotype["evidence"] = evidence
+                phenotypes.append(phenotype)
+            return
+
+        # Case 2: Specific findings mentioned - check for each phenotype
+        found_oligomeganephronia = "oligomeganephronia" in value_lower
+        found_glomerular_cysts = (
+            "multiple glomerular cysts" in value_lower
+            or "glomerular cyst" in value_lower
+        )
+
+        # Add oligomeganephronia
+        if found_oligomeganephronia:
             phenotype = {
                 "type": {"id": "ORPHA:2260", "label": "Oligomeganephronia"},
                 "excluded": False,
@@ -184,10 +232,8 @@ class PhenotypeExtractor:
                 phenotype["evidence"] = evidence
             phenotypes.append(phenotype)
 
-        if (
-            "multiple glomerular cysts" in value_lower
-            or "glomerular cyst" in value_lower
-        ):
+        # Add glomerular cysts
+        if found_glomerular_cysts:
             phenotype = {
                 "type": {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
                 "excluded": False,
