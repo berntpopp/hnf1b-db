@@ -1640,18 +1640,52 @@ async def get_survival_data(
     if comparison == "variant_type":
         # Check for special current_age endpoint
         if endpoint_hpo_terms is None:
-            # For current_age: all patients are included, kidney_failure is event
+            # For current_age endpoint (R script survival analysis):
+            # - Time axis: report_age (age at last follow-up)
+            # - Event: kidney_failure (Stage 4 or 5 CKD)
+            # - Censored: Has CKD data but not Stage 4/5
+            # - EXCLUDED: Patients without any CKD data (R script line 277)
+            # NOTE: Only P/LP variants included (R script line 656)
             query = """
             WITH variant_classification AS (
                 SELECT DISTINCT
                     p.phenopacket_id,
                     CASE
-                        -- CNVs: Large deletions or duplications
+                        -- CNVs: Large deletions or duplications >= 50kb (17qDel/Dup in R)
+                        -- Intragenic deletions < 50kb are classified as Truncating
                         WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                            AND COALESCE(
+                                (SELECT (ext#>>'{value,length}')::bigint
+                                 FROM jsonb_array_elements(
+                                     interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                 ) AS ext
+                                 WHERE ext->>'name' = 'coordinates'
+                                ), 0) >= 50000
                             THEN 'CNV'
-                        -- Truncating variants (VEP IMPACT-based with pathogenicity fallback)
+                        -- Non-truncating: VEP IMPACT = MODERATE (R script line 89: MODERATE → nT)
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' = 'MODERATE'
+                        ) THEN 'Non-truncating'
+                        -- Truncating variants (R script lines 90-96)
                         WHEN (
-                            -- Priority 1: VEP IMPACT HIGH → Truncating
+                            -- Intragenic deletions/duplications < 50kb → Truncating
+                            (
+                                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                                AND COALESCE(
+                                    (SELECT (ext#>>'{value,length}')::bigint
+                                     FROM jsonb_array_elements(
+                                         interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                     ) AS ext
+                                     WHERE ext->>'name' = 'coordinates'
+                                    ), 0) < 50000
+                            )
+                            OR
+                            -- VEP IMPACT = HIGH → Truncating
                             EXISTS (
                                 SELECT 1
                                 FROM jsonb_array_elements(
@@ -1661,22 +1695,17 @@ async def get_survival_data(
                                   AND ext#>>'{value,impact}' = 'HIGH'
                             )
                             OR
-                            -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
-                            (
-                                EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                    ) AS ext
-                                    WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                                )
-                                AND
-                                interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
-                                    IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                            -- VEP IMPACT = LOW/MODIFIER (already P/LP filtered) → Truncating
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                ) AS ext
+                                WHERE ext->>'name' = 'vep_annotation'
+                                  AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                             )
                             OR
-                            -- Priority 3: HGVS pattern fallback (when not MODERATE)
+                            -- No VEP annotation and not a DEL/DUP (already P/LP filtered) → Truncating
                             (
                                 NOT EXISTS (
                                     SELECT 1
@@ -1684,36 +1713,55 @@ async def get_survival_data(
                                         interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
                                     ) AS ext
                                     WHERE ext->>'name' = 'vep_annotation'
-                                      AND ext#>>'{value,impact}' = 'MODERATE'
                                 )
-                                AND
-                                EXISTS (
-                                    SELECT 1
-                                    FROM jsonb_array_elements(
-                                        interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                                    ) AS expr
-                                    WHERE (
-                                        (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                                        OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                                        OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                                        OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
-                                    )
+                                AND NOT interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                            )
+                            OR
+                            -- HGVS pattern fallback for truncating effects
+                            EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                                ) AS expr
+                                WHERE (
+                                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                    OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
                                 )
                             )
                         ) THEN 'Truncating'
                         ELSE 'Non-truncating'
                     END AS variant_group,
                     p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
+                    -- Event: Stage 4 or Stage 5 CKD (R script lines 248-252)
                     EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                        WHERE pf->'type'->>'id' IN ('HP:0012626', 'HP:0003774')  -- Stage 4 and Stage 5 CKD
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) as has_kidney_failure
                 FROM phenopackets p,
                     jsonb_array_elements(p.phenopacket->'interpretations') as interp
                 WHERE p.deleted_at IS NULL
                     AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+                    -- P/LP filter: Only include Pathogenic/Likely Pathogenic (R script line 656)
+                    AND interp.value->'diagnosis'->'genomicInterpretations'->0->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    -- CKD data filter: Only include patients with ANY CKD data (R script line 277)
+                    -- This matches filter(!is.na(kidney_failure)) in R
+                    AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN (
+                            'HP:0012622',  -- Chronic kidney disease (unspecified)
+                            'HP:0012623',  -- Stage 1 CKD
+                            'HP:0012624',  -- Stage 2 CKD
+                            'HP:0012625',  -- Stage 3 CKD
+                            'HP:0012626',  -- Stage 4 CKD
+                            'HP:0003774'   -- Stage 5 CKD
+                        )
+                    )
             )
             SELECT variant_group, current_age, has_kidney_failure
             FROM variant_classification
@@ -1775,18 +1823,61 @@ async def get_survival_data(
                     if event_times
                 ],
                 "statistical_tests": statistical_tests,
+                # Metadata about filters applied - important for transparency
+                "filters": {
+                    "pathogenicity_filter": "P/LP only",
+                    "ckd_data_required": True,
+                    "cnv_included": True,
+                    "description": (
+                        "Only includes P/LP variants. Requires CKD assessment data. "
+                        "CNVs are included and grouped together (17qDel + 17qDup = CNV). "
+                        "Matches R script kidney_failure_by_effect_group_onlyLPP_CNVgrouped."
+                    ),
+                },
             }
 
         # Standard CKD endpoint
+        # NOTE: Only P/LP variants included to match R script (line 656)
         query = """
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
                 CASE
+                    -- CNVs: Large deletions or duplications >= 50kb (17qDel/Dup in R)
+                    -- Intragenic deletions < 50kb are classified as Truncating
                     WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        AND COALESCE(
+                            (SELECT (ext#>>'{value,length}')::bigint
+                             FROM jsonb_array_elements(
+                                 interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                             ) AS ext
+                             WHERE ext->>'name' = 'coordinates'
+                            ), 0) >= 50000
                         THEN 'CNV'
+                    -- Non-truncating: VEP IMPACT = MODERATE (R script line 89: MODERATE → nT)
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' = 'MODERATE'
+                    ) THEN 'Non-truncating'
+                    -- Truncating variants (R script lines 90-96)
                     WHEN (
-                        -- Priority 1: VEP IMPACT = HIGH
+                        -- Intragenic deletions/duplications < 50kb → Truncating
+                        (
+                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                            AND COALESCE(
+                                (SELECT (ext#>>'{value,length}')::bigint
+                                 FROM jsonb_array_elements(
+                                     interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                 ) AS ext
+                                 WHERE ext->>'name' = 'coordinates'
+                                ), 0) < 50000
+                        )
+                        OR
+                        -- VEP IMPACT = HIGH → Truncating
                         EXISTS (
                             SELECT 1
                             FROM jsonb_array_elements(
@@ -1796,22 +1887,17 @@ async def get_survival_data(
                               AND ext#>>'{value,impact}' = 'HIGH'
                         )
                         OR
-                        -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
-                        (
-                            EXISTS (
-                                SELECT 1
-                                FROM jsonb_array_elements(
-                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                ) AS ext
-                                WHERE ext->>'name' = 'vep_annotation'
-                                  AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                            )
-                            AND
-                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
-                                IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        -- VEP IMPACT = LOW/MODIFIER (already P/LP filtered) → Truncating
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                         )
                         OR
-                        -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT != MODERATE)
+                        -- No VEP annotation and not a DEL/DUP (already P/LP filtered) → Truncating
                         (
                             NOT EXISTS (
                                 SELECT 1
@@ -1819,21 +1905,21 @@ async def get_survival_data(
                                     interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
                                 ) AS ext
                                 WHERE ext->>'name' = 'vep_annotation'
-                                  AND ext#>>'{value,impact}' = 'MODERATE'
                             )
-                            AND
-                            EXISTS (
-                                SELECT 1
-                                FROM jsonb_array_elements(
-                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                                ) AS expr
-                                WHERE (
-                                    -- Frameshift, Nonsense, Splice site patterns
-                                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                                    OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
-                                )
+                            AND NOT interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        )
+                        OR
+                        -- HGVS pattern fallback for truncating effects
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                            ) AS expr
+                            WHERE (
+                                (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
                             )
                         )
                     ) THEN 'Truncating'
@@ -1844,6 +1930,9 @@ async def get_survival_data(
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
             WHERE p.deleted_at IS NULL
+                -- P/LP filter: Only include Pathogenic/Likely Pathogenic (R script line 656)
+                AND interp.value->'diagnosis'->'genomicInterpretations'->0->>'interpretationStatus'
+                    IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
         endpoint_cases AS (
             SELECT
@@ -1886,16 +1975,48 @@ async def get_survival_data(
             if onset_age is not None:
                 groups[variant_group].append((onset_age, True))
 
-        # Get censored patients
+        # Get censored patients (those without the endpoint)
+        # NOTE: Only P/LP variants included to match R script (line 656)
         censored_query = """
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
                 CASE
+                    -- CNVs: Large deletions or duplications >= 50kb (17qDel/Dup in R)
+                    -- Intragenic deletions < 50kb are classified as Truncating
                     WHEN interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        AND COALESCE(
+                            (SELECT (ext#>>'{value,length}')::bigint
+                             FROM jsonb_array_elements(
+                                 interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                             ) AS ext
+                             WHERE ext->>'name' = 'coordinates'
+                            ), 0) >= 50000
                         THEN 'CNV'
+                    -- Non-truncating: VEP IMPACT = MODERATE (R script line 89: MODERATE → nT)
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' = 'MODERATE'
+                    ) THEN 'Non-truncating'
+                    -- Truncating variants (R script lines 90-96)
                     WHEN (
-                        -- Priority 1: VEP IMPACT = HIGH
+                        -- Intragenic deletions/duplications < 50kb → Truncating
+                        (
+                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                            AND COALESCE(
+                                (SELECT (ext#>>'{value,length}')::bigint
+                                 FROM jsonb_array_elements(
+                                     interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                                 ) AS ext
+                                 WHERE ext->>'name' = 'coordinates'
+                                ), 0) < 50000
+                        )
+                        OR
+                        -- VEP IMPACT = HIGH → Truncating
                         EXISTS (
                             SELECT 1
                             FROM jsonb_array_elements(
@@ -1905,22 +2026,17 @@ async def get_survival_data(
                               AND ext#>>'{value,impact}' = 'HIGH'
                         )
                         OR
-                        -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic (only when VEP exists)
-                        (
-                            EXISTS (
-                                SELECT 1
-                                FROM jsonb_array_elements(
-                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                                ) AS ext
-                                WHERE ext->>'name' = 'vep_annotation'
-                                  AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
-                            )
-                            AND
-                            interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,interpretationStatus}'
-                                IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                        -- VEP IMPACT = LOW/MODIFIER (already P/LP filtered) → Truncating
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
+                            ) AS ext
+                            WHERE ext->>'name' = 'vep_annotation'
+                              AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
                         )
                         OR
-                        -- Priority 3: HGVS pattern fallback (when no VEP or IMPACT != MODERATE)
+                        -- No VEP annotation and not a DEL/DUP (already P/LP filtered) → Truncating
                         (
                             NOT EXISTS (
                                 SELECT 1
@@ -1928,21 +2044,21 @@ async def get_survival_data(
                                     interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
                                 ) AS ext
                                 WHERE ext->>'name' = 'vep_annotation'
-                                  AND ext#>>'{value,impact}' = 'MODERATE'
                             )
-                            AND
-                            EXISTS (
-                                SELECT 1
-                                FROM jsonb_array_elements(
-                                    interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
-                                ) AS expr
-                                WHERE (
-                                    -- Frameshift, Nonsense, Splice site patterns
-                                    (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                                    OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                                    OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
-                                )
+                            AND NOT interp.value#>>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,id}' ~ ':(DEL|DUP)'
+                        )
+                        OR
+                        -- HGVS pattern fallback for truncating effects
+                        EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,expressions}'
+                            ) AS expr
+                            WHERE (
+                                (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                                OR (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
                             )
                         )
                     ) THEN 'Truncating'
@@ -1952,6 +2068,9 @@ async def get_survival_data(
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
             WHERE p.deleted_at IS NULL
+                -- P/LP filter: Only include Pathogenic/Likely Pathogenic (R script line 656)
+                AND interp.value->'diagnosis'->'genomicInterpretations'->0->>'interpretationStatus'
+                    IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND NOT EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -2014,17 +2133,31 @@ async def get_survival_data(
                 for group_name, event_times in groups.items()
             ],
             "statistical_tests": statistical_tests,
+            # Metadata about filters applied - important for transparency
+            "filters": {
+                "pathogenicity_filter": "P/LP only",
+                "ckd_data_required": False,
+                "cnv_included": True,
+                "description": (
+                    "Only includes P/LP variants. CNVs are included and grouped "
+                    "together (17qDel + 17qDup = CNV). Uses onset age for CKD stages."
+                ),
+            },
         }
 
     elif comparison == "pathogenicity":
-        print(
-            f"DEBUG: pathogenicity comparison, endpoint={endpoint}, endpoint_hpo_terms={endpoint_hpo_terms}"
-        )
+        # Pathogenicity comparison: P/LP vs VUS
+        # Matches R script: survival_data_variants (ACMG_groups != "LB/B")
+        # Key filters applied to match R script:
+        # 1. CKD data filter: Only patients with CKD assessment (R: filter(!is.na(kidney_failure)))
+        # 2. CNV exclusion: Excludes CNVs since they don't have standard ACMG classification
+        #    (This matches R script's n=255 for LP/P + VUS with no CNVs)
+
         # Check for special current_age endpoint
         if endpoint_hpo_terms is None:
-            print("DEBUG: Using current_age endpoint for pathogenicity")
             # Special case: current_age endpoint (Age at Last Follow-up)
             # Use report_age as time axis, kidney_failure as event
+            # Matches R script: kidney_failure_by_acmg_group (lines 781-790)
             query = """
             WITH pathogenicity_classification AS (
                 SELECT DISTINCT
@@ -2040,7 +2173,7 @@ async def get_survival_data(
                     EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                        WHERE pf->'type'->>'id' IN ('HP:0012626', 'HP:0003774')  -- Stage 4 and Stage 5 CKD
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) as has_kidney_failure
                 FROM phenopackets p,
@@ -2048,6 +2181,23 @@ async def get_survival_data(
                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
                 WHERE p.deleted_at IS NULL
                     AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+                    -- CNV exclusion: Exclude 17q deletions and duplications
+                    -- CNVs don't have standard ACMG classification (R script n=255)
+                    AND gi#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+                    -- CKD data filter: Only include patients with any CKD assessment
+                    -- Matches R script line 650: filter(!is.na(kidney_failure))
+                    AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN (
+                            'HP:0012622',  -- Chronic kidney disease (unspecified)
+                            'HP:0012623',  -- Stage 1 CKD
+                            'HP:0012624',  -- Stage 2 CKD
+                            'HP:0012625',  -- Stage 3 CKD
+                            'HP:0012626',  -- Stage 4 CKD
+                            'HP:0003774'   -- Stage 5 CKD
+                        )
+                    )
             )
             SELECT pathogenicity_group, current_age, has_kidney_failure
             FROM pathogenicity_classification
@@ -2068,6 +2218,9 @@ async def get_survival_data(
 
         else:
             # Standard endpoint: match any of the specified HPO terms
+            # Applies same filters as current_age endpoint:
+            # - CNV exclusion (no 17q DEL/DUP)
+            # - CKD data filter (only patients with CKD assessment)
             query = """
             WITH pathogenicity_classification AS (
                 SELECT DISTINCT
@@ -2085,6 +2238,17 @@ async def get_survival_data(
                     jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
                 WHERE p.deleted_at IS NULL
+                    -- CNV exclusion: Exclude 17q deletions and duplications
+                    AND gi#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+                    -- CKD data filter: Only include patients with any CKD assessment
+                    AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN (
+                            'HP:0012622', 'HP:0012623', 'HP:0012624',
+                            'HP:0012625', 'HP:0012626', 'HP:0003774'
+                        )
+                    )
             ),
             endpoint_cases AS (
                 SELECT
@@ -2128,7 +2292,7 @@ async def get_survival_data(
                 if onset_age is not None:
                     groups[pathogenicity_group].append((onset_age, True))
 
-            # Get censored patients
+            # Get censored patients (same filters applied)
             censored_query = """
             WITH pathogenicity_classification AS (
                 SELECT DISTINCT
@@ -2145,6 +2309,17 @@ async def get_survival_data(
                     jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
                 WHERE p.deleted_at IS NULL
+                    -- CNV exclusion
+                    AND gi#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+                    -- CKD data filter
+                    AND EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' IN (
+                            'HP:0012622', 'HP:0012623', 'HP:0012624',
+                            'HP:0012625', 'HP:0012626', 'HP:0003774'
+                        )
+                    )
                     AND NOT EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -2206,6 +2381,16 @@ async def get_survival_data(
                 if event_times
             ],
             "statistical_tests": statistical_tests,
+            # Metadata about filters applied - important for transparency
+            "filters": {
+                "cnv_excluded": True,
+                "ckd_data_required": True,
+                "description": (
+                    "Excludes CNVs (17q deletions/duplications) since they lack "
+                    "standard ACMG classification. Only includes patients with "
+                    "CKD assessment data. Matches R script kidney_failure_by_acmg_group."
+                ),
+            },
         }
 
     elif comparison == "disease_subtype":
@@ -2248,7 +2433,7 @@ async def get_survival_data(
                     EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' IN ('HP:0012624', 'HP:0003774')
+                        WHERE pf->'type'->>'id' IN ('HP:0012626', 'HP:0003774')  -- Stage 4 and Stage 5 CKD
                             AND COALESCE((pf->>'excluded')::boolean, false) = false
                     ) as has_kidney_failure
                 FROM phenopackets p
