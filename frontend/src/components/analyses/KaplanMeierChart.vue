@@ -24,7 +24,7 @@ export default {
     },
     margin: {
       type: Object,
-      default: () => ({ top: 60, right: 100, bottom: 100, left: 80 }),
+      default: () => ({ top: 60, right: 100, bottom: 60, left: 80 }),
     },
   },
   watch: {
@@ -46,7 +46,11 @@ export default {
     renderChart() {
       d3.select(this.$refs.chart).selectAll('*').remove();
 
-      if (!this.survivalData || !this.survivalData.groups || this.survivalData.groups.length === 0) {
+      if (
+        !this.survivalData ||
+        !this.survivalData.groups ||
+        this.survivalData.groups.length === 0
+      ) {
         d3.select(this.$refs.chart)
           .append('div')
           .style('text-align', 'center')
@@ -89,13 +93,7 @@ export default {
       svg
         .append('g')
         .attr('class', 'grid')
-        .call(
-          d3
-            .axisLeft(y)
-            .ticks(10)
-            .tickSize(-svgWidth)
-            .tickFormat('')
-        )
+        .call(d3.axisLeft(y).ticks(10).tickSize(-svgWidth).tickFormat(''))
         .selectAll('line')
         .style('stroke', '#e0e0e0')
         .style('stroke-dasharray', '2,2');
@@ -105,13 +103,7 @@ export default {
         .append('g')
         .attr('class', 'grid')
         .attr('transform', `translate(0,${svgHeight})`)
-        .call(
-          d3
-            .axisBottom(x)
-            .ticks(10)
-            .tickSize(-svgHeight)
-            .tickFormat('')
-        )
+        .call(d3.axisBottom(x).ticks(10).tickSize(-svgHeight).tickFormat(''))
         .selectAll('line')
         .style('stroke', '#e0e0e0')
         .style('stroke-dasharray', '2,2');
@@ -385,107 +377,6 @@ export default {
           .text(`${group.name} (n=${group.n}, events=${group.events})`);
       });
 
-      // Add risk table below chart
-      this.renderRiskTable(svg, groups, x, svgHeight, svgWidth, colorScale);
-
-      // Add statistical tests below risk table
-      if (this.survivalData.statistical_tests && this.survivalData.statistical_tests.length > 0) {
-        this.renderStatisticalTests(svg, svgHeight, svgWidth);
-      }
-    },
-
-    renderRiskTable(svg, groups, xScale, chartHeight, chartWidth, colorScale) {
-      const riskTableY = chartHeight + 70;
-      const rowHeight = 25;
-
-      // Title
-      svg
-        .append('text')
-        .attr('x', 0)
-        .attr('y', riskTableY - 10)
-        .style('font-size', '13px')
-        .style('font-weight', 'bold')
-        .text('Number at Risk');
-
-      // Get time points (every few years)
-      const maxTime = d3.max(groups, (g) => d3.max(g.survival_data, (d) => d.time));
-      const timePoints = d3.range(0, maxTime + 1, Math.ceil(maxTime / 8));
-
-      // Column headers (time points)
-      timePoints.forEach((time) => {
-        svg
-          .append('text')
-          .attr('x', xScale(time))
-          .attr('y', riskTableY + 5)
-          .attr('text-anchor', 'middle')
-          .style('font-size', '11px')
-          .style('font-weight', 'bold')
-          .text(time);
-      });
-
-      // Rows for each group
-      groups.forEach((group, i) => {
-        const yPos = riskTableY + (i + 1) * rowHeight;
-        const color = colorScale(i);
-
-        // Group label
-        svg
-          .append('text')
-          .attr('x', -10)
-          .attr('y', yPos + 5)
-          .attr('text-anchor', 'end')
-          .style('font-size', '11px')
-          .style('fill', color)
-          .style('font-weight', 'bold')
-          .text(group.name);
-
-        // Number at risk at each time point
-        timePoints.forEach((time) => {
-          // Find the closest data point <= time
-          const dataPoint = group.survival_data
-            .filter((d) => d.time <= time)
-            .sort((a, b) => b.time - a.time)[0];
-
-          if (dataPoint) {
-            svg
-              .append('text')
-              .attr('x', xScale(time))
-              .attr('y', yPos + 5)
-              .attr('text-anchor', 'middle')
-              .style('font-size', '11px')
-              .text(dataPoint.at_risk);
-          }
-        });
-      });
-    },
-
-    renderStatisticalTests(svg, chartHeight, chartWidth) {
-      const testsY = chartHeight + 200;
-
-      svg
-        .append('text')
-        .attr('x', 0)
-        .attr('y', testsY - 10)
-        .style('font-size', '13px')
-        .style('font-weight', 'bold')
-        .text('Log-Rank Tests (Pairwise Comparisons)');
-
-      this.survivalData.statistical_tests.forEach((test, i) => {
-        const yPos = testsY + i * 20;
-        const significant = test.significant ? ' ***' : '';
-        const color = test.significant ? '#D32F2F' : '#666';
-
-        svg
-          .append('text')
-          .attr('x', 0)
-          .attr('y', yPos + 5)
-          .style('font-size', '11px')
-          .style('fill', color)
-          .style('font-weight', test.significant ? 'bold' : 'normal')
-          .text(
-            `${test.group1} vs ${test.group2}: χ² = ${test.statistic.toFixed(2)}, p = ${test.p_value.toFixed(4)}${significant}`
-          );
-      });
     },
 
     getComparisonTitle(comparisonType) {

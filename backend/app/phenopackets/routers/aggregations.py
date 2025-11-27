@@ -1574,6 +1574,7 @@ async def get_survival_data(
         Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
     from app.phenopackets.survival_analysis import (
+        apply_bonferroni_correction,
         calculate_kaplan_meier,
         calculate_log_rank_test,
         parse_iso8601_age,
@@ -1832,6 +1833,9 @@ async def get_survival_data(
                             }
                         )
 
+            # Apply Bonferroni correction for multiple comparisons
+            statistical_tests = apply_bonferroni_correction(statistical_tests)
+
             return {
                 "comparison_type": "variant_type",
                 "endpoint": endpoint_label,
@@ -1846,15 +1850,36 @@ async def get_survival_data(
                     if event_times
                 ],
                 "statistical_tests": statistical_tests,
-                # Metadata about filters applied - important for transparency
-                "filters": {
-                    "pathogenicity_filter": "P/LP only",
-                    "ckd_data_required": True,
-                    "cnv_included": True,
-                    "description": (
-                        "Only includes P/LP variants. Requires CKD assessment data. "
-                        "CNVs are included and grouped together (17qDel + 17qDup = CNV). "
-                        "Matches R script kidney_failure_by_effect_group_onlyLPP_CNVgrouped."
+                # Metadata for transparency
+                "metadata": {
+                    "event_definition": (
+                        "Kidney failure: CKD Stage 4 (HP:0012626) or "
+                        "Stage 5/ESRD (HP:0003774)"
+                    ),
+                    "time_axis": "Age at last clinical encounter (timeAtLastEncounter)",
+                    "censoring": (
+                        "Patients without kidney failure are censored at their "
+                        "last reported age"
+                    ),
+                    "group_definitions": {
+                        "CNV": (
+                            "Copy number variants: deletions or duplications ≥50kb "
+                            "(17q12 deletion/duplication syndrome)"
+                        ),
+                        "Truncating": (
+                            "Frameshift, nonsense (stop gained), splice site variants, "
+                            "or intragenic deletions <50kb"
+                        ),
+                        "Non-truncating": (
+                            "Missense variants and other variants with MODERATE impact"
+                        ),
+                    },
+                    "inclusion_criteria": (
+                        "Pathogenic (P) and Likely Pathogenic (LP) variants only. "
+                        "Requires CKD assessment data."
+                    ),
+                    "exclusion_criteria": (
+                        "VUS, Likely Benign, and Benign variants excluded"
                     ),
                 },
             }
@@ -2143,6 +2168,9 @@ async def get_survival_data(
                         }
                     )
 
+        # Apply Bonferroni correction for multiple comparisons
+        statistical_tests = apply_bonferroni_correction(statistical_tests)
+
         return {
             "comparison_type": "variant_type",
             "endpoint": endpoint_label,
@@ -2156,14 +2184,32 @@ async def get_survival_data(
                 for group_name, event_times in groups.items()
             ],
             "statistical_tests": statistical_tests,
-            # Metadata about filters applied - important for transparency
-            "filters": {
-                "pathogenicity_filter": "P/LP only",
-                "ckd_data_required": False,
-                "cnv_included": True,
-                "description": (
-                    "Only includes P/LP variants. CNVs are included and grouped "
-                    "together (17qDel + 17qDup = CNV). Uses onset age for CKD stages."
+            # Metadata for transparency
+            "metadata": {
+                "event_definition": f"Onset of {endpoint_label}",
+                "time_axis": "Age at phenotype onset (from phenotypicFeatures.onset)",
+                "censoring": (
+                    "Patients without the endpoint phenotype are censored at their "
+                    "last reported age (timeAtLastEncounter)"
+                ),
+                "group_definitions": {
+                    "CNV": (
+                        "Copy number variants: deletions or duplications ≥50kb "
+                        "(17q12 deletion/duplication syndrome)"
+                    ),
+                    "Truncating": (
+                        "Frameshift, nonsense (stop gained), splice site variants, "
+                        "or intragenic deletions <50kb"
+                    ),
+                    "Non-truncating": (
+                        "Missense variants and other variants with MODERATE impact"
+                    ),
+                },
+                "inclusion_criteria": (
+                    "Pathogenic (P) and Likely Pathogenic (LP) variants only"
+                ),
+                "exclusion_criteria": (
+                    "VUS, Likely Benign, and Benign variants excluded"
                 ),
             },
         }
@@ -2390,6 +2436,9 @@ async def get_survival_data(
                     }
                 )
 
+        # Apply Bonferroni correction for multiple comparisons
+        statistical_tests = apply_bonferroni_correction(statistical_tests)
+
         return {
             "comparison_type": "pathogenicity",
             "endpoint": endpoint_label,
@@ -2404,14 +2453,33 @@ async def get_survival_data(
                 if event_times
             ],
             "statistical_tests": statistical_tests,
-            # Metadata about filters applied - important for transparency
-            "filters": {
-                "cnv_excluded": True,
-                "ckd_data_required": True,
-                "description": (
-                    "Excludes CNVs (17q deletions/duplications) since they lack "
-                    "standard ACMG classification. Only includes patients with "
-                    "CKD assessment data. Matches R script kidney_failure_by_acmg_group."
+            # Metadata for transparency
+            "metadata": {
+                "event_definition": (
+                    "Kidney failure: CKD Stage 4 (HP:0012626) or "
+                    "Stage 5/ESRD (HP:0003774)"
+                ),
+                "time_axis": "Age at last clinical encounter (timeAtLastEncounter)",
+                "censoring": (
+                    "Patients without kidney failure are censored at their "
+                    "last reported age"
+                ),
+                "group_definitions": {
+                    "P/LP": (
+                        "Pathogenic or Likely Pathogenic variants according to "
+                        "ACMG/AMP guidelines"
+                    ),
+                    "VUS": (
+                        "Variants of Uncertain Significance - insufficient evidence "
+                        "to classify as pathogenic or benign"
+                    ),
+                },
+                "inclusion_criteria": (
+                    "P/LP and VUS variants only. Requires CKD assessment data."
+                ),
+                "exclusion_criteria": (
+                    "CNVs excluded (lack standard ACMG classification). "
+                    "Likely Benign and Benign variants excluded."
                 ),
             },
         }
@@ -2542,6 +2610,9 @@ async def get_survival_data(
                         }
                     )
 
+            # Apply Bonferroni correction for multiple comparisons
+            statistical_tests = apply_bonferroni_correction(statistical_tests)
+
             return {
                 "comparison_type": "disease_subtype",
                 "endpoint": endpoint_label,
@@ -2556,6 +2627,34 @@ async def get_survival_data(
                     if event_times
                 ],
                 "statistical_tests": statistical_tests,
+                # Metadata for transparency
+                "metadata": {
+                    "event_definition": (
+                        "Kidney failure: CKD Stage 4 (HP:0012626) or "
+                        "Stage 5/ESRD (HP:0003774)"
+                    ),
+                    "time_axis": "Age at last clinical encounter (timeAtLastEncounter)",
+                    "censoring": (
+                        "Patients without kidney failure are censored at their "
+                        "last reported age"
+                    ),
+                    "group_definitions": {
+                        "CAKUT": (
+                            "Multicystic kidney dysplasia (HP:0000003), OR "
+                            "Unilateral renal agenesis (HP:0000122), OR "
+                            "Renal hypoplasia (HP:0000089), OR "
+                            "Abnormal renal morphology (HP:0012210), OR "
+                            "(Genital abnormality AND any kidney involvement)"
+                        ),
+                        "MODY": "Maturity-onset diabetes of the young (HP:0004904)",
+                        "CAKUT/MODY": "Meets criteria for both CAKUT and MODY",
+                        "Other": "Does not meet criteria for CAKUT or MODY",
+                    },
+                    "inclusion_criteria": (
+                        "All patients with P/LP/VUS variants and reported age"
+                    ),
+                    "exclusion_criteria": "Likely Benign and Benign variants excluded",
+                },
             }
 
         # Standard CKD endpoint (not current_age)
@@ -2782,6 +2881,9 @@ async def get_survival_data(
                     }
                 )
 
+        # Apply Bonferroni correction for multiple comparisons
+        statistical_tests = apply_bonferroni_correction(statistical_tests)
+
         return {
             "comparison_type": "disease_subtype",
             "endpoint": endpoint_label,
@@ -2796,6 +2898,29 @@ async def get_survival_data(
                 if event_times
             ],
             "statistical_tests": statistical_tests,
+            # Metadata for transparency
+            "metadata": {
+                "event_definition": f"Onset of {endpoint_label}",
+                "time_axis": "Age at phenotype onset (from phenotypicFeatures.onset)",
+                "censoring": (
+                    "Patients without the endpoint phenotype are censored at their "
+                    "last reported age (timeAtLastEncounter)"
+                ),
+                "group_definitions": {
+                    "CAKUT": (
+                        "Multicystic kidney dysplasia (HP:0000003), OR "
+                        "Unilateral renal agenesis (HP:0000122), OR "
+                        "Renal hypoplasia (HP:0000089), OR "
+                        "Abnormal renal morphology (HP:0012210), OR "
+                        "(Genital abnormality AND any kidney involvement)"
+                    ),
+                    "MODY": "Maturity-onset diabetes of the young (HP:0004904)",
+                    "CAKUT/MODY": "Meets criteria for both CAKUT and MODY",
+                    "Other": "Does not meet criteria for CAKUT or MODY",
+                },
+                "inclusion_criteria": "All patients with P/LP/VUS variants",
+                "exclusion_criteria": "Likely Benign and Benign variants excluded",
+            },
         }
 
     else:

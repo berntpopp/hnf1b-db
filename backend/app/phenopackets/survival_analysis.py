@@ -4,6 +4,19 @@ This module provides utilities for:
 - Parsing ISO8601 age durations
 - Calculating Kaplan-Meier survival estimates with confidence intervals
 - Computing log-rank test statistics
+
+Implementation Notes:
+- Uses the standard Kaplan-Meier product-limit estimator: S(t) = ∏[(n-d)/n]
+- Ties handled naturally by KM formula (events at same time processed together)
+- Confidence intervals use log-log transformation (matches R's survfit default)
+- Variance uses Greenwood's formula
+- Log-rank test uses Mantel-Haenszel method (matches R's survdiff)
+- p-values calculated using scipy's chi-square distribution (matches R's pchisq)
+
+Note on tie methods:
+- "Efron" vs "Breslow" tie handling applies to Cox PH regression (coxph()),
+  NOT to the Kaplan-Meier estimator (survfit()).
+- Both R's survfit() and this implementation use the standard product-limit formula.
 """
 
 import math
@@ -102,8 +115,13 @@ def parse_onset_ontology(ontology_class: dict) -> Optional[float]:
 def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
     """Calculate Kaplan-Meier survival estimates with 95% confidence intervals.
 
-    Uses Greenwood's formula for variance estimation and log-log transformation
-    for confidence interval calculation (more accurate for extreme probabilities).
+    Uses the standard product-limit estimator: S(t) = ∏[(n-d)/n]
+    with Greenwood's formula for variance and log-log transformation for CIs.
+
+    This matches R's survfit() function behavior exactly:
+    - Ties are handled naturally (multiple events at same time processed together)
+    - Confidence intervals use log-log transformation
+    - Variance uses Greenwood's formula
 
     Args:
         event_times: List of (time, event_occurred) tuples
@@ -140,7 +158,7 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
     sorted_data = sorted(event_times, key=lambda x: x[0])
 
     # Group by unique time points
-    time_groups = {}
+    time_groups: dict[float, dict[str, int]] = {}
     for time, event in sorted_data:
         if time not in time_groups:
             time_groups[time] = {"events": 0, "censored": 0}
@@ -153,7 +171,7 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
     result = []
     n_at_risk = len(event_times)
     survival_prob = 1.0
-    greenwood_variance = 0.0  # Cumulative variance using Greenwood's formula
+    greenwood_sum = 0.0  # Cumulative sum for Greenwood's formula
 
     # Start at time 0
     result.append(
@@ -170,42 +188,49 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
 
     for time in sorted(time_groups.keys()):
         group = time_groups[time]
-        events = group["events"]
+        d = group["events"]  # Number of events (deaths) at this time
         censored = group["censored"]
+        n = n_at_risk  # Number at risk at this time
 
-        # Update survival probability (only for events, not censored)
-        if events > 0:
-            survival_prob *= (n_at_risk - events) / n_at_risk
+        # Update survival probability using product-limit formula
+        # S(t) = S(t-1) * (n - d) / n
+        # This is the standard Kaplan-Meier estimator
+        if d > 0:
+            survival_prob *= (n - d) / n
 
-            # Update Greenwood's variance:
+            # Greenwood's variance formula:
             # Var(S(t)) = S(t)^2 * sum(d_i / (n_i * (n_i - d_i)))
-            if n_at_risk > events:
-                greenwood_variance += events / (n_at_risk * (n_at_risk - events))
+            if n > d:
+                greenwood_sum += d / (n * (n - d))
 
         # Calculate 95% confidence interval using log-log transformation
-        # More accurate for extreme probabilities than plain Greenwood
+        # This matches R's survfit() default: conf.type = "log-log"
         ci_lower = 1.0
         ci_upper = 1.0
 
-        if survival_prob > 0 and survival_prob < 1 and greenwood_variance > 0:
-            se = survival_prob * math.sqrt(greenwood_variance)  # Standard error
+        if survival_prob > 0 and survival_prob < 1 and greenwood_sum > 0:
+            se = survival_prob * math.sqrt(greenwood_sum)  # Standard error
             z = 1.96  # 95% CI
 
             # Log-log transformation for better CI at extreme probabilities
-            if survival_prob > 0:
+            try:
                 log_log_s = math.log(-math.log(survival_prob))
                 se_log_log = se / (survival_prob * abs(math.log(survival_prob)))
 
                 ci_lower_ll = log_log_s - z * se_log_log
                 ci_upper_ll = log_log_s + z * se_log_log
 
-                # Note: swap for correct bounds
+                # Note: swap for correct bounds due to log-log transform
                 ci_lower = math.exp(-math.exp(ci_upper_ll))
                 ci_upper = math.exp(-math.exp(ci_lower_ll))
 
                 # Clip to valid probability range
                 ci_lower = max(0.0, min(1.0, ci_lower))
                 ci_upper = max(0.0, min(1.0, ci_upper))
+            except (ValueError, OverflowError):
+                # Handle edge cases where log fails
+                ci_lower = 0.0
+                ci_upper = 1.0
 
         result.append(
             {
@@ -213,14 +238,14 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
                 "survival_probability": round(survival_prob, 4),
                 "ci_lower": round(ci_lower, 4),
                 "ci_upper": round(ci_upper, 4),
-                "at_risk": n_at_risk,
-                "events": events,
+                "at_risk": n,
+                "events": d,
                 "censored": censored,
             }
         )
 
         # Update number at risk for next time point
-        n_at_risk -= events + censored
+        n_at_risk -= d + censored
 
     return result
 
@@ -243,8 +268,11 @@ def calculate_log_rank_test(
         }
 
     Note:
-        Uses Mantel-Haenszel log-rank test for comparing survival distributions
+        Uses Mantel-Haenszel log-rank test for comparing survival distributions.
+        This matches R's survdiff() function.
     """
+    from scipy.stats import chi2
+
     # Combine all unique event times
     all_times = set()
     for time, _ in group1_times + group2_times:
@@ -286,7 +314,7 @@ def calculate_log_rank_test(
         # Update test statistic components
         observed_minus_expected += d1 - expected_d1
 
-        # Variance component
+        # Variance component (hypergeometric variance)
         if n_total > 1:
             var_component = (n1_risk * n2_risk * d_total * (n_total - d_total)) / (
                 n_total * n_total * (n_total - 1)
@@ -300,21 +328,56 @@ def calculate_log_rank_test(
         chi_square = 0.0
 
     # Calculate p-value from chi-square distribution (df=1)
-    # Using simple approximation for p-value
-    # For production, would use scipy.stats.chi2.sf(chi_square, 1)
-    import math
-
+    # Using scipy for exact calculation (matches R's pchisq)
     if chi_square == 0:
         p_value = 1.0
     else:
-        # Approximate p-value using normal approximation
-        z = math.sqrt(chi_square)
-        # Two-tailed test
-        p_value = 2 * (1 - 0.5 * (1 + math.erf(z / math.sqrt(2))))
-        p_value = max(0.0, min(1.0, p_value))
+        # Survival function (1 - CDF) gives the p-value for chi-square test
+        p_value = float(chi2.sf(chi_square, df=1))
 
     return {
         "statistic": round(chi_square, 4),
         "p_value": round(p_value, 4),
         "significant": p_value < 0.05,
     }
+
+
+def apply_bonferroni_correction(statistical_tests: list[dict]) -> list[dict]:
+    """Apply Bonferroni correction to pairwise statistical tests.
+
+    Bonferroni correction adjusts p-values for multiple comparisons by
+    multiplying each p-value by the number of tests (capped at 1.0).
+
+    Args:
+        statistical_tests: List of test results with 'p_value' field
+
+    Returns:
+        List of test results with added fields:
+        - p_value_corrected: Bonferroni-corrected p-value
+        - significant: Updated based on corrected p-value
+
+    Example:
+        >>> tests = [{"p_value": 0.01}, {"p_value": 0.03}, {"p_value": 0.06}]
+        >>> corrected = apply_bonferroni_correction(tests)
+        >>> corrected[0]["p_value_corrected"]  # 0.01 * 3 = 0.03
+        0.03
+    """
+    n_tests = len(statistical_tests)
+
+    if n_tests == 0:
+        return statistical_tests
+
+    corrected_tests = []
+    for test in statistical_tests:
+        # Bonferroni: multiply p-value by number of tests, cap at 1.0
+        p_corrected = min(test["p_value"] * n_tests, 1.0)
+
+        corrected_test = {
+            **test,
+            "p_value_corrected": round(p_corrected, 4),
+            # Significance is now based on corrected p-value
+            "significant": p_corrected < 0.05,
+        }
+        corrected_tests.append(corrected_test)
+
+    return corrected_tests
