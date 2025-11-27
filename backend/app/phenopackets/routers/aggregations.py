@@ -1580,13 +1580,36 @@ async def get_survival_data(
         parse_onset_ontology,
     )
 
-    # CAKUT HPO terms (from R script lines 171-203)
+    # CAKUT HPO terms (from R script lines 197-206)
+    # Direct CAKUT phenotypes: Multicystic dysplasia, Unilateral agenesis,
+    # Renal hypoplasia, Abnormal renal morphology
     CAKUT_HPO_TERMS = [
-        "HP:0000107",  # Renal cyst
+        "HP:0000003",  # Multicystic kidney dysplasia
+        "HP:0000122",  # Unilateral renal agenesis
+        "HP:0000089",  # Renal hypoplasia
+        "HP:0012210",  # Abnormal renal morphology
+    ]
+
+    # Genital abnormality HPO term (R script line 201: combined with any_kidney)
+    GENITAL_HPO = "HP:0000078"  # Abnormality of the genital system
+
+    # ANY_KIDNEY HPO terms (R script lines 171-189 for any_kidney helper)
+    # Used for the genital + any_kidney combination to classify as CAKUT
+    ANY_KIDNEY_HPO_TERMS = [
+        "HP:0012622",  # Chronic kidney disease (unspecified)
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
         "HP:0000003",  # Multicystic kidney dysplasia
         "HP:0000089",  # Renal hypoplasia
+        "HP:0000107",  # Renal cyst
         "HP:0000122",  # Unilateral renal agenesis
         "HP:0012210",  # Abnormal renal morphology
+        "HP:0033133",  # Renal cortical hyperechogenicity
+        "HP:0000108",  # Multiple glomerular cysts
+        "HP:0001970",  # Oligomeganephronia
     ]
 
     # MODY HPO term (from R script line 193)
@@ -2399,36 +2422,42 @@ async def get_survival_data(
             # Special case: current_age endpoint (Age at Last Follow-up)
             # Use report_age as time axis, kidney_failure as event
             # Per R script lines 229-233: "Other" has status=0 (censored)
+            # R script CAKUT definition (lines 197-206):
+            # CAKUT = Multicystic dysplasia | Unilateral agenesis |
+            #         (Genital abnormality & any_kidney) | Renal hypoplasia |
+            #         Abnormal renal morphology
             query = """
             WITH disease_classification AS (
                 SELECT DISTINCT
                     p.phenopacket_id,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                            WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                                AND COALESCE((pf->>'excluded')::boolean, false) = false
-                        ) AND EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                            WHERE pf->'type'->>'id' = :mody_hpo
-                                AND COALESCE((pf->>'excluded')::boolean, false) = false
-                        ) THEN 'CAKUT/MODY'
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                            WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                                AND COALESCE((pf->>'excluded')::boolean, false) = false
-                        ) THEN 'CAKUT'
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                            WHERE pf->'type'->>'id' = :mody_hpo
-                                AND COALESCE((pf->>'excluded')::boolean, false) = false
-                        ) THEN 'MODY'
-                        ELSE 'Other'
-                    END AS disease_group,
+                    -- Helper: has direct CAKUT phenotype
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_direct_cakut,
+                    -- Helper: has genital abnormality
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = :genital_hpo
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_genital,
+                    -- Helper: has any kidney involvement (R script any_kidney)
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = ANY(:any_kidney_hpo_terms)
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_any_kidney,
+                    -- Helper: has MODY
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                        WHERE pf->'type'->>'id' = :mody_hpo
+                            AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    ) as has_mody,
                     p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' as current_age,
                     EXISTS (
                         SELECT 1
@@ -2439,33 +2468,57 @@ async def get_survival_data(
                 FROM phenopackets p
                 WHERE p.deleted_at IS NULL
                     AND p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration' IS NOT NULL
+            ),
+            classified AS (
+                SELECT
+                    phenopacket_id,
+                    current_age,
+                    has_kidney_failure,
+                    -- CAKUT: direct CAKUT terms OR (genital AND any_kidney)
+                    (has_direct_cakut OR (has_genital AND has_any_kidney)) as is_cakut,
+                    has_mody as is_mody
+                FROM disease_classification
             )
-            SELECT disease_group, current_age, has_kidney_failure
-            FROM disease_classification
-            WHERE disease_group != 'Other'
+            SELECT
+                CASE
+                    WHEN is_cakut AND is_mody THEN 'CAKUT/MODY'
+                    WHEN is_cakut THEN 'CAKUT'
+                    WHEN is_mody THEN 'MODY'
+                    ELSE 'Other'
+                END AS disease_group,
+                current_age,
+                has_kidney_failure
+            FROM classified
             """
 
             result = await db.execute(
                 text(query),
                 {
                     "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                    "genital_hpo": GENITAL_HPO,
+                    "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
                     "mody_hpo": MODY_HPO,
                 },
             )
             rows = result.fetchall()
 
-            groups = {"CAKUT": [], "CAKUT/MODY": [], "MODY": []}
+            disease_groups: dict[str, list[tuple[float, bool]]] = {
+                "CAKUT": [],
+                "CAKUT/MODY": [],
+                "MODY": [],
+                "Other": [],
+            }
 
             for row in rows:
                 current_age = parse_iso8601_age(row.current_age)
                 if current_age is not None:
                     # Per R script: event is kidney_failure, not reaching current age
                     is_event = row.has_kidney_failure
-                    groups[row.disease_group].append((current_age, is_event))
+                    disease_groups[row.disease_group].append((current_age, is_event))
 
             # Calculate Kaplan-Meier curves
             survival_curves = {}
-            for group_name, event_times in groups.items():
+            for group_name, event_times in disease_groups.items():
                 if event_times:
                     survival_curves[group_name] = calculate_kaplan_meier(event_times)
                 else:
@@ -2473,13 +2526,13 @@ async def get_survival_data(
 
             # Perform pairwise log-rank tests
             statistical_tests = []
-            group_names = [g for g in groups.keys() if groups[g]]
+            group_names = [g for g in disease_groups.keys() if disease_groups[g]]
             for i in range(len(group_names)):
                 for j in range(i + 1, len(group_names)):
                     group1 = group_names[i]
                     group2 = group_names[j]
                     test_result = calculate_log_rank_test(
-                        groups[group1], groups[group2]
+                        disease_groups[group1], disease_groups[group2]
                     )
                     statistical_tests.append(
                         {
@@ -2499,7 +2552,7 @@ async def get_survival_data(
                         "events": sum(1 for _, event in event_times if event),
                         "survival_data": survival_curves[group_name],
                     }
-                    for group_name, event_times in groups.items()
+                    for group_name, event_times in disease_groups.items()
                     if event_times
                 ],
                 "statistical_tests": statistical_tests,
@@ -2507,40 +2560,66 @@ async def get_survival_data(
 
         # Standard CKD endpoint (not current_age)
         # Query for CAKUT vs CAKUT/MODY vs MODY (R script lines 197-214)
+        # R script CAKUT definition: direct CAKUT terms OR (genital AND any_kidney)
         query = """
         WITH disease_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                CASE
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) AND EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = :mody_hpo
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT/MODY'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = :mody_hpo
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'MODY'
-                    ELSE 'Other'
-                END AS disease_group,
+                -- Helper: has direct CAKUT phenotype
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_direct_cakut,
+                -- Helper: has genital abnormality
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :genital_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_genital,
+                -- Helper: has any kidney involvement (R script any_kidney)
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = ANY(:any_kidney_hpo_terms)
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_any_kidney,
+                -- Helper: has MODY
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :mody_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_mody,
                 p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
                 p.phenopacket as phenopacket_data
             FROM phenopackets p
             WHERE p.deleted_at IS NULL
+        ),
+        classified AS (
+            SELECT
+                phenopacket_id,
+                current_age,
+                phenopacket_data,
+                -- CAKUT: direct CAKUT terms OR (genital AND any_kidney)
+                (has_direct_cakut OR (has_genital AND has_any_kidney)) as is_cakut,
+                has_mody as is_mody
+            FROM disease_classification
+        ),
+        with_disease_group AS (
+            SELECT
+                phenopacket_id,
+                CASE
+                    WHEN is_cakut AND is_mody THEN 'CAKUT/MODY'
+                    WHEN is_cakut THEN 'CAKUT'
+                    WHEN is_mody THEN 'MODY'
+                    ELSE 'Other'
+                END AS disease_group,
+                current_age,
+                phenopacket_data
+            FROM classified
         ),
         endpoint_cases AS (
             SELECT
@@ -2549,7 +2628,7 @@ async def get_survival_data(
                 dc.current_age,
                 pf->'onset' as onset,
                 pf->'onset'->>'age' as onset_age
-            FROM disease_classification dc,
+            FROM with_disease_group dc,
                 jsonb_array_elements(dc.phenopacket_data->'phenotypicFeatures') as pf
             WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                 AND COALESCE((pf->>'excluded')::boolean, false) = false
@@ -2560,13 +2639,14 @@ async def get_survival_data(
             onset_age,
             onset
         FROM endpoint_cases
-        WHERE disease_group != 'Other'
         """
 
         result = await db.execute(
             text(query),
             {
                 "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                "genital_hpo": GENITAL_HPO,
+                "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
                 "mody_hpo": MODY_HPO,
                 "endpoint_hpo_terms": endpoint_hpo_terms,
             },
@@ -2574,7 +2654,12 @@ async def get_survival_data(
         rows = result.fetchall()
 
         # Group data by disease subtype
-        groups = {"CAKUT": [], "CAKUT/MODY": [], "MODY": []}
+        subtype_groups: dict[str, list[tuple[float, bool]]] = {
+            "CAKUT": [],
+            "CAKUT/MODY": [],
+            "MODY": [],
+            "Other": [],
+        }
 
         for row in rows:
             disease_group = row.disease_group
@@ -2587,39 +2672,42 @@ async def get_survival_data(
                 onset_age = parse_onset_ontology(dict(row.onset))
 
             if onset_age is not None:
-                groups[disease_group].append((onset_age, True))
+                subtype_groups[disease_group].append((onset_age, True))
 
         # Get censored patients
+        # R script CAKUT definition: direct CAKUT terms OR (genital AND any_kidney)
         censored_query = """
         WITH disease_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                CASE
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) AND EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = :mody_hpo
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT/MODY'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'CAKUT'
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
-                        WHERE pf->'type'->>'id' = :mody_hpo
-                            AND COALESCE((pf->>'excluded')::boolean, false) = false
-                    ) THEN 'MODY'
-                    ELSE 'Other'
-                END AS disease_group,
+                -- Helper: has direct CAKUT phenotype
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = ANY(:cakut_hpo_terms)
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_direct_cakut,
+                -- Helper: has genital abnormality
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :genital_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_genital,
+                -- Helper: has any kidney involvement (R script any_kidney)
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = ANY(:any_kidney_hpo_terms)
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_any_kidney,
+                -- Helper: has MODY
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+                    WHERE pf->'type'->>'id' = :mody_hpo
+                        AND COALESCE((pf->>'excluded')::boolean, false) = false
+                ) as has_mody,
                 p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
             FROM phenopackets p
             WHERE p.deleted_at IS NULL
@@ -2630,16 +2718,33 @@ async def get_survival_data(
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 )
                 AND p.phenopacket->'subject'->>'timeAtLastEncounter' IS NOT NULL
+        ),
+        classified AS (
+            SELECT
+                phenopacket_id,
+                current_age,
+                -- CAKUT: direct CAKUT terms OR (genital AND any_kidney)
+                (has_direct_cakut OR (has_genital AND has_any_kidney)) as is_cakut,
+                has_mody as is_mody
+            FROM disease_classification
         )
-        SELECT disease_group, current_age
-        FROM disease_classification
-        WHERE disease_group != 'Other'
+        SELECT
+            CASE
+                WHEN is_cakut AND is_mody THEN 'CAKUT/MODY'
+                WHEN is_cakut THEN 'CAKUT'
+                WHEN is_mody THEN 'MODY'
+                ELSE 'Other'
+            END AS disease_group,
+            current_age
+        FROM classified
         """
 
         censored_result = await db.execute(
             text(censored_query),
             {
                 "cakut_hpo_terms": CAKUT_HPO_TERMS,
+                "genital_hpo": GENITAL_HPO,
+                "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
                 "mody_hpo": MODY_HPO,
                 "endpoint_hpo_terms": endpoint_hpo_terms,
             },
@@ -2649,11 +2754,11 @@ async def get_survival_data(
         for row in censored_rows:
             current_age = parse_iso8601_age(row.current_age)
             if current_age is not None:
-                groups[row.disease_group].append((current_age, False))
+                subtype_groups[row.disease_group].append((current_age, False))
 
         # Calculate Kaplan-Meier curves
         survival_curves = {}
-        for group_name, event_times in groups.items():
+        for group_name, event_times in subtype_groups.items():
             if event_times:
                 survival_curves[group_name] = calculate_kaplan_meier(event_times)
             else:
@@ -2661,12 +2766,14 @@ async def get_survival_data(
 
         # Perform pairwise log-rank tests
         statistical_tests = []
-        group_names = [g for g in groups.keys() if groups[g]]
+        group_names = [g for g in subtype_groups.keys() if subtype_groups[g]]
         for i in range(len(group_names)):
             for j in range(i + 1, len(group_names)):
                 group1 = group_names[i]
                 group2 = group_names[j]
-                test_result = calculate_log_rank_test(groups[group1], groups[group2])
+                test_result = calculate_log_rank_test(
+                    subtype_groups[group1], subtype_groups[group2]
+                )
                 statistical_tests.append(
                     {
                         "group1": group1,
@@ -2685,7 +2792,7 @@ async def get_survival_data(
                     "events": sum(1 for _, event in event_times if event),
                     "survival_data": survival_curves[group_name],
                 }
-                for group_name, event_times in groups.items()
+                for group_name, event_times in subtype_groups.items()
                 if event_times
             ],
             "statistical_tests": statistical_tests,

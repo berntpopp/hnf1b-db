@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from scipy import stats  # type: ignore[import-untyped]
+from scipy import stats
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -405,7 +405,7 @@ export default {
         {
           label: 'Disease Subtype',
           value: 'disease_subtype',
-          description: 'Compare CAKUT vs CAKUT+MODY vs MODY phenotypes',
+          description: 'Compare CAKUT vs CAKUT+MODY vs MODY vs Other phenotypes',
         },
       ],
       survivalEndpointOptions: [

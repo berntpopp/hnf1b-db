@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import jsonpatch  # type: ignore[import-untyped]
+import jsonpatch
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
