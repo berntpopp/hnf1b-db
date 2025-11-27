@@ -202,10 +202,28 @@ class PhenopacketBuilder:
         if alternate_ids:
             subject["alternateIds"] = sorted(list(alternate_ids))
 
-        # Use latest reported age (from most recent study)
-        age_reported = self.age_parser.parse_age(first_row.get("AgeReported"))
-        if age_reported:
-            subject["timeAtLastEncounter"] = age_reported
+        # Use latest (maximum) reported age across all rows
+        # This captures the most recent follow-up information for patients
+        # who appear in multiple publications/studies
+        latest_age_reported = None
+        for _, row in rows.iterrows():
+            age_reported = self.age_parser.parse_age(row.get("AgeReported"))
+            if age_reported:
+                # Compare ISO8601 durations by converting to months
+                if latest_age_reported is None:
+                    latest_age_reported = age_reported
+                else:
+                    # Extract duration strings for comparison
+                    current_iso = age_reported.get("iso8601duration", "")
+                    latest_iso = latest_age_reported.get("iso8601duration", "")
+                    if current_iso and latest_iso:
+                        if self._iso8601_to_months(current_iso) > self._iso8601_to_months(
+                            latest_iso
+                        ):
+                            latest_age_reported = age_reported
+
+        if latest_age_reported:
+            subject["timeAtLastEncounter"] = latest_age_reported
 
         return subject
 
