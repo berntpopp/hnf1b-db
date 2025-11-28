@@ -10,11 +10,15 @@
     </v-card-title>
 
     <v-card-text>
-      <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 200px;">
+      <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 200px">
         <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
       </div>
 
-      <div v-else-if="error" class="d-flex flex-column align-center justify-center" style="min-height: 200px;">
+      <div
+        v-else-if="error"
+        class="d-flex flex-column align-center justify-center"
+        style="min-height: 200px"
+      >
         <v-icon size="64" color="error" class="mb-4">mdi-alert-circle</v-icon>
         <div class="text-h6 text-error mb-2">Failed to load timeline</div>
         <div class="text-body-2 text-grey">{{ error }}</div>
@@ -24,10 +28,16 @@
         </v-btn>
       </div>
 
-      <div v-else-if="!timelineData || presentFeatures.length === 0" class="d-flex flex-column align-center justify-center" style="min-height: 200px;">
+      <div
+        v-else-if="!timelineData || presentFeatures.length === 0"
+        class="d-flex flex-column align-center justify-center"
+        style="min-height: 200px"
+      >
         <v-icon size="64" color="grey-lighten-1" class="mb-4">mdi-timeline-alert</v-icon>
         <div class="text-h6 text-grey mb-2">No timeline data available</div>
-        <div class="text-body-2 text-grey">No phenotypic features with onset information found.</div>
+        <div class="text-body-2 text-grey">
+          No phenotypic features with onset information found.
+        </div>
       </div>
 
       <div v-else>
@@ -55,11 +65,7 @@
 
               <!-- Features in this onset period -->
               <v-list density="compact">
-                <v-list-item
-                  v-for="(feature, fIndex) in group.features"
-                  :key="fIndex"
-                  class="px-0"
-                >
+                <v-list-item v-for="(feature, fIndex) in group.features" :key="fIndex" class="px-0">
                   <template #prepend>
                     <v-avatar :color="feature.categoryColor" size="24">
                       <v-icon size="x-small" color="white">mdi-check-circle</v-icon>
@@ -134,13 +140,20 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import API from '@/api';
-import { parseAge, formatAge, getCategoryColor, onsetClassToAge, getOrganSystem, ORGAN_SYSTEMS } from '@/utils/ageParser';
+import {
+  parseAge,
+  formatAge,
+  getCategoryColor,
+  onsetClassToAge,
+  getOrganSystem,
+  ORGAN_SYSTEMS,
+} from '@/utils/ageParser';
 
 const props = defineProps({
   phenopacketId: {
     type: String,
-    required: true
-  }
+    required: true,
+  },
 });
 
 const loading = ref(true);
@@ -150,7 +163,7 @@ const timelineData = ref(null);
 // Filter out excluded features (absent phenotypes)
 const presentFeatures = computed(() => {
   if (!timelineData.value) return [];
-  return timelineData.value.features.filter(f => !f.excluded);
+  return timelineData.value.features.filter((f) => !f.excluded);
 });
 
 // Group features by onset period
@@ -158,7 +171,7 @@ const groupedFeatures = computed(() => {
   if (!presentFeatures.value || presentFeatures.value.length === 0) return [];
 
   // Parse ages and assign onset labels
-  const featuresWithAges = presentFeatures.value.map(f => {
+  const featuresWithAges = presentFeatures.value.map((f) => {
     let age = null;
     let onsetLabel = 'Unknown onset';
     let sortOrder = 999; // For unknown/unspecified
@@ -174,15 +187,27 @@ const groupedFeatures = computed(() => {
       onsetLabel = f.onset_label;
 
       // Assign sort order based on onset classification
-      if (onsetLabel.toLowerCase().includes('prenatal') || onsetLabel.toLowerCase().includes('fetal')) {
+      if (
+        onsetLabel.toLowerCase().includes('prenatal') ||
+        onsetLabel.toLowerCase().includes('fetal')
+      ) {
         sortOrder = 0;
-      } else if (onsetLabel.toLowerCase().includes('congenital') || onsetLabel.toLowerCase().includes('birth')) {
+      } else if (
+        onsetLabel.toLowerCase().includes('congenital') ||
+        onsetLabel.toLowerCase().includes('birth')
+      ) {
         sortOrder = 1;
       } else if (onsetLabel.toLowerCase().includes('neonatal')) {
         sortOrder = 2;
-      } else if (onsetLabel.toLowerCase().includes('infantile') || onsetLabel.toLowerCase().includes('infant')) {
+      } else if (
+        onsetLabel.toLowerCase().includes('infantile') ||
+        onsetLabel.toLowerCase().includes('infant')
+      ) {
         sortOrder = 3;
-      } else if (onsetLabel.toLowerCase().includes('childhood') || onsetLabel.toLowerCase().includes('child')) {
+      } else if (
+        onsetLabel.toLowerCase().includes('childhood') ||
+        onsetLabel.toLowerCase().includes('child')
+      ) {
         sortOrder = 4;
       } else if (onsetLabel.toLowerCase().includes('juvenile')) {
         sortOrder = 5;
@@ -201,7 +226,7 @@ const groupedFeatures = computed(() => {
       } else if (age === 0) {
         onsetLabel = 'Birth';
         sortOrder = 1;
-      } else if (age < 1/12) {
+      } else if (age < 1 / 12) {
         onsetLabel = 'Neonatal onset';
         sortOrder = 2;
       } else if (age < 1) {
@@ -229,19 +254,19 @@ const groupedFeatures = computed(() => {
       onsetLabel,
       sortOrder,
       category,
-      categoryColor
+      categoryColor,
     };
   });
 
   // Group by onset label
   const groups = {};
-  featuresWithAges.forEach(feature => {
+  featuresWithAges.forEach((feature) => {
     const key = feature.onsetLabel;
     if (!groups[key]) {
       groups[key] = {
         onsetLabel: key,
         sortOrder: feature.sortOrder,
-        features: []
+        features: [],
       };
     }
     groups[key].features.push(feature);
@@ -277,23 +302,27 @@ async function fetchData() {
 }
 
 // Debug watcher to log category assignments
-watch(groupedFeatures, (groups) => {
-  if (groups && groups.length > 0) {
-    const firstGroup = groups[0];
-    if (firstGroup.features && firstGroup.features.length > 0) {
-      const sampleFeatures = firstGroup.features.slice(0, 3).map(f => ({
-        hpo_id: f.hpo_id,
-        label: f.label,
-        category: f.category,
-        categoryColor: f.categoryColor
-      }));
-      window.logService.debug('Sample feature categories from first onset group', {
-        onsetLabel: firstGroup.onsetLabel,
-        sampleFeatures
-      });
+watch(
+  groupedFeatures,
+  (groups) => {
+    if (groups && groups.length > 0) {
+      const firstGroup = groups[0];
+      if (firstGroup.features && firstGroup.features.length > 0) {
+        const sampleFeatures = firstGroup.features.slice(0, 3).map((f) => ({
+          hpo_id: f.hpo_id,
+          label: f.label,
+          category: f.category,
+          categoryColor: f.categoryColor,
+        }));
+        window.logService.debug('Sample feature categories from first onset group', {
+          onsetLabel: firstGroup.onsetLabel,
+          sampleFeatures,
+        });
+      }
     }
-  }
-}, { immediate: true });
+  },
+  { immediate: true }
+);
 
 onMounted(async () => {
   await fetchData();

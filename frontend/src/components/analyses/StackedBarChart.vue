@@ -190,7 +190,8 @@ export default {
           const present = d.data.present;
           const absent = d.data.absent;
           const totalReported = present + absent;
-          const penetrance = totalReported > 0 ? ((present / totalReported) * 100).toFixed(1) : 'N/A';
+          const penetrance =
+            totalReported > 0 ? ((present / totalReported) * 100).toFixed(1) : 'N/A';
 
           tooltip
             .html(

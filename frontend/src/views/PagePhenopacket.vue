@@ -307,16 +307,19 @@ export default {
       if (!this.phenopacket) return;
 
       const jsonString = JSON.stringify(this.phenopacket, null, 2);
-      navigator.clipboard.writeText(jsonString).then(() => {
-        window.logService.info('Phenopacket JSON copied to clipboard', {
-          phenopacketId: this.phenopacket.id,
+      navigator.clipboard
+        .writeText(jsonString)
+        .then(() => {
+          window.logService.info('Phenopacket JSON copied to clipboard', {
+            phenopacketId: this.phenopacket.id,
+          });
+          // Could add a toast notification here
+        })
+        .catch((err) => {
+          window.logService.error('Failed to copy JSON to clipboard', {
+            error: err.message,
+          });
         });
-        // Could add a toast notification here
-      }).catch(err => {
-        window.logService.error('Failed to copy JSON to clipboard', {
-          error: err.message,
-        });
-      });
     },
 
     navigateToEdit() {

@@ -376,7 +376,6 @@ export default {
           .style('font-size', '12px')
           .text(`${group.name} (n=${group.n}, events=${group.events})`);
       });
-
     },
 
     getComparisonTitle(comparisonType) {

@@ -24,7 +24,11 @@
       </div>
 
       <!-- Error State -->
-      <div v-else-if="error" class="d-flex flex-column align-center justify-center" style="min-height: 400px">
+      <div
+        v-else-if="error"
+        class="d-flex flex-column align-center justify-center"
+        style="min-height: 400px"
+      >
         <v-icon size="64" color="error" class="mb-4">mdi-alert-circle</v-icon>
         <div class="text-h6 text-error mb-2">Failed to load data</div>
         <div class="text-body-2 text-grey">{{ error }}</div>
@@ -215,17 +219,19 @@ export default {
       });
 
       // Sort years
-      const years = Object.keys(yearTypeMap).map(Number).sort((a, b) => a - b);
+      const years = Object.keys(yearTypeMap)
+        .map(Number)
+        .sort((a, b) => a - b);
 
       // Create datasets for each publication type
       const typeColors = {
-        case_report: '#2196F3',          // Blue
-        case_series: '#4CAF50',          // Green
-        research: '#FF9800',             // Orange
-        review: '#9C27B0',               // Purple
-        review_and_cases: '#F44336',     // Red
-        screening_multiple: '#00BCD4',   // Cyan
-        unknown: '#757575',              // Grey
+        case_report: '#2196F3', // Blue
+        case_series: '#4CAF50', // Green
+        research: '#FF9800', // Orange
+        review: '#9C27B0', // Purple
+        review_and_cases: '#F44336', // Red
+        screening_multiple: '#00BCD4', // Cyan
+        unknown: '#757575', // Grey
       };
 
       const datasets = Array.from(publicationTypes).map((type) => {
@@ -279,9 +285,10 @@ export default {
           plugins: {
             title: {
               display: true,
-              text: this.chartMode === 'cumulative'
-                ? 'Cumulative Phenopackets by Publication Type Over Years'
-                : 'Number of Phenopackets by Publication Type Over Years',
+              text:
+                this.chartMode === 'cumulative'
+                  ? 'Cumulative Phenopackets by Publication Type Over Years'
+                  : 'Number of Phenopackets by Publication Type Over Years',
               font: {
                 size: 16,
               },
@@ -308,9 +315,10 @@ export default {
             y: {
               title: {
                 display: true,
-                text: this.chartMode === 'cumulative'
-                  ? 'Cumulative Phenopackets'
-                  : 'Number of Phenopackets',
+                text:
+                  this.chartMode === 'cumulative'
+                    ? 'Cumulative Phenopackets'
+                    : 'Number of Phenopackets',
                 font: {
                   size: 14,
                 },

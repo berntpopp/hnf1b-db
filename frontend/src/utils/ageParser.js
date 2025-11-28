@@ -9,17 +9,17 @@
  */
 export function parseAge(iso8601duration) {
   if (!iso8601duration) return null;
-  
+
   const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?/;
   const matches = iso8601duration.match(regex);
-  
+
   if (!matches) return null;
-  
+
   const years = parseInt(matches[1] || 0);
   const months = parseInt(matches[2] || 0);
   const days = parseInt(matches[3] || 0);
-  
-  return years + (months / 12) + (days / 365);
+
+  return years + months / 12 + days / 365;
 }
 
 /**
@@ -29,7 +29,7 @@ export function parseAge(iso8601duration) {
  */
 export function formatAge(age) {
   if (age === null || age === undefined) return 'Unknown';
-  
+
   if (age === 0) return 'Birth';
   if (age < 1) {
     const months = Math.round(age * 12);
@@ -48,18 +48,18 @@ export function formatAge(age) {
  */
 export function onsetClassToAge(hpoId) {
   const onsetMapping = {
-    'HP:0003577': 0,         // Congenital onset
-    'HP:0003623': 0,         // Neonatal onset (0-4 weeks)
-    'HP:0034199': 0.08,      // Neonatal onset (approx 1 month)
-    'HP:0003593': 0.5,       // Infantile onset (1-12 months)
-    'HP:0410280': 3,         // Pediatric onset (midpoint ~age 3)
-    'HP:0003621': 5,         // Juvenile onset (midpoint ~age 5)
-    'HP:0011462': 12,        // Young adult onset (midpoint ~age 12)
-    'HP:0003581': 25,        // Adult onset (midpoint ~age 25)
-    'HP:0003596': 40,        // Middle age onset (midpoint ~age 40)
-    'HP:0003584': 65,        // Late onset (midpoint ~age 65)
+    'HP:0003577': 0, // Congenital onset
+    'HP:0003623': 0, // Neonatal onset (0-4 weeks)
+    'HP:0034199': 0.08, // Neonatal onset (approx 1 month)
+    'HP:0003593': 0.5, // Infantile onset (1-12 months)
+    'HP:0410280': 3, // Pediatric onset (midpoint ~age 3)
+    'HP:0003621': 5, // Juvenile onset (midpoint ~age 5)
+    'HP:0011462': 12, // Young adult onset (midpoint ~age 12)
+    'HP:0003581': 25, // Adult onset (midpoint ~age 25)
+    'HP:0003596': 40, // Middle age onset (midpoint ~age 40)
+    'HP:0003584': 65, // Late onset (midpoint ~age 65)
   };
-  
+
   return onsetMapping[hpoId] || null;
 }
 
@@ -67,18 +67,18 @@ export function onsetClassToAge(hpoId) {
  * Timeline color scheme for organ systems/categories
  */
 export const TIMELINE_COLORS = {
-  renal: '#1976D2',           // Blue
-  diabetes: '#F57C00',        // Orange
-  genital: '#7B1FA2',         // Purple
-  hepatic: '#388E3C',         // Green
-  pancreatic: '#C62828',      // Red
-  neurological: '#0097A7',    // Cyan
-  skeletal: '#5D4037',        // Brown
-  cardiovascular: '#E91E63',  // Pink
-  endocrine: '#FBC02D',       // Yellow
-  other: '#757575',           // Grey
-  unknown: '#BDBDBD',         // Light grey
-  excluded: '#E0E0E0',        // Very light grey
+  renal: '#1976D2', // Blue
+  diabetes: '#F57C00', // Orange
+  genital: '#7B1FA2', // Purple
+  hepatic: '#388E3C', // Green
+  pancreatic: '#C62828', // Red
+  neurological: '#0097A7', // Cyan
+  skeletal: '#5D4037', // Brown
+  cardiovascular: '#E91E63', // Pink
+  endocrine: '#FBC02D', // Yellow
+  other: '#757575', // Grey
+  unknown: '#BDBDBD', // Light grey
+  excluded: '#E0E0E0', // Very light grey
 };
 
 /**
@@ -127,18 +127,18 @@ export function getOrganSystem(hpoId) {
   // HP:0000077 - Abnormality of the kidney (and all descendants)
   // HP:0000119 - Abnormality of the genitourinary system
   if (
-    (numericId >= 77 && numericId <= 140) ||      // Kidney abnormalities
-    (numericId >= 795 && numericId <= 850) ||     // Ureter/bladder/urethra
-    numericId === 3 ||                             // Multicystic kidney dysplasia
-    numericId === 2149 ||                          // Hyperuricemia
-    numericId === 2900 ||                          // Hypokalemia
-    numericId === 2917 ||                          // Hypomagnesemia
-    numericId === 3111 ||                          // Abnormal blood electrolyte
-    (numericId >= 3774 && numericId <= 3780) ||   // Stage 5 CKD
+    (numericId >= 77 && numericId <= 140) || // Kidney abnormalities
+    (numericId >= 795 && numericId <= 850) || // Ureter/bladder/urethra
+    numericId === 3 || // Multicystic kidney dysplasia
+    numericId === 2149 || // Hyperuricemia
+    numericId === 2900 || // Hypokalemia
+    numericId === 2917 || // Hypomagnesemia
+    numericId === 3111 || // Abnormal blood electrolyte
+    (numericId >= 3774 && numericId <= 3780) || // Stage 5 CKD
     (numericId >= 12210 && numericId <= 12213) || // Abnormal renal morphology/physiology
     (numericId >= 12622 && numericId <= 12626) || // CKD stages
-    numericId === 33133 ||                         // Renal cortical hyperechogenicity
-    numericId === 100611                           // Multiple glomerular cysts
+    numericId === 33133 || // Renal cortical hyperechogenicity
+    numericId === 100611 // Multiple glomerular cysts
   ) {
     return 'renal';
   }

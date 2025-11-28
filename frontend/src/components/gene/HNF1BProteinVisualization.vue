@@ -173,12 +173,7 @@
           @mouseleave="hideTooltip"
         >
           <!-- Visible range coordinate labels -->
-          <text
-            :x="margin.left"
-            :y="svgHeight - 10"
-            text-anchor="start"
-            class="coordinate-label"
-          >
+          <text :x="margin.left" :y="svgHeight - 10" text-anchor="start" class="coordinate-label">
             {{ visibleStart }} aa
           </text>
           <text
@@ -310,7 +305,8 @@
           </v-btn-group>
           <div v-if="zoomLevel > 1" class="zoom-indicator mt-1">
             <span class="text-caption text-grey">
-              Viewing aa {{ visibleStart }}-{{ visibleEnd }} ({{ Math.round(zoomLevel * 10) / 10 }}x zoom)
+              Viewing aa {{ visibleStart }}-{{ visibleEnd }} ({{ Math.round(zoomLevel * 10) / 10 }}x
+              zoom)
             </span>
           </div>
         </v-col>
@@ -521,13 +517,12 @@ export default {
             return classification.includes('UNCERTAIN') || classification.includes('VUS');
           }
           if (filterValue === 'LIKELY_BENIGN') {
-            return classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN');
+            return (
+              classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN')
+            );
           }
           if (filterValue === 'BENIGN') {
-            return (
-              classification.includes('BENIGN') &&
-              !classification.includes('LIKELY')
-            );
+            return classification.includes('BENIGN') && !classification.includes('LIKELY');
           }
           return true;
         });
