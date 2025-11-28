@@ -118,8 +118,8 @@
                   <StackedBarChart
                     :chart-data="stackedBarChartData"
                     :display-limit="stackedBarDisplayLimit"
-                    :width="1000"
-                    :height="600"
+                    :width="1200"
+                    :height="800"
                   />
                 </v-tabs-window-item>
 

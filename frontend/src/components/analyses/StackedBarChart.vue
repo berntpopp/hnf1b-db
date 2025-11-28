@@ -8,6 +8,24 @@
 <script>
 import * as d3 from 'd3';
 
+/**
+ * CKD stage HPO IDs to aggregate into a single "Chronic Kidney Disease" entry.
+ * HP:0012622 - Chronic kidney disease (parent term)
+ * HP:0012623 - Stage 1 chronic kidney disease
+ * HP:0012624 - Stage 2 chronic kidney disease
+ * HP:0012625 - Stage 3 chronic kidney disease
+ * HP:0012626 - Stage 4 chronic kidney disease
+ * HP:0003774 - Stage 5 chronic kidney disease (ESRD)
+ */
+const CKD_HPO_IDS = [
+  'HP:0012622', // Chronic kidney disease
+  'HP:0012623', // Stage 1
+  'HP:0012624', // Stage 2
+  'HP:0012625', // Stage 3
+  'HP:0012626', // Stage 4
+  'HP:0003774', // Stage 5 (ESRD)
+];
+
 export default {
   name: 'StackedBarChart',
   props: {
@@ -73,6 +91,76 @@ export default {
     window.removeEventListener('resize', this.renderChart);
   },
   methods: {
+    /**
+     * Aggregate CKD stages into a single entry.
+     * - Present: any CKD stage reported as present
+     * - Absent: CKD explicitly reported as absent (and no stage present)
+     * - Not Reported: no CKD data at all
+     */
+    aggregateCKDStages(data) {
+      const ckdEntries = [];
+      const nonCkdEntries = [];
+
+      // Separate CKD and non-CKD entries
+      data.forEach((d) => {
+        if (CKD_HPO_IDS.includes(d.details?.hpo_id)) {
+          ckdEntries.push(d);
+        } else {
+          nonCkdEntries.push(d);
+        }
+      });
+
+      // If no CKD entries, return original data
+      if (ckdEntries.length === 0) {
+        return data;
+      }
+
+      // Calculate total phenopackets from one of the entries
+      // (present + absent + not_reported should equal total)
+      const sampleEntry = ckdEntries[0];
+      const totalPhenopackets =
+        (sampleEntry.details?.present_count || 0) +
+        (sampleEntry.details?.absent_count || 0) +
+        (sampleEntry.details?.not_reported_count || 0);
+
+      // Find unique phenopackets with any CKD stage present
+      // Since we don't have phenopacket-level data, we use max present count
+      // as a conservative estimate (accounts for patients with multiple stages)
+      const maxPresent = Math.max(...ckdEntries.map((d) => d.details?.present_count || 0));
+
+      // For absent: sum up all absent counts from CKD entries
+      // Note: There may be multiple entries with same HPO ID but different labels
+      // (e.g., "chronic kidney disease, not specified" vs "Chronic kidney disease")
+      const ckdAbsent = ckdEntries.reduce((sum, d) => sum + (d.details?.absent_count || 0), 0);
+
+      // Not reported: total minus those with any CKD data
+      const ckdNotReported = totalPhenopackets - maxPresent - ckdAbsent;
+
+      // Create aggregated CKD entry
+      const aggregatedCkd = {
+        label: 'Chronic Kidney Disease',
+        count: maxPresent,
+        percentage: totalPhenopackets > 0 ? (maxPresent / totalPhenopackets) * 100 : 0,
+        details: {
+          hpo_id: 'HP:0012622 (aggregated)',
+          present_count: maxPresent,
+          absent_count: ckdAbsent,
+          not_reported_count: Math.max(0, ckdNotReported),
+        },
+      };
+
+      // Insert aggregated CKD entry in sorted position based on present count
+      const result = [...nonCkdEntries];
+      const insertIndex = result.findIndex((d) => (d.details?.present_count || 0) < maxPresent);
+      if (insertIndex === -1) {
+        result.push(aggregatedCkd);
+      } else {
+        result.splice(insertIndex, 0, aggregatedCkd);
+      }
+
+      return result;
+    },
+
     renderChart() {
       // Remove any existing chart content.
       d3.select(this.$refs.chart).selectAll('*').remove();
@@ -102,9 +190,12 @@ export default {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
+      // Aggregate CKD stages into a single entry
+      const aggregatedData = this.aggregateCKDStages(this.chartData);
+
       // Transform the API data into horizontal bar chart format (flip x/y)
       // Take only the top N features
-      const limitedData = this.chartData.slice(0, this.displayLimit);
+      const limitedData = aggregatedData.slice(0, this.displayLimit);
 
       const data = limitedData.map((d) => ({
         group: d.label,
@@ -128,8 +219,11 @@ export default {
       // Add Y axis (phenotype labels)
       const yAxis = svg.append('g').call(d3.axisLeft(y));
 
-      // Wrap long phenotype labels
-      yAxis.selectAll('text').call(this.wrapText, margin.left - 10);
+      // Wrap long phenotype labels and set font size
+      yAxis
+        .selectAll('text')
+        .style('font-size', '13px')
+        .call(this.wrapText, margin.left - 10);
 
       // Add X axis (counts)
       svg
