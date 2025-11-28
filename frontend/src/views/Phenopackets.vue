@@ -47,7 +47,7 @@
               />
             </template>
             <span>
-              Enable cursor pagination for stable results<br>
+              Enable cursor pagination for stable results<br />
               (prevents duplicate/missing records when data changes)
             </span>
           </v-tooltip>
@@ -107,23 +107,6 @@
         </v-chip>
       </template>
 
-      <!-- Render primary disease -->
-      <template #item.primary_disease="{ item }">
-        <v-tooltip v-if="item.primary_disease" location="top">
-          <template #activator="{ props }">
-            <span
-              v-bind="props"
-              class="text-truncate"
-              style="max-width: 200px; display: inline-block"
-            >
-              {{ item.primary_disease }}
-            </span>
-          </template>
-          <span>{{ item.primary_disease }}</span>
-        </v-tooltip>
-        <span v-else>N/A</span>
-      </template>
-
       <!-- Render phenotypes count with badge -->
       <template #item.features_count="{ item }">
         <v-chip
@@ -135,15 +118,24 @@
         </v-chip>
       </template>
 
-      <!-- Render variants count with badge -->
-      <template #item.variants_count="{ item }">
-        <v-chip
-          :color="item.variants_count > 0 ? 'blue-lighten-3' : 'grey-lighten-2'"
-          size="small"
-          variant="flat"
-        >
-          {{ item.variants_count }}
-        </v-chip>
+      <!-- Render variant display -->
+      <template #item.variant_display="{ item }">
+        <v-tooltip v-if="item.variant_display" location="top">
+          <template #activator="{ props }">
+            <v-chip
+              v-bind="props"
+              :color="item.variant_type === 'CNV' ? 'purple-lighten-3' : 'blue-lighten-3'"
+              size="small"
+              variant="flat"
+              class="text-truncate"
+              style="max-width: 200px"
+            >
+              {{ item.variant_display }}
+            </v-chip>
+          </template>
+          <span>{{ item.variant_full }}</span>
+        </v-tooltip>
+        <span v-else class="text-grey">N/A</span>
       </template>
 
       <template #no-data> No phenopackets found. </template>
@@ -190,12 +182,6 @@ export default {
           width: '120px',
         },
         {
-          title: 'Primary Disease',
-          value: 'primary_disease',
-          sortable: false,
-          width: '220px',
-        },
-        {
           title: 'Phenotypes',
           value: 'features_count',
           sortable: false,
@@ -203,11 +189,10 @@ export default {
           align: 'center',
         },
         {
-          title: 'Variants',
-          value: 'variants_count',
+          title: 'Variant',
+          value: 'variant_display',
           sortable: false,
-          width: '100px',
-          align: 'center',
+          width: '220px',
         },
       ],
       options: {
@@ -393,24 +378,71 @@ export default {
      */
     transformPhenopacket(phenopacket) {
       const subject = phenopacket.subject || {};
-      const diseases = phenopacket.diseases || [];
       const features = phenopacket.phenotypicFeatures || [];
       const interpretations = phenopacket.interpretations || [];
 
-      // Count variants from interpretations
-      let variantsCount = 0;
-      interpretations.forEach((interp) => {
-        const genomicInterps = interp.diagnosis?.genomicInterpretations || [];
-        variantsCount += genomicInterps.length;
-      });
+      // Count only present phenotypes (excluded !== true)
+      const presentFeaturesCount = features.filter((f) => !f.excluded).length;
+
+      // Extract variant information from first genomic interpretation
+      let variantDisplay = null;
+      let variantFull = null;
+      let variantType = null;
+
+      if (interpretations.length > 0) {
+        const genomicInterps = interpretations[0].diagnosis?.genomicInterpretations || [];
+        if (genomicInterps.length > 0) {
+          const variantInterp = genomicInterps[0].variantInterpretation || {};
+          const varDescriptor = variantInterp.variationDescriptor || {};
+          const variantId = varDescriptor.id || '';
+          const label = varDescriptor.label || '';
+          const expressions = varDescriptor.expressions || [];
+          const extensions = varDescriptor.extensions || [];
+
+          // Determine if CNV based on variant ID
+          const isCNV = variantId.includes('DEL') || variantId.includes('DUP');
+          variantType = isCNV ? 'CNV' : 'SNV';
+
+          // Get HGVS.c notation for point mutations
+          const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
+
+          if (isCNV) {
+            // For CNVs, format as "CNV (X.XX Mb)" using length from coordinates extension
+            const coordsExt = extensions.find((e) => e.name === 'coordinates');
+            const lengthBp = coordsExt?.value?.length;
+
+            if (lengthBp) {
+              // Convert to Mb with 2 decimal places
+              const lengthMb = (lengthBp / 1000000).toFixed(2);
+              variantDisplay = `CNV (${lengthMb} Mb)`;
+            } else {
+              // Fallback if no length available
+              variantDisplay = 'CNV';
+            }
+            variantFull = label || variantId;
+          } else if (hgvsC) {
+            // For point mutations, show HGVS.c (e.g., "c.544+1G>A")
+            // Strip the transcript prefix for display
+            const hgvsValue = hgvsC.value || '';
+            const cNotation = hgvsValue.includes(':') ? hgvsValue.split(':')[1] : hgvsValue;
+            variantDisplay = cNotation;
+            variantFull = hgvsValue;
+          } else {
+            // Fallback to label or ID
+            variantDisplay = label || variantId;
+            variantFull = label || variantId;
+          }
+        }
+      }
 
       return {
         phenopacket_id: phenopacket.id,
         subject_id: subject.id || 'N/A',
         sex: subject.sex || 'UNKNOWN_SEX',
-        primary_disease: diseases[0]?.term?.label || null,
-        features_count: features.length,
-        variants_count: variantsCount,
+        features_count: presentFeaturesCount,
+        variant_display: variantDisplay,
+        variant_full: variantFull,
+        variant_type: variantType,
       };
     },
 
