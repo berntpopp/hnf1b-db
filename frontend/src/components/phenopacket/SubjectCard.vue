@@ -12,20 +12,30 @@
           <v-list-item-subtitle>{{ subject.id || 'N/A' }}</v-list-item-subtitle>
         </v-list-item>
 
-        <v-list-item v-if="subject.alternateIds && subject.alternateIds.length > 0">
+        <v-list-item v-if="individualIdentifiers.length > 0 || reportIds.length > 0">
           <v-list-item-title class="font-weight-bold">
-            Individual Identifier{{ subject.alternateIds.length > 1 ? 's' : '' }}
+            Alternate ID{{ individualIdentifiers.length + reportIds.length > 1 ? 's' : '' }}
           </v-list-item-title>
           <v-list-item-subtitle>
             <v-chip
-              v-for="(altId, index) in subject.alternateIds"
-              :key="index"
+              v-for="(identifier, index) in individualIdentifiers"
+              :key="'name-' + index"
               size="small"
               class="mr-1 mb-1 font-weight-medium"
               color="blue-lighten-4"
               variant="flat"
             >
-              {{ altId }}
+              {{ identifier }}
+            </v-chip>
+            <v-chip
+              v-for="(reportId, index) in reportIds"
+              :key="'report-' + index"
+              size="small"
+              class="mr-1 mb-1 font-weight-medium"
+              color="grey-lighten-2"
+              variant="flat"
+            >
+              {{ reportId }}
             </v-chip>
           </v-list-item-subtitle>
         </v-list-item>
@@ -71,6 +81,26 @@ export default {
     },
   },
   computed: {
+    /**
+     * Extract individual identifiers (non-numeric, human-readable names).
+     * These are the publication-specific identifiers like "Case 3", "Duval_Table1_P7".
+     */
+    individualIdentifiers() {
+      const altIds = this.subject.alternateIds || [];
+      // Filter to get non-numeric identifiers (text-based identifiers from publications)
+      return altIds.filter((id) => !/^\d+$/.test(id));
+    },
+
+    /**
+     * Extract report IDs (numeric IDs from alternateIds).
+     * Report IDs are the row identifiers from the source spreadsheet.
+     */
+    reportIds() {
+      const altIds = this.subject.alternateIds || [];
+      // Collect all numeric IDs from alternateIds
+      return altIds.filter((id) => /^\d+$/.test(id));
+    },
+
     age() {
       const timeAtLastEncounter = this.subject.timeAtLastEncounter;
       if (timeAtLastEncounter?.age?.iso8601duration) {

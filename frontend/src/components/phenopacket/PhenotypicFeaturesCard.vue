@@ -80,14 +80,25 @@ export default {
     },
 
     formatOnset(onset) {
+      // Helper to extract ISO8601 duration from age field
+      const extractAgeDuration = (age) => {
+        if (typeof age === 'string') return age;
+        if (age.iso8601duration) return age.iso8601duration;
+        // age might contain ontologyClass instead of duration (e.g., prenatal onset)
+        if (age.ontologyClass) return null;
+        return null;
+      };
+
       // Handle combined onset (e.g., postnatal + specific age)
       if (onset.ontologyClass && onset.age) {
         const classification = (onset.ontologyClass.label || onset.ontologyClass.id).toLowerCase();
-        // age can be a string "P2Y" or an object {"iso8601duration": "P2Y"}
-        const ageValue =
-          typeof onset.age === 'string' ? onset.age : onset.age.iso8601duration || onset.age;
-        const formattedAge = this.formatISO8601Duration(ageValue);
-        return `${classification}, reported: age ${formattedAge}`;
+        const ageDuration = extractAgeDuration(onset.age);
+        if (ageDuration) {
+          const formattedAge = this.formatISO8601Duration(ageDuration);
+          return `${classification}, reported: age ${formattedAge}`;
+        }
+        // age contains ontologyClass but no duration - just show the classification
+        return classification;
       }
 
       // Handle age-only onset (string format)
@@ -97,9 +108,15 @@ export default {
 
       // Handle age object
       if (onset.age) {
-        const ageValue =
-          typeof onset.age === 'string' ? onset.age : onset.age.iso8601duration || onset.age;
-        return `reported: age ${this.formatISO8601Duration(ageValue)}`;
+        const ageDuration = extractAgeDuration(onset.age);
+        if (ageDuration) {
+          return `reported: age ${this.formatISO8601Duration(ageDuration)}`;
+        }
+        // age contains ontologyClass instead of duration
+        if (onset.age.ontologyClass) {
+          return onset.age.ontologyClass.label || onset.age.ontologyClass.id;
+        }
+        return 'Unknown';
       }
 
       // Handle ontology class only (prenatal/postnatal without specific age)
