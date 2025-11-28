@@ -143,23 +143,18 @@ class PhenopacketBuilder:
         """Build subject section.
 
         When individual appears in multiple studies (multiple rows), this method:
-        - Uses report_id from first row as primary subject ID (sequential IDs without gaps)
-        - Stores individual_id, other report_ids, and IndividualIdentifier as alternateIds
+        - Uses individual_id as primary subject ID (unique identifier for the person)
+        - Stores all report_ids and IndividualIdentifier values as alternateIds
         - Prioritizes non-UNKNOWN_SEX values across all rows
         - Uses latest reported age
 
         Example:
-            If individual appears in 2 studies with report_id 1 and 940:
-            - subject.id = "1" (first report_id)
-            - alternateIds = ["1", "940", "IndividualIdentifier value"]
+            If individual HNF1B-001 appears in 2 studies with report_id 5 and 120:
+            - subject.id = "HNF1B-001" (individual_id)
+            - alternateIds = ["5", "120", "OriginalID1", "OriginalID2"]
         """
-        first_row = rows.iloc[0]
-
-        # Use report_id as primary subject ID (gives sequential IDs: 1, 2, 3, 4...)
-        # Falls back to individual_id if report_id not available
-        primary_id = self._safe_value(first_row.get("report_id"))
-        if not primary_id:
-            primary_id = individual_id
+        # Use individual_id as primary subject ID (unique identifier for the person)
+        primary_id = individual_id
 
         # Prioritize non-UNKNOWN sex from any row
         sex = "UNKNOWN_SEX"
@@ -170,16 +165,11 @@ class PhenopacketBuilder:
                 break  # Use first non-UNKNOWN value found
 
         # Collect all unique alternate IDs:
-        # 1. individual_id (for deduplication tracking)
-        # 2. Other report_ids (if patient in multiple studies)
-        # 3. IndividualIdentifier (original source identifier)
+        # 1. All report_ids (study-specific identifiers)
+        # 2. All IndividualIdentifier values (original source identifiers)
         alternate_ids = set()
 
-        # Add individual_id as alternate (links duplicate reports)
-        if individual_id != primary_id:
-            alternate_ids.add(str(individual_id))
-
-        # Add all report_ids from all rows (including first one for completeness)
+        # Add all report_ids from all rows
         for _, row in rows.iterrows():
             report_id = self._safe_value(row.get("report_id"))
             if report_id:
@@ -190,9 +180,6 @@ class PhenopacketBuilder:
             identifier = self._safe_value(row.get("IndividualIdentifier"))
             if identifier:
                 alternate_ids.add(identifier)
-
-        # Remove primary_id from alternates if it was added
-        alternate_ids.discard(str(primary_id))
 
         subject: Dict[str, Any] = {
             "id": str(primary_id),
@@ -231,22 +218,43 @@ class PhenopacketBuilder:
         """Merge phenotypes from multiple rows.
 
         When same phenotype appears in multiple studies:
+        - Present (excluded=False) takes priority over absent (excluded=True)
+          (clinical principle: you can't "unobserve" a finding)
         - Keeps earliest onset (most informative temporal data)
         - Merges evidence from all publications
         - Sorts phenotypes chronologically by onset age
         """
-        phenotype_dict = {}
+        phenotype_dict: Dict[str, Dict[str, Any]] = {}
 
         for _, row in rows.iterrows():
             phenotypes = self.phenotype_extractor.extract(row)
             for pheno in phenotypes:
                 pheno_id = pheno["type"]["id"]
+                new_excluded = pheno.get("excluded", False)
 
                 if pheno_id not in phenotype_dict:
                     phenotype_dict[pheno_id] = pheno
                 else:
-                    # Merge evidence from different publications
                     existing_pheno = phenotype_dict[pheno_id]
+                    existing_excluded = existing_pheno.get("excluded", False)
+
+                    # Priority rule: present (excluded=False) trumps absent (excluded=True)
+                    # If existing is absent but new is present, replace with present
+                    if existing_excluded and not new_excluded:
+                        # New phenotype is present, existing was absent - use new as base
+                        # but preserve evidence from the absent report
+                        old_evidence = existing_pheno.get("evidence", [])
+                        phenotype_dict[pheno_id] = pheno
+                        existing_pheno = phenotype_dict[pheno_id]
+                        # Merge old evidence into the new (present) phenotype
+                        if old_evidence:
+                            if "evidence" not in existing_pheno:
+                                existing_pheno["evidence"] = []
+                            for old_ev in old_evidence:
+                                if old_ev not in existing_pheno["evidence"]:
+                                    existing_pheno["evidence"].append(old_ev)
+
+                    # Merge evidence from different publications
                     new_evidence = pheno.get("evidence", [])
                     if new_evidence:
                         if "evidence" not in existing_pheno:
@@ -265,14 +273,16 @@ class PhenopacketBuilder:
                                 existing_pheno["evidence"].append(new_ev)
 
                     # Keep earliest onset when same phenotype reported at different ages
-                    existing_onset = existing_pheno.get("onset")
-                    new_onset = pheno.get("onset")
+                    # Only update onset if the phenotype is present (not excluded)
+                    if not existing_pheno.get("excluded", False):
+                        existing_onset = existing_pheno.get("onset")
+                        new_onset = pheno.get("onset")
 
-                    if new_onset and (
-                        not existing_onset
-                        or self._is_earlier_onset(new_onset, existing_onset)
-                    ):
-                        existing_pheno["onset"] = new_onset
+                        if new_onset and (
+                            not existing_onset
+                            or self._is_earlier_onset(new_onset, existing_onset)
+                        ):
+                            existing_pheno["onset"] = new_onset
 
         # Sort phenotypes chronologically (earliest onset first)
         phenotypes_list = list(phenotype_dict.values())
