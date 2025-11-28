@@ -621,6 +621,10 @@ export default {
       ],
       comparisonTypes: [
         { label: 'Truncating vs Non-truncating', value: 'truncating_vs_non_truncating' },
+        {
+          label: 'Truncating vs Non-truncating (excl. CNVs)',
+          value: 'truncating_vs_non_truncating_excl_cnv',
+        },
         { label: 'CNVs vs Non-CNV variants', value: 'cnv_vs_point_mutation' },
       ],
       sortByOptions: [

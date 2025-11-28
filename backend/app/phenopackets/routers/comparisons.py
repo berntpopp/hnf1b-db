@@ -175,6 +175,7 @@ def calculate_cohens_h(p1: float, p2: float) -> float:
 async def compare_variant_types(
     comparison: Literal[
         "truncating_vs_non_truncating",
+        "truncating_vs_non_truncating_excl_cnv",
         "cnv_vs_point_mutation",
         "cnv_deletion_vs_duplication",
     ] = Query(
@@ -207,9 +208,10 @@ async def compare_variant_types(
     """Compare phenotype distributions between variant type groups.
 
     Performs statistical comparison of phenotype presence/absence between:
-    1. Truncating vs Non-truncating variants
-    2. CNVs (17q deletions/duplications) vs Non-CNV variants
-    3. CNV deletions (17qDel) vs CNV duplications (17qDup)
+    1. Truncating vs Non-truncating variants (all variants)
+    2. Truncating vs Non-truncating variants (excluding large CNVs ≥50kb)
+    3. CNVs (17q deletions/duplications ≥50kb) vs Non-CNV variants
+    4. CNV deletions (17qDel) vs CNV duplications (17qDup)
 
     **Truncating variants (multi-tier classification matching R reference logic):**
 
@@ -368,6 +370,203 @@ async def compare_variant_types(
 
         group1_name = "Truncating"
         group2_name = "Non-truncating"
+
+    elif comparison == "truncating_vs_non_truncating_excl_cnv":
+        # Same as truncating_vs_non_truncating but excluding large CNVs (>=50kb)
+        # This allows comparing point mutations only, without the confounding effect of CNVs
+        #
+        # Key difference from truncating_vs_non_truncating:
+        # - Large CNVs (>=50kb) are excluded from BOTH groups (they get variant_group=NULL)
+        # - Small intragenic deletions (<50kb) are still included and classified as truncating
+        # - Non-truncating count should remain the same as the original comparison
+
+        # Condition to identify large CNVs (>=50kb) - these will be EXCLUDED
+        is_large_cnv = """
+            (
+                (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                 OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+                AND
+                COALESCE(
+                    (SELECT (ext#>>'{value,length}')::bigint
+                     FROM jsonb_array_elements(
+                         gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                     ) AS ext
+                     WHERE ext->>'name' = 'coordinates'),
+                    0
+                ) >= 50000
+            )
+        """
+
+        # Truncating variants (same logic as original, but large CNVs excluded via is_large_cnv)
+        # Note: We reuse the EXACT same truncating logic, just add NOT is_large_cnv
+        group1_condition = """
+            -- Truncating variants (excluding large CNVs >=50kb)
+            -- Large CNVs are excluded; small intragenic del/dup (<50kb) remain as truncating
+            NOT """ + is_large_cnv + """
+            AND
+            (
+                -- Priority 1: VEP IMPACT = HIGH
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                    ) AS ext
+                    WHERE ext->>'name' = 'vep_annotation'
+                      AND ext#>>'{value,impact}' = 'HIGH'
+                )
+                OR
+                -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic
+                (
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                    )
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 3: CNVs (DEL/DUP) + Pathogenic - includes small intragenic del (<50kb)
+                -- Large CNVs already excluded above, so this only matches small ones
+                (
+                    (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                     OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 4: Missing VEP IMPACT + HGVS pattern indicates truncating
+                (
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' IS NOT NULL
+                    )
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    AND
+                    -- Exclude DEL/DUP variants (handled in Priority 3)
+                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DEL$'
+                    AND gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DUP$'
+                    AND
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE (
+                            -- Frameshift: contains 'fs' in protein notation
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                            OR
+                            -- Nonsense: contains 'Ter' or '*' in protein notation
+                            (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                            OR
+                            -- Splice donor: +1 to +6 in transcript notation
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                            OR
+                            -- Splice acceptor: -1 to -3 in transcript notation
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                            OR
+                            -- Start loss: Met1 changes (affects start codon)
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'Met1')
+                        )
+                    )
+                )
+            )
+        """
+
+        # Non-truncating: NOT truncating AND NOT large CNV
+        # This should give the same non-truncating variants as the original comparison
+        group2_condition = """
+            -- Non-truncating: All other variants (excluding large CNVs)
+            -- Large CNVs are excluded (get NULL), non-truncating stays the same
+            NOT """ + is_large_cnv + """
+            AND
+            NOT (
+                -- Same truncating conditions as group1 (without the CNV exclusion prefix)
+                -- Priority 1: VEP IMPACT = HIGH
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                    ) AS ext
+                    WHERE ext->>'name' = 'vep_annotation'
+                      AND ext#>>'{value,impact}' = 'HIGH'
+                )
+                OR
+                -- Priority 2: VEP IMPACT = LOW/MODIFIER + Pathogenic
+                (
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' IN ('LOW', 'MODIFIER')
+                    )
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 3: CNVs (DEL/DUP) + Pathogenic
+                (
+                    (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                     OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                )
+                OR
+                -- Priority 4: Missing VEP IMPACT + HGVS pattern indicates truncating
+                (
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                        ) AS ext
+                        WHERE ext->>'name' = 'vep_annotation'
+                          AND ext#>>'{value,impact}' IS NOT NULL
+                    )
+                    AND
+                    gen_interp.value->>'interpretationStatus'
+                        IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                    AND
+                    gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DEL$'
+                    AND gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DUP$'
+                    AND
+                    EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(
+                            gen_interp.value#>'{variantInterpretation,variationDescriptor,expressions}'
+                        ) AS expr
+                        WHERE (
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+                            OR
+                            (expr->>'syntax' = 'hgvs.p' AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+                            OR
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+                            OR
+                            (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+                            OR
+                            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'Met1')
+                        )
+                    )
+                )
+            )
+        """
+
+        group1_name = "Truncating (excl. CNVs)"
+        group2_name = "Non-truncating (excl. CNVs)"
 
     elif comparison == "cnv_vs_point_mutation":
         # Classify based on structural type with 50kb threshold

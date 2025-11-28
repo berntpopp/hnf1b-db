@@ -273,6 +273,61 @@ class TestComparisonEndpoint:
         # Check metadata
         assert data["metadata"]["comparison_type"] == "cnv_vs_point_mutation"
 
+    async def test_compare_truncating_vs_non_truncating_excl_cnv(
+        self, async_client, db_session
+    ):
+        """Test truncating vs non-truncating comparison excluding large CNVs."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/compare/variant-types",
+            params={
+                "comparison": "truncating_vs_non_truncating_excl_cnv",
+                "limit": 10,
+                "min_prevalence": 0.05,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check group names indicate CNV exclusion
+        assert data["group1_name"] == "Truncating (excl. CNVs)"
+        assert data["group2_name"] == "Non-truncating (excl. CNVs)"
+
+        # Check metadata
+        assert (
+            data["metadata"]["comparison_type"] == "truncating_vs_non_truncating_excl_cnv"
+        )
+
+        # Use min_prevalence=0 to get accurate total counts across all phenotypes
+        # (min_prevalence filtering can affect which phenotypes are included)
+        response_excl = await async_client.get(
+            "/api/v2/phenopackets/compare/variant-types",
+            params={
+                "comparison": "truncating_vs_non_truncating_excl_cnv",
+                "limit": 100,
+                "min_prevalence": 0,
+            },
+        )
+        response_with_cnv = await async_client.get(
+            "/api/v2/phenopackets/compare/variant-types",
+            params={
+                "comparison": "truncating_vs_non_truncating",
+                "limit": 100,
+                "min_prevalence": 0,
+            },
+        )
+        data_excl = response_excl.json()
+        data_with_cnv = response_with_cnv.json()
+
+        # The truncating count excluding CNVs should be < the full count
+        # (since CNVs are classified as truncating)
+        assert data_excl["group1_count"] <= data_with_cnv["group1_count"]
+
+        # The non-truncating count should remain the same
+        # (CNVs are truncating, not non-truncating, so excluding them shouldn't
+        # affect the non-truncating count)
+        assert data_excl["group2_count"] == data_with_cnv["group2_count"]
+
     async def test_compare_with_different_sort_orders(self, async_client, db_session):
         """Test different sorting options."""
         # Sort by p-value (default)

@@ -62,6 +62,7 @@ export default {
       // Return short labels for bar groups based on comparison type
       const labelMap = {
         truncating_vs_non_truncating: { group1: 'T', group2: 'nT' },
+        truncating_vs_non_truncating_excl_cnv: { group1: 'T', group2: 'nT' },
         cnv_vs_point_mutation: { group1: 'CNV', group2: 'non-CNV' },
         cnv_deletion_vs_duplication: { group1: 'DEL', group2: 'DUP' },
       };
@@ -150,7 +151,10 @@ export default {
       // Apply filtering: first remove uninformative phenotypes, then filter by organ system
       const allPhenotypes = this.comparisonData.phenotypes;
       const informativePhenotypes = this.filterUninformativePhenotypes(allPhenotypes);
-      const data = this.filterPhenotypesByOrganSystem(informativePhenotypes, this.organSystemFilter);
+      const data = this.filterPhenotypesByOrganSystem(
+        informativePhenotypes,
+        this.organSystemFilter
+      );
 
       // If no phenotypes match the filter, show a message
       if (data.length === 0) {
@@ -505,10 +509,22 @@ export default {
       const shortLabels = this.getShortLabels();
 
       // Row 1: Present/Absent indicators (centered)
-      legend.append('rect').attr('x', 0).attr('y', 0).attr('width', 12).attr('height', 12).attr('fill', colorYes);
+      legend
+        .append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', 12)
+        .attr('height', 12)
+        .attr('fill', colorYes);
       legend.append('text').attr('x', 16).attr('y', 10).style('font-size', '11px').text('Present');
 
-      legend.append('rect').attr('x', 100).attr('y', 0).attr('width', 12).attr('height', 12).attr('fill', colorNo);
+      legend
+        .append('rect')
+        .attr('x', 100)
+        .attr('y', 0)
+        .attr('width', 12)
+        .attr('height', 12)
+        .attr('fill', colorNo);
       legend.append('text').attr('x', 116).attr('y', 10).style('font-size', '11px').text('Absent');
 
       // Row 2: Bar label explanations (on separate line to avoid overlap)
