@@ -370,18 +370,41 @@ async def compare_variant_types(
         group2_name = "Non-truncating"
 
     elif comparison == "cnv_vs_point_mutation":
-        # Classify based on structural type
-        # noqa: E501
+        # Classify based on structural type with 50kb threshold
+        # Large CNVs (>=50kb) vs all other variants (including small intragenic del/dup <50kb)
+        # Matches R script logic: 17qDel/17qDup are large CNVs, small deletions are truncating
         group1_condition = """
-            -- CNVs: Large deletions or duplications (match DEL$ or DUP$ to avoid bind param issue)
-            (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
-             OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+            -- CNVs: Large deletions or duplications >= 50kb (17qDel/Dup in R)
+            -- Small intragenic deletions < 50kb are classified as Non-CNV
+            (
+                (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                 OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+                AND
+                COALESCE(
+                    (SELECT (ext#>>'{value,length}')::bigint
+                     FROM jsonb_array_elements(
+                         gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                     ) AS ext
+                     WHERE ext->>'name' = 'coordinates'),
+                    0
+                ) >= 50000
+            )
         """
-        # noqa: E501
         group2_condition = """
-            -- Non-CNVs: All other variants (SNVs, indels, etc.)
-            (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DEL$'
-             AND gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' !~ 'DUP$')
+            -- Non-CNVs: All other variants (SNVs, indels, small intragenic del/dup <50kb)
+            NOT (
+                (gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DEL$'
+                 OR gen_interp.value#>>'{variantInterpretation,variationDescriptor,id}' ~ 'DUP$')
+                AND
+                COALESCE(
+                    (SELECT (ext#>>'{value,length}')::bigint
+                     FROM jsonb_array_elements(
+                         gen_interp.value#>'{variantInterpretation,variationDescriptor,extensions}'
+                     ) AS ext
+                     WHERE ext->>'name' = 'coordinates'),
+                    0
+                ) >= 50000
+            )
         """
         group1_name = "CNVs (17q del/dup)"
         group2_name = "Non-CNV variants"
