@@ -11,6 +11,7 @@
               <v-tab value="Publications Timeline"> Publications Timeline </v-tab>
               <v-tab value="Variant Comparison"> Variant Comparison </v-tab>
               <v-tab value="Survival Curves"> Survival Curves </v-tab>
+              <v-tab value="DNA Distance Analysis"> DNA Distance Analysis </v-tab>
             </v-tabs>
             <v-card-text>
               <v-tabs-window v-model="tab">
@@ -203,7 +204,7 @@
                         hint="Choose how to group patients for survival analysis"
                         persistent-hint
                       >
-                        <template v-slot:item="{ props, item }">
+                        <template #item="{ props, item }">
                           <v-list-item v-bind="props">
                             <v-list-item-subtitle>
                               {{ item.raw.description }}
@@ -222,7 +223,7 @@
                         hint="Choose the clinical outcome to measure"
                         persistent-hint
                       >
-                        <template v-slot:item="{ props, item }">
+                        <template #item="{ props, item }">
                           <v-list-item v-bind="props">
                             <v-list-item-subtitle>
                               {{ item.raw.description }}
@@ -364,18 +365,18 @@
                             <h4 class="text-subtitle-1 font-weight-bold mb-2">Event & Censoring</h4>
                             <v-list density="compact" class="bg-transparent">
                               <v-list-item>
-                                <template v-slot:prepend>
+                                <template #prepend>
                                   <v-icon size="small" color="error">mdi-alert-circle</v-icon>
                                 </template>
-                                <v-list-item-title class="text-body-2"
-                                  >Event Definition</v-list-item-title
-                                >
+                                <v-list-item-title class="text-body-2">
+                                  Event Definition
+                                </v-list-item-title>
                                 <v-list-item-subtitle class="text-wrap">
                                   {{ survivalData.metadata.event_definition }}
                                 </v-list-item-subtitle>
                               </v-list-item>
                               <v-list-item>
-                                <template v-slot:prepend>
+                                <template #prepend>
                                   <v-icon size="small" color="info">mdi-clock-outline</v-icon>
                                 </template>
                                 <v-list-item-title class="text-body-2">Time Axis</v-list-item-title>
@@ -384,7 +385,7 @@
                                 </v-list-item-subtitle>
                               </v-list-item>
                               <v-list-item>
-                                <template v-slot:prepend>
+                                <template #prepend>
                                   <v-icon size="small" color="warning">mdi-eye-off-outline</v-icon>
                                 </template>
                                 <v-list-item-title class="text-body-2">Censoring</v-list-item-title>
@@ -400,7 +401,7 @@
                             </h4>
                             <v-list density="compact" class="bg-transparent">
                               <v-list-item>
-                                <template v-slot:prepend>
+                                <template #prepend>
                                   <v-icon size="small" color="success">mdi-check-circle</v-icon>
                                 </template>
                                 <v-list-item-title class="text-body-2">Included</v-list-item-title>
@@ -409,7 +410,7 @@
                                 </v-list-item-subtitle>
                               </v-list-item>
                               <v-list-item>
-                                <template v-slot:prepend>
+                                <template #prepend>
                                   <v-icon size="small" color="error">mdi-close-circle</v-icon>
                                 </template>
                                 <v-list-item-title class="text-body-2">Excluded</v-list-item-title>
@@ -447,6 +448,11 @@
                     </v-expansion-panel>
                   </v-expansion-panels>
                 </v-tabs-window-item>
+
+                <!-- DNA Distance Analysis Tab -->
+                <v-tabs-window-item value="DNA Distance Analysis">
+                  <DNADistanceAnalysis :width="1200" :height="450" />
+                </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
           </v-card>
@@ -463,6 +469,7 @@ import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
 import VariantComparisonChart from '@/components/analyses/VariantComparisonChart.vue';
 import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
+import DNADistanceAnalysis from '@/components/analyses/DNADistanceAnalysis.vue';
 import * as API from '@/api';
 
 export default {
@@ -473,6 +480,7 @@ export default {
     StackedBarChart,
     VariantComparisonChart,
     KaplanMeierChart,
+    DNADistanceAnalysis,
   },
   data() {
     return {
