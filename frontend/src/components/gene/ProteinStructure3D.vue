@@ -40,8 +40,8 @@
       <!-- Info Alert about structure coverage -->
       <v-alert type="info" density="compact" variant="tonal" class="mb-3">
         <v-icon size="small" class="mr-1"> mdi-information </v-icon>
-        <strong>Structure coverage:</strong> Residues 170-280 (DNA-binding domain). Variants outside
-        this region cannot be visualized in 3D.
+        <strong>Structure coverage:</strong> Residues 90-308 (DNA-binding domain, gap at 187-230).
+        Variants outside this region cannot be visualized in 3D.
       </v-alert>
 
       <!-- Loading state -->
@@ -291,7 +291,7 @@
         <v-icon size="small" class="mr-1"> mdi-map-marker-off </v-icon>
         <strong>Current variant not in structure:</strong>
         {{ currentVariant.protein || currentVariant.transcript }} is outside the PDB structure range
-        (residues 170-280).
+        (residues 90-308, gap at 187-230).
       </v-alert>
 
       <!-- Selected variant info (all variants mode) -->
