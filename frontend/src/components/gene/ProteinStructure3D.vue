@@ -192,13 +192,24 @@
         </v-col>
 
         <!-- DNA Toggle -->
-        <v-col cols="12" sm="3" md="3">
+        <v-col cols="6" sm="3" md="2">
           <v-switch
             v-model="showDNA"
             label="Show DNA"
             density="compact"
             hide-details
             color="primary"
+          />
+        </v-col>
+
+        <!-- Domain Coloring Toggle -->
+        <v-col cols="6" sm="3" md="2">
+          <v-switch
+            v-model="colorByDomain"
+            label="Domain Colors"
+            density="compact"
+            hide-details
+            color="secondary"
           />
         </v-col>
 
@@ -253,6 +264,18 @@
               Likely Benign
             </v-chip>
             <v-chip size="x-small" color="grey-lighten-1"> Unknown </v-chip>
+          </div>
+          <!-- Domain Legend (shown when domain coloring is enabled) -->
+          <div v-if="colorByDomain" class="legend-container mt-2">
+            <span class="text-caption text-grey mr-2">Domains:</span>
+            <v-chip size="x-small" style="background-color: #ab47bc; color: white" class="mr-1">
+              POU-S (90-173)
+            </v-chip>
+            <v-chip size="x-small" style="background-color: #26a69a; color: white" class="mr-1">
+              POU-H (232-305)
+            </v-chip>
+            <v-chip size="x-small" style="background-color: #9e9e9e" class="mr-1"> Linker </v-chip>
+            <span class="text-caption text-grey-darken-1 ml-2"> (Gap: 187-230 not resolved) </span>
           </div>
         </v-col>
       </v-row>
@@ -317,6 +340,7 @@ import {
 let nglStage = null;
 let nglStructureComponent = null;
 let nglVariantRepresentation = null;
+let nglVariantBallStickRepresentation = null;
 let nglLabelRepresentation = null;
 let nglDistanceShape = null;
 let distanceCalculator = null;
@@ -346,7 +370,42 @@ export default {
       structureLoaded: false,
       showDNA: true,
       showDistanceLine: false,
+      colorByDomain: false,
       currentVariantDistanceInfo: null,
+      // HNF1B protein domains (from UniProt P35680)
+      // Note: PDB 2H8R only covers residues 90-308 (with gap 187-230)
+      proteinDomains: [
+        {
+          name: 'Dimerization',
+          shortName: 'Dim',
+          start: 1,
+          end: 31,
+          color: 0xffb74d, // Orange - not visible in structure (before res 90)
+        },
+        {
+          name: 'POU-Specific',
+          shortName: 'POU-S',
+          start: 88,
+          end: 173,
+          color: 0xab47bc, // Purple - partially visible (90-173)
+        },
+        {
+          name: 'POU-Homeodomain',
+          shortName: 'POU-H',
+          start: 232,
+          end: 305,
+          color: 0x26a69a, // Teal - fully visible
+        },
+        {
+          name: 'Transactivation',
+          shortName: 'TAD',
+          start: 314,
+          end: 557,
+          color: 0x81c784, // Green - not visible in structure (after res 308)
+        },
+      ],
+      // Color for linker regions (between domains)
+      linkerColor: 0x9e9e9e, // Grey
       // For showAllVariants mode
       selectedVariantId: null,
       hoveredVariantId: null,
@@ -479,6 +538,9 @@ export default {
     showDNA() {
       this.updateRepresentation();
     },
+    colorByDomain() {
+      this.updateRepresentation();
+    },
     currentVariantId() {
       if (!this.showAllVariants) {
         this.highlightActiveVariant();
@@ -598,29 +660,35 @@ export default {
       nglLabelRepresentation = null;
       this.removeDistanceLine();
 
-      // Add protein representation
-      const proteinParams = {
-        sele: 'protein',
-        color: 'chainid',
-      };
+      // Determine coloring approach
+      if (this.colorByDomain) {
+        // Add domain-colored representations
+        this.addDomainColoredRepresentations();
+      } else {
+        // Add protein representation with chain coloring
+        const proteinParams = {
+          sele: 'protein',
+          color: 'chainid',
+        };
 
-      if (this.representation === 'cartoon') {
-        nglStructureComponent.addRepresentation('cartoon', {
-          ...proteinParams,
-          aspectRatio: 5,
-          smoothSheet: true,
-        });
-      } else if (this.representation === 'surface') {
-        nglStructureComponent.addRepresentation('surface', {
-          ...proteinParams,
-          opacity: 0.7,
-          surfaceType: 'ms',
-        });
-      } else if (this.representation === 'ball+stick') {
-        nglStructureComponent.addRepresentation('ball+stick', {
-          ...proteinParams,
-          multipleBond: 'symmetric',
-        });
+        if (this.representation === 'cartoon') {
+          nglStructureComponent.addRepresentation('cartoon', {
+            ...proteinParams,
+            aspectRatio: 5,
+            smoothSheet: true,
+          });
+        } else if (this.representation === 'surface') {
+          nglStructureComponent.addRepresentation('surface', {
+            ...proteinParams,
+            opacity: 0.7,
+            surfaceType: 'ms',
+          });
+        } else if (this.representation === 'ball+stick') {
+          nglStructureComponent.addRepresentation('ball+stick', {
+            ...proteinParams,
+            multipleBond: 'symmetric',
+          });
+        }
       }
 
       // Add DNA representation if enabled
@@ -643,13 +711,58 @@ export default {
       this.highlightActiveVariant();
     },
 
+    addDomainColoredRepresentations() {
+      // PDB 2H8R covers residues 90-308 (with gap at 187-230)
+      // Define residue ranges for each domain visible in the structure
+      const domainRanges = [
+        // POU-Specific Domain (POU-S): residues 88-173 - visible as 90-173
+        { sele: 'protein and 90-173', color: 0xab47bc, name: 'POU-S' },
+        // Linker region: 174-186 (between POU-S and gap)
+        { sele: 'protein and 174-186', color: this.linkerColor, name: 'Linker1' },
+        // Note: Gap 187-230 is not resolved in structure
+        // Linker region: 231 (between gap and POU-H)
+        { sele: 'protein and 231', color: this.linkerColor, name: 'Linker2' },
+        // POU-Homeodomain (POU-H): residues 232-305
+        { sele: 'protein and 232-305', color: 0x26a69a, name: 'POU-H' },
+        // After POU-H: 306-308 (small tail visible in structure)
+        { sele: 'protein and 306-308', color: this.linkerColor, name: 'C-tail' },
+      ];
+
+      // Common parameters based on representation type
+      const getRepParams = (sele, color) => {
+        const base = { sele, color };
+        if (this.representation === 'cartoon') {
+          return { ...base, aspectRatio: 5, smoothSheet: true };
+        } else if (this.representation === 'surface') {
+          return { ...base, opacity: 0.7, surfaceType: 'ms' };
+        } else if (this.representation === 'ball+stick') {
+          return { ...base, multipleBond: 'symmetric' };
+        }
+        return base;
+      };
+
+      // Add representation for each domain/region
+      domainRanges.forEach((range) => {
+        const params = getRepParams(range.sele, range.color);
+        nglStructureComponent.addRepresentation(this.representation, params);
+      });
+
+      window.logService.debug('Domain coloring applied', {
+        domains: domainRanges.map((d) => d.name),
+      });
+    },
+
     highlightActiveVariant() {
       if (!nglStructureComponent || !nglStage) return;
 
-      // Remove existing variant representation
+      // Remove existing variant representations
       if (nglVariantRepresentation) {
         nglStructureComponent.removeRepresentation(nglVariantRepresentation);
         nglVariantRepresentation = null;
+      }
+      if (nglVariantBallStickRepresentation) {
+        nglStructureComponent.removeRepresentation(nglVariantBallStickRepresentation);
+        nglVariantBallStickRepresentation = null;
       }
       if (nglLabelRepresentation) {
         nglStructureComponent.removeRepresentation(nglLabelRepresentation);
@@ -665,12 +778,21 @@ export default {
       const color = this.getVariantColor(this.activeVariant);
       const selection = `${pdbPosition}`;
 
-      // Add spacefill representation for the variant residue
+      // Add ball+stick representation first (underneath)
+      nglVariantBallStickRepresentation = nglStructureComponent.addRepresentation('ball+stick', {
+        sele: selection,
+        colorScheme: 'element',
+        aspectRatio: 1.5,
+        bondScale: 0.3,
+        bondSpacing: 1.0,
+      });
+
+      // Add semi-transparent spacefill representation on top
       nglVariantRepresentation = nglStructureComponent.addRepresentation('spacefill', {
         sele: selection,
         color: color,
-        opacity: 1.0,
-        scale: 1.5,
+        opacity: 0.4,
+        scale: 1.2,
       });
 
       // Add label using format string for better reliability
@@ -916,8 +1038,8 @@ export default {
       const position = this.extractAAPosition(variant);
       if (!position || !this.isPositionInStructure(position)) return null;
 
-      const pdbPosition = position - STRUCTURE_START + 170;
-      const info = distanceCalculator.calculateResidueToHelixDistance(pdbPosition);
+      // Use position directly - dnaDistanceCalculator uses auth_seq_id which matches UniProt numbering
+      const info = distanceCalculator.calculateResidueToHelixDistance(position);
 
       if (info) {
         this.variantDistanceCache[variant.variant_id] = info;
