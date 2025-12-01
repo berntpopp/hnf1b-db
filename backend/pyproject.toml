@@ -71,7 +71,7 @@ warn_unused_ignores = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["pandas.*", "passlib.*", "biopython.*", "Bio.*"]
+module = ["pandas.*", "passlib.*", "biopython.*", "Bio.*", "scipy.*", "jsonpatch.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

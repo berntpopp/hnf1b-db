@@ -165,22 +165,31 @@ def add_vep_to_phenopacket(
             gnomad_af_nfe = colocated_variants[0].get("gnomad_af_nfe")
 
         # Add new VEP extension (schema-compliant structure)
+        # Helper to safely get from primary_consequence
+        pc = primary_consequence
+
         variant_desc["extensions"].append(
             {
                 "name": "vep_annotation",  # Extension identifier
                 "value": {
                     # Core VEP fields (from top level and primary transcript)
-                    "most_severe_consequence": vep_data.get("most_severe_consequence"),
-                    "impact": primary_consequence.get("impact") if primary_consequence else None,
-                    "gene_symbol": primary_consequence.get("gene_symbol") if primary_consequence else None,
-                    "gene_id": primary_consequence.get("gene_id") if primary_consequence else None,
-                    "transcript_id": primary_consequence.get("transcript_id") if primary_consequence else None,
+                    "most_severe_consequence": vep_data.get(
+                        "most_severe_consequence"
+                    ),
+                    "impact": pc.get("impact") if pc else None,
+                    "gene_symbol": pc.get("gene_symbol") if pc else None,
+                    "gene_id": pc.get("gene_id") if pc else None,
+                    "transcript_id": pc.get("transcript_id") if pc else None,
                     # Pathogenicity scores (from primary transcript)
-                    "cadd_score": primary_consequence.get("cadd_phred") if primary_consequence else None,
-                    "polyphen_prediction": primary_consequence.get("polyphen_prediction") if primary_consequence else None,
-                    "polyphen_score": primary_consequence.get("polyphen_score") if primary_consequence else None,
-                    "sift_prediction": primary_consequence.get("sift_prediction") if primary_consequence else None,
-                    "sift_score": primary_consequence.get("sift_score") if primary_consequence else None,
+                    "cadd_score": pc.get("cadd_phred") if pc else None,
+                    "polyphen_prediction": (
+                        pc.get("polyphen_prediction") if pc else None
+                    ),
+                    "polyphen_score": pc.get("polyphen_score") if pc else None,
+                    "sift_prediction": (
+                        pc.get("sift_prediction") if pc else None
+                    ),
+                    "sift_score": pc.get("sift_score") if pc else None,
                     # Population frequency (from colocated_variants)
                     "gnomad_af": gnomad_af,
                     "gnomad_af_nfe": gnomad_af_nfe,
