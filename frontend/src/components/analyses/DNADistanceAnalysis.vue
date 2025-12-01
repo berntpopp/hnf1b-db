@@ -274,34 +274,78 @@
                 <!-- Effect Size -->
                 <v-row v-if="mannWhitneyResult" class="mt-4">
                   <v-col cols="12">
-                    <h4 class="text-subtitle-1 font-weight-bold mb-2">Effect Size</h4>
+                    <h4 class="text-subtitle-1 font-weight-bold mb-2">
+                      Effect Size & Test Details
+                    </h4>
                     <v-table density="compact">
                       <tbody>
                         <tr>
-                          <td>Median Difference</td>
+                          <td>Median Difference (VUS - P/LP)</td>
                           <td class="text-right">
-                            {{ (pathogenicStats.median - vusStats.median).toFixed(2) }}
+                            {{ (vusStats.median - pathogenicStats.median).toFixed(2) }}
                             &Aring;
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>Cohen's d</td>
-                          <td class="text-right">
-                            {{ mannWhitneyResult.cohensD.toFixed(3) }}
                             <v-chip
                               size="x-small"
-                              :color="getEffectSizeColor(mannWhitneyResult.cohensD)"
+                              :color="
+                                vusStats.median > pathogenicStats.median ? 'success' : 'warning'
+                              "
                               class="ml-2"
                             >
-                              {{ getEffectSizeLabel(mannWhitneyResult.cohensD) }}
+                              {{
+                                vusStats.median > pathogenicStats.median
+                                  ? 'P/LP closer to DNA'
+                                  : 'VUS closer to DNA'
+                              }}
                             </v-chip>
                           </td>
                         </tr>
                         <tr>
-                          <td>Rank-Biserial Correlation</td>
+                          <td>Rank-Biserial Correlation (r)</td>
                           <td class="text-right">
                             {{ mannWhitneyResult.rankBiserial.toFixed(3) }}
+                            <v-chip
+                              size="x-small"
+                              :color="getRankBiserialColor(mannWhitneyResult.rankBiserial)"
+                              class="ml-2"
+                            >
+                              {{ mannWhitneyResult.effectMagnitude }}
+                            </v-chip>
                           </td>
+                        </tr>
+                        <tr>
+                          <td>U Statistic</td>
+                          <td class="text-right">{{ mannWhitneyResult.U.toFixed(0) }}</td>
+                        </tr>
+                        <tr>
+                          <td>p-value</td>
+                          <td class="text-right">
+                            {{ formatPValue(mannWhitneyResult.pValue) }}
+                            <v-chip
+                              size="x-small"
+                              :color="pValueSignificant ? 'success' : 'grey'"
+                              class="ml-2"
+                            >
+                              {{ pValueSignificant ? 'significant' : 'not significant' }}
+                            </v-chip>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>p-value Method</td>
+                          <td class="text-right">
+                            <v-chip size="x-small" color="grey-lighten-1">
+                              {{
+                                mannWhitneyResult.method === 'exact'
+                                  ? 'Exact'
+                                  : mannWhitneyResult.method === 'normal_tie_corrected'
+                                    ? 'Normal (tie-corrected)'
+                                    : 'Normal approximation'
+                              }}
+                            </v-chip>
+                          </td>
+                        </tr>
+                        <tr v-if="mannWhitneyResult.tieCount > 0">
+                          <td>Tied Groups</td>
+                          <td class="text-right">{{ mannWhitneyResult.tieCount }}</td>
                         </tr>
                       </tbody>
                     </v-table>
@@ -593,57 +637,137 @@ export default {
       ];
       combined.sort((a, b) => a.value - b.value);
 
-      // Assign ranks (handling ties)
+      // Assign ranks (handling ties) and track tie groups for correction
+      const tieGroups = [];
       let rank = 1;
       for (let i = 0; i < combined.length; i++) {
         let j = i;
         while (j < combined.length - 1 && combined[j + 1].value === combined[i].value) {
           j++;
         }
-        const avgRank = (rank + rank + (j - i)) / 2;
+        const tieSize = j - i + 1;
+        const avgRank = rank + (tieSize - 1) / 2;
         for (let k = i; k <= j; k++) {
           combined[k].rank = avgRank;
         }
-        rank += j - i + 1;
+        if (tieSize > 1) {
+          tieGroups.push(tieSize);
+        }
+        rank += tieSize;
         i = j;
       }
 
       // Calculate U statistic
       const n1 = x.length;
       const n2 = y.length;
+      const n = n1 + n2;
       const r1 = combined.filter((c) => c.group === 'x').reduce((sum, c) => sum + c.rank, 0);
 
-      const U1 = n1 * n2 + (n1 * (n1 + 1)) / 2 - r1;
+      const U1 = r1 - (n1 * (n1 + 1)) / 2;
       const U2 = n1 * n2 - U1;
       const U = Math.min(U1, U2);
 
-      // Normal approximation for p-value
+      // Calculate p-value - use exact method for small samples, normal approximation otherwise
+      let pValue;
+      let method;
       const mu = (n1 * n2) / 2;
-      const sigma = Math.sqrt((n1 * n2 * (n1 + n2 + 1)) / 12);
-      const z = (U - mu) / sigma;
-      const pValue = 2 * (1 - this.normalCDF(Math.abs(z)));
 
-      // Effect sizes
-      const pooledStd = Math.sqrt(
-        ((n1 - 1) * Math.pow(this.pathogenicStats.stdDev, 2) +
-          (n2 - 1) * Math.pow(this.vusStats.stdDev, 2)) /
-          (n1 + n2 - 2)
-      );
-      const cohensD =
-        pooledStd > 0 ? (this.pathogenicStats.mean - this.vusStats.mean) / pooledStd : 0;
+      if (n1 <= 20 && n2 <= 20 && tieGroups.length === 0) {
+        // Exact p-value for small samples without ties
+        pValue = this.exactMannWhitneyP(U, n1, n2);
+        method = 'exact';
+      } else {
+        // Normal approximation with tie correction
+        // Tie correction factor: sum of (t^3 - t) for each tie group of size t
+        const tieCorrection = tieGroups.reduce((sum, t) => sum + (t * t * t - t), 0);
+
+        // Variance with tie correction
+        const variance = (n1 * n2 * (n + 1)) / 12 - (n1 * n2 * tieCorrection) / (12 * n * (n - 1));
+        const sigma = Math.sqrt(variance);
+
+        // Continuity correction for normal approximation
+        const z = sigma > 0 ? (Math.abs(U - mu) - 0.5) / sigma : 0;
+        pValue = 2 * (1 - this.normalCDF(z));
+        method = tieGroups.length > 0 ? 'normal_tie_corrected' : 'normal';
+      }
+
+      // Effect size: Rank-biserial correlation (r)
+      // r = 1 - (2U)/(n1*n2) or equivalently r = (2U1)/(n1*n2) - 1
       const rankBiserial = 1 - (2 * U) / (n1 * n2);
+
+      // Interpret effect size magnitude (using absolute value)
+      const absR = Math.abs(rankBiserial);
+      let effectMagnitude;
+      if (absR >= 0.5) effectMagnitude = 'large';
+      else if (absR >= 0.3) effectMagnitude = 'medium';
+      else if (absR >= 0.1) effectMagnitude = 'small';
+      else effectMagnitude = 'negligible';
 
       return {
         U,
-        z,
+        U1,
+        U2,
         pValue,
-        cohensD: Math.abs(cohensD),
-        rankBiserial: Math.abs(rankBiserial),
+        method,
+        tieCount: tieGroups.length,
+        rankBiserial,
+        effectMagnitude,
+        n1,
+        n2,
       };
     },
 
+    /**
+     * Calculate exact p-value for Mann-Whitney U test using dynamic programming
+     * This computes the exact distribution of U under the null hypothesis
+     */
+    exactMannWhitneyP(U, n1, n2) {
+      // Build the distribution of U values using memoization
+      // Count arrangements that give U <= observed U
+      const memo = new Map();
+
+      const countWays = (i, j, currentU) => {
+        if (i === 0 && j === 0) return currentU >= 0 ? 1 : 0;
+        if (i < 0 || j < 0 || currentU < 0) return 0;
+
+        const key = `${i},${j},${currentU}`;
+        if (memo.has(key)) return memo.get(key);
+
+        // Either take from group 1 (adds j to U) or group 2 (adds 0)
+        const ways = countWays(i - 1, j, currentU - j) + countWays(i, j - 1, currentU);
+        memo.set(key, ways);
+        return ways;
+      };
+
+      // Total number of arrangements
+      const totalArrangements = this.binomialCoeff(n1 + n2, n1);
+
+      // Count arrangements with U <= observed U (two-tailed)
+      let countLessOrEqual = 0;
+      for (let u = 0; u <= U; u++) {
+        memo.clear();
+        countLessOrEqual += countWays(n1, n2, u);
+      }
+
+      // Two-tailed p-value
+      const pOneTail = countLessOrEqual / totalArrangements;
+      return Math.min(1, 2 * pOneTail);
+    },
+
+    /**
+     * Calculate binomial coefficient C(n, k)
+     */
+    binomialCoeff(n, k) {
+      if (k > n - k) k = n - k;
+      let result = 1;
+      for (let i = 0; i < k; i++) {
+        result = (result * (n - i)) / (i + 1);
+      }
+      return Math.round(result);
+    },
+
     normalCDF(x) {
-      // Approximation of the standard normal CDF
+      // Approximation of the standard normal CDF (Abramowitz and Stegun)
       const a1 = 0.254829592;
       const a2 = -0.284496736;
       const a3 = 1.421413741;
@@ -652,10 +776,10 @@ export default {
       const p = 0.3275911;
 
       const sign = x < 0 ? -1 : 1;
-      x = Math.abs(x) / Math.sqrt(2);
+      const absX = Math.abs(x);
 
-      const t = 1.0 / (1.0 + p * x);
-      const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      const t = 1.0 / (1.0 + p * absX);
+      const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX);
 
       return 0.5 * (1.0 + sign * y);
     },
@@ -992,20 +1116,16 @@ export default {
       return 'Far (≥10Å)';
     },
 
-    getEffectSizeColor(d) {
-      const absD = Math.abs(d);
-      if (absD >= 0.8) return 'error';
-      if (absD >= 0.5) return 'warning';
-      if (absD >= 0.2) return 'info';
+    /**
+     * Get color for rank-biserial correlation effect size
+     * Using standard thresholds: |r| >= 0.5 large, >= 0.3 medium, >= 0.1 small
+     */
+    getRankBiserialColor(r) {
+      const absR = Math.abs(r);
+      if (absR >= 0.5) return 'error';
+      if (absR >= 0.3) return 'warning';
+      if (absR >= 0.1) return 'info';
       return 'grey';
-    },
-
-    getEffectSizeLabel(d) {
-      const absD = Math.abs(d);
-      if (absD >= 0.8) return 'Large';
-      if (absD >= 0.5) return 'Medium';
-      if (absD >= 0.2) return 'Small';
-      return 'Negligible';
     },
   },
 };
