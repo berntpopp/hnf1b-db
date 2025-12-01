@@ -20,7 +20,7 @@
     <v-card-text>
       <!-- Loading State -->
       <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 400px">
-        <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+        <v-progress-circular indeterminate color="primary" size="64" />
       </div>
 
       <!-- Error State -->
@@ -40,7 +40,7 @@
 
       <!-- Chart -->
       <div v-else-if="chartData.labels && chartData.labels.length > 0" style="height: 500px">
-        <canvas ref="chartCanvas"></canvas>
+        <canvas ref="chartCanvas" />
       </div>
 
       <!-- No Data State -->

@@ -3,7 +3,7 @@
     <v-card-title class="bg-green-lighten-5 d-flex align-center">
       <v-icon class="mr-2">mdi-timeline-clock</v-icon>
       Phenotypic Features Timeline
-      <v-spacer></v-spacer>
+      <v-spacer />
       <v-chip v-if="timelineData" color="success" size="small">
         {{ presentFeatures.length }} Features
       </v-chip>
@@ -11,7 +11,7 @@
 
     <v-card-text>
       <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 200px">
-        <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+        <v-progress-circular indeterminate color="primary" size="64" />
       </div>
 
       <div
@@ -142,7 +142,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 import API from '@/api';
 import {
   parseAge,
-  formatAge,
   getCategoryColor,
   onsetClassToAge,
   getOrganSystem,

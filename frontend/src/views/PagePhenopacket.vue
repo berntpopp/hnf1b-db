@@ -137,7 +137,7 @@
                     <v-card-title class="d-flex align-center">
                       <v-icon class="mr-2">mdi-code-json</v-icon>
                       Raw Phenopacket JSON
-                      <v-spacer></v-spacer>
+                      <v-spacer />
                       <v-btn
                         size="small"
                         color="primary"
@@ -389,6 +389,7 @@ export default {
   overflow-y: auto;
 }
 </style>
+
 <style scoped>
 /* Add any custom styles here if needed */
 </style>

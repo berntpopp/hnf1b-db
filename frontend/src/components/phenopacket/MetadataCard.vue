@@ -180,9 +180,6 @@ export default {
       publicationYears: {}, // Map of PMID -> year
     };
   },
-  mounted() {
-    this.fetchPublicationYears();
-  },
   computed: {
     allReviewers() {
       // Collect all unique reviewers from updates
@@ -223,6 +220,9 @@ export default {
         };
       });
     },
+  },
+  mounted() {
+    this.fetchPublicationYears();
   },
   methods: {
     formatDate(dateString) {

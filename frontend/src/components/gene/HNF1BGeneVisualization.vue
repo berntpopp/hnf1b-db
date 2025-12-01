@@ -1001,10 +1001,18 @@ export default {
           window.logService.warn('No genes returned from API for 17q12 region');
         }
       } catch (error) {
-        this.apiError = error.message;
-        window.logService.warn('Failed to fetch chr17q12 genes from API, using empty array', {
-          error: error.message,
-        });
+        // 404 errors are expected when reference data isn't populated - don't log as error
+        const is404 = error.response?.status === 404;
+        if (is404) {
+          window.logService.debug('Reference data not available for chr17q12 genes (expected)', {
+            status: error.response?.status,
+          });
+        } else {
+          this.apiError = error.message;
+          window.logService.warn('Failed to fetch chr17q12 genes from API, using empty array', {
+            error: error.message,
+          });
+        }
         // Keep empty array - component will still work but CNV mode won't show genes
       } finally {
         this.loading = false;

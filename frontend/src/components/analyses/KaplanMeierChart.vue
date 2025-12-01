@@ -249,7 +249,7 @@ export default {
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.5)
           .style('cursor', 'pointer')
-          .on('mouseover', function (event) {
+          .on('mouseover', function (_event) {
             d3.select(this).attr('r', 6);
 
             // Build tooltip text with group name and confidence interval
