@@ -35,8 +35,8 @@
             <v-card-subtitle class="text-h6 mt-2">
               <div v-if="publication.authors">
                 {{ publication.authors }}
-                <span v-if="publication.year" class="text-grey-darken-1">
-                  ({{ publication.year }})</span
+                <span v-if="publication.year" class="text-grey-darken-1"
+                  >({{ publication.year }})</span
                 >
               </div>
               <div class="mt-2">
