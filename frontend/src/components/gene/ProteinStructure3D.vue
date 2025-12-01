@@ -334,6 +334,7 @@ import {
   STRUCTURE_START,
   STRUCTURE_END,
 } from '@/utils/dnaDistanceCalculator';
+import { getPathogenicityColor } from '@/utils/colors';
 
 // Store NGL objects outside Vue's reactivity system
 // This prevents Vue 3 Proxy conflicts with Three.js internal properties
@@ -971,26 +972,7 @@ export default {
     },
 
     getVariantChipColor(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
-        return 'red-lighten-1';
-      }
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      ) {
-        return 'orange-lighten-1';
-      }
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return 'yellow-darken-1';
-      }
-      if (classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN')) {
-        return 'light-green-lighten-1';
-      }
-      if (classification.includes('BENIGN')) {
-        return 'green-lighten-1';
-      }
-      return 'grey-lighten-1';
+      return getPathogenicityColor(variant.classificationVerdict);
     },
 
     getVariantLabel(variant) {

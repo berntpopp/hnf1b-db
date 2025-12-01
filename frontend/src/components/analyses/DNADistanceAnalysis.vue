@@ -412,6 +412,7 @@ import {
   STRUCTURE_START,
   STRUCTURE_END,
 } from '@/utils/dnaDistanceCalculator';
+import { matchesPathogenicityCategory } from '@/utils/colors';
 
 // Store NGL objects outside Vue's reactivity system
 let nglStage = null;
@@ -557,19 +558,16 @@ export default {
       this.totalVariantsInStructure = variantsWithDistances.length;
 
       // Separate by pathogenicity
-      this.pathogenicDistances = variantsWithDistances.filter((v) => {
-        const cls = v.classificationVerdict?.toUpperCase() || '';
-        return (
-          cls.includes('PATHOGENIC') &&
-          !cls.includes('LIKELY_BENIGN') &&
-          !cls.includes('LIKELY BENIGN')
-        );
-      });
+      // Pathogenic group includes both Pathogenic and Likely Pathogenic
+      this.pathogenicDistances = variantsWithDistances.filter(
+        (v) =>
+          matchesPathogenicityCategory(v.classificationVerdict, 'PATHOGENIC') ||
+          matchesPathogenicityCategory(v.classificationVerdict, 'LIKELY_PATHOGENIC')
+      );
 
-      this.vusDistances = variantsWithDistances.filter((v) => {
-        const cls = v.classificationVerdict?.toUpperCase() || '';
-        return cls.includes('UNCERTAIN') || cls.includes('VUS');
-      });
+      this.vusDistances = variantsWithDistances.filter((v) =>
+        matchesPathogenicityCategory(v.classificationVerdict, 'VUS')
+      );
 
       // Count categories
       this.pathogenicCategories = { close: 0, medium: 0, far: 0 };

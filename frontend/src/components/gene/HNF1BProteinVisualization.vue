@@ -380,6 +380,11 @@
 import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getReferenceGeneDomains } from '@/api';
+import {
+  getPathogenicityHexColor,
+  getPathogenicityScore,
+  matchesPathogenicityCategory,
+} from '@/utils/colors';
 
 export default {
   name: 'HNF1BProteinVisualization',
@@ -502,30 +507,9 @@ export default {
       const [filterType, filterValue] = this.activeFilter.split(':');
 
       if (filterType === 'pathogenicity') {
-        return this.snvVariants.filter((v) => {
-          const classification = v.classificationVerdict?.toUpperCase() || '';
-          if (filterValue === 'PATHOGENIC') {
-            return classification.includes('PATHOGENIC') && !classification.includes('LIKELY');
-          }
-          if (filterValue === 'LIKELY_PATHOGENIC') {
-            return (
-              classification.includes('LIKELY_PATHOGENIC') ||
-              classification.includes('LIKELY PATHOGENIC')
-            );
-          }
-          if (filterValue === 'VUS') {
-            return classification.includes('UNCERTAIN') || classification.includes('VUS');
-          }
-          if (filterValue === 'LIKELY_BENIGN') {
-            return (
-              classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN')
-            );
-          }
-          if (filterValue === 'BENIGN') {
-            return classification.includes('BENIGN') && !classification.includes('LIKELY');
-          }
-          return true;
-        });
+        return this.snvVariants.filter((v) =>
+          matchesPathogenicityCategory(v.classificationVerdict, filterValue)
+        );
       }
 
       if (filterType === 'domain') {
@@ -802,42 +786,14 @@ export default {
       }
       // Otherwise use the most pathogenic variant's color
       const mostPathogenic = variantGroup.reduce((prev, curr) => {
-        const prevScore = this.getPathogenicityScore(prev);
-        const currScore = this.getPathogenicityScore(curr);
+        const prevScore = getPathogenicityScore(prev.classificationVerdict);
+        const currScore = getPathogenicityScore(curr.classificationVerdict);
         return currScore > prevScore ? curr : prev;
       });
-      return this.getVariantColor(mostPathogenic);
-    },
-    getPathogenicityScore(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) return 5;
-      if (classification.includes('LIKELY_PATHOGENIC')) return 4;
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) return 3;
-      if (classification.includes('LIKELY_BENIGN')) return 2;
-      if (classification.includes('BENIGN')) return 1;
-      return 0;
+      return getPathogenicityHexColor(mostPathogenic.classificationVerdict);
     },
     getVariantColor(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
-        return '#EF5350'; // red-lighten-3
-      }
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      ) {
-        return '#FF9800'; // orange-lighten-3
-      }
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return '#FBC02D'; // yellow-darken-1
-      }
-      if (classification.includes('LIKELY_BENIGN')) {
-        return '#9CCC65'; // light-green-lighten-3
-      }
-      if (classification.includes('BENIGN')) {
-        return '#66BB6A'; // green-lighten-3
-      }
-      return '#BDBDBD'; // grey
+      return getPathogenicityHexColor(variant.classificationVerdict);
     },
     // HGVS extraction functions imported from utils/hgvs
     extractCNotation,
