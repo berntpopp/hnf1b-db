@@ -4,13 +4,24 @@
  * Calculates distances between variant residues and DNA atoms in PDB 2H8R.
  * Based on the implementation from halbritter-lab/hnf1b-protein-page.
  *
- * PDB 2H8R: HNF1B DNA-binding domain (residues 170-280)
- * Contains protein chains A, B and DNA chains C, D
+ * PDB 2H8R: HNF1B DNA-binding domain
+ * - UniProt P35680 residues 90-308
+ * - Contains protein chains A, B (C, D in mmCIF) and DNA chains E, F (A, B in mmCIF)
+ * - mmCIF auth_seq_id matches UniProt numbering directly (no offset needed)
+ *
+ * IMPORTANT: The structure has a GAP at residues 187-230 (linker region between
+ * the two homeodomains). Variants in this range cannot have distances calculated.
  */
 
 // Structure boundaries
-export const STRUCTURE_START = 170;
-export const STRUCTURE_END = 280;
+// PDB 2H8R maps to UniProt P35680 residues 90-308 (author numbering in mmCIF)
+// NGL uses auth_seq_id which matches UniProt numbering directly
+export const STRUCTURE_START = 90;
+export const STRUCTURE_END = 308;
+
+// Gap in structure (linker region not resolved in crystal)
+export const STRUCTURE_GAP_START = 187;
+export const STRUCTURE_GAP_END = 230;
 
 // Distance thresholds (in Angstroms)
 export const DISTANCE_THRESHOLDS = {
@@ -61,12 +72,23 @@ export function getDistanceColorFromValue(distance) {
 }
 
 /**
- * Check if a residue position is within the structure range
+ * Check if a residue position is within the structure gap (linker region)
+ * @param {number} position - Amino acid position
+ * @returns {boolean}
+ */
+export function isPositionInStructureGap(position) {
+  return position >= STRUCTURE_GAP_START && position <= STRUCTURE_GAP_END;
+}
+
+/**
+ * Check if a residue position is within the structure range and NOT in the gap
  * @param {number} position - Amino acid position
  * @returns {boolean}
  */
 export function isPositionInStructure(position) {
-  return position >= STRUCTURE_START && position <= STRUCTURE_END;
+  return (
+    position >= STRUCTURE_START && position <= STRUCTURE_END && !isPositionInStructureGap(position)
+  );
 }
 
 /**
@@ -156,7 +178,7 @@ export class DNADistanceCalculator {
 
   /**
    * Calculate the minimum distance from a residue to the nearest DNA atom
-   * @param {number} residueNumber - Residue number (amino acid position)
+   * @param {number} residueNumber - Residue number (amino acid position in UniProt numbering)
    * @param {boolean} useSidechainDistance - If true, use all atoms; if false, use only CA
    * @returns {Object|null} - Distance info or null if not found
    */
@@ -169,7 +191,8 @@ export class DNADistanceCalculator {
       return null;
     }
 
-    // Get atoms for this residue
+    // NGL uses auth_seq_id from mmCIF which matches UniProt numbering directly
+    // No offset conversion needed
     const residueAtoms = this.proteinAtoms.filter((atom) => {
       if (atom.resNo !== residueNumber) return false;
       // If not using sidechain, only use CA atom

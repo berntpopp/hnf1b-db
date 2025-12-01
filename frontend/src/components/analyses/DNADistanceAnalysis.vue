@@ -29,7 +29,7 @@
               <v-icon color="info" size="32"> mdi-molecule </v-icon>
               <div class="text-h5 mt-2">{{ totalVariantsInStructure }}</div>
               <div class="text-caption text-grey">Variants in Structure</div>
-              <div class="text-caption text-grey-darken-1">(residues 170-280)</div>
+              <div class="text-caption text-grey-darken-1">(residues 90-186, 231-308)</div>
             </v-card-text>
           </v-card>
         </v-col>
@@ -319,7 +319,8 @@
                         </template>
                         <v-list-item-title class="text-body-2">Structure</v-list-item-title>
                         <v-list-item-subtitle class="text-wrap">
-                          PDB 2H8R - HNF1B DNA-binding domain (residues 170-280)
+                          PDB 2H8R - HNF1B DNA-binding domain (UniProt P35680 residues 90-186 and
+                          231-308; linker region 187-230 not resolved)
                         </v-list-item-subtitle>
                       </v-list-item>
                       <v-list-item>
@@ -410,12 +411,15 @@ export default {
     this.loadData();
   },
   beforeUnmount() {
+    // Clean up NGL stage
     if (nglStage) {
       nglStage.dispose();
       nglStage = null;
       nglStructureComponent = null;
       distanceCalculator = null;
     }
+    // Clean up tooltip
+    d3.select('body').select('.dna-distance-tooltip').remove();
   },
   methods: {
     async loadData() {
@@ -738,7 +742,16 @@ export default {
         .style('font-size', '12px')
         .text('Distance to DNA (Å)');
 
-      // Draw box plots
+      // Kernel density estimation function
+      const kernelDensityEstimator = (kernel, X) => {
+        return (V) => X.map((x) => [x, d3.mean(V, (v) => kernel(x - v))]);
+      };
+
+      const kernelEpanechnikov = (bandwidth) => {
+        return (x) => (Math.abs((x /= bandwidth)) <= 1 ? (0.75 * (1 - x * x)) / bandwidth : 0);
+      };
+
+      // Draw violin + box plots
       groups.forEach((group) => {
         if (group.data.length === 0) return;
 
@@ -754,75 +767,147 @@ export default {
 
         const boxWidth = x.bandwidth();
         const xPos = x(group.name);
+        const centerX = xPos + boxWidth / 2;
 
-        // Box
+        // Calculate kernel density for violin plot
+        const bandwidth = iqr > 0 ? iqr / 1.34 : 1; // Silverman's rule of thumb
+        const kde = kernelDensityEstimator(
+          kernelEpanechnikov(bandwidth),
+          y.ticks(40).map((t) => t)
+        );
+        const density = kde(distances);
+
+        // Scale density to fit within the box width
+        const maxDensity = d3.max(density, (d) => d[1]) || 1;
+        const violinWidth = boxWidth * 0.9;
+        const xScale = d3
+          .scaleLinear()
+          .domain([0, maxDensity])
+          .range([0, violinWidth / 2]);
+
+        // Draw violin shape (mirrored on both sides)
+        const violinArea = d3
+          .area()
+          .x0((d) => centerX - xScale(d[1]))
+          .x1((d) => centerX + xScale(d[1]))
+          .y((d) => y(d[0]))
+          .curve(d3.curveCatmullRom);
+
+        g.append('path')
+          .datum(density)
+          .attr('d', violinArea)
+          .attr('fill', group.color)
+          .attr('fill-opacity', 0.15)
+          .attr('stroke', group.color)
+          .attr('stroke-width', 1)
+          .attr('stroke-opacity', 0.5);
+
+        // Box (narrower, overlaid on violin)
+        const innerBoxWidth = boxWidth * 0.25;
         g.append('rect')
-          .attr('x', xPos)
+          .attr('x', centerX - innerBoxWidth / 2)
           .attr('y', y(q3))
-          .attr('width', boxWidth)
+          .attr('width', innerBoxWidth)
           .attr('height', y(q1) - y(q3))
           .attr('fill', group.color)
-          .attr('fill-opacity', 0.3)
+          .attr('fill-opacity', 0.5)
           .attr('stroke', group.color)
-          .attr('stroke-width', 2);
+          .attr('stroke-width', 1.5);
 
         // Median line
         g.append('line')
-          .attr('x1', xPos)
-          .attr('x2', xPos + boxWidth)
+          .attr('x1', centerX - innerBoxWidth / 2)
+          .attr('x2', centerX + innerBoxWidth / 2)
           .attr('y1', y(median))
           .attr('y2', y(median))
-          .attr('stroke', group.color)
-          .attr('stroke-width', 3);
+          .attr('stroke', 'white')
+          .attr('stroke-width', 2);
 
-        // Whiskers
+        // Whiskers (thinner vertical lines)
         g.append('line')
-          .attr('x1', xPos + boxWidth / 2)
-          .attr('x2', xPos + boxWidth / 2)
+          .attr('x1', centerX)
+          .attr('x2', centerX)
           .attr('y1', y(min))
           .attr('y2', y(q1))
           .attr('stroke', group.color)
-          .attr('stroke-width', 1.5);
+          .attr('stroke-width', 1);
 
         g.append('line')
-          .attr('x1', xPos + boxWidth / 2)
-          .attr('x2', xPos + boxWidth / 2)
+          .attr('x1', centerX)
+          .attr('x2', centerX)
           .attr('y1', y(q3))
           .attr('y2', y(max))
           .attr('stroke', group.color)
-          .attr('stroke-width', 1.5);
+          .attr('stroke-width', 1);
 
-        // Whisker caps
-        const capWidth = boxWidth * 0.3;
-        g.append('line')
-          .attr('x1', xPos + boxWidth / 2 - capWidth / 2)
-          .attr('x2', xPos + boxWidth / 2 + capWidth / 2)
-          .attr('y1', y(min))
-          .attr('y2', y(min))
-          .attr('stroke', group.color)
-          .attr('stroke-width', 1.5);
+        // Individual points (jittered within violin shape) with tooltips
+        // Use 85% of violin width for better spread and less overlap
+        const jitterWidth = violinWidth * 0.85;
+        const pointClass = `point-${group.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
-        g.append('line')
-          .attr('x1', xPos + boxWidth / 2 - capWidth / 2)
-          .attr('x2', xPos + boxWidth / 2 + capWidth / 2)
-          .attr('y1', y(max))
-          .attr('y2', y(max))
-          .attr('stroke', group.color)
-          .attr('stroke-width', 1.5);
+        // Create tooltip div if it doesn't exist
+        let tooltip = d3.select('body').select('.dna-distance-tooltip');
+        if (tooltip.empty()) {
+          tooltip = d3
+            .select('body')
+            .append('div')
+            .attr('class', 'dna-distance-tooltip')
+            .style('position', 'absolute')
+            .style('visibility', 'hidden')
+            .style('background-color', 'rgba(0, 0, 0, 0.85)')
+            .style('color', 'white')
+            .style('padding', '8px 12px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('z-index', '1000')
+            .style('max-width', '300px')
+            .style('box-shadow', '0 2px 8px rgba(0,0,0,0.3)');
+        }
 
-        // Individual points (jittered)
-        const jitterWidth = boxWidth * 0.6;
-        g.selectAll(`.point-${group.name}`)
-          .data(distances)
+        g.selectAll(`.${pointClass}`)
+          .data(group.data)
           .enter()
           .append('circle')
+          .attr('class', pointClass)
           .attr('cx', () => xPos + boxWidth / 2 + (Math.random() - 0.5) * jitterWidth)
-          .attr('cy', (d) => y(d))
+          .attr('cy', (d) => y(d.distance))
           .attr('r', 4)
           .attr('fill', group.color)
-          .attr('fill-opacity', 0.6)
+          .attr('fill-opacity', 0.7)
           .attr('stroke', 'white')
-          .attr('stroke-width', 1);
+          .attr('stroke-width', 1.5)
+          .style('cursor', 'pointer')
+          .on('mouseover', (event, d) => {
+            d3.select(event.currentTarget)
+              .attr('r', 6)
+              .attr('fill-opacity', 1)
+              .attr('stroke-width', 2);
+
+            const variantLabel = d.protein || d.hgvs || d.label || `Position ${d.aaPosition}`;
+            const classification = d.classificationVerdict || 'Unknown';
+
+            tooltip
+              .html(
+                `<strong>${variantLabel}</strong><br/>` +
+                  `Distance: <strong>${d.distance.toFixed(2)} Å</strong><br/>` +
+                  `Position: ${d.aaPosition}<br/>` +
+                  `Classification: ${classification}<br/>` +
+                  `Category: ${this.getCategoryLabel(d.category)}`
+              )
+              .style('visibility', 'visible');
+          })
+          .on('mousemove', (event) => {
+            tooltip.style('top', event.pageY - 10 + 'px').style('left', event.pageX + 15 + 'px');
+          })
+          .on('mouseout', (event) => {
+            d3.select(event.currentTarget)
+              .attr('r', 4)
+              .attr('fill-opacity', 0.7)
+              .attr('stroke-width', 1.5);
+
+            tooltip.style('visibility', 'hidden');
+          });
       });
 
       // Add significance bracket if significant
