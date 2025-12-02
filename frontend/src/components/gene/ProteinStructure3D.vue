@@ -334,7 +334,12 @@ import {
   STRUCTURE_START,
   STRUCTURE_END,
 } from '@/utils/dnaDistanceCalculator';
-import { getPathogenicityColor } from '@/utils/colors';
+import {
+  getPathogenicityColor,
+  getPathogenicityScore,
+  getPathogenicityHexColor,
+} from '@/utils/colors';
+import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 
 // Store NGL objects outside Vue's reactivity system
 // This prevents Vue 3 Proxy conflicts with Three.js internal properties
@@ -524,7 +529,7 @@ export default {
           return distA - distB;
         }
         if (this.sortBy === 'pathogenicity') {
-          return this.getPathogenicityScore(b) - this.getPathogenicityScore(a);
+          return this.getPathogenicityScoreValue(b) - this.getPathogenicityScoreValue(a);
         }
         return 0;
       });
@@ -931,17 +936,7 @@ export default {
     },
 
     extractAAPosition(variant) {
-      if (!variant.protein) return null;
-
-      const pNotation = extractPNotation(variant.protein);
-      if (!pNotation) return null;
-
-      const match = pNotation.match(/p\.([A-Z][a-z]{2})?(\d+)/);
-      if (match && match[2]) {
-        return parseInt(match[2]);
-      }
-
-      return null;
+      return extractAAPositionUtil(variant);
     },
 
     isPositionInStructure(aaPosition) {
@@ -949,26 +944,9 @@ export default {
     },
 
     getVariantColor(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
-        return 0xef5350;
-      }
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      ) {
-        return 0xff9800;
-      }
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return 0xfbc02d;
-      }
-      if (classification.includes('LIKELY_BENIGN') || classification.includes('LIKELY BENIGN')) {
-        return 0x9ccc65;
-      }
-      if (classification.includes('BENIGN')) {
-        return 0x66bb6a;
-      }
-      return 0xbdbdbd;
+      // Convert hex color string to NGL-compatible hex number
+      const hexString = getPathogenicityHexColor(variant.classificationVerdict);
+      return parseInt(hexString.replace('#', ''), 16);
     },
 
     getVariantChipColor(variant) {
@@ -1030,18 +1008,8 @@ export default {
       return info;
     },
 
-    getPathogenicityScore(variant) {
-      const classification = (variant.classificationVerdict || '').toUpperCase();
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) return 5;
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      )
-        return 4;
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) return 3;
-      if (classification.includes('LIKELY_BENIGN')) return 2;
-      if (classification.includes('BENIGN')) return 1;
-      return 0;
+    getPathogenicityScoreValue(variant) {
+      return getPathogenicityScore(variant.classificationVerdict);
     },
 
     getDistanceChipColor(category) {

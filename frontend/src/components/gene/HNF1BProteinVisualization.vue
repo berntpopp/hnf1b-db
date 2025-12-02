@@ -385,6 +385,9 @@ import {
   getPathogenicityScore,
   matchesPathogenicityCategory,
 } from '@/utils/colors';
+import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
+import { calculateTooltipPosition } from '@/utils/tooltip';
+import { isVariantCNV } from '@/utils/geneVisualization';
 
 export default {
   name: 'HNF1BProteinVisualization',
@@ -741,32 +744,10 @@ export default {
       return this.margin.left + relativePosition * svgLength;
     },
     extractAAPosition(variant) {
-      // Parse amino acid position from HGVS protein notation
-      if (!variant.protein) return null;
-
-      const pNotation = this.extractPNotation(variant.protein);
-      if (!pNotation) return null;
-
-      // Match various patterns:
-      // - p.Arg177Ter (nonsense)
-      // - p.Ser546Phe (missense)
-      // - p.Met1? (unknown start)
-      // - p.Arg177del (deletion)
-      // - p.Arg177_Ser178del (deletion range - use start position)
-      // - p.Arg177dup (duplication)
-      // - p.Arg177_Ser178dup (duplication range - use start position)
-      const match = pNotation.match(
-        /p\.([A-Z][a-z]{2})?(\d+)(_[A-Z][a-z]{2}\d+)?(del|dup|ins|Ter|[A-Z][a-z]{2}|\?)?/
-      );
-      if (match && match[2]) {
-        return parseInt(match[2]);
-      }
-
-      return null;
+      return extractAAPositionUtil(variant);
     },
     isCNV(variant) {
-      if (!variant || !variant.hg38) return false;
-      return /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
+      return isVariantCNV(variant);
     },
     isPositionInDomain(position) {
       // Check if the amino acid position falls within any protein domain
@@ -809,8 +790,9 @@ export default {
       this.tooltipVisible = true;
     },
     updateTooltipPosition(event) {
-      this.tooltipX = event.clientX + 15;
-      this.tooltipY = event.clientY + 15;
+      const pos = calculateTooltipPosition(event);
+      this.tooltipX = pos.x;
+      this.tooltipY = pos.y;
     },
     hideTooltip() {
       this.tooltipVisible = false;

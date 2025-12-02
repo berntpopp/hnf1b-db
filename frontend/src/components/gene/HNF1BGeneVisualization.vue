@@ -638,6 +638,21 @@ import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getCNVDetails } from '@/utils/variants';
 import { getReferenceGenomicRegion } from '@/api';
+import {
+  HNF1B_EXONS,
+  CHR17Q12_REGION_DEFAULT,
+  HNF1B_GENE_BOUNDARIES,
+  getExonColor as getExonColorUtil,
+  getCNVColor as getCNVColorUtil,
+  formatCoordinate as formatCoordinateUtil,
+  formatSize,
+  isVariantCNV,
+  isVariantIndel,
+  isVariantSpliceVariant,
+  getIndelDetails as getIndelDetailsUtil,
+} from '@/utils/geneVisualization';
+import { calculateTooltipPosition } from '@/utils/tooltip';
+import { getPathogenicityHexColor } from '@/utils/colors';
 
 export default {
   name: 'HNF1BGeneVisualization',
@@ -660,48 +675,25 @@ export default {
   data() {
     return {
       svgWidth: 1000,
-      svgHeight: 480, // Increased to accommodate 6 rows of gene labels (3 above + 3 below)
-      margin: { top: 130, right: 50, bottom: 130, left: 50 }, // Increased top and bottom margins for 6-layer gene labels
+      svgHeight: 480,
+      margin: { top: 130, right: 50, bottom: 130, left: 50 },
       exonHeight: 40,
-      geneStart: 37680000, // chr17 coordinates (GRCh38) - adjusted to show actual variant positions
-      geneEnd: 37750000, // 70kb range covering all HNF1B coding variants
+      geneStart: HNF1B_GENE_BOUNDARIES.start,
+      geneEnd: HNF1B_GENE_BOUNDARIES.end,
       tooltipVisible: false,
       tooltipX: 0,
       tooltipY: 0,
       tooltipContent: null,
       zoomLevel: 1,
-      zoomedExon: null, // Track which exon is zoomed in
-      viewMode: 'gene', // 'gene' or 'cnv'
-      // Loading state for API data
+      zoomedExon: null,
+      viewMode: 'gene',
       loading: false,
       apiError: null,
-      // Chr17q12 region data - fallback values
-      chr17q12Region: {
-        chromosome: '17',
-        cytoBand: '17q12',
-        start: 36000000,
-        end: 39900000,
-        size: 3900000,
-        name: '17q12 extended region (chr17:36.0-39.9 Mb)',
-        assembly: 'GRCh38/hg38',
-      },
-      chr17q12Genes: [], // Will be populated from API
-      // D3 zoom properties
-      d3Zoom: null, // D3 zoom behavior instance
-      d3Transform: null, // Current D3 zoom transform
-      exons: [
-        // HNF1B coding exons (GRCh38 coordinates from UCSC NM_000458.4)
-        // Note: Gene is on minus strand, so exon 1 is at higher genomic coordinates
-        { number: 1, start: 37744540, end: 37745059, size: 519, domain: "5' UTR" },
-        { number: 2, start: 37739439, end: 37739639, size: 200, domain: null },
-        { number: 3, start: 37733556, end: 37733821, size: 265, domain: 'POU-S' },
-        { number: 4, start: 37731594, end: 37731830, size: 236, domain: 'POU-H' },
-        { number: 5, start: 37710502, end: 37710663, size: 161, domain: 'POU-H' },
-        { number: 6, start: 37704916, end: 37705049, size: 133, domain: null },
-        { number: 7, start: 37700982, end: 37701177, size: 195, domain: 'Transactivation' },
-        { number: 8, start: 37699075, end: 37699194, size: 119, domain: 'Transactivation' },
-        { number: 9, start: 37686430, end: 37687392, size: 962, domain: "3' UTR" },
-      ],
+      chr17q12Region: { ...CHR17Q12_REGION_DEFAULT },
+      chr17q12Genes: [],
+      d3Zoom: null,
+      d3Transform: null,
+      exons: [...HNF1B_EXONS],
     };
   },
   computed: {
@@ -1086,155 +1078,27 @@ export default {
 
       return null;
     },
+    // Delegate to utility functions
     isCNV(variant) {
-      if (!variant || !variant.hg38) return false;
-      // Check for range notation: 17:start-end:DEL/DUP
-      const hasRangeNotation = /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
-      if (!hasRangeNotation) return false;
-
-      // Extract start and end positions
-      const match = variant.hg38.match(/:(\d+)-(\d+):/);
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-        const size = end - start;
-
-        // Consider variants < 50bp as indels (small deletions/insertions)
-        // These should be displayed differently from large CNVs (>= 50bp)
-        return size >= 50;
-      }
-
-      return false;
+      return isVariantCNV(variant);
     },
     isIndel(variant) {
-      if (!variant || !variant.hg38) return false;
-
-      // Check for range notation: 17:start-end:DEL/DUP
-      const hasRangeNotation = /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
-      if (hasRangeNotation) {
-        // Extract start and end positions
-        const match = variant.hg38.match(/:(\d+)-(\d+):/);
-        if (match) {
-          const start = parseInt(match[1]);
-          const end = parseInt(match[2]);
-          const size = end - start;
-
-          // Indels are small variants < 50bp
-          return size < 50;
-        }
-      }
-
-      // Check for VCF-style indels: chr17-37710502-ATCG-A or chr17-37710502-A-ATCG
-      // Where ref and alt have different lengths (not just substitution)
-      const vcfMatch = variant.hg38.match(/chr(\d+|X|Y|MT?)-(\d+)-([A-Z]+)-([A-Z]+)/i);
-      if (vcfMatch) {
-        const ref = vcfMatch[3];
-        const alt = vcfMatch[4];
-        // If ref and alt have different lengths, it's an indel
-        if (ref.length !== alt.length) {
-          return true;
-        }
-      }
-
-      return false;
+      return isVariantIndel(variant);
     },
     isSpliceVariant(variant) {
-      // Check if variant is a splice site variant
-      // Splice variants have transcript notation with +/- positions and no protein notation
-      if (!variant) return false;
-
-      const hasTranscript = variant.transcript && variant.transcript !== '-';
-      const noProtein = !variant.protein || variant.protein === '-';
-      const isSpliceSite = hasTranscript && /[+-]\d+/.test(variant.transcript);
-
-      return hasTranscript && noProtein && isSpliceSite;
+      return isVariantSpliceVariant(variant);
     },
     getIndelDetails(variant) {
-      if (!variant || !variant.hg38) return null;
-
-      // First try range notation: 17:start-end:DEL/DUP
-      const rangeMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)/);
-      if (rangeMatch) {
-        return {
-          chromosome: rangeMatch[1],
-          start: rangeMatch[2],
-          end: rangeMatch[3],
-          type: rangeMatch[4],
-        };
-      }
-
-      // Try VCF-style: chr17-37710502-ATCG-A or chr17-37710502-A-ATCG
-      const vcfMatch = variant.hg38.match(/chr(\d+|X|Y|MT?)-(\d+)-([A-Z]+)-([A-Z]+)/i);
-      if (vcfMatch) {
-        const pos = parseInt(vcfMatch[2]);
-        const ref = vcfMatch[3];
-        const alt = vcfMatch[4];
-
-        // Determine type and calculate end position
-        let type = 'INDEL';
-        let end = pos;
-
-        if (ref.length > 1 && alt.length > 1 && ref.length !== alt.length) {
-          // Complex indel: both ref and alt are multi-base and different lengths
-          // This is a deletion-insertion event (indel with both del and ins)
-          type = 'INDEL';
-          end = pos + ref.length - 1;
-        } else if (ref.length > alt.length) {
-          // Pure deletion: reference is longer than alternate
-          type = 'DEL';
-          end = pos + ref.length - 1;
-        } else if (alt.length > ref.length) {
-          // Pure insertion: alternate is longer than reference
-          type = 'INS';
-          end = pos + ref.length; // Insertions don't extend the reference
-        } else if (ref !== alt && ref.length === alt.length) {
-          // Substitution: same length but different bases (not technically an indel)
-          type = 'SUB';
-          end = pos + ref.length - 1;
-        }
-
-        return {
-          chromosome: vcfMatch[1],
-          start: pos.toString(),
-          end: end.toString(),
-          type: type,
-        };
-      }
-
-      return null;
+      return getIndelDetailsUtil(variant);
     },
     getExonColor(exon) {
-      if (exon.domain?.includes('POU')) return '#42A5F5'; // Blue
-      if (exon.domain?.includes('Transactivation')) return '#66BB6A'; // Green
-      if (exon.domain?.includes('UTR')) return '#BDBDBD'; // Grey
-      return '#1E88E5'; // Default blue
+      return getExonColorUtil(exon);
     },
     getVariantColor(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
-        return '#EF5350'; // red-lighten-3
-      }
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      ) {
-        return '#FF9800'; // orange-lighten-3
-      }
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return '#FBC02D'; // yellow-darken-1
-      }
-      if (classification.includes('LIKELY_BENIGN')) {
-        return '#9CCC65'; // light-green-lighten-3
-      }
-      if (classification.includes('BENIGN')) {
-        return '#66BB6A'; // green-lighten-3
-      }
-      return '#BDBDBD'; // grey
+      return getPathogenicityHexColor(variant.classificationVerdict);
     },
     getCNVColor(cnv) {
-      if (cnv.cnvType === 'DEL') return '#EF5350'; // Red for deletion
-      if (cnv.cnvType === 'DUP') return '#42A5F5'; // Blue for duplication
-      return '#9E9E9E'; // Grey for unknown
+      return getCNVColorUtil(cnv.cnvType);
     },
     getCNVDisplayCoords(cnv) {
       // Clamp CNV coordinates to VISIBLE region (not fixed gene boundaries)
@@ -1252,12 +1116,13 @@ export default {
       };
     },
     formatCoordinate(pos) {
-      return parseInt(pos).toLocaleString();
+      return formatCoordinateUtil(pos);
     },
     // Utility functions imported from utils
     extractCNotation,
     extractPNotation,
     getCNVDetails,
+    formatSize,
     showExonTooltip(event, exon) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'exon', data: exon };
@@ -1274,28 +1139,9 @@ export default {
       this.tooltipVisible = true;
     },
     updateTooltipPosition(event) {
-      // Position tooltip, but prevent overflow on the right edge
-      const tooltipWidth = 300; // Approximate tooltip width
-      const tooltipHeight = 200; // Approximate tooltip height
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      // Default: position to the right and below cursor
-      let x = event.clientX + 15;
-      let y = event.clientY + 15;
-
-      // If tooltip would overflow right edge, position to the left of cursor
-      if (x + tooltipWidth > viewportWidth) {
-        x = event.clientX - tooltipWidth - 15;
-      }
-
-      // If tooltip would overflow bottom edge, position above cursor
-      if (y + tooltipHeight > viewportHeight) {
-        y = event.clientY - tooltipHeight - 15;
-      }
-
-      this.tooltipX = Math.max(10, x); // Ensure at least 10px from left edge
-      this.tooltipY = Math.max(10, y); // Ensure at least 10px from top edge
+      const pos = calculateTooltipPosition(event);
+      this.tooltipX = pos.x;
+      this.tooltipY = pos.y;
     },
     hideTooltip() {
       this.tooltipVisible = false;
@@ -1420,15 +1266,10 @@ export default {
     formatCNVSize() {
       if (!this.cnvVariants.length) return '';
       const cnv = this.cnvVariants[0];
-      const size = cnv.end - cnv.start;
-      if (size >= 1000000) {
-        return `${(size / 1000000).toFixed(2)} Mb`;
-      }
-      return `${(size / 1000).toFixed(0)} kb`;
+      return formatSize(cnv.end - cnv.start);
     },
     formatRegionSize() {
-      const size = this.chr17q12Region.size;
-      return `${(size / 1000000).toFixed(1)} Mb`;
+      return formatSize(this.chr17q12Region.size);
     },
   },
 };
