@@ -611,9 +611,10 @@ export default {
         );
 
         // Load PDB structure 2H8R (HNF1B DNA-binding domain)
+        // Served locally to reduce network dependency and improve load times
         window.logService.info('Loading PDB structure 2H8R');
         nglStructureComponent = markRaw(
-          await nglStage.loadFile('https://www.ebi.ac.uk/pdbe/entry-files/2h8r.cif', {
+          await nglStage.loadFile('/2h8r.cif', {
             defaultRepresentation: false,
             ext: 'cif',
           })
