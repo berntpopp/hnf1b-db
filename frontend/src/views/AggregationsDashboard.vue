@@ -260,193 +260,7 @@
                   />
 
                   <!-- Expandable Panels for Survival Data -->
-                  <v-expansion-panels v-if="survivalData?.groups" class="mt-4">
-                    <!-- Number at Risk Panel -->
-                    <v-expansion-panel>
-                      <v-expansion-panel-title>
-                        <v-icon class="mr-2">mdi-account-group</v-icon>
-                        Number at Risk
-                      </v-expansion-panel-title>
-                      <v-expansion-panel-text>
-                        <v-table density="compact">
-                          <thead>
-                            <tr>
-                              <th class="text-left" style="min-width: 120px">Group</th>
-                              <th
-                                v-for="time in riskTableTimePoints"
-                                :key="time"
-                                class="text-center"
-                              >
-                                {{ time }}y
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr v-for="group in survivalData.groups" :key="group.name">
-                              <td class="font-weight-medium">{{ group.name }}</td>
-                              <td
-                                v-for="time in riskTableTimePoints"
-                                :key="time"
-                                class="text-center"
-                              >
-                                {{ getAtRiskCount(group, time) }}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                        <p class="text-caption text-grey mt-2">
-                          Number of patients still at risk (not yet experienced event or been
-                          censored) at each time point.
-                        </p>
-                      </v-expansion-panel-text>
-                    </v-expansion-panel>
-
-                    <!-- Statistical Tests Panel -->
-                    <v-expansion-panel v-if="survivalData?.statistical_tests?.length > 0">
-                      <v-expansion-panel-title>
-                        <v-icon class="mr-2">mdi-chart-bell-curve</v-icon>
-                        Log-Rank Tests (Pairwise Comparisons)
-                      </v-expansion-panel-title>
-                      <v-expansion-panel-text>
-                        <v-table density="compact">
-                          <thead>
-                            <tr>
-                              <th class="text-left">Comparison</th>
-                              <th class="text-center">χ² Statistic</th>
-                              <th class="text-center">p-value (raw)</th>
-                              <th class="text-center">p-value (corrected)</th>
-                              <th class="text-center">Significant</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr
-                              v-for="test in survivalData.statistical_tests"
-                              :key="`${test.group1}-${test.group2}`"
-                            >
-                              <td>{{ test.group1 }} vs {{ test.group2 }}</td>
-                              <td class="text-center">{{ test.statistic.toFixed(2) }}</td>
-                              <td class="text-center text-grey">
-                                {{ formatPValue(test.p_value) }}
-                              </td>
-                              <td
-                                class="text-center"
-                                :class="{ 'text-success font-weight-bold': test.significant }"
-                              >
-                                {{ formatPValue(test.p_value_corrected) }}
-                              </td>
-                              <td class="text-center">
-                                <v-icon v-if="test.significant" color="success" size="small">
-                                  mdi-check-circle
-                                </v-icon>
-                                <span v-else class="text-grey">—</span>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                        <p class="text-caption text-grey mt-2">
-                          Bonferroni-corrected p &lt; 0.05 considered statistically significant
-                          (marked with
-                          <v-icon size="x-small" color="success">mdi-check-circle</v-icon>).
-                          Correction: p × {{ survivalData.statistical_tests?.length || 1 }}
-                          comparisons.
-                        </p>
-                      </v-expansion-panel-text>
-                    </v-expansion-panel>
-
-                    <!-- Methodology Info Panel -->
-                    <v-expansion-panel v-if="survivalData?.metadata">
-                      <v-expansion-panel-title>
-                        <v-icon class="mr-2">mdi-information-outline</v-icon>
-                        Analysis Methodology & Group Definitions
-                      </v-expansion-panel-title>
-                      <v-expansion-panel-text>
-                        <v-row>
-                          <v-col cols="12" md="6">
-                            <h4 class="text-subtitle-1 font-weight-bold mb-2">Event & Censoring</h4>
-                            <v-list density="compact" class="bg-transparent">
-                              <v-list-item>
-                                <template #prepend>
-                                  <v-icon size="small" color="error">mdi-alert-circle</v-icon>
-                                </template>
-                                <v-list-item-title class="text-body-2">
-                                  Event Definition
-                                </v-list-item-title>
-                                <v-list-item-subtitle class="text-wrap">
-                                  {{ survivalData.metadata.event_definition }}
-                                </v-list-item-subtitle>
-                              </v-list-item>
-                              <v-list-item>
-                                <template #prepend>
-                                  <v-icon size="small" color="info">mdi-clock-outline</v-icon>
-                                </template>
-                                <v-list-item-title class="text-body-2">Time Axis</v-list-item-title>
-                                <v-list-item-subtitle class="text-wrap">
-                                  {{ survivalData.metadata.time_axis }}
-                                </v-list-item-subtitle>
-                              </v-list-item>
-                              <v-list-item>
-                                <template #prepend>
-                                  <v-icon size="small" color="warning">mdi-eye-off-outline</v-icon>
-                                </template>
-                                <v-list-item-title class="text-body-2">Censoring</v-list-item-title>
-                                <v-list-item-subtitle class="text-wrap">
-                                  {{ survivalData.metadata.censoring }}
-                                </v-list-item-subtitle>
-                              </v-list-item>
-                            </v-list>
-                          </v-col>
-                          <v-col cols="12" md="6">
-                            <h4 class="text-subtitle-1 font-weight-bold mb-2">
-                              Inclusion & Exclusion Criteria
-                            </h4>
-                            <v-list density="compact" class="bg-transparent">
-                              <v-list-item>
-                                <template #prepend>
-                                  <v-icon size="small" color="success">mdi-check-circle</v-icon>
-                                </template>
-                                <v-list-item-title class="text-body-2">Included</v-list-item-title>
-                                <v-list-item-subtitle class="text-wrap">
-                                  {{ survivalData.metadata.inclusion_criteria }}
-                                </v-list-item-subtitle>
-                              </v-list-item>
-                              <v-list-item>
-                                <template #prepend>
-                                  <v-icon size="small" color="error">mdi-close-circle</v-icon>
-                                </template>
-                                <v-list-item-title class="text-body-2">Excluded</v-list-item-title>
-                                <v-list-item-subtitle class="text-wrap">
-                                  {{ survivalData.metadata.exclusion_criteria }}
-                                </v-list-item-subtitle>
-                              </v-list-item>
-                            </v-list>
-                          </v-col>
-                        </v-row>
-
-                        <!-- Group Definitions -->
-                        <h4 class="text-subtitle-1 font-weight-bold mt-4 mb-2">
-                          Group Definitions
-                        </h4>
-                        <v-table density="compact">
-                          <thead>
-                            <tr>
-                              <th class="text-left" style="width: 150px">Group</th>
-                              <th class="text-left">Definition</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr
-                              v-for="(definition, groupName) in survivalData.metadata
-                                .group_definitions"
-                              :key="groupName"
-                            >
-                              <td class="font-weight-medium">{{ groupName }}</td>
-                              <td class="text-body-2">{{ definition }}</td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                      </v-expansion-panel-text>
-                    </v-expansion-panel>
-                  </v-expansion-panels>
+                  <SurvivalDataPanels :survival-data="survivalData" />
                 </v-tabs-window-item>
 
                 <!-- DNA Distance Analysis Tab -->
@@ -470,7 +284,21 @@ import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelin
 import VariantComparisonChart from '@/components/analyses/VariantComparisonChart.vue';
 import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
 import DNADistanceAnalysis from '@/components/analyses/DNADistanceAnalysis.vue';
+import SurvivalDataPanels from '@/components/analyses/SurvivalDataPanels.vue';
 import * as API from '@/api';
+import {
+  AGGREGATION_COLOR_MAPS,
+  DONUT_CATEGORIES,
+  COUNT_MODE_OPTIONS,
+  DISPLAY_LIMIT_OPTIONS,
+  COMPARISON_TYPES,
+  SORT_BY_OPTIONS,
+  ORGAN_SYSTEM_OPTIONS,
+  SURVIVAL_COMPARISON_TYPES,
+  SURVIVAL_ENDPOINT_OPTIONS,
+  formatLabel as formatLabelUtil,
+  calculateStackedBarStats,
+} from '@/utils/aggregationConfig';
 
 export default {
   name: 'AggregationsDashboard',
@@ -481,6 +309,7 @@ export default {
     VariantComparisonChart,
     KaplanMeierChart,
     DNADistanceAnalysis,
+    SurvivalDataPanels,
   },
   data() {
     return {
@@ -488,44 +317,8 @@ export default {
       chartData: {},
       stackedBarChartData: [],
       stackedBarDisplayLimit: 20,
-      // Semantic color maps for specific aggregations
-      colorMaps: {
-        // Pathogenicity: red=pathogenic, orange=LP, yellow=VUS, green=benign
-        getVariantPathogenicity: {
-          Pathogenic: '#D32F2F', // Red
-          'Likely Pathogenic': '#FF9800', // Orange
-          'Uncertain Significance': '#FDD835', // Bright yellow for VUS
-          'Likely Benign': '#81C784', // Light green
-          Benign: '#388E3C', // Dark green
-        },
-        // Variant types
-        getVariantTypes: {
-          'Copy Number Loss': '#D32F2F', // Red
-          'Copy Number Gain': '#1976D2', // Blue
-          SNV: '#388E3C', // Green
-          Deletion: '#FF9800', // Orange
-          Duplication: '#9C27B0', // Purple
-          Insertion: '#00BCD4', // Cyan
-          Indel: '#E91E63', // Pink
-          NA: '#9E9E9E', // Grey
-        },
-        // Sex distribution
-        getSexDistribution: {
-          MALE: '#1976D2', // Blue
-          FEMALE: '#E91E63', // Pink
-          OTHER_SEX: '#9C27B0', // Purple
-          UNKNOWN_SEX: '#9E9E9E', // Grey
-        },
-        // Publication types
-        getPublicationTypes: {
-          'Case Series': '#1976D2', // Blue
-          Research: '#4CAF50', // Green
-          'Case Report': '#FF9800', // Orange
-          'Review And Cases': '#9C27B0', // Purple
-          'Screening Multiple': '#00BCD4', // Cyan
-          Review: '#F44336', // Red
-        },
-      },
+      // Use imported configuration constants
+      colorMaps: AGGREGATION_COLOR_MAPS,
       items: [
         {
           tab: 'Donut Chart',
@@ -533,49 +326,12 @@ export default {
           props: { exportable: true, width: 600, height: 500 },
         },
       ],
-      donutCategories: [
-        {
-          label: 'Phenopackets',
-          aggregations: [
-            { label: 'Sex Distribution', value: 'getSexDistribution' },
-            { label: 'Age of Onset', value: 'getAgeOfOnsetAggregation' },
-            { label: 'Kidney Disease Stages', value: 'getKidneyStages' },
-          ],
-        },
-        {
-          label: 'Variants',
-          aggregations: [
-            {
-              label: 'Pathogenicity Classification',
-              value: 'getVariantPathogenicity',
-              supportsCountMode: true,
-            },
-            {
-              label: 'Variant Types (SNV/Indel/CNV)',
-              value: 'getVariantTypes',
-              supportsCountMode: true,
-            },
-          ],
-        },
-        {
-          label: 'Publications',
-          aggregations: [{ label: 'Publication Types', value: 'getPublicationTypes' }],
-        },
-      ],
+      donutCategories: DONUT_CATEGORIES,
       selectedCategory: 'Phenopackets',
       selectedAggregation: 'getSexDistribution',
       variantCountMode: 'all',
-      countModeOptions: [
-        { label: 'All Variant Instances', value: 'all' },
-        { label: 'Unique Variants', value: 'unique' },
-      ],
-      allDisplayLimitOptions: [
-        { label: 'Top 10', value: 10, threshold: 10 },
-        { label: 'Top 20', value: 20, threshold: 20 },
-        { label: 'Top 30', value: 30, threshold: 30 },
-        { label: 'Top 50', value: 50, threshold: 50 },
-        { label: 'All Features', value: 9999, threshold: 0 },
-      ],
+      countModeOptions: COUNT_MODE_OPTIONS,
+      allDisplayLimitOptions: DISPLAY_LIMIT_OPTIONS,
       // Variant Comparison data
       comparisonType: 'truncating_vs_non_truncating',
       sortBy: 'p_value',
@@ -588,67 +344,12 @@ export default {
       survivalData: null,
       survivalLoading: false,
       survivalError: null,
-      survivalComparisonTypes: [
-        {
-          label: 'Variant Type',
-          value: 'variant_type',
-          description: 'Compare CNV vs Truncating vs Non-truncating variants',
-        },
-        {
-          label: 'Pathogenicity',
-          value: 'pathogenicity',
-          description: 'Compare Pathogenic/Likely Pathogenic vs VUS',
-        },
-        {
-          label: 'Disease Subtype',
-          value: 'disease_subtype',
-          description: 'Compare CAKUT vs CAKUT+MODY vs MODY vs Other phenotypes',
-        },
-      ],
-      survivalEndpointOptions: [
-        {
-          label: 'CKD Stage 3+ (GFR <60)',
-          value: 'ckd_stage_3_plus',
-          description: 'Time to CKD Stage 3 or higher (composite endpoint)',
-        },
-        {
-          label: 'Stage 5 CKD (ESRD)',
-          value: 'stage_5_ckd',
-          description: 'Time to End-Stage Renal Disease (historical endpoint)',
-        },
-        {
-          label: 'Any CKD',
-          value: 'any_ckd',
-          description: 'Time to any chronic kidney disease diagnosis',
-        },
-        {
-          label: 'Age at Last Follow-up',
-          value: 'current_age',
-          description: 'Current/reported age (universal endpoint)',
-        },
-      ],
-      comparisonTypes: [
-        { label: 'Truncating vs Non-truncating', value: 'truncating_vs_non_truncating' },
-        {
-          label: 'Truncating vs Non-truncating (excl. CNVs)',
-          value: 'truncating_vs_non_truncating_excl_cnv',
-        },
-        { label: 'CNVs vs Non-CNV variants', value: 'cnv_vs_point_mutation' },
-      ],
-      sortByOptions: [
-        { label: 'P-value (most significant first)', value: 'p_value' },
-        { label: 'Effect size (largest first)', value: 'effect_size' },
-        { label: 'Prevalence difference', value: 'prevalence_diff' },
-      ],
+      survivalComparisonTypes: SURVIVAL_COMPARISON_TYPES,
+      survivalEndpointOptions: SURVIVAL_ENDPOINT_OPTIONS,
+      comparisonTypes: COMPARISON_TYPES,
+      sortByOptions: SORT_BY_OPTIONS,
       organSystemFilter: 'all',
-      organSystemOptions: [
-        { label: 'All Systems', value: 'all' },
-        { label: 'Renal', value: 'renal' },
-        { label: 'Metabolic', value: 'metabolic' },
-        { label: 'Neurological', value: 'neurological' },
-        { label: 'Pancreatic/Endocrine', value: 'pancreatic' },
-        { label: 'Other', value: 'other' },
-      ],
+      organSystemOptions: ORGAN_SYSTEM_OPTIONS,
     };
   },
   computed: {
@@ -659,23 +360,6 @@ export default {
         content: this.items[0].content,
         props: { ...this.items[0].props, chartData: this.chartData, colorMap },
       };
-    },
-    riskTableTimePoints() {
-      if (!this.survivalData?.groups?.length) return [];
-      // Find max time across all groups
-      let maxTime = 0;
-      this.survivalData.groups.forEach((group) => {
-        group.survival_data.forEach((d) => {
-          if (d.time > maxTime) maxTime = d.time;
-        });
-      });
-      // Generate time points (every few years)
-      const step = Math.ceil(maxTime / 8);
-      const points = [];
-      for (let t = 0; t <= maxTime; t += step) {
-        points.push(t);
-      }
-      return points;
     },
     selectedAggregations() {
       const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
@@ -700,74 +384,7 @@ export default {
       });
     },
     stackedBarStats() {
-      if (!this.stackedBarChartData || this.stackedBarChartData.length === 0) {
-        return null;
-      }
-
-      const data = this.stackedBarChartData;
-
-      // Calculate total features
-      const totalFeatures = data.length;
-
-      // Calculate most common feature (highest present count)
-      const mostCommon = data.reduce((max, feature) => {
-        const present = feature.details?.present_count || 0;
-        const maxPresent = max.details?.present_count || 0;
-        return present > maxPresent ? feature : max;
-      }, data[0]);
-
-      const mostCommonPresent = mostCommon.details?.present_count || 0;
-      const mostCommonAbsent = mostCommon.details?.absent_count || 0;
-      const mostCommonReported = mostCommonPresent + mostCommonAbsent;
-      const mostCommonPenetrance =
-        mostCommonReported > 0
-          ? ((mostCommonPresent / mostCommonReported) * 100).toFixed(1)
-          : '0.0';
-
-      // Calculate average penetrance across all features
-      let totalPenetrance = 0;
-      let featuresWithReports = 0;
-
-      data.forEach((feature) => {
-        const present = feature.details?.present_count || 0;
-        const absent = feature.details?.absent_count || 0;
-        const reported = present + absent;
-
-        if (reported > 0) {
-          totalPenetrance += (present / reported) * 100;
-          featuresWithReports++;
-        }
-      });
-
-      const avgPenetrance =
-        featuresWithReports > 0 ? (totalPenetrance / featuresWithReports).toFixed(1) : '0.0';
-
-      // Calculate data completeness (reporting rate)
-      let totalPresent = 0;
-      let totalAbsent = 0;
-      let totalNotReported = 0;
-
-      data.forEach((feature) => {
-        totalPresent += feature.details?.present_count || 0;
-        totalAbsent += feature.details?.absent_count || 0;
-        totalNotReported += feature.details?.not_reported_count || 0;
-      });
-
-      const totalDataPoints = totalPresent + totalAbsent + totalNotReported;
-      const reportingRate =
-        totalDataPoints > 0
-          ? (((totalPresent + totalAbsent) / totalDataPoints) * 100).toFixed(1)
-          : '0.0';
-
-      return {
-        totalFeatures,
-        mostCommon: {
-          label: mostCommon.label || 'N/A',
-          penetrance: mostCommonPenetrance,
-        },
-        avgPenetrance,
-        reportingRate,
-      };
+      return calculateStackedBarStats(this.stackedBarChartData);
     },
   },
   watch: {
@@ -824,17 +441,8 @@ export default {
     this.fetchStackedBarData();
   },
   methods: {
-    /**
-     * Format API labels to human-readable display labels.
-     * Converts UPPER_SNAKE_CASE to Title Case (e.g., LIKELY_PATHOGENIC -> Likely Pathogenic)
-     */
     formatLabel(label) {
-      if (!label) return 'Unknown';
-      // Replace underscores with spaces and convert to title case
-      return label
-        .split('_')
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
+      return formatLabelUtil(label);
     },
 
     fetchStackedBarData() {
@@ -1024,19 +632,6 @@ export default {
       } finally {
         this.survivalLoading = false;
       }
-    },
-
-    getAtRiskCount(group, time) {
-      // Find the data point at or just before the given time
-      const dataPoint = group.survival_data
-        .filter((d) => d.time <= time)
-        .sort((a, b) => b.time - a.time)[0];
-      return dataPoint ? dataPoint.at_risk : '—';
-    },
-
-    formatPValue(pValue) {
-      if (pValue < 0.0001) return '< 0.0001';
-      return pValue.toFixed(4);
     },
   },
 };
