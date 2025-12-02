@@ -33,7 +33,12 @@
               {{ publication.title || 'Publication' }}
             </v-card-title>
             <v-card-subtitle class="text-h6 mt-2">
-              <div v-if="publication.authors">{{ publication.authors }}</div>
+              <div v-if="publication.authors">
+                {{ publication.authors }}
+                <span v-if="publication.year" class="text-grey-darken-1">
+                  ({{ publication.year }})
+                </span>
+              </div>
               <div class="mt-2">
                 <v-chip
                   v-if="publicationId"
@@ -247,6 +252,7 @@ export default {
                   .find((ref) => ref.id.startsWith('DOI:'))
                   ?.id.replace('DOI:', ''),
                 authors: null, // Will be enriched from PubMed API
+                year: null, // Will be enriched from PubMed API
               };
             }
           }
@@ -258,6 +264,7 @@ export default {
             title: `PMID: ${this.publicationId}`,
             authors: null,
             doi: null,
+            year: null,
           };
         }
 
@@ -312,6 +319,14 @@ export default {
               this.publication.authors = authorNames.join(', ');
             } else {
               this.publication.authors = `${authorNames[0]} et al.`;
+            }
+          }
+
+          // Extract publication year from pubdate (format: "2019 Feb 21")
+          if (pubmedData.pubdate) {
+            const yearMatch = pubmedData.pubdate.match(/^\d{4}/);
+            if (yearMatch) {
+              this.publication.year = yearMatch[0];
             }
           }
 

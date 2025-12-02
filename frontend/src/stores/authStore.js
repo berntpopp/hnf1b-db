@@ -1,7 +1,7 @@
 // src/stores/authStore.js - Pinia store for authentication state
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import apiClient from '@/api';
+import { apiClient } from '@/api';
 
 export const useAuthStore = defineStore('auth', () => {
   // State

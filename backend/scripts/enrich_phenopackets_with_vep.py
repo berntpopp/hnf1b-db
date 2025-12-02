@@ -134,28 +134,69 @@ def add_vep_to_phenopacket(
             if ext.get("name") != "vep_annotation"
         ]
 
+        # Extract primary transcript consequence (MANE select preferred)
+        # This matches the logic in backend/app/variant_validator_endpoint.py:312-346
+        primary_consequence = None
+        transcript_consequences = vep_data.get("transcript_consequences", [])
+
+        # Prefer MANE select transcript
+        for tc in transcript_consequences:
+            if tc.get("mane_select"):
+                primary_consequence = tc
+                break
+
+        # Fallback to canonical transcript
+        if not primary_consequence and transcript_consequences:
+            for tc in transcript_consequences:
+                if tc.get("canonical"):
+                    primary_consequence = tc
+                    break
+
+        # Fallback to first transcript
+        if not primary_consequence and transcript_consequences:
+            primary_consequence = transcript_consequences[0]
+
+        # Extract gnomAD frequency from colocated_variants
+        gnomad_af = None
+        gnomad_af_nfe = None
+        colocated_variants = vep_data.get("colocated_variants", [])
+        if colocated_variants:
+            gnomad_af = colocated_variants[0].get("gnomad_af")
+            gnomad_af_nfe = colocated_variants[0].get("gnomad_af_nfe")
+
         # Add new VEP extension (schema-compliant structure)
+        # Helper to safely get from primary_consequence
+        pc = primary_consequence
+
         variant_desc["extensions"].append(
             {
                 "name": "vep_annotation",  # Extension identifier
                 "value": {
-                    # Core VEP fields
-                    "most_severe_consequence": vep_data.get("most_severe_consequence"),
-                    "impact": vep_data.get("impact"),
-                    "gene_symbol": vep_data.get("gene_symbol"),
-                    # Pathogenicity scores
-                    "cadd_score": vep_data.get("cadd_score"),
-                    "polyphen_prediction": vep_data.get("polyphen_prediction"),
-                    "polyphen_score": vep_data.get("polyphen_score"),
-                    "sift_prediction": vep_data.get("sift_prediction"),
-                    "sift_score": vep_data.get("sift_score"),
-                    # Population frequency
-                    "gnomad_af": vep_data.get("gnomad_af"),
-                    "gnomad_af_nfe": vep_data.get("gnomad_af_nfe"),
+                    # Core VEP fields (from top level and primary transcript)
+                    "most_severe_consequence": vep_data.get(
+                        "most_severe_consequence"
+                    ),
+                    "impact": pc.get("impact") if pc else None,
+                    "gene_symbol": pc.get("gene_symbol") if pc else None,
+                    "gene_id": pc.get("gene_id") if pc else None,
+                    "transcript_id": pc.get("transcript_id") if pc else None,
+                    # Pathogenicity scores (from primary transcript)
+                    "cadd_score": pc.get("cadd_phred") if pc else None,
+                    "polyphen_prediction": (
+                        pc.get("polyphen_prediction") if pc else None
+                    ),
+                    "polyphen_score": pc.get("polyphen_score") if pc else None,
+                    "sift_prediction": (
+                        pc.get("sift_prediction") if pc else None
+                    ),
+                    "sift_score": pc.get("sift_score") if pc else None,
+                    # Population frequency (from colocated_variants)
+                    "gnomad_af": gnomad_af,
+                    "gnomad_af_nfe": gnomad_af_nfe,
                     # Metadata
                     "annotated_at": datetime.now().isoformat(),
-                    "vep_version": vep_data.get("vep_version", "112"),
-                    "assembly": vep_data.get("assembly", "GRCh38"),
+                    "vep_version": "112",
+                    "assembly": vep_data.get("assembly_name", "GRCh38"),
                 },
             }
         )

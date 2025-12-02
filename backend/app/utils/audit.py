@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import jsonpatch  # type: ignore[import-untyped]
+import jsonpatch
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,8 +167,7 @@ def _generate_create_summary(phenopacket: Optional[Dict[str, Any]]) -> str:
     variants_count = len(phenopacket.get("interpretations", []))
 
     return (
-        f"Initial import: {phenotypes_count} phenotype(s), "
-        f"{variants_count} variant(s)"
+        f"Initial import: {phenotypes_count} phenotype(s), {variants_count} variant(s)"
     )
 
 
@@ -223,9 +222,7 @@ def _generate_update_summary(
         return "Updated phenopacket metadata"
 
 
-def compare_phenopackets(
-    old: Dict[str, Any], new: Dict[str, Any]
-) -> Dict[str, Any]:
+def compare_phenopackets(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
     """Deep comparison of two phenopackets for conflict detection.
 
     Args:

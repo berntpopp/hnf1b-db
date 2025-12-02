@@ -209,9 +209,7 @@ async def cleanup_test_phenopackets(db_session):
 
     # Pre-cleanup: Remove leftover test data from failed previous runs
     await db_session.execute(
-        delete(PhenopacketAudit).where(
-            PhenopacketAudit.phenopacket_id.like("test-%")
-        )
+        delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
     )
     await db_session.execute(
         delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
@@ -223,9 +221,7 @@ async def cleanup_test_phenopackets(db_session):
 
     # Post-cleanup: Clean up after test
     await db_session.execute(
-        delete(PhenopacketAudit).where(
-            PhenopacketAudit.phenopacket_id.like("test-%")
-        )
+        delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
     )
     await db_session.execute(
         delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))

@@ -6,6 +6,7 @@ Each router focuses on a specific domain of functionality.
 Routers:
 - crud: Basic CRUD operations (list, get, create, update, delete)
 - aggregations: Statistical aggregations and summaries
+- comparisons: Statistical comparisons between variant type groups
 - search: Search and filtering operations
 - variants: Variant-related queries
 - features: Phenotypic features, diseases, and measurements
@@ -14,6 +15,7 @@ Routers:
 from fastapi import APIRouter
 
 from .aggregations import router as aggregations_router
+from .comparisons import router as comparisons_router
 from .crud import router as crud_router
 
 # Import will be added as routers are created
@@ -29,6 +31,7 @@ router = APIRouter(prefix="/phenopackets")
 router.include_router(search_router)  # Include search_router first
 router.include_router(crud_router)
 router.include_router(aggregations_router)
+router.include_router(comparisons_router)
 # router.include_router(variants_router)
 # router.include_router(features_router)
 

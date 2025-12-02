@@ -14,16 +14,18 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useAuthStore } from '@/stores/authStore';
-import apiClient from '@/api/index';
 
-// Mock the API client
-vi.mock('@/api/index', () => ({
-  default: {
+// Mock the API module with named export - must be before imports that use it
+vi.mock('@/api', () => ({
+  apiClient: {
     post: vi.fn(),
     get: vi.fn(),
   },
 }));
+
+// Import after mock is set up
+import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/api';
 
 // Mock localStorage
 const localStorageMock = (() => {

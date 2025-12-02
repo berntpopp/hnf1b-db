@@ -1,7 +1,7 @@
 // src/api/index.js - Complete rewrite for v2 API (GA4GH Phenopackets)
 import axios from 'axios';
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   // Use Vite proxy in development (avoids CORS), direct URL in production
   baseURL: import.meta.env.VITE_API_URL || '/api/v2',
   timeout: 10000,
@@ -190,6 +190,17 @@ export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { par
  * @returns {Promise} Axios promise with phenopacket document
  */
 export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${id}`);
+
+/**
+ * Get phenotype timeline for an individual phenopacket.
+ * Returns temporal data for phenotypic features with onset ages and evidence.
+ * @param {string} id - Phenopacket ID
+ * @returns {Promise} Axios promise with timeline data
+ *   - subject_id: Subject identifier
+ *   - current_age: Current age (ISO8601 duration)
+ *   - features: Array of phenotypic features with onset/evidence
+ */
+export const getPhenotypeTimeline = (id) => apiClient.get(`/phenopackets/${id}/timeline`);
 
 /**
  * Create a new phenopacket (requires curator role).
@@ -392,10 +403,46 @@ export const getPublicationsAggregation = () =>
   apiClient.get('/phenopackets/aggregate/publications');
 
 /**
+ * Get publications by type (for line chart visualization).
+ * Returns publications with PMID, type, and phenopacket count.
+ * @returns {Promise} Axios promise with publications array
+ */
+export const getPublicationsByType = () =>
+  apiClient.get('/phenopackets/aggregate/publications-by-type');
+
+/**
+ * Get publication type distribution (for donut chart).
+ * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
+ * @returns {Promise} Axios promise with publication type aggregation
+ */
+export const getPublicationTypes = () => apiClient.get('/phenopackets/aggregate/publication-types');
+
+/**
  * Get age of onset distribution.
  * @returns {Promise} Axios promise with age of onset data
  */
 export const getAgeOfOnsetAggregation = () => apiClient.get('/phenopackets/aggregate/age-of-onset');
+
+/**
+ * Get survival analysis data (Kaplan-Meier curves).
+ * @param {Object} params - Query parameters
+ * @param {string} params.comparison - Comparison type ('variant_type', 'pathogenicity', 'disease_subtype')
+ * @returns {Promise} Axios promise with survival data including groups and statistical tests
+ */
+export const getSurvivalData = (params = {}) =>
+  apiClient.get('/phenopackets/aggregate/survival-data', { params });
+
+/**
+ * Compare phenotype distributions between variant type groups.
+ * @param {Object} params - Query parameters
+ * @param {string} params.comparison - Type of comparison ('truncating_vs_non_truncating' or 'cnv_vs_point_mutation')
+ * @param {number} params.limit - Maximum number of phenotypes to return (default: 20, max: 100)
+ * @param {number} params.min_prevalence - Minimum prevalence (0-1) in at least one group (default: 0.05)
+ * @param {string} params.sort_by - Sort by 'p_value', 'effect_size', or 'prevalence_diff' (default: 'p_value')
+ * @returns {Promise} Axios promise with comparison results
+ */
+export const compareVariantTypes = (params) =>
+  apiClient.get('/phenopackets/compare/variant-types', { params });
 
 /**
  * Get small variants (SNVs) for protein plot visualization.
@@ -516,6 +563,7 @@ export const getVariants = async (params = {}) => {
     variant_type,
     classification,
     consequence,
+    domain,
     pathogenicity,
     sort,
   } = params;
@@ -529,6 +577,7 @@ export const getVariants = async (params = {}) => {
       variant_type,
       classification: classification || pathogenicity, // Support both new and legacy params
       consequence,
+      domain,
       sort,
     },
   });
@@ -566,4 +615,171 @@ export const getVariants = async (params = {}) => {
   };
 };
 
-export default apiClient;
+/* ==================== REFERENCE GENOME ENDPOINTS ==================== */
+
+/**
+ * Get list of all available genome assemblies.
+ * @returns {Promise} Axios promise with genome assemblies
+ */
+export const getReferenceGenomes = () => apiClient.get('/reference/genomes');
+
+/**
+ * Query genes by symbol or chromosome.
+ * @param {Object} params - Query parameters
+ *   - symbol: Gene symbol to filter (e.g., "HNF1B")
+ *   - chromosome: Chromosome to filter (e.g., "17")
+ *   - genome_build: Genome assembly name (default: GRCh38)
+ * @returns {Promise} Axios promise with genes array
+ */
+export const getReferenceGenes = (params = {}) => apiClient.get('/reference/genes', { params });
+
+/**
+ * Get gene details with transcripts.
+ * @param {string} symbol - Gene symbol (e.g., "HNF1B")
+ * @param {string} genomeBuild - Genome assembly name (default: GRCh38)
+ * @returns {Promise} Axios promise with gene details
+ */
+export const getReferenceGene = (symbol, genomeBuild = 'GRCh38') =>
+  apiClient.get(`/reference/genes/${symbol}`, {
+    params: { genome_build: genomeBuild },
+  });
+
+/**
+ * Get all transcript isoforms for a gene with exon coordinates.
+ * @param {string} symbol - Gene symbol (e.g., "HNF1B")
+ * @param {string} genomeBuild - Genome assembly name (default: GRCh38)
+ * @returns {Promise} Axios promise with transcripts array
+ */
+export const getReferenceGeneTranscripts = (symbol, genomeBuild = 'GRCh38') =>
+  apiClient.get(`/reference/genes/${symbol}/transcripts`, {
+    params: { genome_build: genomeBuild },
+  });
+
+/**
+ * Get protein domains for a gene's canonical transcript.
+ * @param {string} symbol - Gene symbol (e.g., "HNF1B")
+ * @param {string} genomeBuild - Genome assembly name (default: GRCh38)
+ * @returns {Promise} Axios promise with protein domains
+ *   - gene: Gene symbol
+ *   - protein: RefSeq protein ID
+ *   - uniprot: UniProt accession
+ *   - length: Protein length (amino acids)
+ *   - domains: Array of domain objects with name, start, end, function
+ *   - genome_build: Genome assembly
+ *   - updated_at: Last update timestamp
+ */
+export const getReferenceGeneDomains = (symbol, genomeBuild = 'GRCh38') =>
+  apiClient.get(`/reference/genes/${symbol}/domains`, {
+    params: { genome_build: genomeBuild },
+  });
+
+/**
+ * Get all genes in a genomic region.
+ * @param {string} region - Genomic region in format "chr:start-end" (e.g., "17:36000000-37000000")
+ * @param {string} genomeBuild - Genome assembly name (default: GRCh38)
+ * @returns {Promise} Axios promise with genes in region
+ */
+export const getReferenceGenomicRegion = (region, genomeBuild = 'GRCh38') =>
+  apiClient.get(`/reference/regions/${region}`, {
+    params: { genome_build: genomeBuild },
+  });
+
+/* ==================== VARIANT ANNOTATION ENDPOINTS ==================== */
+
+/**
+ * Annotate a variant using Ensembl Variant Effect Predictor (VEP).
+ * Returns comprehensive variant annotations including consequence predictions,
+ * impact severity, CADD scores, and gnomAD frequencies.
+ *
+ * @param {string} variant - Variant notation in one of these formats:
+ *   - HGVS: "NM_000458.4:c.544+1G>A" or "NC_000017.11:g.36459258A>G"
+ *   - VCF: "17-36459258-A-G" or "chr17-36459258-A-G"
+ *   - rsID: "rs56116432"
+ * @returns {Promise} Axios promise with VEP annotation data
+ *   - id: Variant identifier
+ *   - input: Original input notation
+ *   - allele_string: Reference/alternate alleles
+ *   - most_severe_consequence: Most severe predicted consequence (e.g., "missense_variant")
+ *   - transcript_consequences: Array of transcript annotations
+ *   - colocated_variants: Array of known variants (rsIDs, gnomAD)
+ *   - cadd: CADD scores object (PHRED, raw) if available
+ *   - gnomad: gnomAD allele frequency object if available
+ *   - impact: Impact severity (HIGH, MODERATE, LOW, MODIFIER)
+ */
+export const annotateVariant = (variant) =>
+  apiClient.post('/variants/annotate', null, {
+    params: { variant },
+  });
+
+// Default export with all API methods
+export default {
+  // Phenopackets CRUD
+  getPhenopackets,
+  getPhenopacket,
+  getPhenotypeTimeline,
+  createPhenopacket,
+  updatePhenopacket,
+  deletePhenopacket,
+  getPhenopacketAuditHistory,
+
+  // Phenopackets Batch & Search
+  getPhenopacketsBatch,
+  searchPhenopackets,
+  getSearchFacets,
+  getPhenopacketsBySex,
+  getPhenopacketsWithVariants,
+  getPhenopacketsByPublication,
+  getPhenotypicFeaturesBatch,
+  getVariantsBatch,
+  getPhenopacketsByVariant,
+
+  // Aggregations
+  getSummaryStats,
+  getSexDistribution,
+  getPhenotypicFeaturesAggregation,
+  getDiseaseAggregation,
+  getVariantPathogenicity,
+  getKidneyStages,
+  getVariantTypes,
+  getPublicationsAggregation,
+  getPublicationsByType,
+  getPublicationTypes,
+  getAgeOfOnsetAggregation,
+  getSurvivalData,
+  getSmallVariants,
+
+  // Publications
+  getPublicationMetadata,
+
+  // Authentication
+  login,
+  getCurrentUser,
+  logout,
+
+  // HPO
+  getHPOAutocomplete,
+  searchHPOTerms,
+
+  // Clinical endpoints
+  getRenalInsufficiencyCases,
+  getGenitalAbnormalitiesCases,
+  getDiabetesCases,
+  getHypomagnesemiaCases,
+
+  // Variants
+  getVariants,
+
+  // Reference
+  getReferenceGenomes,
+  getReferenceGenes,
+  getReferenceGene,
+  getReferenceGeneTranscripts,
+  getReferenceGeneDomains,
+  getReferenceGenomicRegion,
+
+  // Variant annotation
+  annotateVariant,
+
+  // Axios client for custom requests
+  client: apiClient,
+};

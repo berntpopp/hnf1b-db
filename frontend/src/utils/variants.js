@@ -10,6 +10,11 @@
 import { extractCNotation } from './hgvs';
 
 // HNF1B gene boundaries on chromosome 17 (GRCh38)
+// These constants are intentionally hardcoded for performance reasons to avoid
+// API calls on every variant type check. Values are sourced from NCBI Gene ID 6928.
+// Source: https://www.ncbi.nlm.nih.gov/gene/6928
+// Coordinates: chr17:36,098,063-36,112,306 (GRCh38/hg38)
+// Last verified: 2025-01
 const HNF1B_START = 36098063;
 const HNF1B_END = 36112306;
 

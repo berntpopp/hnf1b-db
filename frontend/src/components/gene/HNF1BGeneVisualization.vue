@@ -159,369 +159,373 @@
             Reset to zoom out
           </text>
 
-          <!-- Intron line (backbone) -->
-          <line
-            :x1="margin.left"
-            :y1="hnf1bTrackY"
-            :x2="svgWidth - margin.right"
-            :y2="hnf1bTrackY"
-            stroke="#9E9E9E"
-            stroke-width="3"
-          />
-
-          <!-- Exons -->
-          <g v-for="exon in exons" :key="`exon-${exon.number}`">
-            <rect
-              :x="scalePosition(exon.start)"
-              :y="hnf1bTrackY - exonHeight / 2"
-              :width="Math.max(scalePosition(exon.end) - scalePosition(exon.start), 2)"
-              :height="exonHeight"
-              :fill="getExonColor(exon)"
-              :stroke="zoomedExon?.number === exon.number ? '#FF6F00' : '#1565C0'"
-              :stroke-width="zoomedExon?.number === exon.number ? 4 : 2"
-              class="exon-rect"
-              :class="{ 'exon-zoomed': zoomedExon?.number === exon.number }"
-              @mouseenter="showExonTooltip($event, exon)"
-              @mousemove="updateTooltipPosition($event)"
-              @click="handleExonClick(exon)"
+          <!-- Zoom Group: All visualization content that should zoom/pan -->
+          <g id="zoom-group">
+            <!-- Intron line (backbone) -->
+            <line
+              :x1="margin.left"
+              :y1="hnf1bTrackY"
+              :x2="svgWidth - margin.right"
+              :y2="hnf1bTrackY"
+              stroke="#9E9E9E"
+              stroke-width="3"
             />
-            <!-- Exon label: hidden in region view to avoid clutter -->
-            <text
-              v-if="effectiveViewMode !== 'cnv'"
-              :x="
-                scalePosition(exon.start) +
-                (scalePosition(exon.end) - scalePosition(exon.start)) / 2
-              "
-              :y="hnf1bTrackY - exonHeight / 2 - 8"
-              text-anchor="middle"
-              class="exon-label"
-            >
-              E{{ exon.number }}
-            </text>
-          </g>
 
-          <!-- Gene Track (CNV mode only) -->
-          <g v-if="effectiveViewMode === 'cnv'">
-            <!-- Gene track title -->
-            <text :x="margin.left" :y="centerY - 120" class="gene-track-label" font-weight="600">
-              Genes in 17q12 Region:
-            </text>
-
-            <!-- Gene rectangles -->
-            <g v-for="(gene, index) in chr17q12Genes" :key="`gene-${gene.symbol}`">
+            <!-- Exons -->
+            <g v-for="exon in exons" :key="`exon-${exon.number}`">
               <rect
-                :x="scalePosition(gene.start)"
-                :y="centerY - 60"
-                :width="Math.max(scalePosition(gene.end) - scalePosition(gene.start), 2)"
-                :height="20"
-                :fill="gene.color"
-                :stroke="gene.clinicalSignificance === 'critical' ? '#D32F2F' : '#424242'"
-                :stroke-width="gene.clinicalSignificance === 'critical' ? 3 : 1"
-                :opacity="0.8"
-                class="gene-rect"
-                @mouseenter="showGeneTooltip($event, gene)"
+                :x="scalePosition(exon.start)"
+                :y="hnf1bTrackY - exonHeight / 2"
+                :width="Math.max(scalePosition(exon.end) - scalePosition(exon.start), 2)"
+                :height="exonHeight"
+                :fill="getExonColor(exon)"
+                :stroke="zoomedExon?.number === exon.number ? '#FF6F00' : '#1565C0'"
+                :stroke-width="zoomedExon?.number === exon.number ? 4 : 2"
+                class="exon-rect"
+                :class="{ 'exon-zoomed': zoomedExon?.number === exon.number }"
+                @mouseenter="showExonTooltip($event, exon)"
                 @mousemove="updateTooltipPosition($event)"
+                @click="handleExonClick(exon)"
               />
-              <!-- Gene label with connecting line - show ALL genes in 6 staggered rows (3 above, 3 below) -->
-              <!-- Use collision-aware distribution to minimize overlap -->
-              <g>
-                <!-- Connecting line from gene to label -->
-                <line
-                  :x1="
-                    scalePosition(gene.start) +
-                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
-                  "
-                  :y1="getGeneLabelRow(index, gene) < 3 ? centerY - 60 : centerY - 40"
-                  :x2="
-                    scalePosition(gene.start) +
-                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
-                  "
-                  :y2="getGeneLabelLineEndY(getGeneLabelRow(index, gene))"
-                  stroke="#666"
-                  stroke-width="1"
-                  stroke-dasharray="2,2"
-                  opacity="0.7"
+              <!-- Exon label: hidden in region view to avoid clutter -->
+              <text
+                v-if="effectiveViewMode !== 'cnv'"
+                :x="
+                  scalePosition(exon.start) +
+                  (scalePosition(exon.end) - scalePosition(exon.start)) / 2
+                "
+                :y="hnf1bTrackY - exonHeight / 2 - 8"
+                text-anchor="middle"
+                class="exon-label"
+              >
+                E{{ exon.number }}
+              </text>
+            </g>
+
+            <!-- Gene Track (CNV mode only) -->
+            <g v-if="effectiveViewMode === 'cnv'">
+              <!-- Gene track title -->
+              <text :x="margin.left" :y="centerY - 120" class="gene-track-label" font-weight="600">
+                Genes in 17q12 Region:
+              </text>
+
+              <!-- Gene rectangles -->
+              <g v-for="(gene, index) in chr17q12Genes" :key="`gene-${gene.symbol}`">
+                <rect
+                  :x="scalePosition(gene.start)"
+                  :y="centerY - 60"
+                  :width="Math.max(scalePosition(gene.end) - scalePosition(gene.start), 2)"
+                  :height="20"
+                  :fill="gene.color"
+                  :stroke="gene.clinicalSignificance === 'critical' ? '#D32F2F' : '#424242'"
+                  :stroke-width="gene.clinicalSignificance === 'critical' ? 3 : 1"
+                  :opacity="0.8"
+                  class="gene-rect"
+                  @mouseenter="showGeneTooltip($event, gene)"
+                  @mousemove="updateTooltipPosition($event)"
                 />
-                <!-- Gene label -->
-                <text
-                  :x="
-                    scalePosition(gene.start) +
-                    (scalePosition(gene.end) - scalePosition(gene.start)) / 2
-                  "
-                  :y="getGeneLabelYPosition(getGeneLabelRow(index, gene))"
-                  text-anchor="middle"
-                  class="gene-name-label"
-                  font-size="10"
-                  font-weight="600"
-                  :fill="
-                    gene.clinicalSignificance === 'critical' || gene.clinicalSignificance === 'high'
-                      ? '#D32F2F'
-                      : '#424242'
-                  "
-                  pointer-events="none"
-                >
-                  {{ gene.symbol }}
-                </text>
+                <!-- Gene label with connecting line - show ALL genes in 6 staggered rows (3 above, 3 below) -->
+                <!-- Use collision-aware distribution to minimize overlap -->
+                <g>
+                  <!-- Connecting line from gene to label -->
+                  <line
+                    :x1="
+                      scalePosition(gene.start) +
+                      (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                    "
+                    :y1="getGeneLabelRow(index, gene) < 3 ? centerY - 60 : centerY - 40"
+                    :x2="
+                      scalePosition(gene.start) +
+                      (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                    "
+                    :y2="getGeneLabelLineEndY(getGeneLabelRow(index, gene))"
+                    stroke="#666"
+                    stroke-width="1"
+                    stroke-dasharray="2,2"
+                    opacity="0.7"
+                  />
+                  <!-- Gene label -->
+                  <text
+                    :x="
+                      scalePosition(gene.start) +
+                      (scalePosition(gene.end) - scalePosition(gene.start)) / 2
+                    "
+                    :y="getGeneLabelYPosition(getGeneLabelRow(index, gene))"
+                    text-anchor="middle"
+                    class="gene-name-label"
+                    font-size="10"
+                    font-weight="600"
+                    :fill="
+                      gene.clinicalSignificance === 'critical' ||
+                      gene.clinicalSignificance === 'high'
+                        ? '#D32F2F'
+                        : '#424242'
+                    "
+                    pointer-events="none"
+                  >
+                    {{ gene.symbol }}
+                  </text>
+                </g>
               </g>
             </g>
-          </g>
 
-          <!-- CNV deletions (background bars) -->
-          <g v-for="(cnv, index) in cnvVariants" :key="`cnv-${index}`">
-            <!-- CNV deletion/duplication bar -->
-            <rect
-              v-if="cnv.start && cnv.end && getCNVDisplayCoords(cnv).width > 0"
-              :x="getCNVDisplayCoords(cnv).x"
-              :y="hnf1bTrackY + exonHeight / 2 + 10 + index * 20"
-              :width="getCNVDisplayCoords(cnv).width"
-              :height="15"
-              :fill="getCNVColor(cnv)"
-              :opacity="0.7"
-              stroke="#424242"
-              stroke-width="1"
-              class="cnv-rect"
-              @mouseenter="showVariantTooltip($event, cnv)"
-              @mousemove="updateTooltipPosition($event)"
-              @click="handleVariantClick(cnv)"
-            />
-          </g>
-
-          <!-- Indel markers (small deletions/insertions < 50bp) -->
-          <!-- Only shown in gene mode, not CNV mode -->
-          <template v-if="effectiveViewMode !== 'cnv'">
-            <g v-for="(indel, index) in indelVariants" :key="`indel-${index}`">
-              <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
+            <!-- CNV deletions (background bars) -->
+            <g v-for="(cnv, index) in cnvVariants" :key="`cnv-${index}`">
+              <!-- CNV deletion/duplication bar -->
               <rect
-                v-if="indel.start && indel.end"
-                :x="scalePosition(indel.start)"
-                :y="hnf1bTrackY + exonHeight / 2 + 30"
-                :width="Math.max(scalePosition(indel.end) - scalePosition(indel.start), 3)"
-                :height="25"
-                :fill="getVariantColor(indel)"
-                :stroke="'#424242'"
-                :stroke-width="1"
-                :opacity="0.9"
-                class="indel-rect"
-                @mouseenter="showVariantTooltip($event, indel)"
-                @mousemove="updateTooltipPosition($event)"
-                @click="handleVariantClick(indel)"
-              />
-              <!-- Connecting line from indel to affected exon region -->
-              <line
-                v-if="indel.start && indel.end"
-                :x1="scalePosition(indel.start)"
-                :y1="hnf1bTrackY + exonHeight / 2"
-                :x2="scalePosition(indel.start)"
-                :y2="hnf1bTrackY + exonHeight / 2 + 30"
+                v-if="cnv.start && cnv.end && getCNVDisplayCoords(cnv).width > 0"
+                :x="getCNVDisplayCoords(cnv).x"
+                :y="hnf1bTrackY + exonHeight / 2 + 10 + index * 20"
+                :width="getCNVDisplayCoords(cnv).width"
+                :height="15"
+                :fill="getCNVColor(cnv)"
+                :opacity="0.7"
                 stroke="#424242"
                 stroke-width="1"
-                opacity="0.6"
-              />
-              <line
-                v-if="indel.start && indel.end"
-                :x1="scalePosition(indel.end)"
-                :y1="hnf1bTrackY + exonHeight / 2"
-                :x2="scalePosition(indel.end)"
-                :y2="hnf1bTrackY + exonHeight / 2 + 30"
-                stroke="#424242"
-                stroke-width="1"
-                opacity="0.6"
-              />
-              <!-- Indel label for current variant (positioned below the bar) -->
-              <text
-                v-if="indel.isCurrentVariant"
-                :x="
-                  scalePosition(indel.start) +
-                  (scalePosition(indel.end) - scalePosition(indel.start)) / 2
-                "
-                :y="hnf1bTrackY + exonHeight / 2 + 65"
-                text-anchor="middle"
-                class="indel-label-text"
-                fill="#9C27B0"
-                font-size="13"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                {{ indel.simple_id || indel.variant_id }}
-              </text>
-              <!-- Star icon for current indel (next to label) -->
-              <text
-                v-if="indel.isCurrentVariant"
-                :x="
-                  scalePosition(indel.start) +
-                  (scalePosition(indel.end) - scalePosition(indel.start)) / 2 -
-                  35
-                "
-                :y="hnf1bTrackY + exonHeight / 2 + 65"
-                text-anchor="middle"
-                class="variant-star-icon"
-                fill="#9C27B0"
-                font-size="13"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                ★
-              </text>
-            </g>
-          </template>
-
-          <!-- SNV markers -->
-          <!-- Only shown in gene mode, not CNV mode -->
-          <template v-if="effectiveViewMode !== 'cnv'">
-            <g v-for="(variant, index) in snvVariants" :key="`snv-${index}`">
-              <!-- Connecting line (longer to avoid exon label overlap) -->
-              <line
-                v-if="variant.position"
-                :x1="scalePosition(variant.position)"
-                :y1="hnf1bTrackY - exonHeight / 2"
-                :x2="scalePosition(variant.position)"
-                :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-                :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
-                :stroke-width="variant.isCurrentVariant ? 2 : 1"
-                stroke-dasharray="2,2"
-              />
-              <!-- Variant marker circle (removed purple border for non-current) -->
-              <circle
-                v-if="variant.position"
-                :cx="scalePosition(variant.position)"
-                :cy="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-                :r="variant.isCurrentVariant ? 15 : 5"
-                :fill="getVariantColor(variant)"
-                :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
-                :stroke-width="variant.isCurrentVariant ? 5 : 0"
-                :opacity="variant.isCurrentVariant ? 1 : 0.7"
-                class="variant-circle"
-                :class="{ 'current-variant': variant.isCurrentVariant }"
-                @mouseenter="showVariantTooltip($event, variant)"
+                class="cnv-rect"
+                @mouseenter="showVariantTooltip($event, cnv)"
                 @mousemove="updateTooltipPosition($event)"
-                @click="handleVariantClick(variant)"
+                @click="handleVariantClick(cnv)"
               />
-              <!-- Star icon for current variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 6"
-                text-anchor="middle"
-                class="variant-star-icon"
-                fill="white"
-                font-size="16"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                ★
-              </text>
-              <!-- Variant label for current variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 90"
-                text-anchor="middle"
-                class="variant-label-text"
-                fill="#9C27B0"
-                font-size="14"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                {{ variant.simple_id || variant.variant_id }}
-              </text>
-              <!-- Protein notation for current variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant && variant.protein"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 75"
-                text-anchor="middle"
-                class="variant-protein-text"
-                fill="#757575"
-                font-size="11"
-                pointer-events="none"
-              >
-                {{ extractPNotation(variant.protein) }}
-              </text>
             </g>
-          </template>
 
-          <!-- Splice variant markers (diamonds) -->
-          <!-- Only shown in gene mode, not CNV mode -->
-          <template v-if="effectiveViewMode !== 'cnv'">
-            <g v-for="(variant, index) in spliceVariants" :key="`splice-${index}`">
-              <!-- Connecting line (same as SNVs but with different end position) -->
-              <line
-                v-if="variant.position"
-                :x1="scalePosition(variant.position)"
-                :y1="hnf1bTrackY - exonHeight / 2"
-                :x2="scalePosition(variant.position)"
-                :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
-                :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
-                :stroke-width="variant.isCurrentVariant ? 2 : 1"
-                stroke-dasharray="2,2"
-              />
-              <!-- Diamond marker (rotated square) -->
-              <rect
-                v-if="variant.position"
-                :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
-                :y="
-                  hnf1bTrackY -
-                  exonHeight / 2 -
-                  50 -
-                  (index % 3) * 12 -
-                  (variant.isCurrentVariant ? 10.5 : 3.5)
-                "
-                :width="variant.isCurrentVariant ? 21 : 7"
-                :height="variant.isCurrentVariant ? 21 : 7"
-                :fill="getVariantColor(variant)"
-                :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
-                :stroke-width="variant.isCurrentVariant ? 3 : 0"
-                :opacity="variant.isCurrentVariant ? 1 : 0.7"
-                :transform="`rotate(45, ${scalePosition(variant.position)}, ${hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12})`"
-                class="variant-diamond"
-                :class="{ 'current-variant': variant.isCurrentVariant }"
-                @mouseenter="showVariantTooltip($event, variant)"
-                @mousemove="updateTooltipPosition($event)"
-                @click="handleVariantClick(variant)"
-              />
-              <!-- Star icon for current splice variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 5"
-                text-anchor="middle"
-                class="variant-star-icon"
-                fill="white"
-                font-size="14"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                ★
-              </text>
-              <!-- Variant label for current splice variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 90"
-                text-anchor="middle"
-                class="variant-label-text"
-                fill="#9C27B0"
-                font-size="14"
-                font-weight="bold"
-                pointer-events="none"
-              >
-                {{ variant.simple_id || variant.variant_id }}
-              </text>
-              <!-- Transcript notation for current splice variant -->
-              <text
-                v-if="variant.position && variant.isCurrentVariant && variant.transcript"
-                :x="scalePosition(variant.position)"
-                :y="hnf1bTrackY - exonHeight / 2 - 75"
-                text-anchor="middle"
-                class="variant-protein-text"
-                fill="#757575"
-                font-size="11"
-                pointer-events="none"
-              >
-                {{ extractCNotation(variant.transcript) }}
-              </text>
-            </g>
-          </template>
+            <!-- Indel markers (small deletions/insertions < 50bp) -->
+            <!-- Only shown in gene mode, not CNV mode -->
+            <template v-if="effectiveViewMode !== 'cnv'">
+              <g v-for="(indel, index) in indelVariants" :key="`indel-${index}`">
+                <!-- Indel deletion bar (positioned below HNF1B track with larger gap) -->
+                <rect
+                  v-if="indel.start && indel.end"
+                  :x="scalePosition(indel.start)"
+                  :y="hnf1bTrackY + exonHeight / 2 + 30"
+                  :width="Math.max(scalePosition(indel.end) - scalePosition(indel.start), 3)"
+                  :height="25"
+                  :fill="getVariantColor(indel)"
+                  :stroke="'#424242'"
+                  :stroke-width="1"
+                  :opacity="0.9"
+                  class="indel-rect"
+                  @mouseenter="showVariantTooltip($event, indel)"
+                  @mousemove="updateTooltipPosition($event)"
+                  @click="handleVariantClick(indel)"
+                />
+                <!-- Connecting line from indel to affected exon region -->
+                <line
+                  v-if="indel.start && indel.end"
+                  :x1="scalePosition(indel.start)"
+                  :y1="hnf1bTrackY + exonHeight / 2"
+                  :x2="scalePosition(indel.start)"
+                  :y2="hnf1bTrackY + exonHeight / 2 + 30"
+                  stroke="#424242"
+                  stroke-width="1"
+                  opacity="0.6"
+                />
+                <line
+                  v-if="indel.start && indel.end"
+                  :x1="scalePosition(indel.end)"
+                  :y1="hnf1bTrackY + exonHeight / 2"
+                  :x2="scalePosition(indel.end)"
+                  :y2="hnf1bTrackY + exonHeight / 2 + 30"
+                  stroke="#424242"
+                  stroke-width="1"
+                  opacity="0.6"
+                />
+                <!-- Indel label for current variant (positioned below the bar) -->
+                <text
+                  v-if="indel.isCurrentVariant"
+                  :x="
+                    scalePosition(indel.start) +
+                    (scalePosition(indel.end) - scalePosition(indel.start)) / 2
+                  "
+                  :y="hnf1bTrackY + exonHeight / 2 + 65"
+                  text-anchor="middle"
+                  class="indel-label-text"
+                  fill="#9C27B0"
+                  font-size="13"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  {{ indel.simple_id || indel.variant_id }}
+                </text>
+                <!-- Star icon for current indel (next to label) -->
+                <text
+                  v-if="indel.isCurrentVariant"
+                  :x="
+                    scalePosition(indel.start) +
+                    (scalePosition(indel.end) - scalePosition(indel.start)) / 2 -
+                    35
+                  "
+                  :y="hnf1bTrackY + exonHeight / 2 + 65"
+                  text-anchor="middle"
+                  class="variant-star-icon"
+                  fill="#9C27B0"
+                  font-size="13"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  ★
+                </text>
+              </g>
+            </template>
+
+            <!-- SNV markers -->
+            <!-- Only shown in gene mode, not CNV mode -->
+            <template v-if="effectiveViewMode !== 'cnv'">
+              <g v-for="(variant, index) in snvVariants" :key="`snv-${index}`">
+                <!-- Connecting line (longer to avoid exon label overlap) -->
+                <line
+                  v-if="variant.position"
+                  :x1="scalePosition(variant.position)"
+                  :y1="hnf1bTrackY - exonHeight / 2"
+                  :x2="scalePosition(variant.position)"
+                  :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                  :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
+                  :stroke-width="variant.isCurrentVariant ? 2 : 1"
+                  stroke-dasharray="2,2"
+                />
+                <!-- Variant marker circle (removed purple border for non-current) -->
+                <circle
+                  v-if="variant.position"
+                  :cx="scalePosition(variant.position)"
+                  :cy="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                  :r="variant.isCurrentVariant ? 15 : 5"
+                  :fill="getVariantColor(variant)"
+                  :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+                  :stroke-width="variant.isCurrentVariant ? 5 : 0"
+                  :opacity="variant.isCurrentVariant ? 1 : 0.7"
+                  class="variant-circle"
+                  :class="{ 'current-variant': variant.isCurrentVariant }"
+                  @mouseenter="showVariantTooltip($event, variant)"
+                  @mousemove="updateTooltipPosition($event)"
+                  @click="handleVariantClick(variant)"
+                />
+                <!-- Star icon for current variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 6"
+                  text-anchor="middle"
+                  class="variant-star-icon"
+                  fill="white"
+                  font-size="16"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  ★
+                </text>
+                <!-- Variant label for current variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 90"
+                  text-anchor="middle"
+                  class="variant-label-text"
+                  fill="#9C27B0"
+                  font-size="14"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  {{ variant.simple_id || variant.variant_id }}
+                </text>
+                <!-- Protein notation for current variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant && variant.protein"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 75"
+                  text-anchor="middle"
+                  class="variant-protein-text"
+                  fill="#757575"
+                  font-size="11"
+                  pointer-events="none"
+                >
+                  {{ extractPNotation(variant.protein) }}
+                </text>
+              </g>
+            </template>
+
+            <!-- Splice variant markers (diamonds) -->
+            <!-- Only shown in gene mode, not CNV mode -->
+            <template v-if="effectiveViewMode !== 'cnv'">
+              <g v-for="(variant, index) in spliceVariants" :key="`splice-${index}`">
+                <!-- Connecting line (same as SNVs but with different end position) -->
+                <line
+                  v-if="variant.position"
+                  :x1="scalePosition(variant.position)"
+                  :y1="hnf1bTrackY - exonHeight / 2"
+                  :x2="scalePosition(variant.position)"
+                  :y2="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12"
+                  :stroke="variant.isCurrentVariant ? '#9C27B0' : '#BDBDBD'"
+                  :stroke-width="variant.isCurrentVariant ? 2 : 1"
+                  stroke-dasharray="2,2"
+                />
+                <!-- Diamond marker (rotated square) -->
+                <rect
+                  v-if="variant.position"
+                  :x="scalePosition(variant.position) - (variant.isCurrentVariant ? 10.5 : 3.5)"
+                  :y="
+                    hnf1bTrackY -
+                    exonHeight / 2 -
+                    50 -
+                    (index % 3) * 12 -
+                    (variant.isCurrentVariant ? 10.5 : 3.5)
+                  "
+                  :width="variant.isCurrentVariant ? 21 : 7"
+                  :height="variant.isCurrentVariant ? 21 : 7"
+                  :fill="getVariantColor(variant)"
+                  :stroke="variant.isCurrentVariant ? '#9C27B0' : 'none'"
+                  :stroke-width="variant.isCurrentVariant ? 3 : 0"
+                  :opacity="variant.isCurrentVariant ? 1 : 0.7"
+                  :transform="`rotate(45, ${scalePosition(variant.position)}, ${hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12})`"
+                  class="variant-diamond"
+                  :class="{ 'current-variant': variant.isCurrentVariant }"
+                  @mouseenter="showVariantTooltip($event, variant)"
+                  @mousemove="updateTooltipPosition($event)"
+                  @click="handleVariantClick(variant)"
+                />
+                <!-- Star icon for current splice variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 50 - (index % 3) * 12 + 5"
+                  text-anchor="middle"
+                  class="variant-star-icon"
+                  fill="white"
+                  font-size="14"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  ★
+                </text>
+                <!-- Variant label for current splice variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 90"
+                  text-anchor="middle"
+                  class="variant-label-text"
+                  fill="#9C27B0"
+                  font-size="14"
+                  font-weight="bold"
+                  pointer-events="none"
+                >
+                  {{ variant.simple_id || variant.variant_id }}
+                </text>
+                <!-- Transcript notation for current splice variant -->
+                <text
+                  v-if="variant.position && variant.isCurrentVariant && variant.transcript"
+                  :x="scalePosition(variant.position)"
+                  :y="hnf1bTrackY - exonHeight / 2 - 75"
+                  text-anchor="middle"
+                  class="variant-protein-text"
+                  fill="#757575"
+                  font-size="11"
+                  pointer-events="none"
+                >
+                  {{ extractCNotation(variant.transcript) }}
+                </text>
+              </g>
+            </template>
+          </g>
         </svg>
       </div>
 
@@ -630,9 +634,25 @@
 </template>
 
 <script>
-import chr17q12Data from '@/data/chr17q12_genes.json';
+import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getCNVDetails } from '@/utils/variants';
+import { getReferenceGenomicRegion } from '@/api';
+import {
+  HNF1B_EXONS,
+  CHR17Q12_REGION_DEFAULT,
+  HNF1B_GENE_BOUNDARIES,
+  getExonColor as getExonColorUtil,
+  getCNVColor as getCNVColorUtil,
+  formatCoordinate as formatCoordinateUtil,
+  formatSize,
+  isVariantCNV,
+  isVariantIndel,
+  isVariantSpliceVariant,
+  getIndelDetails as getIndelDetailsUtil,
+} from '@/utils/geneVisualization';
+import { calculateTooltipPosition } from '@/utils/tooltip';
+import { getPathogenicityHexColor } from '@/utils/colors';
 
 export default {
   name: 'HNF1BGeneVisualization',
@@ -655,33 +675,25 @@ export default {
   data() {
     return {
       svgWidth: 1000,
-      svgHeight: 480, // Increased to accommodate 6 rows of gene labels (3 above + 3 below)
-      margin: { top: 130, right: 50, bottom: 130, left: 50 }, // Increased top and bottom margins for 6-layer gene labels
+      svgHeight: 480,
+      margin: { top: 130, right: 50, bottom: 130, left: 50 },
       exonHeight: 40,
-      geneStart: 37680000, // chr17 coordinates (GRCh38) - adjusted to show actual variant positions
-      geneEnd: 37750000, // 70kb range covering all HNF1B coding variants
+      geneStart: HNF1B_GENE_BOUNDARIES.start,
+      geneEnd: HNF1B_GENE_BOUNDARIES.end,
       tooltipVisible: false,
       tooltipX: 0,
       tooltipY: 0,
       tooltipContent: null,
       zoomLevel: 1,
-      zoomedExon: null, // Track which exon is zoomed in
-      viewMode: 'gene', // 'gene' or 'cnv'
-      chr17q12Region: chr17q12Data.region,
-      chr17q12Genes: chr17q12Data.genes,
-      exons: [
-        // HNF1B coding exons (GRCh38 coordinates from UCSC NM_000458.4)
-        // Note: Gene is on minus strand, so exon 1 is at higher genomic coordinates
-        { number: 1, start: 37744540, end: 37745059, size: 519, domain: "5' UTR" },
-        { number: 2, start: 37739439, end: 37739639, size: 200, domain: null },
-        { number: 3, start: 37733556, end: 37733821, size: 265, domain: 'POU-S' },
-        { number: 4, start: 37731594, end: 37731830, size: 236, domain: 'POU-H' },
-        { number: 5, start: 37710502, end: 37710663, size: 161, domain: 'POU-H' },
-        { number: 6, start: 37704916, end: 37705049, size: 133, domain: null },
-        { number: 7, start: 37700982, end: 37701177, size: 195, domain: 'Transactivation' },
-        { number: 8, start: 37699075, end: 37699194, size: 119, domain: 'Transactivation' },
-        { number: 9, start: 37686430, end: 37687392, size: 962, domain: "3' UTR" },
-      ],
+      zoomedExon: null,
+      viewMode: 'gene',
+      loading: false,
+      apiError: null,
+      chr17q12Region: { ...CHR17Q12_REGION_DEFAULT },
+      chr17q12Genes: [],
+      d3Zoom: null,
+      d3Transform: null,
+      exons: [...HNF1B_EXONS],
     };
   },
   computed: {
@@ -915,14 +927,89 @@ export default {
       });
     },
   },
-  mounted() {
+  async mounted() {
     this.updateSVGWidth();
     window.addEventListener('resize', this.updateSVGWidth);
+    this.initializeD3Zoom();
+    window.addEventListener('keydown', this.handleKeyboardShortcuts);
+
+    // Fetch chr17q12 genes from API
+    await this.fetchChr17q12Genes();
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.updateSVGWidth);
+    window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
+    async fetchChr17q12Genes() {
+      try {
+        this.loading = true;
+        this.apiError = null;
+
+        window.logService.info('Fetching chr17q12 genes from API');
+
+        // Fetch genes in the 17q12 region (36.0-39.9 Mb)
+        const response = await getReferenceGenomicRegion('17:36000000-39900000', 'GRCh38');
+
+        if (response.data && response.data.genes && response.data.genes.length > 0) {
+          // Map API gene data to component format and filter for clinical relevance
+          const MIN_GENE_SIZE = 10000; // 10kb minimum size
+
+          this.chr17q12Genes = response.data.genes
+            .map((gene) => ({
+              symbol: gene.symbol,
+              name: gene.name,
+              start: gene.start,
+              end: gene.end,
+              size: gene.end - gene.start,
+              strand: gene.strand,
+              biotype: gene.extra_data?.biotype || 'protein_coding',
+              transcriptId: gene.extra_data?.transcript_id || null,
+              mim: gene.extra_data?.mim || null,
+              function: gene.extra_data?.function || null,
+              phenotype: gene.extra_data?.phenotype || null,
+              clinicalSignificance: gene.extra_data?.clinical_significance || 'unknown',
+              color: gene.extra_data?.color || '#90CAF9',
+            }))
+            .filter((gene) => {
+              // Filter 1: Protein-coding genes only (exclude lncRNA, miRNA, etc.)
+              const isProteinCoding = gene.biotype === 'protein_coding';
+
+              // Filter 2: Has approved gene symbol (not ENSG* novel transcript)
+              const hasApprovedSymbol = !gene.symbol.startsWith('ENSG');
+
+              // Filter 3: Minimum size of 10kb to reduce clutter
+              const meetsMinSize = gene.size >= MIN_GENE_SIZE;
+
+              return isProteinCoding && hasApprovedSymbol && meetsMinSize;
+            });
+
+          window.logService.info('Successfully loaded chr17q12 genes from API (filtered)', {
+            totalGenes: response.data.genes.length,
+            filteredGenes: this.chr17q12Genes.length,
+            filter: 'protein-coding, approved symbols, >10kb',
+          });
+        } else {
+          window.logService.warn('No genes returned from API for 17q12 region');
+        }
+      } catch (error) {
+        // 404 errors are expected when reference data isn't populated - don't log as error
+        const is404 = error.response?.status === 404;
+        if (is404) {
+          window.logService.debug('Reference data not available for chr17q12 genes (expected)', {
+            status: error.response?.status,
+          });
+        } else {
+          this.apiError = error.message;
+          window.logService.warn('Failed to fetch chr17q12 genes from API, using empty array', {
+            error: error.message,
+          });
+        }
+        // Keep empty array - component will still work but CNV mode won't show genes
+      } finally {
+        this.loading = false;
+      }
+    },
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
@@ -991,155 +1078,27 @@ export default {
 
       return null;
     },
+    // Delegate to utility functions
     isCNV(variant) {
-      if (!variant || !variant.hg38) return false;
-      // Check for range notation: 17:start-end:DEL/DUP
-      const hasRangeNotation = /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
-      if (!hasRangeNotation) return false;
-
-      // Extract start and end positions
-      const match = variant.hg38.match(/:(\d+)-(\d+):/);
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-        const size = end - start;
-
-        // Consider variants < 50bp as indels (small deletions/insertions)
-        // These should be displayed differently from large CNVs (>= 50bp)
-        return size >= 50;
-      }
-
-      return false;
+      return isVariantCNV(variant);
     },
     isIndel(variant) {
-      if (!variant || !variant.hg38) return false;
-
-      // Check for range notation: 17:start-end:DEL/DUP
-      const hasRangeNotation = /(\d+|X|Y|MT?):(\d+)-(\d+):/.test(variant.hg38);
-      if (hasRangeNotation) {
-        // Extract start and end positions
-        const match = variant.hg38.match(/:(\d+)-(\d+):/);
-        if (match) {
-          const start = parseInt(match[1]);
-          const end = parseInt(match[2]);
-          const size = end - start;
-
-          // Indels are small variants < 50bp
-          return size < 50;
-        }
-      }
-
-      // Check for VCF-style indels: chr17-37710502-ATCG-A or chr17-37710502-A-ATCG
-      // Where ref and alt have different lengths (not just substitution)
-      const vcfMatch = variant.hg38.match(/chr(\d+|X|Y|MT?)-(\d+)-([A-Z]+)-([A-Z]+)/i);
-      if (vcfMatch) {
-        const ref = vcfMatch[3];
-        const alt = vcfMatch[4];
-        // If ref and alt have different lengths, it's an indel
-        if (ref.length !== alt.length) {
-          return true;
-        }
-      }
-
-      return false;
+      return isVariantIndel(variant);
     },
     isSpliceVariant(variant) {
-      // Check if variant is a splice site variant
-      // Splice variants have transcript notation with +/- positions and no protein notation
-      if (!variant) return false;
-
-      const hasTranscript = variant.transcript && variant.transcript !== '-';
-      const noProtein = !variant.protein || variant.protein === '-';
-      const isSpliceSite = hasTranscript && /[+-]\d+/.test(variant.transcript);
-
-      return hasTranscript && noProtein && isSpliceSite;
+      return isVariantSpliceVariant(variant);
     },
     getIndelDetails(variant) {
-      if (!variant || !variant.hg38) return null;
-
-      // First try range notation: 17:start-end:DEL/DUP
-      const rangeMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):([A-Z]+)/);
-      if (rangeMatch) {
-        return {
-          chromosome: rangeMatch[1],
-          start: rangeMatch[2],
-          end: rangeMatch[3],
-          type: rangeMatch[4],
-        };
-      }
-
-      // Try VCF-style: chr17-37710502-ATCG-A or chr17-37710502-A-ATCG
-      const vcfMatch = variant.hg38.match(/chr(\d+|X|Y|MT?)-(\d+)-([A-Z]+)-([A-Z]+)/i);
-      if (vcfMatch) {
-        const pos = parseInt(vcfMatch[2]);
-        const ref = vcfMatch[3];
-        const alt = vcfMatch[4];
-
-        // Determine type and calculate end position
-        let type = 'INDEL';
-        let end = pos;
-
-        if (ref.length > 1 && alt.length > 1 && ref.length !== alt.length) {
-          // Complex indel: both ref and alt are multi-base and different lengths
-          // This is a deletion-insertion event (indel with both del and ins)
-          type = 'INDEL';
-          end = pos + ref.length - 1;
-        } else if (ref.length > alt.length) {
-          // Pure deletion: reference is longer than alternate
-          type = 'DEL';
-          end = pos + ref.length - 1;
-        } else if (alt.length > ref.length) {
-          // Pure insertion: alternate is longer than reference
-          type = 'INS';
-          end = pos + ref.length; // Insertions don't extend the reference
-        } else if (ref !== alt && ref.length === alt.length) {
-          // Substitution: same length but different bases (not technically an indel)
-          type = 'SUB';
-          end = pos + ref.length - 1;
-        }
-
-        return {
-          chromosome: vcfMatch[1],
-          start: pos.toString(),
-          end: end.toString(),
-          type: type,
-        };
-      }
-
-      return null;
+      return getIndelDetailsUtil(variant);
     },
     getExonColor(exon) {
-      if (exon.domain?.includes('POU')) return '#42A5F5'; // Blue
-      if (exon.domain?.includes('Transactivation')) return '#66BB6A'; // Green
-      if (exon.domain?.includes('UTR')) return '#BDBDBD'; // Grey
-      return '#1E88E5'; // Default blue
+      return getExonColorUtil(exon);
     },
     getVariantColor(variant) {
-      const classification = variant.classificationVerdict?.toUpperCase() || '';
-      if (classification.includes('PATHOGENIC') && !classification.includes('LIKELY')) {
-        return '#EF5350'; // red-lighten-3
-      }
-      if (
-        classification.includes('LIKELY_PATHOGENIC') ||
-        classification.includes('LIKELY PATHOGENIC')
-      ) {
-        return '#FF9800'; // orange-lighten-3
-      }
-      if (classification.includes('UNCERTAIN') || classification.includes('VUS')) {
-        return '#FBC02D'; // yellow-darken-1
-      }
-      if (classification.includes('LIKELY_BENIGN')) {
-        return '#9CCC65'; // light-green-lighten-3
-      }
-      if (classification.includes('BENIGN')) {
-        return '#66BB6A'; // green-lighten-3
-      }
-      return '#BDBDBD'; // grey
+      return getPathogenicityHexColor(variant.classificationVerdict);
     },
     getCNVColor(cnv) {
-      if (cnv.cnvType === 'DEL') return '#EF5350'; // Red for deletion
-      if (cnv.cnvType === 'DUP') return '#42A5F5'; // Blue for duplication
-      return '#9E9E9E'; // Grey for unknown
+      return getCNVColorUtil(cnv.cnvType);
     },
     getCNVDisplayCoords(cnv) {
       // Clamp CNV coordinates to VISIBLE region (not fixed gene boundaries)
@@ -1157,12 +1116,13 @@ export default {
       };
     },
     formatCoordinate(pos) {
-      return parseInt(pos).toLocaleString();
+      return formatCoordinateUtil(pos);
     },
     // Utility functions imported from utils
     extractCNotation,
     extractPNotation,
     getCNVDetails,
+    formatSize,
     showExonTooltip(event, exon) {
       this.updateTooltipPosition(event);
       this.tooltipContent = { type: 'exon', data: exon };
@@ -1179,28 +1139,9 @@ export default {
       this.tooltipVisible = true;
     },
     updateTooltipPosition(event) {
-      // Position tooltip, but prevent overflow on the right edge
-      const tooltipWidth = 300; // Approximate tooltip width
-      const tooltipHeight = 200; // Approximate tooltip height
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      // Default: position to the right and below cursor
-      let x = event.clientX + 15;
-      let y = event.clientY + 15;
-
-      // If tooltip would overflow right edge, position to the left of cursor
-      if (x + tooltipWidth > viewportWidth) {
-        x = event.clientX - tooltipWidth - 15;
-      }
-
-      // If tooltip would overflow bottom edge, position above cursor
-      if (y + tooltipHeight > viewportHeight) {
-        y = event.clientY - tooltipHeight - 15;
-      }
-
-      this.tooltipX = Math.max(10, x); // Ensure at least 10px from left edge
-      this.tooltipY = Math.max(10, y); // Ensure at least 10px from top edge
+      const pos = calculateTooltipPosition(event);
+      this.tooltipX = pos.x;
+      this.tooltipY = pos.y;
     },
     hideTooltip() {
       this.tooltipVisible = false;
@@ -1218,27 +1159,117 @@ export default {
       }
     },
     zoomIn() {
-      this.zoomLevel = Math.min(this.zoomLevel * 1.3, 5);
+      if (this.d3Zoom && this.$refs.geneSvg) {
+        const svg = d3.select(this.$refs.geneSvg);
+
+        // Get current transform
+        const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
+
+        // Calculate new scale
+        const newScale = Math.min(currentTransform.k * 1.3, 10);
+
+        // Viewport center in screen coordinates
+        const viewportCenterX = this.svgWidth / 2;
+        const viewportCenterY = this.dynamicSvgHeight / 2;
+
+        // Calculate the point in data coordinates that's currently at viewport center
+        // currentTransform: x' = k * x + tx, so x = (x' - tx) / k
+        const dataCenterX = (viewportCenterX - currentTransform.x) / currentTransform.k;
+        const dataCenterY = (viewportCenterY - currentTransform.y) / currentTransform.k;
+
+        // New transform: keep the same data point at viewport center with new scale
+        // viewportCenterX = newScale * dataCenterX + newTx
+        // newTx = viewportCenterX - newScale * dataCenterX
+        const newTx = viewportCenterX - newScale * dataCenterX;
+        const newTy = viewportCenterY - newScale * dataCenterY;
+
+        const transform = d3.zoomIdentity.translate(newTx, newTy).scale(newScale);
+
+        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
+      }
     },
     zoomOut() {
-      this.zoomLevel = Math.max(this.zoomLevel / 1.3, 1);
+      if (this.d3Zoom && this.$refs.geneSvg) {
+        const svg = d3.select(this.$refs.geneSvg);
+
+        // Get current transform
+        const currentTransform = d3.zoomTransform(this.$refs.geneSvg);
+
+        // Calculate new scale
+        const newScale = Math.max(currentTransform.k / 1.3, 1);
+
+        // Viewport center in screen coordinates
+        const viewportCenterX = this.svgWidth / 2;
+        const viewportCenterY = this.dynamicSvgHeight / 2;
+
+        // Calculate the point in data coordinates that's currently at viewport center
+        const dataCenterX = (viewportCenterX - currentTransform.x) / currentTransform.k;
+        const dataCenterY = (viewportCenterY - currentTransform.y) / currentTransform.k;
+
+        // New transform: keep the same data point at viewport center with new scale
+        const newTx = viewportCenterX - newScale * dataCenterX;
+        const newTy = viewportCenterY - newScale * dataCenterY;
+
+        const transform = d3.zoomIdentity.translate(newTx, newTy).scale(newScale);
+
+        svg.transition().duration(300).call(this.d3Zoom.transform, transform);
+      }
     },
     resetZoom() {
-      this.zoomLevel = 1;
-      this.zoomedExon = null; // Also reset exon zoom
+      this.zoomedExon = null; // Reset exon zoom
+      if (this.d3Zoom && this.$refs.geneSvg) {
+        const svg = d3.select(this.$refs.geneSvg);
+        this.d3Zoom.transform(svg.transition().duration(500), d3.zoomIdentity);
+      }
+    },
+    initializeD3Zoom() {
+      if (!this.$refs.geneSvg) return;
+
+      const svg = d3.select(this.$refs.geneSvg);
+      const g = svg.select('#zoom-group');
+
+      // Create zoom behavior with constraints
+      this.d3Zoom = d3
+        .zoom()
+        .scaleExtent([1, 10]) // Min 1x, Max 10x zoom
+        .on('zoom', (event) => {
+          this.d3Transform = event.transform;
+          g.attr('transform', event.transform);
+          this.zoomLevel = event.transform.k; // Update zoomLevel for display
+        });
+
+      // Apply zoom behavior to SVG
+      svg.call(this.d3Zoom);
+
+      // Constrain panning to prevent scrolling off-canvas
+      this.d3Zoom.translateExtent([
+        [0, 0],
+        [this.svgWidth, this.dynamicSvgHeight],
+      ]);
+    },
+    handleKeyboardShortcuts(event) {
+      // Only trigger if focused on body or SVG (not in input fields)
+      const target = event.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        this.zoomIn();
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        this.zoomOut();
+      } else if (event.key === '0') {
+        event.preventDefault();
+        this.resetZoom();
+      }
     },
     formatCNVSize() {
       if (!this.cnvVariants.length) return '';
       const cnv = this.cnvVariants[0];
-      const size = cnv.end - cnv.start;
-      if (size >= 1000000) {
-        return `${(size / 1000000).toFixed(2)} Mb`;
-      }
-      return `${(size / 1000).toFixed(0)} kb`;
+      return formatSize(cnv.end - cnv.start);
     },
     formatRegionSize() {
-      const size = this.chr17q12Region.size;
-      return `${(size / 1000000).toFixed(1)} Mb`;
+      return formatSize(this.chr17q12Region.size);
     },
   },
 };

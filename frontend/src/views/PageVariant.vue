@@ -227,6 +227,12 @@
                   Protein View
                 </v-tab>
 
+                <!-- 3D Structure tab (only for SNVs/indels) -->
+                <v-tab v-if="!isCNV(variant)" value="structure3d">
+                  <v-icon left> mdi-cube-outline </v-icon>
+                  3D Structure
+                </v-tab>
+
                 <!-- Region View tab (only for CNVs) -->
                 <v-tab v-if="isCNV(variant)" value="region">
                   <v-icon left> mdi-map-marker-radius </v-icon>
@@ -248,6 +254,15 @@
                 <!-- Protein View: Only for SNVs/indels -->
                 <v-window-item value="protein">
                   <HNF1BProteinVisualization
+                    :variants="allVariants"
+                    :current-variant-id="$route.params.variant_id"
+                    @variant-clicked="navigateToVariant"
+                  />
+                </v-window-item>
+
+                <!-- 3D Structure View: Only for SNVs/indels -->
+                <v-window-item value="structure3d">
+                  <ProteinStructure3D
                     :variants="allVariants"
                     :current-variant-id="$route.params.variant_id"
                     @variant-clicked="navigateToVariant"
@@ -323,6 +338,7 @@
 import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
+import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
 import {
   extractCNotation,
   extractPNotation,
@@ -338,6 +354,7 @@ export default {
   components: {
     HNF1BGeneVisualization,
     HNF1BProteinVisualization,
+    ProteinStructure3D,
   },
   data() {
     return {

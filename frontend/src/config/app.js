@@ -67,7 +67,8 @@ export const VIZ_CONFIG = {
   DEFAULT_SVG_WIDTH: 1000,
 
   /**
-   * Gene coordinate range for HNF1B (GRCh38/hg38).
+   * HNF1B gene coordinates (GRCh38).
+   * Used for gene visualizations and variant positioning.
    */
   HNF1B_GENE: {
     chromosome: '17',

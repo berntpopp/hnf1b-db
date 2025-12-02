@@ -13,7 +13,7 @@
 
 import { ref } from 'vue';
 import { debounce } from 'lodash-es';
-import apiClient from '@/api';
+import { apiClient } from '@/api';
 
 export function useHPOAutocomplete() {
   const terms = ref([]);

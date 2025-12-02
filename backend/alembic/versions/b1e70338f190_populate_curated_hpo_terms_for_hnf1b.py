@@ -5,13 +5,14 @@ Revises: f74b2759f2a9
 Create Date: 2025-11-14 22:26:44.767241
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'b1e70338f190'
-down_revision: Union[str, Sequence[str], None] = 'f74b2759f2a9'
+revision: str = "b1e70338f190"
+down_revision: Union[str, Sequence[str], None] = "f74b2759f2a9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

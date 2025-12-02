@@ -3,15 +3,15 @@
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-green-lighten-5">
       <v-icon left color="success" size="small"> mdi-medical-bag </v-icon>
-      Phenotypic Features ({{ features.length }})
+      Phenotypic Features ({{ presentFeatures.length }})
     </v-card-title>
     <v-card-text class="pa-2">
-      <v-alert v-if="features.length === 0" type="info" density="compact">
+      <v-alert v-if="presentFeatures.length === 0" type="info" density="compact">
         No phenotypic features recorded
       </v-alert>
 
       <v-list v-else>
-        <v-list-item v-for="(feature, index) in features" :key="index" class="mb-2">
+        <v-list-item v-for="(feature, index) in presentFeatures" :key="index" class="mb-2">
           <template #prepend>
             <v-chip
               :href="getHpoUrl(feature.type.id)"
@@ -63,6 +63,13 @@ export default {
       default: () => [],
     },
   },
+  computed: {
+    // Filter out excluded phenotypes (those marked as "No" or absent)
+    // Only show features that are actually present (excluded !== true)
+    presentFeatures() {
+      return this.features.filter((feature) => !feature.excluded);
+    },
+  },
   methods: {
     getHpoUrl(hpoId) {
       // Convert HP:0003774 to https://hpo.jax.org/app/browse/term/HP:0003774
@@ -73,14 +80,25 @@ export default {
     },
 
     formatOnset(onset) {
+      // Helper to extract ISO8601 duration from age field
+      const extractAgeDuration = (age) => {
+        if (typeof age === 'string') return age;
+        if (age.iso8601duration) return age.iso8601duration;
+        // age might contain ontologyClass instead of duration (e.g., prenatal onset)
+        if (age.ontologyClass) return null;
+        return null;
+      };
+
       // Handle combined onset (e.g., postnatal + specific age)
       if (onset.ontologyClass && onset.age) {
         const classification = (onset.ontologyClass.label || onset.ontologyClass.id).toLowerCase();
-        // age can be a string "P2Y" or an object {"iso8601duration": "P2Y"}
-        const ageValue =
-          typeof onset.age === 'string' ? onset.age : onset.age.iso8601duration || onset.age;
-        const formattedAge = this.formatISO8601Duration(ageValue);
-        return `${classification}, reported: age ${formattedAge}`;
+        const ageDuration = extractAgeDuration(onset.age);
+        if (ageDuration) {
+          const formattedAge = this.formatISO8601Duration(ageDuration);
+          return `${classification}, reported: age ${formattedAge}`;
+        }
+        // age contains ontologyClass but no duration - just show the classification
+        return classification;
       }
 
       // Handle age-only onset (string format)
@@ -90,9 +108,15 @@ export default {
 
       // Handle age object
       if (onset.age) {
-        const ageValue =
-          typeof onset.age === 'string' ? onset.age : onset.age.iso8601duration || onset.age;
-        return `reported: age ${this.formatISO8601Duration(ageValue)}`;
+        const ageDuration = extractAgeDuration(onset.age);
+        if (ageDuration) {
+          return `reported: age ${this.formatISO8601Duration(ageDuration)}`;
+        }
+        // age contains ontologyClass instead of duration
+        if (onset.age.ontologyClass) {
+          return onset.age.ontologyClass.label || onset.age.ontologyClass.id;
+        }
+        return 'Unknown';
       }
 
       // Handle ontology class only (prenatal/postnatal without specific age)

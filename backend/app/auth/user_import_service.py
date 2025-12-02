@@ -102,9 +102,7 @@ class UserImportService:
         Returns:
             User object if found, None otherwise
         """
-        result = await db.execute(
-            select(User).where(User.username == username.strip())
-        )
+        result = await db.execute(select(User).where(User.username == username.strip()))
         return result.scalar_one_or_none()
 
     @staticmethod

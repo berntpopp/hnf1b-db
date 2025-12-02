@@ -37,7 +37,7 @@
  */
 
 import { ref } from 'vue';
-import apiClient from '@/api';
+import { apiClient } from '@/api';
 
 export function usePhenopacketVocabularies() {
   // Vocabulary data refs

@@ -12,6 +12,7 @@ from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.extractors import PhenotypeExtractor, VariantExtractor
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
+from migration.phenopackets.reviewer_mapper import ReviewerMapper
 
 
 class PhenopacketBuilder:
@@ -25,15 +26,18 @@ class PhenopacketBuilder:
         self,
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
+        reviewer_mapper: Optional[ReviewerMapper] = None,
     ):
         """Initialize phenopacket builder.
 
         Args:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
+            reviewer_mapper: Reviewer name mapper for resolving emails to full names
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
+        self.reviewer_mapper = reviewer_mapper
         self.age_parser = AgeParser()
         self.mondo_mappings = self._init_mondo_mappings()
 
@@ -127,7 +131,9 @@ class PhenopacketBuilder:
         if reviewer_email and not pd.isna(reviewer_email):
             phenopacket["_migration_metadata"] = {
                 "reviewer_email": str(reviewer_email).strip(),
-                "sheet_row_number": first_row.name if hasattr(first_row, "name") else None,
+                "sheet_row_number": first_row.name
+                if hasattr(first_row, "name")
+                else None,
                 "import_date": datetime.utcnow().isoformat(),
             }
 
@@ -137,23 +143,18 @@ class PhenopacketBuilder:
         """Build subject section.
 
         When individual appears in multiple studies (multiple rows), this method:
-        - Uses report_id from first row as primary subject ID (sequential IDs without gaps)
-        - Stores individual_id, other report_ids, and IndividualIdentifier as alternateIds
+        - Uses individual_id as primary subject ID (unique identifier for the person)
+        - Stores all report_ids and IndividualIdentifier values as alternateIds
         - Prioritizes non-UNKNOWN_SEX values across all rows
         - Uses latest reported age
 
         Example:
-            If individual appears in 2 studies with report_id 1 and 940:
-            - subject.id = "1" (first report_id)
-            - alternateIds = ["1", "940", "IndividualIdentifier value"]
+            If individual HNF1B-001 appears in 2 studies with report_id 5 and 120:
+            - subject.id = "HNF1B-001" (individual_id)
+            - alternateIds = ["5", "120", "OriginalID1", "OriginalID2"]
         """
-        first_row = rows.iloc[0]
-
-        # Use report_id as primary subject ID (gives sequential IDs: 1, 2, 3, 4...)
-        # Falls back to individual_id if report_id not available
-        primary_id = self._safe_value(first_row.get("report_id"))
-        if not primary_id:
-            primary_id = individual_id
+        # Use individual_id as primary subject ID (unique identifier for the person)
+        primary_id = individual_id
 
         # Prioritize non-UNKNOWN sex from any row
         sex = "UNKNOWN_SEX"
@@ -164,16 +165,11 @@ class PhenopacketBuilder:
                 break  # Use first non-UNKNOWN value found
 
         # Collect all unique alternate IDs:
-        # 1. individual_id (for deduplication tracking)
-        # 2. Other report_ids (if patient in multiple studies)
-        # 3. IndividualIdentifier (original source identifier)
+        # 1. All report_ids (study-specific identifiers)
+        # 2. All IndividualIdentifier values (original source identifiers)
         alternate_ids = set()
 
-        # Add individual_id as alternate (links duplicate reports)
-        if individual_id != primary_id:
-            alternate_ids.add(str(individual_id))
-
-        # Add all report_ids from all rows (including first one for completeness)
+        # Add all report_ids from all rows
         for _, row in rows.iterrows():
             report_id = self._safe_value(row.get("report_id"))
             if report_id:
@@ -185,9 +181,6 @@ class PhenopacketBuilder:
             if identifier:
                 alternate_ids.add(identifier)
 
-        # Remove primary_id from alternates if it was added
-        alternate_ids.discard(str(primary_id))
-
         subject: Dict[str, Any] = {
             "id": str(primary_id),
             "sex": sex,
@@ -196,10 +189,28 @@ class PhenopacketBuilder:
         if alternate_ids:
             subject["alternateIds"] = sorted(list(alternate_ids))
 
-        # Use latest reported age (from most recent study)
-        age_reported = self.age_parser.parse_age(first_row.get("AgeReported"))
-        if age_reported:
-            subject["timeAtLastEncounter"] = age_reported
+        # Use latest (maximum) reported age across all rows
+        # This captures the most recent follow-up information for patients
+        # who appear in multiple publications/studies
+        latest_age_reported = None
+        for _, row in rows.iterrows():
+            age_reported = self.age_parser.parse_age(row.get("AgeReported"))
+            if age_reported:
+                # Compare ISO8601 durations by converting to months
+                if latest_age_reported is None:
+                    latest_age_reported = age_reported
+                else:
+                    # Extract duration strings for comparison
+                    current_iso = age_reported.get("iso8601duration", "")
+                    latest_iso = latest_age_reported.get("iso8601duration", "")
+                    if current_iso and latest_iso:
+                        if self._iso8601_to_months(current_iso) > self._iso8601_to_months(
+                            latest_iso
+                        ):
+                            latest_age_reported = age_reported
+
+        if latest_age_reported:
+            subject["timeAtLastEncounter"] = latest_age_reported
 
         return subject
 
@@ -207,22 +218,43 @@ class PhenopacketBuilder:
         """Merge phenotypes from multiple rows.
 
         When same phenotype appears in multiple studies:
+        - Present (excluded=False) takes priority over absent (excluded=True)
+          (clinical principle: you can't "unobserve" a finding)
         - Keeps earliest onset (most informative temporal data)
         - Merges evidence from all publications
         - Sorts phenotypes chronologically by onset age
         """
-        phenotype_dict = {}
+        phenotype_dict: Dict[str, Dict[str, Any]] = {}
 
         for _, row in rows.iterrows():
             phenotypes = self.phenotype_extractor.extract(row)
             for pheno in phenotypes:
                 pheno_id = pheno["type"]["id"]
+                new_excluded = pheno.get("excluded", False)
 
                 if pheno_id not in phenotype_dict:
                     phenotype_dict[pheno_id] = pheno
                 else:
-                    # Merge evidence from different publications
                     existing_pheno = phenotype_dict[pheno_id]
+                    existing_excluded = existing_pheno.get("excluded", False)
+
+                    # Priority rule: present (excluded=False) trumps absent (excluded=True)
+                    # If existing is absent but new is present, replace with present
+                    if existing_excluded and not new_excluded:
+                        # New phenotype is present, existing was absent - use new as base
+                        # but preserve evidence from the absent report
+                        old_evidence = existing_pheno.get("evidence", [])
+                        phenotype_dict[pheno_id] = pheno
+                        existing_pheno = phenotype_dict[pheno_id]
+                        # Merge old evidence into the new (present) phenotype
+                        if old_evidence:
+                            if "evidence" not in existing_pheno:
+                                existing_pheno["evidence"] = []
+                            for old_ev in old_evidence:
+                                if old_ev not in existing_pheno["evidence"]:
+                                    existing_pheno["evidence"].append(old_ev)
+
+                    # Merge evidence from different publications
                     new_evidence = pheno.get("evidence", [])
                     if new_evidence:
                         if "evidence" not in existing_pheno:
@@ -241,14 +273,16 @@ class PhenopacketBuilder:
                                 existing_pheno["evidence"].append(new_ev)
 
                     # Keep earliest onset when same phenotype reported at different ages
-                    existing_onset = existing_pheno.get("onset")
-                    new_onset = pheno.get("onset")
+                    # Only update onset if the phenotype is present (not excluded)
+                    if not existing_pheno.get("excluded", False):
+                        existing_onset = existing_pheno.get("onset")
+                        new_onset = pheno.get("onset")
 
-                    if new_onset and (
-                        not existing_onset
-                        or self._is_earlier_onset(new_onset, existing_onset)
-                    ):
-                        existing_pheno["onset"] = new_onset
+                        if new_onset and (
+                            not existing_onset
+                            or self._is_earlier_onset(new_onset, existing_onset)
+                        ):
+                            existing_pheno["onset"] = new_onset
 
         # Sort phenotypes chronologically (earliest onset first)
         phenotypes_list = list(phenotype_dict.values())
@@ -532,37 +566,92 @@ class PhenopacketBuilder:
             "phenopacketSchemaVersion": "2.0.0",
         }
 
-        # Add update history
-        if len(rows) > 1:
-            updates = []
-            for _, row in rows.iterrows():
-                timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
-                if timestamp:
-                    updates.append(
-                        {
-                            "timestamp": timestamp,
-                            "updatedBy": f"Publication: {row.get('Publication', 'Unknown')}",
-                            "comment": f"Data from {row.get('Publication', 'Unknown source')}",
-                        }
-                    )
-            if updates:
-                updates.sort(key=lambda x: x["timestamp"])
-                metadata["updates"] = updates
+        # Build update history with per-publication metadata
+        # This preserves comments and reviewers from ALL publications
+        updates = []
+        for _, row in rows.iterrows():
+            timestamp = self.age_parser.parse_review_date(row.get("ReviewDate"))
+            if timestamp:
+                pub_id = self._safe_value(row.get("Publication"))
+                update_entry = {
+                    "timestamp": timestamp,
+                    "updatedBy": f"Publication: {pub_id or 'Unknown'}",
+                }
 
-        # Add publication references
+                # Add publication-specific comment if available
+                row_comment = self._safe_value(row.get("Comment"))
+                if row_comment:
+                    update_entry["comment"] = row_comment
+                else:
+                    update_entry["comment"] = f"Data from {pub_id or 'Unknown source'}"
+
+                # Add publication-specific reviewer if available
+                row_reviewer_email = self._safe_value(row.get("ReviewBy"))
+                if row_reviewer_email:
+                    if self.reviewer_mapper:
+                        row_reviewer_name = self.reviewer_mapper.get_full_name(
+                            row_reviewer_email
+                        )
+                        update_entry["reviewer"] = (
+                            row_reviewer_name or row_reviewer_email
+                        )
+                    else:
+                        update_entry["reviewer"] = row_reviewer_email
+
+                # Add publication ID for easy reference
+                if pub_id:
+                    update_entry["publication"] = pub_id
+
+                updates.append(update_entry)
+
+        if updates:
+            updates.sort(key=lambda x: x["timestamp"])
+            metadata["updates"] = updates
+
+            # Set top-level comment and reviewer from most recent publication
+            most_recent_update = updates[-1]  # Last item after sorting
+            if "comment" in most_recent_update:
+                metadata["comment"] = most_recent_update["comment"]
+            if "reviewer" in most_recent_update:
+                metadata["reviewer"] = most_recent_update["reviewer"]
+        else:
+            # Fallback for single publication with no ReviewDate
+            first_row = rows.iloc[0]
+            comment = self._safe_value(first_row.get("Comment"))
+            if comment:
+                metadata["comment"] = comment
+
+            reviewer_email = self._safe_value(first_row.get("ReviewBy"))
+            if reviewer_email and self.reviewer_mapper:
+                reviewer_name = self.reviewer_mapper.get_full_name(reviewer_email)
+                metadata["reviewer"] = reviewer_name or reviewer_email
+            elif reviewer_email:
+                metadata["reviewer"] = reviewer_email
+
+        # Add publication references with publication type
         if self.publication_mapper:
             external_refs = []
-            pub_ids = set()
+            pub_data = {}  # Map pub_id -> (pub_ref, publication_type)
 
             for _, row in rows.iterrows():
                 pub_val = row.get("Publication")
                 if pub_val and pd.notna(pub_val):
-                    pub_ids.add(str(pub_val))
+                    pub_id = str(pub_val)
+                    if pub_id not in pub_data:
+                        pub_ref = self.publication_mapper.create_publication_reference(
+                            pub_id
+                        )
+                        if pub_ref:
+                            # Get PublicationType from this row
+                            pub_type = self._safe_value(row.get("PublicationType"))
+                            pub_data[pub_id] = (pub_ref, pub_type)
 
-            for pub_id in sorted(pub_ids):
-                pub_ref = self.publication_mapper.create_publication_reference(pub_id)
-                if pub_ref:
-                    external_refs.append(pub_ref)
+            for pub_id in sorted(pub_data.keys()):
+                pub_ref, pub_type = pub_data[pub_id]
+                # Add publication type as 'reference' field if available
+                if pub_type:
+                    pub_ref["reference"] = pub_type
+                external_refs.append(pub_ref)
 
             if external_refs:
                 metadata["externalReferences"] = external_refs

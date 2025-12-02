@@ -61,6 +61,10 @@
               <v-icon start> mdi-dna </v-icon>
               Gene View
             </v-tab>
+            <v-tab value="structure3d">
+              <v-icon start> mdi-cube-outline </v-icon>
+              3D Structure
+            </v-tab>
             <v-tab value="region">
               <v-icon start> mdi-map-marker-radius </v-icon>
               17q12 Region
@@ -93,6 +97,19 @@
               </v-card-text>
             </v-window-item>
 
+            <!-- 3D Structure View Tab -->
+            <v-window-item value="structure3d">
+              <v-card-text>
+                <ProteinStructure3D
+                  v-if="snvVariantsLoaded"
+                  :variants="snvVariants"
+                  :show-all-variants="true"
+                  @variant-clicked="navigateToVariant"
+                />
+                <v-skeleton-loader v-else type="image" height="400" />
+              </v-card-text>
+            </v-window-item>
+
             <!-- CNV Region View Tab -->
             <v-window-item value="region">
               <v-card-text>
@@ -118,6 +135,7 @@ import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
+import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
 import { getSummaryStats, getVariants } from '@/api/index.js';
 import { API_CONFIG } from '@/config/app';
 
@@ -135,6 +153,7 @@ export default {
     SearchCard,
     HNF1BGeneVisualization,
     HNF1BProteinVisualization,
+    ProteinStructure3D,
   },
   setup() {
     const router = useRouter();
@@ -345,8 +364,8 @@ export default {
         cnvVariantsLoaded: cnvVariantsLoaded.value,
       });
 
-      if (tab === 'protein' || tab === 'gene') {
-        fetchSNVVariants(); // Protein and gene views use SNVs
+      if (tab === 'protein' || tab === 'gene' || tab === 'structure3d') {
+        fetchSNVVariants(); // Protein, gene, and 3D views use SNVs
       } else if (tab === 'region') {
         fetchCNVVariants(); // Region view uses CNVs
       }

@@ -43,10 +43,19 @@ export default {
       type: Number,
       default: 50,
     },
-    /** Color scheme for the donut slices */
+    /** Color scheme for the donut slices (fallback when colorMap not provided) */
     colorScheme: {
       type: Array,
       default: () => [...d3.schemeCategory10, ...d3.schemePaired],
+    },
+    /**
+     * Color map for semantic coloring (label -> color).
+     * When provided, labels are mapped to specific colors.
+     * Example: { 'Pathogenic': '#D32F2F', 'Benign': '#388E3C' }
+     */
+    colorMap: {
+      type: Object,
+      default: null,
     },
     /**
      * If true, shows an export button that lets the user download the chart as PNG.
@@ -119,7 +128,15 @@ export default {
         this.chartData.total_count || dataEntries.reduce((sum, [, value]) => sum + value, 0);
 
       // Set up the color scale.
-      const color = d3.scaleOrdinal().domain(Object.keys(dataObj)).range(this.colorScheme);
+      // Use colorMap for semantic coloring if provided, otherwise fall back to colorScheme
+      const colorMap = this.colorMap;
+      const fallbackColor = d3.scaleOrdinal().domain(Object.keys(dataObj)).range(this.colorScheme);
+      const color = (label) => {
+        if (colorMap && colorMap[label]) {
+          return colorMap[label];
+        }
+        return fallbackColor(label);
+      };
 
       // Compute the positions for each slice.
       const pie = d3
