@@ -1,0 +1,75 @@
+# frontend/Dockerfile.prod
+# syntax=docker/dockerfile:1.11
+# Production Dockerfile for HNF1B Database Frontend
+
+# ============================================================================
+# ARGUMENTS
+# ============================================================================
+ARG NODE_VERSION=20-alpine3.20
+ARG NGINX_VERSION=1.27-alpine3.20-slim
+ARG VITE_API_URL
+
+# ============================================================================
+# STAGE 1: Dependencies
+# ============================================================================
+FROM node:${NODE_VERSION} AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+
+# Use --ignore-scripts for security (prevents postinstall attacks)
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --ignore-scripts
+
+# ============================================================================
+# STAGE 2: Builder
+# ============================================================================
+FROM node:${NODE_VERSION} AS builder
+
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+RUN npm run build && \
+    ls -la dist/
+
+# ============================================================================
+# STAGE 3: Runtime - nginx-unprivileged
+# ============================================================================
+FROM nginxinc/nginx-unprivileged:${NGINX_VERSION} AS runtime
+
+# OCI standard labels
+LABEL org.opencontainers.image.title="HNF1B Database Frontend" \
+      org.opencontainers.image.description="Vue.js frontend for HNF1B clinical database" \
+      org.opencontainers.image.vendor="HNF1B Database" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/berntpopp/hnf1b-db"
+
+# Copy nginx configuration
+COPY --chown=nginx:nginx nginx/nginx.prod.conf /etc/nginx/nginx.conf
+
+# Copy built assets
+COPY --chown=nginx:nginx --from=builder /app/dist /usr/share/nginx/html
+
+# Apply security updates (need root temporarily)
+USER root
+RUN apk update && apk upgrade --no-cache && \
+    rm -f /etc/nginx/conf.d/*.conf.default
+USER nginx
+
+# Health check - use correct wget flags for Alpine
+# --no-verbose: Suppress output that can interfere with exit codes
+# --tries=1: Let Docker handle retries
+# 127.0.0.1: Alpine lacks proper localhost DNS resolution
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1
+
+EXPOSE 8080
+
+ENTRYPOINT ["nginx"]
+CMD ["-g", "daemon off;"]

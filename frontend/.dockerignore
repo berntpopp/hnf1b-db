@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log*
+
+# Build outputs (we rebuild in container)
+dist
+.vite
+
+# IDE
+.idea
+.vscode
+
+# Local
+.env
+.env.local
+
+# Tests
+tests/
+*.test.js
+*.spec.js
+coverage/
+
+# Benchmarks
+.benchmarks
+
+# Husky hooks (not needed in container)
+.husky
+
+# Cache
+.pytest_cache

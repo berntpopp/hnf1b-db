@@ -1,0 +1,223 @@
+# docker-compose.npm.yml
+# Production deployment for Nginx Proxy Manager integration
+#
+# Usage:
+#   docker compose -f docker-compose.npm.yml --env-file .env.docker up -d
+#
+# Prerequisites:
+#   1. NPM network must exist: docker network create npm_default
+#   2. .env.docker must be configured from .env.docker.template
+
+name: hnf1b-db
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  hnf1b_db:
+    image: postgres:15-alpine
+    container_name: hnf1b_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hnf1b_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-hnf1b_phenopackets}
+    volumes:
+      - hnf1b_postgres_data:/var/lib/postgresql/data
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hnf1b_user} -d ${POSTGRES_DB:-hnf1b_phenopackets}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  hnf1b_cache:
+    image: redis:7-alpine
+    container_name: hnf1b_cache
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - hnf1b_redis_data:/data
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # FastAPI Backend
+  # ============================================
+  hnf1b_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: hnf1b-db/api:${IMAGE_TAG:-latest}
+    container_name: hnf1b_api
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,size=100M,mode=1777
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hnf1b_user}:${POSTGRES_PASSWORD}@hnf1b_db:5432/${POSTGRES_DB:-hnf1b_phenopackets}
+      REDIS_URL: redis://hnf1b_cache:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      DEBUG: "false"
+      LOG_LEVEL: ${LOG_LEVEL_API:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://hnf1b.org,https://www.hnf1b.org}
+      # Data import configuration
+      ENABLE_DATA_IMPORT: ${ENABLE_DATA_IMPORT:-false}
+      DATA_IMPORT_SOURCE: ${DATA_IMPORT_SOURCE:-}
+    depends_on:
+      hnf1b_db:
+        condition: service_healthy
+      hnf1b_cache:
+        condition: service_healthy
+    networks:
+      - hnf1b_internal
+      - npm_proxy_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================
+  # Vue.js Frontend
+  # ============================================
+  hnf1b_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.hnf1b.org/api/v2}
+        BUILDKIT_INLINE_CACHE: 1
+    image: hnf1b-db/frontend:${IMAGE_TAG:-latest}
+    container_name: hnf1b_frontend
+    restart: unless-stopped
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101,size=50M,mode=0755
+      - /var/run:uid=101,gid=101,size=10M,mode=0755
+      - /tmp:uid=101,gid=101,size=10M,mode=1777
+    depends_on:
+      hnf1b_api:
+        condition: service_healthy
+    networks:
+      - hnf1b_internal
+      - npm_proxy_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  hnf1b_internal:
+    name: hnf1b_internal
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16  # Explicit subnet to avoid conflicts
+
+  npm_proxy_network:
+    name: ${NPM_SHARED_NETWORK_NAME:-npm_default}
+    external: true
+
+# ============================================
+# Volumes - CRITICAL FOR DATA PERSISTENCE
+# ============================================
+volumes:
+  hnf1b_postgres_data:
+    name: hnf1b_postgres_data
+    # Data persists across container restarts
+    # Use 'docker compose down -v' to remove (DATA LOSS!)
+
+  hnf1b_redis_data:
+    name: hnf1b_redis_data
+    # Cache data - can be rebuilt if lost
