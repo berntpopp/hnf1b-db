@@ -203,9 +203,9 @@ export default {
         })
       );
 
-      // Load PDB structure
+      // Load PDB structure (served locally for performance)
       nglStructureComponent = markRaw(
-        await nglStage.loadFile('https://www.ebi.ac.uk/pdbe/entry-files/2h8r.cif', {
+        await nglStage.loadFile('/2h8r.cif', {
           defaultRepresentation: false,
           ext: 'cif',
         })
