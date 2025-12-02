@@ -40,8 +40,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.14.6",
-    "mypy==1.18.2",
+    "ruff==0.14.7",
+    "mypy==1.19.0",
     "types-jsonschema>=4.25.1.20250822",
 ]
 test = [

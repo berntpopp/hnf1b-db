@@ -5,8 +5,8 @@
 -r requirements.txt
 
 # Development tools (from [dependency-groups.dev])
-ruff==0.14.6
-mypy==1.18.2
+ruff==0.14.7
+mypy==1.19.0
 
 # Testing (from [dependency-groups.test])  
 pytest==9.0.1
