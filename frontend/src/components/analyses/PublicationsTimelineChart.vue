@@ -179,6 +179,11 @@ export default {
             error: error.message,
           });
         }
+
+        // Add delay between batches to respect PubMed rate limits (3 req/sec without API key)
+        if (i + batchSize < pmids.length) {
+          await new Promise((resolve) => setTimeout(resolve, 350));
+        }
       }
 
       // Add years to publications
