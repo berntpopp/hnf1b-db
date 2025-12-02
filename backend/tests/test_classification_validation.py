@@ -258,6 +258,10 @@ class TestDistributionReasonableness:
 
         total = sum(counts.values())
 
+        # Skip test if no variants in database
+        if total == 0:
+            pytest.skip("No variants found in database")
+
         print("\n=== Classification Distribution ===")
         print(f"Truncating: {truncating_count} ({truncating_count / total * 100:.1f}%)")
         print(
