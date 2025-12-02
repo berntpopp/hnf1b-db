@@ -893,9 +893,9 @@ export default {
 
       // Convert hex color string to RGB array
       const colorHex = lineCoords.color.replace('#', '');
-      const r = parseInt(colorHex.substr(0, 2), 16) / 255;
-      const g = parseInt(colorHex.substr(2, 2), 16) / 255;
-      const b = parseInt(colorHex.substr(4, 2), 16) / 255;
+      const r = parseInt(colorHex.substring(0, 2), 16) / 255;
+      const g = parseInt(colorHex.substring(2, 4), 16) / 255;
+      const b = parseInt(colorHex.substring(4, 6), 16) / 255;
 
       // Add cylinder for the line
       shape.addCylinder(
