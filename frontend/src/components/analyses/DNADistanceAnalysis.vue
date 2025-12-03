@@ -84,7 +84,7 @@
 import * as NGL from 'ngl';
 import { markRaw } from 'vue';
 import { getVariants } from '@/api';
-import { extractPNotation } from '@/utils/hgvs';
+import { extractPNotation, extractCNotation } from '@/utils/hgvs';
 import {
   DNADistanceCalculator,
   STRUCTURE_START,
@@ -175,11 +175,11 @@ export default {
         // 5. Mark loading complete
         this.loading = false;
 
-        window.logService.info('DNA distance analysis complete', {
+        window.logService.info('DNA distance analysis complete (missense only)', {
           totalVariants: this.variants.length,
-          inStructure: this.totalVariantsInStructure,
-          pathogenicCount: this.pathogenicDistances.length,
-          vusCount: this.vusDistances.length,
+          missenseInStructure: this.totalVariantsInStructure,
+          pathogenicMissense: this.pathogenicDistances.length,
+          vusMissense: this.vusDistances.length,
         });
       } catch (err) {
         window.logService.error('Failed to load DNA distance analysis', { error: err.message });
@@ -220,6 +220,15 @@ export default {
       const variantsWithDistances = [];
 
       for (const variant of this.variants) {
+        // Filter for missense variants only
+        // Truncating variants (nonsense, frameshift) eliminate the residue entirely,
+        // so measuring their "distance to DNA" is not biologically meaningful.
+        // Only missense variants, which substitute one amino acid for another,
+        // are relevant for DNA-binding affinity analysis.
+        if (!this.isMissenseVariant(variant)) {
+          continue;
+        }
+
         const aaPosition = this.extractAAPosition(variant);
         if (!aaPosition || aaPosition < STRUCTURE_START || aaPosition > STRUCTURE_END) {
           continue;
@@ -249,6 +258,23 @@ export default {
       this.vusDistances = variantsWithDistances.filter((v) =>
         matchesPathogenicityCategory(v.classificationVerdict, 'VUS')
       );
+
+      // Debug logging to track variant counts
+      window.logService.info('DNA Distance Analysis - Variant counts', {
+        totalVariantsFromAPI: this.variants.length,
+        missenseInStructure: variantsWithDistances.length,
+        pathogenicCount: this.pathogenicDistances.length,
+        vusCount: this.vusDistances.length,
+      });
+
+      // Log details of VUS variants for debugging
+      window.logService.debug('VUS variants included in analysis', {
+        vusVariants: this.vusDistances.map((v) => ({
+          protein: v.protein,
+          aaPosition: v.aaPosition,
+          classification: v.classificationVerdict,
+        })),
+      });
 
       // Count categories
       this.pathogenicCategories = { close: 0, medium: 0, far: 0 };
@@ -288,6 +314,57 @@ export default {
       }
 
       return null;
+    },
+
+    /**
+     * Check if a variant is a missense variant (amino acid substitution).
+     * Missense variants change one amino acid to another without causing
+     * truncation (nonsense), frameshift, or splicing effects.
+     *
+     * Pattern: p.Arg177Gln (3-letter code to 3-letter code)
+     * Excludes:
+     *   - Nonsense (Ter, *): p.Arg177Ter, p.Arg177*
+     *   - Frameshift (fs): p.Arg177ProfsTer5
+     *   - Splice variants (from c. notation): c.544+1G>A
+     *   - In-frame deletions/insertions: p.Arg177del, p.Arg177_Gln180del
+     *
+     * @param {Object} variant - Variant object with protein and transcript fields
+     * @returns {boolean} True if variant is missense
+     */
+    isMissenseVariant(variant) {
+      if (!variant.protein) return false;
+
+      const pNotation = extractPNotation(variant.protein);
+      if (!pNotation || pNotation === '-') return false;
+
+      // Exclude nonsense variants (Ter or *)
+      if (/Ter|[*]/.test(pNotation)) return false;
+
+      // Exclude frameshift variants
+      if (/fs/.test(pNotation)) return false;
+
+      // Exclude deletions, insertions, duplications
+      if (/del|ins|dup/.test(pNotation)) return false;
+
+      // Exclude synonymous/silent variants (same amino acid: p.Arg177Arg or p.Arg177=)
+      if (/p\.([A-Z][a-z]{2})(\d+)\1/.test(pNotation) || /=/.test(pNotation)) return false;
+
+      // Check for splice variants in c. notation
+      if (variant.transcript) {
+        const cNotation = extractCNotation(variant.transcript);
+        if (cNotation && /[+-]\d/.test(cNotation)) return false;
+      }
+
+      // Match missense pattern: p.Arg177Gln (3-letter to different 3-letter)
+      // Must have two different amino acid codes
+      const missenseMatch = pNotation.match(/p\.([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})$/);
+      if (missenseMatch) {
+        const refAA = missenseMatch[1];
+        const altAA = missenseMatch[3];
+        return refAA !== altAA; // Different amino acids = missense
+      }
+
+      return false;
     },
   },
 };
