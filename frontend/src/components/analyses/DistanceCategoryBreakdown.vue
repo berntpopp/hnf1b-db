@@ -1,9 +1,12 @@
 <!-- Distance Category Breakdown for DNA Distance Analysis -->
 <template>
   <v-card variant="outlined" class="h-100">
-    <v-card-title class="text-subtitle-1 py-2 bg-orange-lighten-5">
+    <v-card-title class="text-subtitle-1 py-2 bg-orange-lighten-5 d-flex align-center">
       <v-icon left color="orange" size="small">mdi-chart-donut</v-icon>
-      Distance Categories by Group
+      <span class="flex-grow-1">Distance Categories by Group</span>
+      <button class="export-btn" title="Download as SVG" @click="exportSVG">
+        <span class="export-icon">⬇</span> Export SVG
+      </button>
     </v-card-title>
     <v-card-text>
       <!-- P/LP Distribution -->
@@ -114,6 +117,116 @@ export default {
     };
   },
   methods: {
+    exportSVG() {
+      // Generate SVG programmatically since this component uses HTML/CSS
+      const width = 400;
+      const height = 200;
+      const barHeight = 28;
+      const margin = { top: 40, right: 20, bottom: 60, left: 20 };
+
+      const colors = {
+        close: '#D32F2F',
+        medium: '#FF9800',
+        far: '#4CAF50',
+      };
+
+      // Create SVG content
+      let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="white"/>
+
+  <!-- Title -->
+  <text x="${width / 2}" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">
+    Distance Categories by Group
+  </text>
+
+  <!-- P/LP Label -->
+  <text x="${margin.left}" y="${margin.top + 15}" font-size="12" font-weight="500" fill="#333">
+    Pathogenic / Likely Pathogenic (n=${this.getGroupTotal('pathogenic')})
+  </text>
+
+  <!-- P/LP Bar -->
+  <g transform="translate(${margin.left}, ${margin.top + 22})">`;
+
+      // Add P/LP bars
+      let xOffset = 0;
+      const barWidth = width - margin.left - margin.right;
+      for (const cat of this.categories) {
+        const catWidth = (this.getCategoryWidth('pathogenic', cat) / 100) * barWidth;
+        if (catWidth > 0) {
+          svg += `
+    <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
+          if (this.pathogenicCategories[cat] > 0 && catWidth > 20) {
+            svg += `
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.pathogenicCategories[cat]}</text>`;
+          }
+          xOffset += catWidth;
+        }
+      }
+
+      svg += `
+  </g>
+
+  <!-- VUS Label -->
+  <text x="${margin.left}" y="${margin.top + barHeight + 45}" font-size="12" font-weight="500" fill="#333">
+    Variants of Uncertain Significance (n=${this.getGroupTotal('vus')})
+  </text>
+
+  <!-- VUS Bar -->
+  <g transform="translate(${margin.left}, ${margin.top + barHeight + 52})">`;
+
+      // Add VUS bars
+      xOffset = 0;
+      for (const cat of this.categories) {
+        const catWidth = (this.getCategoryWidth('vus', cat) / 100) * barWidth;
+        if (catWidth > 0) {
+          svg += `
+    <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
+          if (this.vusCategories[cat] > 0 && catWidth > 20) {
+            svg += `
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.vusCategories[cat]}</text>`;
+          }
+          xOffset += catWidth;
+        }
+      }
+
+      // Add legend
+      const legendY = height - 25;
+      svg += `
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(${margin.left}, ${legendY})">
+    <circle cx="8" cy="0" r="5" fill="${colors.close}"/>
+    <text x="18" y="4" font-size="10" fill="#666">Close (&lt;5Å)</text>
+
+    <circle cx="${barWidth / 3 + 8}" cy="0" r="5" fill="${colors.medium}"/>
+    <text x="${barWidth / 3 + 18}" y="4" font-size="10" fill="#666">Medium (5-10Å)</text>
+
+    <circle cx="${(barWidth * 2) / 3 + 8}" cy="0" r="5" fill="${colors.far}"/>
+    <text x="${(barWidth * 2) / 3 + 18}" y="4" font-size="10" fill="#666">Far (≥10Å)</text>
+  </g>
+</svg>`;
+
+      // Create blob and download
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `dna-distance-categories-${timestamp}.svg`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    },
+    getGroupTotal(group) {
+      const categories = group === 'pathogenic' ? this.pathogenicCategories : this.vusCategories;
+      return categories.close + categories.medium + categories.far;
+    },
     getCategoryWidth(group, category) {
       const categories = group === 'pathogenic' ? this.pathogenicCategories : this.vusCategories;
       const total = categories.close + categories.medium + categories.far;
@@ -185,5 +298,33 @@ export default {
 
 .legend-dot.far {
   background-color: #4caf50;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-left: 8px;
+}
+
+.export-btn:hover {
+  background-color: #1565c0;
+}
+
+.export-btn:active {
+  background-color: #0d47a1;
+}
+
+.export-icon {
+  font-size: 11px;
 }
 </style>

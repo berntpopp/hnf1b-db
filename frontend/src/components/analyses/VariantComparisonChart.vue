@@ -1,5 +1,10 @@
 <template>
   <div class="variant-comparison-container">
+    <div class="export-controls">
+      <button class="export-btn" title="Download as SVG" @click="exportSVG">
+        <span class="export-icon">⬇</span> Export SVG
+      </button>
+    </div>
     <div ref="chart" />
   </div>
 </template>
@@ -32,7 +37,7 @@ export default {
     },
     margin: {
       type: Object,
-      default: () => ({ top: 120, right: 30, bottom: 180, left: 80 }),
+      default: () => ({ top: 120, right: 30, bottom: 220, left: 80 }),
     },
   },
   watch: {
@@ -114,6 +119,49 @@ export default {
         const lowerLabel = p.hpo_label.toLowerCase();
         return !ckdStagePatterns.some((pattern) => lowerLabel.includes(pattern));
       });
+    },
+    exportSVG() {
+      const svgElement = this.$refs.chart.querySelector('svg');
+      if (!svgElement) {
+        return;
+      }
+
+      // Clone the SVG to avoid modifying the original
+      const clonedSvg = svgElement.cloneNode(true);
+
+      // Add XML declaration and namespace for standalone SVG
+      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+      // Add white background for better compatibility with publication software
+      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      background.setAttribute('width', '100%');
+      background.setAttribute('height', '100%');
+      background.setAttribute('fill', 'white');
+      clonedSvg.insertBefore(background, clonedSvg.firstChild);
+
+      // Serialize to string
+      const serializer = new XMLSerializer();
+      let svgString = serializer.serializeToString(clonedSvg);
+
+      // Add XML declaration
+      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
+
+      // Create blob and download
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      // Generate filename based on comparison type and filter
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `variant-comparison-${this.comparisonType}-${this.organSystemFilter}-${timestamp}.svg`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     },
     renderChart() {
       d3.select(this.$refs.chart).selectAll('*').remove();
@@ -328,7 +376,7 @@ export default {
           .attr('x', xPos + barWidth / 2)
           .attr('y', svgHeight + 20)
           .attr('text-anchor', 'middle')
-          .attr('font-size', '11px')
+          .attr('font-size', '12px')
           .attr('font-weight', 'bold')
           .text(shortLabels.group1);
 
@@ -337,7 +385,7 @@ export default {
           .attr('x', xPos + barWidth + 2 + barWidth / 2)
           .attr('y', svgHeight + 20)
           .attr('text-anchor', 'middle')
-          .attr('font-size', '11px')
+          .attr('font-size', '12px')
           .attr('font-weight', 'bold')
           .text(shortLabels.group2);
 
@@ -350,7 +398,7 @@ export default {
             .attr('y', y(d.group1_percentage / 2))
             .attr('text-anchor', 'middle')
             .attr('dy', '.35em')
-            .attr('font-size', '10px')
+            .attr('font-size', '11px')
             .attr('font-weight', 'bold')
             .attr('fill', 'white')
             .text(`${d.group1_present}`)
@@ -365,7 +413,7 @@ export default {
             .attr('y', y(d.group2_percentage / 2))
             .attr('text-anchor', 'middle')
             .attr('dy', '.35em')
-            .attr('font-size', '10px')
+            .attr('font-size', '11px')
             .attr('font-weight', 'bold')
             .attr('fill', 'white')
             .text(`${d.group2_present}`)
@@ -412,7 +460,7 @@ export default {
             .attr('x', centerX)
             .attr('y', -10)
             .attr('text-anchor', 'middle')
-            .attr('font-size', '14px')
+            .attr('font-size', '16px')
             .attr('fill', '#D32F2F')
             .attr('font-weight', 'bold')
             .text(pValueText);
@@ -423,7 +471,7 @@ export default {
             .attr('x', centerX)
             .attr('y', -20)
             .attr('text-anchor', 'middle')
-            .attr('font-size', '9px')
+            .attr('font-size', '10px')
             .attr('fill', d.significant ? '#D32F2F' : '#666')
             .attr('font-weight', d.significant ? 'bold' : 'normal')
             .text(pValueText);
@@ -437,7 +485,7 @@ export default {
               .attr('x', centerX)
               .attr('y', -8)
               .attr('text-anchor', 'middle')
-              .attr('font-size', '8px')
+              .attr('font-size', '9px')
               .attr('fill', '#666')
               .text(`h=${h.toFixed(2)} (${label})`);
           }
@@ -452,7 +500,7 @@ export default {
 
       xAxis
         .selectAll('text')
-        .style('font-size', '10px')
+        .style('font-size', '12px')
         .style('text-anchor', 'end')
         .attr('transform', 'rotate(-45)')
         .attr('dx', '-0.5em')
@@ -468,7 +516,7 @@ export default {
             .tickFormat((d) => `${d}%`)
         )
         .selectAll('text')
-        .style('font-size', '11px');
+        .style('font-size', '12px');
 
       // Title
       svg
@@ -476,7 +524,7 @@ export default {
         .attr('x', svgWidth / 2)
         .attr('y', -90)
         .attr('text-anchor', 'middle')
-        .style('font-size', '18px')
+        .style('font-size', '20px')
         .style('font-weight', 'bold')
         .text(`${group1Name} vs ${group2Name} - Phenotype Prevalence Comparison`);
 
@@ -486,7 +534,7 @@ export default {
         .attr('x', svgWidth / 2)
         .attr('y', -70)
         .attr('text-anchor', 'middle')
-        .style('font-size', '13px')
+        .style('font-size', '14px')
         .style('fill', '#666')
         .text(
           `${group1Name}: n=${this.comparisonData.group1_count} | ${group2Name}: n=${this.comparisonData.group2_count}`
@@ -499,7 +547,7 @@ export default {
         .attr('x', -svgHeight / 2)
         .attr('y', -50)
         .attr('text-anchor', 'middle')
-        .style('font-size', '13px')
+        .style('font-size', '14px')
         .style('font-weight', 'bold')
         .text('Prevalence (%)');
 
@@ -513,26 +561,26 @@ export default {
         .append('rect')
         .attr('x', 0)
         .attr('y', 0)
-        .attr('width', 12)
-        .attr('height', 12)
+        .attr('width', 14)
+        .attr('height', 14)
         .attr('fill', colorYes);
-      legend.append('text').attr('x', 16).attr('y', 10).style('font-size', '11px').text('Present');
+      legend.append('text').attr('x', 18).attr('y', 11).style('font-size', '12px').text('Present');
 
       legend
         .append('rect')
         .attr('x', 100)
         .attr('y', 0)
-        .attr('width', 12)
-        .attr('height', 12)
+        .attr('width', 14)
+        .attr('height', 14)
         .attr('fill', colorNo);
-      legend.append('text').attr('x', 116).attr('y', 10).style('font-size', '11px').text('Absent');
+      legend.append('text').attr('x', 118).attr('y', 11).style('font-size', '12px').text('Absent');
 
       // Row 2: Bar label explanations (on separate line to avoid overlap)
       legend
         .append('text')
         .attr('x', 200)
-        .attr('y', 10)
-        .style('font-size', '10px')
+        .attr('y', 11)
+        .style('font-size', '11px')
         .style('fill', '#666')
         .text(`${shortLabels.group1} = ${group1Name}  |  ${shortLabels.group2} = ${group2Name}`);
     },
@@ -544,5 +592,39 @@ export default {
 .variant-comparison-container {
   width: 100%;
   overflow-x: auto;
+}
+
+.export-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  padding-right: 10px;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.export-btn:hover {
+  background-color: #1565c0;
+}
+
+.export-btn:active {
+  background-color: #0d47a1;
+}
+
+.export-icon {
+  font-size: 14px;
 }
 </style>
