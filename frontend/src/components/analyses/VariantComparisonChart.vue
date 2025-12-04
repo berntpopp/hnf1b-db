@@ -65,10 +65,15 @@ export default {
   methods: {
     getShortLabels() {
       // Return short labels for bar groups based on comparison type
+      // Use shorter labels when showing all organ systems to prevent overlap
+      const isAllSystems = this.organSystemFilter === 'all';
+
       const labelMap = {
         truncating_vs_non_truncating: { group1: 'T', group2: 'nT' },
         truncating_vs_non_truncating_excl_cnv: { group1: 'T', group2: 'nT' },
-        cnv_vs_point_mutation: { group1: 'CNV', group2: 'non-CNV' },
+        cnv_vs_point_mutation: isAllSystems
+          ? { group1: 'C', group2: 'nC' }
+          : { group1: 'CNV', group2: 'non-CNV' },
         cnv_deletion_vs_duplication: { group1: 'DEL', group2: 'DUP' },
       };
       return labelMap[this.comparisonType] || { group1: 'G1', group2: 'G2' };
@@ -129,14 +134,28 @@ export default {
       // Clone the SVG to avoid modifying the original
       const clonedSvg = svgElement.cloneNode(true);
 
+      // Add padding to prevent content cutoff (4mm ≈ 15px)
+      const padding = 15;
+      const originalWidth = parseFloat(svgElement.getAttribute('width')) || this.width;
+      const originalHeight = parseFloat(svgElement.getAttribute('height')) || this.height;
+      const newWidth = originalWidth + padding * 2;
+      const newHeight = originalHeight + padding * 2;
+
+      // Update SVG dimensions and viewBox
+      clonedSvg.setAttribute('width', newWidth);
+      clonedSvg.setAttribute('height', newHeight);
+      clonedSvg.setAttribute('viewBox', `${-padding} ${-padding} ${newWidth} ${newHeight}`);
+
       // Add XML declaration and namespace for standalone SVG
       clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
       clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
 
       // Add white background for better compatibility with publication software
       const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      background.setAttribute('width', '100%');
-      background.setAttribute('height', '100%');
+      background.setAttribute('x', -padding);
+      background.setAttribute('y', -padding);
+      background.setAttribute('width', newWidth);
+      background.setAttribute('height', newHeight);
       background.setAttribute('fill', 'white');
       clonedSvg.insertBefore(background, clonedSvg.firstChild);
 
