@@ -30,17 +30,18 @@ WORKDIR /app
 
 # Phase 1: Install dependencies only (better layer caching)
 # This layer is cached when only code changes, not dependencies
+# Include migration group for data import capability
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev --group migration
 
 # Copy application code
 COPY . .
 
 # Phase 2: Install project (runs when code changes)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --group migration
 
 # ============================================================================
 # STAGE 2: Production runtime
@@ -62,6 +63,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y --no-install-recommends \
         libpq5 \
         curl \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /root/.cache \
     # Security: Remove setuid/setgid bits
@@ -82,6 +84,10 @@ COPY --chown=hnf1b:hnf1b ./alembic ./alembic
 COPY --chown=hnf1b:hnf1b ./alembic.ini ./
 COPY --chown=hnf1b:hnf1b ./migration ./migration
 
+# Copy and make entrypoint executable (fix Windows CRLF line endings)
+COPY --chown=hnf1b:hnf1b ./docker-entrypoint.sh ./
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
+
 # Set environment - include UV optimizations for faster startup
 ENV PATH="/app/.venv/bin:$PATH" \
     UV_COMPILE_BYTECODE=1 \
@@ -99,7 +105,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 EXPOSE 8000
 
-# Use ENTRYPOINT + CMD for flexibility
+# Use entrypoint script for initialization
+ENTRYPOINT ["./docker-entrypoint.sh"]
+
+# Default command - run uvicorn with production settings
 # --proxy-headers: Required for proper X-Forwarded-* handling behind NPM
-ENTRYPOINT ["uvicorn"]
-CMD ["app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

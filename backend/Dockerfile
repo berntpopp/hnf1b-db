@@ -20,6 +20,9 @@ RUN uv sync --frozen --group migration
 # Copy application code
 COPY . .
 
+# Fix line endings (Windows CRLF → Unix LF) and make executable
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
+
 # Set PATH to include the virtualenv for proper module imports
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app"
@@ -27,5 +30,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Expose port
 EXPOSE 8000
 
-# Run the application (with reload for development)
+# Use entrypoint script for initialization
+ENTRYPOINT ["./docker-entrypoint.sh"]
+
+# Default command - run uvicorn with reload for development
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
