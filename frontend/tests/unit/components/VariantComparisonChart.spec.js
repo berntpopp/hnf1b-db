@@ -284,7 +284,7 @@ describe('VariantComparisonChart', () => {
 
       expect(wrapper.props('width')).toBe(1200);
       expect(wrapper.props('height')).toBe(600);
-      expect(wrapper.props('margin')).toEqual({ top: 120, right: 30, bottom: 180, left: 80 });
+      expect(wrapper.props('margin')).toEqual({ top: 120, right: 30, bottom: 220, left: 80 });
       expect(wrapper.props('comparisonType')).toBe('truncating_vs_non_truncating');
       expect(wrapper.props('organSystemFilter')).toBe('all');
     });
@@ -325,15 +325,31 @@ describe('VariantComparisonChart', () => {
       expect(labels).toEqual({ group1: 'T', group2: 'nT' });
     });
 
-    it('should return correct labels for cnv_vs_point_mutation', () => {
+    it('should return correct labels for cnv_vs_point_mutation with all organ systems', () => {
       wrapper = shallowMount(VariantComparisonChart, {
         props: {
           comparisonData: null,
           comparisonType: 'cnv_vs_point_mutation',
+          organSystemFilter: 'all',
         },
       });
 
       const labels = wrapper.vm.getShortLabels();
+      // Uses short labels when showing all organ systems to prevent overlap
+      expect(labels).toEqual({ group1: 'C', group2: 'nC' });
+    });
+
+    it('should return full labels for cnv_vs_point_mutation with specific organ system', () => {
+      wrapper = shallowMount(VariantComparisonChart, {
+        props: {
+          comparisonData: null,
+          comparisonType: 'cnv_vs_point_mutation',
+          organSystemFilter: 'nervous_system',
+        },
+      });
+
+      const labels = wrapper.vm.getShortLabels();
+      // Uses full labels when filtering to a specific organ system
       expect(labels).toEqual({ group1: 'CNV', group2: 'non-CNV' });
     });
 
@@ -743,24 +759,39 @@ describe('VariantComparisonChart', () => {
   });
 
   describe('Label Mapping - All Cases', () => {
-    const labelMappings = {
+    // Labels when organSystemFilter is 'all' (default) - uses short labels to prevent overlap
+    const labelMappingsAllSystems = {
       truncating_vs_non_truncating: { group1: 'T', group2: 'nT' },
       truncating_vs_non_truncating_excl_cnv: { group1: 'T', group2: 'nT' },
-      cnv_vs_point_mutation: { group1: 'CNV', group2: 'non-CNV' },
+      cnv_vs_point_mutation: { group1: 'C', group2: 'nC' },
       cnv_deletion_vs_duplication: { group1: 'DEL', group2: 'DUP' },
     };
 
-    Object.entries(labelMappings).forEach(([type, expectedLabels]) => {
-      it(`should map '${type}' to correct labels`, () => {
+    Object.entries(labelMappingsAllSystems).forEach(([type, expectedLabels]) => {
+      it(`should map '${type}' to correct labels with all organ systems`, () => {
         const wrapper = shallowMount(VariantComparisonChart, {
           props: {
             comparisonData: null,
             comparisonType: type,
+            organSystemFilter: 'all',
           },
         });
 
         expect(wrapper.vm.getShortLabels()).toEqual(expectedLabels);
       });
+    });
+
+    // Labels when organSystemFilter is a specific system - uses full labels for cnv_vs_point_mutation
+    it('should use full CNV labels when filtering to specific organ system', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: {
+          comparisonData: null,
+          comparisonType: 'cnv_vs_point_mutation',
+          organSystemFilter: 'nervous_system',
+        },
+      });
+
+      expect(wrapper.vm.getShortLabels()).toEqual({ group1: 'CNV', group2: 'non-CNV' });
     });
   });
 

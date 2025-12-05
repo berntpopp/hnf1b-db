@@ -1345,7 +1345,7 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
     )
     distinct_hpo_terms = distinct_hpo_result.scalar() or 0
 
-    # 4. Distinct publications
+    # 4. Distinct sources (publications and internal cohort data)
     distinct_publications_result = await db.execute(
         text(
             """
@@ -1354,7 +1354,7 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
                  jsonb_array_elements(
                      phenopacket->'metaData'->'externalReferences'
                  ) as ext_ref
-            WHERE ext_ref->>'id' LIKE 'PMID:%'
+            WHERE ext_ref->>'id' IS NOT NULL
         """
         )
     )

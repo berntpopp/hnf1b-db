@@ -1,6 +1,13 @@
 <!-- D3 Box Plot / Violin Plot Chart for DNA Distance Analysis -->
 <template>
-  <div ref="chartContainer" class="chart-container" />
+  <div class="box-plot-wrapper">
+    <div class="export-controls">
+      <button class="export-btn" title="Download as SVG" @click="exportSVG">
+        <span class="export-icon">⬇</span> Export SVG
+      </button>
+    </div>
+    <div ref="chartContainer" class="chart-container" />
+  </div>
 </template>
 
 <script>
@@ -58,6 +65,49 @@ export default {
     d3.select('body').select('.dna-distance-tooltip').remove();
   },
   methods: {
+    exportSVG() {
+      const svgElement = this.$refs.chartContainer?.querySelector('svg');
+      if (!svgElement) {
+        return;
+      }
+
+      // Clone the SVG to avoid modifying the original
+      const clonedSvg = svgElement.cloneNode(true);
+
+      // Add XML declaration and namespace for standalone SVG
+      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+      // Add white background for better compatibility with publication software
+      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      background.setAttribute('width', '100%');
+      background.setAttribute('height', '100%');
+      background.setAttribute('fill', 'white');
+      clonedSvg.insertBefore(background, clonedSvg.firstChild);
+
+      // Serialize to string
+      const serializer = new XMLSerializer();
+      let svgString = serializer.serializeToString(clonedSvg);
+
+      // Add XML declaration
+      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
+
+      // Create blob and download
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      // Generate filename
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `dna-distance-violin-plot-${timestamp}.svg`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    },
     renderChart() {
       if (!this.$refs.chartContainer) {
         return;
@@ -382,8 +432,45 @@ export default {
 </script>
 
 <style scoped>
+.box-plot-wrapper {
+  width: 100%;
+}
+
 .chart-container {
   width: 100%;
   min-height: 400px;
+}
+
+.export-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.export-btn:hover {
+  background-color: #1565c0;
+}
+
+.export-btn:active {
+  background-color: #0d47a1;
+}
+
+.export-icon {
+  font-size: 12px;
 }
 </style>
