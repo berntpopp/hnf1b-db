@@ -4,7 +4,7 @@
     <v-card-title class="text-h6 bg-grey-lighten-4">
       <v-icon left color="secondary"> mdi-protein </v-icon>
       HNF1B Protein Domains (NP_000449.3, 557 aa)
-      <v-tooltip location="bottom">
+      <v-tooltip location="bottom" aria-label="View protein in UniProt database">
         <template #activator="{ props }">
           <v-btn
             icon
@@ -13,9 +13,11 @@
             v-bind="props"
             href="https://www.uniprot.org/uniprotkb/P35680/entry"
             target="_blank"
+            rel="noopener noreferrer"
             class="ml-1"
+            aria-label="View in UniProt (P35680) - opens in new tab"
           >
-            <v-icon size="small"> mdi-open-in-new </v-icon>
+            <v-icon size="small" aria-hidden="true"> mdi-open-in-new </v-icon>
           </v-btn>
         </template>
         <span>View in UniProt (P35680)</span>
@@ -285,22 +287,32 @@
       <!-- Zoom Controls -->
       <v-row class="mt-3">
         <v-col cols="12" class="text-center">
-          <v-btn-group density="compact">
-            <v-btn size="small" :disabled="visibleStart <= 1" @click="panLeft">
-              <v-icon>mdi-chevron-left</v-icon>
+          <v-btn-group density="compact" aria-label="Zoom and pan controls">
+            <v-btn
+              size="small"
+              :disabled="visibleStart <= 1"
+              aria-label="Pan left towards N-terminus"
+              @click="panLeft"
+            >
+              <v-icon aria-hidden="true">mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn size="small" @click="zoomIn">
-              <v-icon>mdi-magnify-plus</v-icon>
+            <v-btn size="small" aria-label="Zoom in" @click="zoomIn">
+              <v-icon aria-hidden="true">mdi-magnify-plus</v-icon>
             </v-btn>
-            <v-btn size="small" @click="zoomOut">
-              <v-icon>mdi-magnify-minus</v-icon>
+            <v-btn size="small" aria-label="Zoom out" @click="zoomOut">
+              <v-icon aria-hidden="true">mdi-magnify-minus</v-icon>
             </v-btn>
-            <v-btn size="small" @click="resetZoom">
-              <v-icon>mdi-magnify</v-icon>
+            <v-btn size="small" aria-label="Reset zoom to full view" @click="resetZoom">
+              <v-icon aria-hidden="true">mdi-magnify</v-icon>
               Reset
             </v-btn>
-            <v-btn size="small" :disabled="visibleEnd >= proteinLength" @click="panRight">
-              <v-icon>mdi-chevron-right</v-icon>
+            <v-btn
+              size="small"
+              :disabled="visibleEnd >= proteinLength"
+              aria-label="Pan right towards C-terminus"
+              @click="panRight"
+            >
+              <v-icon aria-hidden="true">mdi-chevron-right</v-icon>
             </v-btn>
           </v-btn-group>
           <div v-if="zoomLevel > 1" class="zoom-indicator mt-1">

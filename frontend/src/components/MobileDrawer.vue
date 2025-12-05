@@ -15,7 +15,7 @@
     <v-divider />
 
     <!-- Navigation Items -->
-    <v-list density="compact" nav>
+    <v-list density="compact" nav role="navigation" aria-label="Main navigation">
       <v-list-item
         v-for="item in navigationItems"
         :key="item.route"
@@ -23,6 +23,8 @@
         :prepend-icon="item.icon"
         :title="item.label"
         :active="isActiveRoute(item.route)"
+        :aria-label="`Navigate to ${item.label}`"
+        role="link"
         @click="closeDrawer"
       />
     </v-list>
@@ -30,12 +32,14 @@
     <v-divider />
 
     <!-- Curate Menu (curator/admin only) -->
-    <v-list v-if="canCurate" density="compact">
+    <v-list v-if="canCurate" density="compact" role="navigation" aria-label="Curation actions">
       <v-list-subheader>Curate</v-list-subheader>
       <v-list-item
         prepend-icon="mdi-account-plus"
         title="Create Phenopacket"
         to="/phenopackets/create"
+        aria-label="Create new phenopacket"
+        role="link"
         @click="closeDrawer"
       />
     </v-list>
@@ -43,20 +47,35 @@
     <v-divider v-if="canCurate" />
 
     <!-- User Menu (authenticated) -->
-    <v-list v-if="isAuthenticated" density="compact">
+    <v-list v-if="isAuthenticated" density="compact" role="menu" aria-label="Account menu">
       <v-list-subheader>Account</v-list-subheader>
       <v-list-item
         prepend-icon="mdi-account-circle"
         title="User Profile"
         to="/user"
+        aria-label="View user profile"
+        role="menuitem"
         @click="closeDrawer"
       />
-      <v-list-item prepend-icon="mdi-logout" title="Logout" @click="handleLogout" />
+      <v-list-item
+        prepend-icon="mdi-logout"
+        title="Logout"
+        aria-label="Log out of account"
+        role="menuitem"
+        @click="handleLogout"
+      />
     </v-list>
 
     <!-- Login (not authenticated) -->
-    <v-list v-else density="compact">
-      <v-list-item prepend-icon="mdi-login" title="Login" to="/login" @click="closeDrawer" />
+    <v-list v-else density="compact" role="navigation" aria-label="Authentication">
+      <v-list-item
+        prepend-icon="mdi-login"
+        title="Login"
+        to="/login"
+        aria-label="Log in to account"
+        role="link"
+        @click="closeDrawer"
+      />
     </v-list>
   </v-navigation-drawer>
 </template>

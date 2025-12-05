@@ -50,8 +50,13 @@
               <v-icon right size="small">mdi-menu-down</v-icon>
             </v-btn>
           </template>
-          <v-list>
-            <v-list-item prepend-icon="mdi-account-plus" @click="navigateToCreatePhenopacket">
+          <v-list role="menu" aria-label="Curation options">
+            <v-list-item
+              prepend-icon="mdi-account-plus"
+              role="menuitem"
+              aria-label="Create new phenopacket"
+              @click="navigateToCreatePhenopacket"
+            >
               <v-list-item-title>Create Phenopacket</v-list-item-title>
             </v-list-item>
           </v-list>
@@ -71,8 +76,8 @@
               <v-icon v-else>mdi-account</v-icon>
             </v-btn>
           </template>
-          <v-list>
-            <v-list-item v-if="authStore.user">
+          <v-list role="menu" aria-label="User account options">
+            <v-list-item v-if="authStore.user" role="presentation">
               <v-list-item-title>{{ authStore.user.username }}</v-list-item-title>
               <v-list-item-subtitle>
                 <v-chip :color="getRoleColor" size="x-small" dark>
@@ -81,10 +86,20 @@
               </v-list-item-subtitle>
             </v-list-item>
             <v-divider />
-            <v-list-item prepend-icon="mdi-account-circle" @click="goToUser">
+            <v-list-item
+              prepend-icon="mdi-account-circle"
+              role="menuitem"
+              aria-label="View user profile"
+              @click="goToUser"
+            >
               <v-list-item-title>User Profile</v-list-item-title>
             </v-list-item>
-            <v-list-item prepend-icon="mdi-logout" @click="handleLogout">
+            <v-list-item
+              prepend-icon="mdi-logout"
+              role="menuitem"
+              aria-label="Log out of account"
+              @click="handleLogout"
+            >
               <v-list-item-title>Logout</v-list-item-title>
             </v-list-item>
           </v-list>

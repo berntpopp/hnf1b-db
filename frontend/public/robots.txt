@@ -1,0 +1,19 @@
+# HNF1B Database - Robots.txt
+# https://hnf1b.org/robots.txt
+
+User-agent: *
+Allow: /
+
+# Disallow admin/internal pages
+Disallow: /login
+Disallow: /user
+Disallow: /phenopacket/create
+Disallow: /phenopacket/edit
+Disallow: /phenopackets/create
+Disallow: /phenopackets/*/edit
+
+# Sitemap location
+Sitemap: https://hnf1b.org/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1

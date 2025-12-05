@@ -4,11 +4,28 @@ import vue from '@vitejs/plugin-vue';
 import path from 'path';
 import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from 'rollup-plugin-visualizer';
+import compression from 'vite-plugin-compression';
 
 export default defineConfig({
   plugins: [
     vue(),
     vuetify({ autoImport: true }),
+
+    // Brotli compression (best compression, ~20% smaller than gzip)
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 1024,
+      exclude: [/\.(png|jpg|jpeg|gif|webp|avif|ico)$/i],
+    }),
+
+    // Gzip compression (fallback for older browsers)
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 1024,
+      exclude: [/\.(png|jpg|jpeg|gif|webp|avif|ico)$/i],
+    }),
 
     // Bundle size visualization (all environments)
     // Creates dist/bundle-analysis.html after build
@@ -65,21 +82,43 @@ export default defineConfig({
   },
 
   build: {
-    // Enable sourcemaps for production debugging
-    sourcemap: true,
+    // Hidden sourcemaps for error tracking (not linked from JS)
+    sourcemap: 'hidden',
 
     rollupOptions: {
       output: {
-        // Manual chunk splitting for better caching
-        // Users only re-download changed chunks
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router'],
-          vuetify: ['vuetify'],
-          d3: ['d3'],
-          axios: ['axios'],
+        // Function-based chunk splitting for better granularity and caching
+        manualChunks(id) {
+          // Heavy visualization libraries - lazy loaded
+          if (id.includes('chart.js')) return 'charts';
+          if (id.includes('ngl')) return 'ngl-viewer';
+
+          // D3 modules - used for visualizations
+          if (id.includes('d3-') || id.includes('/d3/')) return 'd3-modules';
+
+          // Vuetify data table components (heavy)
+          if (id.includes('vuetify/lib/components/VDataTable')) {
+            return 'vuetify-data';
+          }
+          if (id.includes('vuetify')) return 'vuetify-core';
+
+          // Vue ecosystem
+          if (id.includes('vue-router') || id.includes('pinia')) {
+            return 'vue-core';
+          }
+          if (id.includes('/vue/') || id.includes('@vue/')) return 'vue-vendor';
+
+          // Axios for API calls
+          if (id.includes('axios')) return 'axios';
+
+          // Other node_modules
+          if (id.includes('node_modules')) return 'vendor';
         },
       },
     },
+
+    // Alert on large chunks (300KB threshold)
+    chunkSizeWarningLimit: 300,
 
     // Modern build target (smaller bundles)
     target: 'esnext',

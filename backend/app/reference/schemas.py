@@ -148,7 +148,10 @@ class GeneWithExonsSchema(GeneDetailSchema):
 
 
 class ProteinDomainsResponse(BaseModel):
-    """Response schema for protein domains endpoint."""
+    """Response schema for protein domains endpoint.
+
+    Returns empty domains array gracefully if reference data is unavailable.
+    """
 
     gene: str = Field(..., description="Gene symbol")
     protein: Optional[str] = Field(None, description="RefSeq protein ID")
@@ -158,7 +161,9 @@ class ProteinDomainsResponse(BaseModel):
         default_factory=list, description="Protein domains"
     )
     genome_build: str = Field(..., description="Genome assembly")
-    updated_at: datetime = Field(..., description="Last update timestamp")
+    updated_at: Optional[datetime] = Field(
+        None, description="Last update timestamp (None if data unavailable)"
+    )
 
 
 class GenomicRegionResponse(BaseModel):

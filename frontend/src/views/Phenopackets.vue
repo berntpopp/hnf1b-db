@@ -66,17 +66,27 @@
             <!-- Display the current items range -->
             <span class="mx-2">{{ rangeText }}</span>
             <!-- Pagination navigation buttons -->
-            <v-btn icon :disabled="!canGoToFirst" @click="goToFirstPage">
-              <v-icon>mdi-page-first</v-icon>
+            <v-btn
+              icon
+              :disabled="!canGoToFirst"
+              aria-label="Go to first page"
+              @click="goToFirstPage"
+            >
+              <v-icon aria-hidden="true">mdi-page-first</v-icon>
             </v-btn>
-            <v-btn icon :disabled="!canGoToPrevious" @click="goToPreviousPage">
-              <v-icon>mdi-chevron-left</v-icon>
+            <v-btn
+              icon
+              :disabled="!canGoToPrevious"
+              aria-label="Go to previous page"
+              @click="goToPreviousPage"
+            >
+              <v-icon aria-hidden="true">mdi-chevron-left</v-icon>
             </v-btn>
-            <v-btn icon :disabled="!canGoToNext" @click="goToNextPage">
-              <v-icon>mdi-chevron-right</v-icon>
+            <v-btn icon :disabled="!canGoToNext" aria-label="Go to next page" @click="goToNextPage">
+              <v-icon aria-hidden="true">mdi-chevron-right</v-icon>
             </v-btn>
-            <v-btn icon :disabled="!canGoToLast" @click="goToLastPage">
-              <v-icon>mdi-page-last</v-icon>
+            <v-btn icon :disabled="!canGoToLast" aria-label="Go to last page" @click="goToLastPage">
+              <v-icon aria-hidden="true">mdi-page-last</v-icon>
             </v-btn>
           </div>
           <!-- Create Button - Curator/Admin only -->
