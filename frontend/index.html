@@ -73,6 +73,14 @@
     <link rel="dns-prefetch" href="//api.hnf1b.org" />
     <link rel="preconnect" href="https://api.hnf1b.org" crossorigin />
 
+    <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
+    <style>
+      /* Reserve space for app to prevent CLS during hydration */
+      #app { min-height: 100vh; }
+      /* Hide unhydrated app to prevent FOUC */
+      #app:empty { visibility: hidden; }
+    </style>
+
     <!-- JSON-LD Structured Data: Organization -->
     <script type="application/ld+json">
       {

@@ -80,6 +80,20 @@ button:focus-visible {
 
 /* ==================== PERFORMANCE OPTIMIZATIONS ==================== */
 
+/* Font-display: swap for Material Design Icons to prevent FOIT
+   This allows text to display immediately while the icon font loads.
+   Lighthouse recommends this for ~790ms FCP improvement.
+   This overrides the @mdi/font CSS which doesn't include font-display. */
+@font-face {
+  font-family: 'Material Design Icons';
+  font-display: swap;
+  src:
+    url('@mdi/font/fonts/materialdesignicons-webfont.woff2') format('woff2'),
+    url('@mdi/font/fonts/materialdesignicons-webfont.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* Content visibility for below-fold sections - skip rendering off-screen content */
 .v-data-table,
 .phenopacket-details,
