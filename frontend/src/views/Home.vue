@@ -130,22 +130,53 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
-import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
-import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
-import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
-import { getSummaryStats, getVariants } from '@/api/index.js';
-import { API_CONFIG } from '@/config/app';
+import { useVariantStore } from '@/stores/variantStore';
+import { getSummaryStats } from '@/api/index.js';
+
+/**
+ * Lazy-loaded heavy visualization components.
+ * Uses defineAsyncComponent to defer loading D3/NGL bundles until needed.
+ * This reduces initial bundle size and improves first paint time.
+ */
+const HNF1BGeneVisualization = defineAsyncComponent({
+  loader: () => import('@/components/gene/HNF1BGeneVisualization.vue'),
+  loadingComponent: {
+    template: '<v-skeleton-loader type="image" height="400" />',
+  },
+  delay: 200,
+});
+
+const HNF1BProteinVisualization = defineAsyncComponent({
+  loader: () => import('@/components/gene/HNF1BProteinVisualization.vue'),
+  loadingComponent: {
+    template: '<v-skeleton-loader type="image" height="400" />',
+  },
+  delay: 200,
+});
+
+const ProteinStructure3D = defineAsyncComponent({
+  loader: () => import('@/components/gene/ProteinStructure3D.vue'),
+  loadingComponent: {
+    template: '<v-skeleton-loader type="image" height="400" />',
+  },
+  delay: 200,
+});
 
 /**
  * Home view component.
  *
  * This component fetches summary statistics and includes the search functionality.
- * It initializes stat values to 0 and animates them when the actual data is received.
+ * Uses Pinia variantStore for progressive variant loading by clinical relevance:
+ * 1. PATHOGENIC variants first (fast first paint)
+ * 2. LIKELY_PATHOGENIC second
+ * 3. VUS + BENIGN in parallel
  *
  * @component
+ * @see stores/variantStore.js
+ * @see plan/01-active/home-page-loading-optimization.md
  */
 export default {
   name: 'Home',
@@ -157,6 +188,7 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const variantStore = useVariantStore();
 
     // Holds the stats to be displayed, with default values of 0.
     const displayStats = ref({
@@ -166,19 +198,36 @@ export default {
       publications: 0,
     });
 
-    // Holds all variants for the gene visualization
-    const allVariants = ref([]);
-
-    // Separate variants by type for different visualization cards
-    const snvVariants = ref([]);
-    const cnvVariants = ref([]);
-
-    // Track which variant types have been loaded (for lazy loading)
-    const snvVariantsLoaded = ref(false);
-    const cnvVariantsLoaded = ref(false);
-
     // Active tab state (default to protein view)
     const activeTab = ref('protein');
+
+    // ==================== COMPUTED FROM STORE ====================
+
+    /**
+     * SNV variants from store (reactive).
+     * Updates automatically as progressive loading brings in more data.
+     */
+    const snvVariants = computed(() => variantStore.snvVariants);
+
+    /**
+     * CNV variants from store (reactive).
+     */
+    const cnvVariants = computed(() => variantStore.cnvVariants);
+
+    /**
+     * Whether SNV data is ready for display.
+     * Uses hasPathogenic for fast first paint - shows visualization
+     * as soon as PATHOGENIC variants load, even before complete data.
+     */
+    const snvVariantsLoaded = computed(() => variantStore.hasPathogenic);
+
+    /**
+     * Whether CNV data is ready for display.
+     * CNVs are extracted from all variants, so we need at least partial data.
+     */
+    const cnvVariantsLoaded = computed(() => variantStore.cnvVariants.length > 0);
+
+    // ==================== STATS ANIMATION ====================
 
     /**
      * Animate a count from 0 to the target value.
@@ -239,142 +288,29 @@ export default {
       }
     };
 
-    /**
-     * Check if a variant is a CNV that extends beyond HNF1B gene boundaries.
-     * Only large structural variants that span beyond HNF1B should be in CNV track.
-     *
-     * @param {Object} variant - Variant object with hg38 field
-     * @returns {boolean} True if variant is a large CNV extending beyond HNF1B
-     */
-    const isCNV = (variant) => {
-      if (!variant || !variant.hg38) return false;
-
-      // HNF1B gene boundaries (GRCh38)
-      const HNF1B_START = 37686430;
-      const HNF1B_END = 37745059;
-
-      // Check for range notation: 17:start-end:DEL/DUP
-      const match = variant.hg38.match(/:(\d+)-(\d+):/);
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-        const size = end - start;
-
-        // Only consider it a "CNV track variant" if:
-        // 1. Size >= 50bp (structural variant)
-        // 2. Extends beyond HNF1B gene boundaries
-        const extendsBeyondHNF1B = start < HNF1B_START || end > HNF1B_END;
-        return size >= 50 && extendsBeyondHNF1B;
-      }
-      return false;
-    };
+    // ==================== TAB HANDLING ====================
 
     /**
-     * Fetch SNV variants for protein and gene visualizations.
-     * Only fetches if not already loaded (lazy loading).
+     * Handle tab change - triggers resize for SVG visualizations.
+     * The variantStore handles progressive loading automatically.
      *
-     * @async
-     * @function fetchSNVVariants
-     * @returns {Promise<void>}
-     */
-    const fetchSNVVariants = async () => {
-      if (snvVariantsLoaded.value) {
-        window.logService.debug('SNV variants already loaded, skipping fetch', {
-          snvCount: snvVariants.value.length,
-        });
-        return; // Already loaded
-      }
-
-      window.logService.debug('Fetching SNV variants for visualization', {
-        pageSize: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-      });
-
-      try {
-        // Fetch all variants to filter SNVs
-        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
-        // See @/config/app.js for details
-        const response = await getVariants({
-          page: 1,
-          page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-        });
-        allVariants.value = response.data || [];
-
-        // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
-        snvVariants.value = allVariants.value.filter((v) => !isCNV(v));
-        snvVariantsLoaded.value = true;
-
-        window.logService.debug('SNV variants filtered', {
-          totalVariants: allVariants.value.length,
-          snvVariants: snvVariants.value.length,
-          cnvVariants: allVariants.value.length - snvVariants.value.length,
-        });
-      } catch (error) {
-        window.logService.error('Failed to fetch SNV variants for visualization', {
-          error: error.message,
-          status: error.response?.status,
-        });
-      }
-    };
-
-    /**
-     * Fetch CNV variants for 17q12 region visualization.
-     * Only fetches if not already loaded (lazy loading).
-     *
-     * @async
-     * @function fetchCNVVariants
-     * @returns {Promise<void>}
-     */
-    const fetchCNVVariants = async () => {
-      if (cnvVariantsLoaded.value) return; // Already loaded
-
-      try {
-        // Use cached allVariants if available, otherwise fetch
-        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
-        // See @/config/app.js for details
-        if (allVariants.value.length === 0) {
-          const response = await getVariants({
-            page: 1,
-            page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-          });
-          allVariants.value = response.data || [];
-        }
-
-        // Filter CNVs: Large structural variants >= 50bp that extend beyond HNF1B
-        cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
-        cnvVariantsLoaded.value = true;
-      } catch (error) {
-        window.logService.error('Failed to fetch CNV variants for visualization', {
-          error: error.message,
-          status: error.response?.status,
-        });
-      }
-    };
-
-    /**
-     * Handle tab change - lazy load variants when tab is clicked.
-     * Triggers a resize event after DOM updates to ensure SVG visualizations render correctly.
-     *
-     * @param {string} tab - The active tab value ('protein', 'gene', or 'region')
+     * @param {string} tab - The active tab value ('protein', 'gene', 'structure3d', or 'region')
      */
     const handleTabChange = (tab) => {
       window.logService.debug('Visualization tab changed', {
-        fromTab: activeTab.value,
         toTab: tab,
-        snvVariantsLoaded: snvVariantsLoaded.value,
-        cnvVariantsLoaded: cnvVariantsLoaded.value,
+        loadingState: variantStore.loadingState,
+        snvCount: snvVariants.value.length,
+        cnvCount: cnvVariants.value.length,
       });
-
-      if (tab === 'protein' || tab === 'gene' || tab === 'structure3d') {
-        fetchSNVVariants(); // Protein, gene, and 3D views use SNVs
-      } else if (tab === 'region') {
-        fetchCNVVariants(); // Region view uses CNVs
-      }
 
       // Trigger resize event after DOM updates to fix SVG width calculation
       nextTick(() => {
         window.dispatchEvent(new Event('resize'));
       });
     };
+
+    // ==================== NAVIGATION ====================
 
     /**
      * Navigate to a variant detail page when clicked in the visualization.
@@ -386,12 +322,16 @@ export default {
       router.push(`/variants/${variant.variant_id}`);
     };
 
-    onMounted(() => {
-      // Load statistics immediately (lightweight)
+    // ==================== LIFECYCLE ====================
+
+    onMounted(async () => {
+      // Load statistics immediately (lightweight, 164 bytes)
       fetchStats();
 
-      // Load protein view variants immediately (default tab)
-      fetchSNVVariants();
+      // Start progressive variant loading
+      // This loads PATHOGENIC first for fast first paint (~100ms),
+      // then continues loading LIKELY_PATHOGENIC, VUS, and BENIGN
+      await variantStore.fetchProgressively();
     });
 
     return {

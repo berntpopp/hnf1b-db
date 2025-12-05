@@ -6,7 +6,7 @@ variants, and publications.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -515,6 +515,7 @@ async def aggregate_publication_types(
 @router.get("/all-variants")
 async def aggregate_all_variants(
     request: Request,
+    response: Response,
     limit: int = Query(100, ge=1, le=1000),
     skip: int = Query(0, ge=0),
     query: Optional[str] = Query(
@@ -559,6 +560,7 @@ async def aggregate_all_variants(
 
     Args:
         request: FastAPI request object for rate limiting
+        response: FastAPI response object for setting cache headers
         query: Text search across HGVS notations, variant IDs, and coordinates
         variant_type: Filter by variant structural type
         classification: Filter by ACMG pathogenicity classification
@@ -612,6 +614,10 @@ async def aggregate_all_variants(
     """
     # Rate limiting (security layer)
     check_rate_limit(request)
+
+    # HTTP caching: 5 minutes for variant data (open research database)
+    # This enables browser caching and reduces server load for repeated requests
+    response.headers["Cache-Control"] = "public, max-age=300"
 
     # Input validation (security layer)
     validated_query = validate_search_query(query)
