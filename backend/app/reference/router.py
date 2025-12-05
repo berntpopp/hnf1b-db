@@ -227,6 +227,9 @@ async def get_gene_domains(
 ) -> ProteinDomainsResponse:
     """Get protein domains for a gene's canonical transcript.
 
+    Returns empty domains array gracefully if reference data is not populated.
+    This avoids 404 errors in production when reference tables are empty.
+
     Args:
         symbol: Gene symbol (e.g., "HNF1B")
         response: FastAPI response object for setting cache headers
@@ -235,14 +238,31 @@ async def get_gene_domains(
 
     Returns:
         Protein domains with UniProt/Pfam/InterPro annotations.
+        Returns empty domains array if reference data unavailable.
 
     Example:
         GET /api/v2/reference/genes/HNF1B/domains
     """
     response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
 
-    # Get genome
-    genome = await _get_genome(db, genome_build)
+    # Resolve genome build name (default to GRCh38 if not specified)
+    resolved_genome_build = genome_build or "GRCh38"
+
+    # Try to get genome - return empty response if not found
+    # This handles the case where reference tables aren't populated
+    try:
+        genome = await _get_genome(db, genome_build)
+    except HTTPException:
+        # Reference data not populated - return empty response gracefully
+        return ProteinDomainsResponse(
+            gene=symbol.upper(),
+            protein=None,
+            uniprot=None,
+            length=None,
+            domains=[],
+            genome_build=resolved_genome_build,
+            updated_at=None,
+        )
 
     # Query gene to get canonical transcript
     stmt = (
@@ -257,9 +277,15 @@ async def get_gene_domains(
     gene = result.scalar_one_or_none()
 
     if not gene:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Gene '{symbol}' not found in {genome.name}",
+        # Gene not found - return empty response gracefully
+        return ProteinDomainsResponse(
+            gene=symbol.upper(),
+            protein=None,
+            uniprot=None,
+            length=None,
+            domains=[],
+            genome_build=genome.name,
+            updated_at=None,
         )
 
     # Find canonical transcript
@@ -270,9 +296,15 @@ async def get_gene_domains(
         canonical = gene.transcripts[0] if gene.transcripts else None
 
     if not canonical:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No transcript found for gene '{symbol}'",
+        # No transcript - return empty response gracefully
+        return ProteinDomainsResponse(
+            gene=symbol.upper(),
+            protein=None,
+            uniprot=None,
+            length=None,
+            domains=[],
+            genome_build=genome.name,
+            updated_at=gene.updated_at,
         )
 
     # Calculate protein length from domain data if available
