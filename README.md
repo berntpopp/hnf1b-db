@@ -18,9 +18,12 @@ hnf1b-db/
 │   ├── public/         # Static assets
 │   ├── package.json    # Node dependencies
 │   └── Makefile        # Frontend commands
+├── docker/             # Docker configuration & scripts
+│   ├── docker-compose.yml      # Full stack base config
+│   ├── docker-compose.dev.yml  # Hybrid dev (services only)
+│   ├── docker-compose.npm.yml  # Production (behind NPM)
+│   └── .env.example            # Environment template
 ├── docs/               # Documentation
-├── docker-compose.yml  # Full stack (development)
-├── docker-compose.services.yml  # Services only (hybrid mode)
 └── Makefile            # Unified commands
 ```
 
@@ -52,6 +55,8 @@ make frontend         # http://localhost:5173
 
 ```bash
 # Start everything in Docker
+docker compose -f docker/docker-compose.yml up -d
+# OR use the make shortcut:
 make dev-up
 
 # Access:
@@ -349,7 +354,7 @@ Create/edit `backend/.env` file with required variables:
 # Copy template
 cp backend/.env.example backend/.env
 
-# PostgreSQL Database (matches docker-compose.services.yml)
+# PostgreSQL Database (matches docker/docker-compose.dev.yml)
 DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets
 
 # JWT Authentication (REQUIRED - generate with: openssl rand -hex 32)

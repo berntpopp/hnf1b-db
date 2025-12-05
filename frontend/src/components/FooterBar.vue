@@ -134,7 +134,8 @@ const refreshHealth = async () => {
 const loadFooterConfig = async () => {
   // Get API URL from environment variable, fallback to localhost for development
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-  const apiDocsUrl = apiBaseUrl.replace('/api/v2', '') + '/docs';
+  // Docs are mounted at /api/v2/docs in FastAPI, so append /docs to the base URL
+  const apiDocsUrl = apiBaseUrl + '/docs';
 
   try {
     const response = await fetch('/config/footerConfig.json');

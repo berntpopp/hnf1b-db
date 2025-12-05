@@ -1,5 +1,9 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
+
+# Build-time argument for API URL (Vite embeds this at build time)
+ARG VITE_API_URL=http://localhost:8000/api/v2
+ENV VITE_API_URL=${VITE_API_URL}
 
 WORKDIR /app
 
@@ -12,7 +16,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build application
+# Build application with the API URL baked in
 RUN npm run build
 
 # Production stage

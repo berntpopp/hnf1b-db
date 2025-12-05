@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs
+*.egg
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Local
+.env
+.env.local
+*.log
+backend.log
+
+# Tests (not needed in production)
+tests/
+conftest.py
+
+# Cache directories
+.ontology_cache
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Archive/old files
+archive/
+
+# Examples
+examples/

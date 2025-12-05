@@ -35,6 +35,7 @@ app = FastAPI(
     description="GA4GH Phenopackets v2 compliant API for HNF1B disease data",
     version="2.0.0",
     lifespan=lifespan,
+    openapi_url="/api/v2/openapi.json",  # OpenAPI spec at /api/v2/openapi.json
     docs_url="/api/v2/docs",
     redoc_url="/api/v2/redoc",
 )

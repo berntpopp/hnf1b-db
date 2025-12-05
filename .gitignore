@@ -211,6 +211,8 @@ Thumbs.db
 
 # Docker
 *.log
+.env.docker
+backups/
 
 # MCP Playwright test artifacts
 .playwright-mcp/
