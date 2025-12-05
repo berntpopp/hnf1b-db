@@ -10,7 +10,8 @@
 #   POSTGRES_DB     - Database name (default: from .env.docker or hnf1b_phenopackets)
 #   DB_CONTAINER    - Container name (default: hnf1b_db)
 #
-# Note: This script is designed for Linux systems. The cleanup uses GNU xargs.
+# Note: This script works on Unix-like systems (Linux, macOS). The cleanup is
+#       portable and does not require GNU-specific xargs flags.
 
 set -e
 
@@ -35,8 +36,9 @@ echo "  Container: $DB_CONTAINER"
 echo "  Database:  $DB_NAME"
 echo "  User:      $DB_USER"
 
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T "$DB_CONTAINER" \
-    pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "$BACKUP_FILE"
+# Use docker exec directly on the container (works regardless of compose setup)
+# This avoids needing to know which compose files were used to start the containers
+docker exec -t "$DB_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "$BACKUP_FILE"
 
 echo "Backup size: $(du -h "$BACKUP_FILE" | cut -f1)"
 

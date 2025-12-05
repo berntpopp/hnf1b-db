@@ -238,16 +238,9 @@ class TestDistributionReasonableness:
             pytest.skip("No variants found in database")
 
         print("\n=== Classification Distribution (via API) ===")
-        print(
-            f"Truncating: {group1_count} ({group1_count / total * 100:.1f}%)"
-            if total > 0
-            else "Truncating: 0"
-        )
-        print(
-            f"Non-truncating: {group2_count} ({group2_count / total * 100:.1f}%)"
-            if total > 0
-            else "Non-truncating: 0"
-        )
+        # Note: total > 0 is guaranteed here since we skip if total == 0
+        print(f"Truncating: {group1_count} ({group1_count / total * 100:.1f}%)")
+        print(f"Non-truncating: {group2_count} ({group2_count / total * 100:.1f}%)")
         print(f"Total: {total}")
 
         # Assertions - both groups should have variants

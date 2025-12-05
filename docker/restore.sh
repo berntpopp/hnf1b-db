@@ -55,8 +55,9 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 echo "Restoring from: $BACKUP_FILE"
-gunzip -c "$BACKUP_FILE" | \
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T "$DB_CONTAINER" \
-    psql -U "$DB_USER" -d "$DB_NAME"
+
+# Use docker exec directly on the container (works regardless of compose setup)
+# This avoids needing to know which compose files were used to start the containers
+gunzip -c "$BACKUP_FILE" | docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME"
 
 echo "Restore complete!"

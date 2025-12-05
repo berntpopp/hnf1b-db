@@ -243,16 +243,6 @@ docker-ps:  ## Show running containers
 # Note: These targets auto-detect whether to use standard (hnf1b_api) or NPM
 # (hnf1b_api_npm) container names based on which containers are running.
 
-# Helper function to detect API container name
-define get_api_container
-$(shell docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1 || echo "hnf1b_api")
-endef
-
-# Helper function to detect DB container name
-define get_db_container
-$(shell docker ps --format '{{.Names}}' | grep -E '^hnf1b_db$$' | head -1 || echo "hnf1b_db")
-endef
-
 docker-db-migrate:  ## Run Alembic migrations in Docker
 	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
 	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
