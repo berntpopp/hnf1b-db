@@ -8,6 +8,12 @@
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
 
+# Docker compose file paths
+COMPOSE_BASE := docker/docker-compose.yml
+COMPOSE_NPM := docker/docker-compose.npm.yml
+COMPOSE_DEV := docker/docker-compose.dev.yml
+ENV_FILE := .env.docker
+
 help:  ## Show this help message
 	@echo "╔════════════════════════════════════════════════════════════════╗"
 	@echo "║     HNF1B Database - Full Stack Development Commands          ║"
@@ -20,7 +26,7 @@ help:  ## Show this help message
 	@echo "  make frontend        - Run frontend locally (after hybrid-up)"
 	@echo ""
 	@echo "🐳 FULL DOCKER DEVELOPMENT:"
-	@echo "  make dev-up          - Start full stack in Docker"
+	@echo "  make dev-up          - Start full stack in Docker (with ports)"
 	@echo "  make dev-down        - Stop all Docker services"
 	@echo "  make dev-logs        - Show Docker logs"
 	@echo ""
@@ -60,10 +66,6 @@ help:  ## Show this help message
 	@echo "  make docker-clean    - Clean up (preserves volumes)"
 	@echo "  make docker-clean-all - Full clean (DATA LOSS!)"
 	@echo ""
-	@echo "🔧 DOCKER DEVELOPMENT:"
-	@echo "  make docker-dev      - Start dev mode with port exposure"
-	@echo "  make docker-dev-bg   - Start dev mode (background)"
-	@echo ""
 	@echo "💾 DOCKER DATABASE:"
 	@echo "  make docker-db-migrate - Run migrations in Docker"
 	@echo "  make docker-db-backup  - Backup database"
@@ -95,7 +97,7 @@ server:  ## Start development server
 
 # Hybrid Development Commands (Services in Docker, Apps local)
 hybrid-up:  ## Start PostgreSQL and Redis services in Docker
-	$(DOCKER_COMPOSE) -f docker-compose.services.yml up -d
+	$(DOCKER_COMPOSE) -f $(COMPOSE_DEV) up -d
 	@echo ""
 	@echo "✅ Services started!"
 	@echo ""
@@ -105,11 +107,11 @@ hybrid-up:  ## Start PostgreSQL and Redis services in Docker
 	@echo ""
 
 hybrid-down:  ## Stop PostgreSQL and Redis services
-	$(DOCKER_COMPOSE) -f docker-compose.services.yml down
+	$(DOCKER_COMPOSE) -f $(COMPOSE_DEV) down
 
 # Full Docker Development Commands
-dev-up:  ## Start full stack in Docker
-	$(DOCKER_COMPOSE) up -d
+dev-up:  ## Start full stack in Docker (with ports exposed)
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) up -d --build
 	@echo ""
 	@echo "✅ Full stack started!"
 	@echo "  Frontend: http://localhost:3000"
@@ -118,10 +120,10 @@ dev-up:  ## Start full stack in Docker
 	@echo ""
 
 dev-down:  ## Stop all Docker services
-	$(DOCKER_COMPOSE) down
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) down
 
 dev-logs:  ## Show Docker logs
-	$(DOCKER_COMPOSE) logs -f
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) logs -f
 
 # Component Commands
 backend:  ## Run backend locally
@@ -135,7 +137,7 @@ status:  ## Show system status
 	@echo "=== System Status ==="
 	@echo ""
 	@echo "Docker Containers:"
-	@$(DOCKER_COMPOSE) ps
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) ps 2>/dev/null || echo "No containers running"
 	@echo ""
 	@echo "Backend Status:"
 	@-curl -s http://localhost:8000/health 2>/dev/null | head -1 || echo "Backend not running"
@@ -181,8 +183,8 @@ clean:  ## Remove virtual environment and cache
 
 clean-all:  ## Stop all services and clean data
 	@echo "Stopping all services..."
-	@$(DOCKER_COMPOSE) down -v 2>/dev/null || true
-	@$(DOCKER_COMPOSE) -f docker-compose.services.yml down -v 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) down -v 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_DEV) down -v 2>/dev/null || true
 	@-pkill -f "uvicorn app.main:app" 2>/dev/null || true
 	@-pkill -f "vite.*5173" 2>/dev/null || true
 	@echo "✅ All services stopped and data cleaned"
@@ -190,47 +192,37 @@ clean-all:  ## Stop all services and clean data
 reset: clean install  ## Clean and reinstall everything
 
 # ============================================
-# Docker Production Targets
+# Docker Production Targets (NPM)
 # ============================================
 
 docker-build:  ## Build production Docker images
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker build
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) build
 
 docker-npm:  ## Start NPM production mode (foreground)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker up --build
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) up --build
 
 docker-npm-bg:  ## Start NPM production mode (background)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker up -d --build
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) up -d --build
 
 docker-down:  ## Stop all containers (preserves data)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker down
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) down
 
 docker-logs:  ## View container logs
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker logs -f
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) logs -f
 
 docker-logs-api:  ## View API container logs
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker logs -f hnf1b_api
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) logs -f hnf1b_api
 
 docker-logs-frontend:  ## View frontend container logs
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker logs -f hnf1b_frontend
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) logs -f hnf1b_frontend
 
 docker-clean:  ## Clean up (preserves volumes)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker down --rmi local
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) down --rmi local
 
 docker-clean-all:  ## Full clean (removes volumes - DATA LOSS!)
 	@echo "WARNING: This will delete all data!"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ]
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker down -v --rmi local
-
-# ============================================
-# Docker Development Targets
-# ============================================
-
-docker-dev:  ## Start development mode with port exposure (foreground)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml -f docker-compose.dev.yml --env-file .env.docker up --build
-
-docker-dev-bg:  ## Start development mode (background)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml -f docker-compose.dev.yml --env-file .env.docker up -d --build
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) down -v --rmi local
 
 # ============================================
 # Health & Status
@@ -238,36 +230,38 @@ docker-dev-bg:  ## Start development mode (background)
 
 docker-health:  ## Check container health status
 	@echo "Checking container health..."
-	@docker inspect --format='{{.Name}}: {{.State.Health.Status}}' hnf1b_api hnf1b_frontend hnf1b_db hnf1b_cache 2>/dev/null || echo "Containers not running"
+	@docker inspect --format='{{.Name}}: {{.State.Health.Status}}' hnf1b_api hnf1b_frontend hnf1b_db hnf1b_cache 2>/dev/null || \
+	docker inspect --format='{{.Name}}: {{.State.Health.Status}}' hnf1b_api_npm hnf1b_frontend_npm hnf1b_db hnf1b_cache 2>/dev/null || \
+	echo "Containers not running"
 
 docker-ps:  ## Show running containers
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker ps
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) ps
 
 # ============================================
 # Database Operations (Docker)
 # ============================================
 
 docker-db-migrate:  ## Run Alembic migrations in Docker
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_api alembic upgrade head
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api alembic upgrade head
 
 docker-db-init:  ## Initialize database with admin user in Docker
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_api python -m app.scripts.create_admin
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m app.scripts.create_admin
 
 docker-db-backup:  ## Backup database
 	./docker/backup.sh
 
 docker-shell-api:  ## Shell into API container
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_api /bin/sh
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api /bin/sh
 
 docker-shell-db:  ## Connect to PostgreSQL CLI
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_db psql -U hnf1b_user -d hnf1b_phenopackets
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_db psql -U hnf1b_user -d hnf1b_phenopackets
 
 # ============================================
 # Data Import (Docker)
 # ============================================
 
 docker-import-full:  ## Run full data import in Docker
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_api python -m migration.direct_sheets_to_phenopackets
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m migration.direct_sheets_to_phenopackets
 
 docker-import-test:  ## Run test data import in Docker (20 records)
-	$(DOCKER_COMPOSE) -f docker-compose.npm.yml --env-file .env.docker exec hnf1b_api python -m migration.direct_sheets_to_phenopackets --test
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m migration.direct_sheets_to_phenopackets --test

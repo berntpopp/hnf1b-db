@@ -1,0 +1,92 @@
+# docker-compose.dev.yml
+# HNF1B Database - Development Services Only (Hybrid Mode)
+#
+# Usage:
+#   docker compose -f docker/docker-compose.dev.yml up -d
+#
+# This configuration runs ONLY PostgreSQL and Redis for hybrid development
+# where FastAPI backend and Vue frontend run locally for faster iteration.
+#
+# After starting services:
+#   Terminal 1: make backend   # Start FastAPI on http://localhost:8000
+#   Terminal 2: make frontend  # Start Vue on http://localhost:5173
+
+name: hnf1b-dev
+
+services:
+  # ============================================
+  # PostgreSQL Database (Development)
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: hnf1b_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hnf1b_phenopackets}
+      POSTGRES_USER: ${POSTGRES_USER:-hnf1b_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hnf1b_pass}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      # Non-standard port to avoid conflicts with local PostgreSQL
+      - "${DB_PORT_HOST:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts if needed
+      - ../database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - hnf1b_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hnf1b_user} -d ${POSTGRES_DB:-hnf1b_phenopackets}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Redis Cache (Development)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: hnf1b_cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      # Non-standard port to avoid conflicts with local Redis
+      - "${REDIS_PORT_HOST:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hnf1b_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  hnf1b_network:
+    name: hnf1b_network
+    driver: bridge
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -28,7 +28,7 @@ fi
 
 echo "Restoring from: $BACKUP_FILE"
 gunzip -c "$BACKUP_FILE" | \
-docker compose -f docker-compose.npm.yml --env-file .env.docker exec -T hnf1b_db \
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T hnf1b_db \
     psql -U hnf1b_user -d hnf1b_phenopackets
 
 echo "Restore complete!"

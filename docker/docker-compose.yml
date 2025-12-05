@@ -1,0 +1,158 @@
+# docker-compose.yml
+# HNF1B Database - Base Docker Compose Configuration
+#
+# Usage:
+#   Local Development:  docker compose -f docker/docker-compose.yml up -d --build
+#   Production (NPM):   docker compose -f docker/docker-compose.yml -f docker/docker-compose.npm.yml --env-file .env.docker up -d --build
+#
+# This base configuration includes all services with ports exposed for local development.
+# Use docker-compose.npm.yml overlay for production deployment behind Nginx Proxy Manager.
+
+name: hnf1b-db
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  hnf1b_db:
+    image: postgres:15-alpine
+    container_name: hnf1b_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hnf1b_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hnf1b_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-hnf1b_phenopackets}
+    ports:
+      - "${DB_PORT_HOST:-5433}:5432"
+    volumes:
+      - hnf1b_postgres_data:/var/lib/postgresql/data
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hnf1b_user} -d ${POSTGRES_DB:-hnf1b_phenopackets}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  hnf1b_cache:
+    image: redis:7-alpine
+    container_name: hnf1b_cache
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+    ports:
+      - "${REDIS_PORT_HOST:-6380}:6379"
+    volumes:
+      - hnf1b_redis_data:/data
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # FastAPI Backend
+  # ============================================
+  hnf1b_api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: hnf1b-db/api:${IMAGE_TAG:-latest}
+    container_name: hnf1b_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-hnf1b_user}:${POSTGRES_PASSWORD:-hnf1b_pass}@hnf1b_db:5432/${POSTGRES_DB:-hnf1b_phenopackets}
+      REDIS_URL: redis://hnf1b_cache:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL_API:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "${API_PORT_HOST:-8000}:8000"
+    depends_on:
+      hnf1b_db:
+        condition: service_healthy
+      hnf1b_cache:
+        condition: service_healthy
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================
+  # Vue.js Frontend
+  # ============================================
+  hnf1b_frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v2}
+    image: hnf1b-db/frontend:${IMAGE_TAG:-latest}
+    container_name: hnf1b_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT_HOST:-3000}:80"
+    depends_on:
+      hnf1b_api:
+        condition: service_healthy
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  hnf1b_internal:
+    name: hnf1b_internal
+    driver: bridge
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  hnf1b_postgres_data:
+    name: hnf1b_postgres_data
+  hnf1b_redis_data:
+    name: hnf1b_redis_data

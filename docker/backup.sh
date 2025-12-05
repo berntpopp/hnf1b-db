@@ -10,7 +10,7 @@ BACKUP_FILE="$BACKUP_DIR/hnf1b_backup_$TIMESTAMP.sql.gz"
 mkdir -p "$BACKUP_DIR"
 
 echo "Creating backup: $BACKUP_FILE"
-docker compose -f docker-compose.npm.yml --env-file .env.docker exec -T hnf1b_db \
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T hnf1b_db \
     pg_dump -U hnf1b_user -d hnf1b_phenopackets | gzip > "$BACKUP_FILE"
 
 echo "Backup size: $(du -h "$BACKUP_FILE" | cut -f1)"

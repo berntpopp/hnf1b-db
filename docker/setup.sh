@@ -16,21 +16,21 @@ echo -e "${GREEN}=====================================${NC}"
 command -v docker &> /dev/null || { echo -e "${RED}Error: Docker not installed${NC}"; exit 1; }
 docker compose version &> /dev/null || { echo -e "${RED}Error: Docker Compose V2 not installed${NC}"; exit 1; }
 
-# Check/create .env.docker
-if [ ! -f ".env.docker" ]; then
-    if [ -f ".env.docker.template" ]; then
-        cp .env.docker.template .env.docker
-        echo -e "${YELLOW}Created .env.docker - please configure it${NC}"
+# Check/create docker/.env.docker
+if [ ! -f "docker/.env.docker" ]; then
+    if [ -f "docker/.env.example" ]; then
+        cp docker/.env.example docker/.env.docker
+        echo -e "${YELLOW}Created docker/.env.docker - please configure it${NC}"
         echo -e "${YELLOW}Required: POSTGRES_PASSWORD, JWT_SECRET, ADMIN_PASSWORD${NC}"
         exit 1
     else
-        echo -e "${RED}Error: .env.docker.template not found${NC}"
+        echo -e "${RED}Error: docker/.env.example not found${NC}"
         exit 1
     fi
 fi
 
 # Validate required variables
-source .env.docker
+source docker/.env.docker
 [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32" ] && {
     echo -e "${RED}Error: Configure JWT_SECRET (openssl rand -hex 32)${NC}"; exit 1;
 }
@@ -45,32 +45,33 @@ docker network ls | grep -q "$NPM_NETWORK" || {
     docker network create "$NPM_NETWORK"
 }
 
-# Create symlink
-ln -sf .env.docker .env
+# Create symlink in root for convenience
+ln -sf docker/.env.docker .env
 
 # Build and start
 echo -e "${GREEN}Building Docker images...${NC}"
-docker compose -f docker-compose.npm.yml --env-file .env.docker build
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker build
 
 echo -e "${GREEN}Starting services...${NC}"
-docker compose -f docker-compose.npm.yml --env-file .env.docker up -d
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker up -d
 
 echo -e "${YELLOW}Waiting for services to be healthy...${NC}"
 sleep 30
 
-docker compose -f docker-compose.npm.yml --env-file .env.docker ps
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker ps
 
 # Run migrations
 echo -e "${GREEN}Running database migrations...${NC}"
-docker compose -f docker-compose.npm.yml --env-file .env.docker exec -T hnf1b_api alembic upgrade head
+docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T hnf1b_api alembic upgrade head
 
 # Check if initial import needed
 if [ "$ENABLE_DATA_IMPORT" = "true" ]; then
     echo -e "${GREEN}Running initial data import...${NC}"
-    docker compose -f docker-compose.npm.yml --env-file .env.docker exec -T hnf1b_api python -m migration.direct_sheets_to_phenopackets
+    docker compose -f docker/docker-compose.npm.yml --env-file docker/.env.docker exec -T hnf1b_api python -m migration.direct_sheets_to_phenopackets
 
     echo -e "${YELLOW}Disabling future auto-imports...${NC}"
-    sed -i 's/ENABLE_DATA_IMPORT=true/ENABLE_DATA_IMPORT=false/' .env.docker
+    # Update the file in docker/ directory
+    sed -i 's/ENABLE_DATA_IMPORT=true/ENABLE_DATA_IMPORT=false/' docker/.env.docker
 fi
 
 echo -e "${GREEN}=====================================${NC}"
