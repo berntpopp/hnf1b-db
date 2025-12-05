@@ -82,7 +82,8 @@ export default {
       // Generate filename based on comparison type and endpoint
       const timestamp = new Date().toISOString().slice(0, 10);
       const comparison = this.survivalData?.comparison_type || 'survival';
-      const endpoint = this.survivalData?.endpoint?.replace(/\s+/g, '-').toLowerCase() || 'analysis';
+      const endpoint =
+        this.survivalData?.endpoint?.replace(/\s+/g, '-').toLowerCase() || 'analysis';
       const filename = `kaplan-meier-${comparison}-${endpoint}-${timestamp}.svg`;
 
       const link = document.createElement('a');
