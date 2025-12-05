@@ -18,8 +18,10 @@
 # Prerequisites:
 # 1. Create .env.docker from .env.docker.example with production values
 # 2. NPM network must exist: docker network create npm_default
-
-name: hnf1b-db-npm
+#
+# Note: This overlay uses the same project name as the base compose file (hnf1b-db)
+# to properly merge configurations. Container names are explicitly set to *_npm
+# variants for clarity in production environments.
 
 services:
   # ============================================

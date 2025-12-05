@@ -31,8 +31,8 @@ services:
       - "${DB_PORT_HOST:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Init scripts if needed
-      - ../database/init:/docker-entrypoint-initdb.d:ro
+      # Note: Add init scripts to ../database/init if needed for custom initialization
+      # - ../database/init:/docker-entrypoint-initdb.d:ro
     networks:
       - hnf1b_network
     healthcheck:

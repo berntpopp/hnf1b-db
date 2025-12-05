@@ -67,7 +67,17 @@ create_admin_user() {
 # Run initial data import if enabled
 run_data_import() {
     if [ "${ENABLE_DATA_IMPORT:-false}" = "true" ]; then
-        log_info "Data import is ENABLED, checking if database is empty..."
+        log_info "Data import is ENABLED, checking configuration..."
+
+        # Validate required environment variables for Google Sheets import
+        if [ -z "$GOOGLE_SHEETS_ID" ]; then
+            log_error "GOOGLE_SHEETS_ID environment variable is not set."
+            log_error "Data import requires GOOGLE_SHEETS_ID to be configured."
+            log_warn "Skipping data import. Set GOOGLE_SHEETS_ID or disable ENABLE_DATA_IMPORT."
+            return 0
+        fi
+
+        log_info "Checking if database is empty..."
 
         # Check if phenopackets table has data
         local count=$(python -c "
