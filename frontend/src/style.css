@@ -105,11 +105,69 @@ button:focus-visible {
   opacity: 0.7;
 }
 
+/* Ensure text-grey has sufficient contrast (WCAG AA requires 4.5:1) */
+.text-grey {
+  color: #616161 !important; /* Darker grey for better contrast */
+}
+
+/* Improve text-caption contrast */
+.text-caption {
+  color: #424242;
+}
+
 /* Make links distinguishable without color alone */
 a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
+}
+
+/* Enhanced focus indicators for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: 2px !important;
+}
+
+/* Ensure Vuetify buttons have visible focus */
+.v-btn:focus-visible {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: 2px !important;
+}
+
+/* Ensure list items have visible focus */
+.v-list-item:focus-visible {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: -2px !important;
+}
+
+/* Improve chip contrast when focused */
+.v-chip:focus-visible {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: 2px !important;
+}
+
+/* Ensure SVG interactive elements are keyboard accessible */
+.lollipop-circle:focus,
+.domain-rect:focus {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #1976d2;
+  color: white;
+  padding: 8px 16px;
+  z-index: 9999;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+  top: 0;
 }
 
 /* Respect reduced motion preference */
