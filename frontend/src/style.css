@@ -77,3 +77,49 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* ==================== PERFORMANCE OPTIMIZATIONS ==================== */
+
+/* Content visibility for below-fold sections - skip rendering off-screen content */
+.v-data-table,
+.phenopacket-details,
+.aggregations-dashboard {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* Skip rendering hidden tabs entirely */
+.v-window-item:not(.v-window-item--active) {
+  content-visibility: hidden;
+}
+
+/* ==================== ACCESSIBILITY IMPROVEMENTS ==================== */
+
+/* Ensure WCAG AA compliance for tonal chips */
+.v-chip--variant-tonal {
+  --v-chip-tonal-opacity: 0.2;
+}
+
+/* Improve muted text readability (increase from 0.6 to 0.7) */
+.text-medium-emphasis {
+  opacity: 0.7;
+}
+
+/* Make links distinguishable without color alone */
+a:not(.v-btn):not(.v-chip):not(.v-list-item) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

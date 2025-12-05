@@ -2,14 +2,196 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Primary Meta Tags -->
+    <title>HNF1B Database - Clinical Phenotype and Variant Registry</title>
+    <meta
+      name="title"
+      content="HNF1B Database - Clinical Phenotype and Variant Registry"
+    />
+    <meta
+      name="description"
+      content="Comprehensive database of HNF1B gene variants and associated phenotypes. Search 800+ phenopackets with clinical features, genetic variants, and publications for HNF1B-related disorders."
+    />
+    <meta
+      name="keywords"
+      content="HNF1B, MODY5, renal cysts, diabetes, phenopackets, genetic variants, clinical genetics"
+    />
+    <meta name="author" content="Berlin Institute of Health at Charité" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://hnf1b.org/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hnf1b.org/" />
+    <meta
+      property="og:title"
+      content="HNF1B Database - Clinical Phenotype and Variant Registry"
+    />
+    <meta
+      property="og:description"
+      content="Comprehensive database of HNF1B gene variants and associated phenotypes. Search 800+ phenopackets with clinical features and genetic variants."
+    />
+    <meta property="og:image" content="https://hnf1b.org/HNF1B-db_logo.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="HNF1B Database" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://hnf1b.org/" />
+    <meta
+      name="twitter:title"
+      content="HNF1B Database - Clinical Phenotype and Variant Registry"
+    />
+    <meta
+      name="twitter:description"
+      content="Comprehensive database of HNF1B gene variants and associated phenotypes."
+    />
+    <meta name="twitter:image" content="https://hnf1b.org/HNF1B-db_logo.png" />
+
     <!-- Modern favicon setup: SVG with PNG fallbacks -->
     <link rel="icon" type="image/svg+xml" href="/HNF1B-db_favicon.svg" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/apple-touch-icon.png"
+    />
+
+    <!-- Mobile -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HNF1B Database</title>
+    <meta name="theme-color" content="#1976D2" />
+
+    <!-- Preconnect to API for faster first request -->
+    <link rel="dns-prefetch" href="//api.hnf1b.org" />
+    <link rel="preconnect" href="https://api.hnf1b.org" crossorigin />
+
+    <!-- JSON-LD Structured Data: Organization -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://hnf1b.org/#organization",
+        "name": "HNF1B Database",
+        "url": "https://hnf1b.org",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://hnf1b.org/HNF1B-db_logo.svg",
+          "width": 512,
+          "height": 512
+        },
+        "description": "Comprehensive database of HNF1B gene variants and associated clinical phenotypes.",
+        "foundingDate": "2021",
+        "sameAs": ["https://github.com/berntpopp/hnf1b-db"],
+        "parentOrganization": {
+          "@type": "Organization",
+          "name": "Berlin Institute of Health at Charité",
+          "alternateName": "BIH",
+          "url": "https://www.bihealth.org"
+        }
+      }
+    </script>
+
+    <!-- JSON-LD Structured Data: WebSite (enables sitelinks search) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://hnf1b.org/#website",
+        "name": "HNF1B Database",
+        "url": "https://hnf1b.org",
+        "description": "Clinical phenotype and variant registry for HNF1B-related disorders",
+        "publisher": {
+          "@id": "https://hnf1b.org/#organization"
+        },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://hnf1b.org/search?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <!-- JSON-LD Structured Data: SoftwareApplication -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://hnf1b.org/#software",
+        "name": "HNF1B Database",
+        "applicationCategory": "HealthApplication",
+        "applicationSubCategory": "Clinical Genetics Database",
+        "operatingSystem": "Web Browser",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "GA4GH Phenopackets v2 compliant data storage",
+          "Variant Effect Predictor (VEP) annotations",
+          "HPO term autocomplete and search",
+          "Kaplan-Meier survival analysis",
+          "Interactive protein visualizations",
+          "Publication tracking with PubMed integration"
+        ],
+        "softwareVersion": "2.0",
+        "isAccessibleForFree": true,
+        "license": "https://opensource.org/licenses/MIT",
+        "codeRepository": "https://github.com/berntpopp/hnf1b-db",
+        "programmingLanguage": ["Python", "JavaScript", "Vue.js"],
+        "author": {
+          "@id": "https://hnf1b.org/#organization"
+        }
+      }
+    </script>
+
+    <!-- JSON-LD Structured Data: Dataset (for scientific databases) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "@id": "https://hnf1b.org/#dataset",
+        "name": "HNF1B Phenopacket Collection",
+        "description": "Collection of 864 GA4GH Phenopackets containing clinical phenotype and genetic variant data for HNF1B-related disorders",
+        "url": "https://hnf1b.org/phenopackets",
+        "identifier": "hnf1b-phenopackets-v2",
+        "keywords": [
+          "HNF1B",
+          "MODY5",
+          "renal cysts",
+          "diabetes",
+          "phenopackets",
+          "rare disease"
+        ],
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "creator": {
+          "@id": "https://hnf1b.org/#organization"
+        },
+        "distribution": {
+          "@type": "DataDownload",
+          "encodingFormat": "application/json",
+          "contentUrl": "https://api.hnf1b.org/api/v2/phenopackets/"
+        },
+        "measurementTechnique": "Clinical phenotyping with HPO terms",
+        "variableMeasured": [
+          "Clinical phenotypes (HPO)",
+          "Genetic variants",
+          "Disease classifications (MONDO)",
+          "Publication references"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

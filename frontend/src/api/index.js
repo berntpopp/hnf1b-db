@@ -657,6 +657,7 @@ export const getReferenceGeneTranscripts = (symbol, genomeBuild = 'GRCh38') =>
 
 /**
  * Get protein domains for a gene's canonical transcript.
+ * Returns empty domains array gracefully if reference data is unavailable.
  * @param {string} symbol - Gene symbol (e.g., "HNF1B")
  * @param {string} genomeBuild - Genome assembly name (default: GRCh38)
  * @returns {Promise} Axios promise with protein domains
@@ -668,10 +669,20 @@ export const getReferenceGeneTranscripts = (symbol, genomeBuild = 'GRCh38') =>
  *   - genome_build: Genome assembly
  *   - updated_at: Last update timestamp
  */
-export const getReferenceGeneDomains = (symbol, genomeBuild = 'GRCh38') =>
-  apiClient.get(`/reference/genes/${symbol}/domains`, {
-    params: { genome_build: genomeBuild },
-  });
+export const getReferenceGeneDomains = async (symbol, genomeBuild = 'GRCh38') => {
+  try {
+    return await apiClient.get(`/reference/genes/${symbol}/domains`, {
+      params: { genome_build: genomeBuild },
+    });
+  } catch (error) {
+    // Handle 404 gracefully - reference data may not be populated
+    if (error.response?.status === 404) {
+      window.logService?.debug('Reference domains not available', { symbol, genomeBuild });
+      return { data: { domains: [], gene: symbol, genome_build: genomeBuild } };
+    }
+    throw error;
+  }
+};
 
 /**
  * Get all genes in a genomic region.
