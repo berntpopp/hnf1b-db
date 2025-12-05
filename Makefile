@@ -240,28 +240,58 @@ docker-ps:  ## Show running containers
 # ============================================
 # Database Operations (Docker)
 # ============================================
+# Note: These targets auto-detect whether to use standard (hnf1b_api) or NPM
+# (hnf1b_api_npm) container names based on which containers are running.
+
+# Helper function to detect API container name
+define get_api_container
+$(shell docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1 || echo "hnf1b_api")
+endef
+
+# Helper function to detect DB container name
+define get_db_container
+$(shell docker ps --format '{{.Names}}' | grep -E '^hnf1b_db$$' | head -1 || echo "hnf1b_db")
+endef
 
 docker-db-migrate:  ## Run Alembic migrations in Docker
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api alembic upgrade head
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER alembic upgrade head
 
 docker-db-init:  ## Initialize database with admin user in Docker
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m app.scripts.create_admin
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER python -m app.scripts.create_admin
 
 docker-db-backup:  ## Backup database
 	./docker/backup.sh
 
 docker-shell-api:  ## Shell into API container
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api /bin/sh
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Connecting to: $$API_CONTAINER"; \
+	docker exec -it $$API_CONTAINER /bin/sh
 
 docker-shell-db:  ## Connect to PostgreSQL CLI
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_db psql -U hnf1b_user -d hnf1b_phenopackets
+	@DB_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_db$$' | head -1); \
+	if [ -z "$$DB_CONTAINER" ]; then echo "Error: No DB container running"; exit 1; fi; \
+	echo "Connecting to: $$DB_CONTAINER"; \
+	docker exec -it $$DB_CONTAINER psql -U $${POSTGRES_USER:-hnf1b_user} -d $${POSTGRES_DB:-hnf1b_phenopackets}
 
 # ============================================
 # Data Import (Docker)
 # ============================================
 
 docker-import-full:  ## Run full data import in Docker
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m migration.direct_sheets_to_phenopackets
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets
 
 docker-import-test:  ## Run test data import in Docker (20 records)
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) -f $(COMPOSE_NPM) --env-file $(ENV_FILE) exec hnf1b_api python -m migration.direct_sheets_to_phenopackets --test
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets --test
