@@ -205,80 +205,63 @@ class TestClassificationConsistency:
 class TestDistributionReasonableness:
     """Test that classification distributions are reasonable."""
 
-    async def test_both_groups_have_variants(self, db_session):
+    async def test_both_groups_have_variants(self, async_client):
         """Verify that both truncating and non-truncating groups exist.
+
+        Uses the actual API endpoint for classification, which applies the full
+        multi-tier classification logic (VEP IMPACT → pathogenicity + IMPACT →
+        HGVS patterns → default). This ensures the test matches real behavior.
 
         If one group is empty, the classification logic may be broken.
         """
-        result = await db_session.execute(
-            text(
-                """
-            WITH variant_classification AS (
-                SELECT
-                    p.phenopacket_id,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(
-                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                            ) AS ext
-                            WHERE ext->>'name' = 'vep_annotation'
-                              AND ext#>>'{value,impact}' = 'HIGH'
-                        ) THEN 'Truncating'
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM jsonb_array_elements(
-                                interp.value#>'{diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor,extensions}'
-                            ) AS ext
-                            WHERE ext->>'name' = 'vep_annotation'
-                              AND ext#>>'{value,impact}' = 'MODERATE'
-                        ) THEN 'Non-truncating'
-                        ELSE 'Other'
-                    END as classification
-                FROM phenopackets p,
-                     jsonb_array_elements(p.phenopacket->'interpretations') AS interp
-                WHERE p.deleted_at IS NULL
-                  AND interp.value#>'{diagnosis,genomicInterpretations}' IS NOT NULL
-            )
-            SELECT
-                classification,
-                COUNT(*) as count
-            FROM variant_classification
-            GROUP BY classification
-        """
-            )
+        # Use the API endpoint which applies proper multi-tier classification
+        response = await async_client.get(
+            "/api/v2/phenopackets/compare/variant-types",
+            params={
+                "comparison": "truncating_vs_non_truncating",
+                "limit": 1,  # Only need summary data
+                "min_prevalence": 0.0,  # Get all phenotypes to see group sizes
+            },
         )
 
-        rows = result.fetchall()
-        counts = {row[0]: row[1] for row in rows}
+        assert response.status_code == 200
+        data = response.json()
 
-        truncating_count = counts.get("Truncating", 0)
-        non_truncating_count = counts.get("Non-truncating", 0)
-        other_count = counts.get("Other", 0)
+        # Extract group counts from the ComparisonResult
+        group1_count = data.get("group1_count", 0)
+        group2_count = data.get("group2_count", 0)
 
-        total = sum(counts.values())
+        total = group1_count + group2_count
 
         # Skip test if no variants in database
         if total == 0:
             pytest.skip("No variants found in database")
 
-        print("\n=== Classification Distribution ===")
-        print(f"Truncating: {truncating_count} ({truncating_count / total * 100:.1f}%)")
+        print("\n=== Classification Distribution (via API) ===")
         print(
-            f"Non-truncating: {non_truncating_count} ({non_truncating_count / total * 100:.1f}%)"
+            f"Truncating: {group1_count} ({group1_count / total * 100:.1f}%)"
+            if total > 0
+            else "Truncating: 0"
         )
-        print(f"Other: {other_count} ({other_count / total * 100:.1f}%)")
+        print(
+            f"Non-truncating: {group2_count} ({group2_count / total * 100:.1f}%)"
+            if total > 0
+            else "Non-truncating: 0"
+        )
         print(f"Total: {total}")
 
-        # Assertions
-        assert truncating_count > 0, "No truncating variants found"
-        assert non_truncating_count > 0, "No non-truncating variants found"
+        # Assertions - both groups should have variants
+        assert group1_count > 0, (
+            "No truncating variants found - classification logic may be broken or "
+            "data may lack VEP annotations and HGVS patterns for classification"
+        )
+        assert group2_count > 0, (
+            "No non-truncating variants found - classification logic may be broken"
+        )
 
         # Both groups should have at least 10% of total
-        assert truncating_count / total >= 0.1, "Truncating group too small (< 10%)"
-        assert non_truncating_count / total >= 0.1, (
-            "Non-truncating group too small (< 10%)"
-        )
+        assert group1_count / total >= 0.1, "Truncating group too small (< 10%)"
+        assert group2_count / total >= 0.1, "Non-truncating group too small (< 10%)"
 
         print("\n✓ Both groups have reasonable representation")
 
