@@ -1,5 +1,8 @@
 # app/database.py
-"""Database configuration and session management for PostgreSQL."""
+"""Database configuration and session management for PostgreSQL.
+
+Pool settings and timeouts are loaded from config.yaml.
+"""
 
 import logging
 from typing import AsyncGenerator
@@ -8,23 +11,23 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from app.config import settings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create async engine with proper configuration
+# Create async engine with configuration from config.yaml
 engine = create_async_engine(
     settings.DATABASE_URL,
-    # Connection pool settings
-    pool_size=20,
-    max_overflow=0,
+    # Connection pool settings (from config.yaml)
+    pool_size=settings.database.pool_size,
+    max_overflow=settings.database.max_overflow,
     pool_pre_ping=True,
-    pool_recycle=3600,
+    pool_recycle=settings.database.pool_recycle_seconds,
     # Echo SQL queries in development (set to False in production)
     echo=False,
     # Connection arguments
     connect_args={
-        "command_timeout": 60,
+        "command_timeout": settings.database.command_timeout_seconds,
         "server_settings": {
             "jit": "off",  # Disable JIT for better predictability in development
         },

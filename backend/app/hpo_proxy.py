@@ -1,23 +1,23 @@
-"""HPO Proxy endpoints to handle CORS and caching for frontend."""
+"""HPO Proxy endpoints to handle CORS and caching for frontend.
+
+Proxies requests to the OLS API for HPO term search and autocomplete.
+Uses Redis for distributed caching (with in-memory fallback).
+Configuration is loaded from config.yaml via app.core.config.
+"""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.cache import cache
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2/hpo", tags=["hpo"])
-
-# HPO JAX API base URL
-# Note: Using OLS API as HPO JAX API structure has changed
-OLS_API_BASE = "https://www.ebi.ac.uk/ols4/api"
-
-# Optional: Simple in-memory cache for frequent searches
-# In production, consider using Redis for caching
-search_cache: Dict[str, Any] = {}
 
 
 class HPOTerm(BaseModel):
@@ -49,17 +49,23 @@ async def search_hpo_terms(
     Returns:
         Search results from HPO JAX API
     """
-    # Check cache first (optional)
-    cache_key = f"{q}:{max_results}"
-    if cache_key in search_cache:
+    # Check cache first (Redis with fallback)
+    cache_key = f"hpo:search:{q}:{max_results}"
+    cached = await cache.get_json(cache_key)
+    if cached:
         logger.info(f"Cache hit for HPO search: {q}")
-        return search_cache[cache_key]
+        return cached
+
+    # Get config values
+    ols_base = settings.external_apis.ols.base_url
+    ols_timeout = settings.external_apis.ols.timeout_seconds
+    cache_ttl = settings.external_apis.ols.cache_ttl_seconds
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=ols_timeout) as client:
             # Using OLS API for HPO term search
             response = await client.get(
-                f"{OLS_API_BASE}/search",
+                f"{ols_base}/search",
                 params={
                     "q": q,
                     "ontology": "hp",
@@ -90,13 +96,8 @@ async def search_hpo_terms(
                         )
                 data = {"terms": terms}
 
-            # Cache the result (optional)
-            search_cache[cache_key] = data
-
-            # Limit cache size
-            if len(search_cache) > 100:
-                # Remove oldest entries (simple FIFO)
-                search_cache.pop(next(iter(search_cache)))
+            # Cache the result in Redis (with TTL for automatic expiration)
+            await cache.set_json(cache_key, data, ttl=cache_ttl)
 
             return data
 
@@ -125,11 +126,15 @@ async def get_hpo_term(term_id: str):
     # Normalize term ID format
     term_id = term_id.replace("_", ":")
 
+    # Get config values
+    ols_base = settings.external_apis.ols.base_url
+    ols_timeout = settings.external_apis.ols.timeout_seconds
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=ols_timeout) as client:
             # Using OLS API to get term details
             response = await client.get(
-                f"{OLS_API_BASE}/ontologies/hp/terms",
+                f"{ols_base}/ontologies/hp/terms",
                 params={
                     "iri": f"http://purl.obolibrary.org/obo/{term_id.replace(':', '_')}"
                 },
@@ -167,10 +172,14 @@ async def autocomplete_hpo_terms(
     Returns:
         List of HPO terms with ID and name
     """
+    # Get config values
+    ols_base = settings.external_apis.ols.base_url
+    ols_timeout = settings.external_apis.ols.timeout_seconds
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=ols_timeout) as client:
             response = await client.get(
-                f"{OLS_API_BASE}/search",
+                f"{ols_base}/search",
                 params={"q": q, "ontology": "hp", "rows": limit, "local": "true"},
             )
             response.raise_for_status()

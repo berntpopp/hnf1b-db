@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
-from app.config import settings
+from app.core.cache import close_cache, init_cache
+from app.core.config import settings
 from app.database import engine
 from app.ontology import routers as ontology_router
 from app.phenopackets import clinical_endpoints
@@ -22,10 +23,15 @@ async def lifespan(app: FastAPI):
 
     Database schema is now managed by Alembic migrations.
     Run 'uv run alembic upgrade head' to initialize/update the database schema.
+
+    Initializes:
+    - Redis cache connection (with in-memory fallback)
     """
-    # Application startup - no table creation needed (handled by Alembic)
+    # Application startup
+    await init_cache()  # Initialize Redis cache
     yield
     # Cleanup on shutdown
+    await close_cache()  # Close Redis connection
     await engine.dispose()
 
 

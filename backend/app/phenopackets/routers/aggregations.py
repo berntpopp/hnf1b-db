@@ -520,7 +520,7 @@ async def aggregate_all_variants(
     - domain: POU-Specific Domain, POU Homeodomain, etc.
     """
     # Rate limiting (security layer)
-    check_rate_limit(request)
+    await check_rate_limit(request)
 
     # HTTP caching: 5 minutes for variant data (open research database)
     # This enables browser caching and reduces server load for repeated requests
