@@ -4,6 +4,8 @@ This module tests the rate limiting functionality using Redis (with in-memory fa
 Tests the async rate limiting with distributed counter support.
 """
 
+from typing import Optional
+
 import pytest
 from fastapi import HTTPException
 
@@ -25,7 +27,7 @@ RATE_WINDOW = settings.rate_limiting.api.window_seconds
 class MockRequest:
     """Mock FastAPI Request for testing."""
 
-    def __init__(self, client_host: str = "127.0.0.1", forwarded_for: str = None):
+    def __init__(self, client_host: str = "127.0.0.1", forwarded_for: Optional[str] = None):
         """Initialize mock request with client host and optional forwarded headers."""
         self.client = type("obj", (object,), {"host": client_host})
         self.headers = {}
@@ -62,15 +64,18 @@ class TestGetClientIP:
 
 
 @pytest.fixture
-async def reset_cache():
-    """Async fixture to reset rate limits before each test."""
-    # Ensure cache is connected (uses in-memory fallback if Redis unavailable)
-    if not cache.is_connected:
-        await cache.connect()
-    await reset_rate_limits()
+def reset_cache():
+    """Fixture to reset rate limits before each test.
+
+    Uses in-memory fallback mode to avoid Redis connection issues in CI.
+    This is a synchronous fixture that uses the use_fallback_only() method
+    to prevent async event loop conflicts.
+    """
+    # Force in-memory mode to avoid Redis connection in tests
+    cache.use_fallback_only()
     yield
-    # Clean up after test
-    await reset_rate_limits()
+    # Clear cache after test
+    cache.clear_fallback()
 
 
 @pytest.mark.asyncio

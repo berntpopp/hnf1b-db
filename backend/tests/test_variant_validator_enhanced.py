@@ -30,12 +30,15 @@ def clear_cache_between_tests():
 
     This ensures that tests checking error scenarios don't get cached results
     from previous successful tests.
+
+    Uses the public clear_fallback() method instead of accessing private _fallback
+    to maintain proper encapsulation and avoid coupling to implementation details.
     """
-    # Clear before test
-    cache._fallback.clear()
+    # Force in-memory fallback mode and clear before test
+    cache.use_fallback_only()
     yield
-    # Clear after test
-    cache._fallback.clear()
+    # Clear after test using public method
+    cache.clear_fallback()
 
 
 class TestVariantFormatDetection:

@@ -202,10 +202,34 @@ class CacheService:
     async def close(self) -> None:
         """Close Redis connection."""
         if self._redis:
-            await self._redis.aclose()  # type: ignore[attr-defined]
+            # Use hasattr check for aclose() method compatibility
+            # (aclose is the newer async close method in redis-py 5.x+)
+            if hasattr(self._redis, "aclose"):
+                await self._redis.aclose()
+            elif hasattr(self._redis, "close"):
+                await self._redis.close()
             self._redis = None
             self._connected = False
             logger.info("Redis connection closed")
+
+    def use_fallback_only(self) -> None:
+        """Force cache to use in-memory fallback only.
+
+        Useful for testing to avoid Redis connection issues in CI environments.
+        This prevents async event loop conflicts when tests don't have Redis.
+        """
+        self._redis = None
+        self._connected = False
+        self._fallback.clear()
+        logger.info("Cache set to in-memory fallback mode (testing)")
+
+    def clear_fallback(self) -> None:
+        """Clear the in-memory fallback cache.
+
+        Useful for testing to reset cache state between tests without
+        needing to access private attributes.
+        """
+        self._fallback.clear()
 
     @property
     def is_connected(self) -> bool:

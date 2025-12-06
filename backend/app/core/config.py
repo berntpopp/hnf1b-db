@@ -18,7 +18,6 @@ Usage:
 """
 
 import logging
-import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
@@ -211,6 +210,12 @@ class Settings(BaseSettings):
     PUBMED_API_KEY: Optional[str] = None
 
     # Admin credentials (for initial setup)
+    # SECURITY NOTE: These are default credentials for initial database setup only.
+    # The default password MUST be changed immediately after first login in production.
+    # Override these values in .env for production deployments:
+    #   ADMIN_USERNAME=your_admin_user
+    #   ADMIN_EMAIL=admin@yourdomain.com
+    #   ADMIN_PASSWORD=<strong-unique-password>
     ADMIN_USERNAME: str = "admin"
     ADMIN_EMAIL: str = "admin@hnf1b-db.local"
     ADMIN_PASSWORD: str = "ChangeMe!Admin2025"
@@ -233,8 +238,9 @@ class Settings(BaseSettings):
     def validate_jwt_secret(cls, v: str) -> str:
         """Fail fast if JWT_SECRET is missing.
 
-        The application will exit immediately if JWT_SECRET is not set
-        to prevent running with insecure configuration.
+        Raises ValueError if JWT_SECRET is not set to prevent running
+        with insecure configuration. Using ValueError instead of sys.exit()
+        allows proper error handling in tests and provides better stack traces.
         """
         if not v or v.strip() == "":
             logger.critical(
@@ -242,7 +248,10 @@ class Settings(BaseSettings):
                 "Set JWT_SECRET in .env file for secure authentication. "
                 "Example: JWT_SECRET=$(openssl rand -hex 32)"
             )
-            sys.exit(1)
+            raise ValueError(
+                "JWT_SECRET is required. Set JWT_SECRET in .env file. "
+                "Generate with: openssl rand -hex 32"
+            )
         return v
 
     @field_validator("CORS_ORIGINS", mode="before")

@@ -21,6 +21,14 @@ Refresh Strategy:
 Performance Impact:
 - Aggregation queries: O(n) JSONB scan -> O(1) indexed lookup
 - Expected speedup: 10-100x for large datasets
+
+Deployment Notes:
+- DOWNTIME WARNING: Creating materialized views involves full table scans.
+  For large datasets (1000+ phenopackets), this may take several seconds.
+  Consider running during maintenance windows for production deployments.
+- Initial creation is NOT concurrent (CREATE MATERIALIZED VIEW cannot be concurrent).
+  Only subsequent REFRESH operations can use CONCURRENTLY with the UNIQUE indexes.
+- If the migration fails mid-way, the downgrade() function will clean up all views.
 """
 
 from typing import Sequence, Union
