@@ -141,10 +141,10 @@ def build_offset_response(
         data=data,
         meta=MetaObject(
             page=PageMeta(
-                current_page=current_page,
-                page_size=page_size,
-                total_pages=total_pages,
-                total_records=total_records,
+                currentPage=current_page,
+                pageSize=page_size,
+                totalPages=total_pages,
+                totalRecords=total_records,
             )
         ),
         links=build_offset_links(

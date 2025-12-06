@@ -91,9 +91,9 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon color="cyan-darken-1" size="large" class="mb-2"
-                    >mdi-file-document-multiple</v-icon
-                  >
+                  <v-icon color="cyan-darken-1" size="large" class="mb-2">
+                    mdi-file-document-multiple
+                  </v-icon>
                   <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
                     <span v-if="!loadingStats">{{ displayStats.publications }}</span>
                     <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />

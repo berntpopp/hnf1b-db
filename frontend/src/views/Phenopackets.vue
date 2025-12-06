@@ -103,9 +103,9 @@
         <div class="d-flex align-center justify-space-between header-wrapper">
           <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
             <span class="header-title">{{ column.title }}</span>
-            <v-icon v-if="isSorted(column)" size="small" class="ml-1">{{
-              getSortIcon(column)
-            }}</v-icon>
+            <v-icon v-if="isSorted(column)" size="small" class="ml-1">
+              {{ getSortIcon(column) }}
+            </v-icon>
           </div>
           <v-menu :close-on-content-click="false" location="bottom">
             <template #activator="{ props }">
