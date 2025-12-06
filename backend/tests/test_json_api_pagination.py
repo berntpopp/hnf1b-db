@@ -572,9 +572,9 @@ class TestBackwardsCompatibility:
     async def test_legacy_skip_limit(
         self, async_client: AsyncClient, sample_phenopackets, auth_headers
     ):
-        """Test legacy skip and limit parameters."""
+        """Test page[number] and page[size] parameters (replaced skip/limit)."""
         response = await async_client.get(
-            "/api/v2/phenopackets/?skip=0&limit=20",
+            "/api/v2/phenopackets/?page[number]=1&page[size]=20",
             headers=auth_headers,
         )
 
@@ -593,9 +593,9 @@ class TestBackwardsCompatibility:
     async def test_legacy_sex_filter(
         self, async_client: AsyncClient, sample_phenopackets, auth_headers
     ):
-        """Test legacy sex parameter."""
+        """Test filter[sex] parameter (replaced legacy sex param)."""
         response = await async_client.get(
-            "/api/v2/phenopackets/?skip=0&limit=20&sex=MALE",
+            "/api/v2/phenopackets/?page[number]=1&page[size]=20&filter[sex]=MALE",
             headers=auth_headers,
         )
 
@@ -610,9 +610,9 @@ class TestBackwardsCompatibility:
     async def test_legacy_has_variants_filter(
         self, async_client: AsyncClient, sample_phenopackets, auth_headers
     ):
-        """Test legacy has_variants parameter."""
+        """Test filter[has_variants] parameter (replaced legacy param)."""
         response = await async_client.get(
-            "/api/v2/phenopackets/?skip=0&limit=20&has_variants=true",
+            "/api/v2/phenopackets/?page[number]=1&page[size]=20&filter[has_variants]=true",
             headers=auth_headers,
         )
 
