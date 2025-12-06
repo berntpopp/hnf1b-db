@@ -613,6 +613,7 @@ export const getVariants = async (params = {}) => {
       transcript: variant.transcript,
       protein: variant.protein,
       classificationVerdict: variant.pathogenicity,
+      pathogenicity: variant.pathogenicity, // Alias for DNA Distance Analysis
       individualCount: variant.phenopacket_count,
       molecular_consequence: variant.molecular_consequence,
     })),
