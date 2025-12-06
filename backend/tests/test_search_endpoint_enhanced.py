@@ -296,19 +296,23 @@ async def test_search_pagination(
     """Test search endpoint pagination.
 
     Uses unique search term to ensure deterministic results.
+    Search uses cursor-based pagination (no total count for efficiency).
     """
     response = await async_client.get(
-        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1",
+        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&page[size]=1",
         headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()["data"]
     meta = response.json()["meta"]
     assert len(data) == 1
-    assert meta["total"] == 2  # Exactly pp1 and pp3 match unique term
+    # Cursor pagination uses page.hasNextPage instead of total count
+    assert meta["page"]["hasNextPage"] is True
 
+    # Get second page using cursor from first page
+    end_cursor = meta["page"]["endCursor"]
     response_page2 = await async_client.get(
-        "/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&limit=1&skip=1",
+        f"/api/v2/phenopackets/search?q=ZZTEST_UNIQUE_RENAL&page[size]=1&page[after]={end_cursor}",
         headers=auth_headers,
     )
     assert response_page2.status_code == 200

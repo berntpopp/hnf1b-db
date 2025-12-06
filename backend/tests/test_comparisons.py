@@ -295,7 +295,8 @@ class TestComparisonEndpoint:
 
         # Check metadata
         assert (
-            data["metadata"]["comparison_type"] == "truncating_vs_non_truncating_excl_cnv"
+            data["metadata"]["comparison_type"]
+            == "truncating_vs_non_truncating_excl_cnv"
         )
 
         # Use min_prevalence=0 to get accurate total counts across all phenotypes

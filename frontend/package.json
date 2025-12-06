@@ -20,16 +20,13 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
-    "@mdi/js": "^7.4.47",
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "file-saver": "^2.0.5",
     "just-debounce-it": "^3.2.0",
-    "lodash-es": "^4.17.21",
     "ngl": "^2.4.0",
-    "vee-validate": "^4.15.1",
     "vue": "^3.5.25",
     "vue-router": "^4.5.0",
     "yup": "^1.7.1"

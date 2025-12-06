@@ -163,6 +163,13 @@ npm test -- tests/specific.test.js
 - ✅ ALWAYS use `window.logService.debug/info/warn/error()`
 - Automatic redaction of sensitive data (HPO terms, emails, variants, tokens)
 
+**Pagination/Sorting Requirements:**
+- ❌ NEVER use client-side pagination or sorting
+- ✅ ALWAYS use server-side pagination with cursor-based JSON:API
+- ✅ ALWAYS send sort parameters to the backend API
+- All data tables must use `server-side="true"` with AppDataTable
+- Use `buildSortParameter()` from `@/utils/pagination` to convert Vuetify sortBy to JSON:API sort
+
 ## Development Workflow
 
 ### Environment Setup

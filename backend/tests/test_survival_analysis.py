@@ -320,7 +320,10 @@ class TestApplyBonferroniCorrection:
         """Significance should be based on corrected p-value."""
         tests = [
             {"p_value": 0.02, "comparison": "A vs B"},  # 0.02 * 2 = 0.04 (significant)
-            {"p_value": 0.03, "comparison": "A vs C"},  # 0.03 * 2 = 0.06 (not significant)
+            {
+                "p_value": 0.03,
+                "comparison": "A vs C",
+            },  # 0.03 * 2 = 0.06 (not significant)
         ]
         result = apply_bonferroni_correction(tests)
 

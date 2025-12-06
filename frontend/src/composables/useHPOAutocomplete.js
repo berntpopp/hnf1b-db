@@ -12,7 +12,7 @@
  */
 
 import { ref } from 'vue';
-import { debounce } from 'lodash-es';
+import debounce from 'just-debounce-it';
 import { apiClient } from '@/api';
 
 export function useHPOAutocomplete() {

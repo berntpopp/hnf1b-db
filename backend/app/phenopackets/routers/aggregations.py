@@ -6,12 +6,13 @@ variants, and publications.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.rate_limiter import check_rate_limit, get_client_ip
+from app.models.json_api import JsonApiResponse
 from app.phenopackets.models import (
     AggregationResult,
     Phenopacket,
@@ -25,6 +26,7 @@ from app.phenopackets.variant_search_validation import (
     validate_variant_type,
 )
 from app.utils.audit_logger import log_variant_search
+from app.utils.pagination import build_offset_response
 
 router = APIRouter(prefix="/aggregate", tags=["phenopackets-aggregations"])
 
@@ -421,54 +423,6 @@ async def aggregate_variant_types(
     ]
 
 
-@router.get("/publications", response_model=List[Dict])
-async def aggregate_publications(
-    db: AsyncSession = Depends(get_db),
-):
-    """Get publication statistics with detailed information.
-
-    Returns detailed publication data including PMID, URL, DOI, phenopacket count.
-    Suitable for publications table view.
-    """
-    query = """
-    SELECT
-        ext_ref->>'id' as pmid,
-        ext_ref->>'reference' as url,
-        ext_ref->>'description' as description,
-        COUNT(DISTINCT phenopacket_id) as phenopacket_count,
-        MIN(created_at) as first_added
-    FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
-    WHERE
-        ext_ref->>'id' LIKE 'PMID:%'
-    GROUP BY
-        ext_ref->>'id',
-        ext_ref->>'reference',
-        ext_ref->>'description'
-    ORDER BY
-        phenopacket_count DESC, pmid
-    """
-
-    result = await db.execute(text(query))
-    rows = result.fetchall()
-
-    return [
-        {
-            "pmid": row.pmid.replace("PMID:", "") if row.pmid else None,
-            "url": row.url,
-            "doi": (
-                row.description.replace("DOI:", "")
-                if row.description and row.description.startswith("DOI:")
-                else None
-            ),
-            "phenopacket_count": row.phenopacket_count,
-            "first_added": (row.first_added.isoformat() if row.first_added else None),
-        }
-        for row in rows
-    ]
-
-
 @router.get("/publication-types", response_model=List[AggregationResult])
 async def aggregate_publication_types(
     db: AsyncSession = Depends(get_db),
@@ -512,11 +466,17 @@ async def aggregate_publication_types(
     ]
 
 
-@router.get("/all-variants")
+@router.get("/all-variants", response_model=JsonApiResponse)
 async def aggregate_all_variants(
     request: Request,
-    limit: int = Query(100, ge=1, le=1000),
-    skip: int = Query(0, ge=0),
+    response: Response,
+    # Offset pagination (JSON:API v1.1)
+    page_number: int = Query(
+        1, alias="page[number]", ge=1, description="Page number (1-indexed)"
+    ),
+    page_size: int = Query(
+        100, alias="page[size]", ge=1, le=500, description="Page size"
+    ),
     query: Optional[str] = Query(
         None,
         description="Search in HGVS notations, variant ID, or genomic coordinates",
@@ -542,76 +502,29 @@ async def aggregate_all_variants(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    """Search and filter variants across all phenopackets.
+    """Search and filter variants with offset pagination.
 
-    Aggregates variants from all phenopackets and returns unique variants
-    with their details and the count of individuals carrying each variant.
+    Uses page[number] and page[size] for direct page access.
 
-    **Search Fields (8 total):**
-    1. **Transcript (c. notation)**: e.g., "c.1654-2A>T"
-    2. **Protein (p. notation)**: e.g., "p.Arg177Ter"
-    3. **Variant ID**: e.g., "Var1", "ga4gh:VA.xxx"
-    4. **HG38 Coordinates**: e.g., "chr17:36098063", "17:36459258-37832869"
-    5. **Variant Type**: SNV, deletion, duplication, insertion, inversion, CNV
-    6. **Classification**: PATHOGENIC, LIKELY_PATHOGENIC, etc.
-    7. **Gene Symbol**: HNF1B
-    8. **Molecular Consequence**: Frameshift, Nonsense, Missense, etc.
+    **Search Fields:**
+    - Transcript (c. notation): e.g., "c.1654-2A>T"
+    - Protein (p. notation): e.g., "p.Arg177Ter"
+    - Variant ID: e.g., "Var1", "ga4gh:VA.xxx"
+    - HG38 Coordinates: e.g., "chr17:36098063"
 
-    Args:
-        request: FastAPI request object for rate limiting
-        query: Text search across HGVS notations, variant IDs, and coordinates
-        variant_type: Filter by variant structural type
-        classification: Filter by ACMG pathogenicity classification
-        gene: Filter by gene symbol (e.g., "HNF1B")
-        consequence: Filter by molecular consequence (e.g., "Frameshift")
-        domain: Filter by protein domain (e.g., "POU-Specific Domain")
-        limit: Maximum number of variants to return (default: 100, max: 1000)
-        skip: Number of variants to skip for pagination (default: 0)
-        sort: Sort field with optional '-' prefix for descending
-            (e.g., 'simple_id', '-individualCount')
-        pathogenicity: DEPRECATED - use 'classification' instead
-        db: Database session
-
-    Returns:
-        List of unique variants with:
-        - simple_id: User-friendly variant ID (e.g., "Var1")
-        - variant_id: VRS ID or custom identifier
-        - label: Human-readable variant description
-        - gene_symbol: Gene symbol (e.g., "HNF1B")
-        - gene_id: HGNC ID (e.g., "HGNC:5024")
-        - structural_type: Variant type (e.g., "deletion", "SNV")
-        - pathogenicity: ACMG classification
-        - phenopacket_count: Number of individuals with this variant
-        - hg38: Genomic coordinates or VCF string
-        - transcript: HGVS c. notation
-        - protein: HGVS p. notation
-        - molecular_consequence: Computed molecular consequence
-
-    Security:
-        - All inputs validated with character whitelists
-        - HGVS format validation
-        - SQL injection prevention via parameterized queries
-        - Length limits enforced (max 200 chars)
-
-    Examples:
-        # Search by HGVS notation
-        GET /aggregate/all-variants?query=c.1654-2A>T
-
-        # Search by genomic coordinates
-        GET /aggregate/all-variants?query=chr17:36098063
-
-        # Filter pathogenic deletions
-        GET /aggregate/all-variants?variant_type=deletion&classification=PATHOGENIC
-
-        # Search with molecular consequence filter
-        GET /aggregate/all-variants?query=frameshift&consequence=Frameshift
-
-        # Combined search and filters
-        GET /aggregate/all-variants?query=HNF1B&variant_type=SNV&
-            classification=PATHOGENIC
+    **Filters:**
+    - variant_type: SNV, deletion, duplication, insertion, CNV
+    - classification: PATHOGENIC, LIKELY_PATHOGENIC, etc.
+    - gene: HNF1B
+    - consequence: Frameshift, Nonsense, Missense, etc.
+    - domain: POU-Specific Domain, POU Homeodomain, etc.
     """
     # Rate limiting (security layer)
     check_rate_limit(request)
+
+    # HTTP caching: 5 minutes for variant data (open research database)
+    # This enables browser caching and reduces server load for repeated requests
+    response.headers["Cache-Control"] = "public, max-age=300"
 
     # Input validation (security layer)
     validated_query = validate_search_query(query)
@@ -625,7 +538,10 @@ async def aggregate_all_variants(
 
     # Build query with optional filters
     where_clauses = []
-    params: Dict[str, Any] = {"limit": limit, "offset": skip}
+    params: Dict[str, Any] = {
+        "limit": page_size,
+        "offset": (page_number - 1) * page_size,
+    }
 
     # Text search: Search across HGVS notations, variant IDs, and coordinates
     if validated_query:
@@ -927,22 +843,19 @@ async def aggregate_all_variants(
         "individualCount": "phenopacket_count",
     }
 
-    # Default sort: by individual count DESC, then variant_id for deterministic ordering
-    order_by = "phenopacket_count DESC, variant_id ASC"
-    if sort:
-        # Check if descending (starts with '-')
-        if sort.startswith("-"):
-            field_name = sort[1:]
-            direction = "DESC"
-        else:
-            field_name = sort
-            direction = "ASC"
+    # Parse sort parameter
+    sort_field = "phenopacket_count"  # Default sort field
+    sort_direction = "DESC"  # Default direction
 
-        # Map field name to SQL column
-        sql_column = sort_field_map.get(field_name)
-        if sql_column:
-            # Add variant_id as tie-breaker for deterministic ordering
-            order_by = f"{sql_column} {direction}, variant_id ASC"
+    if sort:
+        if sort.startswith("-"):
+            sort_field = sort_field_map.get(sort[1:], "phenopacket_count")
+            sort_direction = "DESC"
+        else:
+            sort_field = sort_field_map.get(sort, "phenopacket_count")
+            sort_direction = "ASC"
+
+    order_by = f"{sort_field} {sort_direction}, variant_id ASC"
 
     query_sql = f"""
     WITH all_variants_unfiltered AS (
@@ -1132,13 +1045,8 @@ async def aggregate_all_variants(
     OFFSET :offset
     """
 
-    result = await db.execute(text(query_sql), params)
-    rows = result.fetchall()
-
-    # Get total count of variants (without limit/offset)
-    # Reuse the same CTEs but only count final results
-    # IMPORTANT: Must include simple_id filter to match main query
-    count_query = f"""
+    # Execute COUNT query for total records
+    count_sql = f"""
     WITH all_variants_unfiltered AS (
         SELECT DISTINCT ON (vd->>'id', p.id)
             vd->>'id' as variant_id,
@@ -1153,23 +1061,6 @@ async def aggregate_all_variants(
         WHERE
             vi_lateral.vi IS NOT NULL
             AND vd_lateral.vd IS NOT NULL
-    ),
-    all_variants_agg AS (
-        SELECT
-            variant_id,
-            MAX(gene_symbol) as gene_symbol,
-            COUNT(DISTINCT phenopacket_id) as phenopacket_count
-        FROM all_variants_unfiltered
-        GROUP BY variant_id
-    ),
-    all_variants_with_stable_id AS (
-        -- Assign stable IDs to ALL variants based on unfiltered dataset
-        SELECT
-            ROW_NUMBER() OVER (
-                ORDER BY phenopacket_count DESC, gene_symbol ASC, variant_id ASC
-            ) as simple_id,
-            variant_id
-        FROM all_variants_agg
     ),
     variant_raw AS (
         SELECT DISTINCT ON (vd->>'id', p.id)
@@ -1187,34 +1078,34 @@ async def aggregate_all_variants(
             {where_sql}
     ),
     variant_agg AS (
-        SELECT
-            variant_id,
-            COUNT(DISTINCT phenopacket_id) as phenopacket_count
+        SELECT variant_id, COUNT(DISTINCT phenopacket_id) as phenopacket_count
         FROM variant_raw
         GROUP BY variant_id
     ),
-    variant_with_stable_id AS (
-        -- Join filtered results with pre-calculated stable IDs
+    all_variants_with_stable_id AS (
         SELECT
-            avwsi.simple_id,
-            va.variant_id
+            ROW_NUMBER() OVER (
+                ORDER BY (SELECT COUNT(DISTINCT phenopacket_id) FROM all_variants_unfiltered WHERE all_variants_unfiltered.variant_id = a.variant_id) DESC, a.variant_id ASC
+            ) as simple_id,
+            a.variant_id
+        FROM (SELECT DISTINCT variant_id FROM all_variants_unfiltered) a
+    ),
+    variant_with_stable_id AS (
+        SELECT avwsi.simple_id, va.variant_id
         FROM variant_agg va
         INNER JOIN all_variants_with_stable_id avwsi ON va.variant_id = avwsi.variant_id
     )
     SELECT COUNT(*) as total
     FROM variant_with_stable_id
     WHERE 1=1
-        {
-        "AND CONCAT('Var', simple_id::text) ILIKE :simple_id_query"
-        if validated_query and validated_query.lower().startswith("var")
-        else ""
-    }
+        {"AND CONCAT('Var', simple_id::text) ILIKE :simple_id_query" if validated_query and validated_query.lower().startswith("var") else ""}
     """
-
-    # Create a copy of params without limit/offset for count query
-    count_params = {k: v for k, v in params.items() if k not in ("limit", "offset")}
-    count_result = await db.execute(text(count_query), count_params)
+    count_result = await db.execute(text(count_sql), params)
     total_count = count_result.scalar() or 0
+
+    # Execute main query
+    result = await db.execute(text(query_sql), params)
+    rows = list(result.fetchall())
 
     # simple_id is calculated using default sort order (by individual count)
     # This ensures each variant has a stable ID regardless of current sort
@@ -1254,13 +1145,32 @@ async def aggregate_all_variants(
         request_path=str(request.url.path),
     )
 
-    # Return variants with pagination metadata
-    return {
-        "data": variants,
-        "total": total_count,
-        "skip": skip,
-        "limit": limit,
-    }
+    # Build filter dict for pagination links
+    filters: Dict[str, Any] = {}
+    if validated_query:
+        filters["query"] = validated_query
+    if validated_variant_type:
+        filters["variant_type"] = validated_variant_type
+    if validated_classification:
+        filters["classification"] = validated_classification
+    if validated_gene:
+        filters["gene"] = validated_gene
+    if validated_consequence:
+        filters["consequence"] = validated_consequence
+    if domain:
+        filters["domain"] = domain
+
+    # Build JSON:API offset response
+    base_url = str(request.url.path)
+    return build_offset_response(
+        data=variants,
+        current_page=page_number,
+        page_size=page_size,
+        total_records=total_count,
+        base_url=base_url,
+        filters=filters,
+        sort=sort,
+    )
 
 
 @router.get("/age-of-onset", response_model=List[AggregationResult])

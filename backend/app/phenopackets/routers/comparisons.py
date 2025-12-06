@@ -399,10 +399,13 @@ async def compare_variant_types(
 
         # Truncating variants (same logic as original, but large CNVs excluded via is_large_cnv)
         # Note: We reuse the EXACT same truncating logic, just add NOT is_large_cnv
-        group1_condition = """
+        group1_condition = (
+            """
             -- Truncating variants (excluding large CNVs >=50kb)
             -- Large CNVs are excluded; small intragenic del/dup (<50kb) remain as truncating
-            NOT """ + is_large_cnv + """
+            NOT """
+            + is_large_cnv
+            + """
             AND
             (
                 -- Priority 1: VEP IMPACT = HIGH
@@ -483,13 +486,17 @@ async def compare_variant_types(
                 )
             )
         """
+        )
 
         # Non-truncating: NOT truncating AND NOT large CNV
         # This should give the same non-truncating variants as the original comparison
-        group2_condition = """
+        group2_condition = (
+            """
             -- Non-truncating: All other variants (excluding large CNVs)
             -- Large CNVs are excluded (get NULL), non-truncating stays the same
-            NOT """ + is_large_cnv + """
+            NOT """
+            + is_large_cnv
+            + """
             AND
             NOT (
                 -- Same truncating conditions as group1 (without the CNV exclusion prefix)
@@ -564,6 +571,7 @@ async def compare_variant_types(
                 )
             )
         """
+        )
 
         group1_name = "Truncating (excl. CNVs)"
         group2_name = "Non-truncating (excl. CNVs)"

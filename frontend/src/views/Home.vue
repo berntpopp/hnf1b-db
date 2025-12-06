@@ -1,152 +1,237 @@
 <!-- src/views/Home.vue -->
 <template>
-  <v-container fill-height>
-    <v-row align="center" justify="center">
-      <v-col cols="12" md="11" lg="10" xl="10">
-        <v-card class="pa-4" variant="flat">
-          <!-- Title -->
-          <v-card-title class="text-h3 text-center"> Welcome to HNF1B-db </v-card-title>
-
-          <!-- Subtitle -->
-          <v-card-subtitle class="text-center">
-            This is a curated database of HNF1B gene variants and associated phenotypes. It
-            currently contains:
-          </v-card-subtitle>
-
-          <v-card-text class="text-center">
-            <!-- Stats row: defaults start at 0 and then animate upward -->
-            <p>
-              <v-chip color="light-green-lighten-3" class="ma-1" variant="flat">
-                {{ displayStats.individuals }} individuals
-                <v-icon right> mdi-account </v-icon>
-              </v-chip>
-              with
-              <v-chip color="pink-lighten-3" class="ma-1" variant="flat">
-                {{ displayStats.variants }} genetic variants
-                <v-icon right> mdi-dna </v-icon>
-              </v-chip>
-              with
-              <v-chip color="amber-lighten-3" class="ma-1" variant="flat">
-                {{ displayStats.total_reports }} phenotypes
-                <v-icon right> mdi-medical-bag </v-icon>
-              </v-chip>
-              from
-              <v-chip color="cyan-lighten-3" class="ma-1" variant="flat">
-                {{ displayStats.publications }} publications
-                <v-icon right> mdi-book-open-blank-variant </v-icon>
-              </v-chip>
+  <div class="home-container">
+    <!-- HERO SECTION -->
+    <section class="hero-section py-6 px-4 mb-4">
+      <v-container>
+        <v-row justify="center" align="center">
+          <v-col cols="12" md="10" lg="8" class="text-center">
+            <h1 class="text-h3 font-weight-bold text-teal-darken-2 mb-2">HNF1B-db</h1>
+            <p
+              class="text-subtitle-1 text-medium-emphasis mb-6"
+              style="max-width: 800px; margin: 0 auto"
+            >
+              A curated database of HNF1B gene variants and associated phenotypes, integrating
+              clinical reports and genomic data.
             </p>
 
-            <!-- Centered Search card below the stats -->
-            <div class="searchcard-flex">
+            <!-- Search Bar Integrated in Hero -->
+            <div class="d-flex justify-center mb-6">
               <SearchCard />
             </div>
-          </v-card-text>
-        </v-card>
+          </v-col>
+        </v-row>
 
-        <!-- Variant Visualizations with Tabs -->
-        <v-card class="mt-4" variant="flat">
-          <v-card-title class="text-h5"> HNF1B Variant Visualizations </v-card-title>
-          <v-tabs
-            v-model="activeTab"
-            bg-color="transparent"
-            color="primary"
-            @update:model-value="handleTabChange"
-          >
-            <v-tab value="protein">
-              <v-icon start> mdi-protein </v-icon>
-              Protein View
-            </v-tab>
-            <v-tab value="gene">
-              <v-icon start> mdi-dna </v-icon>
-              Gene View
-            </v-tab>
-            <v-tab value="structure3d">
-              <v-icon start> mdi-cube-outline </v-icon>
-              3D Structure
-            </v-tab>
-            <v-tab value="region">
-              <v-icon start> mdi-map-marker-radius </v-icon>
-              17q12 Region
-            </v-tab>
-          </v-tabs>
+        <!-- STATS GRID (Stable Layout) -->
+        <v-row justify="center" class="mt-2">
+          <v-col cols="12" md="10">
+            <v-row>
+              <!-- Individuals -->
+              <v-col cols="6" md="3">
+                <v-card
+                  class="py-4 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="teal" size="large" class="mb-2">mdi-account-group</v-icon>
+                  <div class="text-h4 font-weight-bold text-teal mb-0">
+                    <span v-if="!loadingStats">{{ displayStats.individuals }}</span>
+                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Individuals
+                  </div>
+                </v-card>
+              </v-col>
 
-          <v-window v-model="activeTab">
-            <!-- Protein View Tab (Default) -->
-            <v-window-item value="protein">
-              <v-card-text>
+              <!-- Variants -->
+              <v-col cols="6" md="3">
+                <v-card
+                  class="py-4 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="pink" size="large" class="mb-2">mdi-dna</v-icon>
+                  <div class="text-h4 font-weight-bold text-pink mb-0">
+                    <span v-if="!loadingStats">{{ displayStats.variants }}</span>
+                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Unique Variants
+                  </div>
+                </v-card>
+              </v-col>
+
+              <!-- Phenotypes -->
+              <v-col cols="6" md="3">
+                <v-card
+                  class="py-4 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="amber-darken-2" size="large" class="mb-2">mdi-medical-bag</v-icon>
+                  <div class="text-h4 font-weight-bold text-amber-darken-2 mb-0">
+                    <span v-if="!loadingStats">{{ displayStats.total_reports }}</span>
+                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Phenotypes
+                  </div>
+                </v-card>
+              </v-col>
+
+              <!-- Publications -->
+              <v-col cols="6" md="3">
+                <v-card
+                  class="py-4 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="cyan-darken-1" size="large" class="mb-2">
+                    mdi-file-document-multiple
+                  </v-icon>
+                  <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
+                    <span v-if="!loadingStats">{{ displayStats.publications }}</span>
+                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Publications
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-col>
+        </v-row>
+      </v-container>
+    </section>
+
+    <!-- VISUALIZATIONS SECTION -->
+    <v-container class="pb-12">
+      <v-row justify="center">
+        <v-col cols="12" xl="10">
+          <v-card variant="outlined" class="border-opacity-12" rounded="lg">
+            <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
+              <v-icon color="primary" class="mr-2">mdi-chart-timeline-variant</v-icon>
+              <span class="text-h6 font-weight-medium">Variant Visualizations</span>
+            </div>
+
+            <v-tabs
+              v-model="activeTab"
+              bg-color="transparent"
+              color="primary"
+              align-tabs="start"
+              class="px-2 pt-2"
+              @update:model-value="handleTabChange"
+            >
+              <v-tab value="protein" class="text-capitalize rounded-t-lg">Protein View</v-tab>
+              <v-tab value="gene" class="text-capitalize rounded-t-lg">Gene View</v-tab>
+              <v-tab value="structure3d" class="text-capitalize rounded-t-lg">3D Structure</v-tab>
+              <v-tab value="region" class="text-capitalize rounded-t-lg">17q12 Region</v-tab>
+            </v-tabs>
+
+            <v-divider />
+
+            <v-window v-model="activeTab" class="pa-4 bg-white" style="min-height: 500px">
+              <!-- Protein View Tab (Default) -->
+              <v-window-item value="protein">
                 <HNF1BProteinVisualization
                   v-if="snvVariantsLoaded"
                   :variants="snvVariants"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader v-else type="image" height="400" />
-              </v-card-text>
-            </v-window-item>
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <span class="mt-4 text-grey">Loading Protein Visualization...</span>
+                </div>
+              </v-window-item>
 
-            <!-- Gene View Tab -->
-            <v-window-item value="gene">
-              <v-card-text>
+              <!-- Gene View Tab -->
+              <v-window-item value="gene">
                 <HNF1BGeneVisualization
                   v-if="snvVariantsLoaded"
                   :variants="snvVariants"
                   force-view-mode="gene"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader v-else type="image" height="400" />
-              </v-card-text>
-            </v-window-item>
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                </div>
+              </v-window-item>
 
-            <!-- 3D Structure View Tab -->
-            <v-window-item value="structure3d">
-              <v-card-text>
+              <!-- 3D Structure View Tab -->
+              <v-window-item value="structure3d">
                 <ProteinStructure3D
                   v-if="snvVariantsLoaded"
                   :variants="snvVariants"
                   :show-all-variants="true"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader v-else type="image" height="400" />
-              </v-card-text>
-            </v-window-item>
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                </div>
+              </v-window-item>
 
-            <!-- CNV Region View Tab -->
-            <v-window-item value="region">
-              <v-card-text>
+              <!-- CNV Region View Tab -->
+              <v-window-item value="region">
                 <HNF1BGeneVisualization
                   v-if="cnvVariantsLoaded"
                   :variants="cnvVariants"
                   force-view-mode="cnv"
                   @variant-clicked="navigateToVariant"
                 />
-                <v-skeleton-loader v-else type="image" height="400" />
-              </v-card-text>
-            </v-window-item>
-          </v-window>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <span class="mt-4 text-grey">Loading CNV Data...</span>
+                </div>
+              </v-window-item>
+            </v-window>
+          </v-card>
+        </v-col>
+      </v-row>
+    </v-container>
+  </div>
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, defineAsyncComponent, h } from 'vue';
 import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
-import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
-import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
-import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
-import { getSummaryStats, getVariants } from '@/api/index.js';
-import { API_CONFIG } from '@/config/app';
+import { useVariantStore } from '@/stores/variantStore';
+import { getSummaryStats } from '@/api/index.js';
 
 /**
- * Home view component.
- *
- * This component fetches summary statistics and includes the search functionality.
- * It initializes stat values to 0 and animates them when the actual data is received.
- *
- * @component
+ * Loading placeholder component using render function (no runtime compiler needed).
  */
+const LoadingPlaceholder = {
+  render: () => h('div', { style: 'height: 400px' }),
+};
+
+/**
+ * Lazy-loaded heavy visualization components.
+ * Uses render functions instead of template strings to avoid runtime compilation.
+ */
+const HNF1BGeneVisualization = defineAsyncComponent({
+  loader: () => import('@/components/gene/HNF1BGeneVisualization.vue'),
+  loadingComponent: LoadingPlaceholder,
+  delay: 200,
+});
+
+const HNF1BProteinVisualization = defineAsyncComponent({
+  loader: () => import('@/components/gene/HNF1BProteinVisualization.vue'),
+  loadingComponent: LoadingPlaceholder,
+  delay: 200,
+});
+
+const ProteinStructure3D = defineAsyncComponent({
+  loader: () => import('@/components/gene/ProteinStructure3D.vue'),
+  loadingComponent: LoadingPlaceholder,
+  delay: 200,
+});
+
 export default {
   name: 'Home',
   components: {
@@ -157,42 +242,42 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const variantStore = useVariantStore();
 
-    // Holds the stats to be displayed, with default values of 0.
+    // Stats
     const displayStats = ref({
       individuals: 0,
       variants: 0,
       total_reports: 0,
       publications: 0,
     });
+    const loadingStats = ref(true);
 
-    // Holds all variants for the gene visualization
-    const allVariants = ref([]);
-
-    // Separate variants by type for different visualization cards
-    const snvVariants = ref([]);
-    const cnvVariants = ref([]);
-
-    // Track which variant types have been loaded (for lazy loading)
-    const snvVariantsLoaded = ref(false);
-    const cnvVariantsLoaded = ref(false);
-
-    // Active tab state (default to protein view)
+    // Active tab
     const activeTab = ref('protein');
 
-    /**
-     * Animate a count from 0 to the target value.
-     *
-     * @param {string} prop The property name to animate.
-     * @param {number} targetValue The final value to reach.
-     * @param {number} duration Duration of the animation in ms.
-     */
-    function animateCount(prop, targetValue, duration = 500) {
+    // ==================== COMPUTED FROM STORE ====================
+
+    const snvVariants = computed(() => variantStore.snvVariants);
+    const cnvVariants = computed(() => variantStore.cnvVariants);
+    const snvVariantsLoaded = computed(() => variantStore.hasPathogenic);
+    const cnvVariantsLoaded = computed(() => variantStore.cnvVariants.length > 0);
+
+    // ==================== STATS ANIMATION ====================
+
+    function animateCount(prop, targetValue, duration = 1500) {
       const startTime = performance.now();
+      const startValue = 0;
+
       const animate = () => {
         const now = performance.now();
         const progress = Math.min((now - startTime) / duration, 1);
-        displayStats.value[prop] = Math.floor(progress * targetValue);
+
+        // Easing function (easeOutExpo)
+        const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+
+        displayStats.value[prop] = Math.floor(startValue + (targetValue - startValue) * ease);
+
         if (progress < 1) {
           requestAnimationFrame(animate);
         } else {
@@ -202,31 +287,16 @@ export default {
       requestAnimationFrame(animate);
     }
 
-    /**
-     * Fetch summary statistics from the backend API and animate each stat.
-     *
-     * @async
-     * @function fetchStats
-     * @returns {Promise<void>}
-     */
     const fetchStats = async () => {
+      loadingStats.value = true;
       try {
-        // Fetch summary stats from /api/v2/phenopackets/aggregate/summary
         const response = await getSummaryStats();
         const data = response.data || {};
-        // Animate each statistic from 0 to its target value.
-        // Map API response fields to display fields:
-        // - total_phenopackets -> individuals
-        // - distinct_variants -> variants (UNIQUE variants, not total variant interpretations)
-        // - distinct_hpo_terms -> total_reports (repurposed for HPO count)
-        // - distinct_publications -> publications
-        window.logService.info('Summary statistics loaded', {
-          individuals: data.total_phenopackets || 0,
-          variants: data.distinct_variants || 0,
-          hpoTerms: data.distinct_hpo_terms || 0,
-          publications: data.distinct_publications || 0,
-        });
 
+        window.logService.info('Summary statistics loaded', data);
+
+        // Start animation
+        loadingStats.value = false;
         animateCount('individuals', data.total_phenopackets || 0);
         animateCount('variants', data.distinct_variants || 0);
         animateCount('total_reports', data.distinct_hpo_terms || 0);
@@ -234,168 +304,38 @@ export default {
       } catch (error) {
         window.logService.error('Failed to fetch summary statistics', {
           error: error.message,
-          status: error.response?.status,
         });
+        loadingStats.value = false; // Show 0s or errors
       }
     };
 
-    /**
-     * Check if a variant is a CNV that extends beyond HNF1B gene boundaries.
-     * Only large structural variants that span beyond HNF1B should be in CNV track.
-     *
-     * @param {Object} variant - Variant object with hg38 field
-     * @returns {boolean} True if variant is a large CNV extending beyond HNF1B
-     */
-    const isCNV = (variant) => {
-      if (!variant || !variant.hg38) return false;
+    // ==================== TAB HANDLING ====================
 
-      // HNF1B gene boundaries (GRCh38)
-      const HNF1B_START = 37686430;
-      const HNF1B_END = 37745059;
-
-      // Check for range notation: 17:start-end:DEL/DUP
-      const match = variant.hg38.match(/:(\d+)-(\d+):/);
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-        const size = end - start;
-
-        // Only consider it a "CNV track variant" if:
-        // 1. Size >= 50bp (structural variant)
-        // 2. Extends beyond HNF1B gene boundaries
-        const extendsBeyondHNF1B = start < HNF1B_START || end > HNF1B_END;
-        return size >= 50 && extendsBeyondHNF1B;
-      }
-      return false;
-    };
-
-    /**
-     * Fetch SNV variants for protein and gene visualizations.
-     * Only fetches if not already loaded (lazy loading).
-     *
-     * @async
-     * @function fetchSNVVariants
-     * @returns {Promise<void>}
-     */
-    const fetchSNVVariants = async () => {
-      if (snvVariantsLoaded.value) {
-        window.logService.debug('SNV variants already loaded, skipping fetch', {
-          snvCount: snvVariants.value.length,
-        });
-        return; // Already loaded
-      }
-
-      window.logService.debug('Fetching SNV variants for visualization', {
-        pageSize: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-      });
-
-      try {
-        // Fetch all variants to filter SNVs
-        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
-        // See @/config/app.js for details
-        const response = await getVariants({
-          page: 1,
-          page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-        });
-        allVariants.value = response.data || [];
-
-        // Filter SNVs: Point mutations, splice variants, and small variants (not large CNVs)
-        snvVariants.value = allVariants.value.filter((v) => !isCNV(v));
-        snvVariantsLoaded.value = true;
-
-        window.logService.debug('SNV variants filtered', {
-          totalVariants: allVariants.value.length,
-          snvVariants: snvVariants.value.length,
-          cnvVariants: allVariants.value.length - snvVariants.value.length,
-        });
-      } catch (error) {
-        window.logService.error('Failed to fetch SNV variants for visualization', {
-          error: error.message,
-          status: error.response?.status,
-        });
-      }
-    };
-
-    /**
-     * Fetch CNV variants for 17q12 region visualization.
-     * Only fetches if not already loaded (lazy loading).
-     *
-     * @async
-     * @function fetchCNVVariants
-     * @returns {Promise<void>}
-     */
-    const fetchCNVVariants = async () => {
-      if (cnvVariantsLoaded.value) return; // Already loaded
-
-      try {
-        // Use cached allVariants if available, otherwise fetch
-        // ⚠️ WARNING: Assumes total variants < MAX_VARIANTS_FOR_PRIORITY_SORT
-        // See @/config/app.js for details
-        if (allVariants.value.length === 0) {
-          const response = await getVariants({
-            page: 1,
-            page_size: API_CONFIG.MAX_VARIANTS_FOR_PRIORITY_SORT,
-          });
-          allVariants.value = response.data || [];
-        }
-
-        // Filter CNVs: Large structural variants >= 50bp that extend beyond HNF1B
-        cnvVariants.value = allVariants.value.filter((v) => isCNV(v));
-        cnvVariantsLoaded.value = true;
-      } catch (error) {
-        window.logService.error('Failed to fetch CNV variants for visualization', {
-          error: error.message,
-          status: error.response?.status,
-        });
-      }
-    };
-
-    /**
-     * Handle tab change - lazy load variants when tab is clicked.
-     * Triggers a resize event after DOM updates to ensure SVG visualizations render correctly.
-     *
-     * @param {string} tab - The active tab value ('protein', 'gene', or 'region')
-     */
     const handleTabChange = (tab) => {
-      window.logService.debug('Visualization tab changed', {
-        fromTab: activeTab.value,
-        toTab: tab,
-        snvVariantsLoaded: snvVariantsLoaded.value,
-        cnvVariantsLoaded: cnvVariantsLoaded.value,
-      });
-
-      if (tab === 'protein' || tab === 'gene' || tab === 'structure3d') {
-        fetchSNVVariants(); // Protein, gene, and 3D views use SNVs
-      } else if (tab === 'region') {
-        fetchCNVVariants(); // Region view uses CNVs
-      }
-
       // Trigger resize event after DOM updates to fix SVG width calculation
       nextTick(() => {
         window.dispatchEvent(new Event('resize'));
       });
+      // Track event
+      window.logService.debug('Visualization tab changed', { toTab: tab });
     };
 
-    /**
-     * Navigate to a variant detail page when clicked in the visualization.
-     *
-     * @param {Object} variant - The variant object that was clicked
-     */
+    // ==================== NAVIGATION ====================
+
     const navigateToVariant = (variant) => {
-      // Use Vue Router for SPA navigation (no page reload)
       router.push(`/variants/${variant.variant_id}`);
     };
 
-    onMounted(() => {
-      // Load statistics immediately (lightweight)
-      fetchStats();
+    // ==================== LIFECYCLE ====================
 
-      // Load protein view variants immediately (default tab)
-      fetchSNVVariants();
+    onMounted(async () => {
+      fetchStats();
+      await variantStore.fetchProgressively();
     });
 
     return {
       displayStats,
+      loadingStats,
       snvVariants,
       cnvVariants,
       snvVariantsLoaded,
@@ -409,9 +349,16 @@ export default {
 </script>
 
 <style scoped>
-/* Center the search card using flexbox */
-.searchcard-flex {
-  display: flex;
-  justify-content: center;
+.hero-section {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e0f2f1 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.border-bottom {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.border-opacity-12 {
+  border-color: rgba(0, 0, 0, 0.12) !important;
 }
 </style>

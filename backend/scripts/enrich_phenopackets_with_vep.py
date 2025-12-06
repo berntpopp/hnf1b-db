@@ -173,9 +173,7 @@ def add_vep_to_phenopacket(
                 "name": "vep_annotation",  # Extension identifier
                 "value": {
                     # Core VEP fields (from top level and primary transcript)
-                    "most_severe_consequence": vep_data.get(
-                        "most_severe_consequence"
-                    ),
+                    "most_severe_consequence": vep_data.get("most_severe_consequence"),
                     "impact": pc.get("impact") if pc else None,
                     "gene_symbol": pc.get("gene_symbol") if pc else None,
                     "gene_id": pc.get("gene_id") if pc else None,
@@ -186,9 +184,7 @@ def add_vep_to_phenopacket(
                         pc.get("polyphen_prediction") if pc else None
                     ),
                     "polyphen_score": pc.get("polyphen_score") if pc else None,
-                    "sift_prediction": (
-                        pc.get("sift_prediction") if pc else None
-                    ),
+                    "sift_prediction": (pc.get("sift_prediction") if pc else None),
                     "sift_score": pc.get("sift_score") if pc else None,
                     # Population frequency (from colocated_variants)
                     "gnomad_af": gnomad_af,

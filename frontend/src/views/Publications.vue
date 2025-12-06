@@ -1,32 +1,67 @@
 <!-- src/views/Publications.vue -->
+<!--
+  Publications Registry with server-side pagination following JSON:API v1.1 spec.
+
+  Features:
+  - Server-side pagination with page numbers (1, 2, 3... n)
+  - Server-side sorting via JSON:API sort parameter
+  - Client-side search filtering (dataset is small, ~50 publications)
+  - Go to Last Page button
+  - Consistent UI/UX with Variants and Phenopackets tables
+-->
 <template>
-  <v-container>
-    <v-data-table
+  <v-container fluid>
+    <!-- Unified Table with Integrated Search Toolbar -->
+    <AppDataTable
+      v-model:options="options"
       :headers="headers"
-      :items="filteredPublications"
+      :items="publications"
       :loading="loading"
-      :sort-by="sortBy"
-      class="elevation-1"
-      density="compact"
+      :items-length="publications.length"
+      :custom-sort="customSort"
+      hide-default-footer
+      title="Publications Registry"
+      @update:options="onOptionsUpdate"
     >
+      <!-- Integrated Search Toolbar -->
+      <template #toolbar>
+        <AppTableToolbar
+          v-model:search-query="searchQuery"
+          search-placeholder="Search PMID, DOI, title, or author..."
+          :result-count="pagination.totalRecords"
+          result-label="publications"
+          :loading="loading"
+          @search="onSearch"
+          @clear-search="clearSearch"
+        />
+      </template>
+
+      <!-- Pagination controls above table -->
       <template #top>
-        <v-toolbar flat>
-          <v-toolbar-title>Publications</v-toolbar-title>
-          <v-spacer />
-          <!-- Search Field -->
-          <v-text-field
-            v-model="searchQuery"
-            label="Search"
-            placeholder="PMID, DOI, Title, or Author"
-            prepend-inner-icon="mdi-magnify"
-            clearable
-            hide-details
-            density="compact"
-            style="max-width: 350px"
-            class="mr-4"
-            @click:clear="clearSearch"
-          />
-        </v-toolbar>
+        <AppPagination
+          :current-count="publications.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
+      </template>
+
+      <!-- Pagination controls below table -->
+      <template #bottom>
+        <AppPagination
+          :current-count="publications.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
       </template>
 
       <!-- Render PMID as clickable chip with external link -->
@@ -35,16 +70,16 @@
           v-if="item.pmid"
           :href="`https://pubmed.ncbi.nlm.nih.gov/${item.pmid}`"
           color="orange-lighten-3"
-          size="small"
+          size="x-small"
           variant="flat"
           target="_blank"
           link
         >
-          <v-icon left size="small">mdi-book-open-variant</v-icon>
+          <v-icon start size="x-small">mdi-book-open-variant</v-icon>
           PMID: {{ item.pmid }}
-          <v-icon right size="small">mdi-open-in-new</v-icon>
+          <v-icon end size="x-small">mdi-open-in-new</v-icon>
         </v-chip>
-        <span v-else>-</span>
+        <span v-else class="text-body-2 text-medium-emphasis">-</span>
       </template>
 
       <!-- Render DOI as clickable chip -->
@@ -53,198 +88,232 @@
           v-if="item.doi"
           :href="'https://doi.org/' + item.doi"
           color="blue-lighten-3"
-          size="small"
+          size="x-small"
           variant="flat"
           target="_blank"
           link
+          class="text-truncate"
+          style="max-width: 200px"
         >
-          <v-icon left size="small">mdi-link-variant</v-icon>
+          <v-icon start size="x-small">mdi-link-variant</v-icon>
           {{ item.doi }}
-          <v-icon right size="small">mdi-open-in-new</v-icon>
+          <v-icon end size="x-small">mdi-open-in-new</v-icon>
         </v-chip>
-        <span v-else>-</span>
+        <span v-else class="text-body-2 text-medium-emphasis">-</span>
       </template>
 
       <!-- Render phenopacket count as clickable chip -->
       <template #item.phenopacket_count="{ item }">
         <v-chip
           color="green-lighten-3"
-          size="small"
+          size="x-small"
           variant="flat"
           :to="`/publications/${item.pmid}`"
           link
         >
-          <v-icon left size="small">mdi-account-multiple</v-icon>
+          <v-icon start size="x-small">mdi-account-multiple</v-icon>
           {{ item.phenopacket_count }}
         </v-chip>
       </template>
 
       <!-- Format date -->
       <template #item.first_added="{ item }">
-        {{ formatDate(item.first_added) }}
+        <span class="text-body-2">{{ formatDate(item.first_added) }}</span>
       </template>
 
       <template #no-data>
-        <v-alert type="info" variant="tonal">
+        <v-alert type="info" variant="tonal" density="compact">
           No publications found. Publications are extracted from phenopacket metadata.
         </v-alert>
       </template>
-    </v-data-table>
+    </AppDataTable>
   </v-container>
 </template>
 
 <script>
-import { getPublicationsAggregation } from '@/api';
+import { getPublications } from '@/api';
+import { buildSortParameter } from '@/utils/pagination';
+import AppDataTable from '@/components/common/AppDataTable.vue';
+import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
+import AppPagination from '@/components/common/AppPagination.vue';
 
 export default {
   name: 'Publications',
+  components: {
+    AppDataTable,
+    AppTableToolbar,
+    AppPagination,
+  },
   data() {
     return {
       publications: [],
-      searchQuery: '', // Search query for filtering
+      searchQuery: '',
       loading: false,
-      sortBy: [{ key: 'phenopacket_count', order: 'desc' }],
+
+      // Offset pagination state (JSON:API v1.1)
+      pagination: {
+        currentPage: 1,
+        pageSize: 10,
+        totalPages: 0,
+        totalRecords: 0,
+      },
+
+      // Table configuration
       headers: [
-        {
-          title: 'PMID',
-          value: 'pmid',
-          sortable: true,
-          width: '180px',
-        },
-        {
-          title: 'Title',
-          value: 'title',
-          sortable: true,
-          width: '350px',
-        },
-        {
-          title: 'Authors',
-          value: 'authors',
-          sortable: true,
-          width: '200px',
-        },
-        {
-          title: 'DOI',
-          value: 'doi',
-          sortable: true,
-          width: '250px',
-        },
+        { title: 'PMID', value: 'pmid', sortable: true, width: '160px' },
+        { title: 'Title', value: 'title', sortable: true, width: '300px' },
+        { title: 'Authors', value: 'authors', sortable: true, width: '180px' },
+        { title: 'DOI', value: 'doi', sortable: true, width: '220px' },
         {
           title: 'Individuals',
           value: 'phenopacket_count',
           sortable: true,
-          width: '120px',
+          width: '100px',
           align: 'center',
         },
-        {
-          title: 'First Added',
-          value: 'first_added',
-          sortable: true,
-          width: '150px',
-        },
+        { title: 'First Added', value: 'first_added', sortable: true, width: '120px' },
       ],
+
+      // Default sort configuration
+      defaultSortBy: [{ key: 'phenopacket_count', order: 'desc' }],
+
+      // Table options (for Vuetify data table)
+      options: {
+        page: 1,
+        itemsPerPage: 10,
+        sortBy: [{ key: 'phenopacket_count', order: 'desc' }],
+      },
+      itemsPerPageOptions: [10, 20, 50, 100],
+
+      // Initialization flag
+      loadingInitialized: false,
+
+      // Track previous sortBy for change detection (v-model updates this.options before handler)
+      previousSortBy: [{ key: 'phenopacket_count', order: 'desc' }],
     };
   },
-  computed: {
-    filteredPublications() {
-      if (!this.searchQuery || this.searchQuery.trim() === '') {
-        return this.publications;
-      }
-
-      const query = this.searchQuery.toLowerCase().trim();
-      return this.publications.filter((pub) => {
-        return (
-          pub.pmid?.toLowerCase().includes(query) ||
-          pub.doi?.toLowerCase().includes(query) ||
-          pub.title?.toLowerCase().includes(query) ||
-          pub.authors?.toLowerCase().includes(query)
-        );
-      });
-    },
-  },
-  mounted() {
-    this.fetchPublications();
-  },
   methods: {
+    /**
+     * Fetch publications from the server with JSON:API offset pagination.
+     */
     async fetchPublications() {
       this.loading = true;
-      try {
-        const response = await getPublicationsAggregation();
-        this.publications = response.data;
+      window.logService.debug('Fetching publications', {
+        page: this.pagination.currentPage,
+        sortBy: this.options.sortBy,
+        search: this.searchQuery,
+      });
 
-        // Fetch titles and authors from PubMed API for each publication
-        await this.enrichWithPubMedData();
+      try {
+        const { sortBy } = this.options;
+
+        // Map frontend column keys to backend sort field names
+        const sortFieldMap = {
+          pmid: 'pmid',
+          title: 'title',
+          authors: 'authors',
+          doi: 'doi',
+          phenopacket_count: 'phenopacket_count',
+          first_added: 'first_added',
+        };
+
+        const sortParam = buildSortParameter(sortBy, sortFieldMap) || '-phenopacket_count';
+
+        // Build request params for offset pagination
+        const requestParams = {
+          'page[number]': this.pagination.currentPage,
+          'page[size]': this.pagination.pageSize,
+          sort: sortParam,
+        };
+
+        // Add search query if present
+        if (this.searchQuery?.trim()) {
+          requestParams.q = this.searchQuery.trim();
+        }
+
+        const response = await getPublications(requestParams);
+
+        // Extract JSON:API response data
+        const jsonApiData = response.data || {};
+        const publicationItems = jsonApiData.data || [];
+        const meta = jsonApiData.meta?.page || {};
+
+        this.publications = publicationItems;
+        this.pagination.currentPage = meta.currentPage || this.pagination.currentPage;
+        this.pagination.totalPages = meta.totalPages || 0;
+        this.pagination.totalRecords = meta.totalRecords || 0;
+
+        window.logService.info('Publications fetched', {
+          count: publicationItems.length,
+          total: meta.totalRecords,
+          page: this.pagination.currentPage,
+        });
       } catch (error) {
-        window.logService.error('Failed to fetch publications aggregation', {
+        window.logService.error('Failed to fetch publications', {
           error: error.message,
           status: error.response?.status,
         });
+        this.publications = [];
       } finally {
         this.loading = false;
       }
     },
 
-    async enrichWithPubMedData() {
-      // Fetch publication metadata from PubMed API in parallel
-      const pmids = this.publications.map((pub) => pub.pmid).filter(Boolean);
-      if (pmids.length === 0) return;
+    resetPaginationAndFetch() {
+      this.pagination.currentPage = 1;
+      this.pagination.totalPages = 0;
+      this.pagination.totalRecords = 0;
+      this.fetchPublications();
+    },
 
-      try {
-        // NCBI E-utilities API: fetch summaries for all PMIDs
-        const response = await fetch(
-          `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=json`
-        );
+    // Event handlers
+    onOptionsUpdate(newOptions) {
+      // Preserve initial sort if Vuetify sends empty sortBy on first mount
+      if (!this.loadingInitialized && (!newOptions.sortBy || newOptions.sortBy.length === 0)) {
+        newOptions.sortBy = [...this.defaultSortBy];
+        this.options.sortBy = [...this.defaultSortBy];
+      }
 
-        if (!response.ok) {
-          window.logService.warn('Failed to fetch PubMed data', {
-            status: response.status,
-          });
-          return;
-        }
+      // Compare with previousSortBy since v-model updates this.options before handler
+      const sortChanged = JSON.stringify(this.previousSortBy) !== JSON.stringify(newOptions.sortBy);
 
-        const data = await response.json();
-        const results = data.result;
+      // Store current sortBy for next comparison
+      this.previousSortBy = newOptions.sortBy ? [...newOptions.sortBy] : [];
+      this.options = { ...newOptions };
 
-        // Update publications with title and authors
-        this.publications.forEach((pub) => {
-          if (!pub.pmid || !results[pub.pmid]) {
-            pub.title = 'Title unavailable';
-            pub.authors = '-';
-            return;
-          }
-
-          const pubmedData = results[pub.pmid];
-          pub.title = pubmedData.title || 'Title unavailable';
-
-          // Format authors: "FirstAuthor et al." or list first 3
-          if (pubmedData.authors && pubmedData.authors.length > 0) {
-            const authorNames = pubmedData.authors.map((a) => a.name);
-            if (authorNames.length === 1) {
-              pub.authors = authorNames[0];
-            } else if (authorNames.length <= 3) {
-              pub.authors = authorNames.join(', ');
-            } else {
-              pub.authors = `${authorNames[0]} et al.`;
-            }
-          } else {
-            pub.authors = '-';
-          }
-        });
-
-        window.logService.info('Enriched publications with PubMed metadata', {
-          count: pmids.length,
-        });
-      } catch (error) {
-        window.logService.error('Failed to enrich publications with PubMed data', {
-          error: error.message,
-        });
-        // Don't fail the whole view if PubMed enrichment fails
-        this.publications.forEach((pub) => {
-          if (!pub.title) pub.title = 'Title unavailable';
-          if (!pub.authors) pub.authors = '-';
-        });
+      if (!this.loadingInitialized) {
+        this.loadingInitialized = true;
+        this.fetchPublications();
+      } else if (sortChanged) {
+        this.resetPaginationAndFetch();
       }
     },
+
+    customSort(items) {
+      // Server-side sorting - return items as-is
+      return items;
+    },
+
+    onSearch() {
+      this.resetPaginationAndFetch();
+    },
+
+    clearSearch() {
+      this.searchQuery = '';
+      this.resetPaginationAndFetch();
+    },
+
+    onPageSizeChange(newSize) {
+      this.pagination.pageSize = newSize;
+      this.resetPaginationAndFetch();
+    },
+
+    goToPage(page) {
+      if (page < 1 || page > this.pagination.totalPages) return;
+      this.pagination.currentPage = page;
+      this.fetchPublications();
+    },
+
     formatDate(dateString) {
       if (!dateString) return '-';
       const date = new Date(dateString);
@@ -254,14 +323,10 @@ export default {
         day: 'numeric',
       });
     },
-    clearSearch() {
-      this.searchQuery = '';
-      window.logService.info('Cleared publications search filter');
-    },
   },
 };
 </script>
 
 <style scoped>
-/* Add view-specific styles if needed */
+/* Publications table has no clickable rows */
 </style>

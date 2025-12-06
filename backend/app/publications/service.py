@@ -1,7 +1,7 @@
-"""PubMed API service with database caching.
+"""PubMed API service with permanent database storage.
 
 This module provides publication metadata fetching from PubMed with:
-- Database caching (90-day TTL)
+- Permanent database storage (fetched once, stored forever)
 - PMID validation (SQL injection prevention)
 - Rate limiting handling
 - Comprehensive error handling
@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 PUBMED_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_API_KEY = os.getenv("PUBMED_API_KEY")  # Optional but recommended
-CACHE_TTL_DAYS = 90
 API_VERSION = "2.0"  # E-utilities version
 
 # Rate limiting based on API key presence
@@ -191,7 +190,6 @@ async def _get_cached_metadata(pmid: str, db: AsyncSession) -> Optional[dict]:
             api_version
         FROM publication_metadata
         WHERE pmid = :pmid
-        AND fetched_at > NOW() - INTERVAL '90 days'
     """)
 
     result = await db.execute(query, {"pmid": pmid})

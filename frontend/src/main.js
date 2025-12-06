@@ -6,6 +6,8 @@ import router from './router';
 import { createVuetify } from 'vuetify';
 import 'vuetify/styles';
 import '@mdi/font/css/materialdesignicons.css';
+// Import app styles AFTER MDI to allow font-display override
+import './style.css';
 
 // Import logging services
 import { logService } from '@/services/logService';
