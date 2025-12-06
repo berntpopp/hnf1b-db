@@ -5,6 +5,17 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Monospace for data */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace !important;
 }
 
 #app {
@@ -54,7 +65,8 @@ body {
 
 /* Ensure text-grey has sufficient contrast (WCAG AA requires 4.5:1) */
 .text-grey {
-  color: #616161 !important; /* Darker grey for better contrast */
+  color: #616161 !important;
+  /* Darker grey for better contrast */
 }
 
 /* Improve text-caption contrast */

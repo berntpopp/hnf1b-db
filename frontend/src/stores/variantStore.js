@@ -121,7 +121,7 @@ export const useVariantStore = defineStore('variants', () => {
     try {
       const response = await getVariants({
         classification,
-        page_size: 500, // Sufficient for any single classification
+        pageSize: 500, // Sufficient for any single classification
       });
 
       // Merge without duplicates (use variant_id as unique key)
@@ -217,7 +217,7 @@ export const useVariantStore = defineStore('variants', () => {
 
     try {
       const response = await getVariants({
-        page_size: 1000, // Get all variants
+        pageSize: 1000, // Get all variants
       });
 
       variants.value = response.data;

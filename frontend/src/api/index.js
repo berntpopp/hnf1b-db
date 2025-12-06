@@ -116,10 +116,9 @@ apiClient.interceptors.response.use(
 );
 
 /**
- * Convert page-based pagination to skip/limit.
- * @param {number} page - Page number (1-indexed)
- * @param {number} pageSize - Items per page
- * @returns {Object} { skip, limit }
+ * DEPRECATED: Use cursor pagination instead.
+ * This function is kept for backwards compatibility during migration.
+ * @deprecated Use buildCursorParams from @/utils/pagination instead
  */
 export function pageToSkipLimit(page, pageSize) {
   return {
@@ -396,13 +395,6 @@ export const getVariantTypes = (params = {}) =>
   apiClient.get('/phenopackets/aggregate/variant-types', { params });
 
 /**
- * Get publications aggregation with citation counts.
- * @returns {Promise} Axios promise with publication statistics
- */
-export const getPublicationsAggregation = () =>
-  apiClient.get('/phenopackets/aggregate/publications');
-
-/**
  * Get publications by type (for line chart visualization).
  * Returns publications with PMID, type, and phenopacket count.
  * @returns {Promise} Axios promise with publications array
@@ -451,6 +443,30 @@ export const compareVariantTypes = (params) =>
 export const getSmallVariants = () => apiClient.get('/phenopackets/variants/small-variants');
 
 /* ==================== PUBLICATION ENDPOINTS ==================== */
+
+/**
+ * Get a list of publications with JSON:API pagination, filtering, and search.
+ *
+ * @param {Object} params - Query parameters
+ *   - page[number]: Page number (1-indexed, default: 1)
+ *   - page[size]: Items per page (default: 20, max: 100)
+ *   - filter[year]: Filter by publication year
+ *   - filter[year_gte]: Filter by minimum year
+ *   - filter[year_lte]: Filter by maximum year
+ *   - filter[has_doi]: Filter by DOI presence
+ *   - sort: Sort field (prefix with '-' for descending, default: '-phenopacket_count')
+ *   - q: Full-text search query (searches title, authors, PMID, DOI)
+ * @returns {Promise} Axios promise with JSON:API response { data, meta, links }
+ *
+ * @example
+ * getPublications({
+ *   'page[number]': 1,
+ *   'page[size]': 20,
+ *   'sort': '-phenopacket_count',
+ *   'q': 'HNF1B'
+ * })
+ */
+export const getPublications = (params = {}) => apiClient.get('/publications/', { params });
 
 /**
  * Get publication metadata by PMID.
@@ -542,55 +558,50 @@ export const getHypomagnesemiaCases = () => apiClient.get('/clinical/hypomagnese
 
 /**
  * Get aggregated unique variants across all phenopackets with search and filters.
- * Implements backend search endpoint from Issue #64.
+ * Uses offset-based pagination (JSON:API v1.1).
  *
  * @param {Object} params - Query parameters
- * @param {number} params.page - Page number (1-indexed)
- * @param {number} params.page_size - Items per page
+ * @param {number} params.page - Page number (1-indexed, default: 1)
+ * @param {number} params.pageSize - Items per page (default: 10)
  * @param {string} [params.query] - Text search (HGVS, variant ID, coordinates)
  * @param {string} [params.variant_type] - Filter by variant type (SNV, deletion, etc.)
  * @param {string} [params.classification] - Filter by ACMG classification
  * @param {string} [params.consequence] - Filter by molecular consequence
- * @param {string} [params.pathogenicity] - DEPRECATED: use classification instead
  * @param {string} [params.sort] - Sort field (prefix with '-' for descending order)
- * @returns {Promise} Promise resolving to variants data with pagination metadata
+ * @returns {Promise} Promise resolving to variants data with offset pagination metadata
  */
 export const getVariants = async (params = {}) => {
   const {
     page = 1,
-    page_size = 10,
+    pageSize = 10,
     query,
     variant_type,
     classification,
     consequence,
     domain,
-    pathogenicity,
     sort,
   } = params;
-  const { skip, limit } = pageToSkipLimit(page, page_size);
 
   const response = await apiClient.get('/phenopackets/aggregate/all-variants', {
     params: {
-      skip,
-      limit,
+      'page[number]': page,
+      'page[size]': pageSize,
       query,
       variant_type,
-      classification: classification || pathogenicity, // Support both new and legacy params
+      classification,
       consequence,
       domain,
       sort,
     },
   });
 
-  // Backend now returns { data: [...], total: N, skip: N, limit: N }
+  // Backend returns JSON:API offset response
   const responseData = response.data || {};
   const data = responseData.data || [];
-  const total = responseData.total || 0;
+  const meta = responseData.meta?.page || {};
 
   return {
     data: data.map((variant) => ({
-      // 'id' uses 'simple_id' if present, otherwise falls back to 'variant_id'.
-      // This fallback may cause ambiguity; ideally, the backend should always provide 'simple_id'.
       id: variant.simple_id || variant.variant_id,
       simple_id: variant.simple_id,
       variant_id: variant.variant_id,
@@ -606,11 +617,10 @@ export const getVariants = async (params = {}) => {
       molecular_consequence: variant.molecular_consequence,
     })),
     meta: {
-      // Backend provides accurate total count
-      total: total,
-      total_pages: Math.ceil(total / page_size),
-      current_page: page,
-      page_size: page_size,
+      currentPage: meta.currentPage || page,
+      pageSize: meta.pageSize || pageSize,
+      totalPages: meta.totalPages || 0,
+      totalRecords: meta.totalRecords || 0,
     },
   };
 };
@@ -752,7 +762,6 @@ export default {
   getVariantPathogenicity,
   getKidneyStages,
   getVariantTypes,
-  getPublicationsAggregation,
   getPublicationsByType,
   getPublicationTypes,
   getAgeOfOnsetAggregation,
@@ -760,6 +769,7 @@ export default {
   getSmallVariants,
 
   // Publications
+  getPublications,
   getPublicationMetadata,
 
   // Authentication

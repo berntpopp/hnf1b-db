@@ -103,8 +103,12 @@ class CursorPageMeta(BaseModel):
     Cursor pagination prevents duplicate/missing records when data changes
     during pagination (e.g., records added/deleted while user browses).
 
+    Per JSON:API Cursor Pagination Profile, includes optional total count.
+    Reference: https://jsonapi.org/profiles/ethanresnick/cursor-pagination/
+
     Attributes:
         page_size: Number of items per page
+        total: Total number of records matching filters (optional per spec)
         has_next_page: Whether there are more records after current page
         has_previous_page: Whether there are records before current page
         start_cursor: Opaque cursor pointing to first record in page
@@ -112,6 +116,9 @@ class CursorPageMeta(BaseModel):
     """
 
     page_size: int = Field(..., alias="pageSize", ge=1, le=1000)
+    total: Optional[int] = Field(
+        None, ge=0, description="Total records matching filters"
+    )
     has_next_page: bool = Field(..., alias="hasNextPage")
     has_previous_page: bool = Field(..., alias="hasPreviousPage")
     start_cursor: Optional[str] = Field(None, alias="startCursor")

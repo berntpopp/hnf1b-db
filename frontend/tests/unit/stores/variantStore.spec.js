@@ -225,7 +225,7 @@ describe('Variant Store', () => {
 
       expect(getVariants).toHaveBeenCalledWith({
         classification: 'PATHOGENIC',
-        page_size: 500,
+        pageSize: 500,
       });
       expect(store.variants).toHaveLength(2);
       expect(store.loadedClassifications.has('PATHOGENIC')).toBe(true);
@@ -370,7 +370,7 @@ describe('Variant Store', () => {
 
       await store.fetchAll();
 
-      expect(getVariants).toHaveBeenCalledWith({ page_size: 1000 });
+      expect(getVariants).toHaveBeenCalledWith({ pageSize: 1000 });
       expect(store.variants).toHaveLength(3);
       expect(store.loadingState).toBe('complete');
     });

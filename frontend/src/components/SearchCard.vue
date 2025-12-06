@@ -141,16 +141,10 @@ const handleClearRecentSearches = () => {
 </script>
 
 <style scoped>
-/* Typical width is 600px on larger devices, with a minimum of 400px for smaller screens */
 .search-card {
-  min-width: 350px;
-  width: 600px;
-}
-
-@media (max-width: 600px) {
-  .search-card {
-    width: 100%;
-  }
+  width: 100%;
+  max-width: 800px;
+  background-color: transparent !important; /* Allow parent background to likely show through or be set by parent */
 }
 
 .mx-auto {

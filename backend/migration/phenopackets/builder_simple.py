@@ -204,9 +204,9 @@ class PhenopacketBuilder:
                     current_iso = age_reported.get("iso8601duration", "")
                     latest_iso = latest_age_reported.get("iso8601duration", "")
                     if current_iso and latest_iso:
-                        if self._iso8601_to_months(current_iso) > self._iso8601_to_months(
-                            latest_iso
-                        ):
+                        if self._iso8601_to_months(
+                            current_iso
+                        ) > self._iso8601_to_months(latest_iso):
                             latest_age_reported = age_reported
 
         if latest_age_reported:

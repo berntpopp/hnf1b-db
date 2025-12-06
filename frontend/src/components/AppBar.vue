@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar app color="teal" dark elevation="2">
+  <v-app-bar app color="teal" dark elevation="2" style="z-index: 1009">
     <v-container fluid class="d-flex align-center px-4">
       <!-- Mobile: Hamburger Menu (visible < 960px) -->
       <v-app-bar-nav-icon
@@ -16,7 +16,8 @@
           class="app-logo"
           contain
           max-height="48"
-          max-width="184"
+          width="184"
+          min-width="140"
           @click="navigateHome"
         />
       </v-toolbar-title>
@@ -195,6 +196,7 @@ const handleLogout = async () => {
 <style scoped>
 .app-logo {
   cursor: pointer;
+  flex-shrink: 0; /* Prevent logo from shrinking on small screens */
 }
 
 /* Active route indicator */

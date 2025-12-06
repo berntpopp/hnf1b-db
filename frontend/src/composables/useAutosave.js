@@ -21,7 +21,7 @@
  */
 
 import { watch } from 'vue';
-import { debounce } from 'lodash-es';
+import debounce from 'just-debounce-it';
 
 export function useAutosave(data, key, delay = 2000) {
   const save = debounce(() => {

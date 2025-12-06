@@ -1,6 +1,6 @@
 /**
- * Pagination and sorting utilities for Vue components.
- * Provides reusable functions for JSON:API compliant pagination and sorting.
+ * Offset pagination utilities for Vue components.
+ * All pagination uses offset-based JSON:API v1.1 (page[number]/page[size]).
  */
 
 /**
@@ -40,18 +40,24 @@ export function buildSortParameter(sortBy, sortFieldMap) {
 }
 
 /**
- * Build JSON:API pagination parameters from page number and size.
+ * Build offset pagination parameters for API requests.
  *
- * @param {number} page - Page number (1-indexed)
- * @param {number} pageSize - Number of items per page
- * @returns {Object} JSON:API pagination parameters
- *   Example: { 'page[number]': 1, 'page[size]': 20 }
+ * @param {Object} options - Pagination options
+ * @param {number} options.page - Page number (1-indexed)
+ * @param {number} options.pageSize - Number of items per page
+ * @returns {Object} JSON:API offset pagination parameters
  *
  * @example
- * const params = buildPaginationParameters(2, 50);
- * // Returns: { 'page[number]': 2, 'page[size]': 50 }
+ * // First page
+ * buildOffsetParams({ page: 1, pageSize: 20 });
+ * // Returns: { 'page[number]': 1, 'page[size]': 20 }
+ *
+ * @example
+ * // Third page
+ * buildOffsetParams({ page: 3, pageSize: 20 });
+ * // Returns: { 'page[number]': 3, 'page[size]': 20 }
  */
-export function buildPaginationParameters(page, pageSize) {
+export function buildOffsetParams({ page = 1, pageSize = 20 }) {
   return {
     'page[number]': page,
     'page[size]': pageSize,
@@ -59,121 +65,134 @@ export function buildPaginationParameters(page, pageSize) {
 }
 
 /**
- * Calculate range text for pagination display.
+ * Extract offset pagination metadata from JSON:API response.
  *
- * @param {number} page - Current page number (1-indexed)
- * @param {number} pageSize - Number of items per page
- * @param {number} totalItems - Total number of items
- * @returns {string} Range text (e.g., "1-20 of 864" or "0 of 0")
- *
- * @example
- * const rangeText = calculateRangeText(1, 20, 864);
- * // Returns: "1-20 of 864"
+ * @param {Object} response - Axios response object with JSON:API structure
+ * @returns {Object} Offset pagination metadata
+ *   - currentPage: Current page number (1-indexed)
+ *   - pageSize: Number of items per page
+ *   - totalPages: Total number of pages
+ *   - totalRecords: Total count of items
  *
  * @example
- * const rangeText = calculateRangeText(1, 20, 0);
- * // Returns: "0 of 0"
- */
-export function calculateRangeText(page, pageSize, totalItems) {
-  if (totalItems === 0) {
-    return '0 of 0';
-  }
-
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, totalItems);
-
-  return `${start}-${end} of ${totalItems}`;
-}
-
-/**
- * Extract pagination metadata from JSON:API response.
- * Supports both offset pagination and cursor pagination.
- *
- * @param {Object} response - Axios response object
- * @returns {Object} Pagination metadata
- *   Offset pagination:
- *     - totalRecords: Total number of records
- *     - totalPages: Total number of pages
- *     - currentPage: Current page number
- *     - pageSize: Number of items per page
- *     - type: 'offset'
- *   Cursor pagination:
- *     - pageSize: Number of items per page
- *     - hasNextPage: Whether there's a next page
- *     - hasPreviousPage: Whether there's a previous page
- *     - startCursor: Cursor for the first item (opaque token)
- *     - endCursor: Cursor for the last item (opaque token)
- *     - type: 'cursor'
- *
- * @example
- * // Offset pagination
  * const meta = extractPaginationMeta(response);
- * // Returns: { type: 'offset', totalRecords: 864, totalPages: 44, currentPage: 1, pageSize: 20 }
- *
- * @example
- * // Cursor pagination
- * const meta = extractPaginationMeta(response);
- * // Returns: { type: 'cursor', pageSize: 20, hasNextPage: true, hasPreviousPage: false, startCursor: '...', endCursor: '...' }
+ * // Returns: {
+ * //   currentPage: 1,
+ * //   pageSize: 20,
+ * //   totalPages: 44,
+ * //   totalRecords: 864
+ * // }
  */
 export function extractPaginationMeta(response) {
   const data = response.data || {};
   const meta = data.meta || {};
   const page = meta.page || {};
 
-  // Detect pagination type by presence of cursor-specific fields
-  const isCursorPagination = 'hasNextPage' in page || 'hasPreviousPage' in page;
-
-  if (isCursorPagination) {
-    // Cursor pagination
-    return {
-      type: 'cursor',
-      pageSize: page.pageSize || 20,
-      hasNextPage: page.hasNextPage || false,
-      hasPreviousPage: page.hasPreviousPage || false,
-      startCursor: page.startCursor || null,
-      endCursor: page.endCursor || null,
-    };
-  } else {
-    // Offset pagination
-    return {
-      type: 'offset',
-      totalRecords: page.totalRecords || 0,
-      totalPages: page.totalPages || 0,
-      currentPage: page.currentPage || 1,
-      pageSize: page.pageSize || 20,
-    };
-  }
+  return {
+    currentPage: page.currentPage || 1,
+    pageSize: page.pageSize || 20,
+    totalPages: page.totalPages || 0,
+    totalRecords: page.totalRecords || 0,
+  };
 }
 
 /**
- * Build cursor pagination parameters for next/previous page.
+ * Calculate display text for offset pagination.
  *
- * @param {string|null} cursor - Cursor token (startCursor or endCursor from pagination meta)
- * @param {number} pageSize - Number of items per page
- * @param {'after'|'before'} direction - Direction to paginate
- * @returns {Object} JSON:API cursor pagination parameters
- *   Example: { 'page[after]': 'eyJpZCI6IjEyMyJ9', 'page[size]': 20 }
+ * Shows range with total count: "1-20 of 864"
  *
- * @example
- * const nextParams = buildCursorPaginationParameters(meta.endCursor, 20, 'after');
- * // Returns: { 'page[after]': 'eyJpZCI6IjEyMyJ9', 'page[size]': 20 }
+ * @param {number} currentCount - Number of items on current page
+ * @param {number} currentPage - Current page number (1-indexed)
+ * @param {number} pageSize - Items per page
+ * @param {number} totalRecords - Total count
+ * @returns {string} Range text (e.g., "1-20 of 864")
  *
  * @example
- * const prevParams = buildCursorPaginationParameters(meta.startCursor, 20, 'before');
- * // Returns: { 'page[before]': 'eyJpZCI6IjEyMyJ9', 'page[size]': 20 }
+ * calculateRangeText(20, 1, 20, 864);   // "1-20 of 864"
+ * calculateRangeText(15, 44, 20, 864);  // "861-875 of 864"
+ * calculateRangeText(0, 1, 20, 0);      // "0-0 of 0"
  */
-export function buildCursorPaginationParameters(cursor, pageSize, direction = 'after') {
-  if (!cursor) {
-    // No cursor - return initial page with empty cursor to trigger cursor pagination mode
-    // Backend detects cursor pagination by presence of page[after]/page[before] param
-    return {
-      'page[after]': '', // Empty string triggers cursor pagination mode
-      'page[size]': pageSize,
-    };
+export function calculateRangeText(currentCount, currentPage, pageSize, totalRecords) {
+  if (currentCount === 0 && totalRecords === 0) {
+    return '0-0 of 0';
   }
 
+  if (currentCount === 0) {
+    return 'No results';
+  }
+
+  const start = (currentPage - 1) * pageSize + 1;
+  const end = start + currentCount - 1;
+
+  return `${start}-${end} of ${totalRecords}`;
+}
+
+/**
+ * Create an offset pagination state object for Vue components.
+ *
+ * Use this to initialize pagination reactive state in components.
+ *
+ * @param {number} pageSize - Default page size
+ * @returns {Object} Initial pagination state
+ *
+ * @example
+ * const pagination = reactive(createPaginationState(20));
+ * // Returns: {
+ * //   currentPage: 1,
+ * //   pageSize: 20,
+ * //   totalPages: 0,
+ * //   totalRecords: 0
+ * // }
+ */
+export function createPaginationState(pageSize = 20) {
   return {
-    [`page[${direction}]`]: cursor,
-    'page[size]': pageSize,
+    currentPage: 1,
+    pageSize,
+    totalPages: 0,
+    totalRecords: 0,
   };
+}
+
+/**
+ * Update pagination state after API response.
+ *
+ * @param {Object} state - Reactive pagination state object
+ * @param {Object} meta - Pagination metadata from extractPaginationMeta
+ */
+export function updatePaginationState(state, meta) {
+  state.currentPage = meta.currentPage;
+  state.totalPages = meta.totalPages;
+  state.totalRecords = meta.totalRecords;
+}
+
+/**
+ * Calculate visible page numbers for pagination UI.
+ *
+ * Returns an array of page numbers to display, with ellipsis support.
+ *
+ * @param {number} currentPage - Current page number (1-indexed)
+ * @param {number} totalPages - Total number of pages
+ * @param {number} maxVisible - Maximum number of page buttons to show (default: 5)
+ * @returns {Array} Array of page numbers to display
+ *
+ * @example
+ * getVisiblePages(1, 10, 5);   // [1, 2, 3, 4, 5]
+ * getVisiblePages(5, 10, 5);   // [3, 4, 5, 6, 7]
+ * getVisiblePages(10, 10, 5);  // [6, 7, 8, 9, 10]
+ */
+export function getVisiblePages(currentPage, totalPages, maxVisible = 5) {
+  if (totalPages <= maxVisible) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const half = Math.floor(maxVisible / 2);
+  let start = Math.max(1, currentPage - half);
+  let end = Math.min(totalPages, start + maxVisible - 1);
+
+  // Adjust start if we're near the end
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 }

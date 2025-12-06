@@ -73,6 +73,11 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Health check endpoint for backend monitoring
+      '/health': {
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
 
     watch: {
@@ -88,28 +93,38 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Function-based chunk splitting for better granularity and caching
+        // Smaller chunks = better cache invalidation + parallel loading
         manualChunks(id) {
-          // Heavy visualization libraries - lazy loaded
+          // Heavy visualization libraries - lazy loaded on demand
           if (id.includes('chart.js')) return 'charts';
           if (id.includes('ngl')) return 'ngl-viewer';
 
           // D3 modules - used for visualizations
           if (id.includes('d3-') || id.includes('/d3/')) return 'd3-modules';
 
-          // Vuetify data table components (heavy)
+          // Vuetify data table components (heavy, often lazy loaded)
           if (id.includes('vuetify/lib/components/VDataTable')) {
             return 'vuetify-data';
           }
           if (id.includes('vuetify')) return 'vuetify-core';
 
-          // Vue ecosystem
+          // Vue ecosystem - core framework
           if (id.includes('vue-router') || id.includes('pinia')) {
             return 'vue-core';
           }
           if (id.includes('/vue/') || id.includes('@vue/')) return 'vue-vendor';
 
-          // Axios for API calls
+          // Axios for API calls - frequently used
           if (id.includes('axios')) return 'axios';
+
+          // Date utilities - split for better caching
+          if (id.includes('date-fns')) return 'date-utils';
+
+          // Form validation - only needed on edit pages
+          if (id.includes('yup')) return 'validation';
+
+          // File utilities - only needed for downloads
+          if (id.includes('file-saver')) return 'file-utils';
 
           // Other node_modules
           if (id.includes('node_modules')) return 'vendor';

@@ -1,329 +1,215 @@
 <!-- src/views/Variants.vue -->
 <template>
   <v-container fluid>
-    <!-- Search and Filter Section -->
-    <v-card class="mb-4">
-      <v-card-title>Search Variants</v-card-title>
-      <v-card-text>
-        <v-row>
-          <!-- Text Search -->
-          <v-col cols="12" md="4">
-            <v-text-field
-              v-model="searchQuery"
-              label="Search"
-              placeholder="Enter HGVS notation, gene symbol, or variant ID"
-              prepend-inner-icon="mdi-magnify"
-              clearable
-              :loading="loading"
-              hide-details
-              @input="debouncedSearch"
-              @click:clear="clearSearch"
-            >
-              <template #append-inner>
-                <v-menu>
-                  <template #activator="{ props }">
-                    <v-btn
-                      icon="mdi-help-circle-outline"
-                      variant="text"
-                      size="small"
-                      v-bind="props"
-                    />
-                  </template>
-                  <v-list density="compact">
-                    <v-list-item>
-                      <v-list-item-title class="font-weight-bold text-caption">
-                        Search Examples:
-                      </v-list-item-title>
-                    </v-list-item>
-                    <v-list-item>
-                      <v-list-item-subtitle class="text-caption">
-                        c.1654-2A>T (transcript)
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                    <v-list-item>
-                      <v-list-item-subtitle class="text-caption">
-                        p.Ser546Phe (protein)
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                    <v-list-item>
-                      <v-list-item-subtitle class="text-caption">
-                        Var1 (variant ID)
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                    <v-list-item>
-                      <v-list-item-subtitle class="text-caption">
-                        chr17:36098063 (coordinates)
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
-              </template>
-            </v-text-field>
-          </v-col>
-
-          <!-- Variant Type Filter -->
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="filterType"
-              :items="variantTypes"
-              label="Type"
-              clearable
-              :disabled="loading"
-              hide-details
-              @update:model-value="applyFilters"
-            />
-          </v-col>
-
-          <!-- Classification Filter -->
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="filterClassification"
-              :items="classifications"
-              label="Classification"
-              clearable
-              :disabled="loading"
-              hide-details
-              @update:model-value="applyFilters"
-            />
-          </v-col>
-
-          <!-- Molecular Consequence Filter -->
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="filterConsequence"
-              :items="consequences"
-              label="Consequence"
-              clearable
-              :disabled="loading"
-              hide-details
-              @update:model-value="applyFilters"
-            />
-          </v-col>
-
-          <!-- Protein Domain Filter -->
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="filterDomain"
-              :items="domainFilterOptions"
-              item-title="label"
-              item-value="value"
-              label="Protein Domain"
-              clearable
-              :disabled="loading"
-              hide-details
-              @update:model-value="applyFilters"
-            />
-          </v-col>
-        </v-row>
-
-        <!-- Active Filters Display -->
-        <v-row v-if="hasActiveFilters" class="mt-2">
-          <v-col cols="12">
-            <v-chip-group>
-              <v-chip
-                v-if="searchQuery"
-                closable
-                color="primary"
-                size="small"
-                variant="flat"
-                @click:close="clearSearch"
-              >
-                <v-icon start size="small"> mdi-magnify </v-icon>
-                Search: {{ searchQuery }}
-              </v-chip>
-              <v-chip
-                v-if="filterType"
-                closable
-                color="secondary"
-                size="small"
-                variant="flat"
-                @click:close="clearTypeFilter"
-              >
-                <v-icon start size="small"> mdi-dna </v-icon>
-                Type: {{ filterType }}
-              </v-chip>
-              <v-chip
-                v-if="filterClassification"
-                closable
-                :color="getClassificationColor(filterClassification)"
-                size="small"
-                variant="flat"
-                @click:close="clearClassificationFilter"
-              >
-                <v-icon start size="small"> mdi-alert-circle </v-icon>
-                {{ filterClassification }}
-              </v-chip>
-              <v-chip
-                v-if="filterConsequence"
-                closable
-                color="purple"
-                size="small"
-                variant="flat"
-                @click:close="clearConsequenceFilter"
-              >
-                <v-icon start size="small"> mdi-molecule </v-icon>
-                {{ filterConsequence }}
-              </v-chip>
-              <v-chip
-                v-if="filterDomain"
-                closable
-                color="teal"
-                size="small"
-                variant="flat"
-                @click:close="clearDomainFilter"
-              >
-                <v-icon start size="small"> mdi-protein </v-icon>
-                {{ filterDomain }}
-              </v-chip>
-              <v-chip color="error" size="small" variant="outlined" @click="clearAllFilters">
-                <v-icon start size="small"> mdi-close </v-icon>
-                Clear All
-              </v-chip>
-            </v-chip-group>
-          </v-col>
-        </v-row>
-
-        <!-- Results Count -->
-        <v-row class="mt-1">
-          <v-col cols="12">
-            <div class="d-flex align-center">
-              <v-chip color="info" size="small" variant="flat">
-                <v-icon start size="small"> mdi-filter </v-icon>
-                {{ filteredCount }} variants
-                <span v-if="hasActiveFilters"> (filtered)</span>
-              </v-chip>
-              <v-spacer />
-              <v-btn
-                v-if="hasActiveFilters"
-                variant="text"
-                size="small"
-                color="primary"
-                @click="clearAllFilters"
-              >
-                <v-icon start> mdi-refresh </v-icon>
-                Reset Filters
-              </v-btn>
-            </div>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
-
-    <!-- Variants Table -->
-    <v-data-table-server
+    <!-- Unified Table with Column-Based Filtering -->
+    <AppDataTable
       v-model:options="options"
       :headers="headers"
       :items="variants"
       :loading="loading"
-      :items-length="totalPages"
+      :items-length="variants.length"
       :custom-sort="customSort"
       hide-default-footer
-      class="elevation-1"
-      density="compact"
+      title="Variants Registry"
       @update:options="onOptionsUpdate"
       @click:row="handleRowClick"
     >
+      <!-- Simplified Search Toolbar -->
+      <template #toolbar>
+        <AppTableToolbar
+          v-model:search-query="searchQuery"
+          search-placeholder="Search HGVS, gene symbol, or variant ID..."
+          :result-count="pagination.totalRecords"
+          result-label="variants"
+          :loading="loading"
+          @search="onSearch"
+          @clear-search="onClearSearch"
+        >
+          <template #actions>
+            <!-- Clear filters button -->
+            <v-btn
+              v-if="hasActiveFilters"
+              variant="text"
+              size="small"
+              color="warning"
+              @click="clearAllFilters"
+            >
+              <v-icon start size="small">mdi-filter-off</v-icon>
+              Clear Filters ({{ activeFilterCount }})
+            </v-btn>
+          </template>
+        </AppTableToolbar>
+      </template>
+
+      <!-- Pagination controls above table -->
       <template #top>
-        <v-toolbar flat>
-          <v-toolbar-title>Variants</v-toolbar-title>
-          <v-spacer />
-          <div class="d-flex align-center">
-            <!-- Rows per page label and dropdown -->
-            <span class="mr-2">Rows per page:</span>
-            <v-select
-              v-model="options.itemsPerPage"
-              :items="itemsPerPageOptions"
-              dense
-              hide-details
-              solo
-              style="max-width: 120px"
-            />
-            <!-- Display the current items range -->
-            <span class="mx-2">{{ rangeText }}</span>
-            <!-- Pagination navigation buttons -->
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              aria-label="Go to first page"
-              @click="goToFirstPage"
-            >
-              <v-icon aria-hidden="true">mdi-page-first</v-icon>
-            </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === 1"
-              aria-label="Go to previous page"
-              @click="goToPreviousPage"
-            >
-              <v-icon aria-hidden="true">mdi-chevron-left</v-icon>
-            </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              aria-label="Go to next page"
-              @click="goToNextPage"
-            >
-              <v-icon aria-hidden="true">mdi-chevron-right</v-icon>
-            </v-btn>
-            <v-btn
-              icon
-              :disabled="options.page === totalPages"
-              aria-label="Go to last page"
-              @click="goToLastPage"
-            >
-              <v-icon aria-hidden="true">mdi-page-last</v-icon>
-            </v-btn>
+        <AppPagination
+          :current-count="variants.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
+      </template>
+
+      <!-- Pagination controls below table -->
+      <template #bottom>
+        <AppPagination
+          :current-count="variants.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
+      </template>
+
+      <!-- Column Header: Type with filter menu -->
+      <template #header.variant_type="{ column, toggleSort }">
+        <div class="d-flex align-center justify-space-between header-wrapper">
+          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
+            <span class="header-title">{{ column.title }}</span>
           </div>
-        </v-toolbar>
+          <v-menu :close-on-content-click="false" location="bottom">
+            <template #activator="{ props }">
+              <v-btn
+                icon
+                size="x-small"
+                variant="text"
+                v-bind="props"
+                :color="filterValues.type ? 'primary' : 'default'"
+              >
+                <v-icon size="small">
+                  {{ filterValues.type ? 'mdi-filter' : 'mdi-filter-outline' }}
+                </v-icon>
+              </v-btn>
+            </template>
+            <v-card min-width="200" max-width="280">
+              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
+                <v-icon size="small" class="mr-2">mdi-dna</v-icon>
+                Filter: Type
+              </v-card-title>
+              <v-divider />
+              <v-card-text class="pa-3">
+                <v-select
+                  v-model="filterValues.type"
+                  :items="variantTypes"
+                  label="Select type"
+                  density="compact"
+                  variant="outlined"
+                  clearable
+                  hide-details
+                />
+              </v-card-text>
+              <v-divider />
+              <v-card-actions class="pa-2">
+                <v-spacer />
+                <v-btn size="small" variant="text" @click="clearFilter('type')">Clear</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-menu>
+        </div>
+      </template>
+
+      <!-- Column Header: Classification with filter menu -->
+      <template #header.classificationVerdict="{ column, getSortIcon, toggleSort, isSorted }">
+        <div class="d-flex align-center justify-space-between header-wrapper">
+          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
+            <span class="header-title">{{ column.title }}</span>
+            <v-icon v-if="isSorted(column)" size="small" class="ml-1">{{
+              getSortIcon(column)
+            }}</v-icon>
+          </div>
+          <v-menu :close-on-content-click="false" location="bottom">
+            <template #activator="{ props }">
+              <v-btn
+                icon
+                size="x-small"
+                variant="text"
+                v-bind="props"
+                :color="filterValues.classification ? 'primary' : 'default'"
+              >
+                <v-icon size="small">
+                  {{ filterValues.classification ? 'mdi-filter' : 'mdi-filter-outline' }}
+                </v-icon>
+              </v-btn>
+            </template>
+            <v-card min-width="220" max-width="300">
+              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
+                <v-icon size="small" class="mr-2">mdi-alert-circle</v-icon>
+                Filter: Classification
+              </v-card-title>
+              <v-divider />
+              <v-card-text class="pa-3">
+                <v-select
+                  v-model="filterValues.classification"
+                  :items="classifications"
+                  label="Select classification"
+                  density="compact"
+                  variant="outlined"
+                  clearable
+                  hide-details
+                />
+              </v-card-text>
+              <v-divider />
+              <v-card-actions class="pa-2">
+                <v-spacer />
+                <v-btn size="small" variant="text" @click="clearFilter('classification')"
+                  >Clear</v-btn
+                >
+              </v-card-actions>
+            </v-card>
+          </v-menu>
+        </div>
       </template>
 
       <!-- Render simple_id as a clickable chip -->
       <template #item.simple_id="{ item }">
-        <v-chip color="pink-lighten-3" class="ma-1" size="small" variant="flat">
+        <v-chip color="pink-lighten-3" size="x-small" variant="flat">
           {{ item.simple_id }}
-          <v-icon right> mdi-dna </v-icon>
+          <v-icon end size="x-small">mdi-dna</v-icon>
         </v-chip>
       </template>
 
-      <!-- Render transcript with only c. notation (strip NM_ prefix) -->
+      <!-- Render transcript with only c. notation -->
       <template #item.transcript="{ item }">
-        {{ extractCNotation(item.transcript) }}
+        <span class="text-body-2">{{ extractCNotation(item.transcript) }}</span>
       </template>
 
-      <!-- Render protein with only p. notation (strip NP_ prefix) -->
+      <!-- Render protein with only p. notation -->
       <template #item.protein="{ item }">
-        {{ extractPNotation(item.protein) }}
+        <span class="text-body-2">{{ extractPNotation(item.protein) }}</span>
       </template>
 
       <!-- Render variant type with color coding -->
       <template #item.variant_type="{ item }">
-        <v-chip
-          :color="getVariantTypeColor(getVariantType(item))"
-          class="ma-1"
-          size="small"
-          variant="flat"
-        >
+        <v-chip :color="getVariantTypeColor(getVariantType(item))" size="x-small" variant="flat">
           {{ getVariantType(item) }}
         </v-chip>
       </template>
 
       <!-- Render HG38 with truncation for long values -->
       <template #item.hg38="{ item }">
-        <v-tooltip v-if="item.hg38 && item.hg38.length > 40" location="top">
+        <v-tooltip v-if="item.hg38 && item.hg38.length > 30" location="top">
           <template #activator="{ props }">
             <span
               v-bind="props"
-              class="text-truncate d-inline-block"
-              style="max-width: 280px; cursor: help"
+              class="text-truncate d-inline-block text-body-2"
+              style="max-width: 200px; cursor: help"
             >
               {{ item.hg38 }}
             </span>
           </template>
-          <span style="word-break: break-all; max-width: 500px; display: block">{{
+          <span style="word-break: break-all; max-width: 400px; display: block">{{
             item.hg38
           }}</span>
         </v-tooltip>
-        <span v-else>{{ item.hg38 || '-' }}</span>
+        <span v-else class="text-body-2">{{ item.hg38 || '-' }}</span>
       </template>
 
       <!-- Render classification with color coding -->
@@ -331,18 +217,17 @@
         <v-chip
           v-if="item.classificationVerdict"
           :color="getPathogenicityColor(item.classificationVerdict)"
-          class="ma-1"
-          size="small"
+          size="x-small"
           variant="flat"
         >
           {{ item.classificationVerdict }}
         </v-chip>
-        <span v-else>-</span>
+        <span v-else class="text-body-2 text-medium-emphasis">-</span>
       </template>
 
       <!-- Render individual count as a badge -->
       <template #item.individualCount="{ item }">
-        <v-chip color="light-green-lighten-3" class="ma-1" size="small" variant="flat">
+        <v-chip color="light-green-lighten-3" size="x-small" variant="flat">
           {{ item.individualCount || 0 }}
         </v-chip>
       </template>
@@ -352,56 +237,63 @@
           v-if="hasActiveFilters"
           icon="mdi-filter-off"
           title="No variants found"
-          text="No variants match your search criteria. Try adjusting your filters or clearing them."
+          text="Try adjusting your search or filters."
         >
           <template #actions>
-            <v-btn color="primary" @click="clearAllFilters"> Clear Filters </v-btn>
+            <v-btn color="primary" size="small" @click="clearAllFilters">Clear Filters</v-btn>
           </template>
         </v-empty-state>
-        <span v-else>No variants found.</span>
+        <span v-else class="text-body-2 text-medium-emphasis">No variants found.</span>
       </template>
-    </v-data-table-server>
+    </AppDataTable>
   </v-container>
 </template>
 
 <script>
-import debounce from 'just-debounce-it';
-import { getVariants, getReferenceGeneDomains } from '@/api';
+import { getVariants } from '@/api';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
 import { buildSortParameter } from '@/utils/pagination';
+import AppDataTable from '@/components/common/AppDataTable.vue';
+import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
+import AppPagination from '@/components/common/AppPagination.vue';
 
 export default {
   name: 'Variants',
+  components: {
+    AppDataTable,
+    AppTableToolbar,
+    AppPagination,
+  },
   data() {
     return {
       // Search and filter state
       searchQuery: '',
-      filterType: null,
-      filterClassification: null,
-      filterConsequence: null,
-      filterDomain: null,
+      filterValues: {
+        type: null,
+        classification: null,
+      },
 
       // Table data
       variants: [],
       loading: false,
-      totalItems: 0,
-      totalPages: 0,
-      filteredCount: 0,
 
-      // Protein domain data (for filter dropdown options)
-      proteinDomains: [],
-      domainsLoading: false,
+      // Offset pagination state
+      pagination: {
+        currentPage: 1,
+        pageSize: 10,
+        totalPages: 0,
+        totalRecords: 0,
+      },
 
-      // Initialization flag to prevent double loading
-      // See: https://github.com/vuetifyjs/vuetify/issues/16878
+      // Initialization flag
       loadingInitialized: false,
 
+      // Track previous sortBy for change detection (v-model updates this.options before handler)
+      previousSortBy: [{ key: 'simple_id', order: 'desc' }],
+
       // Filter options
-      // CNV = large structural variants (whole gene deletions/duplications)
-      // SNV = single nucleotide variants
-      // Small indels: deletion, insertion, duplication, indel (delins)
       variantTypes: ['SNV', 'CNV', 'deletion', 'duplication', 'insertion', 'indel'],
       classifications: [
         'PATHOGENIC',
@@ -411,347 +303,145 @@ export default {
         'BENIGN',
       ],
 
-      consequences: [
-        'Frameshift',
-        'Nonsense',
-        'Missense',
-        'Splice Donor',
-        'Splice Acceptor',
-        'In-frame Deletion',
-        'In-frame Insertion',
-      ],
-
       // Table configuration
+      // All sortable columns are server-side sorted via JSON:API sort parameter
       headers: [
-        {
-          title: 'Variant ID',
-          value: 'simple_id',
-          sortable: true,
-          width: '120px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
-        {
-          title: 'Transcript (c.)',
-          value: 'transcript',
-          sortable: true,
-          width: '200px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
-        {
-          title: 'Protein (p.)',
-          value: 'protein',
-          sortable: true,
-          width: '200px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
-        {
-          title: 'Variant Type',
-          value: 'variant_type',
-          sortable: false, // Not a typical sort field
-          width: '130px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
-        {
-          title: 'HG38',
-          value: 'hg38',
-          sortable: false, // Not a sortable field
-          width: '280px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
-        {
-          title: 'Classification',
-          value: 'classificationVerdict',
-          sortable: true,
-          width: '180px',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
-        },
+        { title: 'Variant ID', value: 'simple_id', sortable: true, width: '100px' },
+        { title: 'Transcript (c.)', value: 'transcript', sortable: true, width: '160px' },
+        { title: 'Protein (p.)', value: 'protein', sortable: true, width: '140px' },
+        { title: 'Type', value: 'variant_type', sortable: true, width: '100px' },
+        { title: 'HG38', value: 'hg38', sortable: true, width: '200px' },
+        { title: 'Classification', value: 'classificationVerdict', sortable: true, width: '140px' },
         {
           title: 'Individuals',
           value: 'individualCount',
           sortable: true,
-          width: '120px',
+          width: '90px',
           align: 'center',
-          headerProps: {
-            class: 'font-weight-bold',
-          },
         },
       ],
 
-      // Pagination options
+      // Default sort configuration (preserved separately from v-model binding)
+      // Vuetify's v-model:options overwrites sortBy on mount, so we keep a copy
+      defaultSortBy: [{ key: 'simple_id', order: 'desc' }],
+
+      // Table options (for Vuetify data table)
       options: {
         page: 1,
         itemsPerPage: 10,
-        sortBy: [{ key: 'simple_id', order: 'desc' }], // Default: sort by Variant ID descending
+        sortBy: [{ key: 'simple_id', order: 'desc' }],
       },
       itemsPerPageOptions: [10, 20, 50, 100],
     };
   },
   computed: {
-    // Check if any filters are active
     hasActiveFilters() {
-      return !!(
-        this.searchQuery ||
-        this.filterType ||
-        this.filterClassification ||
-        this.filterConsequence ||
-        this.filterDomain
-      );
+      return !!(this.searchQuery || this.filterValues.type || this.filterValues.classification);
     },
 
-    // Domain filter options for dropdown
-    domainFilterOptions() {
-      return this.proteinDomains.map((domain) => ({
-        label: `${domain.name} (${domain.start}-${domain.end})`,
-        value: domain.name,
-      }));
-    },
-
-    // Calculate the starting item index for the current page
-    pageStart() {
-      return (this.options.page - 1) * this.options.itemsPerPage + 1;
-    },
-
-    // Calculate the ending item index for the current page
-    pageEnd() {
-      return Math.min(this.options.page * this.options.itemsPerPage, this.totalItems);
-    },
-
-    // Create the range text (e.g., "1-10 of 160")
-    rangeText() {
-      return this.totalItems === 0
-        ? '0 of 0'
-        : `${this.pageStart}-${this.pageEnd} of ${this.totalItems}`;
+    activeFilterCount() {
+      let count = 0;
+      if (this.searchQuery) count++;
+      if (this.filterValues.type) count++;
+      if (this.filterValues.classification) count++;
+      return count;
     },
   },
   watch: {
-    // Fetch data whenever pagination or sorting options change
-    // IMPORTANT: Do NOT use immediate:true here to prevent double loading
-    // The v-data-table-server component calls @update:options on mount,
-    // which triggers fetchVariants() through onOptionsUpdate()
-    // Using immediate:true would cause fetchVariants() to be called twice:
-    // 1. On component creation (immediate:true)
-    // 2. On mount when table initializes (@update:options event)
-    // See: https://github.com/vuetifyjs/vuetify/issues/16878
-    options: {
+    filterValues: {
       handler() {
-        // Only fetch if initialization has completed
         if (this.loadingInitialized) {
-          this.fetchVariants();
+          this.resetPaginationAndFetch();
         }
       },
       deep: true,
     },
   },
-  async created() {
-    // Debounce search to prevent excessive API calls (300ms delay)
-    this.debouncedSearch = debounce(this.searchVariants, 300);
-
-    // Fetch protein domains for domain filtering
-    await this.fetchProteinDomains();
-  },
   methods: {
-    async fetchProteinDomains() {
-      try {
-        this.domainsLoading = true;
-        window.logService.info('Fetching HNF1B protein domains for filtering');
-
-        const response = await getReferenceGeneDomains('HNF1B', 'GRCh38');
-
-        if (response.data && response.data.domains && response.data.domains.length > 0) {
-          this.proteinDomains = response.data.domains;
-          window.logService.info('Successfully loaded protein domains', {
-            domainCount: this.proteinDomains.length,
-          });
-        }
-      } catch (error) {
-        window.logService.warn('Failed to fetch protein domains', {
-          error: error.message,
-        });
-        // Domain filtering will be disabled if domains can't be loaded
-      } finally {
-        this.domainsLoading = false;
-      }
-    },
-
     async fetchVariants() {
       this.loading = true;
-      window.logService.debug('Starting variant fetch', {
-        page: this.options.page,
-        itemsPerPage: this.options.itemsPerPage,
-        activeFilters: {
-          searchQuery: this.searchQuery,
-          filterType: this.filterType,
-          filterClassification: this.filterClassification,
-          filterConsequence: this.filterConsequence,
-        },
+      window.logService.debug('Fetching variants', {
+        page: this.pagination.currentPage,
         sortBy: this.options.sortBy,
+        filters: { searchQuery: this.searchQuery, ...this.filterValues },
       });
 
       try {
-        const { page, itemsPerPage, sortBy } = this.options;
+        const { sortBy } = this.options;
 
-        // Map frontend column keys to backend sort fields
+        // Map frontend column keys to backend sort field names
         const sortFieldMap = {
-          simple_id: 'variant_id',
+          simple_id: 'simple_id',
           transcript: 'transcript',
           protein: 'protein',
-          classificationVerdict: 'classification',
-          individualCount: 'individual_count',
+          variant_type: 'variant_type',
+          hg38: 'hg38',
+          classificationVerdict: 'classificationVerdict',
+          individualCount: 'individualCount',
         };
 
-        // Build sort and pagination parameters using utility functions
         const sortParam = buildSortParameter(sortBy, sortFieldMap);
 
-        // Build request params with pagination, search, and filters
         const requestParams = {
-          page,
-          page_size: itemsPerPage,
+          page: this.pagination.currentPage,
+          pageSize: this.pagination.pageSize,
           ...(sortParam && { sort: sortParam }),
+          ...(this.searchQuery && { query: this.searchQuery }),
+          ...(this.filterValues.type && { variant_type: this.filterValues.type }),
+          ...(this.filterValues.classification && {
+            classification: this.filterValues.classification,
+          }),
         };
-
-        // Add search query if present
-        if (this.searchQuery) {
-          requestParams.query = this.searchQuery;
-        }
-
-        // Add filters
-        if (this.filterType) {
-          requestParams.variant_type = this.filterType;
-        }
-        if (this.filterClassification) {
-          requestParams.classification = this.filterClassification;
-        }
-        if (this.filterConsequence) {
-          requestParams.consequence = this.filterConsequence;
-        }
-        if (this.filterDomain) {
-          requestParams.domain = this.filterDomain;
-        }
 
         const response = await getVariants(requestParams);
 
-        window.logService.info('Variants fetched successfully', {
-          count: response.data?.length || 0,
-          total: response.meta?.total || 0,
-          page,
-          hasFilters: this.hasActiveFilters,
-        });
-
-        // Set variants from response
         this.variants = response.data;
-        this.totalItems = response.meta.total || 0;
-        this.totalPages = response.meta.total_pages || 0;
-        this.filteredCount = response.meta.total || 0;
+        this.pagination.currentPage = response.meta.currentPage;
+        this.pagination.totalPages = response.meta.totalPages;
+        this.pagination.totalRecords = response.meta.totalRecords;
+
+        window.logService.info('Variants fetched', { count: response.data?.length });
       } catch (error) {
-        window.logService.error('Failed to fetch variants', {
-          error: error.message,
-          status: error.response?.status,
-          requestParams: {
-            page: this.options.page,
-            itemsPerPage: this.options.itemsPerPage,
-            hasFilters: this.hasActiveFilters,
-          },
-        });
-        // Show error message to user
-        if (error.response?.status === 429) {
-          // Rate limit error
-          window.logService.warn('Rate limit exceeded on variants endpoint', {
-            endpoint: '/phenopackets/aggregate/all-variants',
-          });
-        }
+        window.logService.error('Failed to fetch variants', { error: error.message });
+        this.variants = [];
       } finally {
         this.loading = false;
       }
     },
 
-    searchVariants() {
-      // Reset to page 1 when searching
-      this.options.page = 1;
+    resetPaginationAndFetch() {
+      this.pagination.currentPage = 1;
+      this.pagination.totalPages = 0;
+      this.pagination.totalRecords = 0;
       this.fetchVariants();
     },
 
-    applyFilters() {
-      window.logService.debug('Filters applied', {
-        activeFilters: {
-          searchQuery: this.searchQuery,
-          filterType: this.filterType,
-          filterClassification: this.filterClassification,
-          filterConsequence: this.filterConsequence,
-        },
-        resetToPageOne: true,
-      });
-      // Reset to page 1 when applying filters
-      this.options.page = 1;
-      this.fetchVariants();
+    // Event handlers
+    onSearch() {
+      this.resetPaginationAndFetch();
     },
 
-    clearSearch() {
+    onClearSearch() {
       this.searchQuery = '';
-      this.searchVariants();
+      this.resetPaginationAndFetch();
     },
 
-    clearTypeFilter() {
-      this.filterType = null;
-      this.applyFilters();
+    onPageSizeChange(newSize) {
+      this.pagination.pageSize = newSize;
+      this.resetPaginationAndFetch();
     },
 
-    clearClassificationFilter() {
-      this.filterClassification = null;
-      this.applyFilters();
-    },
-
-    clearConsequenceFilter() {
-      this.filterConsequence = null;
-      this.applyFilters();
-    },
-
-    clearDomainFilter() {
-      this.filterDomain = null;
-      this.applyFilters();
+    clearFilter(key) {
+      this.filterValues[key] = null;
     },
 
     clearAllFilters() {
       this.searchQuery = '';
-      this.filterType = null;
-      this.filterClassification = null;
-      this.filterConsequence = null;
-      this.filterDomain = null;
-      this.applyFilters();
+      this.filterValues = { type: null, classification: null };
+      this.resetPaginationAndFetch();
     },
 
-    getClassificationColor(classification) {
-      const upperClass = classification ? classification.toUpperCase() : '';
-      if (upperClass.includes('PATHOGENIC') && !upperClass.includes('LIKELY')) {
-        return 'error';
-      }
-      if (upperClass.includes('LIKELY_PATHOGENIC') || upperClass.includes('LIKELY PATHOGENIC')) {
-        return 'warning';
-      }
-      if (upperClass.includes('UNCERTAIN') || upperClass.includes('VUS')) {
-        return 'info';
-      }
-      if (upperClass.includes('LIKELY_BENIGN') || upperClass.includes('LIKELY BENIGN')) {
-        return 'light-green';
-      }
-      if (upperClass.includes('BENIGN')) {
-        return 'success';
-      }
-      return 'grey';
-    },
-
-    // Utility functions imported from utils modules
+    // Utility functions
     getVariantType,
     extractCNotation,
     extractPNotation,
@@ -759,66 +449,43 @@ export default {
     getVariantTypeColor,
 
     onOptionsUpdate(newOptions) {
-      window.logService.debug('Table options updated', {
-        oldOptions: {
-          page: this.options.page,
-          itemsPerPage: this.options.itemsPerPage,
-          sortBy: this.options.sortBy,
-        },
-        newOptions: {
-          page: newOptions.page,
-          itemsPerPage: newOptions.itemsPerPage,
-          sortBy: newOptions.sortBy,
-        },
-        initialized: this.loadingInitialized,
-      });
-
-      // Mark as initialized BEFORE updating options
-      // This allows the watch to trigger fetchVariants() exactly once
-      if (!this.loadingInitialized) {
-        this.loadingInitialized = true;
+      // Preserve initial sort if Vuetify sends empty sortBy on first mount
+      // Note: v-model:options overwrites this.options BEFORE this handler runs,
+      // so we use the separate defaultSortBy constant
+      if (!this.loadingInitialized && (!newOptions.sortBy || newOptions.sortBy.length === 0)) {
+        newOptions.sortBy = [...this.defaultSortBy];
+        // Also restore options.sortBy so Vuetify shows the sort indicator
+        this.options.sortBy = [...this.defaultSortBy];
       }
 
-      // Update options - this triggers the watch which calls fetchVariants()
+      // Compare with previousSortBy since v-model updates this.options before handler
+      const sortChanged = JSON.stringify(this.previousSortBy) !== JSON.stringify(newOptions.sortBy);
+
+      // Store current sortBy for next comparison
+      this.previousSortBy = newOptions.sortBy ? [...newOptions.sortBy] : [];
       this.options = { ...newOptions };
+
+      if (!this.loadingInitialized) {
+        this.loadingInitialized = true;
+        this.fetchVariants();
+      } else if (sortChanged) {
+        this.resetPaginationAndFetch();
+      }
     },
 
-    // Disable client-side sorting (use backend sorting instead)
     customSort(items) {
       return items;
     },
 
-    goToFirstPage() {
-      this.options.page = 1;
-      this.fetchVariants();
-    },
-
-    goToPreviousPage() {
-      if (this.options.page > 1) {
-        this.options.page--;
-        this.fetchVariants();
-      }
-    },
-
-    goToNextPage() {
-      if (this.options.page < this.totalPages) {
-        this.options.page++;
-        this.fetchVariants();
-      }
-    },
-
-    goToLastPage() {
-      this.options.page = this.totalPages;
+    goToPage(page) {
+      if (page < 1 || page > this.pagination.totalPages) return;
+      this.pagination.currentPage = page;
       this.fetchVariants();
     },
 
     handleRowClick(event, row) {
-      // Navigate to variant detail page using variant_id
-      if (row.item && row.item.variant_id) {
-        window.logService.info('Navigating to variant detail', {
-          variantId: row.item.variant_id,
-          simpleId: row.item.simple_id,
-        });
+      if (row.item?.variant_id) {
+        window.logService.info('Navigating to variant', { variantId: row.item.variant_id });
         this.$router.push(`/variants/${row.item.variant_id}`);
       }
     },
@@ -827,24 +494,35 @@ export default {
 </script>
 
 <style scoped>
-/* Ensure header cells are bold */
-.font-weight-bold {
-  font-weight: bold;
-}
-
-/* Truncate long text in table cells */
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Make table rows look clickable */
 :deep(tbody tr) {
   cursor: pointer;
 }
 
-:deep(tbody tr:hover) {
-  background-color: rgba(0, 0, 0, 0.04);
+/* Header wrapper for filter buttons */
+.header-wrapper {
+  width: 100%;
+  gap: 4px;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s;
+  min-width: 0;
+}
+
+.sortable-header:hover {
+  opacity: 0.7;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #37474f;
 }
 </style>
