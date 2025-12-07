@@ -486,7 +486,8 @@ export default {
     handleRowClick(event, row) {
       if (row.item?.variant_id) {
         window.logService.info('Navigating to variant', { variantId: row.item.variant_id });
-        this.$router.push(`/variants/${row.item.variant_id}`);
+        // URL-encode variant_id to handle special characters like colons
+        this.$router.push(`/variants/${encodeURIComponent(row.item.variant_id)}`);
       }
     },
   },

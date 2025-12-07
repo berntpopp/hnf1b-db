@@ -24,14 +24,14 @@
         <v-list-item v-bind="props" :title="item.raw.label">
           <template #prepend>
             <v-icon v-if="item.raw.type === 'Gene'" color="primary">mdi-dna</v-icon>
-            <v-icon v-else-if="item.raw.type === 'Gene Feature'" color="purple"
-              >mdi-creation</v-icon
-            >
+            <v-icon v-else-if="item.raw.type === 'Gene Feature'" color="purple">
+              mdi-creation
+            </v-icon>
             <v-icon v-else-if="item.raw.type === 'Variant'" color="error">mdi-flash</v-icon>
             <v-icon v-else-if="item.raw.type === 'Phenopacket'" color="teal">mdi-account</v-icon>
-            <v-icon v-else-if="item.raw.type === 'Publication'" color="orange"
-              >mdi-book-open-page-variant</v-icon
-            >
+            <v-icon v-else-if="item.raw.type === 'Publication'" color="orange">
+              mdi-book-open-page-variant
+            </v-icon>
             <v-icon v-else color="grey">mdi-magnify</v-icon>
           </template>
           <v-list-item-subtitle>

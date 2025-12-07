@@ -336,7 +336,7 @@ export const getVariantsBatch = (phenopacketIds) =>
  * @returns {Promise} Axios promise with phenopackets containing this variant
  */
 export const getPhenopacketsByVariant = (variantId) =>
-  apiClient.get(`/phenopackets/by-variant/${variantId}`);
+  apiClient.get(`/phenopackets/by-variant/${encodeURIComponent(variantId)}`);
 
 /* ==================== AGGREGATION ENDPOINTS ==================== */
 

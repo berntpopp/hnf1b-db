@@ -323,7 +323,8 @@ export default {
     // ==================== NAVIGATION ====================
 
     const navigateToVariant = (variant) => {
-      router.push(`/variants/${variant.variant_id}`);
+      // URL-encode variant_id to handle special characters like colons
+      router.push(`/variants/${encodeURIComponent(variant.variant_id)}`);
     };
 
     // ==================== LIFECYCLE ====================

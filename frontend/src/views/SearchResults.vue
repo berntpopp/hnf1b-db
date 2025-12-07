@@ -91,9 +91,9 @@
                   </template>
                   <v-list-item-title class="font-weight-medium">{{ item.label }}</v-list-item-title>
                   <v-list-item-subtitle>
-                    <v-chip size="x-small" label class="mr-2" :color="getTypeColor(item.type)">{{
-                      item.type
-                    }}</v-chip>
+                    <v-chip size="x-small" label class="mr-2" :color="getTypeColor(item.type)">
+                      {{ item.type }}
+                    </v-chip>
                     <span v-if="item.subtype" class="text-body-2 text-medium-emphasis">{{
                       item.subtype
                     }}</span>
@@ -214,7 +214,7 @@ const fetchResults = async () => {
     summary.value = data.summary;
     totalResults.value = data.total;
   } catch (error) {
-    console.error('Search failed:', error);
+    window.logService.error('Search failed', { error: error.message });
     results.value = [];
     totalResults.value = 0;
   } finally {
