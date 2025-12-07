@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.database import get_db
 
 from .sql_fragments import (
@@ -21,70 +22,34 @@ from .sql_fragments import (
 router = APIRouter()
 
 
-# HPO term constants for disease classification
-CAKUT_HPO_TERMS = [
-    "HP:0000003",  # Multicystic kidney dysplasia
-    "HP:0000122",  # Unilateral renal agenesis
-    "HP:0000089",  # Renal hypoplasia
-    "HP:0012210",  # Abnormal renal morphology
-]
-
-GENITAL_HPO = "HP:0000078"  # Abnormality of the genital system
-
-ANY_KIDNEY_HPO_TERMS = [
-    "HP:0012622",  # Chronic kidney disease (unspecified)
-    "HP:0012623",  # Stage 1 chronic kidney disease
-    "HP:0012624",  # Stage 2 chronic kidney disease
-    "HP:0012625",  # Stage 3 chronic kidney disease
-    "HP:0012626",  # Stage 4 chronic kidney disease
-    "HP:0003774",  # Stage 5 chronic kidney disease
-    "HP:0000003",  # Multicystic kidney dysplasia
-    "HP:0000089",  # Renal hypoplasia
-    "HP:0000107",  # Renal cyst
-    "HP:0000122",  # Unilateral renal agenesis
-    "HP:0012210",  # Abnormal renal morphology
-    "HP:0033133",  # Renal cortical hyperechogenicity
-    "HP:0000108",  # Multiple glomerular cysts
-    "HP:0001970",  # Oligomeganephronia
-]
-
-MODY_HPO = "HP:0004904"  # Maturity-onset diabetes of the young
-
-CKD_STAGE_HPO_TERMS = [
-    "HP:0012622",  # Chronic kidney disease (unspecified)
-    "HP:0012623",  # Stage 1 CKD
-    "HP:0012624",  # Stage 2 CKD
-    "HP:0012625",  # Stage 3 CKD
-    "HP:0012626",  # Stage 4 CKD
-    "HP:0003774",  # Stage 5 CKD
-]
-
-KIDNEY_FAILURE_HPO_TERMS = ["HP:0012626", "HP:0003774"]  # Stage 4 and Stage 5 CKD
+# HPO terms now loaded from configuration (settings.hpo_terms)
+# Access via: settings.hpo_terms.cakut, settings.hpo_terms.genital, etc.
 
 
-# Endpoint configuration
-ENDPOINT_CONFIG: Dict[str, Dict[str, Any]] = {
-    "ckd_stage_3_plus": {
-        "hpo_terms": [
-            "HP:0012625",  # Stage 3 CKD
-            "HP:0012626",  # Stage 4 CKD
-            "HP:0003774",  # Stage 5 CKD
-        ],
-        "label": "CKD Stage 3+ (GFR <60)",
-    },
-    "stage_5_ckd": {
-        "hpo_terms": ["HP:0003774"],  # Stage 5 CKD
-        "label": "Stage 5 CKD (ESRD)",
-    },
-    "any_ckd": {
-        "hpo_terms": CKD_STAGE_HPO_TERMS,
-        "label": "Any CKD",
-    },
-    "current_age": {
-        "hpo_terms": None,  # Special case: use current age
-        "label": "Age at Last Follow-up",
-    },
-}
+def _get_endpoint_config() -> Dict[str, Dict[str, Any]]:
+    """Get endpoint configuration using HPO terms from settings.
+
+    Returns dynamically constructed config using centralized HPO terms,
+    enabling configuration changes without code modifications.
+    """
+    return {
+        "ckd_stage_3_plus": {
+            "hpo_terms": settings.hpo_terms.ckd_stage_3_plus,
+            "label": "CKD Stage 3+ (GFR <60)",
+        },
+        "stage_5_ckd": {
+            "hpo_terms": settings.hpo_terms.stage_5_ckd,
+            "label": "Stage 5 CKD (ESRD)",
+        },
+        "any_ckd": {
+            "hpo_terms": settings.hpo_terms.ckd_stages,
+            "label": "Any CKD",
+        },
+        "current_age": {
+            "hpo_terms": None,  # Special case: use current age
+            "label": "Age at Last Follow-up",
+        },
+    }
 
 
 def _calculate_survival_curves(
@@ -388,7 +353,7 @@ async def _handle_pathogenicity_current_age(
     """Handle pathogenicity comparison with current_age endpoint."""
     from app.phenopackets.survival_analysis import parse_iso8601_age
 
-    query = """
+    query = f"""
     WITH pathogenicity_classification AS (
         SELECT DISTINCT
             p.phenopacket_id,
@@ -411,7 +376,7 @@ async def _handle_pathogenicity_current_age(
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
         WHERE p.deleted_at IS NULL
             AND {CURRENT_AGE_PATH} IS NOT NULL
-            AND gi#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
+            AND gi#>>'{{variantInterpretation,variationDescriptor,id}}' !~ ':(DEL|DUP)'
             AND EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -638,7 +603,7 @@ async def _handle_disease_subtype_current_age(
     """Handle disease subtype comparison with current_age endpoint."""
     from app.phenopackets.survival_analysis import parse_iso8601_age
 
-    query = """
+    query = f"""
     WITH disease_classification AS (
         SELECT DISTINCT
             p.phenopacket_id,
@@ -701,10 +666,10 @@ async def _handle_disease_subtype_current_age(
     result = await db.execute(
         text(query),
         {
-            "cakut_hpo_terms": CAKUT_HPO_TERMS,
-            "genital_hpo": GENITAL_HPO,
-            "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
-            "mody_hpo": MODY_HPO,
+            "cakut_hpo_terms": settings.hpo_terms.cakut,
+            "genital_hpo": settings.hpo_terms.genital,
+            "any_kidney_hpo_terms": settings.hpo_terms.any_kidney,
+            "mody_hpo": settings.hpo_terms.mody,
         },
     )
     rows = result.fetchall()
@@ -843,10 +808,10 @@ async def _handle_disease_subtype_standard(
     result = await db.execute(
         text(query),
         {
-            "cakut_hpo_terms": CAKUT_HPO_TERMS,
-            "genital_hpo": GENITAL_HPO,
-            "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
-            "mody_hpo": MODY_HPO,
+            "cakut_hpo_terms": settings.hpo_terms.cakut,
+            "genital_hpo": settings.hpo_terms.genital,
+            "any_kidney_hpo_terms": settings.hpo_terms.any_kidney,
+            "mody_hpo": settings.hpo_terms.mody,
             "endpoint_hpo_terms": endpoint_hpo_terms,
         },
     )
@@ -931,10 +896,10 @@ async def _handle_disease_subtype_standard(
     censored_result = await db.execute(
         text(censored_query),
         {
-            "cakut_hpo_terms": CAKUT_HPO_TERMS,
-            "genital_hpo": GENITAL_HPO,
-            "any_kidney_hpo_terms": ANY_KIDNEY_HPO_TERMS,
-            "mody_hpo": MODY_HPO,
+            "cakut_hpo_terms": settings.hpo_terms.cakut,
+            "genital_hpo": settings.hpo_terms.genital,
+            "any_kidney_hpo_terms": settings.hpo_terms.any_kidney,
+            "mody_hpo": settings.hpo_terms.mody,
             "endpoint_hpo_terms": endpoint_hpo_terms,
         },
     )
@@ -1012,13 +977,14 @@ async def get_survival_data(
     Returns:
         Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
-    if endpoint not in ENDPOINT_CONFIG:
-        valid_options = ", ".join(ENDPOINT_CONFIG.keys())
+    endpoint_config = _get_endpoint_config()
+    if endpoint not in endpoint_config:
+        valid_options = ", ".join(endpoint_config.keys())
         raise ValueError(
             f"Unknown endpoint: {endpoint}. Valid options: {valid_options}"
         )
 
-    config = ENDPOINT_CONFIG[endpoint]
+    config = endpoint_config[endpoint]
     endpoint_hpo_terms: Optional[List[str]] = config["hpo_terms"]
     endpoint_label: str = config["label"]
 
