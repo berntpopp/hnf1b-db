@@ -129,8 +129,8 @@ class TestGlobalSearchRepository:
     ):
         """Test that search returns matching results."""
         repo = GlobalSearchRepository(db_session)
-        # Use HNF1B which should exist in the database
-        results = await repo.search("HNF1B", limit=10)
+        # Use SEARCHGENE which is inserted by the search_test_data fixture
+        results = await repo.search("SEARCHGENE", limit=10)
 
         assert len(results) >= 1
 
@@ -140,12 +140,12 @@ class TestGlobalSearchRepository:
     ):
         """Test search with type filter."""
         repo = GlobalSearchRepository(db_session)
-        # Use HNF1B which should exist as a gene
-        results = await repo.search("HNF1B", type_filter="Gene", limit=10)
+        # Search for SEARCHGENE with Variant type filter (from fixture data)
+        results = await repo.search("SEARCHGENE", type_filter="Variant", limit=10)
 
-        # Should find results if gene exists
+        # Should find the variant from fixture
         if results:
-            assert all(r["type"] == "Gene" for r in results)
+            assert all(r["type"] == "Variant" for r in results)
 
     @pytest.mark.asyncio
     async def test_search_pagination(
@@ -154,10 +154,10 @@ class TestGlobalSearchRepository:
         """Test search pagination with limit and offset."""
         repo = GlobalSearchRepository(db_session)
 
-        # Get first page using broad search
-        page1 = await repo.search("HNF1B", limit=1, offset=0)
+        # Get first page using fixture data search term
+        page1 = await repo.search("SEARCHGENE", limit=1, offset=0)
         # Get second page
-        page2 = await repo.search("HNF1B", limit=1, offset=1)
+        page2 = await repo.search("SEARCHGENE", limit=1, offset=1)
 
         # If there are multiple results, pages should differ
         if len(page1) > 0 and len(page2) > 0:
@@ -177,10 +177,10 @@ class TestGlobalSearchRepository:
     ):
         """Test count returns results grouped by type."""
         repo = GlobalSearchRepository(db_session)
-        counts = await repo.count("HNF1B")
+        counts = await repo.count("SEARCHGENE")
 
         assert isinstance(counts, dict)
-        # Should find at least some type
+        # Should find at least some type (Variant from fixture)
         assert len(counts) >= 1
 
     @pytest.mark.asyncio
@@ -189,12 +189,12 @@ class TestGlobalSearchRepository:
     ):
         """Test autocomplete returns prefix matches."""
         repo = GlobalSearchRepository(db_session)
-        # Use HNF which should match HNF1B
-        results = await repo.autocomplete("HNF", limit=10)
+        # Use SEARCH which should match SEARCHGENE variant from fixture
+        results = await repo.autocomplete("SEARCH", limit=10)
 
         assert len(results) >= 1
         # Prefix matches should be prioritized
-        assert any(r["label"].startswith("HNF") for r in results)
+        assert any("SEARCH" in r["label"].upper() for r in results)
 
     @pytest.mark.asyncio
     async def test_autocomplete_similarity_match(
@@ -202,8 +202,8 @@ class TestGlobalSearchRepository:
     ):
         """Test autocomplete uses trigram similarity for fuzzy matches."""
         repo = GlobalSearchRepository(db_session)
-        # Use HNF1 which should find HNF1B via prefix/similarity
-        results = await repo.autocomplete("HNF1", limit=10)
+        # Use SEARCHGEN which should find SEARCHGENE via prefix/similarity
+        results = await repo.autocomplete("SEARCHGEN", limit=10)
 
         assert len(results) >= 1
 
@@ -348,7 +348,7 @@ class TestGlobalSearchService:
         service = GlobalSearchService(db_session)
         pagination = PaginationParams(page=1, page_size=20)
 
-        response = await service.search("HNF1B", pagination)
+        response = await service.search("SEARCHGENE", pagination)
 
         assert isinstance(response, GlobalSearchResponse)
         assert response.page == 1
@@ -389,11 +389,11 @@ class TestGlobalSearchService:
         service = GlobalSearchService(db_session)
         pagination = PaginationParams(page=1, page_size=20)
 
-        response = await service.search("HNF1B", pagination, type_filter="Gene")
+        response = await service.search("SEARCHGENE", pagination, type_filter="Variant")
 
-        # All results should be of type Gene
+        # All results should be of type Variant (from fixture data)
         if response.results:
-            assert all(r.type == "Gene" for r in response.results)
+            assert all(r.type == "Variant" for r in response.results)
 
     @pytest.mark.asyncio
     async def test_autocomplete_min_length(self, db_session: AsyncSession):
@@ -411,7 +411,7 @@ class TestGlobalSearchService:
         """Test autocomplete with valid query."""
         service = GlobalSearchService(db_session)
 
-        response = await service.autocomplete("HNF", limit=10)
+        response = await service.autocomplete("SEARCH", limit=10)
 
         assert len(response.results) >= 1
         assert all(isinstance(r, SearchResultItem) for r in response.results)
@@ -645,7 +645,7 @@ class TestSearchEndpoints:
     ):
         """Test /search/autocomplete endpoint."""
         response = await async_client.get(
-            "/api/v2/search/autocomplete", params={"q": "HNF", "limit": 5}
+            "/api/v2/search/autocomplete", params={"q": "SEARCH", "limit": 5}
         )
 
         assert response.status_code == 200
@@ -669,7 +669,7 @@ class TestSearchEndpoints:
         """Test /search/global endpoint."""
         response = await async_client.get(
             "/api/v2/search/global",
-            params={"q": "HNF1B", "page": 1, "page_size": 10},
+            params={"q": "SEARCHGENE", "page": 1, "page_size": 10},
         )
 
         assert response.status_code == 200
@@ -685,13 +685,13 @@ class TestSearchEndpoints:
         """Test /search/global with type filter."""
         response = await async_client.get(
             "/api/v2/search/global",
-            params={"q": "HNF1B", "type": "Gene"},
+            params={"q": "SEARCHGENE", "type": "Variant"},
         )
 
         assert response.status_code == 200
         data = response.json()
         for result in data["results"]:
-            assert result["type"] == "Gene"
+            assert result["type"] == "Variant"
 
     @pytest.mark.asyncio
     async def test_global_search_pagination(
@@ -700,7 +700,7 @@ class TestSearchEndpoints:
         """Test /search/global pagination parameters."""
         response = await async_client.get(
             "/api/v2/search/global",
-            params={"q": "HNF1B", "page": 2, "page_size": 5},
+            params={"q": "SEARCHGENE", "page": 2, "page_size": 5},
         )
 
         assert response.status_code == 200
