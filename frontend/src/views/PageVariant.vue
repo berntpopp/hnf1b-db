@@ -1,337 +1,553 @@
 <!-- src/views/PageVariant.vue -->
 <template>
-  <v-container fluid>
-    <v-row justify="center">
-      <v-col cols="12">
-        <v-sheet outlined>
-          <!-- Loading overlay -->
-          <v-overlay :model-value="loading" contained class="align-center justify-center">
-            <v-progress-circular indeterminate color="primary" />
-          </v-overlay>
+  <div class="variant-container">
+    <!-- HERO SECTION - Variant Header -->
+    <section class="hero-section py-4 px-4 mb-4">
+      <v-container>
+        <v-row justify="center" align="center">
+          <v-col cols="12" xl="10">
+            <!-- Breadcrumb Navigation -->
+            <v-breadcrumbs :items="breadcrumbs" class="pa-0 mb-3">
+              <template #prepend>
+                <v-btn
+                  icon="mdi-arrow-left"
+                  variant="text"
+                  size="small"
+                  class="mr-2"
+                  aria-label="Go back to previous page"
+                  @click="$router.back()"
+                />
+              </template>
+            </v-breadcrumbs>
 
-          <!-- Variant Details Card -->
-          <v-card outlined class="mb-4" :style="{ width: '90%', margin: 'auto' }" tile>
-            <v-card-title class="text-h6">
-              <v-icon left color="pink darken-2"> mdi-dna </v-icon>
-              Variant Details
-              <v-chip color="pink lighten-4" class="ma-2">
-                {{ variant.simple_id || variant.variant_id }}
-              </v-chip>
-            </v-card-title>
-            <v-card-text class="text-body-1">
+            <!-- Variant Title Row -->
+            <div class="d-flex flex-wrap align-center gap-3 mb-4">
+              <v-icon color="pink-darken-2" size="x-large">mdi-dna</v-icon>
+              <div>
+                <h1 class="text-h5 font-weight-bold text-pink-darken-2 mb-1">Variant Details</h1>
+                <div v-if="!loading && variant.variant_id" class="d-flex flex-wrap gap-2">
+                  <v-chip
+                    color="pink-lighten-4"
+                    size="small"
+                    variant="flat"
+                    class="font-weight-medium"
+                  >
+                    {{ variant.simple_id || formatVariantId(variant.variant_id) }}
+                  </v-chip>
+                  <v-chip
+                    v-if="variant.classificationVerdict"
+                    :color="getPathogenicityColor(variant.classificationVerdict)"
+                    size="small"
+                    variant="flat"
+                  >
+                    <v-icon start size="small">
+                      {{ getPathogenicityIcon(variant.classificationVerdict) }}
+                    </v-icon>
+                    {{ formatClassification(variant.classificationVerdict) }}
+                  </v-chip>
+                  <v-chip
+                    v-if="getVariantType(variant)"
+                    color="purple-lighten-3"
+                    size="small"
+                    variant="flat"
+                  >
+                    {{ getVariantType(variant) }}
+                  </v-chip>
+                </div>
+                <v-skeleton-loader v-else type="chip" width="200" />
+              </div>
+            </div>
+
+            <!-- Quick Stats Row -->
+            <v-row v-if="!loading">
+              <!-- Individuals Count -->
+              <v-col cols="6" sm="3">
+                <v-card
+                  class="py-3 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="purple" size="large" class="mb-1">mdi-account-multiple</v-icon>
+                  <div class="text-h5 font-weight-bold text-purple mb-0">
+                    {{ phenopacketsWithVariant.length }}
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Individuals
+                  </div>
+                </v-card>
+              </v-col>
+
+              <!-- Variant Size (for non-SNVs) -->
+              <v-col v-if="getVariantSize(variant)" cols="6" sm="3">
+                <v-card
+                  class="py-3 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="blue" size="large" class="mb-1">mdi-ruler</v-icon>
+                  <div class="text-h6 font-weight-bold text-blue mb-0">
+                    {{ getVariantSize(variant) }}
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Size
+                  </div>
+                </v-card>
+              </v-col>
+
+              <!-- Gene -->
+              <v-col cols="6" sm="3">
+                <v-card
+                  class="py-3 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="teal" size="large" class="mb-1">mdi-molecule</v-icon>
+                  <div class="text-h6 font-weight-bold text-teal mb-0">
+                    {{ variant.geneSymbol || 'HNF1B' }}
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Gene
+                  </div>
+                </v-card>
+              </v-col>
+
+              <!-- Molecular Consequence -->
+              <v-col v-if="getMolecularConsequence(variant)" cols="6" sm="3">
+                <v-card
+                  class="py-3 px-2 text-center h-100"
+                  variant="elevated"
+                  elevation="2"
+                  rounded="lg"
+                >
+                  <v-icon color="amber-darken-2" size="large" class="mb-1"
+                    >mdi-lightning-bolt</v-icon
+                  >
+                  <div class="text-body-2 font-weight-bold text-amber-darken-2 mb-0">
+                    {{ getMolecularConsequence(variant) }}
+                  </div>
+                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                    Consequence
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Loading skeleton for stats -->
+            <v-row v-else>
+              <v-col v-for="i in 4" :key="i" cols="6" sm="3">
+                <v-skeleton-loader type="card" />
+              </v-col>
+            </v-row>
+          </v-col>
+        </v-row>
+      </v-container>
+    </section>
+
+    <!-- MAIN CONTENT -->
+    <v-container class="pb-12">
+      <v-row justify="center">
+        <v-col cols="12" xl="10">
+          <!-- VARIANT DETAILS CARD -->
+          <v-card variant="outlined" class="border-opacity-12 mb-6" rounded="lg">
+            <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
+              <v-icon color="pink-darken-2" class="mr-2">mdi-clipboard-text</v-icon>
+              <span class="text-h6 font-weight-medium">Genomic Information</span>
+              <v-spacer />
+              <v-btn
+                v-if="variant.hg38"
+                icon="mdi-content-copy"
+                size="small"
+                variant="text"
+                aria-label="Copy HG38 coordinates to clipboard"
+                @click="copyToClipboard(variant.hg38, 'HG38 coordinates')"
+              />
+            </div>
+
+            <v-card-text class="pa-4">
               <v-row>
-                <v-col cols="12" sm="6">
-                  <div><strong>Type:</strong> {{ getVariantType(variant) }}</div>
+                <!-- Left Column: Core Variant Info -->
+                <v-col cols="12" md="6">
+                  <v-list density="compact" class="bg-transparent">
+                    <v-list-item v-if="variant.hg38">
+                      <template #prepend>
+                        <v-icon color="grey-darken-1" size="small">mdi-map-marker</v-icon>
+                      </template>
+                      <v-list-item-title class="text-caption text-medium-emphasis">
+                        HG38 Coordinates
+                      </v-list-item-title>
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                        {{ variant.hg38 }}
+                      </v-list-item-subtitle>
+                    </v-list-item>
 
-                  <!-- Variant size (for all types except SNVs) -->
-                  <div v-if="getVariantSize(variant)">
-                    <strong>Size:</strong> {{ getVariantSize(variant) }}
-                  </div>
+                    <!-- CNV-specific details -->
+                    <template v-if="isCNV(variant) && getCNVDetails(variant)">
+                      <v-list-item>
+                        <template #prepend>
+                          <v-icon color="grey-darken-1" size="small">mdi-chromosome</v-icon>
+                        </template>
+                        <v-list-item-title class="text-caption text-medium-emphasis">
+                          Genomic Region
+                        </v-list-item-title>
+                        <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                          chr{{ getCNVDetails(variant).chromosome }}:{{
+                            formatPosition(getCNVDetails(variant).start)
+                          }}-{{ formatPosition(getCNVDetails(variant).end) }}
+                        </v-list-item-subtitle>
+                      </v-list-item>
+                    </template>
 
-                  <!-- CNV-specific details -->
-                  <div v-if="isCNV(variant) && getCNVDetails(variant)">
-                    <div>
-                      <strong>Chromosome:</strong> chr{{ getCNVDetails(variant).chromosome }}
-                    </div>
-                    <div>
-                      <strong>Start Position:</strong>
-                      {{ formatPosition(getCNVDetails(variant).start) }}
-                    </div>
-                    <div>
-                      <strong>End Position:</strong>
-                      {{ formatPosition(getCNVDetails(variant).end) }}
-                    </div>
-                  </div>
+                    <v-list-item v-if="variant.geneId">
+                      <template #prepend>
+                        <v-icon color="grey-darken-1" size="small">mdi-molecule</v-icon>
+                      </template>
+                      <v-list-item-title class="text-caption text-medium-emphasis">
+                        Gene
+                      </v-list-item-title>
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                        <a
+                          :href="`https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${variant.geneId}`"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary text-decoration-none"
+                          :aria-label="`View ${variant.geneSymbol} on HGNC (opens in new tab)`"
+                        >
+                          {{ variant.geneSymbol }}
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
+                            >mdi-open-in-new</v-icon
+                          >
+                        </a>
+                        <span class="text-caption text-grey ml-1">({{ variant.geneId }})</span>
+                      </v-list-item-subtitle>
+                    </v-list-item>
 
-                  <div>
-                    <strong>HG38:</strong> {{ variant.hg38 }}
-                    <v-btn
-                      icon="mdi-content-copy"
-                      size="x-small"
-                      variant="text"
-                      class="ml-1"
-                      @click="copyToClipboard(variant.hg38, 'HG38 coordinates')"
-                    />
-                  </div>
-                  <div v-if="variant.geneId">
-                    <strong>Gene:</strong>
-                    <a
-                      :href="`https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${variant.geneId}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="gene-link"
-                    >
-                      {{ variant.geneSymbol }}
-                    </a>
-                    <span class="text-caption text-grey">({{ variant.geneId }})</span>
-                  </div>
-                  <div v-if="variant.transcript">
-                    <strong>Transcript:</strong>
-                    <a
-                      v-if="extractTranscriptId(variant.transcript)"
-                      :href="`https://www.ncbi.nlm.nih.gov/nuccore/${extractTranscriptId(variant.transcript)}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="transcript-link"
-                    >
-                      {{ extractTranscriptId(variant.transcript) }}
-                    </a>
-                    {{ extractCNotation(variant.transcript) }}
-                  </div>
-                  <div v-if="variant.protein">
-                    <strong>Protein:</strong>
-                    <a
-                      v-if="extractProteinId(variant.protein)"
-                      :href="`https://www.ncbi.nlm.nih.gov/protein/${extractProteinId(variant.protein)}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="protein-link"
-                    >
-                      {{ extractProteinId(variant.protein) }}
-                    </a>
-                    {{ extractPNotation(variant.protein) }}
-                  </div>
+                    <v-list-item v-if="variant.transcript">
+                      <template #prepend>
+                        <v-icon color="grey-darken-1" size="small">mdi-text-box</v-icon>
+                      </template>
+                      <v-list-item-title class="text-caption text-medium-emphasis">
+                        Transcript (HGVS c.)
+                      </v-list-item-title>
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                        <a
+                          v-if="extractTranscriptId(variant.transcript)"
+                          :href="`https://www.ncbi.nlm.nih.gov/nuccore/${extractTranscriptId(variant.transcript)}`"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary text-decoration-none"
+                          :aria-label="`View transcript ${extractTranscriptId(variant.transcript)} on NCBI (opens in new tab)`"
+                        >
+                          {{ extractTranscriptId(variant.transcript) }}
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
+                            >mdi-open-in-new</v-icon
+                          >
+                        </a>
+                        <span class="ml-1">{{ extractCNotation(variant.transcript) }}</span>
+                      </v-list-item-subtitle>
+                    </v-list-item>
+
+                    <v-list-item v-if="variant.protein">
+                      <template #prepend>
+                        <v-icon color="grey-darken-1" size="small">mdi-protein</v-icon>
+                      </template>
+                      <v-list-item-title class="text-caption text-medium-emphasis">
+                        Protein (HGVS p.)
+                      </v-list-item-title>
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                        <a
+                          v-if="extractProteinId(variant.protein)"
+                          :href="`https://www.ncbi.nlm.nih.gov/protein/${extractProteinId(variant.protein)}`"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary text-decoration-none"
+                          :aria-label="`View protein ${extractProteinId(variant.protein)} on NCBI (opens in new tab)`"
+                        >
+                          {{ extractProteinId(variant.protein) }}
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
+                            >mdi-open-in-new</v-icon
+                          >
+                        </a>
+                        <span class="ml-1">{{ extractPNotation(variant.protein) }}</span>
+                      </v-list-item-subtitle>
+                    </v-list-item>
+                  </v-list>
                 </v-col>
-                <v-col cols="12" sm="6">
-                  <div v-if="variant.classificationVerdict">
-                    <strong>Classification:</strong>
+
+                <!-- Right Column: External Resources -->
+                <v-col cols="12" md="6">
+                  <div
+                    class="text-caption text-medium-emphasis mb-2 text-uppercase font-weight-bold"
+                  >
+                    External Resources
+                  </div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <!-- Variant databases -->
                     <v-chip
-                      :color="getPathogenicityColor(variant.classificationVerdict)"
-                      class="ml-2"
+                      v-if="getClinVarLink(variant)"
+                      :href="getClinVarLink(variant)"
+                      target="_blank"
+                      color="blue-lighten-4"
                       size="small"
                       variant="flat"
+                      link
+                      aria-label="View on ClinVar (opens in new tab)"
                     >
-                      {{ variant.classificationVerdict }}
+                      ClinVar
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
                     </v-chip>
-                  </div>
-                  <div v-if="getMolecularConsequence(variant)">
-                    <strong>Molecular Consequence:</strong>
-                    <v-chip color="purple-lighten-3" class="ml-2" size="small" variant="flat">
-                      {{ getMolecularConsequence(variant) }}
+                    <v-chip
+                      v-if="getDbSNPLink(variant)"
+                      :href="getDbSNPLink(variant)"
+                      target="_blank"
+                      color="blue-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View on dbSNP (opens in new tab)"
+                    >
+                      dbSNP
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
                     </v-chip>
-                  </div>
-                  <div>
-                    <strong>Individuals Count:</strong>
-                    {{ variant.individualCount || phenopacketsWithVariant.length }}
-                  </div>
-                  <div v-if="hasExternalLinks(variant)">
-                    <strong>External Resources:</strong>
-                    <div class="external-links-container">
-                      <!-- Variant-specific databases -->
-                      <a
-                        v-if="getClinVarLink(variant)"
-                        :href="getClinVarLink(variant)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link"
-                      >
-                        ClinVar
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                      <a
-                        v-if="getDbSNPLink(variant)"
-                        :href="getDbSNPLink(variant)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link"
-                      >
-                        dbSNP
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                      <a
-                        v-if="getClinGenLink(variant)"
-                        :href="getClinGenLink(variant)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link"
-                      >
-                        ClinGen
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                      <a
-                        v-if="getDecipherLink(variant)"
-                        :href="getDecipherLink(variant)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link"
-                      >
-                        DECIPHER
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                      <a
-                        v-if="getUCSCLink(variant)"
-                        :href="getUCSCLink(variant)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link"
-                      >
-                        UCSC Browser
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
+                    <v-chip
+                      v-if="getClinGenLink(variant)"
+                      :href="getClinGenLink(variant)"
+                      target="_blank"
+                      color="blue-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View on ClinGen (opens in new tab)"
+                    >
+                      ClinGen
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
+                    </v-chip>
+                    <v-chip
+                      v-if="getDecipherLink(variant)"
+                      :href="getDecipherLink(variant)"
+                      target="_blank"
+                      color="green-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View on DECIPHER (opens in new tab)"
+                    >
+                      DECIPHER
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
+                    </v-chip>
+                    <v-chip
+                      v-if="getUCSCLink(variant)"
+                      :href="getUCSCLink(variant)"
+                      target="_blank"
+                      color="green-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View on UCSC Genome Browser (opens in new tab)"
+                    >
+                      UCSC Browser
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
+                    </v-chip>
 
-                      <!-- Gene databases (divider) -->
-                      <span v-if="variant.geneSymbol" class="external-link-divider">|</span>
+                    <!-- Gene databases -->
+                    <v-chip
+                      v-if="variant.geneSymbol"
+                      :href="`https://www.ncbi.nlm.nih.gov/gene/?term=${variant.geneSymbol}`"
+                      target="_blank"
+                      color="teal-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View gene on NCBI (opens in new tab)"
+                    >
+                      NCBI Gene
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
+                    </v-chip>
+                    <v-chip
+                      v-if="variant.geneSymbol"
+                      :href="`https://www.omim.org/search?search=${variant.geneSymbol}`"
+                      target="_blank"
+                      color="teal-lighten-4"
+                      size="small"
+                      variant="flat"
+                      link
+                      aria-label="View gene on OMIM (opens in new tab)"
+                    >
+                      OMIM
+                      <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
+                    </v-chip>
 
-                      <!-- General gene databases -->
-                      <a
-                        v-if="variant.geneSymbol"
-                        :href="`https://www.ncbi.nlm.nih.gov/gene/?term=${variant.geneSymbol}`"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link external-link-gene"
-                      >
-                        NCBI Gene
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                      <a
-                        v-if="variant.geneSymbol"
-                        :href="`https://www.omim.org/search?search=${variant.geneSymbol}`"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="external-link external-link-gene"
-                      >
-                        OMIM
-                        <v-icon size="x-small" class="ml-1"> mdi-open-in-new </v-icon>
-                      </a>
-                    </div>
+                    <span v-if="!hasExternalLinks(variant)" class="text-grey text-body-2">
+                      No external links available
+                    </span>
                   </div>
                 </v-col>
               </v-row>
             </v-card-text>
           </v-card>
 
-          <!-- Snackbar for copy notification -->
-          <v-snackbar v-model="snackbar" :timeout="2000" color="success">
-            {{ snackbarMessage }}
-          </v-snackbar>
+          <!-- VISUALIZATIONS SECTION -->
+          <v-card variant="outlined" class="border-opacity-12 mb-6" rounded="lg">
+            <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
+              <v-icon color="primary" class="mr-2">mdi-chart-timeline-variant</v-icon>
+              <span class="text-h6 font-weight-medium">Visualizations</span>
+            </div>
 
-          <!-- Gene/Protein Visualizations -->
-          <!-- Use wider layout (98%) for region view, standard (90%) otherwise -->
-          <div
-            :style="{ width: visualizationTab === 'region' ? '98%' : '90%', margin: 'auto' }"
-            class="mb-4"
-          >
-            <v-card>
-              <!-- Conditional tabs based on variant type -->
-              <v-tabs v-model="visualizationTab" bg-color="grey-lighten-4">
-                <!-- Gene View tab (always shown) -->
-                <v-tab value="gene">
-                  <v-icon left> mdi-dna </v-icon>
-                  <span v-if="isCNV(variant)">Gene View (HNF1B only)</span>
-                  <span v-else>Gene View</span>
-                </v-tab>
+            <v-tabs
+              v-model="visualizationTab"
+              bg-color="transparent"
+              color="primary"
+              align-tabs="start"
+              class="px-2 pt-2"
+              @update:model-value="handleTabChange"
+            >
+              <!-- Gene View tab (always shown) -->
+              <v-tab value="gene" class="text-capitalize rounded-t-lg">
+                <v-icon start>mdi-dna</v-icon>
+                <span v-if="isCNV(variant)">Gene View (HNF1B)</span>
+                <span v-else>Gene View</span>
+              </v-tab>
 
-                <!-- Protein View tab (only for SNVs/indels) -->
-                <v-tab v-if="!isCNV(variant)" value="protein">
-                  <v-icon left> mdi-protein </v-icon>
-                  Protein View
-                </v-tab>
+              <!-- Protein View tab (only for SNVs/indels) -->
+              <v-tab v-if="!isCNV(variant)" value="protein" class="text-capitalize rounded-t-lg">
+                <v-icon start>mdi-protein</v-icon>
+                Protein View
+              </v-tab>
 
-                <!-- 3D Structure tab (only for SNVs/indels) -->
-                <v-tab v-if="!isCNV(variant)" value="structure3d">
-                  <v-icon left> mdi-cube-outline </v-icon>
-                  3D Structure
-                </v-tab>
+              <!-- 3D Structure tab (only for SNVs/indels) -->
+              <v-tab
+                v-if="!isCNV(variant)"
+                value="structure3d"
+                class="text-capitalize rounded-t-lg"
+              >
+                <v-icon start>mdi-cube-outline</v-icon>
+                3D Structure
+              </v-tab>
 
-                <!-- Region View tab (only for CNVs) -->
-                <v-tab v-if="isCNV(variant)" value="region">
-                  <v-icon left> mdi-map-marker-radius </v-icon>
-                  Region View (17q12 - 15 genes)
-                </v-tab>
-              </v-tabs>
+              <!-- Region View tab (only for CNVs) -->
+              <v-tab v-if="isCNV(variant)" value="region" class="text-capitalize rounded-t-lg">
+                <v-icon start>mdi-map-marker-radius</v-icon>
+                17q12 Region (15 genes)
+              </v-tab>
+            </v-tabs>
 
-              <v-window v-model="visualizationTab">
-                <!-- Gene View: Shows HNF1B gene structure -->
-                <v-window-item value="gene">
-                  <HNF1BGeneVisualization
-                    :variants="allVariants"
-                    :current-variant-id="$route.params.variant_id"
-                    :force-view-mode="isCNV(variant) ? 'gene' : null"
-                    @variant-clicked="navigateToVariant"
-                  />
-                </v-window-item>
+            <v-divider />
 
-                <!-- Protein View: Only for SNVs/indels -->
-                <v-window-item value="protein">
-                  <HNF1BProteinVisualization
-                    :variants="allVariants"
-                    :current-variant-id="$route.params.variant_id"
-                    @variant-clicked="navigateToVariant"
-                  />
-                </v-window-item>
+            <v-window v-model="visualizationTab" class="pa-4 bg-white" style="min-height: 450px">
+              <!-- Gene View -->
+              <v-window-item value="gene">
+                <HNF1BGeneVisualization
+                  v-if="allVariants.length > 0"
+                  :variants="allVariants"
+                  :current-variant-id="$route.params.variant_id"
+                  :force-view-mode="isCNV(variant) ? 'gene' : null"
+                  @variant-clicked="navigateToVariant"
+                />
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <span class="mt-4 text-grey">Loading Gene Visualization...</span>
+                </div>
+              </v-window-item>
 
-                <!-- 3D Structure View: Only for SNVs/indels -->
-                <v-window-item value="structure3d">
-                  <ProteinStructure3D
-                    :variants="allVariants"
-                    :current-variant-id="$route.params.variant_id"
-                    @variant-clicked="navigateToVariant"
-                  />
-                </v-window-item>
+              <!-- Protein View -->
+              <v-window-item value="protein">
+                <HNF1BProteinVisualization
+                  v-if="allVariants.length > 0"
+                  :variants="allVariants"
+                  :current-variant-id="$route.params.variant_id"
+                  @variant-clicked="navigateToVariant"
+                />
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                </div>
+              </v-window-item>
 
-                <!-- Region View: Only for CNVs - shows 17q12 region with 15 genes -->
-                <v-window-item value="region">
-                  <HNF1BGeneVisualization
-                    :variants="allVariants"
-                    :current-variant-id="$route.params.variant_id"
-                    :force-view-mode="'cnv'"
-                    @variant-clicked="navigateToVariant"
-                  />
-                </v-window-item>
-              </v-window>
-            </v-card>
-          </div>
+              <!-- 3D Structure View -->
+              <v-window-item value="structure3d">
+                <ProteinStructure3D
+                  v-if="allVariants.length > 0"
+                  :variants="allVariants"
+                  :current-variant-id="$route.params.variant_id"
+                  @variant-clicked="navigateToVariant"
+                />
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                </div>
+              </v-window-item>
 
-          <!-- Affected Individuals Table -->
+              <!-- Region View (CNVs only) -->
+              <v-window-item value="region">
+                <HNF1BGeneVisualization
+                  v-if="allVariants.length > 0"
+                  :variants="allVariants"
+                  :current-variant-id="$route.params.variant_id"
+                  :force-view-mode="'cnv'"
+                  @variant-clicked="navigateToVariant"
+                />
+                <div v-else class="d-flex flex-column align-center justify-center pa-12">
+                  <v-progress-circular indeterminate color="primary" size="64" />
+                </div>
+              </v-window-item>
+            </v-window>
+          </v-card>
+
+          <!-- AFFECTED INDIVIDUALS TABLE -->
           <v-card
             v-if="phenopacketsWithVariant.length > 0"
-            outlined
-            class="mb-4"
-            :style="{ width: '90%', margin: 'auto' }"
-            tile
+            variant="outlined"
+            class="border-opacity-12"
+            rounded="lg"
           >
-            <v-card-title class="text-h6">
-              <v-icon left color="purple darken-2"> mdi-account-multiple </v-icon>
-              Affected Individuals ({{ phenopacketsWithVariant.length }})
-            </v-card-title>
-            <v-card-text>
-              <v-data-table
-                :headers="headers"
-                :items="phenopacketsWithVariant"
-                density="compact"
-                :items-per-page="10"
-                class="elevation-0"
-              >
-                <!-- Subject ID as clickable chip with icon -->
-                <template #item.subject_id="{ item }">
-                  <v-chip
-                    :to="`/phenopackets/${item.phenopacket_id}`"
-                    color="teal-lighten-3"
-                    size="small"
-                    variant="flat"
-                    link
-                  >
-                    <v-icon left size="small"> mdi-card-account-details </v-icon>
-                    {{ item.subject_id }}
-                  </v-chip>
-                </template>
+            <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
+              <v-icon color="purple-darken-2" class="mr-2">mdi-account-multiple</v-icon>
+              <span class="text-h6 font-weight-medium">
+                Affected Individuals ({{ phenopacketsWithVariant.length }})
+              </span>
+            </div>
 
-                <!-- Sex with icon as chip -->
-                <template #item.subject_sex="{ item }">
-                  <v-chip :color="getSexChipColor(item.subject_sex)" size="small" variant="flat">
-                    <v-icon left size="small">
-                      {{ getSexIcon(item.subject_sex) }}
-                    </v-icon>
-                    {{ formatSex(item.subject_sex) }}
-                  </v-chip>
-                </template>
-              </v-data-table>
-            </v-card-text>
+            <v-data-table
+              :headers="headers"
+              :items="phenopacketsWithVariant"
+              density="comfortable"
+              :items-per-page="10"
+              class="elevation-0"
+            >
+              <!-- Subject ID as clickable chip with icon -->
+              <template #item.subject_id="{ item }">
+                <v-chip
+                  :to="`/phenopackets/${item.phenopacket_id}`"
+                  color="teal-lighten-3"
+                  size="small"
+                  variant="flat"
+                  link
+                >
+                  <v-icon start size="small">mdi-card-account-details</v-icon>
+                  {{ item.subject_id }}
+                </v-chip>
+              </template>
+
+              <!-- Sex with icon as chip -->
+              <template #item.subject_sex="{ item }">
+                <v-chip :color="getSexChipColor(item.subject_sex)" size="small" variant="flat">
+                  <v-icon start size="small">
+                    {{ getSexIcon(item.subject_sex) }}
+                  </v-icon>
+                  {{ formatSex(item.subject_sex) }}
+                </v-chip>
+              </template>
+            </v-data-table>
           </v-card>
-        </v-sheet>
-      </v-col>
-    </v-row>
-  </v-container>
+        </v-col>
+      </v-row>
+    </v-container>
+
+    <!-- Snackbar for copy notification -->
+    <v-snackbar v-model="snackbar" :timeout="2000" color="success">
+      {{ snackbarMessage }}
+    </v-snackbar>
+  </div>
 </template>
 
 <script>
@@ -360,11 +576,11 @@ export default {
     return {
       variant: {},
       phenopacketsWithVariant: [],
-      allVariants: [], // All variants for visualization context
-      loading: false,
+      allVariants: [],
+      loading: true,
       snackbar: false,
       snackbarMessage: '',
-      visualizationTab: 'gene', // Default to gene view
+      visualizationTab: 'gene',
       headers: [
         {
           title: 'Subject ID',
@@ -386,6 +602,19 @@ export default {
       ],
     };
   },
+  computed: {
+    breadcrumbs() {
+      return [
+        { title: 'Home', to: '/' },
+        { title: 'Variants', to: '/variants' },
+        {
+          title:
+            this.variant.simple_id || this.formatVariantId(this.variant.variant_id) || 'Loading...',
+          disabled: true,
+        },
+      ];
+    },
+  },
   watch: {
     '$route.params.variant_id': {
       handler() {
@@ -393,25 +622,47 @@ export default {
       },
       immediate: false,
     },
-    visualizationTab() {
-      // When tab changes, trigger a resize event after DOM updates
-      // This ensures SVG width is recalculated correctly for the newly visible tab
-      this.$nextTick(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-    },
   },
   created() {
     this.loadVariantData();
     this.loadAllVariants();
   },
   methods: {
+    handleTabChange() {
+      this.$nextTick(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+    },
+    formatVariantId(id) {
+      if (!id) return '';
+      // Shorten GA4GH IDs for display
+      if (id.startsWith('ga4gh:VA.')) {
+        return id.substring(0, 20) + '...';
+      }
+      return id;
+    },
+    formatClassification(classification) {
+      if (!classification) return '';
+      return classification
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    },
+    getPathogenicityIcon(classification) {
+      const icons = {
+        PATHOGENIC: 'mdi-alert-circle',
+        LIKELY_PATHOGENIC: 'mdi-alert',
+        UNCERTAIN_SIGNIFICANCE: 'mdi-help-circle',
+        LIKELY_BENIGN: 'mdi-check-circle',
+        BENIGN: 'mdi-check-circle',
+      };
+      return icons[classification] || 'mdi-help-circle';
+    },
     async loadAllVariants() {
-      // Load all variants for visualization context
       try {
         const response = await getVariants({
           page: 1,
-          pageSize: 500, // Get all variants (max allowed by backend)
+          pageSize: 500,
         });
         this.allVariants = response.data || [];
       } catch (error) {
@@ -419,40 +670,32 @@ export default {
           error: error.message,
           status: error.response?.status,
         });
-        // Don't block page load if this fails
         this.allVariants = [];
       }
     },
     navigateToVariant(variant) {
-      // Navigate to another variant's detail page
       if (variant && variant.variant_id) {
         window.logService.info('Navigating to variant from visualization', {
           fromVariantId: this.$route.params.variant_id,
           toVariantId: variant.variant_id,
           source: 'gene visualization',
         });
-        // URL-encode variant_id to handle special characters like colons
         this.$router.push(`/variants/${encodeURIComponent(variant.variant_id)}`);
       }
     },
-    // Wrapper methods that use utility functions with appropriate options for detail view
     getVariantType(variant) {
-      // Detail view shows specific type (deletion/duplication) instead of generic "CNV"
       return getVariantType(variant, { specificCNVType: true });
     },
     isCNV,
     getCNVDetails,
-    getCNVSize(variant) {
-      // Calculate CNV size in human-readable format
+    getVariantSize(variant) {
       return getVariantSize(variant, { formatted: true });
     },
     formatPosition(pos) {
-      // Add thousand separators: 36459258 → 36,459,258
       return parseInt(pos).toLocaleString();
     },
     async loadVariantData() {
       this.loading = true;
-      // Decode variant_id to handle URL-encoded special characters (e.g., colons)
       const variantId = decodeURIComponent(this.$route.params.variant_id);
 
       window.logService.debug('Loading variant detail page', {
@@ -494,16 +737,6 @@ export default {
           }),
         }));
 
-        window.logService.debug('Phenopackets data transformation complete', {
-          rawPhenopacketCount: phenopacketsResponse.data.length,
-          transformedCount: this.phenopacketsWithVariant.length,
-          variantDetails: {
-            hg38: this.variant.hg38,
-            type: this.getVariantType(this.variant),
-            classification: this.variant.classificationVerdict,
-          },
-        });
-
         window.logService.info('Variant detail loaded successfully', {
           variantId: this.variant.variant_id,
           variantType: this.getVariantType(this.variant),
@@ -520,26 +753,18 @@ export default {
         this.loading = false;
       }
     },
-    // HGVS extraction functions imported from utils/hgvs
     extractCNotation,
     extractPNotation,
     extractTranscriptId,
     extractProteinId,
-    // Color mapping functions imported from utils/colors
     getPathogenicityColor,
-    // Note: getVariantType, isCNV, getCNVDetails, getCNVSize are defined below as wrapper methods
     getMolecularConsequence(variant) {
-      // Backend now correctly computes molecular_consequence
-      // Just return it directly instead of recomputing
       if (!variant) return null;
 
-      // Use the computed consequence from backend if available
       if (variant.molecular_consequence) {
         return variant.molecular_consequence;
       }
 
-      // Fallback to client-side computation (for backwards compatibility)
-      // IMPORTANT: Check protein/transcript BEFORE variant_type
       if (variant.protein) {
         const pNotation = this.extractPNotation(variant.protein);
         if (!pNotation) return 'Coding Sequence Variant';
@@ -563,16 +788,6 @@ export default {
           const sign = spliceMatch[1];
           const position = parseInt(spliceMatch[2], 10);
 
-          // Canonical splice site boundaries (HGVS/Sequence Ontology conventions):
-          // Splice Donor (5' site): +1 to +6 positions after exon end
-          //   - Conserved GT dinucleotide at +1/+2 (SO:0000164)
-          //   - Extended donor motif spans +1 to +6
-          // Splice Acceptor (3' site): -1 to -3 positions before exon start
-          //   - Conserved AG dinucleotide at -2/-1 (SO:0000162)
-          //   - Branch point region at -3
-          // References:
-          //   - Sequence Ontology: http://www.sequenceontology.org/
-          //   - HGVS nomenclature: https://varnomen.hgvs.org/
           if (sign === '+' && position >= 1 && position <= 6) return 'Splice Donor';
           if (sign === '-' && position >= 1 && position <= 3) return 'Splice Acceptor';
           return 'Intronic Variant';
@@ -581,7 +796,6 @@ export default {
         return 'Coding Sequence Variant';
       }
 
-      // Check variant type last (only for CNVs without protein/transcript data)
       if (variant.variant_type === 'deletion') return 'Copy Number Loss';
       if (variant.variant_type === 'duplication') return 'Copy Number Gain';
 
@@ -595,7 +809,7 @@ export default {
         this.getDecipherLink(variant) ||
         this.getUCSCLink(variant) ||
         variant.geneSymbol
-      ); // Always show if we have gene symbol (for NCBI Gene & OMIM)
+      );
     },
     copyToClipboard(text, label) {
       window.logService.debug('Clipboard copy initiated', {
@@ -603,7 +817,6 @@ export default {
         textLength: text?.length || 0,
       });
 
-      // Copy to clipboard using modern Clipboard API
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard
           .writeText(text)
@@ -621,7 +834,6 @@ export default {
             this.snackbar = true;
           });
       } else {
-        // Fallback for older browsers
         const textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.style.position = 'fixed';
@@ -644,7 +856,6 @@ export default {
       }
     },
     getClinVarLink(variant) {
-      // ClinVar search works for all variant types with HGVS notation (not just SNVs)
       if (!variant || !variant.transcript || !variant.geneSymbol) {
         return null;
       }
@@ -653,59 +864,6 @@ export default {
         const searchTerm = encodeURIComponent(`${variant.geneSymbol}[gene] AND ${cNotation}`);
         return `https://www.ncbi.nlm.nih.gov/clinvar/?term=${searchTerm}`;
       }
-      return null;
-    },
-    getVariantSize(variant) {
-      if (!variant || !variant.hg38) return null;
-
-      // SNVs don't need size display
-      if (variant.variant_type === 'SNV') return null;
-
-      // Parse VCF format: chr17-37739638-TG-T or 17:12345-67890:DEL
-      // For small variants: chr-pos-REF-ALT
-      const smallVariantMatch = variant.hg38.match(/chr\d+-\d+-([A-Z]+)-([A-Z]+)/i);
-      if (smallVariantMatch) {
-        const ref = smallVariantMatch[1];
-        const alt = smallVariantMatch[2];
-        const refLen = ref.length;
-        const altLen = alt.length;
-
-        if (variant.variant_type === 'deletion') {
-          const deleted = refLen - altLen;
-          const deletedBases = ref.slice(1); // Skip first base (anchor)
-          return `${deleted}bp deletion (${deletedBases} deleted)`;
-        } else if (variant.variant_type === 'insertion') {
-          const inserted = altLen - refLen;
-          const insertedBases = alt.slice(1); // Skip first base (anchor)
-          return `${inserted}bp insertion (${insertedBases} inserted)`;
-        } else if (variant.variant_type === 'indel') {
-          const deleted = refLen - 1; // Subtract anchor base
-          const inserted = altLen - 1; // Subtract anchor base
-          const deletedBases = ref.slice(1);
-          const insertedBases = alt.slice(1);
-          return `${deleted}bp deleted, ${inserted}bp inserted (${deletedBases}→${insertedBases})`;
-        }
-      }
-
-      // For large CNVs: 17:12345-67890:DEL
-      const cnvMatch = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
-      if (
-        cnvMatch &&
-        (variant.variant_type === 'deletion' || variant.variant_type === 'duplication')
-      ) {
-        const start = parseInt(cnvMatch[2]);
-        const end = parseInt(cnvMatch[3]);
-        const size = end - start;
-
-        if (size >= 1000000) {
-          return `${(size / 1000000).toFixed(2)}Mb`;
-        } else if (size >= 1000) {
-          return `${(size / 1000).toFixed(1)}kb`;
-        } else {
-          return `${size}bp`;
-        }
-      }
-
       return null;
     },
     getDbSNPLink(variant) {
@@ -772,7 +930,6 @@ export default {
       }
       return null;
     },
-    // Sex formatting functions imported from @/utils/sex
     getSexIcon,
     getSexChipColor,
     formatSex,
@@ -781,73 +938,29 @@ export default {
 </script>
 
 <style scoped>
-/* Link styling for transcript and protein references */
-.transcript-link,
-.protein-link {
-  color: #1976d2;
-  text-decoration: none;
-  margin-right: 4px;
+.variant-container {
+  min-height: 100vh;
+  background-color: #fafafa;
 }
 
-.transcript-link:hover,
-.protein-link:hover {
-  text-decoration: underline;
+.hero-section {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 50%, #f5f7fa 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* External links container */
-.external-links-container {
-  display: flex;
-  flex-wrap: wrap;
+.border-bottom {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.border-opacity-12 {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
   gap: 12px;
-  margin-top: 4px;
-}
-
-.external-link {
-  display: inline-flex;
-  align-items: center;
-  color: #1976d2;
-  text-decoration: none;
-  font-weight: 500;
-  padding: 4px 8px;
-  border: 1px solid #1976d2;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.external-link:hover {
-  background-color: #1976d2;
-  color: white;
-  text-decoration: none;
-}
-
-/* Gene link styling */
-.gene-link {
-  color: #1976d2;
-  text-decoration: none;
-  font-weight: 500;
-  margin-left: 4px;
-  margin-right: 4px;
-}
-
-.gene-link:hover {
-  text-decoration: underline;
-}
-
-/* External links divider */
-.external-link-divider {
-  margin: 0 8px;
-  color: #999;
-  font-weight: 300;
-}
-
-/* Gene-specific external links (lighter style) */
-.external-link-gene {
-  border-color: #64b5f6;
-  color: #64b5f6;
-}
-
-.external-link-gene:hover {
-  background-color: #64b5f6;
-  color: white;
 }
 </style>
