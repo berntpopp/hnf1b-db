@@ -21,9 +21,10 @@ Usage Contexts:
 VD_BASE = "diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor"
 
 # Variation descriptor field paths (require interp alias in query)
-VD_ID = f"interp.value#>>'{{'{VD_BASE},id}}'"
-VD_EXTENSIONS = f"interp.value#>'{{'{VD_BASE},extensions}}'"
-VD_EXPRESSIONS = f"interp.value#>>'{{'{VD_BASE},expressions}}'"
+# Note: Triple braces {{{ produce literal { + f-string substitution
+VD_ID = f"interp.value#>>'{{{VD_BASE},id}}'"
+VD_EXTENSIONS = f"interp.value#>'{{{VD_BASE},extensions}}'"
+VD_EXPRESSIONS = f"interp.value#>'{{{VD_BASE},expressions}}'"
 
 # Subject age path (used in survival queries)
 CURRENT_AGE_PATH = "p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration'"

@@ -139,6 +139,69 @@ class MaterializedViewsConfig(BaseModel):
     ]
 
 
+class HPOTermsConfig(BaseModel):
+    """HPO term constants for survival analysis and disease classification.
+
+    Centralizes HPO term definitions that were previously hardcoded in survival.py.
+    This allows for easier maintenance and testing without code changes.
+    """
+
+    # CAKUT (Congenital Anomalies of Kidney and Urinary Tract)
+    cakut: List[str] = [
+        "HP:0000003",  # Multicystic kidney dysplasia
+        "HP:0000122",  # Unilateral renal agenesis
+        "HP:0000089",  # Renal hypoplasia
+        "HP:0012210",  # Abnormal renal morphology
+    ]
+
+    # Genital abnormalities
+    genital: str = "HP:0000078"  # Abnormality of the genital system
+
+    # Any kidney-related HPO terms
+    any_kidney: List[str] = [
+        "HP:0012622",  # Chronic kidney disease (unspecified)
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
+        "HP:0000003",  # Multicystic kidney dysplasia
+        "HP:0000089",  # Renal hypoplasia
+        "HP:0000107",  # Renal cyst
+        "HP:0000122",  # Unilateral renal agenesis
+        "HP:0012210",  # Abnormal renal morphology
+        "HP:0033133",  # Renal cortical hyperechogenicity
+        "HP:0000108",  # Multiple glomerular cysts
+        "HP:0001970",  # Oligomeganephronia
+    ]
+
+    # MODY (Maturity-onset diabetes of the young)
+    mody: str = "HP:0004904"
+
+    # CKD stage terms
+    ckd_stages: List[str] = [
+        "HP:0012622",  # Chronic kidney disease (unspecified)
+        "HP:0012623",  # Stage 1 CKD
+        "HP:0012624",  # Stage 2 CKD
+        "HP:0012625",  # Stage 3 CKD
+        "HP:0012626",  # Stage 4 CKD
+        "HP:0003774",  # Stage 5 CKD
+    ]
+
+    # Kidney failure (Stage 4 and Stage 5 CKD)
+    kidney_failure: List[str] = ["HP:0012626", "HP:0003774"]
+
+    # CKD Stage 3+ (for survival analysis endpoint)
+    ckd_stage_3_plus: List[str] = [
+        "HP:0012625",  # Stage 3 CKD
+        "HP:0012626",  # Stage 4 CKD
+        "HP:0003774",  # Stage 5 CKD
+    ]
+
+    # Stage 5 CKD only (ESRD)
+    stage_5_ckd: List[str] = ["HP:0003774"]
+
+
 class SecurityConfig(BaseModel):
     """Security settings (non-secret values)."""
 
@@ -159,6 +222,7 @@ class YamlConfig(BaseModel):
     database: DatabaseConfig = DatabaseConfig()
     http_cache: HttpCacheConfig = HttpCacheConfig()
     materialized_views: MaterializedViewsConfig = MaterializedViewsConfig()
+    hpo_terms: HPOTermsConfig = HPOTermsConfig()
     security: SecurityConfig = SecurityConfig()
 
 
@@ -304,6 +368,11 @@ class Settings(BaseSettings):
     def materialized_views(self) -> MaterializedViewsConfig:
         """Access materialized views configuration."""
         return self.yaml.materialized_views
+
+    @property
+    def hpo_terms(self) -> HPOTermsConfig:
+        """Access HPO terms configuration."""
+        return self.yaml.hpo_terms
 
     @property
     def security(self) -> SecurityConfig:

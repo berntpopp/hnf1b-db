@@ -12,6 +12,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.mv_cache import mv_cache
 from app.database import get_db
 from app.phenopackets.models import (
     AggregationResult,
@@ -48,23 +49,17 @@ __all__ = [
 async def check_materialized_view_exists(
     db: AsyncSession, view_name: str
 ) -> bool:
-    """Check if a materialized view exists and has data.
+    """Check if a materialized view is available (O(1) cached lookup).
+
+    This function now uses the startup-initialized MV cache instead of
+    per-request SQL queries. The db parameter is kept for backward
+    compatibility but is no longer used.
 
     Args:
-        db: Database session
+        db: Database session (unused, kept for backward compatibility)
         view_name: Name of the materialized view
 
     Returns:
         True if view exists and has data, False otherwise
     """
-    if not settings.materialized_views.enabled:
-        return False
-
-    try:
-        result = await db.execute(
-            text(f"SELECT 1 FROM {view_name} LIMIT 1")  # noqa: S608
-        )
-        return result.fetchone() is not None
-    except Exception:
-        logger.debug(f"Materialized view {view_name} not available, using live query")
-        return False
+    return mv_cache.is_available(view_name)

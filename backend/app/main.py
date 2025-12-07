@@ -9,12 +9,14 @@ from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.core.cache import close_cache, init_cache
 from app.core.config import settings
-from app.database import engine
+from app.core.mv_cache import init_mv_cache
+from app.database import async_session_maker, engine
 from app.ontology import routers as ontology_router
 from app.phenopackets import clinical_endpoints
 from app.phenopackets.routers import router as phenopackets_router
 from app.publications import endpoints as publication_endpoints
 from app.reference import router as reference_router
+from app.search.routers import router as search_router
 
 
 @asynccontextmanager
@@ -26,9 +28,15 @@ async def lifespan(app: FastAPI):
 
     Initializes:
     - Redis cache connection (with in-memory fallback)
+    - Materialized view availability cache (O(1) lookups)
     """
     # Application startup
     await init_cache()  # Initialize Redis cache
+
+    # Initialize materialized view cache (checks availability once at startup)
+    async with async_session_maker() as db:
+        await init_mv_cache(db)
+
     yield
     # Cleanup on shutdown
     await close_cache()  # Close Redis connection
@@ -64,6 +72,7 @@ app.include_router(hpo_proxy.router)
 app.include_router(variant_validator_endpoint.router)
 app.include_router(ontology_router.router, prefix="/api/v2")
 app.include_router(reference_router.router, prefix="/api/v2")
+app.include_router(search_router, prefix="/api/v2")
 
 
 # Root endpoint
@@ -131,6 +140,10 @@ async def api_info():
             {
                 "path": "/api/v2/phenopackets/search",
                 "description": "Advanced phenopacket search",
+            },
+            {
+                "path": "/api/v2/search/global",
+                "description": "Global unified search",
             },
             {
                 "path": "/api/v2/phenopackets/aggregate",

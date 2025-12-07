@@ -1,334 +1,220 @@
 <template>
   <v-container fluid>
+    <!-- Header -->
     <v-row>
-      <!-- Sidebar with Faceted Filters -->
-      <v-col cols="12" md="3">
-        <FacetedFilters
-          v-model="selectedFacets"
-          :facets="facets"
-          @filter-change="handleFilterChange"
-        />
+      <v-col cols="12">
+        <div class="d-flex align-center gap-4">
+          <v-btn icon="mdi-arrow-left" variant="text" @click="$router.back()" />
+          <h2 class="text-h4">Results for "{{ searchQuery }}"</h2>
+        </div>
+
+        <!-- Tabs -->
+        <v-tabs v-model="activeTab" color="primary" class="mt-4">
+          <v-tab value="all">All ({{ summaryTotal }})</v-tab>
+          <v-tab v-if="summary['Phenopacket']" value="Phenopacket">
+            Phenopackets ({{ summary['Phenopacket'] }})
+          </v-tab>
+          <v-tab v-if="summary['Variant']" value="Variant">
+            Variants ({{ summary['Variant'] }})
+          </v-tab>
+          <v-tab v-if="summary['Publication']" value="Publication">
+            Publications ({{ summary['Publication'] }})
+          </v-tab>
+          <v-tab v-if="summary['Gene Feature']" value="Gene Feature">
+            Gene Features ({{ summary['Gene Feature'] }})
+          </v-tab>
+        </v-tabs>
       </v-col>
+    </v-row>
 
-      <!-- Main Content Area -->
-      <v-col cols="12" md="9">
-        <!-- Header with Title and Actions -->
-        <v-row>
-          <v-col cols="12">
-            <div class="d-flex justify-space-between align-center mb-4">
-              <div>
-                <h2>
-                  Search Results
-                  <v-chip v-if="!loading" size="small" class="ml-2">
-                    {{ totalResults }} results
-                  </v-chip>
-                </h2>
-                <v-chip-group v-if="Object.keys(filters).length > 0" class="mt-2">
-                  <v-chip v-if="filters.q" closeable @click:close="removeFilter('q')">
-                    Text: {{ filters.q }}
-                  </v-chip>
-                  <v-chip v-if="filters.hpo_id" closeable @click:close="removeFilter('hpo_id')">
-                    HPO: {{ filters.hpo_id }}
-                  </v-chip>
-                  <v-chip v-if="filters.gene" closeable @click:close="removeFilter('gene')">
-                    Gene: {{ filters.gene }}
-                  </v-chip>
-                  <v-chip v-if="filters.sex" closeable @click:close="removeFilter('sex')">
-                    Sex: {{ filters.sex }}
-                  </v-chip>
-                  <v-chip v-if="filters.pmid" closeable @click:close="removeFilter('pmid')">
-                    PMID: {{ filters.pmid }}
-                  </v-chip>
-                </v-chip-group>
-                <p v-else class="text-grey mt-2">No text filters applied.</p>
-              </div>
+    <v-row class="mt-4">
+      <v-col cols="12">
+        <!-- Loading -->
+        <div v-if="loading" class="d-flex justify-center align-center py-12">
+          <v-progress-circular indeterminate color="primary" size="64" />
+        </div>
 
-              <!-- Sort and Export Actions -->
-              <div class="d-flex gap-2">
-                <v-select
-                  v-model="sortBy"
-                  :items="sortOptions"
-                  label="Sort by"
-                  density="compact"
-                  style="max-width: 200px"
-                  hide-details
-                  @update:model-value="handleSortChange"
-                />
-                <v-menu>
-                  <template #activator="{ props }">
-                    <v-btn
-                      v-bind="props"
-                      color="primary"
-                      variant="outlined"
-                      prepend-icon="mdi-download"
-                      :disabled="results.length === 0"
-                    >
-                      Export
-                    </v-btn>
+        <v-window v-else v-model="activeTab">
+          <v-window-item value="all">
+            <!-- Best Match Section -->
+            <div v-if="bestMatch" class="mb-6">
+              <div class="text-overline mb-2 text-medium-emphasis">TOP RESULT</div>
+              <v-card
+                variant="outlined"
+                :color="getTypeColor(bestMatch.type)"
+                class="border-opacity-50"
+              >
+                <v-card-item>
+                  <template #prepend>
+                    <v-avatar :color="getTypeColor(bestMatch.type)" variant="tonal" rounded="0">
+                      <v-icon size="large">{{ getTypeIcon(bestMatch.type) }}</v-icon>
+                    </v-avatar>
                   </template>
-                  <v-list>
-                    <v-list-item @click="exportResults('csv')">
-                      <v-list-item-title>Export as CSV</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item @click="exportResults('json')">
-                      <v-list-item-title>Export as JSON</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
+                  <v-card-title class="text-h6">{{ bestMatch.label }}</v-card-title>
+                  <v-card-subtitle class="opacity-100">
+                    {{ bestMatch.type }}
+                    <span v-if="bestMatch.subtype">• {{ bestMatch.subtype }}</span>
+                  </v-card-subtitle>
+                </v-card-item>
+                <v-divider />
+                <v-card-actions>
+                  <v-spacer />
+                  <v-btn
+                    variant="text"
+                    :to="getResultLink(bestMatch)"
+                    append-icon="mdi-arrow-right"
+                  >
+                    View Details
+                  </v-btn>
+                </v-card-actions>
+              </v-card>
+            </div>
+
+            <!-- Mixed Results List -->
+            <div v-if="results.length > 0">
+              <div v-if="bestMatch" class="text-overline mb-2 text-medium-emphasis">
+                OTHER RESULTS
               </div>
-            </div>
-          </v-col>
-        </v-row>
-
-        <!-- Loading State -->
-        <v-row v-if="loading">
-          <v-col cols="12" class="text-center">
-            <v-progress-circular indeterminate color="primary" size="64" />
-            <p class="mt-4 text-h6">Searching phenopackets...</p>
-          </v-col>
-        </v-row>
-
-        <!-- Results Table -->
-        <v-row v-else>
-          <v-col cols="12">
-            <v-data-table
-              :headers="headers"
-              :items="results"
-              :items-length="totalResults"
-              class="elevation-1"
-              hide-default-footer
-              @click:row="navigateToPhenopacket"
-            >
-              <template #item.subject.id="{ item }">
-                <v-chip
-                  :to="`/phenopackets/${item.id}`"
-                  color="teal-lighten-3"
-                  size="small"
-                  variant="flat"
-                  link
+              <v-list lines="two" bg-color="transparent">
+                <v-list-item
+                  v-for="item in filteredResults"
+                  :key="item.id + item.type"
+                  :to="getResultLink(item)"
+                  rounded="lg"
+                  class="mb-2 elevation-1 bg-surface"
+                  border
                 >
-                  <v-icon left size="small">mdi-card-account-details</v-icon>
-                  {{ item.subject.id }}
-                </v-chip>
-              </template>
-              <template #item.subject.sex="{ item }">
-                <v-chip :color="getSexChipColor(item.subject.sex)" size="small" variant="flat">
-                  <v-icon left size="small">
-                    {{ getSexIcon(item.subject.sex) }}
-                  </v-icon>
-                  {{ formatSex(item.subject.sex) }}
-                </v-chip>
-              </template>
-              <template #no-data>
-                <v-alert type="info" variant="tonal" class="ma-4">
-                  No phenopackets match your search criteria. Try adjusting your filters.
-                </v-alert>
-              </template>
-            </v-data-table>
-
-            <!-- Pagination Controls -->
-            <div v-if="totalResults > 0" class="d-flex justify-end align-center mt-4">
-              <span class="mr-2 text-body-2">Rows per page:</span>
-              <v-select
-                v-model="pageSize"
-                :items="pageSizeOptions"
-                density="compact"
-                hide-details
-                style="max-width: 120px"
-                @update:model-value="handlePageSizeChange"
-              />
-              <span class="mx-3 text-body-2">{{ rangeText }}</span>
-              <v-btn
-                icon
-                :disabled="!canGoToFirst"
-                aria-label="Go to first page"
-                @click="goToFirstPage"
-              >
-                <v-icon aria-hidden="true">mdi-page-first</v-icon>
-              </v-btn>
-              <v-btn
-                icon
-                :disabled="!canGoToPrevious"
-                aria-label="Go to previous page"
-                @click="goToPreviousPage"
-              >
-                <v-icon aria-hidden="true">mdi-chevron-left</v-icon>
-              </v-btn>
-              <v-btn
-                icon
-                :disabled="!canGoToNext"
-                aria-label="Go to next page"
-                @click="goToNextPage"
-              >
-                <v-icon aria-hidden="true">mdi-chevron-right</v-icon>
-              </v-btn>
-              <v-btn
-                icon
-                :disabled="!canGoToLast"
-                aria-label="Go to last page"
-                @click="goToLastPage"
-              >
-                <v-icon aria-hidden="true">mdi-page-last</v-icon>
-              </v-btn>
+                  <template #prepend>
+                    <v-avatar :color="getTypeColor(item.type)" variant="tonal">
+                      <v-icon>{{ getTypeIcon(item.type) }}</v-icon>
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title class="font-weight-medium">{{ item.label }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    <v-chip size="x-small" label class="mr-2" :color="getTypeColor(item.type)">{{
+                      item.type
+                    }}</v-chip>
+                    <span v-if="item.subtype" class="text-body-2 text-medium-emphasis">{{
+                      item.subtype
+                    }}</span>
+                    <span v-if="item.extra_info" class="text-body-2 text-medium-emphasis">
+                      • {{ item.extra_info }}</span
+                    >
+                  </v-list-item-subtitle>
+                  <template #append>
+                    <v-icon size="small" color="grey-lighten-1">mdi-chevron-right</v-icon>
+                  </template>
+                </v-list-item>
+              </v-list>
             </div>
-          </v-col>
-        </v-row>
+          </v-window-item>
+
+          <!-- Type Specific Tabs -->
+          <v-window-item
+            v-for="type in ['Phenopacket', 'Variant', 'Publication', 'Gene Feature']"
+            :key="type"
+            :value="type"
+          >
+            <v-list v-if="results.length > 0" lines="two" bg-color="transparent">
+              <v-list-item
+                v-for="item in results"
+                :key="item.id + item.type"
+                :to="getResultLink(item)"
+                rounded="lg"
+                class="mb-2 elevation-1 bg-surface"
+                border
+              >
+                <template #prepend>
+                  <v-avatar :color="getTypeColor(item.type)" variant="tonal">
+                    <v-icon>{{ getTypeIcon(item.type) }}</v-icon>
+                  </v-avatar>
+                </template>
+                <v-list-item-title class="font-weight-medium">{{ item.label }}</v-list-item-title>
+                <v-list-item-subtitle>
+                  <span v-if="item.subtype">{{ item.subtype }}</span>
+                  <span v-if="item.extra_info"> • {{ item.extra_info }}</span>
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+          </v-window-item>
+        </v-window>
+
+        <!-- Pagination -->
+        <div v-if="totalResults > 0" class="d-flex justify-center mt-6">
+          <v-pagination
+            v-model="currentPage"
+            :length="totalPages"
+            total-visible="7"
+            rounded="circle"
+          />
+        </div>
+
+        <!-- Empty State -->
+        <div v-if="!loading && results.length === 0" class="text-center mt-12">
+          <v-avatar color="grey-lighten-4" size="120" class="mb-6">
+            <v-icon size="64" color="grey-lighten-1">mdi-magnify-remove-outline</v-icon>
+          </v-avatar>
+          <h3 class="text-h5 text-medium-emphasis">No results found for "{{ searchQuery }}"</h3>
+          <p class="text-body-1 text-disabled mt-2">
+            Try checking for typos or using different keywords.
+          </p>
+        </div>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { searchPhenopackets, getSearchFacets } from '@/api';
-import FacetedFilters from '@/components/FacetedFilters.vue';
-import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { searchGlobal } from '@/api';
 
 const route = useRoute();
-const router = useRouter();
 
-const filters = computed(() => {
-  const {
-    page: _page,
-    pageSize: _size,
-    sex: _sex,
-    genes: _genes,
-    phenotypes: _phenotypes,
-    ...textFilters
-  } = route.query;
-  return textFilters;
-});
+// State
+const activeTab = ref('all');
 const results = ref([]);
-const loading = ref(false);
+const summary = ref({});
 const totalResults = ref(0);
-const sortBy = ref(route.query.sort || 'relevance');
-const currentPage = ref(parseInt(route.query.page) || 1);
-const pageSize = ref(parseInt(route.query.pageSize) || 20);
-const selectedFacets = ref({
-  sex: route.query.sex
-    ? Array.isArray(route.query.sex)
-      ? route.query.sex
-      : [route.query.sex]
-    : [],
-  pathogenicity: route.query.pathogenicity
-    ? Array.isArray(route.query.pathogenicity)
-      ? route.query.pathogenicity
-      : [route.query.pathogenicity]
-    : [],
+const loading = ref(false);
+const currentPage = ref(1);
+const pageSize = 20;
+
+// Computed
+const searchQuery = computed(() => route.query.q || '');
+const totalPages = computed(() => Math.ceil(totalResults.value / pageSize));
+const summaryTotal = computed(() => Object.values(summary.value).reduce((a, b) => a + b, 0));
+
+const bestMatch = computed(() => {
+  if (activeTab.value !== 'all' || results.value.length === 0 || currentPage.value > 1) return null;
+  // If the top result has a significantly higher score than the next, treat it as best match
+  // For now, just pick the first one if it's a "definitive" type like Gene Feature or Variant
+  const first = results.value[0];
+  if (['Gene', 'Gene Feature', 'Variant'].includes(first.type)) return first;
+  return null;
 });
 
-const facets = ref({
-  sex: [],
-  pathogenicity: [],
+const filteredResults = computed(() => {
+  if (bestMatch.value) {
+    return results.value.slice(1);
+  }
+  return results.value;
 });
 
-const sortOptions = [
-  { title: 'Relevance', value: 'relevance' },
-  { title: 'Subject ID (A-Z)', value: 'subject_id_asc' },
-  { title: 'Subject ID (Z-A)', value: 'subject_id_desc' },
-  { title: 'Sex', value: 'sex' },
-  { title: 'Date Added (Newest)', value: 'created_desc' },
-  { title: 'Date Added (Oldest)', value: 'created_asc' },
-];
-
-const headers = [
-  { title: 'Subject ID', value: 'subject.id', sortable: false },
-  { title: 'Sex', value: 'subject.sex', sortable: false },
-];
-
-const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value));
-
-const pageSizeOptions = [
-  { title: '10 per page', value: 10 },
-  { title: '20 per page', value: 20 },
-  { title: '50 per page', value: 50 },
-  { title: '100 per page', value: 100 },
-];
-
-// Computed properties for pagination controls
-const pageStart = computed(() => (currentPage.value - 1) * pageSize.value + 1);
-const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, totalResults.value));
-const rangeText = computed(() =>
-  totalResults.value === 0
-    ? '0 of 0'
-    : `${pageStart.value}-${pageEnd.value} of ${totalResults.value}`
-);
-const canGoToPrevious = computed(() => currentPage.value > 1);
-const canGoToNext = computed(() => currentPage.value < totalPages.value);
-const canGoToFirst = computed(() => currentPage.value > 1);
-const canGoToLast = computed(() => currentPage.value < totalPages.value);
-
-// Update URL with all search state
-const updateURL = () => {
-  const query = {
-    ...filters.value, // Keep text filters (q, hpo_id, gene, sex, pmid)
-  };
-
-  // Add sort if not default
-  if (sortBy.value !== 'relevance') {
-    query.sort = sortBy.value;
-  }
-
-  // Add pagination if not default
-  if (currentPage.value !== 1) {
-    query.page = currentPage.value;
-  }
-  if (pageSize.value !== 20) {
-    query.pageSize = pageSize.value;
-  }
-
-  // Add facet filters if selected
-  if (selectedFacets.value.sex.length > 0) {
-    query.sex = selectedFacets.value.sex;
-  }
-  if (selectedFacets.value.pathogenicity.length > 0) {
-    query.pathogenicity = selectedFacets.value.pathogenicity;
-  }
-
-  router.replace({ query });
-};
-
+// Methods
 const fetchResults = async () => {
+  if (!searchQuery.value) return;
+
   loading.value = true;
   try {
-    // Build search params from route query and selected facets
-    const searchParams = {
-      ...filters.value,
-      rank_by_relevance: sortBy.value === 'relevance',
-      skip: (currentPage.value - 1) * pageSize.value,
-      limit: pageSize.value,
-    };
+    const typeFilter = activeTab.value === 'all' ? null : activeTab.value;
+    const { data } = await searchGlobal(searchQuery.value, currentPage.value, pageSize, typeFilter);
 
-    // Add facet filters to search params
-    if (selectedFacets.value.sex.length > 0) {
-      searchParams.sex = selectedFacets.value.sex[0]; // API accepts single sex value
-    }
-    // Note: genes and phenotypes filters removed - genes are all HNF1B, phenotypes use main search
-
-    const { data } = await searchPhenopackets(searchParams);
-    results.value = data.data.map((pp) => ({
-      ...pp.attributes,
-      id: pp.id,
-      search_rank: pp.meta?.search_rank,
-    }));
-    totalResults.value = data.meta.total;
-
-    // Log successful search
-    if (window.logService) {
-      window.logService.info('Search completed', {
-        query: searchParams.q,
-        results: totalResults.value,
-        page: currentPage.value,
-        pageSize: pageSize.value,
-      });
-    }
+    results.value = data.results;
+    summary.value = data.summary;
+    totalResults.value = data.total;
   } catch (error) {
-    if (window.logService) {
-      window.logService.error('Search failed', { error: error.message });
-    } else {
-      console.error('Search failed', { error: error.message });
-    }
+    console.error('Search failed:', error);
     results.value = [];
     totalResults.value = 0;
   } finally {
@@ -336,232 +222,72 @@ const fetchResults = async () => {
   }
 };
 
-const fetchFacets = async () => {
-  try {
-    const { data } = await getSearchFacets(filters.value);
-    facets.value = data.facets;
-
-    if (window.logService) {
-      window.logService.debug('Facets loaded', {
-        sex: facets.value.sex.length,
-        genes: facets.value.genes.length,
-        phenotypes: facets.value.phenotypes.length,
-      });
-    }
-  } catch (error) {
-    if (window.logService) {
-      window.logService.error('Failed to load facets', { error: error.message });
-    } else {
-      console.error('Failed to load facets', { error: error.message });
-    }
+const getTypeColor = (type) => {
+  switch (type) {
+    case 'Gene':
+      return 'primary';
+    case 'Gene Feature':
+      return 'purple';
+    case 'Variant':
+      return 'error';
+    case 'Phenopacket':
+      return 'teal';
+    case 'Publication':
+      return 'orange';
+    default:
+      return 'grey';
   }
 };
 
-const removeFilter = (key) => {
-  const newQuery = { ...route.query };
-  delete newQuery[key];
-  router.push({ query: newQuery });
-};
-
-const handleFilterChange = (newFilters) => {
-  selectedFacets.value = newFilters;
-  currentPage.value = 1; // Reset to first page when filters change
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Facet filters changed', {
-      sex: newFilters.sex,
-      pathogenicity: newFilters.pathogenicity,
-      genes: newFilters.genes,
-      phenotypes: newFilters.phenotypes,
-    });
+const getTypeIcon = (type) => {
+  switch (type) {
+    case 'Gene':
+      return 'mdi-dna';
+    case 'Gene Feature':
+      return 'mdi-creation';
+    case 'Variant':
+      return 'mdi-flash';
+    case 'Phenopacket':
+      return 'mdi-account';
+    case 'Publication':
+      return 'mdi-book-open-page-variant';
+    default:
+      return 'mdi-file';
   }
 };
 
-const handleSortChange = () => {
-  currentPage.value = 1; // Reset to first page when sort changes
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Sort order changed', { sortBy: sortBy.value });
+const getResultLink = (item) => {
+  switch (item.type) {
+    case 'Phenopacket':
+      return `/phenopackets/${item.id}`;
+    case 'Variant':
+      return { name: 'Variants', query: { query: item.label } };
+    case 'Publication':
+      return { name: 'Publications', query: { q: item.id } }; // PMID
+    case 'Gene':
+      return `/reference?q=${item.label}`;
+    case 'Gene Feature':
+      return `/reference?q=${item.label}`;
+    default:
+      return '#';
   }
 };
 
-const handlePageSizeChange = () => {
-  currentPage.value = 1; // Reset to first page when page size changes
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Page size changed', { pageSize: pageSize.value });
-  }
-};
-
-// Pagination navigation functions
-const goToFirstPage = () => {
-  currentPage.value = 1;
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Navigate to first page');
-  }
-};
-
-const goToPreviousPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--;
-    updateURL();
-    if (window.logService) {
-      window.logService.info('Navigate to previous page', { page: currentPage.value });
-    }
-  }
-};
-
-const goToNextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++;
-    updateURL();
-    if (window.logService) {
-      window.logService.info('Navigate to next page', { page: currentPage.value });
-    }
-  }
-};
-
-const goToLastPage = () => {
-  currentPage.value = totalPages.value;
-  updateURL();
-  if (window.logService) {
-    window.logService.info('Navigate to last page', { page: currentPage.value });
-  }
-};
-
-const navigateToPhenopacket = (event, { item }) => {
-  if (item && item.id) {
-    router.push(`/phenopackets/${item.id}`);
-  }
-};
-
-const exportResults = (format) => {
-  if (results.value.length === 0) {
-    return;
-  }
-
-  try {
-    if (format === 'csv') {
-      exportAsCSV();
-    } else if (format === 'json') {
-      exportAsJSON();
-    }
-
-    if (window.logService) {
-      window.logService.info('Exported search results', {
-        format,
-        count: results.value.length,
-      });
-    }
-  } catch (error) {
-    if (window.logService) {
-      window.logService.error('Export failed', { error: error.message, format });
-    } else {
-      console.error('Export failed', { error: error.message, format });
-    }
-  }
-};
-
-const exportAsCSV = () => {
-  // Extract key fields for CSV export
-  const csvData = results.value.map((item) => ({
-    'Phenopacket ID': item.id,
-    'Subject ID': item.subject?.id || '-',
-    Sex: item.subject?.sex || '-',
-    'Primary Disease':
-      item.diseases?.[0]?.term?.label ||
-      item.interpretations?.[0]?.diagnosis?.disease?.label ||
-      '-',
-    'Phenotype Count': item.phenotypicFeatures?.length || 0,
-    'Has Variants': item.interpretations?.length > 0 ? 'Yes' : 'No',
-  }));
-
-  // Convert to CSV string
-  const headers = Object.keys(csvData[0]);
-  const csvContent = [
-    headers.join(','),
-    ...csvData.map((row) =>
-      headers.map((header) => `"${String(row[header]).replace(/"/g, '""')}"`).join(',')
-    ),
-  ].join('\n');
-
-  // Download
-  downloadFile(csvContent, `phenopackets-search-results-${Date.now()}.csv`, 'text/csv');
-};
-
-const exportAsJSON = () => {
-  // Export full phenopacket data
-  const jsonContent = JSON.stringify(
-    {
-      metadata: {
-        exportDate: new Date().toISOString(),
-        totalResults: totalResults.value,
-        exportedResults: results.value.length,
-        searchCriteria: filters.value,
-      },
-      phenopackets: results.value,
-    },
-    null,
-    2
-  );
-
-  downloadFile(jsonContent, `phenopackets-search-results-${Date.now()}.json`, 'application/json');
-};
-
-const downloadFile = (content, filename, mimeType) => {
-  const blob = new Blob([content], { type: mimeType });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-};
-
-// Fetch results and facets on component mount
-onMounted(() => {
+// Watchers
+watch([() => route.query.q, activeTab, currentPage], () => {
   fetchResults();
-  fetchFacets();
 });
 
-// Watch for changes in query parameters and sync to state
-watch(
-  () => route.query,
-  (newQuery) => {
-    // Sync sort
-    sortBy.value = newQuery.sort || 'relevance';
+// Reset page on tab/query change
+watch([() => route.query.q, activeTab], () => {
+  currentPage.value = 1;
+});
 
-    // Sync pagination
-    currentPage.value = parseInt(newQuery.page) || 1;
-    pageSize.value = parseInt(newQuery.pageSize) || 20;
-
-    // Sync facet filters
-    selectedFacets.value = {
-      sex: newQuery.sex ? (Array.isArray(newQuery.sex) ? newQuery.sex : [newQuery.sex]) : [],
-      pathogenicity: newQuery.pathogenicity
-        ? Array.isArray(newQuery.pathogenicity)
-          ? newQuery.pathogenicity
-          : [newQuery.pathogenicity]
-        : [],
-    };
-
-    // Fetch with new parameters
-    fetchResults();
-    fetchFacets();
-  },
-  { deep: true }
-);
+onMounted(fetchResults);
 </script>
 
 <style scoped>
-.v-data-table :deep(tbody tr) {
-  cursor: pointer;
-}
-
-.gap-2 {
-  gap: 8px;
+.gap-4 {
+  gap: 16px;
 }
 </style>
