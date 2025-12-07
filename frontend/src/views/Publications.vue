@@ -66,42 +66,58 @@
         />
       </template>
 
-      <!-- Render PMID as clickable chip with external link -->
+      <!-- Render PMID as internal navigation chip (links to our detail page) -->
       <template #item.pmid="{ item }">
         <v-chip
           v-if="item.pmid"
-          :href="`https://pubmed.ncbi.nlm.nih.gov/${item.pmid}`"
+          :to="`/publications/${extractPmidNumber(item.pmid)}`"
           color="orange-lighten-3"
           size="x-small"
           variant="flat"
-          target="_blank"
-          link
         >
           <v-icon start size="x-small">mdi-book-open-variant</v-icon>
-          PMID: {{ item.pmid }}
-          <v-icon end size="x-small">mdi-open-in-new</v-icon>
+          {{ item.pmid }}
         </v-chip>
         <span v-else class="text-body-2 text-medium-emphasis">-</span>
       </template>
 
-      <!-- Render DOI as clickable chip -->
-      <template #item.doi="{ item }">
-        <v-chip
-          v-if="item.doi"
-          :href="'https://doi.org/' + item.doi"
-          color="blue-lighten-3"
-          size="x-small"
-          variant="flat"
-          target="_blank"
-          link
-          class="text-truncate"
-          style="max-width: 200px"
-        >
-          <v-icon start size="x-small">mdi-link-variant</v-icon>
-          {{ item.doi }}
-          <v-icon end size="x-small">mdi-open-in-new</v-icon>
-        </v-chip>
-        <span v-else class="text-body-2 text-medium-emphasis">-</span>
+      <!-- External links column with PubMed and DOI icons -->
+      <template #item.external_links="{ item }">
+        <div class="d-flex align-center ga-1">
+          <!-- PubMed external link -->
+          <v-tooltip v-if="item.pmid" location="top" text="View on PubMed">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                :href="`https://pubmed.ncbi.nlm.nih.gov/${extractPmidNumber(item.pmid)}`"
+                target="_blank"
+                icon
+                size="x-small"
+                variant="text"
+                color="orange-darken-2"
+              >
+                <v-icon size="small">mdi-book-open-variant</v-icon>
+              </v-btn>
+            </template>
+          </v-tooltip>
+          <!-- DOI external link -->
+          <v-tooltip v-if="item.doi" location="top" text="View DOI">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                :href="`https://doi.org/${item.doi}`"
+                target="_blank"
+                icon
+                size="x-small"
+                variant="text"
+                color="blue-darken-2"
+              >
+                <v-icon size="small">mdi-link-variant</v-icon>
+              </v-btn>
+            </template>
+          </v-tooltip>
+          <span v-if="!item.pmid && !item.doi" class="text-body-2 text-medium-emphasis">-</span>
+        </div>
       </template>
 
       <!-- Render phenopacket count as clickable chip -->
@@ -110,7 +126,7 @@
           color="green-lighten-3"
           size="x-small"
           variant="flat"
-          :to="`/publications/${item.pmid}`"
+          :to="`/publications/${extractPmidNumber(item.pmid)}`"
           link
         >
           <v-icon start size="x-small">mdi-account-multiple</v-icon>
@@ -162,10 +178,9 @@ export default {
 
       // Table configuration
       headers: [
-        { title: 'PMID', value: 'pmid', sortable: true, width: '160px' },
+        { title: 'PMID', value: 'pmid', sortable: true, width: '140px' },
         { title: 'Title', value: 'title', sortable: true, width: '300px' },
         { title: 'Authors', value: 'authors', sortable: true, width: '180px' },
-        { title: 'DOI', value: 'doi', sortable: true, width: '220px' },
         {
           title: 'Individuals',
           value: 'phenopacket_count',
@@ -174,6 +189,13 @@ export default {
           align: 'center',
         },
         { title: 'First Added', value: 'first_added', sortable: true, width: '120px' },
+        {
+          title: 'Links',
+          value: 'external_links',
+          sortable: false,
+          width: '80px',
+          align: 'center',
+        },
       ],
 
       // Default sort configuration
@@ -214,7 +236,6 @@ export default {
           pmid: 'pmid',
           title: 'title',
           authors: 'authors',
-          doi: 'doi',
           phenopacket_count: 'phenopacket_count',
           first_added: 'first_added',
         };
@@ -327,14 +348,21 @@ export default {
     },
 
     /**
+     * Extract numeric PMID from format "PMID:12345678".
+     * Handles both "PMID:12345678" and plain "12345678" formats.
+     */
+    extractPmidNumber(pmid) {
+      if (!pmid) return '';
+      return String(pmid).replace('PMID:', '');
+    },
+
+    /**
      * Handle row click to navigate to publication detail page.
-     * Extracts numeric PMID from format "PMID:12345678"
+     * Uses extractPmidNumber to handle PMID format consistently.
      */
     handleRowClick(event, { item }) {
       if (item?.pmid) {
-        // Extract numeric part from PMID format "PMID:12345678"
-        const pmidNum = item.pmid.replace('PMID:', '');
-        this.$router.push(`/publications/${pmidNum}`);
+        this.$router.push(`/publications/${this.extractPmidNumber(item.pmid)}`);
       }
     },
   },
