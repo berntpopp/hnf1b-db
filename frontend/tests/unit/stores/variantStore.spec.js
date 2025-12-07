@@ -370,7 +370,7 @@ describe('Variant Store', () => {
 
       await store.fetchAll();
 
-      expect(getVariants).toHaveBeenCalledWith({ pageSize: 1000 });
+      expect(getVariants).toHaveBeenCalledWith({ pageSize: 500 });
       expect(store.variants).toHaveLength(3);
       expect(store.loadingState).toBe('complete');
     });

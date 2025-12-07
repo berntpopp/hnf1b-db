@@ -341,6 +341,9 @@ async def get_genomic_region(
 ) -> GenomicRegionResponse:
     """Get all genes in a genomic region.
 
+    Returns empty genes array gracefully if reference data is not populated.
+    This avoids 404 errors in production when reference tables are empty.
+
     Args:
         region: Genomic region in format "chr:start-end"
         response: FastAPI response object for setting cache headers
@@ -349,11 +352,15 @@ async def get_genomic_region(
 
     Returns:
         List of genes overlapping the region.
+        Returns empty genes array if reference data unavailable.
 
     Example:
         GET /api/v2/reference/regions/17:36000000-37000000
     """
     response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+
+    # Resolve genome build name (default to GRCh38 if not specified)
+    resolved_genome_build = genome_build or "GRCh38"
 
     # Parse region
     try:
@@ -370,8 +377,18 @@ async def get_genomic_region(
             ),
         )
 
-    # Get genome
-    genome = await _get_genome(db, genome_build)
+    # Try to get genome - return empty response if not found
+    # This handles the case where reference tables aren't populated
+    try:
+        genome = await _get_genome(db, genome_build)
+    except HTTPException:
+        # Reference data not populated - return empty response gracefully
+        return GenomicRegionResponse(
+            region=region,
+            genome_build=resolved_genome_build,
+            genes=[],
+            total=0,
+        )
 
     # Query genes that overlap the region
     # A gene overlaps if: gene.start <= region.end AND gene.end >= region.start

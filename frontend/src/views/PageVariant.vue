@@ -411,7 +411,7 @@ export default {
       try {
         const response = await getVariants({
           page: 1,
-          pageSize: 1000, // Get all variants
+          pageSize: 500, // Get all variants (max allowed by backend)
         });
         this.allVariants = response.data || [];
       } catch (error) {

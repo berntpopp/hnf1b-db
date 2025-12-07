@@ -136,7 +136,7 @@ export function pageToSkipLimit(page, pageSize) {
  * **JSON:API Offset Pagination (Simple):**
  * @param {Object} params - Query parameters
  *   - page[number]: Page number (1-indexed, default: 1)
- *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - page[size]: Items per page (default: 100, max: 500)
  *   - filter[sex]: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
  *   - filter[has_variants]: Filter by variant presence (boolean)
  *   - sort: Comma-separated fields to sort by (prefix with '-' for descending)
@@ -144,7 +144,7 @@ export function pageToSkipLimit(page, pageSize) {
  * **JSON:API Cursor Pagination (Stable, Recommended):**
  *   - page[after]: Cursor token for next page (opaque token from meta.page.endCursor)
  *   - page[before]: Cursor token for previous page (opaque token from meta.page.startCursor)
- *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - page[size]: Items per page (default: 100, max: 500)
  *   - Cursors provide stable results even when data changes during browsing
  *
  * **Legacy Parameters (Deprecated, auto-converted to JSON:API):**
