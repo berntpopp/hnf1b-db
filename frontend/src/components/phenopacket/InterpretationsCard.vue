@@ -1,242 +1,120 @@
 <!-- src/components/phenopacket/InterpretationsCard.vue -->
 <template>
-  <v-card outlined>
-    <v-card-title class="text-subtitle-1 py-2 bg-purple-lighten-5">
-      <v-icon left color="deep-purple" size="small"> mdi-dna </v-icon>
-      Genomic Interpretations ({{ uniqueInterpretations.length }})
+  <v-card outlined class="interpretation-card">
+    <v-card-title :class="['text-subtitle-1', cardHeader.titlePadding, cardHeader.bgColor]">
+      <v-icon left :color="cardHeader.iconColor" size="small">
+        {{ cardHeader.icon }}
+      </v-icon>
+      {{ cardHeader.title }} ({{ uniqueInterpretations.length }})
     </v-card-title>
     <v-card-text class="pa-2">
       <v-alert v-if="uniqueInterpretations.length === 0" type="info" density="compact">
         No genomic interpretations recorded
       </v-alert>
 
-      <v-expansion-panels v-else accordion>
-        <v-expansion-panel v-for="(interpretation, index) in uniqueInterpretations" :key="index">
-          <v-expansion-panel-title>
-            <v-icon left color="deep-purple" size="small"> mdi-dna </v-icon>
-            <span class="font-weight-medium">
-              {{ getVariantSummary(interpretation) || `Variant ${index + 1}` }}
+      <!-- Inline variant display - no expansion panels -->
+      <div v-else class="variants-container">
+        <div
+          v-for="(interpretation, index) in uniqueInterpretations"
+          :key="index"
+          class="variant-item"
+        >
+          <!-- Row 1: Primary info - type, gene, notation, classification -->
+          <div class="variant-primary-row">
+            <!-- Variant type chip -->
+            <v-chip
+              :color="getVariantTypeColor(getVariantTypeFromInterpretation(interpretation))"
+              size="x-small"
+              variant="flat"
+              label
+              class="variant-type-chip"
+            >
+              {{ getVariantTypeFromInterpretation(interpretation) }}
+            </v-chip>
+
+            <!-- Gene symbol -->
+            <span v-if="getGeneSymbol(interpretation)" class="gene-symbol">
+              {{ getGeneSymbol(interpretation) }}
             </span>
-          </v-expansion-panel-title>
 
-          <v-expansion-panel-text>
-            <v-list v-if="interpretation.diagnosis" density="compact">
-              <div
-                v-for="(gi, giIndex) in interpretation.diagnosis.genomicInterpretations"
-                :key="giIndex"
-                class="mb-3"
-              >
-                <div v-if="gi.variantInterpretation">
-                  <div v-if="gi.variantInterpretation.variationDescriptor">
-                    <!-- Variant ID with link -->
-                    <v-list-item class="px-0">
-                      <v-list-item-title class="font-weight-bold"> Variant </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <v-chip
-                          v-if="gi.variantInterpretation.variationDescriptor.id"
-                          :to="`/variants/${encodeURIComponent(gi.variantInterpretation.variationDescriptor.id)}`"
-                          color="blue-lighten-3"
-                          size="small"
-                          variant="flat"
-                          link
-                        >
-                          <v-icon left size="small">mdi-dna</v-icon>
-                          View Details
-                        </v-chip>
-                      </v-list-item-subtitle>
-                    </v-list-item>
+            <!-- c. notation -->
+            <code v-if="getCNotation(interpretation)" class="hgvs-notation c-notation">
+              {{ getCNotation(interpretation) }}
+            </code>
 
-                    <!-- Variant Type -->
-                    <v-list-item class="px-0">
-                      <v-list-item-title class="font-weight-bold"> Type </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <v-chip
-                          :color="
-                            getVariantTypeColor(
-                              getVariantTypeFromDescriptor(
-                                gi.variantInterpretation.variationDescriptor
-                              )
-                            )
-                          "
-                          size="small"
-                          variant="flat"
-                        >
-                          {{
-                            getVariantTypeFromDescriptor(
-                              gi.variantInterpretation.variationDescriptor
-                            )
-                          }}
-                        </v-chip>
-                      </v-list-item-subtitle>
-                    </v-list-item>
+            <!-- p. notation -->
+            <code v-if="getPNotation(interpretation)" class="hgvs-notation p-notation">
+              {{ getPNotation(interpretation) }}
+            </code>
 
-                    <!-- Size (for CNVs) -->
-                    <v-list-item
-                      v-if="
-                        getVariantSizeFromDescriptor(gi.variantInterpretation.variationDescriptor)
-                      "
-                      class="px-0"
-                    >
-                      <v-list-item-title class="font-weight-bold"> Size </v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{
-                          getVariantSizeFromDescriptor(gi.variantInterpretation.variationDescriptor)
-                        }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
+            <!-- Spacer -->
+            <div class="flex-grow-1" />
 
-                    <!-- CNV-specific details: Chromosome, Start, End -->
-                    <template
-                      v-if="
-                        getCNVDetailsFromDescriptor(gi.variantInterpretation.variationDescriptor)
-                      "
-                    >
-                      <v-list-item class="px-0">
-                        <v-list-item-title class="font-weight-bold"> Chromosome </v-list-item-title>
-                        <v-list-item-subtitle>
-                          chr{{
-                            getCNVDetailsFromDescriptor(
-                              gi.variantInterpretation.variationDescriptor
-                            ).chromosome
-                          }}
-                        </v-list-item-subtitle>
-                      </v-list-item>
+            <!-- Classification badge -->
+            <v-chip
+              :color="getStatusColor(getInterpretationStatus(interpretation))"
+              size="x-small"
+              variant="flat"
+              class="classification-chip"
+            >
+              {{ getStatusLabel(getInterpretationStatus(interpretation)) }}
+            </v-chip>
 
-                      <v-list-item class="px-0">
-                        <v-list-item-title class="font-weight-bold">
-                          Start Position
-                        </v-list-item-title>
-                        <v-list-item-subtitle>
-                          {{
-                            formatPosition(
-                              getCNVDetailsFromDescriptor(
-                                gi.variantInterpretation.variationDescriptor
-                              ).start
-                            )
-                          }}
-                        </v-list-item-subtitle>
-                      </v-list-item>
+            <!-- View details button -->
+            <v-btn
+              v-if="getVariantId(interpretation)"
+              :to="`/variants/${encodeURIComponent(getVariantId(interpretation))}`"
+              color="deep-purple"
+              variant="text"
+              size="x-small"
+              icon="mdi-arrow-right"
+              density="compact"
+              class="ml-1"
+            />
+          </div>
 
-                      <v-list-item class="px-0">
-                        <v-list-item-title class="font-weight-bold">
-                          End Position
-                        </v-list-item-title>
-                        <v-list-item-subtitle>
-                          {{
-                            formatPosition(
-                              getCNVDetailsFromDescriptor(
-                                gi.variantInterpretation.variationDescriptor
-                              ).end
-                            )
-                          }}
-                        </v-list-item-subtitle>
-                      </v-list-item>
-                    </template>
+          <!-- Row 2: Secondary info - coordinates, size, consequence -->
+          <div v-if="hasSecondaryDetails(interpretation)" class="variant-secondary-row">
+            <span
+              v-if="getInterpretationDetails(interpretation)?.coordinates"
+              class="variant-detail"
+            >
+              <v-icon size="x-small" class="mr-1">mdi-map-marker</v-icon>
+              <code>{{ getInterpretationDetails(interpretation).coordinates }}</code>
+            </span>
 
-                    <!-- HG38 coordinates -->
-                    <v-list-item
-                      v-if="getHG38FromDescriptor(gi.variantInterpretation.variationDescriptor)"
-                      class="px-0"
-                    >
-                      <v-list-item-title class="font-weight-bold"> HG38 </v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{ getHG38FromDescriptor(gi.variantInterpretation.variationDescriptor) }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
+            <span v-if="getInterpretationDetails(interpretation)?.size" class="variant-detail">
+              <v-icon size="x-small" class="mr-1">mdi-ruler</v-icon>
+              {{ getInterpretationDetails(interpretation).size }}
+            </span>
 
-                    <!-- Transcript (HGVS c. notation) -->
-                    <v-list-item
-                      v-if="
-                        getTranscriptFromDescriptor(gi.variantInterpretation.variationDescriptor)
-                      "
-                      class="px-0"
-                    >
-                      <v-list-item-title class="font-weight-bold"> Transcript </v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{
-                          getTranscriptFromDescriptor(gi.variantInterpretation.variationDescriptor)
-                        }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
-
-                    <!-- Gene -->
-                    <v-list-item
-                      v-if="gi.variantInterpretation.variationDescriptor.geneContext"
-                      class="px-0"
-                    >
-                      <v-list-item-title class="font-weight-bold"> Gene </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <a
-                          :href="`https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${gi.variantInterpretation.variationDescriptor.geneContext.valueId}`"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="gene-link"
-                        >
-                          {{ gi.variantInterpretation.variationDescriptor.geneContext.symbol }}
-                        </a>
-                        <span class="text-caption text-grey">
-                          ({{ gi.variantInterpretation.variationDescriptor.geneContext.valueId }})
-                        </span>
-                      </v-list-item-subtitle>
-                    </v-list-item>
-
-                    <!-- Classification -->
-                    <v-list-item class="px-0">
-                      <v-list-item-title class="font-weight-bold">
-                        Classification
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <v-chip
-                          :color="getInterpretationStatusColor(gi.interpretationStatus)"
-                          size="small"
-                          variant="flat"
-                        >
-                          {{ gi.interpretationStatus }}
-                        </v-chip>
-                      </v-list-item-subtitle>
-                    </v-list-item>
-
-                    <!-- Molecular Consequence -->
-                    <v-list-item
-                      v-if="
-                        getMolecularConsequenceFromDescriptor(
-                          gi.variantInterpretation.variationDescriptor
-                        )
-                      "
-                      class="px-0"
-                    >
-                      <v-list-item-title class="font-weight-bold">
-                        Molecular Consequence
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <v-chip color="purple-lighten-3" size="small" variant="flat">
-                          {{
-                            getMolecularConsequenceFromDescriptor(
-                              gi.variantInterpretation.variationDescriptor
-                            )
-                          }}
-                        </v-chip>
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </div>
-                </div>
-
-                <v-divider
-                  v-if="giIndex < interpretation.diagnosis.genomicInterpretations.length - 1"
-                  class="my-2"
-                />
-              </div>
-            </v-list>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
+            <v-chip
+              v-if="getInterpretationDetails(interpretation)?.consequence"
+              size="x-small"
+              color="purple-lighten-4"
+              variant="flat"
+              class="consequence-chip"
+            >
+              {{ getInterpretationDetails(interpretation).consequence }}
+            </v-chip>
+          </div>
+        </div>
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <script>
 import { getVariantTypeColor } from '@/utils/colors';
-import { getVariantType, isCNV, getCNVDetails, getVariantSize } from '@/utils/variants';
+import {
+  CARD_HEADERS,
+  TYPOGRAPHY,
+  COLORS,
+  CHIP_SIZES,
+  getInterpretationStatusColor,
+  getInterpretationStatusLabel,
+} from '@/utils/cardStyles';
+import { getVariantType, getVariantSize } from '@/utils/variants';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 
 export default {
@@ -248,16 +126,33 @@ export default {
     },
   },
   computed: {
+    cardHeader() {
+      return {
+        ...CARD_HEADERS.interpretations,
+        titlePadding: 'py-2',
+      };
+    },
+
+    // Expose typography tokens to template for CSS variable injection
+    typography() {
+      return TYPOGRAPHY;
+    },
+
+    colors() {
+      return COLORS;
+    },
+
+    chipSize() {
+      return CHIP_SIZES.dense; // Use x-small for dense interpretation display
+    },
+
     uniqueInterpretations() {
-      // Filter out duplicate interpretations (keep only those with descriptive labels)
-      // Remove interpretations with generic "HNF1B:variant" labels when better labels exist
       const filtered = this.interpretations.filter((interp) => {
         if (!interp.diagnosis?.genomicInterpretations) return false;
 
         const gi = interp.diagnosis.genomicInterpretations[0];
         const label = gi?.variantInterpretation?.variationDescriptor?.label;
 
-        // Skip generic labels like "HNF1B:variant" or "GENE:variant"
         if (label && label.match(/^[A-Z0-9]+:variant$/i)) {
           return false;
         }
@@ -270,28 +165,40 @@ export default {
   },
   methods: {
     getVariantTypeColor,
+    getStatusColor: getInterpretationStatusColor,
+    getStatusLabel: getInterpretationStatusLabel,
 
-    /**
-     * Convert variationDescriptor to variant-like object for utility functions.
-     */
+    getInterpretationStatus(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      return gi?.interpretationStatus || 'UNKNOWN';
+    },
+
+    getVariantId(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      return gi?.variantInterpretation?.variationDescriptor?.id || null;
+    },
+
+    getVariantTypeFromInterpretation(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      if (!gi?.variantInterpretation?.variationDescriptor) return 'Unknown';
+
+      return this.getVariantTypeFromDescriptor(gi.variantInterpretation.variationDescriptor);
+    },
+
     descriptorToVariant(descriptor) {
       if (!descriptor) return null;
 
-      // Extract HGVS expressions
       const expressions = descriptor.expressions || [];
       const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
       const hgvsP = expressions.find((e) => e.syntax === 'hgvs.p');
 
-      // Extract HG38 coordinates from extensions
       const extensions = descriptor.extensions || [];
       const coordsExt = extensions.find((e) => e.name === 'coordinates');
       const coords = coordsExt?.value || {};
 
-      // Build HG38 string from coordinates if available
       let hg38 = null;
       if (coords.chromosome && coords.start && coords.end) {
         const chr = coords.chromosome.replace('chr', '');
-        // Determine SV type from molecularAttributes or label
         const molecularAttrs = descriptor.molecularAttributes || {};
         const ontologyClass = molecularAttrs.ontologyClass || {};
         let svType = '';
@@ -306,7 +213,6 @@ export default {
         hg38 = `${chr}:${coords.start}-${coords.end}:${svType}`;
       }
 
-      // Determine variant type from molecularAttributes
       const molecularAttrs = descriptor.molecularAttributes || {};
       const ontologyClass = molecularAttrs.ontologyClass || {};
       let variantType = null;
@@ -324,22 +230,14 @@ export default {
       };
     },
 
-    /**
-     * Get variant type from variationDescriptor.
-     */
     getVariantTypeFromDescriptor(descriptor) {
       const variant = this.descriptorToVariant(descriptor);
       if (!variant) return 'Unknown';
 
-      // Use utility function with specificCNVType for detail view
       return getVariantType(variant, { specificCNVType: true });
     },
 
-    /**
-     * Get formatted variant size from variationDescriptor.
-     */
     getVariantSizeFromDescriptor(descriptor) {
-      // First try to get size from coordinates extension
       const extensions = descriptor?.extensions || [];
       const coordsExt = extensions.find((e) => e.name === 'coordinates');
       const lengthBp = coordsExt?.value?.length;
@@ -354,41 +252,12 @@ export default {
         }
       }
 
-      // Fall back to utility function
       const variant = this.descriptorToVariant(descriptor);
       if (!variant) return null;
 
       return getVariantSize(variant, { formatted: true });
     },
 
-    /**
-     * Get CNV details (chromosome, start, end) from variationDescriptor.
-     */
-    getCNVDetailsFromDescriptor(descriptor) {
-      // First check if this is a CNV
-      const variant = this.descriptorToVariant(descriptor);
-      if (!variant || !isCNV(variant)) return null;
-
-      // Get details from coordinates extension
-      const extensions = descriptor?.extensions || [];
-      const coordsExt = extensions.find((e) => e.name === 'coordinates');
-      const coords = coordsExt?.value || {};
-
-      if (coords.chromosome && coords.start && coords.end) {
-        return {
-          chromosome: coords.chromosome.replace('chr', ''),
-          start: coords.start,
-          end: coords.end,
-        };
-      }
-
-      // Fall back to utility function
-      return getCNVDetails(variant);
-    },
-
-    /**
-     * Get HG38 coordinates from variationDescriptor.
-     */
     getHG38FromDescriptor(descriptor) {
       const extensions = descriptor?.extensions || [];
       const coordsExt = extensions.find((e) => e.name === 'coordinates');
@@ -396,22 +265,9 @@ export default {
 
       if (coords.chromosome && coords.start && coords.end) {
         const chr = coords.chromosome.replace('chr', '');
-        // Determine SV type
-        const molecularAttrs = descriptor.molecularAttributes || {};
-        const ontologyClass = molecularAttrs.ontologyClass || {};
-        let svType = '';
-        if (ontologyClass.label?.includes('deletion') || descriptor.label?.includes('deletion')) {
-          svType = ':DEL';
-        } else if (
-          ontologyClass.label?.includes('duplication') ||
-          descriptor.label?.includes('duplication')
-        ) {
-          svType = ':DUP';
-        }
-        return `${chr}:${coords.start}-${coords.end}${svType}`;
+        return `${chr}:${coords.start.toLocaleString()}-${coords.end.toLocaleString()}`;
       }
 
-      // For non-CNVs, try to get from HGVS.g expression
       const expressions = descriptor?.expressions || [];
       const hgvsG = expressions.find((e) => e.syntax === 'hgvs.g');
       if (hgvsG?.value) {
@@ -421,44 +277,28 @@ export default {
       return null;
     },
 
-    /**
-     * Get transcript (HGVS c. notation) from variationDescriptor.
-     */
-    getTranscriptFromDescriptor(descriptor) {
-      const expressions = descriptor?.expressions || [];
-      const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
-      return hgvsC?.value || null;
-    },
-
-    /**
-     * Get molecular consequence from variationDescriptor.
-     */
     getMolecularConsequenceFromDescriptor(descriptor) {
-      // Check molecularAttributes.ontologyClass first
       const molecularAttrs = descriptor?.molecularAttributes || {};
       const ontologyClass = molecularAttrs.ontologyClass || {};
 
       if (ontologyClass.label) {
-        // Map SO terms to human-readable labels
         const label = ontologyClass.label.toLowerCase();
-        if (label.includes('copy number loss')) return 'Copy Number Loss';
-        if (label.includes('copy number gain')) return 'Copy Number Gain';
-        if (label.includes('deletion')) return 'Copy Number Loss';
-        if (label.includes('duplication')) return 'Copy Number Gain';
+        if (label.includes('copy number loss')) return 'CNV Loss';
+        if (label.includes('copy number gain')) return 'CNV Gain';
+        if (label.includes('deletion')) return 'Deletion';
+        if (label.includes('duplication')) return 'Duplication';
         if (label.includes('frameshift')) return 'Frameshift';
         if (label.includes('nonsense') || label.includes('stop_gained')) return 'Nonsense';
         if (label.includes('missense')) return 'Missense';
         if (label.includes('splice_donor')) return 'Splice Donor';
         if (label.includes('splice_acceptor')) return 'Splice Acceptor';
-        if (label.includes('splice')) return 'Splice Site';
+        if (label.includes('splice')) return 'Splice';
         if (label.includes('synonymous')) return 'Synonymous';
-        if (label.includes('intron')) return 'Intronic Variant';
+        if (label.includes('intron')) return 'Intronic';
 
-        // Return the label as-is if no mapping
         return ontologyClass.label;
       }
 
-      // Fall back to computing from protein/transcript notation
       const expressions = descriptor?.expressions || [];
       const hgvsP = expressions.find((e) => e.syntax === 'hgvs.p');
       const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
@@ -469,10 +309,10 @@ export default {
           if (pNotation.includes('fs')) return 'Frameshift';
           if (pNotation.includes('Ter') || pNotation.includes('*')) return 'Nonsense';
           if (pNotation.match(/p\.[A-Z][a-z]{2}\d+[A-Z][a-z]{2}/)) return 'Missense';
-          if (pNotation.includes('del') && !pNotation.includes('fs')) return 'In-frame Deletion';
-          if (pNotation.includes('ins') && !pNotation.includes('fs')) return 'In-frame Insertion';
+          if (pNotation.includes('del') && !pNotation.includes('fs')) return 'In-frame Del';
+          if (pNotation.includes('ins') && !pNotation.includes('fs')) return 'In-frame Ins';
           if (pNotation.includes('=')) return 'Synonymous';
-          return 'Coding Sequence Variant';
+          return 'Coding';
         }
       }
 
@@ -485,24 +325,60 @@ export default {
             const position = parseInt(spliceMatch[2], 10);
             if (sign === '+' && position >= 1 && position <= 6) return 'Splice Donor';
             if (sign === '-' && position >= 1 && position <= 3) return 'Splice Acceptor';
-            return 'Intronic Variant';
+            return 'Intronic';
           }
-          return 'Coding Sequence Variant';
+          return 'Coding';
         }
       }
 
       return null;
     },
 
-    /**
-     * Format position with thousand separators.
-     */
-    formatPosition(pos) {
-      return parseInt(pos).toLocaleString();
+    getInterpretationDetails(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      const descriptor = gi?.variantInterpretation?.variationDescriptor;
+      if (!descriptor) return null;
+
+      return {
+        coordinates: this.getHG38FromDescriptor(descriptor),
+        size: this.getVariantSizeFromDescriptor(descriptor),
+        consequence: this.getMolecularConsequenceFromDescriptor(descriptor),
+      };
+    },
+
+    hasSecondaryDetails(interpretation) {
+      const details = this.getInterpretationDetails(interpretation);
+      if (!details) return false;
+      return details.coordinates || details.size || details.consequence;
+    },
+
+    getGeneSymbol(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      return gi?.variantInterpretation?.variationDescriptor?.geneContext?.symbol || null;
+    },
+
+    getCNotation(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      const expressions = gi?.variantInterpretation?.variationDescriptor?.expressions || [];
+      const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
+      if (hgvsC?.value) {
+        return extractCNotation(hgvsC.value);
+      }
+      return null;
+    },
+
+    getPNotation(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      const expressions = gi?.variantInterpretation?.variationDescriptor?.expressions || [];
+      const hgvsP = expressions.find((e) => e.syntax === 'hgvs.p');
+      if (hgvsP?.value) {
+        const pNotation = extractPNotation(hgvsP.value);
+        return pNotation && pNotation !== '-' ? pNotation : null;
+      }
+      return null;
     },
 
     getVariantSummary(interpretation) {
-      // Extract variant label from first genomic interpretation
       if (
         interpretation?.diagnosis?.genomicInterpretations &&
         interpretation.diagnosis.genomicInterpretations.length > 0
@@ -511,7 +387,6 @@ export default {
         const descriptor = gi.variantInterpretation?.variationDescriptor;
         const gene = descriptor?.geneContext?.symbol;
 
-        // For CNVs, show type and size instead of dbVar label
         if (descriptor) {
           const variantType = this.getVariantTypeFromDescriptor(descriptor);
           const size = this.getVariantSizeFromDescriptor(descriptor);
@@ -521,48 +396,162 @@ export default {
             return size ? `${typeLabel} (${size})` : typeLabel;
           }
 
-          // For non-CNVs, try transcript notation
-          const transcript = this.getTranscriptFromDescriptor(descriptor);
-          if (transcript) {
-            const cNotation = extractCNotation(transcript);
+          const expressions = descriptor.expressions || [];
+          const hgvsC = expressions.find((e) => e.syntax === 'hgvs.c');
+          if (hgvsC?.value) {
+            const cNotation = extractCNotation(hgvsC.value);
             if (cNotation && cNotation !== '-') {
               return gene ? `${gene} ${cNotation}` : cNotation;
             }
           }
         }
 
-        // Fall back to gene name
         if (gene) {
           return `${gene} variant`;
         }
       }
       return null;
     },
-
-    getInterpretationStatusColor(status) {
-      const colors = {
-        CAUSATIVE: 'red',
-        CONTRIBUTORY: 'orange',
-        CANDIDATE: 'blue',
-        UNCERTAIN_SIGNIFICANCE: 'grey',
-        NO_KNOWN_DISEASE_RELATIONSHIP: 'grey',
-        PATHOGENIC: 'red',
-        LIKELY_PATHOGENIC: 'orange',
-      };
-      return colors[status] || 'grey';
-    },
   },
 };
 </script>
 
 <style scoped>
-.gene-link {
-  color: #1976d2;
-  text-decoration: none;
-  font-weight: 500;
+/**
+ * Typography tokens applied via CSS custom properties.
+ * Values sourced from cardStyles.js TYPOGRAPHY and COLORS.
+ */
+.interpretation-card {
+  /* Typography tokens */
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-md: 13px;
+  --font-mono: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+
+  /* Color tokens */
+  --color-text-primary: rgba(0, 0, 0, 0.87);
+  --color-text-secondary: rgba(0, 0, 0, 0.6);
+  --color-gene: rgb(var(--v-theme-deep-purple));
+  --color-c-notation: rgb(var(--v-theme-blue-darken-2));
+  --color-p-notation: rgb(var(--v-theme-green-darken-2));
+  --color-bg-code: rgba(0, 0, 0, 0.06);
+  --color-bg-c-notation: rgba(33, 150, 243, 0.1);
+  --color-bg-p-notation: rgba(76, 175, 80, 0.1);
+  --color-accent: rgb(var(--v-theme-deep-purple));
+
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.gene-link:hover {
-  text-decoration: underline;
+.variants-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-item {
+  background: rgba(103, 58, 183, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: background-color 0.15s ease;
+}
+
+.variant-item:hover {
+  background: rgba(103, 58, 183, 0.08);
+}
+
+/* Row 1: Primary info - type, gene, notation, classification */
+.variant-primary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Row 2: Secondary info - coordinates, size, consequence */
+.variant-secondary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(103, 58, 183, 0.12);
+}
+
+.variant-type-chip {
+  flex-shrink: 0;
+}
+
+.gene-symbol {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-gene, #512da8);
+}
+
+.hgvs-notation {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  background: var(--color-bg-code);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--color-text-primary);
+}
+
+.c-notation {
+  background: var(--color-bg-c-notation);
+  color: var(--color-c-notation, #1565c0);
+}
+
+.p-notation {
+  background: var(--color-bg-p-notation);
+  color: var(--color-p-notation, #2e7d32);
+}
+
+.variant-detail {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.variant-detail code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-code);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.classification-chip {
+  flex-shrink: 0;
+}
+
+.consequence-chip {
+  flex-shrink: 0;
+}
+
+.flex-grow-1 {
+  flex-grow: 1;
+}
+
+@media (max-width: 600px) {
+  .variant-primary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .variant-secondary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .flex-grow-1 {
+    display: none;
+  }
 }
 </style>

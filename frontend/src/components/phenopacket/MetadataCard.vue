@@ -1,168 +1,177 @@
 <!-- src/components/phenopacket/MetadataCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-subtitle-1 py-2 bg-grey-lighten-4">
-      <v-icon left color="grey-darken-2" size="small"> mdi-information-outline </v-icon>
-      Metadata
-    </v-card-title>
-    <v-card-text class="pa-2">
-      <v-list density="compact">
-        <v-list-item v-if="metaData.created">
-          <v-list-item-title class="font-weight-bold"> Created </v-list-item-title>
-          <v-list-item-subtitle>
-            {{ formatDate(metaData.created) }}
-            <span v-if="metaData.createdBy" class="ml-2 text-grey">
-              by {{ metaData.createdBy }}
-            </span>
-          </v-list-item-subtitle>
-        </v-list-item>
-
-        <v-list-item v-if="allReviewers.length > 0">
-          <v-list-item-title class="font-weight-bold"> Reviewed By </v-list-item-title>
-          <v-list-item-subtitle>
-            <v-chip
-              v-for="(reviewer, index) in allReviewers"
-              :key="index"
-              size="small"
-              color="purple-lighten-4"
-              variant="flat"
-              class="mr-1 mb-1"
-            >
-              <v-icon left size="x-small">mdi-account-check</v-icon>
-              {{ reviewer }}
-            </v-chip>
-          </v-list-item-subtitle>
-        </v-list-item>
-
-        <v-list-item v-if="metaData.phenopacketSchemaVersion">
-          <v-list-item-title class="font-weight-bold"> Schema Version </v-list-item-title>
-          <v-list-item-subtitle>
-            {{ metaData.phenopacketSchemaVersion }}
-          </v-list-item-subtitle>
-        </v-list-item>
-
-        <v-divider
-          v-if="metaData.externalReferences && metaData.externalReferences.length > 0"
-          class="my-2"
-        />
-
-        <v-list-item v-if="metaData.externalReferences && metaData.externalReferences.length > 0">
-          <v-list-item-title class="font-weight-bold mb-2">
-            External References ({{ metaData.externalReferences.length }})
-          </v-list-item-title>
-          <v-list>
-            <v-list-item
-              v-for="(ref, index) in metaData.externalReferences"
-              :key="index"
-              density="compact"
-            >
-              <v-chip
-                :href="formatExternalReferenceUrl(ref)"
-                target="_blank"
-                color="blue"
-                size="small"
-                variant="flat"
-                class="mr-2"
-              >
-                <v-icon left size="small"> mdi-open-in-new </v-icon>
-                {{ ref.id }}
-              </v-chip>
-              <span class="text-caption">
-                {{ ref.description }}
-                <span v-if="publicationYears[ref.id]" class="text-grey-darken-1">
-                  ({{ publicationYears[ref.id] }})
+    <v-expansion-panels v-model="expanded" variant="accordion">
+      <v-expansion-panel value="metadata">
+        <v-expansion-panel-title class="text-subtitle-1 py-2 bg-grey-lighten-4">
+          <v-icon color="grey-darken-2" size="small" class="mr-2"> mdi-information-outline </v-icon>
+          <span>Metadata</span>
+          <template #actions="{ expanded }">
+            <v-icon :icon="expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'" />
+          </template>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text class="pa-0">
+          <v-list density="compact" class="pa-2">
+            <v-list-item v-if="metaData.created">
+              <v-list-item-title class="font-weight-bold"> Created </v-list-item-title>
+              <v-list-item-subtitle>
+                {{ formatDate(metaData.created) }}
+                <span v-if="metaData.createdBy" class="ml-2 text-grey">
+                  by {{ metaData.createdBy }}
                 </span>
-                <v-chip
-                  v-if="ref.reference"
-                  color="purple-lighten-4"
-                  size="x-small"
-                  variant="flat"
-                  class="ml-2"
-                >
-                  {{ ref.reference }}
-                </v-chip>
-              </span>
+              </v-list-item-subtitle>
             </v-list-item>
-          </v-list>
-        </v-list-item>
 
-        <v-divider v-if="metaData.updates && metaData.updates.length > 0" class="my-2" />
+            <v-list-item v-if="allReviewers.length > 0">
+              <v-list-item-title class="font-weight-bold"> Reviewed By </v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip
+                  v-for="(reviewer, index) in allReviewers"
+                  :key="index"
+                  size="small"
+                  color="purple-lighten-4"
+                  variant="flat"
+                  class="mr-1 mb-1"
+                >
+                  <v-icon left size="x-small">mdi-account-check</v-icon>
+                  {{ reviewer }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-        <v-list-item v-if="enhancedUpdates.length > 0">
-          <v-list-item-title class="font-weight-bold mb-2">
-            Publication Timeline ({{ enhancedUpdates.length }})
-          </v-list-item-title>
-          <v-timeline density="compact" side="end" align="start">
-            <v-timeline-item
-              v-for="(update, index) in enhancedUpdates"
-              :key="index"
-              dot-color="primary"
-              size="small"
+            <v-list-item v-if="metaData.phenopacketSchemaVersion">
+              <v-list-item-title class="font-weight-bold"> Schema Version </v-list-item-title>
+              <v-list-item-subtitle>
+                {{ metaData.phenopacketSchemaVersion }}
+              </v-list-item-subtitle>
+            </v-list-item>
+
+            <v-divider
+              v-if="metaData.externalReferences && metaData.externalReferences.length > 0"
+              class="my-2"
+            />
+
+            <v-list-item
+              v-if="metaData.externalReferences && metaData.externalReferences.length > 0"
             >
-              <template #opposite>
-                <div class="text-caption text-grey">
-                  {{ formatDate(update.timestamp) }}
-                </div>
-              </template>
-              <div>
-                <!-- Publication Info -->
-                <div v-if="update.pmid" class="mb-2">
+              <v-list-item-title class="font-weight-bold mb-2">
+                External References ({{ metaData.externalReferences.length }})
+              </v-list-item-title>
+              <v-list>
+                <v-list-item
+                  v-for="(ref, index) in metaData.externalReferences"
+                  :key="index"
+                  density="compact"
+                >
                   <v-chip
-                    :to="`/publications/${update.pmid.number}`"
-                    color="blue-lighten-4"
+                    :href="formatExternalReferenceUrl(ref)"
+                    target="_blank"
+                    color="blue"
                     size="small"
                     variant="flat"
-                    link
+                    class="mr-2"
                   >
-                    <v-icon left size="x-small">mdi-file-document</v-icon>
-                    {{ update.pmid.id }}
-                    <span v-if="publicationYears[update.pmid.id]" class="ml-1">
-                      ({{ publicationYears[update.pmid.id] }})
-                    </span>
+                    <v-icon left size="small"> mdi-open-in-new </v-icon>
+                    {{ ref.id }}
                   </v-chip>
-                </div>
+                  <span class="text-caption">
+                    {{ ref.description }}
+                    <span v-if="publicationYears[ref.id]" class="text-grey-darken-1">
+                      ({{ publicationYears[ref.id] }})
+                    </span>
+                    <v-chip
+                      v-if="ref.reference"
+                      color="purple-lighten-4"
+                      size="x-small"
+                      variant="flat"
+                      class="ml-2"
+                    >
+                      {{ ref.reference }}
+                    </v-chip>
+                  </span>
+                </v-list-item>
+              </v-list>
+            </v-list-item>
 
-                <!-- Reviewer Info -->
-                <div v-if="update.reviewer" class="text-caption text-grey mb-1">
-                  <v-icon size="x-small" class="mr-1">mdi-account-edit</v-icon>
-                  Reviewed by {{ update.reviewer }}
-                </div>
+            <v-divider v-if="metaData.updates && metaData.updates.length > 0" class="my-2" />
 
-                <!-- Comment -->
-                <div v-if="update.comment" class="text-body-2 mt-1">
-                  {{ update.comment }}
-                </div>
-              </div>
-            </v-timeline-item>
-          </v-timeline>
-        </v-list-item>
+            <v-list-item v-if="enhancedUpdates.length > 0">
+              <v-list-item-title class="font-weight-bold mb-2">
+                Publication Timeline ({{ enhancedUpdates.length }})
+              </v-list-item-title>
+              <v-timeline density="compact" side="end" align="start">
+                <v-timeline-item
+                  v-for="(update, index) in enhancedUpdates"
+                  :key="index"
+                  dot-color="primary"
+                  size="small"
+                >
+                  <template #opposite>
+                    <div class="text-caption text-grey">
+                      {{ formatDate(update.timestamp) }}
+                    </div>
+                  </template>
+                  <div>
+                    <!-- Publication Info -->
+                    <div v-if="update.pmid" class="mb-2">
+                      <v-chip
+                        :to="`/publications/${update.pmid.number}`"
+                        color="blue-lighten-4"
+                        size="small"
+                        variant="flat"
+                        link
+                      >
+                        <v-icon left size="x-small">mdi-file-document</v-icon>
+                        {{ update.pmid.id }}
+                        <span v-if="publicationYears[update.pmid.id]" class="ml-1">
+                          ({{ publicationYears[update.pmid.id] }})
+                        </span>
+                      </v-chip>
+                    </div>
 
-        <v-divider v-if="metaData.resources && metaData.resources.length > 0" class="my-2" />
+                    <!-- Reviewer Info -->
+                    <div v-if="update.reviewer" class="text-caption text-grey mb-1">
+                      <v-icon size="x-small" class="mr-1">mdi-account-edit</v-icon>
+                      Reviewed by {{ update.reviewer }}
+                    </div>
 
-        <v-list-item v-if="metaData.resources && metaData.resources.length > 0">
-          <v-list-item-title class="font-weight-bold mb-2">
-            Ontology Resources ({{ metaData.resources.length }})
-          </v-list-item-title>
-          <v-list>
-            <v-list-item
-              v-for="(resource, index) in metaData.resources"
-              :key="index"
-              density="compact"
-            >
-              <v-chip color="green" size="small" variant="flat" class="mr-2">
-                {{ resource.namespacePrefix }}
-              </v-chip>
-              <span class="text-body-2">
-                {{ resource.name }}
-                <span v-if="resource.version" class="text-caption text-grey">
-                  ({{ resource.version }})
-                </span>
-              </span>
+                    <!-- Comment -->
+                    <div v-if="update.comment" class="text-body-2 mt-1">
+                      {{ update.comment }}
+                    </div>
+                  </div>
+                </v-timeline-item>
+              </v-timeline>
+            </v-list-item>
+
+            <v-divider v-if="metaData.resources && metaData.resources.length > 0" class="my-2" />
+
+            <v-list-item v-if="metaData.resources && metaData.resources.length > 0">
+              <v-list-item-title class="font-weight-bold mb-2">
+                Ontology Resources ({{ metaData.resources.length }})
+              </v-list-item-title>
+              <v-list>
+                <v-list-item
+                  v-for="(resource, index) in metaData.resources"
+                  :key="index"
+                  density="compact"
+                >
+                  <v-chip color="green" size="small" variant="flat" class="mr-2">
+                    {{ resource.namespacePrefix }}
+                  </v-chip>
+                  <span class="text-body-2">
+                    {{ resource.name }}
+                    <span v-if="resource.version" class="text-caption text-grey">
+                      ({{ resource.version }})
+                    </span>
+                  </span>
+                </v-list-item>
+              </v-list>
             </v-list-item>
           </v-list>
-        </v-list-item>
-      </v-list>
-    </v-card-text>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
   </v-card>
 </template>
 
@@ -177,6 +186,7 @@ export default {
   },
   data() {
     return {
+      expanded: null, // Start collapsed (null = no panel open)
       publicationYears: {}, // Map of PMID -> year
     };
   },
@@ -313,3 +323,47 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+/**
+ * Typography tokens applied via CSS custom properties.
+ * Values sourced from cardStyles.js TYPOGRAPHY and COLORS.
+ */
+.v-card {
+  /* Typography tokens - consistent across all phenopacket cards */
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-mono: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+
+  /* Color tokens */
+  --color-text-primary: rgba(0, 0, 0, 0.87);
+  --color-text-secondary: rgba(0, 0, 0, 0.6);
+}
+
+/* Timeline typography standardization */
+.v-timeline :deep(.text-caption) {
+  font-size: var(--font-size-sm) !important;
+}
+
+.v-timeline :deep(.text-body-2) {
+  font-size: var(--font-size-base) !important;
+}
+
+/* List item typography */
+.v-list-item-title {
+  font-size: var(--font-size-md) !important;
+  font-weight: 600 !important;
+}
+
+.v-list-item-subtitle {
+  font-size: var(--font-size-base) !important;
+  color: var(--color-text-secondary);
+}
+
+/* Chip sizing consistency - use small chips consistently */
+.v-chip {
+  font-size: var(--font-size-sm) !important;
+}
+</style>
