@@ -8,6 +8,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from tqdm import tqdm
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +163,39 @@ class PhenopacketStorage:
 
             await session.commit()
             logger.info(f"Successfully stored {stored_count} phenopackets")
+
+            # Refresh materialized views if enabled
+            if settings.materialized_views.auto_refresh_after_import:
+                await self._refresh_materialized_views(session)
+
             return stored_count
+
+    async def _refresh_materialized_views(self, session: AsyncSession) -> None:
+        """Refresh aggregation materialized views after data import.
+
+        Uses the PostgreSQL function `refresh_all_aggregation_views()` that
+        was created by the migration. This uses CONCURRENTLY refresh to allow
+        reads during the update.
+        """
+        if not settings.materialized_views.enabled:
+            logger.debug("Materialized views disabled, skipping refresh")
+            return
+
+        logger.info("Refreshing materialized views after import...")
+
+        try:
+            await session.execute(text("SELECT refresh_all_aggregation_views()"))
+            await session.commit()
+            logger.info(
+                f"Successfully refreshed {len(settings.materialized_views.views)} "
+                "materialized views"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to refresh materialized views: {e}")
+            logger.debug(
+                "Views may not exist yet. Run 'make db-upgrade' to create them."
+            )
+            # Don't raise - this is a non-critical optimization
 
     async def close(self):
         """Close database connection."""
