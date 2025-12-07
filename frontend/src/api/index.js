@@ -136,7 +136,7 @@ export function pageToSkipLimit(page, pageSize) {
  * **JSON:API Offset Pagination (Simple):**
  * @param {Object} params - Query parameters
  *   - page[number]: Page number (1-indexed, default: 1)
- *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - page[size]: Items per page (default: 100, max: 500)
  *   - filter[sex]: Filter by sex (MALE, FEMALE, OTHER_SEX, UNKNOWN_SEX)
  *   - filter[has_variants]: Filter by variant presence (boolean)
  *   - sort: Comma-separated fields to sort by (prefix with '-' for descending)
@@ -144,7 +144,7 @@ export function pageToSkipLimit(page, pageSize) {
  * **JSON:API Cursor Pagination (Stable, Recommended):**
  *   - page[after]: Cursor token for next page (opaque token from meta.page.endCursor)
  *   - page[before]: Cursor token for previous page (opaque token from meta.page.startCursor)
- *   - page[size]: Items per page (default: 100, max: 1000)
+ *   - page[size]: Items per page (default: 100, max: 500)
  *   - Cursors provide stable results even when data changes during browsing
  *
  * **Legacy Parameters (Deprecated, auto-converted to JSON:API):**
@@ -336,7 +336,7 @@ export const getVariantsBatch = (phenopacketIds) =>
  * @returns {Promise} Axios promise with phenopackets containing this variant
  */
 export const getPhenopacketsByVariant = (variantId) =>
-  apiClient.get(`/phenopackets/by-variant/${variantId}`);
+  apiClient.get(`/phenopackets/by-variant/${encodeURIComponent(variantId)}`);
 
 /* ==================== AGGREGATION ENDPOINTS ==================== */
 
@@ -613,6 +613,7 @@ export const getVariants = async (params = {}) => {
       transcript: variant.transcript,
       protein: variant.protein,
       classificationVerdict: variant.pathogenicity,
+      pathogenicity: variant.pathogenicity, // Alias for DNA Distance Analysis
       individualCount: variant.phenopacket_count,
       molecular_consequence: variant.molecular_consequence,
     })),
@@ -732,6 +733,28 @@ export const annotateVariant = (variant) =>
     params: { variant },
   });
 
+/* ==================== GLOBAL SEARCH ENDPOINTS ==================== */
+
+/**
+ * Get autocomplete suggestions for global search.
+ * @param {string} q - Search query
+ * @param {number} limit - Max results
+ * @returns {Promise} Axios promise with search suggestions
+ */
+export const searchAutocomplete = (q, limit = 10) =>
+  apiClient.get('/search/autocomplete', { params: { q, limit } });
+
+/**
+ * Perform a global full-text search.
+ * @param {string} q - Search query
+ * @param {number} page - Page number
+ * @param {number} pageSize - Page size
+ * @param {string} type - Filter by type
+ * @returns {Promise} Axios promise with search results
+ */
+export const searchGlobal = (q, page = 1, pageSize = 20, type = null) =>
+  apiClient.get('/search/global', { params: { q, page, page_size: pageSize, type } });
+
 // Default export with all API methods
 export default {
   // Phenopackets CRUD
@@ -800,6 +823,10 @@ export default {
 
   // Variant annotation
   annotateVariant,
+
+  // Global Search
+  searchAutocomplete,
+  searchGlobal,
 
   // Axios client for custom requests
   client: apiClient,

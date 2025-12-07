@@ -159,8 +159,8 @@ export default {
         this.loading = true;
         this.error = null;
 
-        // 1. Load variants from API
-        const response = await getVariants({ page: 1, page_size: 1000 });
+        // 1. Load variants from API (max page size is 500)
+        const response = await getVariants({ page: 1, pageSize: 500 });
         this.variants = response.data || [];
 
         // 2. Initialize NGL and load structure (hidden, just for calculation)
@@ -218,6 +218,9 @@ export default {
 
     calculateDistances() {
       const variantsWithDistances = [];
+      let missenseCount = 0;
+      let inRangeCount = 0;
+      let withDistanceCount = 0;
 
       for (const variant of this.variants) {
         // Filter for missense variants only
@@ -228,14 +231,23 @@ export default {
         if (!this.isMissenseVariant(variant)) {
           continue;
         }
+        missenseCount++;
 
         const aaPosition = this.extractAAPosition(variant);
         if (!aaPosition || aaPosition < STRUCTURE_START || aaPosition > STRUCTURE_END) {
           continue;
         }
+        inRangeCount++;
 
         const distanceInfo = distanceCalculator.calculateResidueToHelixDistance(aaPosition, true);
-        if (!distanceInfo) continue;
+        if (!distanceInfo) {
+          window.logService.debug('No distance info for position', {
+            aaPosition,
+            variant: variant.protein,
+          });
+          continue;
+        }
+        withDistanceCount++;
 
         variantsWithDistances.push({
           ...variant,
@@ -245,18 +257,27 @@ export default {
         });
       }
 
+      window.logService.info('DNA Distance Analysis - Filtering stats', {
+        totalVariants: this.variants.length,
+        missenseVariants: missenseCount,
+        inStructureRange: inRangeCount,
+        withValidDistance: withDistanceCount,
+      });
+
       this.variantDistances = variantsWithDistances;
       this.totalVariantsInStructure = variantsWithDistances.length;
 
       // Separate by pathogenicity
+      // Note: API returns 'pathogenicity' field with values like 'PATHOGENIC',
+      // 'LIKELY_PATHOGENIC', 'UNCERTAIN_SIGNIFICANCE'
       this.pathogenicDistances = variantsWithDistances.filter(
         (v) =>
-          matchesPathogenicityCategory(v.classificationVerdict, 'PATHOGENIC') ||
-          matchesPathogenicityCategory(v.classificationVerdict, 'LIKELY_PATHOGENIC')
+          matchesPathogenicityCategory(v.pathogenicity, 'PATHOGENIC') ||
+          matchesPathogenicityCategory(v.pathogenicity, 'LIKELY_PATHOGENIC')
       );
 
       this.vusDistances = variantsWithDistances.filter((v) =>
-        matchesPathogenicityCategory(v.classificationVerdict, 'VUS')
+        matchesPathogenicityCategory(v.pathogenicity, 'VUS')
       );
 
       // Debug logging to track variant counts
@@ -272,7 +293,7 @@ export default {
         vusVariants: this.vusDistances.map((v) => ({
           protein: v.protein,
           aaPosition: v.aaPosition,
-          classification: v.classificationVerdict,
+          classification: v.pathogenicity,
         })),
       });
 

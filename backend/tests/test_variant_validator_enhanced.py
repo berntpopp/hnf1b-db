@@ -4,8 +4,8 @@ Tests the VariantValidator class including:
 - Format detection (VCF vs HGVS)
 - VEP API annotation
 - CADD score and gnomAD frequency extraction
-- Rate limiting (15 req/sec)
-- LRU caching
+- Rate limiting (configurable from settings)
+- Redis-based caching (with in-memory fallback)
 - Error handling (invalid format, timeout, 429, 500)
 - Retry logic with exponential backoff
 
@@ -19,7 +19,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from app.core.cache import cache
+from app.core.config import settings
 from app.phenopackets.validation.variant_validator import VariantValidator
+
+
+@pytest.fixture(autouse=True)
+def clear_cache_between_tests():
+    """Clear the in-memory cache between tests to prevent cross-test contamination.
+
+    This ensures that tests checking error scenarios don't get cached results
+    from previous successful tests.
+
+    Uses the public clear_fallback() method instead of accessing private _fallback
+    to maintain proper encapsulation and avoid coupling to implementation details.
+    """
+    # Force in-memory fallback mode and clear before test
+    cache.use_fallback_only()
+    yield
+    # Clear after test using public method
+    cache.clear_fallback()
 
 
 class TestVariantFormatDetection:
@@ -132,7 +151,14 @@ class TestVEPAnnotation:
             ],
         }
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            # Mock cache miss
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
             # Setup mock
             mock_response = MagicMock()
             mock_response.status_code = 200
@@ -254,7 +280,7 @@ class TestVEPAnnotation:
             # Mock successful response with low rate limit
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [{"id": "test"}]
+            mock_response.json = MagicMock(return_value=[{"id": "test"}])
             mock_response.headers = {
                 "X-RateLimit-Remaining": "5",  # 5 remaining
                 "X-RateLimit-Limit": "100",  # out of 100 (5% remaining)
@@ -320,7 +346,7 @@ class TestRateLimiting:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_response_data]
+            mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
 
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
@@ -354,7 +380,7 @@ class TestRateLimiting:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_response_data]
+            mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
 
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
@@ -377,19 +403,23 @@ class TestRateLimiting:
 
 
 class TestCaching:
-    """Test LRU caching functionality."""
+    """Test Redis-based caching functionality (with in-memory fallback)."""
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_api_call(self):
         """Test cache hit returns cached data without API call."""
         validator = VariantValidator()
 
-        # Pre-populate cache
+        # Pre-populate cache via mock
         cached_data = {"cadd_phred": 25.0, "gnomad_af": 0.0002, "cached": True}
-        cache_key = "17-36459258-A-G:True"
-        validator._vep_cache[cache_key] = cached_data
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            # Mock cache hit
+            mock_cache.get_json = AsyncMock(return_value=cached_data)
+
             # Test annotation
             result = await validator.annotate_variant_with_vep("17-36459258-A-G")
 
@@ -397,7 +427,7 @@ class TestCaching:
             assert result == cached_data
             assert result["cached"] is True
 
-            # Should NOT call API
+            # Should NOT call API (cache was checked first)
             mock_client.assert_not_called()
 
     @pytest.mark.asyncio
@@ -405,12 +435,16 @@ class TestCaching:
         """Test cache miss triggers API call and stores result."""
         validator = VariantValidator()
 
-        # Ensure cache is empty
-        validator._vep_cache.clear()
-
         mock_response_data = {"cadd_phred": 28.5, "test": "data"}
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            # Mock cache miss
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json = MagicMock(return_value=[mock_response_data])
@@ -425,57 +459,70 @@ class TestCaching:
             # Should call API
             assert mock_post.called
 
-            # Should cache result
-            cache_key = "17-36459258-A-G:True"
-            assert cache_key in validator._vep_cache
-            assert validator._vep_cache[cache_key] == mock_response_data
+            # Should cache result via cache.set_json
+            mock_cache.set_json.assert_called_once()
 
             # Should return API data
             assert result["cadd_phred"] == 28.5
 
     @pytest.mark.asyncio
     async def test_lru_cache_eviction(self):
-        """Test LRU cache evicts oldest entry when size limit exceeded."""
+        """Test that cache TTL is used for expiration (Redis handles LRU)."""
         validator = VariantValidator()
-        validator._cache_size_limit = 3  # Set small limit for testing
 
-        # Add 3 entries (at limit)
-        validator._vep_cache["variant1:True"] = {"data": 1}
-        validator._vep_cache["variant2:True"] = {"data": 2}
-        validator._vep_cache["variant3:True"] = {"data": 3}
+        # With Redis, cache eviction is handled by Redis TTL
+        # We just verify TTL is passed to set_json
+        mock_response_data = {"cadd_phred": 28.5}
 
-        assert len(validator._vep_cache) == 3
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
 
-        # Add 4th entry (should evict oldest)
-        validator._cache_annotation("variant4:True", {"data": 4})
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json = MagicMock(return_value=[mock_response_data])
+            mock_response.headers = {}
 
-        # Should still be at limit
-        assert len(validator._vep_cache) == 3
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
 
-        # Oldest entry (variant1) should be evicted
-        assert "variant1:True" not in validator._vep_cache
+            await validator.annotate_variant_with_vep("17-36459258-A-G")
 
-        # Other entries should remain
-        assert "variant2:True" in validator._vep_cache
-        assert "variant3:True" in validator._vep_cache
-        assert "variant4:True" in validator._vep_cache
+            # Verify TTL is passed (Redis handles eviction)
+            call_args = mock_cache.set_json.call_args
+            assert call_args is not None
+            # TTL should be passed as keyword argument
+            assert "ttl" in call_args.kwargs or len(call_args.args) > 2
 
     @pytest.mark.asyncio
     async def test_cache_lru_ordering(self):
-        """Test cache maintains LRU ordering on access."""
+        """Test that cache returns correct data on hit."""
         validator = VariantValidator()
 
-        # Add entries
-        validator._vep_cache["variant1:True"] = {"data": 1}
-        validator._vep_cache["variant2:True"] = {"data": 2}
+        cached_data_1 = {"data": 1}
+        cached_data_2 = {"data": 2}
 
-        # Access variant1 (should move to end)
-        validator._vep_cache["variant1:True"]
-        validator._vep_cache.move_to_end("variant1:True")
+        with patch("app.phenopackets.validation.variant_validator.cache") as mock_cache:
+            # Mock different cache responses based on key
+            def get_json_side_effect(key):
+                if "variant1" in key:
+                    return cached_data_1
+                elif "variant2" in key:
+                    return cached_data_2
+                return None
 
-        # variant1 should now be most recently used
-        keys = list(validator._vep_cache.keys())
-        assert keys[-1] == "variant1:True"
+            mock_cache.get_json = AsyncMock(side_effect=get_json_side_effect)
+
+            # Access variant1 - should return cached_data_1
+            result1 = await validator.annotate_variant_with_vep("variant1-123-A-G")
+            assert result1 == cached_data_1
+
+            # Access variant2 - should return cached_data_2
+            result2 = await validator.annotate_variant_with_vep("variant2-456-C-T")
+            assert result2 == cached_data_2
 
 
 class TestErrorHandling:
@@ -936,18 +983,20 @@ class TestVariantRecoding:
         """Test recoding uses cache when available."""
         validator = VariantValidator()
 
-        # Pre-populate cache
-        cache_key = "recode:NM_000458.4:c.544G>A"
+        # Pre-populate cache via mock
         cached_data = {"id": ["rs56116432"], "hgvsg": ["NC_000017.11:g.36459258A>G"]}
-        validator._vep_cache[cache_key] = cached_data
 
-        # Test recoding (should hit cache, no API call)
-        result = await validator.recode_variant_with_vep("NM_000458.4:c.544G>A")
+        with patch("app.phenopackets.validation.variant_validator.cache") as mock_cache:
+            # Mock cache hit
+            mock_cache.get_json = AsyncMock(return_value=cached_data)
 
-        # Should return cached data
-        assert result == cached_data
-        # Cache key should be moved to end (LRU)
-        assert list(validator._vep_cache.keys())[-1] == cache_key
+            # Test recoding (should hit cache, no API call)
+            result = await validator.recode_variant_with_vep("NM_000458.4:c.544G>A")
+
+            # Should return cached data
+            assert result == cached_data
+            # Verify cache was checked
+            mock_cache.get_json.assert_called()
 
 
 class TestPhenopacketValidation:
@@ -1558,53 +1607,49 @@ class TestValidationMethods:
 
 
 class TestConfigurableSettings:
-    """Test that settings are properly configurable."""
+    """Test that settings are properly loaded from config.yaml."""
 
-    def test_custom_rate_limit(self):
-        """Test rate limiter uses configurable setting."""
+    def test_rate_limit_from_config(self):
+        """Test rate limiter uses settings from config.yaml."""
+        validator = VariantValidator()
+
+        # Should load from settings.rate_limiting.vep.requests_per_second
+        assert validator._requests_per_second == settings.rate_limiting.vep.requests_per_second
+        assert validator._requests_per_second > 0  # Sanity check
+
+    def test_retry_config_from_config(self):
+        """Test retry uses settings from config.yaml."""
+        validator = VariantValidator()
+
+        # Should load from settings.external_apis.vep
+        assert validator._max_retries == settings.external_apis.vep.max_retries
+        assert validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+        assert validator._max_retries > 0  # Sanity check
+        assert validator._backoff_factor > 0  # Sanity check
+
+    def test_cache_ttl_from_config(self):
+        """Test cache TTL uses settings from config.yaml."""
+        validator = VariantValidator()
+
+        # Should load from settings.external_apis.vep.cache_ttl_seconds
+        assert validator._cache_ttl == settings.external_apis.vep.cache_ttl_seconds
+        assert validator._cache_ttl > 0  # Sanity check
+
+    def test_custom_settings_with_mock(self):
+        """Test that mocked settings are used by validator."""
         with patch(
             "app.phenopackets.validation.variant_validator.settings"
         ) as mock_settings:
-            mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 10
-            mock_settings.VEP_CACHE_ENABLED = True
-            mock_settings.VEP_CACHE_SIZE_LIMIT = 1000
-            mock_settings.VEP_MAX_RETRIES = 3
-            mock_settings.VEP_RETRY_BACKOFF_FACTOR = 2.0
+            # Create mock nested structure
+            mock_settings.rate_limiting.vep.requests_per_second = 10
+            mock_settings.external_apis.vep.max_retries = 5
+            mock_settings.external_apis.vep.retry_backoff_factor = 3.0
+            mock_settings.external_apis.vep.cache_ttl_seconds = 7200
 
             validator = VariantValidator()
 
-            # Should use custom rate limit
+            # Should use mocked values
             assert validator._requests_per_second == 10
-
-    def test_custom_cache_size(self):
-        """Test cache uses configurable size limit."""
-        with patch(
-            "app.phenopackets.validation.variant_validator.settings"
-        ) as mock_settings:
-            mock_settings.VEP_CACHE_SIZE_LIMIT = 500
-            mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 15
-            mock_settings.VEP_CACHE_ENABLED = True
-            mock_settings.VEP_MAX_RETRIES = 3
-            mock_settings.VEP_RETRY_BACKOFF_FACTOR = 2.0
-
-            validator = VariantValidator()
-
-            # Should use custom cache size
-            assert validator._cache_size_limit == 500
-
-    def test_custom_retry_config(self):
-        """Test retry uses configurable max attempts and backoff."""
-        with patch(
-            "app.phenopackets.validation.variant_validator.settings"
-        ) as mock_settings:
-            mock_settings.VEP_MAX_RETRIES = 5
-            mock_settings.VEP_RETRY_BACKOFF_FACTOR = 3.0
-            mock_settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND = 15
-            mock_settings.VEP_CACHE_ENABLED = True
-            mock_settings.VEP_CACHE_SIZE_LIMIT = 1000
-
-            validator = VariantValidator()
-
-            # Should use custom retry config
             assert validator._max_retries == 5
             assert validator._backoff_factor == 3.0
+            assert validator._cache_ttl == 7200

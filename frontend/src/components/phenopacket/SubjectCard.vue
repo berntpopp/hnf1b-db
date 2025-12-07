@@ -1,27 +1,32 @@
 <!-- src/components/phenopacket/SubjectCard.vue -->
 <template>
   <v-card outlined>
-    <v-card-title class="text-subtitle-1 py-2 bg-blue-lighten-5">
-      <v-icon left color="primary" size="small"> mdi-account </v-icon>
-      Subject Information
+    <v-card-title :class="['text-subtitle-1', 'py-2', cardHeader.bgColor]">
+      <v-icon left :color="cardHeader.iconColor" size="small">
+        {{ cardHeader.icon }}
+      </v-icon>
+      {{ cardHeader.title }}
     </v-card-title>
-    <v-card-text class="pa-2">
-      <v-list density="compact">
-        <v-list-item>
-          <v-list-item-title class="font-weight-bold"> Subject ID </v-list-item-title>
-          <v-list-item-subtitle>{{ subject.id || 'N/A' }}</v-list-item-subtitle>
-        </v-list-item>
+    <v-card-text class="pa-3">
+      <!-- Compact inline layout -->
+      <div class="subject-grid">
+        <!-- Subject ID -->
+        <div class="subject-item">
+          <span class="subject-label">Subject ID</span>
+          <span class="subject-value font-weight-medium">{{ subject.id || 'N/A' }}</span>
+        </div>
 
-        <v-list-item v-if="individualIdentifiers.length > 0 || reportIds.length > 0">
-          <v-list-item-title class="font-weight-bold">
+        <!-- Alternate IDs (if any) -->
+        <div v-if="individualIdentifiers.length > 0 || reportIds.length > 0" class="subject-item">
+          <span class="subject-label">
             Alternate ID{{ individualIdentifiers.length + reportIds.length > 1 ? 's' : '' }}
-          </v-list-item-title>
-          <v-list-item-subtitle>
+          </span>
+          <div class="subject-value">
             <v-chip
               v-for="(identifier, index) in individualIdentifiers"
               :key="'name-' + index"
-              size="small"
-              class="mr-1 mb-1 font-weight-medium"
+              size="x-small"
+              class="mr-1"
               color="blue-lighten-4"
               variant="flat"
             >
@@ -30,48 +35,63 @@
             <v-chip
               v-for="(reportId, index) in reportIds"
               :key="'report-' + index"
-              size="small"
-              class="mr-1 mb-1 font-weight-medium"
+              size="x-small"
+              class="mr-1"
               color="grey-lighten-2"
               variant="flat"
             >
               {{ reportId }}
             </v-chip>
-          </v-list-item-subtitle>
-        </v-list-item>
+          </div>
+        </div>
 
-        <v-list-item>
-          <v-list-item-title class="font-weight-bold"> Sex </v-list-item-title>
-          <v-list-item-subtitle>
-            <v-icon small :color="getSexColor(subject.sex)" class="mr-1">
-              {{ getSexIcon(subject.sex) }}
-            </v-icon>
-            {{ formatSex(subject.sex) }}
-          </v-list-item-subtitle>
-        </v-list-item>
+        <!-- Sex -->
+        <div class="subject-item">
+          <span class="subject-label">Sex</span>
+          <span class="subject-value">
+            <v-chip size="x-small" :color="getSexColor(subject.sex)" variant="flat">
+              <v-icon size="x-small" class="mr-1">{{ getSexIcon(subject.sex) }}</v-icon>
+              {{ formatSex(subject.sex) }}
+            </v-chip>
+          </span>
+        </div>
 
-        <v-list-item v-if="subject.karyotypicSex">
-          <v-list-item-title class="font-weight-bold"> Karyotypic Sex </v-list-item-title>
-          <v-list-item-subtitle>{{ subject.karyotypicSex }}</v-list-item-subtitle>
-        </v-list-item>
+        <!-- Karyotypic Sex (only if different from sex or informative) -->
+        <div v-if="subject.karyotypicSex && showKaryotypicSex" class="subject-item">
+          <span class="subject-label">Karyotype</span>
+          <span class="subject-value">
+            <v-chip size="x-small" color="purple-lighten-4" variant="flat">
+              {{ subject.karyotypicSex }}
+            </v-chip>
+          </span>
+        </div>
 
-        <v-list-item v-if="age">
-          <v-list-item-title class="font-weight-bold"> Age at Last Encounter </v-list-item-title>
-          <v-list-item-subtitle>{{ age }}</v-list-item-subtitle>
-        </v-list-item>
+        <!-- Age at Last Encounter -->
+        <div v-if="age" class="subject-item">
+          <span class="subject-label">Age</span>
+          <span class="subject-value">
+            <v-chip size="x-small" color="amber-lighten-4" variant="flat">
+              <v-icon size="x-small" class="mr-1">mdi-calendar-clock</v-icon>
+              {{ age }}
+            </v-chip>
+          </span>
+        </div>
 
-        <v-list-item v-if="subject.taxonomy">
-          <v-list-item-title class="font-weight-bold"> Taxonomy </v-list-item-title>
-          <v-list-item-subtitle>
+        <!-- Taxonomy (usually Homo sapiens, show only if different) -->
+        <div v-if="subject.taxonomy && !isHomoSapiens" class="subject-item">
+          <span class="subject-label">Taxonomy</span>
+          <span class="subject-value text-body-2">
             {{ subject.taxonomy.label || subject.taxonomy.id }}
-          </v-list-item-subtitle>
-        </v-list-item>
-      </v-list>
+          </span>
+        </div>
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <script>
+import { CARD_HEADERS, SEX_COLORS } from '@/utils/cardStyles';
+
 export default {
   name: 'SubjectCard',
   props: {
@@ -81,23 +101,16 @@ export default {
     },
   },
   computed: {
-    /**
-     * Extract individual identifiers (non-numeric, human-readable names).
-     * These are the publication-specific identifiers like "Case 3", "Duval_Table1_P7".
-     */
+    cardHeader() {
+      return CARD_HEADERS.subject;
+    },
     individualIdentifiers() {
       const altIds = this.subject.alternateIds || [];
-      // Filter to get non-numeric identifiers (text-based identifiers from publications)
       return altIds.filter((id) => !/^\d+$/.test(id));
     },
 
-    /**
-     * Extract report IDs (numeric IDs from alternateIds).
-     * Report IDs are the row identifiers from the source spreadsheet.
-     */
     reportIds() {
       const altIds = this.subject.alternateIds || [];
-      // Collect all numeric IDs from alternateIds
       return altIds.filter((id) => /^\d+$/.test(id));
     },
 
@@ -107,6 +120,29 @@ export default {
         return this.formatISO8601Duration(timeAtLastEncounter.age.iso8601duration);
       }
       return null;
+    },
+
+    showKaryotypicSex() {
+      // Show karyotypic sex if it's informative (not just XX/XY matching sex)
+      const karyotype = this.subject.karyotypicSex;
+      if (!karyotype) return false;
+
+      // Always show non-standard karyotypes
+      if (!['XX', 'XY', 'UNKNOWN_KARYOTYPE'].includes(karyotype)) return true;
+
+      // Show if there's a mismatch with phenotypic sex
+      const sex = this.subject.sex;
+      if (sex === 'MALE' && karyotype !== 'XY') return true;
+      if (sex === 'FEMALE' && karyotype !== 'XX') return true;
+
+      return false;
+    },
+
+    isHomoSapiens() {
+      const taxonomy = this.subject.taxonomy;
+      if (!taxonomy) return true; // Assume human if not specified
+      const label = (taxonomy.label || taxonomy.id || '').toLowerCase();
+      return label.includes('homo') || label.includes('sapiens') || label.includes('human');
     },
   },
   methods: {
@@ -121,13 +157,7 @@ export default {
     },
 
     getSexColor(sex) {
-      const colors = {
-        MALE: 'blue',
-        FEMALE: 'pink',
-        OTHER_SEX: 'purple',
-        UNKNOWN_SEX: 'grey',
-      };
-      return colors[sex] || 'grey';
+      return SEX_COLORS[sex] || SEX_COLORS.UNKNOWN_SEX;
     },
 
     formatSex(sex) {
@@ -141,18 +171,56 @@ export default {
     },
 
     formatISO8601Duration(duration) {
-      // Parse ISO8601 duration (e.g., "P45Y3M" = 45 years 3 months)
       const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?/;
       const matches = duration.match(regex);
       if (!matches) return duration;
 
       const parts = [];
-      if (matches[1]) parts.push(`${matches[1]} year${matches[1] > 1 ? 's' : ''}`);
-      if (matches[2]) parts.push(`${matches[2]} month${matches[2] > 1 ? 's' : ''}`);
-      if (matches[3]) parts.push(`${matches[3]} day${matches[3] > 1 ? 's' : ''}`);
+      if (matches[1]) parts.push(`${matches[1]}y`);
+      if (matches[2]) parts.push(`${matches[2]}m`);
+      if (matches[3]) parts.push(`${matches[3]}d`);
 
-      return parts.join(', ') || duration;
+      return parts.join(' ') || duration;
     },
   },
 };
 </script>
+
+<style scoped>
+/**
+ * Typography tokens applied via CSS custom properties.
+ * Values sourced from cardStyles.js TYPOGRAPHY and COLORS.
+ */
+.subject-grid {
+  /* Typography tokens - consistent across all phenopacket cards */
+  --font-size-sm: 11px;
+  --font-size-md: 13px;
+
+  /* Color tokens */
+  --color-text-primary: rgba(0, 0, 0, 0.87);
+  --color-text-secondary: rgba(0, 0, 0, 0.5);
+
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px 16px;
+}
+
+.subject-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subject-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary);
+}
+
+.subject-value {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+</style>

@@ -224,3 +224,7 @@ backups/
 /alembic/
 /database/
 /.flake8
+
+# Test results (Playwright, Vitest)
+test-results/
+**/test-results/

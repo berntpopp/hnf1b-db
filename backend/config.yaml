@@ -1,0 +1,89 @@
+# HNF1B-API Configuration
+# This file contains all tunable parameters (NOT secrets)
+# Secrets must be in .env file (DATABASE_URL, JWT_SECRET, API keys)
+
+api:
+  title: "HNF1B Phenopackets API"
+  version: "2.0.0"
+
+# Pagination defaults and limits
+pagination:
+  default_page_size: 20
+  max_page_size: 1000
+  search_page_size: 20
+  search_max_page_size: 100
+  aggregation_page_size: 100
+  aggregation_max_page_size: 500
+
+# Rate limiting configuration
+rate_limiting:
+  # API endpoint rate limiting
+  api:
+    requests_per_second: 5
+    window_seconds: 1
+  # VEP external API rate limiting
+  vep:
+    requests_per_second: 15
+  # PubMed API rate limiting
+  pubmed:
+    requests_per_second_with_key: 10
+    requests_per_second_without_key: 3
+
+# External API configuration
+external_apis:
+  # Ensembl VEP API
+  vep:
+    base_url: "https://rest.ensembl.org"
+    timeout_seconds: 30
+    max_retries: 3
+    retry_backoff_factor: 2.0
+    cache_enabled: true
+    cache_size_limit: 1000
+    cache_ttl_seconds: 86400  # 24 hours
+
+  # OLS API for HPO terms
+  ols:
+    base_url: "https://www.ebi.ac.uk/ols4/api"
+    timeout_seconds: 10
+    cache_size_limit: 100
+    cache_ttl_seconds: 3600  # 1 hour
+
+  # PubMed API
+  pubmed:
+    base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+    timeout_seconds: 5
+    version: "2.0"
+
+# Database connection pool
+database:
+  pool_size: 20
+  max_overflow: 0
+  pool_recycle_seconds: 3600
+  command_timeout_seconds: 60
+  pool_pre_ping: true
+
+# HTTP response caching
+http_cache:
+  aggregations_max_age_seconds: 300
+
+# Materialized views for aggregation optimization
+materialized_views:
+  # Enable using materialized views for aggregation queries
+  enabled: true
+  # Refresh views automatically after phenopacket import
+  auto_refresh_after_import: true
+  # List of views to manage
+  views:
+    - mv_feature_aggregation
+    - mv_disease_aggregation
+    - mv_sex_distribution
+    - mv_summary_statistics
+
+# Security settings (non-secret values only)
+security:
+  jwt_algorithm: "HS256"
+  access_token_expire_minutes: 30
+  refresh_token_expire_days: 7
+  password_min_length: 8
+  max_login_attempts: 5
+  account_lockout_minutes: 15

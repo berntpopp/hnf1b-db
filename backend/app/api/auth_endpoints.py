@@ -12,7 +12,7 @@ from app.auth import (
     verify_token,
 )
 from app.auth.permissions import get_all_roles
-from app.config import settings
+from app.core.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.repositories.user_repository import UserRepository

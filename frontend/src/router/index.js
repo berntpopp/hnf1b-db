@@ -99,6 +99,13 @@ const routes = [
     component: () => import(/* webpackChunkName: "user" */ '../views/User.vue'),
     meta: { title: 'User Profile', requiresAuth: true },
   },
+  // Catch-all 404 route - must be last
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import(/* webpackChunkName: "not-found" */ '../views/NotFound.vue'),
+    meta: { title: 'Page Not Found' },
+  },
 ];
 
 const router = createRouter({

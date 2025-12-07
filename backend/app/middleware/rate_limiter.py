@@ -1,29 +1,21 @@
-"""Rate limiting middleware for variant search endpoint.
+"""Rate limiting middleware using Redis for distributed rate limiting.
 
-Implements in-memory rate limiting to prevent API abuse. For production
-deployments, consider using Redis for distributed rate limiting.
+Implements sliding window rate limiting to prevent API abuse.
+Uses Redis for distributed rate limiting across multiple backend instances.
+Falls back to in-memory rate limiting if Redis is unavailable.
 
-Rate Limit: 5 requests per second per IP address.
+Configuration is loaded from config.yaml via app.core.config.
 """
 
 import logging
-from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import HTTPException, Request
 
+from app.core.cache import cache
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
-
-# In-memory rate limiter storage
-# Format: {client_ip: [timestamp1, timestamp2, ...]}
-REQUEST_COUNTS: Dict[str, List[datetime]] = defaultdict(list)
-
-# Rate limit configuration
-# Balanced limit for frontend applications making burst requests
-# 5 requests per second allows normal operation while preventing abuse
-RATE_LIMIT = 5  # Maximum requests
-RATE_WINDOW = 1  # Time window in seconds
 
 
 def get_client_ip(request: Request) -> str:
@@ -52,8 +44,11 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
-def check_rate_limit(request: Request) -> None:
-    """Check if client has exceeded rate limit.
+async def check_rate_limit(request: Request) -> None:
+    """Check if client has exceeded rate limit using Redis.
+
+    Uses sliding window rate limiting with atomic Redis operations.
+    Falls back to in-memory rate limiting if Redis is unavailable.
 
     Args:
         request: FastAPI request object
@@ -61,96 +56,69 @@ def check_rate_limit(request: Request) -> None:
     Raises:
         HTTPException: 429 Too Many Requests if rate limit exceeded
 
-    Rate Limit:
-        - 5 requests per second per IP address
-        - Sliding window implementation
-        - Old requests automatically cleaned up
-
-    Note:
-        For production with multiple backend instances, use Redis:
-            from redis import Redis
-            redis = Redis(host='localhost', port=6379)
-            key = f"rate_limit:{client_ip}"
-            count = redis.incr(key)
-            if count == 1:
-                redis.expire(key, RATE_WINDOW)
-            if count > RATE_LIMIT:
-                raise HTTPException(status_code=429, ...)
+    Configuration:
+        Loaded from config.yaml:
+        - rate_limiting.api.requests_per_second: Max requests per window
+        - rate_limiting.api.window_seconds: Time window in seconds
     """
     client_ip = get_client_ip(request)
-    now = datetime.now()
-    window_start = now - timedelta(seconds=RATE_WINDOW)
+    key = f"rate_limit:{client_ip}"
 
-    # Clean up old requests outside the time window
-    REQUEST_COUNTS[client_ip] = [
-        req_time for req_time in REQUEST_COUNTS[client_ip] if req_time > window_start
-    ]
+    # Get rate limit configuration from YAML config
+    limit = settings.rate_limiting.api.requests_per_second
+    window = settings.rate_limiting.api.window_seconds
 
-    # Check if rate limit exceeded
-    current_count = len(REQUEST_COUNTS[client_ip])
-    if current_count >= RATE_LIMIT:
+    # Increment counter atomically (Redis INCR is atomic)
+    count = await cache.incr(key, ttl=window)
+
+    if count > limit:
         logger.warning(
             f"Rate limit exceeded for IP {client_ip}: "
-            f"{current_count} requests in {RATE_WINDOW}s (limit: {RATE_LIMIT})"
+            f"{count}/{limit} requests in {window}s"
         )
         raise HTTPException(
             status_code=429,
             detail={
                 "error": "Rate limit exceeded",
-                "message": (
-                    f"Maximum {RATE_LIMIT} requests per {RATE_WINDOW} seconds allowed"
-                ),
-                "retry_after": RATE_WINDOW,
-                "current_count": current_count,
+                "message": f"Maximum {limit} requests per {window} seconds allowed",
+                "retry_after": window,
+                "current_count": count,
             },
+            headers={"Retry-After": str(window)},
         )
 
-    # Record this request
-    REQUEST_COUNTS[client_ip].append(now)
     logger.debug(
         f"Rate limit check passed for IP {client_ip}: "
-        f"{current_count + 1}/{RATE_LIMIT} requests in {RATE_WINDOW}s"
+        f"{count}/{limit} requests in {window}s"
     )
 
 
-def reset_rate_limits() -> None:
+async def reset_rate_limits() -> None:
     """Reset all rate limit counters.
 
+    Clears all rate limit keys from Redis.
     Useful for testing or administrative purposes.
-    In production, this would clear the Redis cache.
     """
-    REQUEST_COUNTS.clear()
-    logger.info("All rate limit counters reset")
+    deleted = await cache.clear_pattern("rate_limit:*")
+    logger.info(f"Reset {deleted} rate limit counters")
 
 
 def get_rate_limit_status(request: Request) -> Dict[str, int]:
-    """Get current rate limit status for a client.
+    """Get current rate limit status for a client (sync version for headers).
+
+    Note: This is a synchronous function for use in response headers.
+    For actual rate limiting, use check_rate_limit() which is async.
 
     Args:
         request: FastAPI request object
 
     Returns:
-        Dictionary with rate limit status:
-            - requests_made: Number of requests in current window
-            - requests_remaining: Number of requests remaining
-            - window_seconds: Time window in seconds
-            - limit: Maximum requests allowed
+        Dictionary with rate limit info for response headers
     """
-    client_ip = get_client_ip(request)
-    now = datetime.now()
-    window_start = now - timedelta(seconds=RATE_WINDOW)
-
-    # Clean up old requests
-    REQUEST_COUNTS[client_ip] = [
-        req_time for req_time in REQUEST_COUNTS[client_ip] if req_time > window_start
-    ]
-
-    requests_made = len(REQUEST_COUNTS[client_ip])
-    requests_remaining = max(0, RATE_LIMIT - requests_made)
+    limit = settings.rate_limiting.api.requests_per_second
+    window = settings.rate_limiting.api.window_seconds
 
     return {
-        "requests_made": requests_made,
-        "requests_remaining": requests_remaining,
-        "window_seconds": RATE_WINDOW,
-        "limit": RATE_LIMIT,
+        "X-RateLimit-Limit": limit,
+        "X-RateLimit-Window": window,
     }

@@ -1,30 +1,33 @@
 # app/database.py
-"""Database configuration and session management for PostgreSQL."""
+"""Database configuration and session management for PostgreSQL.
+
+Pool settings and timeouts are loaded from config.yaml.
+"""
 
 import logging
 from typing import AsyncGenerator
 
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from app.config import settings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create async engine with proper configuration
+# Create async engine with configuration from config.yaml
 engine = create_async_engine(
     settings.DATABASE_URL,
-    # Connection pool settings
-    pool_size=20,
-    max_overflow=0,
+    # Connection pool settings (from config.yaml)
+    pool_size=settings.database.pool_size,
+    max_overflow=settings.database.max_overflow,
     pool_pre_ping=True,
-    pool_recycle=3600,
+    pool_recycle=settings.database.pool_recycle_seconds,
     # Echo SQL queries in development (set to False in production)
     echo=False,
     # Connection arguments
     connect_args={
-        "command_timeout": 60,
+        "command_timeout": settings.database.command_timeout_seconds,
         "server_settings": {
             "jit": "off",  # Disable JIT for better predictability in development
         },
@@ -139,3 +142,64 @@ async def close_db() -> None:
     logger.info("Closing database connections...")
     await engine.dispose()
     logger.info("Database connections closed")
+
+
+async def refresh_materialized_views(
+    db: AsyncSession, *, force: bool = False
+) -> dict[str, bool]:
+    """Refresh all aggregation materialized views.
+
+    Calls the PostgreSQL function `refresh_all_aggregation_views()` to update
+    pre-computed statistics after data imports. Uses CONCURRENTLY option to
+    allow reads during refresh.
+
+    Args:
+        db: Database session
+        force: If True, refresh even if auto_refresh_after_import is disabled
+
+    Returns:
+        Dict with refresh status for each view (True if refreshed, False if skipped)
+
+    Configuration:
+        - materialized_views.enabled: Master switch for using views
+        - materialized_views.auto_refresh_after_import: Auto-refresh after imports
+
+    Example:
+        >>> async with async_session_maker() as db:
+        ...     result = await refresh_materialized_views(db)
+        ...     print(result)
+        {'mv_feature_aggregation': True, 'mv_disease_aggregation': True, ...}
+    """
+    views = settings.materialized_views.views
+    result: dict[str, bool] = {view: False for view in views}
+
+    # Check if refresh is enabled
+    if not settings.materialized_views.enabled:
+        logger.debug("Materialized views disabled, skipping refresh")
+        return result
+
+    if not force and not settings.materialized_views.auto_refresh_after_import:
+        logger.debug("Auto-refresh disabled, skipping (use force=True to override)")
+        return result
+
+    logger.info("Refreshing materialized views...")
+
+    try:
+        # Use the PostgreSQL function that refreshes all views concurrently
+        await db.execute(text("SELECT refresh_all_aggregation_views()"))
+        await db.commit()
+
+        for view in views:
+            result[view] = True
+
+        logger.info(f"Successfully refreshed {len(views)} materialized views")
+
+    except Exception as e:
+        logger.warning(f"Failed to refresh materialized views: {e}")
+        logger.debug(
+            "This may occur if views don't exist yet. "
+            "Run 'make db-upgrade' to create them."
+        )
+        # Don't raise - view refresh is non-critical
+
+    return result

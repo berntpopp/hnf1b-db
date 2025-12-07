@@ -1,37 +1,47 @@
-"""Variant format validation for HGVS, VCF, VRS, and CNV notations."""
+"""Variant format validation for HGVS, VCF, VRS, and CNV notations.
+
+Uses Redis for distributed caching (with in-memory fallback).
+Configuration is loaded from config.yaml via app.core.config.
+"""
 
 import asyncio
 import logging
 import re
 import time
-from collections import OrderedDict
 from difflib import get_close_matches
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from app.config import settings
+from app.core.cache import cache
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class VariantValidator:
-    """Validates variant formats including HGVS, VCF, VRS, and CNV notations."""
+    """Validates variant formats including HGVS, VCF, VRS, and CNV notations.
+
+    Uses Redis for distributed caching across multiple backend instances.
+    Falls back to in-memory cache if Redis is unavailable.
+    """
 
     def __init__(self):
-        """Initialize validator with configurable cache and rate limiting."""
-        # LRU cache with size limit (OrderedDict for simplicity)
-        self._vep_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
-        self._cache_size_limit = settings.VEP_CACHE_SIZE_LIMIT
+        """Initialize validator with configurable rate limiting.
 
-        # Rate limiting state (configurable via settings)
+        Cache is handled by the centralized Redis cache service.
+        """
+        # Rate limiting state (configurable via config.yaml)
         self._last_request_time = 0.0
         self._request_count = 0
-        self._requests_per_second = settings.VEP_RATE_LIMIT_REQUESTS_PER_SECOND
+        self._requests_per_second = settings.rate_limiting.vep.requests_per_second
 
-        # Retry configuration
-        self._max_retries = settings.VEP_MAX_RETRIES
-        self._backoff_factor = settings.VEP_RETRY_BACKOFF_FACTOR
+        # Retry configuration (from config.yaml)
+        self._max_retries = settings.external_apis.vep.max_retries
+        self._backoff_factor = settings.external_apis.vep.retry_backoff_factor
+
+        # Cache TTL (from config.yaml)
+        self._cache_ttl = settings.external_apis.vep.cache_ttl_seconds
 
     async def validate_variant_with_vep(
         self, hgvs_notation: str
@@ -341,19 +351,23 @@ class VariantValidator:
             cadd = annotation["transcript_consequences"][0]["cadd_phred"]
             gnomad_af = annotation["colocated_variants"][0]["gnomad_af"]
         """
-        # Check cache first (if enabled)
-        cache_key = f"{variant}:{include_annotations}"
-        if settings.VEP_CACHE_ENABLED and cache_key in self._vep_cache:
-            logger.debug(f"VEP cache hit for {variant}")
-            # Move to end (LRU)
-            self._vep_cache.move_to_end(cache_key)
-            return self._vep_cache[cache_key]
+        # Check Redis cache first (if enabled)
+        cache_key = f"vep:annotate:{variant}:{include_annotations}"
+        if settings.external_apis.vep.cache_enabled:
+            cached = await cache.get_json(cache_key)
+            if cached:
+                logger.debug(f"VEP cache hit for {variant}")
+                return cached
 
         # Rate limiting (configurable per Ensembl guidelines)
         await self._rate_limit()
 
         # Determine format and build request
         is_vcf = self._is_vcf_format(variant)
+
+        # Get VEP config
+        vep_base_url = settings.external_apis.vep.base_url
+        vep_timeout = settings.external_apis.vep.timeout_seconds
 
         if is_vcf:
             # VCF format: use POST /vep/human/region
@@ -362,12 +376,12 @@ class VariantValidator:
                 logger.error(f"Failed to convert VCF variant: {variant}")
                 return None
 
-            endpoint = f"{settings.VEP_API_BASE_URL}/vep/human/region"
+            endpoint = f"{vep_base_url}/vep/human/region"
             method = "POST"
             json_data = {"variants": [vep_input]}
         else:
             # HGVS format: use GET /vep/human/hgvs
-            endpoint = f"{settings.VEP_API_BASE_URL}/vep/human/hgvs/{variant}"
+            endpoint = f"{vep_base_url}/vep/human/hgvs/{variant}"
             method = "GET"
             json_data = None
 
@@ -393,14 +407,14 @@ class VariantValidator:
                             json=json_data,
                             params=params,
                             headers={"Content-Type": "application/json"},
-                            timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                            timeout=vep_timeout,
                         )
                     else:
                         response = await client.get(
                             endpoint,
                             params=params,
                             headers={"Content-Type": "application/json"},
-                            timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                            timeout=vep_timeout,
                         )
 
                     # Check rate limit headers
@@ -411,9 +425,11 @@ class VariantValidator:
                         result = response.json()
                         annotation = result[0] if isinstance(result, list) else result
 
-                        # Cache successful result (LRU eviction)
-                        if settings.VEP_CACHE_ENABLED:
-                            self._cache_annotation(cache_key, annotation)
+                        # Cache successful result in Redis (with TTL)
+                        if settings.external_apis.vep.cache_enabled:
+                            await cache.set_json(
+                                cache_key, annotation, ttl=self._cache_ttl
+                            )
 
                         logger.info(f"VEP annotation successful for {variant}")
                         return annotation
@@ -483,24 +499,6 @@ class VariantValidator:
                 return None
 
         return None
-
-    def _cache_annotation(self, cache_key: str, annotation: Dict[str, Any]) -> None:
-        """Cache annotation with LRU eviction.
-
-        Args:
-            cache_key: Cache key
-            annotation: Annotation data to cache
-        """
-        # Add to cache
-        self._vep_cache[cache_key] = annotation
-
-        # LRU eviction if over limit
-        if len(self._vep_cache) > self._cache_size_limit:
-            # Remove oldest (first) item
-            self._vep_cache.popitem(last=False)
-            logger.debug(
-                f"VEP cache evicted oldest entry (size: {len(self._vep_cache)})"
-            )
 
     async def _rate_limit(self):
         """Implement Ensembl rate limiting (15 requests/second).
@@ -597,15 +595,20 @@ class VariantValidator:
             result = await validator.recode_variant_with_vep("17-36459258-A-G")
             hgvsc = result["hgvsc"][0]  # ["NM_000458.4:c.544G>A"]
         """
-        # Check cache first
-        cache_key = f"recode:{variant}"
-        if settings.VEP_CACHE_ENABLED and cache_key in self._vep_cache:
-            logger.debug(f"VEP recode cache hit for {variant}")
-            self._vep_cache.move_to_end(cache_key)
-            return self._vep_cache[cache_key]
+        # Check Redis cache first
+        cache_key = f"vep:recode:{variant}"
+        if settings.external_apis.vep.cache_enabled:
+            cached = await cache.get_json(cache_key)
+            if cached:
+                logger.debug(f"VEP recode cache hit for {variant}")
+                return cached
 
         # Rate limiting
         await self._rate_limit()
+
+        # Get VEP config
+        vep_base_url = settings.external_apis.vep.base_url
+        vep_timeout = settings.external_apis.vep.timeout_seconds
 
         # Convert VCF format to genomic HGVS for variant_recoder
         # VEP variant_recoder doesn't accept our VCF format (17-pos-ref-alt)
@@ -625,7 +628,7 @@ class VariantValidator:
         else:
             input_variant = variant
 
-        endpoint = f"{settings.VEP_API_BASE_URL}/variant_recoder/human/{input_variant}"
+        endpoint = f"{vep_base_url}/variant_recoder/human/{input_variant}"
 
         # Build query parameters
         params = {
@@ -641,7 +644,7 @@ class VariantValidator:
                         endpoint,
                         params=params,
                         headers={"Content-Type": "application/json"},
-                        timeout=settings.VEP_REQUEST_TIMEOUT_SECONDS,
+                        timeout=vep_timeout,
                     )
 
                     # Check rate limit headers
@@ -663,9 +666,11 @@ class VariantValidator:
                             logger.error(f"Empty VEP recoder response for: {variant}")
                             return None
 
-                        # Cache successful result
-                        if settings.VEP_CACHE_ENABLED:
-                            self._cache_annotation(cache_key, recoded)
+                        # Cache successful result in Redis (with TTL)
+                        if settings.external_apis.vep.cache_enabled:
+                            await cache.set_json(
+                                cache_key, recoded, ttl=self._cache_ttl
+                            )
 
                         logger.info(f"VEP recode successful for {variant}")
                         return recoded

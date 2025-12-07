@@ -217,7 +217,7 @@ export const useVariantStore = defineStore('variants', () => {
 
     try {
       const response = await getVariants({
-        pageSize: 1000, // Get all variants
+        pageSize: 500, // Get all variants (max allowed by backend)
       });
 
       variants.value = response.data;

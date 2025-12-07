@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.auth.password import get_password_hash
-from app.config import settings
+from app.core.config import settings
 from app.models.user import User
 
 
