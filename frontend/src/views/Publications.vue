@@ -21,7 +21,9 @@
       :custom-sort="customSort"
       hide-default-footer
       title="Publications Registry"
+      row-class="clickable-row"
       @update:options="onOptionsUpdate"
+      @click:row="handleRowClick"
     >
       <!-- Integrated Search Toolbar -->
       <template #toolbar>
@@ -323,10 +325,30 @@ export default {
         day: 'numeric',
       });
     },
+
+    /**
+     * Handle row click to navigate to publication detail page.
+     * Extracts numeric PMID from format "PMID:12345678"
+     */
+    handleRowClick(event, { item }) {
+      if (item?.pmid) {
+        // Extract numeric part from PMID format "PMID:12345678"
+        const pmidNum = item.pmid.replace('PMID:', '');
+        this.$router.push(`/publications/${pmidNum}`);
+      }
+    },
   },
 };
 </script>
 
 <style scoped>
-/* Publications table has no clickable rows */
+/* Clickable row styling for publication navigation */
+:deep(.clickable-row) {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+:deep(.clickable-row:hover) {
+  background-color: rgba(var(--v-theme-primary), 0.08) !important;
+}
 </style>
