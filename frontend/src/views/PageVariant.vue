@@ -411,7 +411,7 @@ export default {
       try {
         const response = await getVariants({
           page: 1,
-          page_size: 1000, // Get all variants
+          pageSize: 1000, // Get all variants
         });
         this.allVariants = response.data || [];
       } catch (error) {
@@ -431,7 +431,8 @@ export default {
           toVariantId: variant.variant_id,
           source: 'gene visualization',
         });
-        this.$router.push(`/variants/${variant.variant_id}`);
+        // URL-encode variant_id to handle special characters like colons
+        this.$router.push(`/variants/${encodeURIComponent(variant.variant_id)}`);
       }
     },
     // Wrapper methods that use utility functions with appropriate options for detail view
@@ -451,7 +452,8 @@ export default {
     },
     async loadVariantData() {
       this.loading = true;
-      const variantId = this.$route.params.variant_id;
+      // Decode variant_id to handle URL-encoded special characters (e.g., colons)
+      const variantId = decodeURIComponent(this.$route.params.variant_id);
 
       window.logService.debug('Loading variant detail page', {
         variantId: variantId,
@@ -461,11 +463,11 @@ export default {
       try {
         const variantResponse = await getVariants({
           page: 1,
-          page_size: 1000,
+          pageSize: 1000,
         });
 
         if (!variantResponse.data || variantResponse.data.length === 0) {
-          this.$router.push('/PageNotFound');
+          this.$router.replace({ name: 'NotFound' });
           return;
         }
 
@@ -474,9 +476,9 @@ export default {
         if (!this.variant) {
           window.logService.warn('Variant not found', {
             variantId: variantId,
-            redirectTo: '/PageNotFound',
+            availableVariants: variantResponse.data.length,
           });
-          this.$router.push('/PageNotFound');
+          this.$router.replace({ name: 'NotFound' });
           return;
         }
 
