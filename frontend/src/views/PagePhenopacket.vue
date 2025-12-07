@@ -20,9 +20,9 @@
 
             <!-- Title Row with Inline Stats Chips -->
             <div class="d-flex flex-wrap align-center gap-3">
-              <v-icon color="teal-darken-2" size="large" aria-hidden="true"
-                >mdi-account-details</v-icon
-              >
+              <v-icon color="teal-darken-2" size="large" aria-hidden="true">
+                mdi-account-details
+              </v-icon>
               <div class="flex-grow-1">
                 <div class="d-flex flex-wrap align-center gap-2">
                   <h1 class="text-h6 font-weight-bold text-teal-darken-2 ma-0">
@@ -49,9 +49,9 @@
                       size="small"
                       variant="flat"
                     >
-                      <v-icon start size="x-small" aria-hidden="true">{{
-                        getSexIcon(subjectSex)
-                      }}</v-icon>
+                      <v-icon start size="x-small" aria-hidden="true">
+                        {{ getSexIcon(subjectSex) }}
+                      </v-icon>
                       {{ formatSex(subjectSex) }}
                     </v-chip>
                     <v-chip
@@ -64,9 +64,9 @@
                       {{ ageDisplay }}
                     </v-chip>
                     <v-chip color="green-lighten-4" size="small" variant="flat">
-                      <v-icon start size="x-small" aria-hidden="true"
-                        >mdi-format-list-checks</v-icon
-                      >
+                      <v-icon start size="x-small" aria-hidden="true">
+                        mdi-format-list-checks
+                      </v-icon>
                       {{ phenotypicFeaturesCount }} HPO
                     </v-chip>
                     <v-chip
@@ -101,9 +101,9 @@
           <v-card v-else-if="phenopacket" variant="outlined" class="border-opacity-12" rounded="lg">
             <!-- Action Bar -->
             <div class="d-flex align-center flex-wrap px-4 py-2 bg-grey-lighten-4 border-bottom">
-              <v-icon color="teal-darken-2" class="mr-2" aria-hidden="true"
-                >mdi-file-document</v-icon
-              >
+              <v-icon color="teal-darken-2" class="mr-2" aria-hidden="true">
+                mdi-file-document
+              </v-icon>
               <span class="text-h6 font-weight-medium">Phenopacket Data</span>
               <v-spacer />
               <v-btn
