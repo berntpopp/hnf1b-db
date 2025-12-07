@@ -122,9 +122,9 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon color="amber-darken-2" size="large" class="mb-1"
-                    >mdi-lightning-bolt</v-icon
-                  >
+                  <v-icon color="amber-darken-2" size="large" class="mb-1">
+                    mdi-lightning-bolt
+                  </v-icon>
                   <div class="text-body-2 font-weight-bold text-amber-darken-2 mb-0">
                     {{ getMolecularConsequence(variant) }}
                   </div>
