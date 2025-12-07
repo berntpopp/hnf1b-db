@@ -6,13 +6,15 @@ This module provides publication metadata fetching from PubMed with:
 - Rate limiting handling
 - Comprehensive error handling
 - Provenance tracking
+
+Note:
+    Configuration is loaded from app.core.config.settings.
+    PMID validation uses centralized patterns from app.core.patterns.
 """
 
 import asyncio
 import json
 import logging
-import os
-import re
 from datetime import datetime
 from typing import Optional
 
@@ -20,20 +22,25 @@ import aiohttp
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.patterns import normalize_pmid
+
 logger = logging.getLogger(__name__)
 
-# Configuration
-PUBMED_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
-PUBMED_API_KEY = os.getenv("PUBMED_API_KEY")  # Optional but recommended
-API_VERSION = "2.0"  # E-utilities version
 
-# Rate limiting based on API key presence
-if PUBMED_API_KEY:
-    MAX_REQUESTS_PER_SECOND = 10
-    logger.info("PubMed API key configured: 10 req/sec limit")
+def _get_rate_limit() -> int:
+    """Get PubMed API rate limit based on API key presence."""
+    if settings.PUBMED_API_KEY:
+        return settings.rate_limiting.pubmed.requests_per_second_with_key
+    return settings.rate_limiting.pubmed.requests_per_second_without_key
+
+
+# Log rate limit at module load
+_rate_limit = _get_rate_limit()
+if settings.PUBMED_API_KEY:
+    logger.info(f"PubMed API key configured: {_rate_limit} req/sec limit")
 else:
-    MAX_REQUESTS_PER_SECOND = 3
-    logger.warning("No PubMed API key: 3 req/sec limit")
+    logger.warning(f"No PubMed API key: {_rate_limit} req/sec limit")
 
 
 # Custom exceptions
@@ -91,18 +98,8 @@ def validate_pmid(pmid: str) -> str:
         >>> validate_pmid("PMID:abc123")  # Non-numeric
         ValueError: Invalid PMID format: PMID:abc123. Expected PMID:12345678
     """
-    # Add prefix if missing
-    if not pmid.startswith("PMID:"):
-        pmid = f"PMID:{pmid}"
-
-    # Validate format: PMID followed by 1-8 digits only
-    # This prevents SQL injection attempts like "PMID:123; DROP TABLE users;"
-    if not re.match(r"^PMID:\d{1,8}$", pmid):
-        raise ValueError(
-            f"Invalid PMID format: {pmid}. Expected PMID:12345678 (1-8 digits)"
-        )
-
-    return pmid
+    # Use centralized pattern from app.core.patterns
+    return normalize_pmid(pmid)
 
 
 async def get_publication_metadata(
@@ -230,6 +227,9 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
     """
     pmid_number = pmid.replace("PMID:", "")
 
+    # Get config from settings
+    pubmed_config = settings.external_apis.pubmed
+
     # Build URL with optional API key
     params = {
         "db": "pubmed",
@@ -237,15 +237,15 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
         "retmode": "json",
         "rettype": "abstract",
     }
-    if PUBMED_API_KEY:
-        params["api_key"] = PUBMED_API_KEY
+    if settings.PUBMED_API_KEY:
+        params["api_key"] = settings.PUBMED_API_KEY
 
     try:
         async with aiohttp.ClientSession() as session:
-            # 5 second timeout for API call
-            timeout = aiohttp.ClientTimeout(total=5)
+            # Use timeout from config
+            timeout = aiohttp.ClientTimeout(total=pubmed_config.timeout_seconds)
             async with session.get(
-                PUBMED_API, params=params, timeout=timeout
+                pubmed_config.base_url, params=params, timeout=timeout
             ) as response:
                 # Handle rate limiting
                 if response.status == 429:
@@ -382,7 +382,7 @@ async def _store_in_cache(
             "data_source": metadata["data_source"],
             "fetched_by": fetched_by,
             "fetched_at": metadata["fetched_at"],
-            "api_version": API_VERSION,
+            "api_version": settings.external_apis.pubmed.version,
         },
     )
 

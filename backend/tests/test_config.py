@@ -4,23 +4,23 @@ from unittest.mock import patch
 
 import pytest
 
-from app.config import Settings
+from app.core.config import Settings
 
 
 class TestJWTSecretValidation:
     """Test JWT_SECRET security validation."""
 
     def test_jwt_secret_validation_fails_on_empty_string(self):
-        """Test that empty JWT_SECRET causes startup failure."""
-        with pytest.raises(SystemExit) as exc_info:
+        """Test that empty JWT_SECRET raises ValueError."""
+        with pytest.raises(ValueError) as exc_info:
             Settings(JWT_SECRET="")
-        assert exc_info.value.code == 1
+        assert "JWT_SECRET is required" in str(exc_info.value)
 
     def test_jwt_secret_validation_fails_on_whitespace(self):
-        """Test that whitespace-only JWT_SECRET causes startup failure."""
-        with pytest.raises(SystemExit) as exc_info:
+        """Test that whitespace-only JWT_SECRET raises ValueError."""
+        with pytest.raises(ValueError) as exc_info:
             Settings(JWT_SECRET="   ")
-        assert exc_info.value.code == 1
+        assert "JWT_SECRET is required" in str(exc_info.value)
 
     def test_jwt_secret_validation_succeeds_with_valid_secret(self):
         """Test that valid JWT_SECRET works."""
@@ -33,10 +33,10 @@ class TestJWTSecretValidation:
         settings = Settings(JWT_SECRET=strong_secret)
         assert settings.JWT_SECRET == strong_secret
 
-    @patch("app.config.logger")
+    @patch("app.core.config.logger")
     def test_jwt_secret_validation_logs_critical_error(self, mock_logger):
         """Test that empty JWT_SECRET logs critical error."""
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             Settings(JWT_SECRET="")
 
         # Verify critical log was called
@@ -85,3 +85,43 @@ class TestDatabaseConfiguration:
         # Note: May be loaded from .env if present, so just check it's nullable
         settings = Settings(JWT_SECRET="test-secret", OLD_DATABASE_URL=None)
         assert settings.OLD_DATABASE_URL is None
+
+
+class TestYAMLConfiguration:
+    """Test YAML configuration loading."""
+
+    def test_pagination_defaults(self):
+        """Test pagination configuration has sensible defaults."""
+        settings = Settings(JWT_SECRET="test-secret")
+        assert settings.pagination.default_page_size == 20
+        assert settings.pagination.max_page_size == 1000
+
+    def test_external_apis_vep_defaults(self):
+        """Test VEP API configuration has expected defaults."""
+        settings = Settings(JWT_SECRET="test-secret")
+        assert "ensembl.org" in settings.external_apis.vep.base_url
+        assert settings.external_apis.vep.timeout_seconds > 0
+
+    def test_external_apis_pubmed_defaults(self):
+        """Test PubMed API configuration has expected defaults."""
+        settings = Settings(JWT_SECRET="test-secret")
+        assert "ncbi.nlm.nih.gov" in settings.external_apis.pubmed.base_url
+        assert settings.external_apis.pubmed.timeout_seconds > 0
+
+    def test_rate_limiting_defaults(self):
+        """Test rate limiting configuration has sensible defaults."""
+        settings = Settings(JWT_SECRET="test-secret")
+        assert settings.rate_limiting.api.requests_per_second > 0
+        assert settings.rate_limiting.vep.requests_per_second > 0
+        assert settings.rate_limiting.pubmed.requests_per_second_with_key > 0
+
+    def test_legacy_property_aliases(self):
+        """Test legacy property aliases work for backward compatibility."""
+        settings = Settings(JWT_SECRET="test-secret")
+        # These legacy properties should map to YAML config
+        assert settings.JWT_ALGORITHM == settings.security.jwt_algorithm
+        assert (
+            settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            == settings.security.access_token_expire_minutes
+        )
+        assert settings.VEP_API_BASE_URL == settings.external_apis.vep.base_url

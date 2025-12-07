@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.config import settings
+from app.core.config import settings
 from app.reference.models import (
     Exon,
     Gene,

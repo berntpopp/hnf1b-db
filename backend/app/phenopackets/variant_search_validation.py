@@ -8,41 +8,23 @@ Security Features:
 - HGVS notation format validation
 - Length limits (DoS prevention)
 - Enum validation for controlled vocabularies
+
+Note:
+    Regex patterns are imported from app.core.patterns to ensure DRY compliance.
+    All pattern changes should be made in the centralized patterns module.
 """
 
-import re
 from typing import Optional
 
 from fastapi import HTTPException
 
-# HGVS validation patterns
-HGVS_PATTERNS = {
-    # c. notation: c.1654-2A>T, c.544+1G>T, c.1621C>T, c.1654_1656del
-    "c": re.compile(
-        r"^c\."
-        r"([\d]+([+-]\d+)?"  # Position (with optional intron offset)
-        r"(_[\d]+([+-]\d+)?)?"  # Optional range end
-        r"([ACGT]+>[ACGT]+|del|dup|ins[ACGT]*|delins[ACGT]*))$",  # Variation
-        re.IGNORECASE,
-    ),
-    # p. notation: p.Arg177Ter, p.(Ser546Phe), p.Gly319del
-    "p": re.compile(
-        r"^p\."
-        r"(\()?([A-Z][a-z]{2}\d+([A-Z][a-z]{2}|Ter|\*|del|dup|ins|fs))+(\))?$"
-    ),
-    # g. notation: g.36098063A>T, g.36459258_37832869del
-    "g": re.compile(
-        r"^g\."
-        r"(\d+(_\d+)?"  # Position or range
-        r"([ACGT]+>[ACGT]+|del|dup|ins[ACGT]*|delins[ACGT]*))$",
-        re.IGNORECASE,
-    ),
-}
-
-# HG38 coordinate formats: chr17:36098063, chr17-36098063-A-T, 17:36459258-37832869:DEL
-HG38_PATTERN = re.compile(
-    r"^(chr)?(\d+|X|Y|MT?)([:-])(\d+)([-:](\d+))?([:-]([A-Z]+(-[A-Z]+)?))?$",
-    re.IGNORECASE,
+from app.core.patterns import (
+    HG38_PATTERN,
+    HG38_SIMPLE_PATTERN,
+    HGVS_C_SEARCH_PATTERN,
+    HGVS_G_SEARCH_PATTERN,
+    HGVS_P_SEARCH_PATTERN,
+    is_safe_search_query,
 )
 
 # Allowed values for controlled vocabularies
@@ -81,7 +63,7 @@ ALLOWED_CONSEQUENCES = {
 
 
 def validate_hgvs_notation(query: str) -> bool:
-    """Validate HGVS notation format.
+    """Validate HGVS notation format using centralized patterns.
 
     Args:
         query: User-provided HGVS string (e.g., "c.1654-2A>T")
@@ -99,14 +81,18 @@ def validate_hgvs_notation(query: str) -> bool:
             except Exception:
                 return False
     """
-    for pattern in HGVS_PATTERNS.values():
-        if pattern.match(query):
-            return True
+    # Check each HGVS type pattern
+    if query.startswith("c."):
+        return bool(HGVS_C_SEARCH_PATTERN.match(query))
+    elif query.startswith("p."):
+        return bool(HGVS_P_SEARCH_PATTERN.match(query))
+    elif query.startswith("g."):
+        return bool(HGVS_G_SEARCH_PATTERN.match(query))
     return False
 
 
 def validate_hg38_coordinate(query: str) -> bool:
-    """Validate HG38 genomic coordinate format.
+    """Validate HG38 genomic coordinate format using centralized patterns.
 
     Args:
         query: Genomic coordinate string
@@ -150,9 +136,8 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
             status_code=400, detail="Search query too long (max 200 characters)"
         )
 
-    # Character whitelist: alphanumeric + HGVS/VCF symbols
-    # Allowed: A-Z a-z 0-9 . _ : > ( ) + - * /
-    if not re.match(r"^[A-Za-z0-9._:>()+=*\-/\s]+$", query):
+    # Character whitelist using centralized pattern
+    if not is_safe_search_query(query):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -171,7 +156,7 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
             )
 
     # Optional: Validate HG38 coordinates if they look like coordinates
-    if re.match(r"^(chr)?\d+[:-]", query_stripped):
+    if HG38_SIMPLE_PATTERN.match(query_stripped):
         if not validate_hg38_coordinate(query_stripped):
             raise HTTPException(
                 status_code=400,
