@@ -463,7 +463,7 @@ export default {
       try {
         const variantResponse = await getVariants({
           page: 1,
-          pageSize: 1000,
+          pageSize: 500,
         });
 
         if (!variantResponse.data || variantResponse.data.length === 0) {
