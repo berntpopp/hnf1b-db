@@ -111,7 +111,7 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 # Alembic migration files: revision identifiers are required by Alembic framework
 # These variables are read via introspection, not direct import
-"alembic/versions/*.py" = ["F841", "E501", "D415"]  # Unused variable, long SQL queries, docstring format
+"alembic/versions/*.py" = ["F841", "E501", "D103", "D415"]  # Unused variable, long SQL queries, Alembic funcs, docstring format
 "alembic/env.py" = ["E501"]  # Long comments explaining model imports
 # Migration files: allow long SQL queries, data strings, and complex expressions
 "migration/**/*.py" = ["E501"]
