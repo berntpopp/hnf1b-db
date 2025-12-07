@@ -7,8 +7,8 @@ Uses materialized views when available for O(1) performance.
 from typing import List
 
 from .common import (
-    APIRouter,
     AggregationResult,
+    APIRouter,
     AsyncSession,
     Depends,
     check_materialized_view_exists,

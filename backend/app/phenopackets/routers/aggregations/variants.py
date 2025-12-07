@@ -6,8 +6,8 @@ Provides variant statistics by pathogenicity and type.
 from typing import List
 
 from .common import (
-    APIRouter,
     AggregationResult,
+    APIRouter,
     AsyncSession,
     Depends,
     Query,

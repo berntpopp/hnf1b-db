@@ -6,8 +6,8 @@ Provides publication statistics and timeline data.
 from typing import Dict, List
 
 from .common import (
-    APIRouter,
     AggregationResult,
+    APIRouter,
     AsyncSession,
     Depends,
     get_db,
@@ -23,7 +23,7 @@ async def aggregate_publication_types(
 ):
     """Get distribution of publication types.
 
-    Aggregates phenopackets by publication type (case_series, research, case_report, etc.).
+    Aggregates phenopackets by publication type (case_series, research, etc.).
     Publication type is stored in metaData.externalReferences.reference field.
 
     Returns:

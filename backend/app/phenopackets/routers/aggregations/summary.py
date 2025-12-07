@@ -9,9 +9,9 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Phenopacket,
     func,
     get_db,
-    Phenopacket,
     select,
     text,
 )
