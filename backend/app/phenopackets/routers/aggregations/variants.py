@@ -23,7 +23,7 @@ router = APIRouter()
 async def aggregate_variant_pathogenicity(
     count_mode: str = Query(
         "all",
-        regex="^(all|unique)$",
+        pattern="^(all|unique)$",
         description=(
             "Count mode: 'all' (default) counts all variant instances, "
             "'unique' counts distinct variants"
@@ -96,7 +96,7 @@ async def aggregate_variant_pathogenicity(
 async def aggregate_variant_types(
     count_mode: str = Query(
         "all",
-        regex="^(all|unique)$",
+        pattern="^(all|unique)$",
         description=(
             "Count mode: 'all' (default) counts all variant instances, "
             "'unique' counts distinct variants"

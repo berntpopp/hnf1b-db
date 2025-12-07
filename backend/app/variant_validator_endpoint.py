@@ -269,7 +269,7 @@ async def annotate_variant(
     variant: str = Query(
         ...,
         description="Variant in HGVS, VCF, or rsID format",
-        example="NM_000458.4:c.544+1G>A",
+        examples=["NM_000458.4:c.544+1G>A"],
     ),
 ) -> Dict[str, Any]:
     """Annotate variant with VEP including functional predictions.
@@ -435,7 +435,7 @@ async def recode_variant(
     variant: str = Query(
         ...,
         description="Variant in any supported format",
-        example="rs56116432",
+        examples=["rs56116432"],
     ),
 ) -> Dict[str, Any]:
     """Recode variant to all possible representations (HGVS, VCF, SPDI, rsID).

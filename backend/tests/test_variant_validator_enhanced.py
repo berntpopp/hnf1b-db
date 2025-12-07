@@ -280,7 +280,7 @@ class TestVEPAnnotation:
             # Mock successful response with low rate limit
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [{"id": "test"}]
+            mock_response.json = MagicMock(return_value=[{"id": "test"}])
             mock_response.headers = {
                 "X-RateLimit-Remaining": "5",  # 5 remaining
                 "X-RateLimit-Limit": "100",  # out of 100 (5% remaining)
@@ -346,7 +346,7 @@ class TestRateLimiting:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_response_data]
+            mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
 
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
@@ -380,7 +380,7 @@ class TestRateLimiting:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_response_data]
+            mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
 
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
