@@ -14,6 +14,7 @@ from .common import (
     get_db,
     text,
 )
+from .sql_fragments import VARIANT_TYPE_CASE
 
 router = APIRouter()
 
@@ -89,69 +90,6 @@ async def aggregate_variant_pathogenicity(
         )
         for row in rows
     ]
-
-
-# SQL expression for variant type detection
-VARIANT_TYPE_CASE = """
-    CASE
-        -- Large structural variants: parse size from label (e.g., "1.37Mb del")
-        WHEN vd->'structuralType'->>'label' IN ('deletion', 'duplication') THEN
-            CASE
-                WHEN COALESCE(
-                    NULLIF(
-                        regexp_replace(vd->>'label', '^([0-9.]+)Mb.*', '\\1'),
-                        vd->>'label'
-                    )::numeric,
-                    0
-                ) >= 0.1 THEN
-                    CASE
-                        WHEN vd->'structuralType'->>'label' = 'deletion'
-                            THEN 'Copy Number Loss'
-                        ELSE 'Copy Number Gain'
-                    END
-                -- Smaller structural variants (<0.1 Mb)
-                WHEN vd->'structuralType'->>'label' = 'deletion'
-                    THEN 'Deletion'
-                ELSE 'Duplication'
-            END
-        -- Small variants: detect type from c. notation
-        WHEN vd->'structuralType'->>'label' IS NULL THEN
-            CASE
-                -- Indel: delins pattern
-                WHEN EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
-                    WHERE elem->>'syntax' = 'hgvs.c'
-                    AND elem->>'value' ~ 'delins'
-                ) THEN 'Indel'
-                -- Small deletion
-                WHEN EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
-                    WHERE elem->>'syntax' = 'hgvs.c'
-                    AND elem->>'value' ~ 'del'
-                ) THEN 'Deletion'
-                -- Duplication
-                WHEN EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
-                    WHERE elem->>'syntax' = 'hgvs.c'
-                    AND elem->>'value' ~ 'dup'
-                ) THEN 'Duplication'
-                -- Insertion
-                WHEN EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
-                    WHERE elem->>'syntax' = 'hgvs.c'
-                    AND elem->>'value' ~ 'ins'
-                ) THEN 'Insertion'
-                -- SNV: substitution pattern
-                WHEN EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(vd->'expressions') elem
-                    WHERE elem->>'syntax' = 'hgvs.c'
-                    AND elem->>'value' ~ '>[ACGT]'
-                ) THEN 'SNV'
-                ELSE 'NA'
-            END
-        ELSE 'NA'
-    END
-"""
 
 
 @router.get("/variant-types", response_model=List[AggregationResult])

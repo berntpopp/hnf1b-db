@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 
+from .sql_fragments import (
+    CURRENT_AGE_PATH,
+    INTERP_STATUS_PATH,
+    VARIANT_TYPE_CLASSIFICATION_SQL,
+)
+
 router = APIRouter()
 
 
@@ -79,97 +85,6 @@ ENDPOINT_CONFIG: Dict[str, Dict[str, Any]] = {
         "label": "Age at Last Follow-up",
     },
 }
-
-
-# JSONB path constants for SQL queries (DRY)
-_VD_BASE = (
-    "diagnosis,genomicInterpretations,0,variantInterpretation,variationDescriptor"
-)
-_VD_ID = "interp.value#>>'{" + _VD_BASE + ",id}'"
-_VD_EXT = "interp.value#>'{" + _VD_BASE + ",extensions}'"
-_VD_EXPR = "interp.value#>'{" + _VD_BASE + ",expressions}'"
-# Subject age path (used in survival queries)
-_CURRENT_AGE = "p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration'"
-# Interpretation status path (used for P/LP filtering)
-_INTERP_STATUS = (
-    "interp.value->'diagnosis'->'genomicInterpretations'"
-    "->0->>'interpretationStatus'"
-)
-
-# SQL fragment for variant type classification (CNV vs Truncating vs Non-truncating)
-# fmt: off
-VARIANT_TYPE_CLASSIFICATION_SQL = f"""
-CASE
-    -- CNVs: Large deletions or duplications >= 50kb
-    WHEN {_VD_ID} ~ ':(DEL|DUP)'
-        AND COALESCE(
-            (SELECT (ext#>>'{{value,length}}')::bigint
-             FROM jsonb_array_elements({_VD_EXT}) AS ext
-             WHERE ext->>'name' = 'coordinates'
-            ), 0) >= 50000
-        THEN 'CNV'
-    -- Non-truncating: VEP IMPACT = MODERATE
-    WHEN EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements({_VD_EXT}) AS ext
-        WHERE ext->>'name' = 'vep_annotation'
-          AND ext#>>'{{value,impact}}' = 'MODERATE'
-    ) THEN 'Non-truncating'
-    -- Truncating variants
-    WHEN (
-        -- Intragenic deletions/duplications < 50kb
-        (
-            {_VD_ID} ~ ':(DEL|DUP)'
-            AND COALESCE(
-                (SELECT (ext#>>'{{value,length}}')::bigint
-                 FROM jsonb_array_elements({_VD_EXT}) AS ext
-                 WHERE ext->>'name' = 'coordinates'
-                ), 0) < 50000
-        )
-        OR
-        -- VEP IMPACT = HIGH
-        EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements({_VD_EXT}) AS ext
-            WHERE ext->>'name' = 'vep_annotation'
-              AND ext#>>'{{value,impact}}' = 'HIGH'
-        )
-        OR
-        -- VEP IMPACT = LOW/MODIFIER (P/LP filtered)
-        EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements({_VD_EXT}) AS ext
-            WHERE ext->>'name' = 'vep_annotation'
-              AND ext#>>'{{value,impact}}' IN ('LOW', 'MODIFIER')
-        )
-        OR
-        -- No VEP and not DEL/DUP (P/LP filtered)
-        (
-            NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements({_VD_EXT}) AS ext
-                WHERE ext->>'name' = 'vep_annotation'
-            )
-            AND NOT {_VD_ID} ~ ':(DEL|DUP)'
-        )
-        OR
-        -- HGVS pattern fallback
-        EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements({_VD_EXPR}) AS expr
-            WHERE (
-                (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
-                OR (expr->>'syntax' = 'hgvs.p'
-                    AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
-                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
-                OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
-            )
-        )
-    ) THEN 'Truncating'
-    ELSE 'Non-truncating'
-END
-"""
-# fmt: on
 
 
 def _calculate_survival_curves(
@@ -254,7 +169,7 @@ async def _handle_variant_type_current_age(
         SELECT DISTINCT
             p.phenopacket_id,
             {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
-            {_CURRENT_AGE} as current_age,
+            {CURRENT_AGE_PATH} as current_age,
             EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -264,8 +179,8 @@ async def _handle_variant_type_current_age(
         FROM phenopackets p,
             jsonb_array_elements(p.phenopacket->'interpretations') as interp
         WHERE p.deleted_at IS NULL
-            AND {_CURRENT_AGE} IS NOT NULL
-            AND {_INTERP_STATUS}
+            AND {CURRENT_AGE_PATH} IS NOT NULL
+            AND {INTERP_STATUS_PATH}
                 IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
             AND EXISTS (
                 SELECT 1
@@ -357,7 +272,7 @@ async def _handle_variant_type_standard(
         FROM phenopackets p,
             jsonb_array_elements(p.phenopacket->'interpretations') as interp
         WHERE p.deleted_at IS NULL
-            AND {_INTERP_STATUS}
+            AND {INTERP_STATUS_PATH}
                 IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
     ),
     endpoint_cases AS (
@@ -405,7 +320,7 @@ async def _handle_variant_type_standard(
         FROM phenopackets p,
             jsonb_array_elements(p.phenopacket->'interpretations') as interp
         WHERE p.deleted_at IS NULL
-            AND {_INTERP_STATUS}
+            AND {INTERP_STATUS_PATH}
                 IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
             AND NOT EXISTS (
                 SELECT 1
@@ -484,7 +399,7 @@ async def _handle_pathogenicity_current_age(
                     THEN 'VUS'
                 ELSE 'Unknown'
             END AS pathogenicity_group,
-            {_CURRENT_AGE} as current_age,
+            {CURRENT_AGE_PATH} as current_age,
             EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -495,7 +410,7 @@ async def _handle_pathogenicity_current_age(
             jsonb_array_elements(p.phenopacket->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
         WHERE p.deleted_at IS NULL
-            AND {_CURRENT_AGE} IS NOT NULL
+            AND {CURRENT_AGE_PATH} IS NOT NULL
             AND gi#>>'{variantInterpretation,variationDescriptor,id}' !~ ':(DEL|DUP)'
             AND EXISTS (
                 SELECT 1
@@ -751,7 +666,7 @@ async def _handle_disease_subtype_current_age(
                 WHERE pf->'type'->>'id' = :mody_hpo
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
             ) as has_mody,
-            {_CURRENT_AGE} as current_age,
+            {CURRENT_AGE_PATH} as current_age,
             EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
@@ -760,7 +675,7 @@ async def _handle_disease_subtype_current_age(
             ) as has_kidney_failure
         FROM phenopackets p
         WHERE p.deleted_at IS NULL
-            AND {_CURRENT_AGE} IS NOT NULL
+            AND {CURRENT_AGE_PATH} IS NOT NULL
     ),
     classified AS (
         SELECT

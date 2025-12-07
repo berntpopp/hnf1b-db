@@ -24,6 +24,8 @@ from app.phenopackets.variant_search_validation import (
 from app.utils.audit_logger import log_variant_search
 from app.utils.pagination import build_offset_response
 
+from .sql_fragments import STRUCTURAL_TYPE_CASE
+
 router = APIRouter()
 
 
@@ -274,54 +276,6 @@ def _build_where_clauses(
         params["domain_end"] = end_pos
 
     return where_clauses
-
-
-# SQL fragment for structural type classification
-STRUCTURAL_TYPE_CASE = """
-COALESCE(
-    vd->'structuralType'->>'label',
-    CASE
-        WHEN (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) ~ 'del[A-Z]*ins' THEN 'indel'
-        WHEN (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) ~ 'ins' AND (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) !~ 'del' THEN 'insertion'
-        WHEN (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) ~ 'del' AND (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) !~ 'ins' THEN 'deletion'
-        WHEN (
-            SELECT elem->>'value'
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            LIMIT 1
-        ) ~ 'dup' THEN 'duplication'
-        WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
-        WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
-        ELSE 'OTHER'
-    END,
-    vd->'molecularConsequences'->0->>'label'
-)
-"""
 
 
 def _build_main_query(
