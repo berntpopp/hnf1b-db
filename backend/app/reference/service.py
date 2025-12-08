@@ -145,14 +145,16 @@ class ReferenceDataStatus:
 # =============================================================================
 
 
-async def get_or_create_grch38_genome(db: AsyncSession) -> ReferenceGenome:
+async def get_or_create_grch38_genome(
+    db: AsyncSession,
+) -> tuple[ReferenceGenome, bool]:
     """Get or create the GRCh38 genome assembly.
 
     Args:
         db: Database session
 
     Returns:
-        ReferenceGenome object for GRCh38
+        Tuple of (ReferenceGenome object for GRCh38, created: bool)
     """
     stmt = select(ReferenceGenome).where(ReferenceGenome.name == "GRCh38")
     result = await db.execute(stmt)
@@ -160,7 +162,7 @@ async def get_or_create_grch38_genome(db: AsyncSession) -> ReferenceGenome:
 
     if genome:
         logger.debug("GRCh38 genome already exists")
-        return genome
+        return genome, False
 
     # Create new genome
     genome = ReferenceGenome(
@@ -178,7 +180,7 @@ async def get_or_create_grch38_genome(db: AsyncSession) -> ReferenceGenome:
     db.add(genome)
     await db.flush()
     logger.info("Created GRCh38 genome assembly")
-    return genome
+    return genome, True
 
 
 async def get_genome_by_name(db: AsyncSession, name: str) -> ReferenceGenome | None:
@@ -305,7 +307,7 @@ async def import_hnf1b_exons(
     transcript_id: uuid.UUID,
     chromosome: str,
     strand: str,
-) -> list[Exon]:
+) -> tuple[list[Exon], bool]:
     """Import HNF1B exon coordinates.
 
     Args:
@@ -315,7 +317,7 @@ async def import_hnf1b_exons(
         strand: Strand ("+" or "-")
 
     Returns:
-        List of created Exon objects
+        Tuple of (list of Exon objects, created: bool)
     """
     # Try to load from chr17q12_genes.json
     exon_data = HNF1B_EXONS
@@ -347,7 +349,7 @@ async def import_hnf1b_exons(
     existing = result.scalars().all()
     if existing:
         logger.debug(f"Exons already exist for transcript {transcript_id}")
-        return list(existing)
+        return list(existing), False
 
     exons = []
     for exon_info in exon_data:
@@ -366,12 +368,12 @@ async def import_hnf1b_exons(
 
     await db.flush()
     logger.info(f"Created {len(exons)} HNF1B exons")
-    return exons
+    return exons, True
 
 
 async def import_hnf1b_domains(
     db: AsyncSession, transcript_id: uuid.UUID
-) -> list[ProteinDomain]:
+) -> tuple[list[ProteinDomain], bool]:
     """Import HNF1B protein domains from UniProt P35680.
 
     Args:
@@ -379,7 +381,7 @@ async def import_hnf1b_domains(
         transcript_id: Transcript UUID
 
     Returns:
-        List of created ProteinDomain objects
+        Tuple of (list of ProteinDomain objects, created: bool)
     """
     # Check if domains already exist
     stmt = select(ProteinDomain).where(ProteinDomain.transcript_id == transcript_id)
@@ -387,7 +389,7 @@ async def import_hnf1b_domains(
     existing = result.scalars().all()
     if existing:
         logger.debug(f"Domains already exist for transcript {transcript_id}")
-        return list(existing)
+        return list(existing), False
 
     domains = []
     for domain_data in HNF1B_DOMAINS:
@@ -414,7 +416,7 @@ async def import_hnf1b_domains(
 
     await db.flush()
     logger.info(f"Created {len(domains)} HNF1B protein domains")
-    return domains
+    return domains, True
 
 
 # =============================================================================
@@ -426,18 +428,21 @@ async def initialize_reference_data(db: AsyncSession) -> SyncResult:
     """Initialize all reference data (GRCh38 + HNF1B gene + transcript + domains).
 
     This is idempotent - can be called multiple times safely.
+    Only newly created items are counted in the result.
 
     Args:
         db: Database session
 
     Returns:
-        SyncResult with counts of created items
+        SyncResult with counts of actually created items
     """
     result = SyncResult()
 
     try:
         # Step 1: Create GRCh38 genome
-        genome = await get_or_create_grch38_genome(db)
+        genome, genome_created = await get_or_create_grch38_genome(db)
+        if genome_created:
+            result.imported += 1
 
         # Step 2: Import HNF1B gene
         gene, gene_created = await import_hnf1b_gene(db, genome.id)
@@ -449,15 +454,17 @@ async def initialize_reference_data(db: AsyncSession) -> SyncResult:
         if transcript_created:
             result.imported += 1
 
-        # Step 4: Import exons
-        exons = await import_hnf1b_exons(
+        # Step 4: Import exons (only count if newly created)
+        exons, exons_created = await import_hnf1b_exons(
             db, transcript.id, gene.chromosome, gene.strand
         )
-        result.imported += len(exons) if exons else 0
+        if exons_created:
+            result.imported += len(exons) if exons else 0
 
-        # Step 5: Import protein domains
-        domains = await import_hnf1b_domains(db, transcript.id)
-        result.imported += len(domains) if domains else 0
+        # Step 5: Import protein domains (only count if newly created)
+        domains, domains_created = await import_hnf1b_domains(db, transcript.id)
+        if domains_created:
+            result.imported += len(domains) if domains else 0
 
         await db.commit()
         logger.info(f"Reference data initialized: {result.imported} items created")
@@ -554,7 +561,7 @@ async def sync_chr17q12_genes(
 
     try:
         # Ensure GRCh38 genome exists
-        genome = await get_or_create_grch38_genome(db)
+        genome, _ = await get_or_create_grch38_genome(db)
 
         # Fetch genes from Ensembl
         features = await fetch_genes_from_ensembl(region)
