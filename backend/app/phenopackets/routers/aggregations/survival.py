@@ -16,7 +16,8 @@ from app.database import get_db
 from .sql_fragments import (
     CURRENT_AGE_PATH,
     INTERP_STATUS_PATH,
-    VARIANT_TYPE_CLASSIFICATION_SQL,
+    get_phenopacket_variant_link_cte,
+    get_variant_type_classification_sql,
 )
 
 router = APIRouter()
@@ -126,14 +127,23 @@ async def _handle_variant_type_current_age(
     db: AsyncSession,
     endpoint_label: str,
 ) -> Dict[str, Any]:
-    """Handle variant type comparison with current_age endpoint."""
+    """Handle variant type comparison with current_age endpoint.
+
+    Uses the variant_annotations table via LEFT JOIN for VEP impact classification.
+    This enables proper Non-truncating detection (MODERATE impact variants).
+    """
     from app.phenopackets.survival_analysis import parse_iso8601_age
 
+    # Get reusable SQL fragments
+    phenopacket_variant_cte = get_phenopacket_variant_link_cte()
+    variant_classification_sql = get_variant_type_classification_sql()
+
     query = f"""
-    WITH variant_classification AS (
+    WITH {phenopacket_variant_cte},
+    variant_classification AS (
         SELECT DISTINCT
             p.phenopacket_id,
-            {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+            {variant_classification_sql} AS variant_group,
             {CURRENT_AGE_PATH} as current_age,
             EXISTS (
                 SELECT 1
@@ -141,8 +151,10 @@ async def _handle_variant_type_current_age(
                 WHERE pf->'type'->>'id' IN ('HP:0012626', 'HP:0003774')
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
             ) as has_kidney_failure
-        FROM phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp
+        FROM phenopackets p
+        JOIN jsonb_array_elements(p.phenopacket->'interpretations') as interp ON true
+        LEFT JOIN phenopacket_variant_link pvl ON pvl.phenopacket_id = p.phenopacket_id
+        LEFT JOIN variant_annotations va ON va.variant_id = pvl.variant_id
         WHERE p.deleted_at IS NULL
             AND {CURRENT_AGE_PATH} IS NOT NULL
             AND {INTERP_STATUS_PATH}
@@ -220,22 +232,33 @@ async def _handle_variant_type_standard(
     endpoint_label: str,
     endpoint_hpo_terms: List[str],
 ) -> Dict[str, Any]:
-    """Handle variant type comparison with standard CKD endpoint."""
+    """Handle variant type comparison with standard CKD endpoint.
+
+    Uses the variant_annotations table via LEFT JOIN for VEP impact classification.
+    This enables proper Non-truncating detection (MODERATE impact variants).
+    """
     from app.phenopackets.survival_analysis import (
         parse_iso8601_age,
         parse_onset_ontology,
     )
 
+    # Get reusable SQL fragments
+    phenopacket_variant_cte = get_phenopacket_variant_link_cte()
+    variant_classification_sql = get_variant_type_classification_sql()
+
     # Event cases query
     query = f"""
-    WITH variant_classification AS (
+    WITH {phenopacket_variant_cte},
+    variant_classification AS (
         SELECT DISTINCT
             p.phenopacket_id,
-            {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+            {variant_classification_sql} AS variant_group,
             p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age,
             p.phenopacket as phenopacket_data
-        FROM phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp
+        FROM phenopackets p
+        JOIN jsonb_array_elements(p.phenopacket->'interpretations') as interp ON true
+        LEFT JOIN phenopacket_variant_link pvl ON pvl.phenopacket_id = p.phenopacket_id
+        LEFT JOIN variant_annotations va ON va.variant_id = pvl.variant_id
         WHERE p.deleted_at IS NULL
             AND {INTERP_STATUS_PATH}
                 IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -275,15 +298,18 @@ async def _handle_variant_type_standard(
         if onset_age is not None:
             groups[row.variant_group].append((onset_age, True))
 
-    # Censored cases query
+    # Censored cases query (uses same VEP join pattern)
     censored_query = f"""
-    WITH variant_classification AS (
+    WITH {phenopacket_variant_cte},
+    variant_classification AS (
         SELECT DISTINCT
             p.phenopacket_id,
-            {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+            {variant_classification_sql} AS variant_group,
             p.phenopacket->'subject'->>'timeAtLastEncounter' as current_age
-        FROM phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp
+        FROM phenopackets p
+        JOIN jsonb_array_elements(p.phenopacket->'interpretations') as interp ON true
+        LEFT JOIN phenopacket_variant_link pvl ON pvl.phenopacket_id = p.phenopacket_id
+        LEFT JOIN variant_annotations va ON va.variant_id = pvl.variant_id
         WHERE p.deleted_at IS NULL
             AND {INTERP_STATUS_PATH}
                 IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
