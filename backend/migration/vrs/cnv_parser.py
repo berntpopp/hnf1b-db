@@ -218,11 +218,15 @@ class CNVParser:
         # Add expressions in various formats
         expressions = cast(List[Dict[str, str]], variant_descriptor["expressions"])
 
-        # GA4GH CNV notation (primary)
+        # GA4GH CNV notation (primary) - includes full coordinates
         expressions.append({"syntax": "ga4gh", "value": ga4gh_notation})
 
-        # Add VCF-style notation
-        expressions.append({"syntax": "vcf", "value": hg38})
+        # VCF-style notation with END position for structural variants
+        # Per VCF 4.3 spec, symbolic alleles require END in INFO field
+        # Format: CHROM-POS-END-REF-ALT (e.g., 17-37733556-37733821-C-<DEL>)
+        # This ensures unique identification for CNVs with same start but different end
+        vcf_with_end = f"{chromosome}-{start}-{end}-C-<{variant_type}>"
+        expressions.append({"syntax": "vcf", "value": vcf_with_end})
 
         # Add ISCN notation if available
         if iscn_notation:

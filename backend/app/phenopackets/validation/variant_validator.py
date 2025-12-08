@@ -18,6 +18,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Maximum batch size for Variant Recoder POST endpoint (per Ensembl docs)
+VARIANT_RECODER_BATCH_SIZE = 200
+
 
 class VariantValidator:
     """Validates variant formats including HGVS, VCF, VRS, and CNV notations.
@@ -736,3 +739,228 @@ class VariantValidator:
                 return None
 
         return None
+
+    async def recode_variants_batch(
+        self,
+        variants: List[str],
+        include_vcf: bool = True,
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """Recode multiple variants in batch using VEP Variant Recoder POST API.
+
+        Uses the Ensembl Variant Recoder POST endpoint for efficient batch processing.
+        Maximum batch size is 200 variants per request (per Ensembl limits).
+
+        Args:
+            variants: List of variants in any supported format (HGVS, rsID, SPDI)
+            include_vcf: Include VCF string representation in output
+
+        Returns:
+            Dict mapping input variant to its recoded representations,
+            or None for failed variants.
+
+        Example:
+            results = await validator.recode_variants_batch([
+                "rs56116432",
+                "NM_000458.4:c.544+1G>A"
+            ])
+            for variant, recoded in results.items():
+                if recoded:
+                    print(f"{variant} -> {recoded.get('vcf_string')}")
+        """
+        if not variants:
+            return {}
+
+        results: Dict[str, Optional[Dict[str, Any]]] = {}
+
+        # Process VCF format variants separately (need annotation first)
+        vcf_variants = []
+        non_vcf_variants = []
+
+        for v in variants:
+            if self._is_vcf_format(v):
+                vcf_variants.append(v)
+            else:
+                non_vcf_variants.append(v)
+
+        # Process VCF variants individually (need VEP annotation to get rsID)
+        for vcf_v in vcf_variants:
+            try:
+                result = await self.recode_variant_with_vep(vcf_v)
+                results[vcf_v] = result
+            except Exception as e:
+                logger.warning(f"Failed to recode VCF variant {vcf_v}: {e}")
+                results[vcf_v] = None
+
+        # Process non-VCF variants in batches using POST endpoint
+        if non_vcf_variants:
+            for i in range(0, len(non_vcf_variants), VARIANT_RECODER_BATCH_SIZE):
+                batch = non_vcf_variants[i : i + VARIANT_RECODER_BATCH_SIZE]
+                batch_results = await self._recode_batch_post(batch, include_vcf)
+
+                for v in batch:
+                    results[v] = batch_results.get(v)
+
+                # Rate limiting between batches
+                if i + VARIANT_RECODER_BATCH_SIZE < len(non_vcf_variants):
+                    await asyncio.sleep(0.1)
+
+        return results
+
+    async def _recode_batch_post(
+        self,
+        variants: List[str],
+        include_vcf: bool = True,
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """Internal method to call Variant Recoder POST endpoint.
+
+        Args:
+            variants: List of non-VCF variants (HGVS, rsID, SPDI)
+            include_vcf: Include VCF string representation
+
+        Returns:
+            Dict mapping input variant to recoded data
+        """
+        if not variants:
+            return {}
+
+        # Check cache first
+        results: Dict[str, Optional[Dict[str, Any]]] = {}
+        uncached_variants = []
+
+        for v in variants:
+            cache_key = f"vep:recode:{v}"
+            if settings.external_apis.vep.cache_enabled:
+                cached = await cache.get_json(cache_key)
+                if cached:
+                    results[v] = cached
+                    continue
+            uncached_variants.append(v)
+
+        if not uncached_variants:
+            return results
+
+        # Rate limiting
+        await self._rate_limit()
+
+        # Build request
+        vep_base_url = settings.external_apis.vep.base_url
+        vep_timeout = settings.external_apis.vep.timeout_seconds
+
+        endpoint = f"{vep_base_url}/variant_recoder/homo_sapiens"
+        params = {
+            "fields": "id,hgvsg,hgvsc,hgvsp,spdi",
+            "gencode_primary": "1",
+        }
+        if include_vcf:
+            params["vcf_string"] = "1"
+
+        # Retry with exponential backoff
+        for attempt in range(self._max_retries):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        endpoint,
+                        json={"ids": uncached_variants},
+                        params=params,
+                        headers={"Content-Type": "application/json"},
+                        timeout=vep_timeout,
+                    )
+
+                    self._check_rate_limit_headers(response.headers)
+
+                    if response.status_code == 200:
+                        api_results = response.json()
+
+                        # Parse results - API returns list of dicts
+                        for item in api_results:
+                            input_variant = item.get("input")
+                            if input_variant:
+                                # Cache successful result
+                                if settings.external_apis.vep.cache_enabled:
+                                    cache_key = f"vep:recode:{input_variant}"
+                                    await cache.set_json(
+                                        cache_key, item, ttl=self._cache_ttl
+                                    )
+                                results[input_variant] = item
+
+                        # Mark failed variants as None
+                        for v in uncached_variants:
+                            if v not in results:
+                                results[v] = None
+
+                        success_count = len([r for r in results.values() if r])
+                        logger.info(
+                            f"Batch recoded {success_count}/{len(uncached_variants)} "
+                            "variants"
+                        )
+                        return results
+
+                    elif response.status_code == 429:
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        logger.warning(f"Rate limited, waiting {retry_after}s")
+                        await asyncio.sleep(retry_after)
+                        continue
+
+                    elif response.status_code == 400:
+                        logger.error(f"Invalid variants in batch: {uncached_variants}")
+                        for v in uncached_variants:
+                            results[v] = None
+                        return results
+
+                    elif response.status_code in (500, 502, 503, 504):
+                        if attempt < self._max_retries - 1:
+                            backoff_time = self._backoff_factor**attempt
+                            logger.warning(
+                                f"VEP recoder API error {response.status_code}, "
+                                f"retrying in {backoff_time}s"
+                            )
+                            await asyncio.sleep(backoff_time)
+                            continue
+                        else:
+                            logger.error(
+                                f"VEP recoder batch failed after retries: "
+                                f"{response.status_code}"
+                            )
+                            for v in uncached_variants:
+                                results[v] = None
+                            return results
+
+                    else:
+                        logger.error(f"Unexpected VEP recoder error: {response.status_code}")
+                        for v in uncached_variants:
+                            results[v] = None
+                        return results
+
+            except httpx.TimeoutException:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor**attempt
+                    logger.warning(f"VEP recoder timeout, retrying in {backoff_time}s")
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error("VEP recoder batch timeout after retries")
+                    for v in uncached_variants:
+                        results[v] = None
+                    return results
+
+            except httpx.NetworkError as e:
+                if attempt < self._max_retries - 1:
+                    backoff_time = self._backoff_factor**attempt
+                    logger.warning(f"VEP recoder network error: {e}, retrying")
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    logger.error(f"VEP recoder batch network error: {e}")
+                    for v in uncached_variants:
+                        results[v] = None
+                    return results
+
+            except Exception as e:
+                logger.error(f"Unexpected VEP recoder batch error: {e}", exc_info=True)
+                for v in uncached_variants:
+                    results[v] = None
+                return results
+
+        for v in uncached_variants:
+            results[v] = None
+        return results

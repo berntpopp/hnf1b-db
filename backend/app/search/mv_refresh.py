@@ -7,7 +7,7 @@ and scheduling refreshes based on staleness.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +36,7 @@ async def refresh_global_search_index(
         refresh_sql = f"REFRESH MATERIALIZED VIEW {keyword} global_search_index"
         await db.execute(text(refresh_sql))
         await db.commit()
-        _last_refresh_time = datetime.utcnow()
+        _last_refresh_time = datetime.now(timezone.utc)
         logger.info("Refreshed global_search_index materialized view")
     except Exception as e:
         logger.error(f"Failed to refresh global_search_index: {e}")
@@ -64,7 +64,7 @@ async def schedule_refresh_if_stale(
 
     # Fast path: check in-memory timestamp
     if _last_refresh_time:
-        age = (datetime.utcnow() - _last_refresh_time).total_seconds()
+        age = (datetime.now(timezone.utc) - _last_refresh_time).total_seconds()
         if age < max_age_seconds:
             return False
 
@@ -83,7 +83,7 @@ async def schedule_refresh_if_stale(
         if row and row.age_seconds is not None:
             if row.age_seconds < max_age_seconds:
                 age_delta = timedelta(seconds=row.age_seconds)
-                _last_refresh_time = datetime.utcnow() - age_delta
+                _last_refresh_time = datetime.now(timezone.utc) - age_delta
                 return False
     except Exception as e:
         logger.warning(f"Could not check MV age: {e}")

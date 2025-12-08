@@ -438,9 +438,11 @@ export const getAdminStatistics = () => apiClient.get('/admin/statistics');
 /**
  * Start publication metadata sync task.
  * Requires admin authentication.
+ * @param {boolean} force - If true, re-fetch all publications even if already synced
  * @returns {Promise} Axios promise with task info
  */
-export const startPublicationSync = () => apiClient.post('/admin/sync/publications');
+export const startPublicationSync = (force = false) =>
+  apiClient.post('/admin/sync/publications', null, { params: force ? { force: true } : {} });
 
 /**
  * Get publication sync task progress.
@@ -450,6 +452,26 @@ export const startPublicationSync = () => apiClient.post('/admin/sync/publicatio
  */
 export const getPublicationSyncStatus = (taskId = null) =>
   apiClient.get('/admin/sync/publications/status', {
+    params: taskId ? { task_id: taskId } : {},
+  });
+
+/**
+ * Start variant annotation sync task.
+ * Requires admin authentication.
+ * @param {boolean} force - If true, re-fetch all variant annotations even if already cached
+ * @returns {Promise} Axios promise with task info
+ */
+export const startVariantSync = (force = false) =>
+  apiClient.post('/admin/sync/variants', null, { params: force ? { force: true } : {} });
+
+/**
+ * Get variant sync task progress.
+ * Requires admin authentication.
+ * @param {string} taskId - Optional task ID
+ * @returns {Promise} Axios promise with progress info
+ */
+export const getVariantSyncStatus = (taskId = null) =>
+  apiClient.get('/admin/sync/variants/status', {
     params: taskId ? { task_id: taskId } : {},
   });
 
@@ -885,6 +907,8 @@ export default {
   getAdminStatistics,
   startPublicationSync,
   getPublicationSyncStatus,
+  startVariantSync,
+  getVariantSyncStatus,
 
   // Axios client for custom requests
   client: apiClient,

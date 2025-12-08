@@ -74,6 +74,22 @@
         <v-col cols="12" md="4">
           <v-card elevation="2">
             <v-card-text class="text-center">
+              <v-icon size="48" color="purple" class="mb-2">mdi-dna</v-icon>
+              <div class="text-h3 font-weight-bold">{{ statistics?.variants?.cached || 0 }}</div>
+              <div class="text-body-2 text-grey">Variants Annotated</div>
+              <div class="text-caption text-grey mt-1">
+                {{ statistics?.variants?.unique || 0 }} unique variants
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Second Row Statistics -->
+      <v-row class="mb-4">
+        <v-col cols="12" md="6">
+          <v-card elevation="2">
+            <v-card-text class="text-center">
               <v-icon size="48" color="orange" class="mb-2">mdi-account-group</v-icon>
               <div class="text-h3 font-weight-bold">{{ statistics?.users?.total || 0 }}</div>
               <div class="text-body-2 text-grey">Users</div>
@@ -81,6 +97,18 @@
                 {{ statistics?.users?.admins || 0 }} admins,
                 {{ statistics?.users?.curators || 0 }} curators
               </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+        <v-col cols="12" md="6">
+          <v-card elevation="2">
+            <v-card-text class="text-center">
+              <v-icon size="48" color="green" class="mb-2">mdi-check-decagram</v-icon>
+              <div class="text-h3 font-weight-bold">
+                {{ getSyncCompletionPercent().toFixed(0) }}%
+              </div>
+              <div class="text-body-2 text-grey">Data Sync Progress</div>
+              <div class="text-caption text-grey mt-1">Publications + Variants annotated</div>
             </v-card-text>
           </v-card>
         </v-col>
@@ -145,43 +173,135 @@
                       <span v-else class="text-caption text-grey">Never</span>
                     </td>
                     <td class="text-center">
-                      <v-btn
-                        v-if="item.name === 'Publication Metadata'"
-                        :loading="syncInProgress"
-                        :disabled="item.pending === 0 && !syncInProgress"
-                        size="small"
-                        color="primary"
-                        variant="tonal"
-                        @click="startSync"
-                      >
-                        <v-icon start size="small">mdi-sync</v-icon>
-                        {{ syncInProgress ? 'Syncing...' : 'Sync Now' }}
-                      </v-btn>
+                      <template v-if="item.name === 'Publication Metadata'">
+                        <v-btn-group v-if="!pubSyncInProgress" density="compact">
+                          <v-btn
+                            size="small"
+                            color="primary"
+                            variant="tonal"
+                            @click="startPublicationSync(false)"
+                          >
+                            <v-icon start size="small">mdi-sync</v-icon>
+                            {{ item.pending > 0 ? 'Sync Now' : 'Refresh' }}
+                          </v-btn>
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn
+                                v-bind="props"
+                                size="small"
+                                color="primary"
+                                variant="tonal"
+                                icon
+                              >
+                                <v-icon size="small">mdi-chevron-down</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="startPublicationSync(true)">
+                                <v-list-item-title>
+                                  <v-icon size="small" class="mr-1">mdi-refresh</v-icon>
+                                  Force Re-sync All
+                                </v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </v-btn-group>
+                        <v-btn v-else loading size="small" color="primary" variant="tonal" disabled>
+                          Syncing...
+                        </v-btn>
+                      </template>
+                      <template v-else-if="item.name === 'VEP Annotations'">
+                        <v-btn-group v-if="!varSyncInProgress" density="compact">
+                          <v-btn
+                            size="small"
+                            color="purple"
+                            variant="tonal"
+                            @click="startVariantSync(false)"
+                          >
+                            <v-icon start size="small">mdi-sync</v-icon>
+                            {{ item.pending > 0 ? 'Sync Now' : 'Refresh' }}
+                          </v-btn>
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn
+                                v-bind="props"
+                                size="small"
+                                color="purple"
+                                variant="tonal"
+                                icon
+                              >
+                                <v-icon size="small">mdi-chevron-down</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="startVariantSync(true)">
+                                <v-list-item-title>
+                                  <v-icon size="small" class="mr-1">mdi-refresh</v-icon>
+                                  Force Re-sync All
+                                </v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </v-btn-group>
+                        <v-btn v-else loading size="small" color="purple" variant="tonal" disabled>
+                          Syncing...
+                        </v-btn>
+                      </template>
                       <span v-else class="text-caption text-grey"> CLI only </span>
                     </td>
                   </tr>
                 </tbody>
               </v-table>
 
-              <!-- Sync Progress -->
+              <!-- Publication Sync Progress -->
               <v-expand-transition>
-                <div v-if="syncTask" class="mt-4 pa-4 bg-grey-lighten-4 rounded">
+                <div v-if="pubSyncTask" class="mt-4 pa-4 bg-grey-lighten-4 rounded">
                   <div class="d-flex justify-space-between align-center mb-2">
-                    <span class="font-weight-medium">Sync Progress</span>
-                    <v-chip :color="getSyncStatusColor(syncTask.status)" size="small">
-                      {{ syncTask.status }}
+                    <span class="font-weight-medium">
+                      <v-icon size="small" class="mr-1">mdi-book-open-variant</v-icon>
+                      Publication Sync Progress
+                    </span>
+                    <v-chip :color="getSyncStatusColor(pubSyncTask.status)" size="small">
+                      {{ pubSyncTask.status }}
                     </v-chip>
                   </div>
                   <v-progress-linear
-                    :model-value="syncTask.progress"
-                    :color="getSyncStatusColor(syncTask.status)"
+                    :model-value="pubSyncTask.progress"
+                    :color="getSyncStatusColor(pubSyncTask.status)"
                     height="12"
                     rounded
                   />
                   <div class="d-flex justify-space-between mt-2 text-caption">
-                    <span>{{ syncTask.processed }} / {{ syncTask.total }} processed</span>
-                    <span v-if="syncTask.errors > 0" class="text-error">
-                      {{ syncTask.errors }} errors
+                    <span>{{ pubSyncTask.processed }} / {{ pubSyncTask.total }} processed</span>
+                    <span v-if="pubSyncTask.errors > 0" class="text-error">
+                      {{ pubSyncTask.errors }} errors
+                    </span>
+                  </div>
+                </div>
+              </v-expand-transition>
+
+              <!-- Variant Sync Progress -->
+              <v-expand-transition>
+                <div v-if="varSyncTask" class="mt-4 pa-4 bg-purple-lighten-5 rounded">
+                  <div class="d-flex justify-space-between align-center mb-2">
+                    <span class="font-weight-medium">
+                      <v-icon size="small" class="mr-1">mdi-dna</v-icon>
+                      VEP Annotation Sync Progress
+                    </span>
+                    <v-chip :color="getSyncStatusColor(varSyncTask.status)" size="small">
+                      {{ varSyncTask.status }}
+                    </v-chip>
+                  </div>
+                  <v-progress-linear
+                    :model-value="varSyncTask.progress"
+                    color="purple"
+                    height="12"
+                    rounded
+                  />
+                  <div class="d-flex justify-space-between mt-2 text-caption">
+                    <span>{{ varSyncTask.processed }} / {{ varSyncTask.total }} processed</span>
+                    <span v-if="varSyncTask.errors > 0" class="text-error">
+                      {{ varSyncTask.errors }} errors
                     </span>
                   </div>
                 </div>
@@ -201,25 +321,37 @@
             </v-card-title>
             <v-card-text>
               <v-row>
-                <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="4" lg="2">
                   <v-btn
                     block
                     color="primary"
                     variant="tonal"
-                    :disabled="syncInProgress"
-                    @click="startSync"
+                    :disabled="pubSyncInProgress"
+                    @click="startPublicationSync"
                   >
                     <v-icon start>mdi-book-sync</v-icon>
                     Sync Publications
                   </v-btn>
                 </v-col>
-                <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="4" lg="2">
+                  <v-btn
+                    block
+                    color="purple"
+                    variant="tonal"
+                    :disabled="varSyncInProgress"
+                    @click="startVariantSync"
+                  >
+                    <v-icon start>mdi-dna</v-icon>
+                    Sync Variants
+                  </v-btn>
+                </v-col>
+                <v-col cols="12" sm="6" md="4" lg="2">
                   <v-btn block color="secondary" variant="tonal" @click="refreshStatus">
                     <v-icon start>mdi-refresh</v-icon>
                     Refresh Status
                   </v-btn>
                 </v-col>
-                <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="6" lg="3">
                   <v-btn
                     block
                     color="info"
@@ -231,7 +363,7 @@
                     API Docs
                   </v-btn>
                 </v-col>
-                <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="6" lg="3">
                   <v-btn block color="grey" variant="tonal" to="/user">
                     <v-icon start>mdi-account</v-icon>
                     User Profile
@@ -317,9 +449,16 @@ const error = ref(null);
 const successMessage = ref(null);
 const systemStatus = ref(null);
 const statistics = ref(null);
-const syncTask = ref(null);
-const syncInProgress = ref(false);
-let pollInterval = null;
+
+// Publication sync state
+const pubSyncTask = ref(null);
+const pubSyncInProgress = ref(false);
+let pubPollInterval = null;
+
+// Variant sync state
+const varSyncTask = ref(null);
+const varSyncInProgress = ref(false);
+let varPollInterval = null;
 
 // Computed
 const syncStatus = computed(() => systemStatus.value?.sync_status || []);
@@ -334,6 +473,26 @@ const formatDate = (dateString) => {
 const getProgressPercent = (item) => {
   if (item.total === 0) return 100;
   return (item.synced / item.total) * 100;
+};
+
+const getSyncCompletionPercent = () => {
+  const pubItem = syncStatus.value.find((s) => s.name === 'Publication Metadata');
+  const varItem = syncStatus.value.find((s) => s.name === 'VEP Annotations');
+
+  let totalItems = 0;
+  let syncedItems = 0;
+
+  if (pubItem) {
+    totalItems += pubItem.total;
+    syncedItems += pubItem.synced;
+  }
+  if (varItem) {
+    totalItems += varItem.total;
+    syncedItems += varItem.synced;
+  }
+
+  if (totalItems === 0) return 100;
+  return (syncedItems / totalItems) * 100;
 };
 
 const getSyncIcon = (item) => {
@@ -384,11 +543,12 @@ const refreshStatus = async () => {
   }, 3000);
 };
 
-const startSync = async () => {
+// Publication sync methods
+const startPublicationSync = async (force = false) => {
   try {
-    syncInProgress.value = true;
-    const response = await API.startPublicationSync();
-    syncTask.value = {
+    pubSyncInProgress.value = true;
+    const response = await API.startPublicationSync(force);
+    pubSyncTask.value = {
       task_id: response.data.task_id,
       status: response.data.status,
       progress: 0,
@@ -399,52 +559,115 @@ const startSync = async () => {
 
     if (response.data.status === 'completed') {
       successMessage.value = response.data.message;
-      syncInProgress.value = false;
-      syncTask.value = null;
+      pubSyncInProgress.value = false;
+      pubSyncTask.value = null;
+      await fetchStatus();
     } else {
-      // Start polling for progress
-      startPolling();
+      startPubPolling();
     }
   } catch (err) {
     window.logService.error('Failed to start publication sync', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to start sync';
-    syncInProgress.value = false;
+    error.value = err.response?.data?.detail || 'Failed to start publication sync';
+    pubSyncInProgress.value = false;
   }
 };
 
-const pollSyncStatus = async () => {
+const pollPubSyncStatus = async () => {
   try {
-    const response = await API.getPublicationSyncStatus(syncTask.value?.task_id);
-    syncTask.value = response.data;
+    const response = await API.getPublicationSyncStatus(pubSyncTask.value?.task_id);
+    pubSyncTask.value = response.data;
 
     if (response.data.status === 'completed' || response.data.status === 'failed') {
-      stopPolling();
-      syncInProgress.value = false;
+      stopPubPolling();
+      pubSyncInProgress.value = false;
       if (response.data.status === 'completed') {
-        successMessage.value = `Sync completed: ${response.data.processed} publications synced`;
-        await fetchStatus(); // Refresh statistics
+        successMessage.value = `Publication sync completed: ${response.data.processed} publications`;
+        await fetchStatus();
       } else {
-        error.value = 'Sync task failed';
+        error.value = 'Publication sync task failed';
       }
-      // Clear task after a delay
       setTimeout(() => {
-        syncTask.value = null;
+        pubSyncTask.value = null;
       }, 5000);
     }
   } catch (err) {
-    window.logService.error('Failed to poll sync status', { error: err.message });
+    window.logService.error('Failed to poll publication sync status', { error: err.message });
   }
 };
 
-const startPolling = () => {
-  if (pollInterval) return;
-  pollInterval = setInterval(pollSyncStatus, 2000);
+const startPubPolling = () => {
+  if (pubPollInterval) return;
+  pubPollInterval = setInterval(pollPubSyncStatus, 2000);
 };
 
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+const stopPubPolling = () => {
+  if (pubPollInterval) {
+    clearInterval(pubPollInterval);
+    pubPollInterval = null;
+  }
+};
+
+// Variant sync methods
+const startVariantSync = async (force = false) => {
+  try {
+    varSyncInProgress.value = true;
+    const response = await API.startVariantSync(force);
+    varSyncTask.value = {
+      task_id: response.data.task_id,
+      status: response.data.status,
+      progress: 0,
+      processed: 0,
+      total: response.data.items_to_process,
+      errors: 0,
+    };
+
+    if (response.data.status === 'completed') {
+      successMessage.value = response.data.message;
+      varSyncInProgress.value = false;
+      varSyncTask.value = null;
+      await fetchStatus();
+    } else {
+      startVarPolling();
+    }
+  } catch (err) {
+    window.logService.error('Failed to start variant sync', { error: err.message });
+    error.value = err.response?.data?.detail || 'Failed to start variant sync';
+    varSyncInProgress.value = false;
+  }
+};
+
+const pollVarSyncStatus = async () => {
+  try {
+    const response = await API.getVariantSyncStatus(varSyncTask.value?.task_id);
+    varSyncTask.value = response.data;
+
+    if (response.data.status === 'completed' || response.data.status === 'failed') {
+      stopVarPolling();
+      varSyncInProgress.value = false;
+      if (response.data.status === 'completed') {
+        successMessage.value = `VEP annotation completed: ${response.data.processed} variants`;
+        await fetchStatus();
+      } else {
+        error.value = 'VEP annotation task failed';
+      }
+      setTimeout(() => {
+        varSyncTask.value = null;
+      }, 5000);
+    }
+  } catch (err) {
+    window.logService.error('Failed to poll variant sync status', { error: err.message });
+  }
+};
+
+const startVarPolling = () => {
+  if (varPollInterval) return;
+  varPollInterval = setInterval(pollVarSyncStatus, 2000);
+};
+
+const stopVarPolling = () => {
+  if (varPollInterval) {
+    clearInterval(varPollInterval);
+    varPollInterval = null;
   }
 };
 
@@ -456,7 +679,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  stopPolling();
+  stopPubPolling();
+  stopVarPolling();
 });
 </script>
 

@@ -375,6 +375,195 @@ class TestVariantValidator:
             assert result is not None
 
 
+class TestBatchRecoding:
+    """Test batch variant recoding functionality."""
+
+    @pytest.fixture
+    def mock_batch_recoder_response(self):
+        """Mock VEP variant_recoder POST API response."""
+        return [
+            {
+                "input": "rs56116432",
+                "id": ["rs56116432"],
+                "hgvsg": ["NC_000017.11:g.36459258A>G"],
+                "hgvsc": ["NM_000458.4:c.544+1G>A"],
+                "hgvsp": [],
+                "vcf_string": "17-36459258-A-G",
+            },
+            {
+                "input": "NM_000458.4:c.721C>T",
+                "id": ["rs1169288"],
+                "hgvsg": ["NC_000017.11:g.36459400C>T"],
+                "hgvsc": ["NM_000458.4:c.721C>T"],
+                "hgvsp": ["NP_000449.3:p.Ile241Thr"],
+                "vcf_string": "17-36459400-C-T",
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_recode_variants_batch_success(
+        self, validator, mock_batch_recoder_response
+    ):
+        """Test successful batch recoding."""
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            # Mock cache miss for all variants
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_batch_recoder_response
+            mock_response.headers = {}
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post.return_value = mock_response
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = AsyncMock()
+            mock_client.return_value = mock_client_instance
+
+            results = await validator.recode_variants_batch(
+                ["rs56116432", "NM_000458.4:c.721C>T"]
+            )
+
+            # Both variants should be recoded
+            assert len(results) == 2
+            assert results["rs56116432"] is not None
+            assert results["NM_000458.4:c.721C>T"] is not None
+            assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
+
+    @pytest.mark.asyncio
+    async def test_recode_variants_batch_empty_input(self, validator):
+        """Test batch recoding with empty input."""
+        results = await validator.recode_variants_batch([])
+        assert results == {}
+
+    @pytest.mark.asyncio
+    async def test_recode_variants_batch_with_cache_hits(
+        self, validator, mock_batch_recoder_response
+    ):
+        """Test batch recoding with some variants already cached."""
+        cached_result = mock_batch_recoder_response[0]
+
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            # First variant is cached, second is not
+            async def get_json_side_effect(key):
+                if "rs56116432" in key:
+                    return cached_result
+                return None
+
+            mock_cache.get_json = AsyncMock(side_effect=get_json_side_effect)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = [mock_batch_recoder_response[1]]
+            mock_response.headers = {}
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post.return_value = mock_response
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = AsyncMock()
+            mock_client.return_value = mock_client_instance
+
+            results = await validator.recode_variants_batch(
+                ["rs56116432", "NM_000458.4:c.721C>T"]
+            )
+
+            # Both should have results
+            assert len(results) == 2
+            # Cached variant should return cached data
+            assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
+
+    @pytest.mark.asyncio
+    async def test_recode_variants_batch_partial_failure(
+        self, validator
+    ):
+        """Test batch recoding with some variants failing."""
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
+            # Only return result for first variant
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = [
+                {
+                    "input": "rs56116432",
+                    "id": ["rs56116432"],
+                    "hgvsg": ["NC_000017.11:g.36459258A>G"],
+                    "vcf_string": "17-36459258-A-G",
+                }
+            ]
+            mock_response.headers = {}
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post.return_value = mock_response
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = AsyncMock()
+            mock_client.return_value = mock_client_instance
+
+            results = await validator.recode_variants_batch(
+                ["rs56116432", "invalid_variant"]
+            )
+
+            # First should succeed, second should be None
+            assert results["rs56116432"] is not None
+            assert results["invalid_variant"] is None
+
+    @pytest.mark.asyncio
+    async def test_recode_variants_batch_rate_limit_handling(
+        self, validator
+    ):
+        """Test batch recoding handles rate limiting."""
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+            patch("asyncio.sleep") as mock_sleep,
+        ):
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
+            mock_429_response = Mock()
+            mock_429_response.status_code = 429
+            mock_429_response.headers = {"Retry-After": "1"}
+
+            mock_200_response = Mock()
+            mock_200_response.status_code = 200
+            mock_200_response.json.return_value = [
+                {
+                    "input": "rs56116432",
+                    "id": ["rs56116432"],
+                    "vcf_string": "17-36459258-A-G",
+                }
+            ]
+            mock_200_response.headers = {}
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post.side_effect = [
+                mock_429_response,
+                mock_200_response,
+            ]
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = AsyncMock()
+            mock_client.return_value = mock_client_instance
+
+            results = await validator.recode_variants_batch(["rs56116432"])
+
+            # Should succeed after retry
+            assert results["rs56116432"] is not None
+            # Should have slept for rate limit
+            mock_sleep.assert_called()
+
+
 class TestCacheIntegration:
     """Test cache integration with Redis/in-memory fallback."""
 

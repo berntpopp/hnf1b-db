@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -102,6 +102,16 @@ publications-sync-dry:  ## Dry run - shows what would be fetched without changes
 
 publications-sync-test:  ## Sync first 10 publications (for testing)
 	uv run python scripts/sync_publication_metadata.py --limit 10
+
+# Variant Annotation Sync Commands (Fetch VEP annotations for unique variants)
+variants-sync:  ## Sync all variant annotations from VEP (requires database + internet)
+	uv run python scripts/sync_variant_annotations.py
+
+variants-sync-dry:  ## Dry run - shows what would be fetched without changes
+	uv run python scripts/sync_variant_annotations.py --dry-run
+
+variants-sync-test:  ## Sync first 10 variants (for testing)
+	uv run python scripts/sync_variant_annotations.py --limit 10
 
 check: check-env lint typecheck test  ## Run all checks (lint, typecheck, test)
 
