@@ -38,7 +38,9 @@ async def count_unique_pmids() -> int:
             text("""
                 SELECT COUNT(DISTINCT REPLACE(ext_ref->>'id', 'PMID:', ''))
                 FROM phenopackets,
-                     jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+                     jsonb_array_elements(
+                         phenopacket->'metaData'->'externalReferences'
+                     ) as ext_ref
                 WHERE ext_ref->>'id' LIKE 'PMID:%'
                   AND deleted_at IS NULL
             """)
@@ -62,9 +64,16 @@ async def count_unique_variants() -> int:
             text("""
                 SELECT COUNT(DISTINCT expr->>'value')
                 FROM phenopackets,
-                     jsonb_array_elements(phenopacket->'interpretations') as interp,
-                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                     jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
+                     jsonb_array_elements(
+                         phenopacket->'interpretations'
+                     ) as interp,
+                     jsonb_array_elements(
+                         interp->'diagnosis'->'genomicInterpretations'
+                     ) as gi,
+                     jsonb_array_elements(
+                         gi->'variantInterpretation'
+                           ->'variationDescriptor'->'expressions'
+                     ) as expr
                 WHERE expr->>'syntax' = 'vcf'
                   AND deleted_at IS NULL
             """)
