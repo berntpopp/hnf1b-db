@@ -99,6 +99,13 @@ const routes = [
     component: () => import(/* webpackChunkName: "user" */ '../views/User.vue'),
     meta: { title: 'User Profile', requiresAuth: true },
   },
+  {
+    path: '/admin',
+    name: 'AdminDashboard',
+    component: () =>
+      import(/* webpackChunkName: "admin-dashboard" */ '../views/AdminDashboard.vue'),
+    meta: { title: 'Admin Dashboard', requiresAuth: true, requiresAdmin: true },
+  },
   // Catch-all 404 route - must be last
   {
     path: '/:pathMatch(.*)*',
@@ -114,7 +121,7 @@ const router = createRouter({
 });
 
 // Global navigation guard: Check authentication before each route
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
   // Check if route requires authentication
@@ -132,7 +139,35 @@ router.beforeEach((to, from, next) => {
       });
       return;
     }
-    // Has token, allow navigation (component will fetch user data if needed)
+
+    // If we have a token but no user data, fetch it
+    if (!authStore.user) {
+      try {
+        await authStore.fetchCurrentUser();
+      } catch (err) {
+        // Token is invalid, redirect to login
+        window.logService.warn('Failed to fetch user data, redirecting to login', {
+          error: err.message,
+        });
+        next({
+          name: 'Login',
+          query: { redirect: to.fullPath },
+        });
+        return;
+      }
+    }
+
+    // Check if route requires admin role
+    if (to.meta.requiresAdmin && authStore.user?.role !== 'admin') {
+      window.logService.warn('Route requires admin role, access denied', {
+        from: from.path,
+        to: to.path,
+        userRole: authStore.user?.role,
+      });
+      next({ name: 'Home' });
+      return;
+    }
+    // Has token and proper role, allow navigation
   } else if (to.name === 'Login' && authStore.accessToken) {
     // User already has token, redirect to home
     window.logService.info('User already authenticated, redirecting to home');

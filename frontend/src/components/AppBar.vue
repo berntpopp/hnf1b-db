@@ -96,6 +96,16 @@
               <v-list-item-title>User Profile</v-list-item-title>
             </v-list-item>
             <v-list-item
+              v-if="isAdmin"
+              prepend-icon="mdi-shield-crown"
+              role="menuitem"
+              aria-label="Admin Dashboard"
+              @click="goToAdmin"
+            >
+              <v-list-item-title>Admin Dashboard</v-list-item-title>
+            </v-list-item>
+            <v-divider v-if="isAdmin" />
+            <v-list-item
               prepend-icon="mdi-logout"
               role="menuitem"
               aria-label="Log out of account"
@@ -157,6 +167,13 @@ const canCurate = computed(() => {
 });
 
 /**
+ * Check if user is admin
+ */
+const isAdmin = computed(() => {
+  return authStore.user?.role === 'admin';
+});
+
+/**
  * Check if a route is currently active
  */
 const isActiveRoute = (routePath) => {
@@ -175,6 +192,13 @@ const navigateHome = () => {
  */
 const goToUser = () => {
   router.push({ name: 'User' });
+};
+
+/**
+ * Navigate to admin dashboard
+ */
+const goToAdmin = () => {
+  router.push({ name: 'AdminDashboard' });
 };
 
 /**

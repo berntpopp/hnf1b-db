@@ -46,6 +46,21 @@
 
     <v-divider v-if="canCurate" />
 
+    <!-- Admin Menu (admin only) -->
+    <v-list v-if="isAdmin" density="compact" role="navigation" aria-label="Admin actions">
+      <v-list-subheader>Admin</v-list-subheader>
+      <v-list-item
+        prepend-icon="mdi-shield-crown"
+        title="Admin Dashboard"
+        to="/admin"
+        aria-label="Admin Dashboard"
+        role="link"
+        @click="closeDrawer"
+      />
+    </v-list>
+
+    <v-divider v-if="isAdmin" />
+
     <!-- User Menu (authenticated) -->
     <v-list v-if="isAuthenticated" density="compact" role="menu" aria-label="Account menu">
       <v-list-subheader>Account</v-list-subheader>
@@ -118,6 +133,13 @@ const isAuthenticated = computed(() => authStore.isAuthenticated);
 const canCurate = computed(() => {
   const userRole = authStore.user?.role;
   return userRole === 'curator' || userRole === 'admin';
+});
+
+/**
+ * Check if user is admin
+ */
+const isAdmin = computed(() => {
+  return authStore.user?.role === 'admin';
 });
 
 /**

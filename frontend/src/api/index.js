@@ -417,6 +417,42 @@ export const getPublicationsByType = () =>
 export const getPublicationsTimelineData = () =>
   apiClient.get('/phenopackets/aggregate/publications-timeline-data');
 
+// =============================================================================
+// Admin API Functions (Requires Admin Authentication)
+// =============================================================================
+
+/**
+ * Get admin system status and sync statistics.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with system status
+ */
+export const getAdminStatus = () => apiClient.get('/admin/status');
+
+/**
+ * Get detailed database statistics.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with statistics
+ */
+export const getAdminStatistics = () => apiClient.get('/admin/statistics');
+
+/**
+ * Start publication metadata sync task.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with task info
+ */
+export const startPublicationSync = () => apiClient.post('/admin/sync/publications');
+
+/**
+ * Get publication sync task progress.
+ * Requires admin authentication.
+ * @param {string} taskId - Optional task ID
+ * @returns {Promise} Axios promise with progress info
+ */
+export const getPublicationSyncStatus = (taskId = null) =>
+  apiClient.get('/admin/sync/publications/status', {
+    params: taskId ? { task_id: taskId } : {},
+  });
+
 /**
  * Get publication type distribution (for donut chart).
  * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
@@ -843,6 +879,12 @@ export default {
   // Global Search
   searchAutocomplete,
   searchGlobal,
+
+  // Admin (requires admin authentication)
+  getAdminStatus,
+  getAdminStatistics,
+  startPublicationSync,
+  getPublicationSyncStatus,
 
   // Axios client for custom requests
   client: apiClient,
