@@ -27,7 +27,7 @@ export default [
       'vue/require-default-prop': 'error',
       'vue/require-prop-types': 'error',
       'vue/no-v-html': 'warn',
-      'vue/component-tags-order': [
+      'vue/block-order': [
         'error',
         {
           order: ['template', 'script', 'style'],
