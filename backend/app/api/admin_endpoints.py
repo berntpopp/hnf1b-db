@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
-from app.database import get_db
+from app.database import async_session_maker, get_db
 from app.models.user import User
 from app.publications.service import get_publication_metadata
 from app.variants.service import get_variant_annotations_batch
@@ -234,8 +234,11 @@ async def get_system_status(
 # =============================================================================
 
 
-async def _run_publication_sync(task_id: str, db: AsyncSession) -> None:
-    """Background task to sync publication metadata."""
+async def _run_publication_sync(task_id: str) -> None:
+    """Background task to sync publication metadata.
+
+    Creates its own database session to avoid issues with request session lifecycle.
+    """
     task = _sync_tasks.get(task_id)
     if not task:
         return
@@ -244,41 +247,43 @@ async def _run_publication_sync(task_id: str, db: AsyncSession) -> None:
     task["started_at"] = datetime.now(timezone.utc).isoformat()
 
     try:
-        # Get PMIDs to sync
-        query = text("""
-            WITH phenopacket_pmids AS (
-                SELECT DISTINCT REPLACE(ext_ref->>'id', 'PMID:', '') as pmid
-                FROM phenopackets,
-                     jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
-                WHERE ext_ref->>'id' LIKE 'PMID:%'
-                  AND deleted_at IS NULL
-            )
-            SELECT pp.pmid
-            FROM phenopacket_pmids pp
-            LEFT JOIN publication_metadata pm ON pm.pmid = CONCAT('PMID:', pp.pmid)
-            WHERE pm.pmid IS NULL
-        """)
-        result = await db.execute(query)
-        pmids_to_sync = [row.pmid for row in result.fetchall()]
+        # Create a fresh database session for the background task
+        async with async_session_maker() as db:
+            # Get PMIDs to sync
+            query = text("""
+                WITH phenopacket_pmids AS (
+                    SELECT DISTINCT REPLACE(ext_ref->>'id', 'PMID:', '') as pmid
+                    FROM phenopackets,
+                         jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+                    WHERE ext_ref->>'id' LIKE 'PMID:%'
+                      AND deleted_at IS NULL
+                )
+                SELECT pp.pmid
+                FROM phenopacket_pmids pp
+                LEFT JOIN publication_metadata pm ON pm.pmid = CONCAT('PMID:', pp.pmid)
+                WHERE pm.pmid IS NULL
+            """)
+            result = await db.execute(query)
+            pmids_to_sync = [row.pmid for row in result.fetchall()]
 
-        task["total"] = len(pmids_to_sync)
-        task["processed"] = 0
-        task["errors"] = 0
+            task["total"] = len(pmids_to_sync)
+            task["processed"] = 0
+            task["errors"] = 0
 
-        for pmid in pmids_to_sync:
-            try:
-                await get_publication_metadata(pmid, db, fetched_by="admin_sync")
-                task["processed"] += 1
-            except Exception as e:
-                task["errors"] += 1
-                logger.warning(f"Failed to sync PMID {pmid}: {e}")
+            for pmid in pmids_to_sync:
+                try:
+                    await get_publication_metadata(pmid, db, fetched_by="admin_sync")
+                    task["processed"] += 1
+                except Exception as e:
+                    task["errors"] += 1
+                    logger.warning(f"Failed to sync PMID {pmid}: {e}")
 
-            task["progress"] = (
-                (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
-            )
+                task["progress"] = (
+                    (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+                )
 
-            # Rate limiting
-            await asyncio.sleep(0.35)
+                # Rate limiting
+                await asyncio.sleep(0.35)
 
         task["status"] = "completed"
         task["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -301,9 +306,12 @@ async def _run_publication_sync(task_id: str, db: AsyncSession) -> None:
     Initiates a background task to sync publication metadata from PubMed.
 
     **Process:**
-    1. Identifies PMIDs in phenopackets without cached metadata
+    1. Identifies PMIDs in phenopackets without cached metadata (or all if force=true)
     2. Fetches metadata from PubMed API (respecting rate limits)
     3. Stores permanently in database
+
+    **Parameters:**
+    - force: If true, re-fetch all publications even if already synced
 
     **Requires:** Admin authentication
     """,
@@ -311,26 +319,56 @@ async def _run_publication_sync(task_id: str, db: AsyncSession) -> None:
 )
 async def start_publication_sync(
     background_tasks: BackgroundTasks,
+    force: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     """Start publication metadata sync task."""
-    # Check for pending items
-    query = text("""
-        WITH phenopacket_pmids AS (
+    if force:
+        # Force refresh: get all PMIDs and delete existing cached data
+        query = text("""
             SELECT DISTINCT REPLACE(ext_ref->>'id', 'PMID:', '') as pmid
             FROM phenopackets,
                  jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
             WHERE ext_ref->>'id' LIKE 'PMID:%'
               AND deleted_at IS NULL
-        )
-        SELECT COUNT(*) as count
-        FROM phenopacket_pmids pp
-        LEFT JOIN publication_metadata pm ON pm.pmid = CONCAT('PMID:', pp.pmid)
-        WHERE pm.pmid IS NULL
-    """)
-    result = await db.execute(query)
-    pending_count = result.scalar() or 0
+        """)
+        result = await db.execute(query)
+        all_pmids = [row.pmid for row in result.fetchall()]
+        pending_count = len(all_pmids)
+
+        if pending_count > 0:
+            # Delete existing cached metadata for force refresh
+            delete_query = text("""
+                DELETE FROM publication_metadata
+                WHERE pmid IN (
+                    SELECT DISTINCT ext_ref->>'id' as pmid
+                    FROM phenopackets,
+                         jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+                    WHERE ext_ref->>'id' LIKE 'PMID:%'
+                      AND deleted_at IS NULL
+                )
+            """)
+            await db.execute(delete_query)
+            await db.commit()
+            logger.info(f"Force refresh: deleted existing metadata for {pending_count} publications")
+    else:
+        # Check for pending items only
+        query = text("""
+            WITH phenopacket_pmids AS (
+                SELECT DISTINCT REPLACE(ext_ref->>'id', 'PMID:', '') as pmid
+                FROM phenopackets,
+                     jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+                WHERE ext_ref->>'id' LIKE 'PMID:%'
+                  AND deleted_at IS NULL
+            )
+            SELECT COUNT(*) as count
+            FROM phenopacket_pmids pp
+            LEFT JOIN publication_metadata pm ON pm.pmid = CONCAT('PMID:', pp.pmid)
+            WHERE pm.pmid IS NULL
+        """)
+        result = await db.execute(query)
+        pending_count = result.scalar() or 0
 
     if pending_count == 0:
         return SyncTaskResponse(
@@ -353,8 +391,8 @@ async def start_publication_sync(
         "completed_at": None,
     }
 
-    # Queue background task
-    background_tasks.add_task(_run_publication_sync, task_id, db)
+    # Queue background task (no db session - task creates its own)
+    background_tasks.add_task(_run_publication_sync, task_id)
 
     # Estimate time (0.35s per item + overhead)
     estimated_seconds = int(pending_count * 0.4)
@@ -451,8 +489,11 @@ async def get_publication_sync_status(
 # =============================================================================
 
 
-async def _run_variant_sync(task_id: str, db: AsyncSession) -> None:
-    """Background task to sync variant annotations from VEP."""
+async def _run_variant_sync(task_id: str) -> None:
+    """Background task to sync variant annotations from VEP.
+
+    Creates its own database session to avoid issues with request session lifecycle.
+    """
     task = _sync_tasks.get(task_id)
     if not task:
         return
@@ -461,7 +502,118 @@ async def _run_variant_sync(task_id: str, db: AsyncSession) -> None:
     task["started_at"] = datetime.now(timezone.utc).isoformat()
 
     try:
-        # Get unique variants to sync (including CNVs)
+        # Create a fresh database session for the background task
+        async with async_session_maker() as db:
+            # Get unique variants to sync (including CNVs)
+            query = text("""
+                WITH unique_variants AS (
+                    SELECT DISTINCT
+                        UPPER(
+                            REGEXP_REPLACE(
+                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                                ':',
+                                '-',
+                                'g'
+                            )
+                        ) as variant_id
+                    FROM phenopackets,
+                         jsonb_array_elements(phenopacket->'interpretations') as interp,
+                         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+                         jsonb_array_elements(
+                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                         ) as expr
+                    WHERE expr->>'syntax' = 'vcf'
+                      AND deleted_at IS NULL
+                      AND (
+                          -- SNVs and small indels (ACGT bases)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                          OR
+                          -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                          OR
+                          -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+                      )
+                )
+                SELECT uv.variant_id
+                FROM unique_variants uv
+                LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
+                WHERE va.variant_id IS NULL
+            """)
+            result = await db.execute(query)
+            variants_to_sync = [row.variant_id for row in result.fetchall()]
+
+            task["total"] = len(variants_to_sync)
+            task["processed"] = 0
+            task["errors"] = 0
+
+            # Process in batches of 200 (Ensembl VEP best practice)
+            batch_size = 200
+            for i in range(0, len(variants_to_sync), batch_size):
+                batch = variants_to_sync[i : i + batch_size]
+                try:
+                    results = await get_variant_annotations_batch(
+                        batch, db, fetched_by="admin_sync", batch_size=batch_size
+                    )
+                    for vid in batch:
+                        if vid in results and results[vid]:
+                            task["processed"] += 1
+                        else:
+                            task["errors"] += 1
+                except Exception as e:
+                    task["errors"] += len(batch)
+                    logger.warning(f"Failed to sync variant batch: {e}")
+
+                task["progress"] = (
+                    (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+                )
+
+                # Rate limiting between batches
+                await asyncio.sleep(0.5)
+
+        task["status"] = "completed"
+        task["completed_at"] = datetime.now(timezone.utc).isoformat()
+
+        logger.info(
+            f"Variant sync completed: {task['processed']} synced, {task['errors']} errors"
+        )
+
+    except Exception as e:
+        task["status"] = "failed"
+        task["error"] = str(e)
+        logger.error(f"Variant sync failed: {e}")
+
+
+@router.post(
+    "/sync/variants",
+    response_model=SyncTaskResponse,
+    summary="Start variant annotation sync",
+    description="""
+    Initiates a background task to sync variant annotations from Ensembl VEP.
+
+    **Process:**
+    1. Identifies unique variants in phenopackets without cached annotations (or all if force=true)
+    2. Fetches annotations from VEP API (batches of 200, respecting rate limits)
+    3. Stores permanently in database
+
+    **Parameters:**
+    - force: If true, re-fetch all variant annotations even if already cached
+
+    **Key optimization:** Only syncs unique variants, not per-phenopacket.
+
+    **Requires:** Admin authentication
+    """,
+    dependencies=[Depends(require_admin)],
+)
+async def start_variant_sync(
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Start variant annotation sync task."""
+    if force:
+        # Force refresh: get all unique variants and delete existing cached data
         query = text("""
             WITH unique_variants AS (
                 SELECT DISTINCT
@@ -492,117 +644,78 @@ async def _run_variant_sync(task_id: str, db: AsyncSession) -> None:
                       expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
                   )
             )
-            SELECT uv.variant_id
+            SELECT variant_id FROM unique_variants
+        """)
+        result = await db.execute(query)
+        all_variants = [row.variant_id for row in result.fetchall()]
+        pending_count = len(all_variants)
+
+        if pending_count > 0:
+            # Delete existing cached annotations for force refresh
+            delete_query = text("""
+                DELETE FROM variant_annotations
+                WHERE variant_id IN (
+                    SELECT DISTINCT
+                        UPPER(
+                            REGEXP_REPLACE(
+                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                                ':',
+                                '-',
+                                'g'
+                            )
+                        ) as variant_id
+                    FROM phenopackets,
+                         jsonb_array_elements(phenopacket->'interpretations') as interp,
+                         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+                         jsonb_array_elements(
+                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                         ) as expr
+                    WHERE expr->>'syntax' = 'vcf'
+                      AND deleted_at IS NULL
+                )
+            """)
+            await db.execute(delete_query)
+            await db.commit()
+            logger.info(f"Force refresh: deleted existing annotations for {pending_count} variants")
+    else:
+        # Check for pending items (including CNVs)
+        query = text("""
+            WITH unique_variants AS (
+                SELECT DISTINCT
+                    UPPER(
+                        REGEXP_REPLACE(
+                            REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                            ':',
+                            '-',
+                            'g'
+                        )
+                    ) as variant_id
+                FROM phenopackets,
+                     jsonb_array_elements(phenopacket->'interpretations') as interp,
+                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+                     jsonb_array_elements(
+                         gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                     ) as expr
+                WHERE expr->>'syntax' = 'vcf'
+                  AND deleted_at IS NULL
+                  AND (
+                      -- SNVs and small indels (ACGT bases)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                      OR
+                      -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                      OR
+                      -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+                  )
+            )
+            SELECT COUNT(*) as count
             FROM unique_variants uv
             LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
             WHERE va.variant_id IS NULL
         """)
         result = await db.execute(query)
-        variants_to_sync = [row.variant_id for row in result.fetchall()]
-
-        task["total"] = len(variants_to_sync)
-        task["processed"] = 0
-        task["errors"] = 0
-
-        # Process in batches of 200 (Ensembl VEP best practice)
-        batch_size = 200
-        for i in range(0, len(variants_to_sync), batch_size):
-            batch = variants_to_sync[i : i + batch_size]
-            try:
-                results = await get_variant_annotations_batch(
-                    batch, db, fetched_by="admin_sync", batch_size=batch_size
-                )
-                for vid in batch:
-                    if vid in results and results[vid]:
-                        task["processed"] += 1
-                    else:
-                        task["errors"] += 1
-            except Exception as e:
-                task["errors"] += len(batch)
-                logger.warning(f"Failed to sync variant batch: {e}")
-
-            task["progress"] = (
-                (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
-            )
-
-            # Rate limiting between batches
-            await asyncio.sleep(0.5)
-
-        task["status"] = "completed"
-        task["completed_at"] = datetime.now(timezone.utc).isoformat()
-
-        logger.info(
-            f"Variant sync completed: {task['processed']} synced, {task['errors']} errors"
-        )
-
-    except Exception as e:
-        task["status"] = "failed"
-        task["error"] = str(e)
-        logger.error(f"Variant sync failed: {e}")
-
-
-@router.post(
-    "/sync/variants",
-    response_model=SyncTaskResponse,
-    summary="Start variant annotation sync",
-    description="""
-    Initiates a background task to sync variant annotations from Ensembl VEP.
-
-    **Process:**
-    1. Identifies unique variants in phenopackets without cached annotations
-    2. Fetches annotations from VEP API (batches of 50, respecting rate limits)
-    3. Stores permanently in database
-
-    **Key optimization:** Only syncs unique variants, not per-phenopacket.
-
-    **Requires:** Admin authentication
-    """,
-    dependencies=[Depends(require_admin)],
-)
-async def start_variant_sync(
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """Start variant annotation sync task."""
-    # Check for pending items (including CNVs)
-    query = text("""
-        WITH unique_variants AS (
-            SELECT DISTINCT
-                UPPER(
-                    REGEXP_REPLACE(
-                        REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                        ':',
-                        '-',
-                        'g'
-                    )
-                ) as variant_id
-            FROM phenopackets,
-                 jsonb_array_elements(phenopacket->'interpretations') as interp,
-                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                 jsonb_array_elements(
-                     gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                 ) as expr
-            WHERE expr->>'syntax' = 'vcf'
-              AND deleted_at IS NULL
-              AND (
-                  -- SNVs and small indels (ACGT bases)
-                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
-                  OR
-                  -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
-                  OR
-                  -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
-                  expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
-              )
-        )
-        SELECT COUNT(*) as count
-        FROM unique_variants uv
-        LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
-        WHERE va.variant_id IS NULL
-    """)
-    result = await db.execute(query)
-    pending_count = result.scalar() or 0
+        pending_count = result.scalar() or 0
 
     if pending_count == 0:
         return SyncTaskResponse(
@@ -625,8 +738,8 @@ async def start_variant_sync(
         "completed_at": None,
     }
 
-    # Queue background task
-    background_tasks.add_task(_run_variant_sync, task_id, db)
+    # Queue background task (no db session - task creates its own)
+    background_tasks.add_task(_run_variant_sync, task_id)
 
     # Estimate time (batch of 50 takes ~3-4s + overhead)
     estimated_seconds = int((pending_count / 50 + 1) * 4)
