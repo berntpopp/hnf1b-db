@@ -150,18 +150,36 @@ async def get_system_status(
     last_pub_sync = last_pub_result.scalar()
 
     # VEP annotation status - count unique variants in phenopackets vs cached
+    # Includes both SNVs/indels (ACGT) and CNVs (<DEL>, <DUP>, etc.)
     vep_query = text("""
         WITH unique_variants AS (
             SELECT DISTINCT
-                UPPER(REGEXP_REPLACE(expr->>'value', '^chr', '', 'i')) as variant_id
+                UPPER(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                        ':',
+                        '-',
+                        'g'
+                    )
+                ) as variant_id
             FROM phenopackets,
                  jsonb_array_elements(phenopacket->'interpretations') as interp,
                  jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                 jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
+                 jsonb_array_elements(
+                     gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                 ) as expr
             WHERE expr->>'syntax' = 'vcf'
               AND deleted_at IS NULL
-              AND expr->>'value' !~ '<[A-Z]+>'
-              AND expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+              AND (
+                  -- SNVs and small indels
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                  OR
+                  -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                  OR
+                  -- CNVs in region format (17:start-end:DEL)
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+              )
         )
         SELECT
             COUNT(*) as total,

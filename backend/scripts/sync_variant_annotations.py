@@ -56,13 +56,19 @@ async def get_all_unique_variants(db) -> Set[str]:
     - phenopackets -> interpretations -> diagnosis -> genomicInterpretations
       -> variantInterpretation -> variationDescriptor -> expressions
 
+    Supports:
+    - SNVs and small indels (e.g., "17-36459258-A-G")
+    - CNVs with symbolic alleles (e.g., "17-36459258-A-<DEL>")
+    - CNVs in region format (e.g., "17:36459258-37832869:DEL")
+
     Args:
         db: Database session
 
     Returns:
-        Set of unique variant IDs in VCF format (e.g., "17-36459258-A-G")
+        Set of unique variant IDs in normalized format
     """
     # Extract VCF expressions from all phenopackets
+    # Include both SNVs/indels and CNVs
     query = text("""
         WITH variant_expressions AS (
             SELECT DISTINCT
@@ -81,11 +87,26 @@ async def get_all_unique_variants(db) -> Set[str]:
               AND deleted_at IS NULL
         )
         SELECT
-            UPPER(REGEXP_REPLACE(vcf_value, '^chr', '', 'i')) as variant_id
+            UPPER(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(vcf_value, '^chr', '', 'i'),
+                    ':',
+                    '-',
+                    'g'
+                )
+            ) as variant_id
         FROM variant_expressions
         WHERE vcf_value IS NOT NULL
-          AND vcf_value !~ '<[A-Z]+>'  -- Exclude structural variants (<DEL>, <DUP>)
-          AND vcf_value ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+          AND (
+              -- SNVs and small indels (ACGT bases)
+              vcf_value ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+              OR
+              -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+              vcf_value ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+              OR
+              -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+              vcf_value ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+          )
     """)
     result = await db.execute(query)
     return {row.variant_id for row in result.fetchall()}

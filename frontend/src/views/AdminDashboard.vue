@@ -176,26 +176,38 @@
                       <v-btn
                         v-if="item.name === 'Publication Metadata'"
                         :loading="pubSyncInProgress"
-                        :disabled="item.pending === 0 && !pubSyncInProgress"
+                        :disabled="pubSyncInProgress"
                         size="small"
                         color="primary"
                         variant="tonal"
                         @click="startPublicationSync"
                       >
                         <v-icon start size="small">mdi-sync</v-icon>
-                        {{ pubSyncInProgress ? 'Syncing...' : 'Sync Now' }}
+                        {{
+                          pubSyncInProgress
+                            ? 'Syncing...'
+                            : item.pending > 0
+                              ? 'Sync Now'
+                              : 'Refresh'
+                        }}
                       </v-btn>
                       <v-btn
                         v-else-if="item.name === 'VEP Annotations'"
                         :loading="varSyncInProgress"
-                        :disabled="item.pending === 0 && !varSyncInProgress"
+                        :disabled="varSyncInProgress"
                         size="small"
                         color="purple"
                         variant="tonal"
                         @click="startVariantSync"
                       >
                         <v-icon start size="small">mdi-sync</v-icon>
-                        {{ varSyncInProgress ? 'Syncing...' : 'Sync Now' }}
+                        {{
+                          varSyncInProgress
+                            ? 'Syncing...'
+                            : item.pending > 0
+                              ? 'Sync Now'
+                              : 'Refresh'
+                        }}
                       </v-btn>
                       <span v-else class="text-caption text-grey"> CLI only </span>
                     </td>

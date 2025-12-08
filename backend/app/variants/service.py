@@ -59,13 +59,36 @@ class VEPAPIError(VEPError):
     pass
 
 
-def validate_variant_id(variant_id: str) -> str:
+def is_cnv_variant(variant_id: str) -> bool:
+    """Check if variant is a CNV/structural variant.
+
+    CNV formats supported:
+    - VCF-style with symbolic allele: 17-36459258-A-<DEL>, 17-36459258-A-<DUP>
+    - Region format: 17-36459258-37832869-DEL, 17:36459258-37832869:DEL
+
+    Args:
+        variant_id: Variant identifier
+
+    Returns:
+        True if variant is a CNV/structural variant
+    """
+    sv_types = r"(DEL|DUP|INS|INV|CNV)"
+    cnv_pattern = rf"<{sv_types}>|-{sv_types}$|:{sv_types}$"
+    return bool(re.search(cnv_pattern, variant_id, re.IGNORECASE))
+
+
+def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
     """Validate and normalize variant ID format.
 
     Security: Prevents SQL injection by validating format with regex.
 
+    Supports two formats:
+    1. SNV/indel: CHR-POS-REF-ALT (e.g., 17-36459258-A-G)
+    2. CNV/SV: CHR-POS-REF-<SV_TYPE> or CHR-START-END-SV_TYPE
+
     Args:
-        variant_id: Variant in VCF format (e.g., "17-36459258-A-G")
+        variant_id: Variant in VCF format
+        allow_cnv: If True, also accept CNV/structural variant formats
 
     Returns:
         Normalized variant ID without chr prefix
@@ -76,21 +99,43 @@ def validate_variant_id(variant_id: str) -> str:
     Examples:
         >>> validate_variant_id("17-36459258-A-G")
         '17-36459258-A-G'
-        >>> validate_variant_id("chr17-36459258-A-G")
-        '17-36459258-A-G'
+        >>> validate_variant_id("chr17-36459258-A-<DEL>")
+        '17-36459258-A-<DEL>'
+        >>> validate_variant_id("17-36459258-37832869-DEL")
+        '17-36459258-37832869-DEL'
     """
     # Remove chr prefix if present
     normalized = re.sub(r"^chr", "", variant_id, flags=re.IGNORECASE)
 
-    # Validate format: CHR-POS-REF-ALT
-    pattern = r"^[0-9XYM]+-\d+-[ACGT]+-[ACGT]+$"
-    if not re.match(pattern, normalized, re.IGNORECASE):
-        raise ValueError(
-            f"Invalid variant format: {variant_id}. "
-            "Expected VCF format: CHR-POS-REF-ALT (e.g., 17-36459258-A-G)"
-        )
+    # Normalize colon separators to dashes for region format
+    # e.g., 17:36459258-37832869:DEL -> 17-36459258-37832869-DEL
+    if ":" in normalized and "-" in normalized:
+        normalized = normalized.replace(":", "-")
 
-    return normalized.upper()
+    # Pattern 1: Standard SNV/indel - CHR-POS-REF-ALT (ACGT bases only)
+    snv_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-[ACGT]+$"
+
+    # Pattern 2: CNV with symbolic allele - CHR-POS-REF-<SV_TYPE>
+    cnv_symbolic_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
+
+    # Pattern 3: CNV region format - CHR-START-END-SV_TYPE
+    cnv_region_pattern = r"^[0-9XYM]+-\d+-\d+-(DEL|DUP|INS|INV|CNV)$"
+
+    is_snv = bool(re.match(snv_pattern, normalized, re.IGNORECASE))
+    is_cnv_symbolic = bool(re.match(cnv_symbolic_pattern, normalized, re.IGNORECASE))
+    is_cnv_region = bool(re.match(cnv_region_pattern, normalized, re.IGNORECASE))
+
+    if is_snv:
+        return normalized.upper()
+
+    if allow_cnv and (is_cnv_symbolic or is_cnv_region):
+        return normalized.upper()
+
+    raise ValueError(
+        f"Invalid variant format: {variant_id}. "
+        "Expected: CHR-POS-REF-ALT (e.g., 17-36459258-A-G) or "
+        "CHR-START-END-TYPE for CNVs (e.g., 17-36459258-37832869-DEL)"
+    )
 
 
 async def get_variant_annotation(
@@ -339,19 +384,68 @@ def _row_to_dict(row) -> dict:
     }
 
 
+def _format_variant_for_vep(variant_id: str) -> Optional[str]:
+    """Format a variant ID for VEP POST API.
+
+    Handles two variant types:
+    1. SNV/indel: Convert CHR-POS-REF-ALT to VCF format "CHROM POS ID REF ALT . . ."
+    2. CNV/SV: Convert to VEP default SV format "CHROM START END SV_TYPE STRAND ID"
+
+    Args:
+        variant_id: Normalized variant ID
+
+    Returns:
+        VEP-formatted string or None if format not recognized
+
+    Examples:
+        >>> _format_variant_for_vep("17-36459258-A-G")
+        '17 36459258 17-36459258-A-G A G . . .'
+        >>> _format_variant_for_vep("17-36459258-37832869-DEL")
+        '17 36459258 37832869 DEL + 17-36459258-37832869-DEL'
+        >>> _format_variant_for_vep("17-36459258-A-<DEL>")
+        '17 36459258 36459258 DEL + 17-36459258-A-<DEL>'
+    """
+    parts = variant_id.split("-")
+
+    # Check for CNV region format: CHR-START-END-TYPE (e.g., 17-36459258-37832869-DEL)
+    cnv_region_pattern = r"^[0-9XYM]+-\d+-\d+-(DEL|DUP|INS|INV|CNV)$"
+    if re.match(cnv_region_pattern, variant_id, re.IGNORECASE):
+        chrom, start, end, sv_type = parts
+        # VEP SV format: "CHROM START END SV_TYPE STRAND ID"
+        return f"{chrom} {start} {end} {sv_type.upper()} + {variant_id}"
+
+    # Check for CNV symbolic format: CHR-POS-REF-<TYPE> (e.g., 17-36459258-A-<DEL>)
+    cnv_symbolic_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
+    if re.match(cnv_symbolic_pattern, variant_id, re.IGNORECASE):
+        chrom, pos, _ref, alt = parts
+        # Extract SV type from <DEL> format
+        sv_type = alt.strip("<>").upper()
+        # For symbolic alleles without end position, use same start/end
+        # VEP will interpret based on the SV type
+        return f"{chrom} {pos} {pos} {sv_type} + {variant_id}"
+
+    # Standard SNV/indel format: CHR-POS-REF-ALT
+    if len(parts) == 4:
+        chrom, pos, ref, alt = parts
+        # VCF format: "CHROM POS ID REF ALT QUAL FILTER INFO"
+        return f"{chrom} {pos} {variant_id} {ref} {alt} . . ."
+
+    return None
+
+
 async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
     """Fetch annotations from Ensembl VEP API.
 
-    Uses POST /vep/homo_sapiens/region with VCF-style format for batch requests.
-    The VEP REST API accepts VCF-style format for all variant types including
-    indels. Format: "CHROM POS ID REF ALT QUAL FILTER INFO"
+    Uses POST /vep/homo_sapiens/region with appropriate format for each variant type:
+    - SNV/indels: VCF format "CHROM POS ID REF ALT QUAL FILTER INFO"
+    - CNV/SVs: VEP default SV format "CHROM START END SV_TYPE STRAND ID"
 
     See:
     - https://rest.ensembl.org/documentation/info/vep_region_post
     - https://www.ensembl.org/info/docs/tools/vep/vep_formats.html
 
     Args:
-        variant_ids: List of variants in VCF format (CHR-POS-REF-ALT)
+        variant_ids: List of variants in VCF or CNV format
 
     Returns:
         Dict mapping variant_id to annotation dict
@@ -363,21 +457,14 @@ async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
     if not variant_ids:
         return {}
 
-    # Convert VCF dash format to VCF space format for POST request
-    # VEP POST accepts VCF format: "CHROM POS ID REF ALT QUAL FILTER INFO"
-    # Example: "17 37699167 . TG T . . ." for deletion
-    # See: https://rest.ensembl.org/documentation/info/vep_region_post
-    # See: https://www.ensembl.org/info/docs/tools/vep/vep_formats.html
+    # Format variants for VEP API
     vep_variants = []
     for vid in variant_ids:
-        parts = vid.split("-")
-        if len(parts) != 4:
-            logger.warning(f"Skipping malformed variant ID: {vid}")
-            continue
-        chrom, pos, ref, alt = parts
-        # VCF format with spaces: "CHROM POS ID REF ALT QUAL FILTER INFO"
-        # Use variant ID as the ID field to help match responses
-        vep_variants.append(f"{chrom} {pos} {vid} {ref} {alt} . . .")
+        formatted = _format_variant_for_vep(vid)
+        if formatted:
+            vep_variants.append(formatted)
+        else:
+            logger.warning(f"Skipping unrecognized variant format: {vid}")
 
     if not vep_variants:
         return {}
