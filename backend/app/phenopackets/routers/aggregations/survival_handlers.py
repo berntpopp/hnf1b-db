@@ -735,7 +735,9 @@ class DiseaseSubtypeHandler(SurvivalHandler):
         }
 
         if endpoint_hpo_terms is None:
-            return await self._handle_current_age_with_params(db, endpoint_label, params)
+            return await self._handle_current_age_with_params(
+                db, endpoint_label, params
+            )
         return await self._handle_standard_with_params(
             db, endpoint_label, endpoint_hpo_terms, params
         )

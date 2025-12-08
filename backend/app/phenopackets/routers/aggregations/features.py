@@ -106,9 +106,7 @@ async def aggregate_by_feature(
         AggregationResult(
             label=row["label"] or row["hpo_id"],
             count=int(row["present_count"]),
-            percentage=(int(row["present_count"]) / total * 100)
-            if total > 0
-            else 0,
+            percentage=(int(row["present_count"]) / total * 100) if total > 0 else 0,
             details={
                 "hpo_id": row["hpo_id"],
                 "present_count": int(row["present_count"]),

@@ -46,9 +46,7 @@ __all__ = [
 ]
 
 
-async def check_materialized_view_exists(
-    db: AsyncSession, view_name: str
-) -> bool:
+async def check_materialized_view_exists(db: AsyncSession, view_name: str) -> bool:
     """Check if a materialized view is available (O(1) cached lookup).
 
     This function now uses the startup-initialized MV cache instead of

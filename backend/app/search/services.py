@@ -101,9 +101,7 @@ class GlobalSearchService:
             return AutocompleteResponse(results=[])
 
         results = await self.repo.autocomplete(query, limit)
-        return AutocompleteResponse(
-            results=[SearchResultItem(**r) for r in results]
-        )
+        return AutocompleteResponse(results=[SearchResultItem(**r) for r in results])
 
     async def refresh_index(self, concurrently: bool = True) -> None:
         """Refresh the materialized view.
@@ -209,14 +207,18 @@ class PhenopacketSearchService:
         # Build cursors
         start_cursor = end_cursor = None
         if rows:
-            start_cursor = encode_cursor({
-                "created_at": rows[0]["created_at"],
-                "id": rows[0]["id"],
-            })
-            end_cursor = encode_cursor({
-                "created_at": rows[-1]["created_at"],
-                "id": rows[-1]["id"],
-            })
+            start_cursor = encode_cursor(
+                {
+                    "created_at": rows[0]["created_at"],
+                    "id": rows[0]["id"],
+                }
+            )
+            end_cursor = encode_cursor(
+                {
+                    "created_at": rows[-1]["created_at"],
+                    "id": rows[-1]["id"],
+                }
+            )
 
         # Format response data
         data = []
@@ -360,19 +362,27 @@ class FacetService:
 
         if gene:
             conditions.append("phenopacket->'interpretations' @> :gene_filter")
-            params["gene_filter"] = json.dumps([{
-                "diagnosis": {"genomicInterpretations": [{
-                    "variantInterpretation": {"variationDescriptor": {
-                        "geneContext": {"symbol": gene}
-                    }}
-                }]}
-            }])
+            params["gene_filter"] = json.dumps(
+                [
+                    {
+                        "diagnosis": {
+                            "genomicInterpretations": [
+                                {
+                                    "variantInterpretation": {
+                                        "variationDescriptor": {
+                                            "geneContext": {"symbol": gene}
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            )
 
         if pmid:
             pmid_val = pmid if pmid.startswith("PMID:") else f"PMID:{pmid}"
-            pmid_cond = (
-                "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
-            )
+            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
             conditions.append(pmid_cond)
             params["pmid_filter"] = json.dumps([{"id": pmid_val}])
 
@@ -423,12 +433,10 @@ class FacetService:
 
         # SQL path fragments for JSONB queries
         acmg_path = (
-            "gi.value->'variantInterpretation'"
-            "->>'acmgPathogenicityClassification'"
+            "gi.value->'variantInterpretation'->>'acmgPathogenicityClassification'"
         )
         gi_join = (
-            "COALESCE(interp.value->'diagnosis'"
-            "->'genomicInterpretations', '[]'::jsonb)"
+            "COALESCE(interp.value->'diagnosis'->'genomicInterpretations', '[]'::jsonb)"
         )
 
         # Pathogenicity facet

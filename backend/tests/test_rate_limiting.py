@@ -27,7 +27,9 @@ RATE_WINDOW = settings.rate_limiting.api.window_seconds
 class MockRequest:
     """Mock FastAPI Request for testing."""
 
-    def __init__(self, client_host: str = "127.0.0.1", forwarded_for: Optional[str] = None):
+    def __init__(
+        self, client_host: str = "127.0.0.1", forwarded_for: Optional[str] = None
+    ):
         """Initialize mock request with client host and optional forwarded headers."""
         self.client = type("obj", (object,), {"host": client_host})
         self.headers = {}

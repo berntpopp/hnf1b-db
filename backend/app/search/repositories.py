@@ -182,12 +182,9 @@ class PhenopacketSearchRepository:
         # Full-text search
         if query:
             select_extra = (
-                ", ts_rank(search_vector, "
-                "plainto_tsquery('english', :query)) AS rank"
+                ", ts_rank(search_vector, plainto_tsquery('english', :query)) AS rank"
             )
-            conditions.append(
-                "search_vector @@ plainto_tsquery('english', :query)"
-            )
+            conditions.append("search_vector @@ plainto_tsquery('english', :query)")
             params["query"] = query
 
         # HPO filter
@@ -203,26 +200,30 @@ class PhenopacketSearchRepository:
         # Gene filter
         if filters.get("gene"):
             conditions.append("phenopacket->'interpretations' @> :gene_filter")
-            params["gene_filter"] = json.dumps([{
-                "diagnosis": {
-                    "genomicInterpretations": [{
-                        "variantInterpretation": {
-                            "variationDescriptor": {
-                                "geneContext": {"symbol": filters["gene"]}
-                            }
+            params["gene_filter"] = json.dumps(
+                [
+                    {
+                        "diagnosis": {
+                            "genomicInterpretations": [
+                                {
+                                    "variantInterpretation": {
+                                        "variationDescriptor": {
+                                            "geneContext": {"symbol": filters["gene"]}
+                                        }
+                                    }
+                                }
+                            ]
                         }
-                    }]
-                }
-            }])
+                    }
+                ]
+            )
 
         # PMID filter
         if filters.get("pmid"):
             pmid = filters["pmid"]
             if not pmid.startswith("PMID:"):
                 pmid = f"PMID:{pmid}"
-            pmid_cond = (
-                "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
-            )
+            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
             conditions.append(pmid_cond)
             params["pmid_filter"] = json.dumps([{"id": pmid}])
 
@@ -300,25 +301,29 @@ class PhenopacketSearchRepository:
 
         if filters.get("gene"):
             conditions.append("phenopacket->'interpretations' @> :gene_filter")
-            params["gene_filter"] = json.dumps([{
-                "diagnosis": {
-                    "genomicInterpretations": [{
-                        "variantInterpretation": {
-                            "variationDescriptor": {
-                                "geneContext": {"symbol": filters["gene"]}
-                            }
+            params["gene_filter"] = json.dumps(
+                [
+                    {
+                        "diagnosis": {
+                            "genomicInterpretations": [
+                                {
+                                    "variantInterpretation": {
+                                        "variationDescriptor": {
+                                            "geneContext": {"symbol": filters["gene"]}
+                                        }
+                                    }
+                                }
+                            ]
                         }
-                    }]
-                }
-            }])
+                    }
+                ]
+            )
 
         if filters.get("pmid"):
             pmid = filters["pmid"]
             if not pmid.startswith("PMID:"):
                 pmid = f"PMID:{pmid}"
-            pmid_cond = (
-                "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
-            )
+            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
             conditions.append(pmid_cond)
             params["pmid_filter"] = json.dumps([{"id": pmid}])
 

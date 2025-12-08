@@ -107,7 +107,9 @@ async def search_test_data(db_session: AsyncSession):
     await db_session.execute(
         text("DELETE FROM phenopackets WHERE phenopacket_id = 'PP_SEARCH_TEST_001'")
     )
-    await db_session.execute(text("DELETE FROM publication_metadata WHERE pmid = 'PMID:88888'"))
+    await db_session.execute(
+        text("DELETE FROM publication_metadata WHERE pmid = 'PMID:88888'")
+    )
     await db_session.commit()
 
     # Refresh MV after cleanup
@@ -148,9 +150,7 @@ class TestGlobalSearchRepository:
             assert all(r["type"] == "Variant" for r in results)
 
     @pytest.mark.asyncio
-    async def test_search_pagination(
-        self, db_session: AsyncSession, search_test_data
-    ):
+    async def test_search_pagination(self, db_session: AsyncSession, search_test_data):
         """Test search pagination with limit and offset."""
         repo = GlobalSearchRepository(db_session)
 
@@ -320,9 +320,7 @@ class TestPhenopacketSearchRepository:
             assert isinstance(backward_results, list)
 
     @pytest.mark.asyncio
-    async def test_count_with_filters(
-        self, db_session: AsyncSession, search_test_data
-    ):
+    async def test_count_with_filters(self, db_session: AsyncSession, search_test_data):
         """Test count with various filters."""
         repo = PhenopacketSearchRepository(db_session)
 
@@ -503,23 +501,25 @@ class TestFacetService:
     """
 
     @pytest.mark.asyncio
-    async def test_get_facets_returns_all_categories(
-        self, db_session: AsyncSession
-    ):
+    async def test_get_facets_returns_all_categories(self, db_session: AsyncSession):
         """Test get_facets returns all expected facet categories."""
         service = FacetService(db_session)
 
         facets = await service.get_facets()
 
-        expected_categories = ["sex", "hasVariants", "pathogenicity", "genes", "phenotypes"]
+        expected_categories = [
+            "sex",
+            "hasVariants",
+            "pathogenicity",
+            "genes",
+            "phenotypes",
+        ]
         for category in expected_categories:
             assert category in facets
             assert isinstance(facets[category], list)
 
     @pytest.mark.asyncio
-    async def test_facet_item_structure(
-        self, db_session: AsyncSession
-    ):
+    async def test_facet_item_structure(self, db_session: AsyncSession):
         """Test facet items have correct structure."""
         service = FacetService(db_session)
 
@@ -575,9 +575,7 @@ class TestMVRefresh:
         await refresh_global_search_index(db_session, concurrently=False)
 
     @pytest.mark.asyncio
-    async def test_schedule_refresh_respects_staleness(
-        self, db_session: AsyncSession
-    ):
+    async def test_schedule_refresh_respects_staleness(self, db_session: AsyncSession):
         """Test scheduled refresh respects staleness threshold."""
         # Force a refresh first
         await refresh_global_search_index(db_session)

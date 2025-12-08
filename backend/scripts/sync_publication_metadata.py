@@ -25,6 +25,7 @@ Requirements:
     - Valid backend/.env with DATABASE_URL
     - Internet connection (for PubMed API calls)
 """
+# ruff: noqa: E501 - SQL queries are more readable when not line-wrapped
 
 import argparse
 import asyncio
@@ -84,9 +85,7 @@ async def get_stored_pmids(db) -> Set[str]:
     return {row.pmid for row in result.fetchall()}
 
 
-async def main(
-    dry_run: bool = False, limit: Optional[int] = None, force: bool = False
-):
+async def main(dry_run: bool = False, limit: Optional[int] = None, force: bool = False):
     """Sync all publication metadata from PubMed.
 
     Args:

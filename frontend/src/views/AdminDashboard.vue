@@ -260,9 +260,9 @@
                         <v-icon color="success">mdi-check-circle</v-icon>
                       </template>
                       <v-list-item-title>System Status</v-list-item-title>
-                      <v-list-item-subtitle>{{
-                        systemStatus?.status || 'Unknown'
-                      }}</v-list-item-subtitle>
+                      <v-list-item-subtitle>
+                        {{ systemStatus?.status || 'Unknown' }}
+                      </v-list-item-subtitle>
                     </v-list-item>
                     <v-list-item>
                       <template #prepend>

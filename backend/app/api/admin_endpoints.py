@@ -5,6 +5,7 @@ Provides admin-only endpoints for:
 - Data sync operations (publications, annotations)
 - Database maintenance tasks
 """
+# ruff: noqa: E501 - SQL queries are more readable when not line-wrapped
 
 import asyncio
 import logging
@@ -68,7 +69,9 @@ class SyncProgressResponse(BaseModel):
     """Response for sync task progress."""
 
     task_id: str = Field(..., description="Task identifier")
-    status: str = Field(..., description="Task status (pending/running/completed/failed)")
+    status: str = Field(
+        ..., description="Task status (pending/running/completed/failed)"
+    )
     progress: float = Field(..., description="Progress percentage (0-100)")
     processed: int = Field(..., description="Items processed")
     total: int = Field(..., description="Total items")
@@ -114,6 +117,8 @@ async def get_system_status(
     """)
     stats_result = await db.execute(stats_query)
     stats = stats_result.fetchone()
+    if stats is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch database statistics")
 
     # Publication sync status
     pub_query = text("""
@@ -132,6 +137,8 @@ async def get_system_status(
     """)
     pub_result = await db.execute(pub_query)
     pub_stats = pub_result.fetchone()
+    if pub_stats is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch publication statistics")
 
     # Get last publication sync time
     last_pub_sync_query = text("""
@@ -155,6 +162,8 @@ async def get_system_status(
     """)
     vep_result = await db.execute(vep_query)
     vep_stats = vep_result.fetchone()
+    if vep_stats is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch VEP statistics")
 
     sync_status = [
         DataSyncStatus(
@@ -229,7 +238,9 @@ async def _run_publication_sync(task_id: str, db: AsyncSession) -> None:
                 task["errors"] += 1
                 logger.warning(f"Failed to sync PMID {pmid}: {e}")
 
-            task["progress"] = (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+            task["progress"] = (
+                (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+            )
 
             # Rate limiting
             await asyncio.sleep(0.35)
@@ -360,14 +371,22 @@ async def get_publication_sync_status(
             """)
             result = await db.execute(query)
             stats = result.fetchone()
+            if stats is None:
+                raise HTTPException(
+                    status_code=500, detail="Failed to fetch sync statistics"
+                )
 
             return SyncProgressResponse(
                 task_id="none",
                 status="idle",
-                progress=100.0 if stats.total == stats.synced else (stats.synced / stats.total * 100 if stats.total > 0 else 0),
+                progress=100.0
+                if stats.total == stats.synced
+                else (stats.synced / stats.total * 100 if stats.total > 0 else 0),
                 processed=stats.synced or 0,
                 total=stats.total or 0,
                 errors=0,
+                started_at=None,
+                completed_at=None,
             )
 
         # Get most recent task
@@ -436,6 +455,8 @@ async def get_statistics(
 
     result = await db.execute(query)
     stats = result.fetchone()
+    if stats is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch statistics")
 
     return {
         "phenopackets": {
@@ -452,6 +473,7 @@ async def get_statistics(
         "publications": {
             "referenced": stats.publications_referenced or 0,
             "cached": stats.publications_cached or 0,
-            "pending_sync": (stats.publications_referenced or 0) - (stats.publications_cached or 0),
+            "pending_sync": (stats.publications_referenced or 0)
+            - (stats.publications_cached or 0),
         },
     }
