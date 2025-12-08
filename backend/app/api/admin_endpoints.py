@@ -251,9 +251,11 @@ async def get_system_status(
         ),
         DataSyncStatus(
             name="chr17q12 Genes",
-            total=175,  # ~175 genes in chr17q12 region from Ensembl
+            # Use synced count as total when genes are present (dynamic from Ensembl)
+            # Before first sync, estimate ~175 genes in chr17q12 region
+            total=ref_status.chr17q12_gene_count if ref_status.chr17q12_gene_count > 0 else 175,
             synced=ref_status.chr17q12_gene_count,
-            pending=max(0, 175 - ref_status.chr17q12_gene_count),
+            pending=0,  # All Ensembl genes synced in single operation
             last_sync=ref_status.last_updated.isoformat() if ref_status.last_updated else None,
         ),
     ]
