@@ -20,6 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import require_admin
 from app.database import async_session_maker, get_db
 from app.models.user import User
+from app.phenopackets.routers.aggregations.sql_fragments import (
+    UNIQUE_VARIANTS_CTE,
+    get_pending_variants_query,
+    get_unique_variants_query,
+    get_variant_sync_status_query,
+)
 from app.publications.service import get_publication_metadata
 from app.variants.service import get_variant_annotations_batch
 
@@ -149,10 +155,29 @@ async def get_system_status(
     last_pub_result = await db.execute(last_pub_sync_query)
     last_pub_sync = last_pub_result.scalar()
 
-    # VEP annotation status - count unique variants in phenopackets vs cached
-    # Includes both SNVs/indels (ACGT) and CNVs (<DEL>, <DUP>, etc.)
+    # VEP annotation status - count unique variants by VRS ID (matches summary endpoint)
+    # and count synced VCF expressions (what VEP can actually annotate)
+    # Note: Some CNVs share the same VCF expression but have different VRS IDs
+    # (e.g., different end positions), so total may exceed synced after full sync
     vep_query = text("""
-        WITH unique_variants AS (
+        WITH unique_vrs_ids AS (
+            -- Count total unique variants by VRS ID (variationDescriptor.id)
+            -- This matches the summary endpoint count per GA4GH VRS 2.0 spec
+            SELECT DISTINCT vd->>'id' as vrs_id
+            FROM phenopackets p,
+                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                 jsonb_array_elements(
+                    interp->'diagnosis'->'genomicInterpretations'
+                 ) as gi,
+                 LATERAL (
+                     SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
+                 ) vd_lateral
+            WHERE vd_lateral.vd IS NOT NULL
+              AND vd_lateral.vd->>'id' IS NOT NULL
+              AND p.deleted_at IS NULL
+        ),
+        unique_vcf_variants AS (
+            -- Count unique VCF expressions (what VEP annotates)
             SELECT DISTINCT
                 UPPER(
                     REGEXP_REPLACE(
@@ -174,17 +199,18 @@ async def get_system_status(
                   -- SNVs and small indels
                   expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
                   OR
-                  -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                  -- CNVs with END position (CHROM-POS-END-REF-<TYPE>) - primary format
+                  -- Per VCF 4.3 spec: symbolic alleles need END for unique identification
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
                   OR
                   -- CNVs in region format (17:start-end:DEL)
                   expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
               )
         )
         SELECT
-            COUNT(*) as total,
+            (SELECT COUNT(*) FROM unique_vrs_ids) as total,
             COUNT(va.variant_id) as synced
-        FROM unique_variants uv
+        FROM unique_vcf_variants uv
         LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
     """)
     vep_result = await db.execute(vep_query)
@@ -504,42 +530,8 @@ async def _run_variant_sync(task_id: str) -> None:
     try:
         # Create a fresh database session for the background task
         async with async_session_maker() as db:
-            # Get unique variants to sync (including CNVs)
-            query = text("""
-                WITH unique_variants AS (
-                    SELECT DISTINCT
-                        UPPER(
-                            REGEXP_REPLACE(
-                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                                ':',
-                                '-',
-                                'g'
-                            )
-                        ) as variant_id
-                    FROM phenopackets,
-                         jsonb_array_elements(phenopacket->'interpretations') as interp,
-                         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                         jsonb_array_elements(
-                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                         ) as expr
-                    WHERE expr->>'syntax' = 'vcf'
-                      AND deleted_at IS NULL
-                      AND (
-                          -- SNVs and small indels (ACGT bases)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
-                          OR
-                          -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
-                          OR
-                          -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
-                      )
-                )
-                SELECT uv.variant_id
-                FROM unique_variants uv
-                LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
-                WHERE va.variant_id IS NULL
-            """)
+            # Get unique variants to sync (using shared SQL fragment)
+            query = text(get_pending_variants_query())
             result = await db.execute(query)
             variants_to_sync = [row.variant_id for row in result.fetchall()]
 
@@ -614,106 +606,27 @@ async def start_variant_sync(
     """Start variant annotation sync task."""
     if force:
         # Force refresh: get all unique variants and delete existing cached data
-        query = text("""
-            WITH unique_variants AS (
-                SELECT DISTINCT
-                    UPPER(
-                        REGEXP_REPLACE(
-                            REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                            ':',
-                            '-',
-                            'g'
-                        )
-                    ) as variant_id
-                FROM phenopackets,
-                     jsonb_array_elements(phenopacket->'interpretations') as interp,
-                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                     jsonb_array_elements(
-                         gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                     ) as expr
-                WHERE expr->>'syntax' = 'vcf'
-                  AND deleted_at IS NULL
-                  AND (
-                      -- SNVs and small indels (ACGT bases)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
-                      OR
-                      -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
-                      OR
-                      -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
-                  )
-            )
-            SELECT variant_id FROM unique_variants
-        """)
+        # Use shared SQL fragment for DRY compliance
+        query = text(get_unique_variants_query())
         result = await db.execute(query)
         all_variants = [row.variant_id for row in result.fetchall()]
         pending_count = len(all_variants)
 
         if pending_count > 0:
             # Delete existing cached annotations for force refresh
-            delete_query = text("""
+            delete_query = text(f"""
                 DELETE FROM variant_annotations
                 WHERE variant_id IN (
-                    SELECT DISTINCT
-                        UPPER(
-                            REGEXP_REPLACE(
-                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                                ':',
-                                '-',
-                                'g'
-                            )
-                        ) as variant_id
-                    FROM phenopackets,
-                         jsonb_array_elements(phenopacket->'interpretations') as interp,
-                         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                         jsonb_array_elements(
-                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                         ) as expr
-                    WHERE expr->>'syntax' = 'vcf'
-                      AND deleted_at IS NULL
+                    WITH {UNIQUE_VARIANTS_CTE}
+                    SELECT variant_id FROM unique_variants
                 )
             """)
             await db.execute(delete_query)
             await db.commit()
             logger.info(f"Force refresh: deleted existing annotations for {pending_count} variants")
     else:
-        # Check for pending items (including CNVs)
-        query = text("""
-            WITH unique_variants AS (
-                SELECT DISTINCT
-                    UPPER(
-                        REGEXP_REPLACE(
-                            REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                            ':',
-                            '-',
-                            'g'
-                        )
-                    ) as variant_id
-                FROM phenopackets,
-                     jsonb_array_elements(phenopacket->'interpretations') as interp,
-                     jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                     jsonb_array_elements(
-                         gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                     ) as expr
-                WHERE expr->>'syntax' = 'vcf'
-                  AND deleted_at IS NULL
-                  AND (
-                      -- SNVs and small indels (ACGT bases)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
-                      OR
-                      -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
-                      OR
-                      -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
-                      expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
-                  )
-            )
-            SELECT COUNT(*) as count
-            FROM unique_variants uv
-            LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
-            WHERE va.variant_id IS NULL
-        """)
+        # Check for pending items (using shared SQL fragment)
+        query = text(get_unique_variants_query("COUNT(*)"))
         result = await db.execute(query)
         pending_count = result.scalar() or 0
 
@@ -775,43 +688,8 @@ async def get_variant_sync_status(
         # Find most recent variant sync task
         var_tasks = {k: v for k, v in _sync_tasks.items() if k.startswith("var_sync_")}
         if not var_tasks:
-            # Return current sync status from database (including CNVs)
-            query = text("""
-                WITH unique_variants AS (
-                    SELECT DISTINCT
-                        UPPER(
-                            REGEXP_REPLACE(
-                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
-                                ':',
-                                '-',
-                                'g'
-                            )
-                        ) as variant_id
-                    FROM phenopackets,
-                         jsonb_array_elements(phenopacket->'interpretations') as interp,
-                         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                         jsonb_array_elements(
-                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
-                         ) as expr
-                    WHERE expr->>'syntax' = 'vcf'
-                      AND deleted_at IS NULL
-                      AND (
-                          -- SNVs and small indels (ACGT bases)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
-                          OR
-                          -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
-                          OR
-                          -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
-                          expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
-                      )
-                )
-                SELECT
-                    COUNT(*) as total,
-                    COUNT(va.variant_id) as synced
-                FROM unique_variants uv
-                LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
-            """)
+            # Return current sync status from database (using shared SQL fragment)
+            query = text(get_variant_sync_status_query())
             result = await db.execute(query)
             stats = result.fetchone()
             if stats is None:
@@ -904,17 +782,20 @@ async def get_statistics(
     if stats is None:
         raise HTTPException(status_code=500, detail="Failed to fetch statistics")
 
-    # Get unique variant count from phenopackets
+    # Get unique variant count from phenopackets by VRS ID
+    # This matches the summary endpoint count per GA4GH VRS 2.0 spec
+    # Each unique variationDescriptor.id represents a distinct variant
     unique_variants_query = text("""
-        SELECT COUNT(DISTINCT UPPER(REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'))) as count
-        FROM phenopackets,
-             jsonb_array_elements(phenopacket->'interpretations') as interp,
+        SELECT COUNT(DISTINCT vd->>'id') as count
+        FROM phenopackets p,
+             jsonb_array_elements(p.phenopacket->'interpretations') as interp,
              jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-             jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
-        WHERE expr->>'syntax' = 'vcf'
-          AND deleted_at IS NULL
-          AND expr->>'value' !~ '<[A-Z]+>'
-          AND expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+             LATERAL (
+                 SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
+             ) vd_lateral
+        WHERE vd_lateral.vd IS NOT NULL
+          AND vd_lateral.vd->>'id' IS NOT NULL
+          AND p.deleted_at IS NULL
     """)
     unique_result = await db.execute(unique_variants_query)
     unique_variants_count = unique_result.scalar() or 0

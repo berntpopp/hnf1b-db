@@ -173,42 +173,80 @@
                       <span v-else class="text-caption text-grey">Never</span>
                     </td>
                     <td class="text-center">
-                      <v-btn
-                        v-if="item.name === 'Publication Metadata'"
-                        :loading="pubSyncInProgress"
-                        :disabled="pubSyncInProgress"
-                        size="small"
-                        color="primary"
-                        variant="tonal"
-                        @click="startPublicationSync"
-                      >
-                        <v-icon start size="small">mdi-sync</v-icon>
-                        {{
-                          pubSyncInProgress
-                            ? 'Syncing...'
-                            : item.pending > 0
-                              ? 'Sync Now'
-                              : 'Refresh'
-                        }}
-                      </v-btn>
-                      <v-btn
-                        v-else-if="item.name === 'VEP Annotations'"
-                        :loading="varSyncInProgress"
-                        :disabled="varSyncInProgress"
-                        size="small"
-                        color="purple"
-                        variant="tonal"
-                        @click="startVariantSync"
-                      >
-                        <v-icon start size="small">mdi-sync</v-icon>
-                        {{
-                          varSyncInProgress
-                            ? 'Syncing...'
-                            : item.pending > 0
-                              ? 'Sync Now'
-                              : 'Refresh'
-                        }}
-                      </v-btn>
+                      <template v-if="item.name === 'Publication Metadata'">
+                        <v-btn-group v-if="!pubSyncInProgress" density="compact">
+                          <v-btn
+                            size="small"
+                            color="primary"
+                            variant="tonal"
+                            @click="startPublicationSync(false)"
+                          >
+                            <v-icon start size="small">mdi-sync</v-icon>
+                            {{ item.pending > 0 ? 'Sync Now' : 'Refresh' }}
+                          </v-btn>
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn
+                                v-bind="props"
+                                size="small"
+                                color="primary"
+                                variant="tonal"
+                                icon
+                              >
+                                <v-icon size="small">mdi-chevron-down</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="startPublicationSync(true)">
+                                <v-list-item-title>
+                                  <v-icon size="small" class="mr-1">mdi-refresh</v-icon>
+                                  Force Re-sync All
+                                </v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </v-btn-group>
+                        <v-btn v-else loading size="small" color="primary" variant="tonal" disabled>
+                          Syncing...
+                        </v-btn>
+                      </template>
+                      <template v-else-if="item.name === 'VEP Annotations'">
+                        <v-btn-group v-if="!varSyncInProgress" density="compact">
+                          <v-btn
+                            size="small"
+                            color="purple"
+                            variant="tonal"
+                            @click="startVariantSync(false)"
+                          >
+                            <v-icon start size="small">mdi-sync</v-icon>
+                            {{ item.pending > 0 ? 'Sync Now' : 'Refresh' }}
+                          </v-btn>
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn
+                                v-bind="props"
+                                size="small"
+                                color="purple"
+                                variant="tonal"
+                                icon
+                              >
+                                <v-icon size="small">mdi-chevron-down</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="startVariantSync(true)">
+                                <v-list-item-title>
+                                  <v-icon size="small" class="mr-1">mdi-refresh</v-icon>
+                                  Force Re-sync All
+                                </v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </v-btn-group>
+                        <v-btn v-else loading size="small" color="purple" variant="tonal" disabled>
+                          Syncing...
+                        </v-btn>
+                      </template>
                       <span v-else class="text-caption text-grey"> CLI only </span>
                     </td>
                   </tr>
@@ -506,10 +544,10 @@ const refreshStatus = async () => {
 };
 
 // Publication sync methods
-const startPublicationSync = async () => {
+const startPublicationSync = async (force = false) => {
   try {
     pubSyncInProgress.value = true;
-    const response = await API.startPublicationSync();
+    const response = await API.startPublicationSync(force);
     pubSyncTask.value = {
       task_id: response.data.task_id,
       status: response.data.status,
@@ -570,10 +608,10 @@ const stopPubPolling = () => {
 };
 
 // Variant sync methods
-const startVariantSync = async () => {
+const startVariantSync = async (force = false) => {
   try {
     varSyncInProgress.value = true;
-    const response = await API.startVariantSync();
+    const response = await API.startVariantSync(force);
     varSyncTask.value = {
       task_id: response.data.task_id,
       status: response.data.status,

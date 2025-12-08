@@ -240,3 +240,138 @@ COALESCE(
     vd->'molecularConsequences'->0->>'label'
 )
 """
+
+
+# =============================================================================
+# Unique Variant Extraction CTEs (Admin Sync)
+# =============================================================================
+# Purpose: Extract unique variant IDs for VEP annotation sync
+# Categories: VCF expressions, Internal CNV format
+# Used by: admin_endpoints.py for variant sync operations
+# Note: Combines variants from two sources with UNION for deduplication
+
+# Regex patterns for variant format validation
+VCF_VARIANT_PATTERNS = """(
+    -- SNVs and small indels (ACGT bases)
+    expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+    OR
+    -- CNVs with END position (CHROM-POS-END-REF-<TYPE>) - primary format
+    -- Per VCF 4.3 spec: symbolic alleles need END for unique identification
+    expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+    OR
+    -- CNVs with symbolic alleles 4-part (<DEL>, <DUP>, etc.)
+    expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+    OR
+    -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+    expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+)"""
+
+# Internal CNV format regex (e.g., var:HNF1B:17:36459258-37832869:DEL)
+# fmt: off
+INTERNAL_CNV_PATTERN = (
+    "'^var:[A-Za-z0-9]+:[0-9XYM]+:[0-9]+-[0-9]+:(DEL|DUP|INS|INV|CNV)$'"
+)
+# fmt: on
+
+# CTE: Extract variants from VCF expressions array
+VCF_VARIANTS_CTE = f"""
+vcf_variants AS (
+    -- Variants from VCF expressions array
+    SELECT DISTINCT
+        UPPER(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                ':',
+                '-',
+                'g'
+            )
+        ) as variant_id
+    FROM phenopackets,
+         jsonb_array_elements(phenopacket->'interpretations') as interp,
+         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+         jsonb_array_elements(
+             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+         ) as expr
+    WHERE expr->>'syntax' = 'vcf'
+      AND deleted_at IS NULL
+      AND {VCF_VARIANT_PATTERNS}
+)"""
+
+# CTE: Extract variants from variationDescriptor.id (internal CNV format)
+INTERNAL_CNV_VARIANTS_CTE = f"""
+internal_cnv_variants AS (
+    -- Variants from variationDescriptor.id (internal CNV format)
+    -- Format: var:GENE:CHROM:START-END:TYPE (e.g., var:HNF1B:17:36459258-37832869:DEL)
+    SELECT DISTINCT vd->>'id' as variant_id
+    FROM phenopackets p,
+         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+         LATERAL (
+             SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
+         ) vd_lateral
+    WHERE vd_lateral.vd IS NOT NULL
+      AND vd_lateral.vd->>'id' IS NOT NULL
+      AND p.deleted_at IS NULL
+      AND vd_lateral.vd->>'id' ~ {INTERNAL_CNV_PATTERN}
+)"""
+
+# Combined CTE: Union of VCF and internal CNV variants
+UNIQUE_VARIANTS_CTE = f"""
+{VCF_VARIANTS_CTE},
+{INTERNAL_CNV_VARIANTS_CTE},
+unique_variants AS (
+    SELECT variant_id FROM vcf_variants
+    UNION
+    SELECT variant_id FROM internal_cnv_variants
+)"""
+
+
+def get_unique_variants_query(select_clause: str = "variant_id") -> str:
+    """Generate a complete query for unique variants.
+
+    Args:
+        select_clause: The SELECT clause to use (default: "variant_id")
+
+    Returns:
+        Complete SQL query string with CTEs
+
+    Example:
+        >>> query = get_unique_variants_query("COUNT(*)")
+        >>> # Returns: WITH ... SELECT COUNT(*) FROM unique_variants
+    """
+    return f"""
+WITH {UNIQUE_VARIANTS_CTE}
+SELECT {select_clause}
+FROM unique_variants
+"""
+
+
+def get_pending_variants_query() -> str:
+    """Generate query for variants not yet in variant_annotations table.
+
+    Returns:
+        Complete SQL query string that finds variants needing sync
+    """
+    return f"""
+WITH {UNIQUE_VARIANTS_CTE}
+SELECT uv.variant_id
+FROM unique_variants uv
+LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
+WHERE va.variant_id IS NULL
+"""
+
+
+def get_variant_sync_status_query() -> str:
+    """Generate query for variant sync status (total/synced counts).
+
+    Returns:
+        Complete SQL query string returning total and synced counts
+    """
+    return f"""
+WITH {UNIQUE_VARIANTS_CTE}
+SELECT
+    COUNT(*) as total,
+    COUNT(va.variant_id) as synced
+FROM unique_variants uv
+LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
+"""

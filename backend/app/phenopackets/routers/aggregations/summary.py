@@ -78,7 +78,11 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
     )
     distinct_publications = distinct_publications_result.scalar() or 0
 
-    # 5. Distinct variants (unique variants across all phenopackets)
+    # 5. Distinct variants (unique variants by VRS ID across all phenopackets)
+    # Count by variationDescriptor.id (VRS identifier) which uniquely identifies
+    # each variant. This correctly counts CNVs with different boundaries as
+    # separate variants
+    # per GA4GH VRS 2.0 specification: https://vrs.ga4gh.org/en/2.0.0-ballot.2024-11/
     distinct_variants_result = await db.execute(
         text(
             """
@@ -93,6 +97,7 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
                  ) vd_lateral
             WHERE vd_lateral.vd IS NOT NULL
               AND vd_lateral.vd->>'id' IS NOT NULL
+              AND p.deleted_at IS NULL
         """
         )
     )

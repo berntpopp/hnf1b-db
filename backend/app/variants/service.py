@@ -82,9 +82,12 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
 
     Security: Prevents SQL injection by validating format with regex.
 
-    Supports two formats:
+    Supports formats:
     1. SNV/indel: CHR-POS-REF-ALT (e.g., 17-36459258-A-G)
-    2. CNV/SV: CHR-POS-REF-<SV_TYPE> or CHR-START-END-SV_TYPE
+    2. CNV symbolic (4-part): CHR-POS-REF-<SV_TYPE> (e.g., 17-36459258-A-<DEL>)
+    3. CNV with END (5-part): CHR-POS-END-REF-<SV_TYPE>
+       (e.g., 17-36459258-37832869-C-<DEL>)
+    4. CNV region: CHR-START-END-SV_TYPE (e.g., 17-36459258-37832869-DEL)
 
     Args:
         variant_id: Variant in VCF format
@@ -101,6 +104,8 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
         '17-36459258-A-G'
         >>> validate_variant_id("chr17-36459258-A-<DEL>")
         '17-36459258-A-<DEL>'
+        >>> validate_variant_id("17-36459258-37832869-C-<DEL>")
+        '17-36459258-37832869-C-<DEL>'
         >>> validate_variant_id("17-36459258-37832869-DEL")
         '17-36459258-37832869-DEL'
     """
@@ -115,26 +120,31 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
     # Pattern 1: Standard SNV/indel - CHR-POS-REF-ALT (ACGT bases only)
     snv_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-[ACGT]+$"
 
-    # Pattern 2: CNV with symbolic allele - CHR-POS-REF-<SV_TYPE>
+    # Pattern 2: CNV with symbolic allele (4-part) - CHR-POS-REF-<SV_TYPE>
     cnv_symbolic_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
 
-    # Pattern 3: CNV region format - CHR-START-END-SV_TYPE
+    # Pattern 3: CNV with END position (5-part) - CHR-POS-END-REF-<SV_TYPE>
+    # Per VCF 4.3 spec: symbolic alleles need END for unique CNV identification
+    cnv_with_end_pattern = r"^[0-9XYM]+-\d+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
+
+    # Pattern 4: CNV region format - CHR-START-END-SV_TYPE
     cnv_region_pattern = r"^[0-9XYM]+-\d+-\d+-(DEL|DUP|INS|INV|CNV)$"
 
     is_snv = bool(re.match(snv_pattern, normalized, re.IGNORECASE))
     is_cnv_symbolic = bool(re.match(cnv_symbolic_pattern, normalized, re.IGNORECASE))
+    is_cnv_with_end = bool(re.match(cnv_with_end_pattern, normalized, re.IGNORECASE))
     is_cnv_region = bool(re.match(cnv_region_pattern, normalized, re.IGNORECASE))
 
     if is_snv:
         return normalized.upper()
 
-    if allow_cnv and (is_cnv_symbolic or is_cnv_region):
+    if allow_cnv and (is_cnv_symbolic or is_cnv_with_end or is_cnv_region):
         return normalized.upper()
 
     raise ValueError(
         f"Invalid variant format: {variant_id}. "
         "Expected: CHR-POS-REF-ALT (e.g., 17-36459258-A-G) or "
-        "CHR-START-END-TYPE for CNVs (e.g., 17-36459258-37832869-DEL)"
+        "CHR-POS-END-REF-<TYPE> for CNVs (e.g., 17-36459258-37832869-C-<DEL>)"
     )
 
 
@@ -387,9 +397,12 @@ def _row_to_dict(row) -> dict:
 def _format_variant_for_vep(variant_id: str) -> Optional[str]:
     """Format a variant ID for VEP POST API.
 
-    Handles two variant types:
+    Handles variant types:
     1. SNV/indel: Convert CHR-POS-REF-ALT to VCF format "CHROM POS ID REF ALT . . ."
-    2. CNV/SV: Convert to VEP default SV format "CHROM START END SV_TYPE STRAND ID"
+    2. CNV region: Convert CHR-START-END-TYPE to VEP SV format
+    3. CNV symbolic (4-part): CHR-POS-REF-<TYPE> - use POS for both start/end
+    4. CNV with END (5-part): CHR-POS-END-REF-<TYPE> - use actual coordinates
+    5. Internal CNV format: var:GENE:CHROM:START-END:TYPE
 
     Args:
         variant_id: Normalized variant ID
@@ -404,8 +417,33 @@ def _format_variant_for_vep(variant_id: str) -> Optional[str]:
         '17 36459258 37832869 DEL + 17-36459258-37832869-DEL'
         >>> _format_variant_for_vep("17-36459258-A-<DEL>")
         '17 36459258 36459258 DEL + 17-36459258-A-<DEL>'
+        >>> _format_variant_for_vep("17-36459258-37832869-C-<DEL>")
+        '17 36459258 37832869 DEL + 17-36459258-37832869-C-<DEL>'
+        >>> _format_variant_for_vep("var:HNF1B:17:36459258-37832869:DEL")
+        '17 36459258 37832869 DEL + var:HNF1B:17:36459258-37832869:DEL'
     """
+    # Check for internal CNV format: var:GENE:CHROM:START-END:TYPE
+    # e.g., var:HNF1B:17:36459258-37832869:DEL
+    internal_cnv_pattern = (
+        r"^var:([A-Z0-9]+):([0-9XYM]+):(\d+)-(\d+):(DEL|DUP|INS|INV|CNV)$"
+    )
+    internal_match = re.match(internal_cnv_pattern, variant_id, re.IGNORECASE)
+    if internal_match:
+        _gene, chrom, start, end, sv_type = internal_match.groups()
+        # VEP SV format: "CHROM START END SV_TYPE STRAND ID"
+        return f"{chrom} {start} {end} {sv_type.upper()} + {variant_id}"
+
     parts = variant_id.split("-")
+
+    # Check for CNV with END position (5-part): CHR-POS-END-REF-<TYPE>
+    # e.g., 17-37733556-37733821-C-<DEL>
+    cnv_with_end_pattern = r"^[0-9XYM]+-\d+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
+    if re.match(cnv_with_end_pattern, variant_id, re.IGNORECASE):
+        chrom, start, end, _ref, alt = parts
+        # Extract SV type from <DEL> format
+        sv_type = alt.strip("<>").upper()
+        # VEP SV format: "CHROM START END SV_TYPE STRAND ID"
+        return f"{chrom} {start} {end} {sv_type} + {variant_id}"
 
     # Check for CNV region format: CHR-START-END-TYPE (e.g., 17-36459258-37832869-DEL)
     cnv_region_pattern = r"^[0-9XYM]+-\d+-\d+-(DEL|DUP|INS|INV|CNV)$"
@@ -414,7 +452,8 @@ def _format_variant_for_vep(variant_id: str) -> Optional[str]:
         # VEP SV format: "CHROM START END SV_TYPE STRAND ID"
         return f"{chrom} {start} {end} {sv_type.upper()} + {variant_id}"
 
-    # Check for CNV symbolic format: CHR-POS-REF-<TYPE> (e.g., 17-36459258-A-<DEL>)
+    # Check for CNV symbolic format (4-part): CHR-POS-REF-<TYPE>
+    # e.g., 17-36459258-A-<DEL>
     cnv_symbolic_pattern = r"^[0-9XYM]+-\d+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$"
     if re.match(cnv_symbolic_pattern, variant_id, re.IGNORECASE):
         chrom, pos, _ref, alt = parts
