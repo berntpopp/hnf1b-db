@@ -441,9 +441,9 @@ class TestPatternConsistency:
         ]
 
         for pattern in patterns:
-            assert isinstance(
-                pattern, re.Pattern
-            ), f"{pattern} is not a compiled pattern"
+            assert isinstance(pattern, re.Pattern), (
+                f"{pattern} is not a compiled pattern"
+            )
 
     def test_hgvs_c_patterns_list(self):
         """Verify HGVS_C_PATTERNS is a list of patterns."""
@@ -452,9 +452,9 @@ class TestPatternConsistency:
         assert isinstance(HGVS_C_PATTERNS, list)
         assert len(HGVS_C_PATTERNS) > 0
         for pattern in HGVS_C_PATTERNS:
-            assert isinstance(
-                pattern, re.Pattern
-            ), f"{pattern} is not a compiled pattern"
+            assert isinstance(pattern, re.Pattern), (
+                f"{pattern} is not a compiled pattern"
+            )
 
 
 class TestRealWorldVariants:

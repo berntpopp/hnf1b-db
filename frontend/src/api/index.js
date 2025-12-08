@@ -396,11 +396,62 @@ export const getVariantTypes = (params = {}) =>
 
 /**
  * Get publications by type (for line chart visualization).
- * Returns publications with PMID, type, and phenopacket count.
- * @returns {Promise} Axios promise with publications array
+ * Returns publications with PMID, type, phenopacket count, and year from cached metadata.
+ * Note: Requires `make publications-sync` to be run first to populate year data.
+ * @returns {Promise} Axios promise with publications array including year
  */
 export const getPublicationsByType = () =>
   apiClient.get('/phenopackets/aggregate/publications-by-type');
+
+/**
+ * Get pre-aggregated timeline data for publications chart.
+ * Returns data aggregated by year and publication type, ready for visualization.
+ * This avoids the need to query PubMed API from the frontend.
+ * Note: Requires `make publications-sync` to be run first to populate year data.
+ * @returns {Promise} Axios promise with timeline data array
+ *   - year: Publication year
+ *   - publication_type: Type of publication (case_series, research, etc.)
+ *   - publication_count: Number of publications in this year/type
+ *   - phenopacket_count: Total phenopackets from these publications
+ */
+export const getPublicationsTimelineData = () =>
+  apiClient.get('/phenopackets/aggregate/publications-timeline-data');
+
+// =============================================================================
+// Admin API Functions (Requires Admin Authentication)
+// =============================================================================
+
+/**
+ * Get admin system status and sync statistics.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with system status
+ */
+export const getAdminStatus = () => apiClient.get('/admin/status');
+
+/**
+ * Get detailed database statistics.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with statistics
+ */
+export const getAdminStatistics = () => apiClient.get('/admin/statistics');
+
+/**
+ * Start publication metadata sync task.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with task info
+ */
+export const startPublicationSync = () => apiClient.post('/admin/sync/publications');
+
+/**
+ * Get publication sync task progress.
+ * Requires admin authentication.
+ * @param {string} taskId - Optional task ID
+ * @returns {Promise} Axios promise with progress info
+ */
+export const getPublicationSyncStatus = (taskId = null) =>
+  apiClient.get('/admin/sync/publications/status', {
+    params: taskId ? { task_id: taskId } : {},
+  });
 
 /**
  * Get publication type distribution (for donut chart).
@@ -786,6 +837,7 @@ export default {
   getKidneyStages,
   getVariantTypes,
   getPublicationsByType,
+  getPublicationsTimelineData,
   getPublicationTypes,
   getAgeOfOnsetAggregation,
   getSurvivalData,
@@ -827,6 +879,12 @@ export default {
   // Global Search
   searchAutocomplete,
   searchGlobal,
+
+  // Admin (requires admin authentication)
+  getAdminStatus,
+  getAdminStatistics,
+  startPublicationSync,
+  getPublicationSyncStatus,
 
   // Axios client for custom requests
   client: apiClient,

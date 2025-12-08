@@ -1614,7 +1614,10 @@ class TestConfigurableSettings:
         validator = VariantValidator()
 
         # Should load from settings.rate_limiting.vep.requests_per_second
-        assert validator._requests_per_second == settings.rate_limiting.vep.requests_per_second
+        assert (
+            validator._requests_per_second
+            == settings.rate_limiting.vep.requests_per_second
+        )
         assert validator._requests_per_second > 0  # Sanity check
 
     def test_retry_config_from_config(self):
@@ -1623,7 +1626,9 @@ class TestConfigurableSettings:
 
         # Should load from settings.external_apis.vep
         assert validator._max_retries == settings.external_apis.vep.max_retries
-        assert validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+        assert (
+            validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+        )
         assert validator._max_retries > 0  # Sanity check
         assert validator._backoff_factor > 0  # Sanity check
 

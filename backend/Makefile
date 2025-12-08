@@ -93,6 +93,16 @@ vep-enrich-dry:  ## Dry run VEP enrichment - shows what would be annotated witho
 vep-enrich-test:  ## Enrich first 10 phenopackets with VEP (for testing)
 	uv run python scripts/enrich_phenopackets_with_vep.py --limit 10
 
+# Publication Metadata Sync Commands (Fetch metadata from PubMed for all publications)
+publications-sync:  ## Sync all publication metadata from PubMed (requires database + internet)
+	uv run python scripts/sync_publication_metadata.py
+
+publications-sync-dry:  ## Dry run - shows what would be fetched without changes
+	uv run python scripts/sync_publication_metadata.py --dry-run
+
+publications-sync-test:  ## Sync first 10 publications (for testing)
+	uv run python scripts/sync_publication_metadata.py --limit 10
+
 check: check-env lint typecheck test  ## Run all checks (lint, typecheck, test)
 
 clean:  ## Remove virtual environment and cache

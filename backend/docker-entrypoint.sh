@@ -97,14 +97,69 @@ print(asyncio.run(check()))
             log_info "Database is empty, running initial data import..."
             if python -m migration.direct_sheets_to_phenopackets; then
                 log_info "Data import completed successfully!"
+                # Sync publication metadata from PubMed after successful import
+                sync_publication_metadata
             else
                 log_warn "Data import failed, but continuing startup..."
             fi
         else
             log_info "Database already has $count phenopackets, skipping import"
+            # Still sync publication metadata if missing
+            sync_publication_metadata
         fi
     else
         log_info "Data import is DISABLED (set ENABLE_DATA_IMPORT=true to enable)"
+    fi
+}
+
+# Sync publication metadata from PubMed
+sync_publication_metadata() {
+    log_info "Checking publication metadata..."
+
+    # Check if publication_metadata table has data
+    local pub_count=$(python -c "
+import asyncio
+from app.database import async_session
+from sqlalchemy import text
+
+async def check():
+    async with async_session() as session:
+        result = await session.execute(text('SELECT COUNT(*) FROM publication_metadata'))
+        return result.scalar()
+
+print(asyncio.run(check()))
+" 2>/dev/null || echo "0")
+
+    # Count unique PMIDs in phenopackets
+    local pmid_count=$(python -c "
+import asyncio
+from app.database import async_session
+from sqlalchemy import text
+
+async def check():
+    async with async_session() as session:
+        query = text('''
+            SELECT COUNT(DISTINCT REPLACE(ext_ref->>'\''id'\'', '\''PMID:'\'', '\'''\''))
+            FROM phenopackets,
+                 jsonb_array_elements(phenopacket->'\''metaData'\''->'\''externalReferences'\'') as ext_ref
+            WHERE ext_ref->>'\''id'\'' LIKE '\''PMID:%'\''
+              AND deleted_at IS NULL
+        ''')
+        result = await session.execute(query)
+        return result.scalar()
+
+print(asyncio.run(check()))
+" 2>/dev/null || echo "0")
+
+    if [ "$pub_count" -lt "$pmid_count" ]; then
+        log_info "Found $pmid_count PMIDs, $pub_count cached. Syncing publication metadata from PubMed..."
+        if python scripts/sync_publication_metadata.py; then
+            log_info "Publication metadata sync completed successfully!"
+        else
+            log_warn "Publication metadata sync failed, but continuing startup..."
+        fi
+    else
+        log_info "Publication metadata is up to date ($pub_count cached)"
     fi
 }
 

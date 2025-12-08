@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import hpo_proxy, variant_validator_endpoint
-from app.api import auth_endpoints
+from app.api import admin_endpoints, auth_endpoints
 from app.core.cache import close_cache, init_cache
 from app.core.config import settings
 from app.core.mv_cache import init_mv_cache
@@ -68,6 +68,7 @@ app.include_router(phenopackets_router, prefix="/api/v2")
 app.include_router(clinical_endpoints.router)
 app.include_router(publication_endpoints.router)
 app.include_router(auth_endpoints.router)
+app.include_router(admin_endpoints.router)
 app.include_router(hpo_proxy.router)
 app.include_router(variant_validator_endpoint.router)
 app.include_router(ontology_router.router, prefix="/api/v2")

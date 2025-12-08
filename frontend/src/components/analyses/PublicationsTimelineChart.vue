@@ -38,15 +38,37 @@
         </v-btn>
       </div>
 
+      <!-- Warning when publication metadata is missing -->
+      <v-alert
+        v-if="missingYearsCount > 0 && !loading && !error"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        class="mb-3"
+      >
+        {{ missingYearsCount }} publication(s) missing year data. Run
+        <code>make publications-sync</code> to fetch metadata from PubMed.
+      </v-alert>
+
       <!-- Chart -->
-      <div v-else-if="chartData.labels && chartData.labels.length > 0" style="height: 500px">
+      <div
+        v-if="!loading && !error && chartData.labels && chartData.labels.length > 0"
+        style="height: 500px"
+      >
         <canvas ref="chartCanvas" />
       </div>
 
       <!-- No Data State -->
-      <div v-else class="d-flex flex-column align-center justify-center" style="min-height: 400px">
+      <div
+        v-if="!loading && !error && (!chartData.labels || chartData.labels.length === 0)"
+        class="d-flex flex-column align-center justify-center"
+        style="min-height: 400px"
+      >
         <v-icon size="64" color="grey-lighten-1" class="mb-4">mdi-chart-line</v-icon>
         <div class="text-h6 text-grey mb-2">No data available</div>
+        <div v-if="missingYearsCount > 0" class="text-body-2 text-grey">
+          Publication metadata not synced. Run <code>make publications-sync</code> first.
+        </div>
       </div>
     </v-card-text>
   </v-card>
@@ -79,6 +101,7 @@ export default {
       },
       rawPublications: [], // Store raw data for mode switching
       chart: null,
+      missingYearsCount: 0, // Track publications without year data
     };
   },
   computed: {
@@ -119,7 +142,8 @@ export default {
       try {
         window.logService.debug('Fetching publications data from API');
 
-        // Fetch publications data
+        // Fetch publications data with year from database cache
+        // (No need to query PubMed - years come from publication_metadata table)
         const response = await API.getPublicationsByType();
         const publications = response.data;
 
@@ -127,11 +151,18 @@ export default {
           count: publications.length,
         });
 
-        // Fetch publication years from PubMed API
-        window.logService.debug('Enriching with years from PubMed');
-        await this.enrichWithYears(publications);
+        // Track how many publications have year data
+        const withYears = publications.filter((p) => p.year);
+        this.missingYearsCount = publications.length - withYears.length;
 
-        window.logService.debug('Finished enriching with years, processing chart data');
+        if (this.missingYearsCount > 0) {
+          window.logService.warn('Some publications missing year data', {
+            total: publications.length,
+            withYears: withYears.length,
+            missing: this.missingYearsCount,
+            hint: 'Run `make publications-sync` to fetch missing metadata from PubMed',
+          });
+        }
 
         // Store raw data for mode switching
         this.rawPublications = publications;
@@ -154,64 +185,6 @@ export default {
       } finally {
         this.loading = false;
       }
-    },
-
-    async enrichWithYears(publications) {
-      // Extract unique PMIDs
-      const pmids = [...new Set(publications.map((p) => p.pmid.replace('PMID:', '')))];
-
-      // Batch fetch years from PubMed (max 200 at a time)
-      const batchSize = 200;
-      const yearMap = {};
-
-      for (let i = 0; i < pmids.length; i += batchSize) {
-        const batch = pmids.slice(i, i + batchSize);
-
-        try {
-          const response = await fetch(
-            `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${batch.join(',')}&retmode=json`
-          );
-
-          if (!response.ok) {
-            window.logService.warn('Failed to fetch publication years from PubMed', {
-              status: response.status,
-            });
-            continue;
-          }
-
-          const data = await response.json();
-
-          // Extract years
-          batch.forEach((pmid) => {
-            const pubmedData = data.result?.[pmid];
-            if (pubmedData?.pubdate) {
-              const yearMatch = pubmedData.pubdate.match(/^\d{4}/);
-              if (yearMatch) {
-                yearMap[`PMID:${pmid}`] = parseInt(yearMatch[0]);
-              }
-            }
-          });
-        } catch (error) {
-          window.logService.error('Error fetching PubMed data', {
-            error: error.message,
-          });
-        }
-
-        // Add delay between batches to respect PubMed rate limits (3 req/sec without API key)
-        if (i + batchSize < pmids.length) {
-          await new Promise((resolve) => setTimeout(resolve, 350));
-        }
-      }
-
-      // Add years to publications
-      publications.forEach((pub) => {
-        pub.year = yearMap[pub.pmid] || null;
-      });
-
-      window.logService.debug('Enriched publications with years', {
-        totalPublications: publications.length,
-        withYears: publications.filter((p) => p.year).length,
-      });
     },
 
     processChartData(publications) {

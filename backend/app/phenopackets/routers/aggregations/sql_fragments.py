@@ -31,8 +31,7 @@ CURRENT_AGE_PATH = "p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601du
 
 # Interpretation status path (used for P/LP filtering)
 INTERP_STATUS_PATH = (
-    "interp.value->'diagnosis'->'genomicInterpretations'"
-    "->0->>'interpretationStatus'"
+    "interp.value->'diagnosis'->'genomicInterpretations'->0->>'interpretationStatus'"
 )
 
 

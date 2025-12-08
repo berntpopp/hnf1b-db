@@ -82,9 +82,14 @@ class TestVariantValidator:
         assert validator._request_count == 0
 
         # Values from config (may differ from defaults)
-        assert validator._requests_per_second == settings.rate_limiting.vep.requests_per_second
+        assert (
+            validator._requests_per_second
+            == settings.rate_limiting.vep.requests_per_second
+        )
         assert validator._max_retries == settings.external_apis.vep.max_retries
-        assert validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+        assert (
+            validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+        )
         assert validator._cache_ttl == settings.external_apis.vep.cache_ttl_seconds
 
     def test_is_vcf_format(self, validator):
@@ -239,9 +244,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep(
-                "NM_000458.4:c.544+1G>A"
-            )
+            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
 
             assert result is not None
             assert result["id"] == "test"
@@ -300,9 +303,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep(
-                "NM_000458.4:c.544+1G>A"
-            )
+            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
 
             assert result is not None
             assert result["id"] == "test"

@@ -3,7 +3,8 @@
         phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry check reset clean-all \
         docker-build docker-npm docker-npm-bg docker-down docker-logs docker-clean docker-clean-all \
         docker-dev docker-dev-bg docker-health docker-ps docker-db-migrate docker-db-init docker-db-backup \
-        docker-shell-api docker-shell-db docker-import-full docker-import-test
+        docker-shell-api docker-shell-db docker-import-full docker-import-test \
+        publications-sync publications-sync-dry publications-sync-test docker-publications-sync
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -48,6 +49,7 @@ help:  ## Show this help message
 	@echo "  make db-reset        - Reset database"
 	@echo "  make phenopackets-migrate      - Import all data from Google Sheets"
 	@echo "  make phenopackets-migrate-test - Import test data (20 individuals)"
+	@echo "  make publications-sync         - Sync publication metadata from PubMed"
 	@echo ""
 	@echo "📊 MONITORING:"
 	@echo "  make status          - Show system status"
@@ -173,6 +175,16 @@ phenopackets-migrate-test:  ## Test migration with limited data (20 individuals)
 phenopackets-migrate-dry:  ## Dry run migration - outputs to JSON file without database
 	cd backend && uv run python -m migration.direct_sheets_to_phenopackets --test --dry-run
 
+# Publication Metadata Sync Commands
+publications-sync:  ## Sync all publication metadata from PubMed
+	cd backend && uv run python scripts/sync_publication_metadata.py
+
+publications-sync-dry:  ## Dry run - shows what would be fetched without changes
+	cd backend && uv run python scripts/sync_publication_metadata.py --dry-run
+
+publications-sync-test:  ## Sync first 10 publications (for testing)
+	cd backend && uv run python scripts/sync_publication_metadata.py --limit 10
+
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 
 clean:  ## Remove virtual environment and cache
@@ -285,3 +297,19 @@ docker-import-test:  ## Run test data import in Docker (20 records)
 	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
 	echo "Using container: $$API_CONTAINER"; \
 	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets --test
+
+docker-publications-sync:  ## Sync publication metadata from PubMed in Docker
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py
+
+# Combined data import command (phenopackets + publications)
+docker-import-full-with-publications:  ## Full data import with publication metadata sync
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	echo "Step 1/2: Importing phenopackets..."; \
+	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets; \
+	echo "Step 2/2: Syncing publication metadata from PubMed..."; \
+	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py

@@ -415,9 +415,7 @@ async def _handle_pathogenicity_current_age(
             "Patients without kidney failure are censored at their last reported age"
         ),
         "group_definitions": {
-            "P/LP": (
-                "P/LP variants per ACMG/AMP guidelines"
-            ),
+            "P/LP": ("P/LP variants per ACMG/AMP guidelines"),
             "VUS": (
                 "Variants of Uncertain Significance - insufficient evidence "
                 "to classify as pathogenic or benign"
@@ -571,9 +569,7 @@ async def _handle_pathogenicity_standard(
             "Patients without kidney failure are censored at their last reported age"
         ),
         "group_definitions": {
-            "P/LP": (
-                "P/LP variants per ACMG/AMP guidelines"
-            ),
+            "P/LP": ("P/LP variants per ACMG/AMP guidelines"),
             "VUS": (
                 "Variants of Uncertain Significance - insufficient evidence "
                 "to classify as pathogenic or benign"
