@@ -304,25 +304,50 @@ import {
   calculateStackedBarStats,
 } from '@/utils/aggregationConfig';
 
-// URL State Schema - defines all URL-synced parameters
-const urlStateSchema = {
+// URL State Schema - defines all URL-synced parameters with their defaults
+const URL_STATE_DEFAULTS = {
   // Tab selection
-  tab: { default: DEFAULT_TAB, type: 'string' },
+  tab: DEFAULT_TAB,
   // Donut chart options
-  category: { default: 'Phenopackets', type: 'string' },
-  aggregation: { default: 'getSexDistribution', type: 'string' },
-  countMode: { default: 'all', type: 'string' },
+  category: 'Phenopackets',
+  aggregation: 'getSexDistribution',
+  countMode: 'all',
   // Stacked bar options
-  displayLimit: { default: 20, type: 'number' },
+  displayLimit: 20,
   // Publications timeline options
-  timelineMode: { default: 'cumulative', type: 'string' },
+  timelineMode: 'cumulative',
   // Variant comparison options
-  comparison: { default: 'truncating_vs_non_truncating', type: 'string' },
-  organSystem: { default: 'all', type: 'string' },
-  sortBy: { default: 'p_value', type: 'string' },
+  comparison: 'truncating_vs_non_truncating',
+  organSystem: 'all',
+  sortBy: 'p_value',
   // Survival options
-  survivalComparison: { default: 'variant_type', type: 'string' },
-  survivalEndpoint: { default: 'ckd_stage_3_plus', type: 'string' },
+  survivalComparison: 'variant_type',
+  survivalEndpoint: 'ckd_stage_3_plus',
+};
+
+// Define which parameters belong to which tab (for cleanup on tab switch)
+const TAB_SPECIFIC_PARAMS = {
+  donut: ['category', 'aggregation', 'countMode'],
+  'stacked-bar': ['displayLimit'],
+  publications: ['timelineMode'],
+  'variant-comparison': ['comparison', 'organSystem', 'sortBy'],
+  survival: ['survivalComparison', 'survivalEndpoint'],
+  'dna-distance': [],
+};
+
+// Build schema from defaults
+const urlStateSchema = {
+  tab: { default: URL_STATE_DEFAULTS.tab, type: 'string' },
+  category: { default: URL_STATE_DEFAULTS.category, type: 'string' },
+  aggregation: { default: URL_STATE_DEFAULTS.aggregation, type: 'string' },
+  countMode: { default: URL_STATE_DEFAULTS.countMode, type: 'string' },
+  displayLimit: { default: URL_STATE_DEFAULTS.displayLimit, type: 'number' },
+  timelineMode: { default: URL_STATE_DEFAULTS.timelineMode, type: 'string' },
+  comparison: { default: URL_STATE_DEFAULTS.comparison, type: 'string' },
+  organSystem: { default: URL_STATE_DEFAULTS.organSystem, type: 'string' },
+  sortBy: { default: URL_STATE_DEFAULTS.sortBy, type: 'string' },
+  survivalComparison: { default: URL_STATE_DEFAULTS.survivalComparison, type: 'string' },
+  survivalEndpoint: { default: URL_STATE_DEFAULTS.survivalEndpoint, type: 'string' },
 };
 
 // Initialize URL state with schema
@@ -599,7 +624,34 @@ watch(displayLimit, () => {
   // Stacked bar uses displayLimit reactively via prop, no need to refetch
 });
 
-watch(tab, (newTab) => {
+watch(tab, (newTab, oldTab) => {
+  // Reset parameters from other tabs to their defaults
+  if (oldTab && oldTab !== newTab) {
+    // Get all parameters that belong to the OLD tab
+    const oldTabParams = TAB_SPECIFIC_PARAMS[oldTab] || [];
+
+    // Create a map of all refs for easy access
+    const urlRefs = {
+      category,
+      aggregation,
+      countMode,
+      displayLimit,
+      timelineMode,
+      comparison,
+      organSystem,
+      sortBy,
+      survivalComparison,
+      survivalEndpoint,
+    };
+
+    // Reset old tab's parameters to defaults
+    oldTabParams.forEach((param) => {
+      if (urlRefs[param]) {
+        urlRefs[param].value = URL_STATE_DEFAULTS[param];
+      }
+    });
+  }
+
   // Auto-fetch data when switching to specific tabs
   if (newTab === 'variant-comparison' && !comparisonData.value) {
     fetchComparisonData();
