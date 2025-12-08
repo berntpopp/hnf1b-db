@@ -73,14 +73,12 @@ run_data_import() {
         # This is idempotent and required for proper gene/variant context
         sync_reference_data
 
-        # Validate required environment variables for Google Sheets import
-        if [ -z "$GOOGLE_SHEETS_ID" ]; then
-            log_error "GOOGLE_SHEETS_ID environment variable is not set."
-            log_error "Data import requires GOOGLE_SHEETS_ID to be configured."
-            log_warn "Skipping phenopacket import. Set GOOGLE_SHEETS_ID or disable ENABLE_DATA_IMPORT."
-            # Still run other syncs that don't depend on phenopackets
-            sync_chr17q12_genes
-            return 0
+        # Note: GOOGLE_SHEETS_ID is optional - the migration script has a default value
+        # If set, it will override the default. If not set, the hardcoded default is used.
+        if [ -n "$GOOGLE_SHEETS_ID" ]; then
+            log_info "Using GOOGLE_SHEETS_ID from environment: ${GOOGLE_SHEETS_ID:0:10}..."
+        else
+            log_info "Using default Google Sheets ID (set GOOGLE_SHEETS_ID to override)"
         fi
 
         log_info "Checking if database is empty..."
