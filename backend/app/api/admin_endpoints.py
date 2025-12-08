@@ -461,19 +461,36 @@ async def _run_variant_sync(task_id: str, db: AsyncSession) -> None:
     task["started_at"] = datetime.now(timezone.utc).isoformat()
 
     try:
-        # Get unique variants to sync
+        # Get unique variants to sync (including CNVs)
         query = text("""
             WITH unique_variants AS (
                 SELECT DISTINCT
-                    UPPER(REGEXP_REPLACE(expr->>'value', '^chr', '', 'i')) as variant_id
+                    UPPER(
+                        REGEXP_REPLACE(
+                            REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                            ':',
+                            '-',
+                            'g'
+                        )
+                    ) as variant_id
                 FROM phenopackets,
                      jsonb_array_elements(phenopacket->'interpretations') as interp,
                      jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                     jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
+                     jsonb_array_elements(
+                         gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                     ) as expr
                 WHERE expr->>'syntax' = 'vcf'
                   AND deleted_at IS NULL
-                  AND expr->>'value' !~ '<[A-Z]+>'
-                  AND expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                  AND (
+                      -- SNVs and small indels (ACGT bases)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                      OR
+                      -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                      OR
+                      -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+                      expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+                  )
             )
             SELECT uv.variant_id
             FROM unique_variants uv
@@ -548,19 +565,36 @@ async def start_variant_sync(
     current_user: User = Depends(require_admin),
 ):
     """Start variant annotation sync task."""
-    # Check for pending items
+    # Check for pending items (including CNVs)
     query = text("""
         WITH unique_variants AS (
             SELECT DISTINCT
-                UPPER(REGEXP_REPLACE(expr->>'value', '^chr', '', 'i')) as variant_id
+                UPPER(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                        ':',
+                        '-',
+                        'g'
+                    )
+                ) as variant_id
             FROM phenopackets,
                  jsonb_array_elements(phenopacket->'interpretations') as interp,
                  jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                 jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
+                 jsonb_array_elements(
+                     gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                 ) as expr
             WHERE expr->>'syntax' = 'vcf'
               AND deleted_at IS NULL
-              AND expr->>'value' !~ '<[A-Z]+>'
-              AND expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+              AND (
+                  -- SNVs and small indels (ACGT bases)
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                  OR
+                  -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                  OR
+                  -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+                  expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+              )
         )
         SELECT COUNT(*) as count
         FROM unique_variants uv
@@ -628,19 +662,36 @@ async def get_variant_sync_status(
         # Find most recent variant sync task
         var_tasks = {k: v for k, v in _sync_tasks.items() if k.startswith("var_sync_")}
         if not var_tasks:
-            # Return current sync status from database
+            # Return current sync status from database (including CNVs)
             query = text("""
                 WITH unique_variants AS (
                     SELECT DISTINCT
-                        UPPER(REGEXP_REPLACE(expr->>'value', '^chr', '', 'i')) as variant_id
+                        UPPER(
+                            REGEXP_REPLACE(
+                                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                                ':',
+                                '-',
+                                'g'
+                            )
+                        ) as variant_id
                     FROM phenopackets,
                          jsonb_array_elements(phenopacket->'interpretations') as interp,
                          jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
-                         jsonb_array_elements(gi->'variantInterpretation'->'variationDescriptor'->'expressions') as expr
+                         jsonb_array_elements(
+                             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+                         ) as expr
                     WHERE expr->>'syntax' = 'vcf'
                       AND deleted_at IS NULL
-                      AND expr->>'value' !~ '<[A-Z]+>'
-                      AND expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                      AND (
+                          -- SNVs and small indels (ACGT bases)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-[ACGT]+$'
+                          OR
+                          -- CNVs with symbolic alleles (<DEL>, <DUP>, etc.)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+-[0-9]+-[ACGT]+-<(DEL|DUP|INS|INV|CNV)>$'
+                          OR
+                          -- CNVs in region format (17:start-end:DEL or 17-start-end-DEL)
+                          expr->>'value' ~ '^(chr)?[0-9XYM]+[:-][0-9]+-[0-9]+[:-](DEL|DUP|INS|INV|CNV)$'
+                      )
                 )
                 SELECT
                     COUNT(*) as total,
