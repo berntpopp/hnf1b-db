@@ -68,6 +68,7 @@ make db-reset      # Reset database (drop + recreate + migrations)
 make db-create-admin  # Create/update admin user
 make phenopackets-migrate  # Import all data (864 phenopackets)
 make phenopackets-migrate-test  # Import test data (20 phenopackets)
+make publications-sync  # Fetch publication metadata from PubMed (required for timeline chart)
 ```
 
 ### Run Single Test
@@ -482,6 +483,25 @@ make phenopackets-migrate-test
 # Dry run (outputs to JSON file, no database changes)
 make phenopackets-migrate-dry
 ```
+
+**Sync Publication Metadata from PubMed:**
+```bash
+# Sync all publication metadata (title, authors, year, DOI)
+make publications-sync
+
+# Dry run (shows what would be fetched without changes)
+make publications-sync-dry
+
+# Sync first 10 publications (for testing)
+make publications-sync-test
+
+# Docker: sync publications in container
+make docker-publications-sync
+```
+
+Publication metadata is cached permanently in the `publication_metadata` table and used by:
+- Publications table (`/publications`) - displays title, authors, year
+- Publications timeline chart (`/aggregations?tab=publications`) - year-based aggregation
 
 **Migration System** (`backend/migration/`):
 - Direct conversion: Google Sheets → GA4GH Phenopackets v2
