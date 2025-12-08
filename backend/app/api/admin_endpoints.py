@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
+from app.core.config import settings
 from app.database import async_session_maker, get_db
 from app.models.user import User
 from app.phenopackets.routers.aggregations.sql_fragments import (
@@ -32,7 +33,7 @@ from app.reference.service import (
     initialize_reference_data,
     sync_chr17q12_genes,
 )
-from app.variants.service import get_variant_annotations_batch
+from app.variants.service import get_variant_annotations_batch, is_cnv_variant
 
 logger = logging.getLogger(__name__)
 
@@ -550,14 +551,20 @@ async def _run_variant_sync(task_id: str) -> None:
             # Get unique variants to sync (using shared SQL fragment)
             query = text(get_pending_variants_query())
             result = await db.execute(query)
-            variants_to_sync = [row.variant_id for row in result.fetchall()]
+            all_variants = [row.variant_id for row in result.fetchall()]
+
+            # Filter out CNVs - VEP HGVS API doesn't support them
+            variants_to_sync = [v for v in all_variants if not is_cnv_variant(v)]
+            cnv_count = len(all_variants) - len(variants_to_sync)
+            if cnv_count > 0:
+                logger.info(f"Skipping {cnv_count} CNV variants (not supported by VEP HGVS)")
 
             task["total"] = len(variants_to_sync)
             task["processed"] = 0
             task["errors"] = 0
 
-            # Process in batches of 200 (Ensembl VEP best practice)
-            batch_size = 200
+            # Process in batches using configured batch size (default 50)
+            batch_size = settings.external_apis.vep.batch_size
             for i in range(0, len(variants_to_sync), batch_size):
                 batch = variants_to_sync[i : i + batch_size]
                 try:
@@ -577,8 +584,8 @@ async def _run_variant_sync(task_id: str) -> None:
                     (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
                 )
 
-                # Rate limiting between batches
-                await asyncio.sleep(0.5)
+                # Rate limiting between batches - longer delay to avoid 503 errors
+                await asyncio.sleep(1.0)
 
         task["status"] = "completed"
         task["completed_at"] = datetime.now(timezone.utc).isoformat()
