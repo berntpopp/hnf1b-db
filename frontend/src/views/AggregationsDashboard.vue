@@ -125,7 +125,7 @@
 
                 <!-- Publications Timeline Tab -->
                 <v-tabs-window-item value="Publications Timeline">
-                  <PublicationsTimelineChart />
+                  <PublicationsTimelineChart v-model:mode="timelineMode" />
                 </v-tabs-window-item>
 
                 <!-- Variant Comparison Tab -->
@@ -314,6 +314,8 @@ const urlStateSchema = {
   countMode: { default: 'all', type: 'string' },
   // Stacked bar options
   displayLimit: { default: 20, type: 'number' },
+  // Publications timeline options
+  timelineMode: { default: 'cumulative', type: 'string' },
   // Variant comparison options
   comparison: { default: 'truncating_vs_non_truncating', type: 'string' },
   organSystem: { default: 'all', type: 'string' },
@@ -330,6 +332,7 @@ const {
   aggregation,
   countMode,
   displayLimit,
+  timelineMode,
   comparison,
   organSystem,
   sortBy,
