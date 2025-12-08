@@ -27,6 +27,11 @@ from app.phenopackets.routers.aggregations.sql_fragments import (
     get_variant_sync_status_query,
 )
 from app.publications.service import get_publication_metadata
+from app.reference.service import (
+    get_reference_data_status,
+    initialize_reference_data,
+    sync_chr17q12_genes,
+)
 from app.variants.service import get_variant_annotations_batch
 
 logger = logging.getLogger(__name__)
@@ -226,6 +231,9 @@ async def get_system_status(
     last_vep_result = await db.execute(last_vep_sync_query)
     last_vep_sync = last_vep_result.scalar()
 
+    # Reference data status
+    ref_status = await get_reference_data_status(db)
+
     sync_status = [
         DataSyncStatus(
             name="Publication Metadata",
@@ -240,6 +248,13 @@ async def get_system_status(
             synced=vep_stats.synced or 0,
             pending=(vep_stats.total or 0) - (vep_stats.synced or 0),
             last_sync=last_vep_sync.isoformat() if last_vep_sync else None,
+        ),
+        DataSyncStatus(
+            name="Reference Data (chr17q12 genes)",
+            total=70,  # Expected ~70 genes in chr17q12 region
+            synced=ref_status.chr17q12_gene_count,
+            pending=max(0, 70 - ref_status.chr17q12_gene_count),
+            last_sync=ref_status.last_updated.isoformat() if ref_status.last_updated else None,
         ),
     ]
 
@@ -823,4 +838,296 @@ async def get_statistics(
             "cached": stats.variants_cached or 0,
             "pending_sync": unique_variants_count - (stats.variants_cached or 0),
         },
+    }
+
+
+# =============================================================================
+# Reference Data Sync Endpoints
+# =============================================================================
+
+
+async def _run_reference_init(task_id: str) -> None:
+    """Background task to initialize reference data (GRCh38 + HNF1B).
+
+    Creates its own database session to avoid issues with request session lifecycle.
+    """
+    task = _sync_tasks.get(task_id)
+    if not task:
+        return
+
+    task["status"] = "running"
+    task["started_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        async with async_session_maker() as db:
+            result = await initialize_reference_data(db)
+            task["processed"] = result.imported
+            task["total"] = result.total
+            task["errors"] = result.errors
+            task["progress"] = 100.0
+
+        task["status"] = "completed"
+        task["completed_at"] = datetime.now(timezone.utc).isoformat()
+        logger.info(f"Reference data init completed: {result.imported} items created")
+
+    except Exception as e:
+        task["status"] = "failed"
+        task["error"] = str(e)
+        logger.error(f"Reference data init failed: {e}")
+
+
+async def _run_genes_sync(task_id: str) -> None:
+    """Background task to sync chr17q12 genes from Ensembl.
+
+    Creates its own database session to avoid issues with request session lifecycle.
+    """
+    task = _sync_tasks.get(task_id)
+    if not task:
+        return
+
+    task["status"] = "running"
+    task["started_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        async with async_session_maker() as db:
+            result = await sync_chr17q12_genes(db)
+            task["processed"] = result.imported + result.updated
+            task["total"] = result.total
+            task["errors"] = result.errors
+            task["progress"] = 100.0
+
+        task["status"] = "completed"
+        task["completed_at"] = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            f"Gene sync completed: {result.imported} imported, "
+            f"{result.updated} updated, {result.errors} errors"
+        )
+
+    except Exception as e:
+        task["status"] = "failed"
+        task["error"] = str(e)
+        logger.error(f"Gene sync failed: {e}")
+
+
+@router.post(
+    "/sync/reference/init",
+    response_model=SyncTaskResponse,
+    summary="Initialize reference data (GRCh38 + HNF1B)",
+    description="""
+    Initializes core reference data required for the application:
+
+    **What it creates:**
+    - GRCh38 genome assembly entry
+    - HNF1B gene with coordinates
+    - NM_000458.4 canonical transcript
+    - 9 HNF1B exons
+    - 4 protein domains (UniProt P35680)
+
+    **Idempotent:** Safe to call multiple times - skips existing data.
+
+    **Requires:** Admin authentication
+    """,
+    dependencies=[Depends(require_admin)],
+)
+async def start_reference_init(
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Start reference data initialization task."""
+    # Check current status
+    ref_status = await get_reference_data_status(db)
+
+    if ref_status.has_grch38 and ref_status.has_hnf1b:
+        return SyncTaskResponse(
+            task_id="none",
+            status="completed",
+            message="Reference data already initialized (GRCh38 + HNF1B present)",
+            items_to_process=0,
+            estimated_time_seconds=0,
+        )
+
+    # Create task
+    task_id = f"ref_init_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    _sync_tasks[task_id] = {
+        "status": "pending",
+        "progress": 0,
+        "processed": 0,
+        "total": 15,  # genome + gene + transcript + 9 exons + 4 domains
+        "errors": 0,
+        "started_at": None,
+        "completed_at": None,
+    }
+
+    background_tasks.add_task(_run_reference_init, task_id)
+
+    logger.info(
+        f"Reference data init initiated by {current_user.username}",
+        extra={"task_id": task_id},
+    )
+
+    return SyncTaskResponse(
+        task_id=task_id,
+        status="pending",
+        message="Reference data initialization queued",
+        items_to_process=15,
+        estimated_time_seconds=5,
+    )
+
+
+@router.post(
+    "/sync/genes",
+    response_model=SyncTaskResponse,
+    summary="Sync chr17q12 region genes from Ensembl",
+    description="""
+    Syncs all genes in the chr17q12 region from Ensembl REST API.
+
+    **Process:**
+    1. Ensures GRCh38 genome exists
+    2. Fetches ~70 genes from Ensembl for region 17:36000000-39900000
+    3. Filters for protein_coding, lncRNA, miRNA, snRNA, snoRNA
+    4. Creates or updates gene records
+
+    **Key genes:** LHX1, HNF1B, ACACA, AATF, ZNHIT3, PIGW, GGNBP2
+
+    **Rate limiting:** Respects Ensembl 15 req/sec limit
+
+    **Requires:** Admin authentication
+    """,
+    dependencies=[Depends(require_admin)],
+)
+async def start_genes_sync(
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Start chr17q12 gene sync task."""
+    # Check current status
+    ref_status = await get_reference_data_status(db)
+
+    if not force and ref_status.chr17q12_gene_count >= 60:
+        return SyncTaskResponse(
+            task_id="none",
+            status="completed",
+            message=f"chr17q12 genes already synced ({ref_status.chr17q12_gene_count} genes present)",
+            items_to_process=0,
+            estimated_time_seconds=0,
+        )
+
+    # Create task
+    task_id = f"genes_sync_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    _sync_tasks[task_id] = {
+        "status": "pending",
+        "progress": 0,
+        "processed": 0,
+        "total": 70,  # Expected ~70 genes
+        "errors": 0,
+        "started_at": None,
+        "completed_at": None,
+    }
+
+    background_tasks.add_task(_run_genes_sync, task_id)
+
+    logger.info(
+        f"Gene sync initiated by {current_user.username}",
+        extra={"task_id": task_id},
+    )
+
+    return SyncTaskResponse(
+        task_id=task_id,
+        status="pending",
+        message="chr17q12 gene sync queued",
+        items_to_process=70,
+        estimated_time_seconds=10,
+    )
+
+
+@router.get(
+    "/sync/genes/status",
+    response_model=SyncProgressResponse,
+    summary="Get gene sync progress",
+    description="Returns the current status of the gene sync task.",
+    dependencies=[Depends(require_admin)],
+)
+async def get_genes_sync_status(
+    task_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get gene sync task status."""
+    # If no task_id, get the most recent gene sync task
+    if task_id is None:
+        gene_tasks = {
+            k: v for k, v in _sync_tasks.items()
+            if k.startswith("genes_sync_") or k.startswith("ref_init_")
+        }
+        if not gene_tasks:
+            # Return current sync status from database
+            ref_status = await get_reference_data_status(db)
+            return SyncProgressResponse(
+                task_id="none",
+                status="idle",
+                progress=100.0 if ref_status.chr17q12_gene_count >= 60 else 0,
+                processed=ref_status.chr17q12_gene_count,
+                total=70,
+                errors=0,
+                started_at=None,
+                completed_at=None,
+            )
+
+        task_id = max(gene_tasks.keys())
+
+    task = _sync_tasks.get(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found",
+        )
+
+    return SyncProgressResponse(
+        task_id=task_id,
+        status=task["status"],
+        progress=task["progress"],
+        processed=task["processed"],
+        total=task["total"],
+        errors=task["errors"],
+        started_at=task.get("started_at"),
+        completed_at=task.get("completed_at"),
+    )
+
+
+@router.get(
+    "/reference/status",
+    summary="Get reference data status",
+    description="Returns detailed status of reference data in the database.",
+    dependencies=[Depends(require_admin)],
+)
+async def get_reference_status(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get detailed reference data status."""
+    ref_status = await get_reference_data_status(db)
+
+    return {
+        "genomes": {
+            "count": ref_status.genome_count,
+            "has_grch38": ref_status.has_grch38,
+        },
+        "genes": {
+            "total": ref_status.gene_count,
+            "chr17q12_count": ref_status.chr17q12_gene_count,
+            "has_hnf1b": ref_status.has_hnf1b,
+        },
+        "transcripts": {
+            "count": ref_status.transcript_count,
+        },
+        "exons": {
+            "count": ref_status.exon_count,
+        },
+        "protein_domains": {
+            "count": ref_status.domain_count,
+        },
+        "last_updated": ref_status.last_updated.isoformat() if ref_status.last_updated else None,
+        "initialized": ref_status.has_grch38 and ref_status.has_hnf1b,
+        "chr17q12_synced": ref_status.chr17q12_gene_count >= 60,
     }
