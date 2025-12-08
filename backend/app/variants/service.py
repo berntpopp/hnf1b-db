@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -666,7 +666,7 @@ def _parse_vep_response(
             "assembly": result.get("assembly_name", "GRCh38"),
             "data_source": "Ensembl VEP",
             "vep_version": "114",  # Current Ensembl release
-            "fetched_at": datetime.utcnow(),  # Timezone-naive for TIMESTAMP column
+            "fetched_at": datetime.now(timezone.utc),
         }
 
         parsed[matched_id] = annotation
@@ -787,7 +787,7 @@ async def _store_annotations_batch(
                 "data_source": ann.get("data_source", "Ensembl VEP"),
                 "vep_version": ann.get("vep_version", "114"),
                 "fetched_by": fetched_by,
-                "fetched_at": ann.get("fetched_at", datetime.utcnow()),
+                "fetched_at": ann.get("fetched_at", datetime.now(timezone.utc)),
             },
         )
 

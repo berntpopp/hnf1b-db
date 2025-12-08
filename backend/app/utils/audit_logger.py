@@ -6,7 +6,7 @@ trail and compliance purposes.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # Create dedicated audit logger
@@ -82,7 +82,7 @@ def log_variant_search(
     # Create structured log entry
     log_entry = {
         "event": "VARIANT_SEARCH",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "client_ip": client_ip,
         "user_id": user_id or "anonymous",
         "search_criteria": search_criteria,
@@ -113,7 +113,7 @@ def log_rate_limit_exceeded(
     """
     log_entry = {
         "event": "RATE_LIMIT_EXCEEDED",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "client_ip": client_ip,
         "request_count": request_count,
         "request_path": request_path,
@@ -149,7 +149,7 @@ def log_validation_error(
     """
     log_entry = {
         "event": "VALIDATION_ERROR",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "client_ip": client_ip,
         "user_id": user_id or "anonymous",
         "error_type": error_type,

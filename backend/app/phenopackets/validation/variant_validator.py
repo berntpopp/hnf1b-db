@@ -888,9 +888,10 @@ class VariantValidator:
                             if v not in results:
                                 results[v] = None
 
+                        success_count = len([r for r in results.values() if r])
                         logger.info(
-                            f"Batch recoded {len([r for r in results.values() if r])}"
-                            f"/{len(uncached_variants)} variants"
+                            f"Batch recoded {success_count}/{len(uncached_variants)} "
+                            "variants"
                         )
                         return results
 
