@@ -315,14 +315,13 @@ internal_cnv_variants AS (
       AND vd_lateral.vd->>'id' ~ {INTERNAL_CNV_PATTERN}
 )"""
 
-# Combined CTE: Union of VCF and internal CNV variants
+# Combined CTE: VCF variants only (internal CNV format is redundant)
+# Note: Internal CNV variants (var:GENE:CHROM:START-END:TYPE) are duplicates
+# of VCF variants stored in a different format. VCF format is preferred for VEP.
 UNIQUE_VARIANTS_CTE = f"""
 {VCF_VARIANTS_CTE},
-{INTERNAL_CNV_VARIANTS_CTE},
 unique_variants AS (
     SELECT variant_id FROM vcf_variants
-    UNION
-    SELECT variant_id FROM internal_cnv_variants
 )"""
 
 

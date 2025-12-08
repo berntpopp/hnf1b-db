@@ -88,13 +88,16 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
     3. CNV with END (5-part): CHR-POS-END-REF-<SV_TYPE>
        (e.g., 17-36459258-37832869-C-<DEL>)
     4. CNV region: CHR-START-END-SV_TYPE (e.g., 17-36459258-37832869-DEL)
+    5. Internal CNV: var:GENE:CHROM:START-END:TYPE
+       (e.g., var:HNF1B:17:36459258-37832869:DEL)
 
     Args:
         variant_id: Variant in VCF format
         allow_cnv: If True, also accept CNV/structural variant formats
 
     Returns:
-        Normalized variant ID without chr prefix
+        Normalized variant ID (without chr prefix for VCF formats,
+        unchanged for internal CNV format)
 
     Raises:
         ValueError: If variant format is invalid
@@ -108,7 +111,15 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
         '17-36459258-37832869-C-<DEL>'
         >>> validate_variant_id("17-36459258-37832869-DEL")
         '17-36459258-37832869-DEL'
+        >>> validate_variant_id("var:HNF1B:17:36459258-37832869:DEL")
+        'var:HNF1B:17:36459258-37832869:DEL'
     """
+    # Pattern 5: Internal CNV format - var:GENE:CHROM:START-END:TYPE
+    # Check this first since it contains colons that would be normalized otherwise
+    internal_cnv_pattern = r"^var:[A-Za-z0-9]+:[0-9XYM]+:\d+-\d+:(DEL|DUP|INS|INV|CNV)$"
+    if allow_cnv and re.match(internal_cnv_pattern, variant_id, re.IGNORECASE):
+        return variant_id  # Keep as-is (case-sensitive gene names)
+
     # Remove chr prefix if present
     normalized = re.sub(r"^chr", "", variant_id, flags=re.IGNORECASE)
 
@@ -479,9 +490,12 @@ async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
     - SNV/indels: VCF format "CHROM POS ID REF ALT QUAL FILTER INFO"
     - CNV/SVs: VEP default SV format "CHROM START END SV_TYPE STRAND ID"
 
+    Implements exponential backoff with jitter for resilient API calls.
+
     See:
     - https://rest.ensembl.org/documentation/info/vep_region_post
     - https://www.ensembl.org/info/docs/tools/vep/vep_formats.html
+    - AWS Architecture Blog: Exponential Backoff And Jitter
 
     Args:
         variant_ids: List of variants in VCF or CNV format
@@ -493,6 +507,8 @@ async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
         VEPRateLimitError: If rate limit exceeded (429)
         VEPAPIError: For other API errors
     """
+    from app.core.retry import RetryConfig, retry_async
+
     if not variant_ids:
         return {}
 
@@ -512,7 +528,7 @@ async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
     vep_base_url = settings.external_apis.vep.base_url
     vep_timeout = settings.external_apis.vep.timeout_seconds
     max_retries = settings.external_apis.vep.max_retries
-    backoff_factor = settings.external_apis.vep.retry_backoff_factor
+    base_delay = settings.external_apis.vep.retry_backoff_factor
 
     endpoint = f"{vep_base_url}/vep/homo_sapiens/region"
     params = {
@@ -522,63 +538,71 @@ async def _fetch_from_vep(variant_ids: List[str]) -> Dict[str, dict]:
         "gencode_primary": "1",
     }
 
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    endpoint,
-                    json={"variants": vep_variants},
-                    params=params,
-                    headers={"Content-Type": "application/json"},
-                    timeout=vep_timeout,
+    # Configure retry with exponential backoff and jitter
+    retry_config = RetryConfig(
+        max_attempts=max_retries,
+        base_delay=base_delay,
+        max_delay=60.0,  # Cap at 60 seconds
+        exponential_base=2.0,
+        jitter=True,  # Add randomness to prevent thundering herd
+        retryable_exceptions=(
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            VEPAPIError,  # Server errors (5xx) wrapped as VEPAPIError
+        ),
+        non_retryable_exceptions=(
+            VEPNotFoundError,  # 400 - invalid format
+            VEPRateLimitError,  # 429 - handled separately
+        ),
+    )
+
+    def on_retry(exc: Exception, attempt: int, delay: float) -> None:
+        logger.warning(
+            f"VEP request failed (attempt {attempt + 1}/{max_retries}): "
+            f"{type(exc).__name__}. Retrying in {delay:.1f}s"
+        )
+
+    async def make_vep_request() -> Dict[str, dict]:
+        """Make a single VEP API request."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                endpoint,
+                json={"variants": vep_variants},
+                params=params,
+                headers={"Content-Type": "application/json"},
+                timeout=vep_timeout,
+            )
+
+            if response.status_code == 200:
+                results = response.json()
+                return _parse_vep_response(results, variant_ids)
+
+            elif response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", 60))
+                logger.warning(f"VEP rate limited, retry after {retry_after}s")
+                raise VEPRateLimitError(
+                    f"Rate limit exceeded. Retry after {retry_after} seconds"
                 )
 
-                if response.status_code == 200:
-                    results = response.json()
-                    return _parse_vep_response(results, variant_ids)
+            elif response.status_code == 400:
+                logger.error(f"Invalid variant format: {variant_ids}")
+                raise VEPNotFoundError("Invalid variant format")
 
-                elif response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", 60))
-                    logger.warning(f"VEP rate limited, retry after {retry_after}s")
-                    raise VEPRateLimitError(
-                        f"Rate limit exceeded. Retry after {retry_after} seconds"
-                    )
+            elif response.status_code in (500, 502, 503, 504):
+                # Server error - retryable
+                raise VEPAPIError(f"VEP server error: {response.status_code}")
 
-                elif response.status_code == 400:
-                    logger.error(f"Invalid variant format: {variant_ids}")
-                    raise VEPNotFoundError("Invalid variant format")
+            else:
+                raise VEPAPIError(f"Unexpected VEP error: {response.status_code}")
 
-                elif response.status_code in (500, 502, 503, 504):
-                    if attempt < max_retries - 1:
-                        backoff_time = backoff_factor ** attempt
-                        logger.warning(
-                            f"VEP API error {response.status_code}, "
-                            f"retrying in {backoff_time}s"
-                        )
-                        await asyncio.sleep(backoff_time)
-                        continue
-                    raise VEPAPIError(f"VEP API error: {response.status_code}")
-
-                else:
-                    raise VEPAPIError(f"Unexpected VEP error: {response.status_code}")
-
-        except httpx.TimeoutException:
-            if attempt < max_retries - 1:
-                backoff_time = backoff_factor ** attempt
-                logger.warning(f"VEP timeout, retrying in {backoff_time}s")
-                await asyncio.sleep(backoff_time)
-                continue
-            raise VEPTimeoutError("VEP API timeout")
-
-        except httpx.NetworkError as e:
-            if attempt < max_retries - 1:
-                backoff_time = backoff_factor ** attempt
-                logger.warning(f"VEP network error: {e}, retrying in {backoff_time}s")
-                await asyncio.sleep(backoff_time)
-                continue
-            raise VEPAPIError(f"Network error: {e}")
-
-    return {}
+    try:
+        return await retry_async(
+            make_vep_request, config=retry_config, on_retry=on_retry
+        )
+    except httpx.TimeoutException:
+        raise VEPTimeoutError("VEP API timeout after all retries")
+    except httpx.NetworkError as e:
+        raise VEPAPIError(f"Network error after all retries: {e}")
 
 
 def _parse_vep_response(
@@ -764,6 +788,11 @@ async def _store_annotations_batch(
     """)
 
     for ann in annotations:
+        # Convert timezone-aware datetime to naive (DB column is timestamp without tz)
+        fetched_at = ann.get("fetched_at", datetime.now(timezone.utc))
+        if fetched_at.tzinfo is not None:
+            fetched_at = fetched_at.replace(tzinfo=None)
+
         await db.execute(
             query,
             {
@@ -787,7 +816,7 @@ async def _store_annotations_batch(
                 "data_source": ann.get("data_source", "Ensembl VEP"),
                 "vep_version": ann.get("vep_version", "114"),
                 "fetched_by": fetched_by,
-                "fetched_at": ann.get("fetched_at", datetime.now(timezone.utc)),
+                "fetched_at": fetched_at,
             },
         )
 
