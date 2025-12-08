@@ -4,7 +4,8 @@
         docker-build docker-npm docker-npm-bg docker-down docker-logs docker-clean docker-clean-all \
         docker-dev docker-dev-bg docker-health docker-ps docker-db-migrate docker-db-init docker-db-backup \
         docker-shell-api docker-shell-db docker-import-full docker-import-test \
-        publications-sync publications-sync-dry publications-sync-test docker-publications-sync
+        publications-sync publications-sync-dry publications-sync-test docker-publications-sync \
+        variants-sync variants-sync-dry variants-sync-test docker-variants-sync
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -50,6 +51,7 @@ help:  ## Show this help message
 	@echo "  make phenopackets-migrate      - Import all data from Google Sheets"
 	@echo "  make phenopackets-migrate-test - Import test data (20 individuals)"
 	@echo "  make publications-sync         - Sync publication metadata from PubMed"
+	@echo "  make variants-sync             - Sync variant annotations from VEP"
 	@echo ""
 	@echo "📊 MONITORING:"
 	@echo "  make status          - Show system status"
@@ -185,6 +187,16 @@ publications-sync-dry:  ## Dry run - shows what would be fetched without changes
 publications-sync-test:  ## Sync first 10 publications (for testing)
 	cd backend && uv run python scripts/sync_publication_metadata.py --limit 10
 
+# Variant Annotation Sync Commands (Fetch VEP annotations for unique variants)
+variants-sync:  ## Sync all variant annotations from VEP
+	cd backend && uv run python scripts/sync_variant_annotations.py
+
+variants-sync-dry:  ## Dry run - shows what would be fetched without changes
+	cd backend && uv run python scripts/sync_variant_annotations.py --dry-run
+
+variants-sync-test:  ## Sync first 10 variants (for testing)
+	cd backend && uv run python scripts/sync_variant_annotations.py --limit 10
+
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 
 clean:  ## Remove virtual environment and cache
@@ -304,12 +316,20 @@ docker-publications-sync:  ## Sync publication metadata from PubMed in Docker
 	echo "Using container: $$API_CONTAINER"; \
 	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py
 
-# Combined data import command (phenopackets + publications)
-docker-import-full-with-publications:  ## Full data import with publication metadata sync
+docker-variants-sync:  ## Sync variant annotations from VEP in Docker
 	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
 	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
 	echo "Using container: $$API_CONTAINER"; \
-	echo "Step 1/2: Importing phenopackets..."; \
+	docker exec $$API_CONTAINER python scripts/sync_variant_annotations.py
+
+# Combined data import command (phenopackets + publications + variants)
+docker-import-full-with-sync:  ## Full data import with publication and variant sync
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	echo "Step 1/3: Importing phenopackets..."; \
 	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets; \
-	echo "Step 2/2: Syncing publication metadata from PubMed..."; \
-	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py
+	echo "Step 2/3: Syncing publication metadata from PubMed..."; \
+	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py; \
+	echo "Step 3/3: Syncing variant annotations from VEP..."; \
+	docker exec $$API_CONTAINER python scripts/sync_variant_annotations.py

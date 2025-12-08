@@ -494,6 +494,106 @@ async def recode_variant(
     }
 
 
+class BatchRecodeRequest(BaseModel):
+    """Request model for batch variant recoding."""
+
+    variants: List[str]
+    include_vcf: bool = True
+
+
+class BatchRecodeResponse(BaseModel):
+    """Response model for batch variant recoding."""
+
+    results: Dict[str, Optional[Dict[str, Any]]]
+    success_count: int
+    failed_count: int
+
+
+@router.post(
+    "/recode/batch",
+    response_model=BatchRecodeResponse,
+    summary="Batch recode variants",
+    description="""
+Recode multiple variants in batch to all possible representations.
+
+This endpoint efficiently processes up to 200 variants per batch using the
+Ensembl Variant Recoder POST API.
+
+**Input Formats:**
+- HGVS: `NM_000458.4:c.544G>A`, `NC_000017.11:g.36459258A>G`
+- rsID: `rs56116432`
+- SPDI: `NC_000017.11:36459257:A:G`
+
+**Output Includes:**
+- hgvsg: Genomic HGVS notations
+- hgvsc: Coding HGVS notations
+- hgvsp: Protein HGVS notations
+- spdi: SPDI notation
+- vcf_string: VCF format representation
+- id: Variant IDs (rsIDs)
+
+**Performance:**
+- Batch size: Up to 200 variants per request
+- Cached responses: ~10ms per variant
+- First call: ~500ms per batch
+    """,
+    response_description="Batch recoding results",
+    responses={
+        200: {
+            "description": "Successful batch recoding",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "results": {
+                            "rs56116432": {
+                                "input": "rs56116432",
+                                "hgvsg": ["NC_000017.11:g.36459258A>G"],
+                                "hgvsc": ["NM_000458.4:c.544+1G>A"],
+                                "vcf_string": "17-36459258-A-G",
+                            },
+                            "invalid_variant": None,
+                        },
+                        "success_count": 1,
+                        "failed_count": 1,
+                    }
+                }
+            },
+        },
+    },
+)
+async def batch_recode_variants(request: BatchRecodeRequest) -> BatchRecodeResponse:
+    """Recode multiple variants in batch.
+
+    Efficiently processes multiple variants using Ensembl Variant Recoder POST API.
+    Maximum 200 variants per request.
+
+    Args:
+        request: Batch recoding request with list of variants
+
+    Returns:
+        BatchRecodeResponse with results for each variant
+    """
+    if len(request.variants) > 200:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 200 variants per batch request",
+        )
+
+    results = await validator.variant_validator.recode_variants_batch(
+        request.variants,
+        include_vcf=request.include_vcf,
+    )
+
+    success_count = sum(1 for r in results.values() if r is not None)
+    failed_count = len(results) - success_count
+
+    return BatchRecodeResponse(
+        results=results,
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
 @router.get(
     "/suggest/{partial_notation}",
     summary="Get variant notation suggestions",

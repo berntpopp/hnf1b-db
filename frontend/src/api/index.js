@@ -454,6 +454,24 @@ export const getPublicationSyncStatus = (taskId = null) =>
   });
 
 /**
+ * Start variant annotation sync task.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with task info
+ */
+export const startVariantSync = () => apiClient.post('/admin/sync/variants');
+
+/**
+ * Get variant sync task progress.
+ * Requires admin authentication.
+ * @param {string} taskId - Optional task ID
+ * @returns {Promise} Axios promise with progress info
+ */
+export const getVariantSyncStatus = (taskId = null) =>
+  apiClient.get('/admin/sync/variants/status', {
+    params: taskId ? { task_id: taskId } : {},
+  });
+
+/**
  * Get publication type distribution (for donut chart).
  * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
  * @returns {Promise} Axios promise with publication type aggregation
@@ -885,6 +903,8 @@ export default {
   getAdminStatistics,
   startPublicationSync,
   getPublicationSyncStatus,
+  startVariantSync,
+  getVariantSyncStatus,
 
   // Axios client for custom requests
   client: apiClient,
