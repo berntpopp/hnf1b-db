@@ -210,13 +210,13 @@ async def get_variant_annotations_batch(
     variant_ids: List[str],
     db: AsyncSession,
     fetched_by: Optional[str] = "system",
-    batch_size: int = 200,
+    batch_size: Optional[int] = None,
 ) -> Dict[str, Optional[dict]]:
     """Fetch variant annotations for multiple variants with batching.
 
     Efficiently fetches annotations for multiple variants:
     1. Check database cache for all variants
-    2. Batch fetch missing variants from VEP (50 per request)
+    2. Batch fetch missing variants from VEP (configurable batch size)
     3. Store results in database
     4. Return all annotations
 
@@ -224,11 +224,15 @@ async def get_variant_annotations_batch(
         variant_ids: List of variants in VCF format
         db: Database session
         fetched_by: User or system identifier
-        batch_size: Variants per VEP batch (default: 200, per Ensembl limits)
+        batch_size: Variants per VEP batch (default: from config, typically 50)
 
     Returns:
         Dict mapping variant_id to annotation (or None if not found)
     """
+    # Use config batch size if not specified
+    if batch_size is None:
+        batch_size = settings.external_apis.vep.batch_size
+
     # Validate all variants first
     validated_ids = []
     for vid in variant_ids:

@@ -77,9 +77,10 @@ class VepApiConfig(BaseModel):
     """Ensembl VEP API configuration."""
 
     base_url: str = "https://rest.ensembl.org"
-    timeout_seconds: int = 30
-    max_retries: int = 3
+    timeout_seconds: int = 60  # Increased for batch requests
+    max_retries: int = 4  # More retries for resilience
     retry_backoff_factor: float = 2.0
+    batch_size: int = 50  # VEP recommends max 200, but 50 is more reliable
     cache_enabled: bool = True
     cache_size_limit: int = 1000
     cache_ttl_seconds: int = 86400
