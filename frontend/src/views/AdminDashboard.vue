@@ -87,7 +87,7 @@
 
       <!-- Second Row Statistics -->
       <v-row class="mb-4">
-        <v-col cols="12" md="6">
+        <v-col cols="12" md="4">
           <v-card elevation="2">
             <v-card-text class="text-center">
               <v-icon size="48" color="orange" class="mb-2">mdi-account-group</v-icon>
@@ -100,7 +100,35 @@
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="6">
+        <v-col cols="12" md="4">
+          <v-card elevation="2">
+            <v-card-text class="text-center">
+              <v-icon size="48" color="cyan" class="mb-2">mdi-map-marker</v-icon>
+              <div class="text-h3 font-weight-bold">
+                {{ statistics?.reference?.chr17q12_gene_count || 0 }}
+              </div>
+              <div class="text-body-2 text-grey">chr17q12 Genes</div>
+              <div class="text-caption text-grey mt-1">
+                <v-icon
+                  size="x-small"
+                  :color="statistics?.reference?.has_grch38 ? 'success' : 'warning'"
+                >
+                  {{ statistics?.reference?.has_grch38 ? 'mdi-check-circle' : 'mdi-alert' }}
+                </v-icon>
+                GRCh38
+                <v-icon
+                  size="x-small"
+                  :color="statistics?.reference?.has_hnf1b ? 'success' : 'warning'"
+                  class="ml-2"
+                >
+                  {{ statistics?.reference?.has_hnf1b ? 'mdi-check-circle' : 'mdi-alert' }}
+                </v-icon>
+                HNF1B
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+        <v-col cols="12" md="4">
           <v-card elevation="2">
             <v-card-text class="text-center">
               <v-icon size="48" color="green" class="mb-2">mdi-check-decagram</v-icon>
@@ -247,6 +275,52 @@
                           Syncing...
                         </v-btn>
                       </template>
+                      <template v-else-if="item.name === 'Reference Data'">
+                        <v-btn
+                          v-if="!refInitInProgress"
+                          size="small"
+                          color="cyan"
+                          variant="tonal"
+                          @click="startReferenceInit"
+                        >
+                          <v-icon start size="small">mdi-database-plus</v-icon>
+                          {{ item.synced > 0 ? 'Re-Init' : 'Initialize' }}
+                        </v-btn>
+                        <v-btn v-else loading size="small" color="cyan" variant="tonal" disabled>
+                          Initializing...
+                        </v-btn>
+                      </template>
+                      <template v-else-if="item.name === 'chr17q12 Genes'">
+                        <v-btn-group v-if="!genesSyncInProgress" density="compact">
+                          <v-btn
+                            size="small"
+                            color="teal"
+                            variant="tonal"
+                            @click="startGenesSync(false)"
+                          >
+                            <v-icon start size="small">mdi-sync</v-icon>
+                            {{ item.pending > 0 ? 'Sync Now' : 'Refresh' }}
+                          </v-btn>
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn v-bind="props" size="small" color="teal" variant="tonal" icon>
+                                <v-icon size="small">mdi-chevron-down</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="startGenesSync(true)">
+                                <v-list-item-title>
+                                  <v-icon size="small" class="mr-1">mdi-refresh</v-icon>
+                                  Force Re-sync All
+                                </v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </v-btn-group>
+                        <v-btn v-else loading size="small" color="teal" variant="tonal" disabled>
+                          Syncing...
+                        </v-btn>
+                      </template>
                       <span v-else class="text-caption text-grey"> CLI only </span>
                     </td>
                   </tr>
@@ -306,6 +380,33 @@
                   </div>
                 </div>
               </v-expand-transition>
+
+              <!-- Genes Sync Progress -->
+              <v-expand-transition>
+                <div v-if="genesSyncTask" class="mt-4 pa-4 bg-teal-lighten-5 rounded">
+                  <div class="d-flex justify-space-between align-center mb-2">
+                    <span class="font-weight-medium">
+                      <v-icon size="small" class="mr-1">mdi-map-marker</v-icon>
+                      chr17q12 Genes Sync Progress
+                    </span>
+                    <v-chip :color="getSyncStatusColor(genesSyncTask.status)" size="small">
+                      {{ genesSyncTask.status }}
+                    </v-chip>
+                  </div>
+                  <v-progress-linear
+                    :model-value="genesSyncTask.progress"
+                    color="teal"
+                    height="12"
+                    rounded
+                  />
+                  <div class="d-flex justify-space-between mt-2 text-caption">
+                    <span>{{ genesSyncTask.processed }} / {{ genesSyncTask.total }} processed</span>
+                    <span v-if="genesSyncTask.errors > 0" class="text-error">
+                      {{ genesSyncTask.errors }} errors
+                    </span>
+                  </div>
+                </div>
+              </v-expand-transition>
             </v-card-text>
           </v-card>
         </v-col>
@@ -346,24 +447,36 @@
                   </v-btn>
                 </v-col>
                 <v-col cols="12" sm="6" md="4" lg="2">
+                  <v-btn
+                    block
+                    color="cyan"
+                    variant="tonal"
+                    :disabled="refInitInProgress"
+                    @click="startReferenceInit"
+                  >
+                    <v-icon start>mdi-database-plus</v-icon>
+                    Init Reference
+                  </v-btn>
+                </v-col>
+                <v-col cols="12" sm="6" md="4" lg="2">
+                  <v-btn
+                    block
+                    color="teal"
+                    variant="tonal"
+                    :disabled="genesSyncInProgress"
+                    @click="startGenesSync"
+                  >
+                    <v-icon start>mdi-map-marker</v-icon>
+                    Sync Genes
+                  </v-btn>
+                </v-col>
+                <v-col cols="12" sm="6" md="4" lg="2">
                   <v-btn block color="secondary" variant="tonal" @click="refreshStatus">
                     <v-icon start>mdi-refresh</v-icon>
                     Refresh Status
                   </v-btn>
                 </v-col>
-                <v-col cols="12" sm="6" md="6" lg="3">
-                  <v-btn
-                    block
-                    color="info"
-                    variant="tonal"
-                    href="http://localhost:8000/api/v2/docs"
-                    target="_blank"
-                  >
-                    <v-icon start>mdi-api</v-icon>
-                    API Docs
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="6" lg="3">
+                <v-col cols="12" sm="6" md="4" lg="2">
                   <v-btn block color="grey" variant="tonal" to="/user">
                     <v-icon start>mdi-account</v-icon>
                     User Profile
@@ -460,6 +573,14 @@ const varSyncTask = ref(null);
 const varSyncInProgress = ref(false);
 let varPollInterval = null;
 
+// Reference init state
+const refInitInProgress = ref(false);
+
+// Genes sync state
+const genesSyncTask = ref(null);
+const genesSyncInProgress = ref(false);
+let genesPollInterval = null;
+
 // Computed
 const syncStatus = computed(() => systemStatus.value?.sync_status || []);
 
@@ -498,6 +619,8 @@ const getSyncCompletionPercent = () => {
 const getSyncIcon = (item) => {
   if (item.name === 'Publication Metadata') return 'mdi-book-open-variant';
   if (item.name === 'VEP Annotations') return 'mdi-dna';
+  if (item.name === 'Reference Data') return 'mdi-database';
+  if (item.name === 'chr17q12 Genes') return 'mdi-map-marker';
   return 'mdi-sync';
 };
 
@@ -671,6 +794,96 @@ const stopVarPolling = () => {
   }
 };
 
+// Reference init methods
+const startReferenceInit = async () => {
+  try {
+    refInitInProgress.value = true;
+    const response = await API.startReferenceInit();
+
+    if (response.data.status === 'completed') {
+      successMessage.value = response.data.message || 'Reference data initialized successfully';
+      await fetchStatus();
+    } else if (response.data.status === 'failed') {
+      error.value = response.data.message || 'Reference initialization failed';
+    } else {
+      successMessage.value = 'Reference initialization started';
+      // Wait a bit and refresh status
+      setTimeout(async () => {
+        await fetchStatus();
+      }, 2000);
+    }
+  } catch (err) {
+    window.logService.error('Failed to initialize reference data', { error: err.message });
+    error.value = err.response?.data?.detail || 'Failed to initialize reference data';
+  } finally {
+    refInitInProgress.value = false;
+  }
+};
+
+// Genes sync methods
+const startGenesSync = async (force = false) => {
+  try {
+    genesSyncInProgress.value = true;
+    const response = await API.startGenesSync(force);
+    genesSyncTask.value = {
+      task_id: response.data.task_id,
+      status: response.data.status,
+      progress: 0,
+      processed: 0,
+      total: response.data.items_to_process,
+      errors: 0,
+    };
+
+    if (response.data.status === 'completed') {
+      successMessage.value = response.data.message;
+      genesSyncInProgress.value = false;
+      genesSyncTask.value = null;
+      await fetchStatus();
+    } else {
+      startGenesPolling();
+    }
+  } catch (err) {
+    window.logService.error('Failed to start genes sync', { error: err.message });
+    error.value = err.response?.data?.detail || 'Failed to start genes sync';
+    genesSyncInProgress.value = false;
+  }
+};
+
+const pollGenesSyncStatus = async () => {
+  try {
+    const response = await API.getGenesSyncStatus(genesSyncTask.value?.task_id);
+    genesSyncTask.value = response.data;
+
+    if (response.data.status === 'completed' || response.data.status === 'failed') {
+      stopGenesPolling();
+      genesSyncInProgress.value = false;
+      if (response.data.status === 'completed') {
+        successMessage.value = `chr17q12 genes sync completed: ${response.data.processed} genes`;
+        await fetchStatus();
+      } else {
+        error.value = 'chr17q12 genes sync task failed';
+      }
+      setTimeout(() => {
+        genesSyncTask.value = null;
+      }, 5000);
+    }
+  } catch (err) {
+    window.logService.error('Failed to poll genes sync status', { error: err.message });
+  }
+};
+
+const startGenesPolling = () => {
+  if (genesPollInterval) return;
+  genesPollInterval = setInterval(pollGenesSyncStatus, 2000);
+};
+
+const stopGenesPolling = () => {
+  if (genesPollInterval) {
+    clearInterval(genesPollInterval);
+    genesPollInterval = null;
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
   window.logService.info('Admin dashboard mounted');
@@ -681,6 +894,7 @@ onMounted(async () => {
 onUnmounted(() => {
   stopPubPolling();
   stopVarPolling();
+  stopGenesPolling();
 });
 </script>
 
