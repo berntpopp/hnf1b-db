@@ -250,10 +250,10 @@ async def get_system_status(
             last_sync=last_vep_sync.isoformat() if last_vep_sync else None,
         ),
         DataSyncStatus(
-            name="Reference Data (chr17q12 genes)",
-            total=70,  # Expected ~70 genes in chr17q12 region
+            name="chr17q12 Genes",
+            total=175,  # ~175 genes in chr17q12 region from Ensembl
             synced=ref_status.chr17q12_gene_count,
-            pending=max(0, 70 - ref_status.chr17q12_gene_count),
+            pending=max(0, 175 - ref_status.chr17q12_gene_count),
             last_sync=ref_status.last_updated.isoformat() if ref_status.last_updated else None,
         ),
     ]
