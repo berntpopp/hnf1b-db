@@ -23,6 +23,11 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Helper function to get counts from database using the helper module
+get_count() {
+    python -m scripts.entrypoint_helpers "$1" 2>/dev/null || echo "0"
+}
+
 # Wait for PostgreSQL to be ready
 wait_for_db() {
     log_info "Waiting for PostgreSQL to be ready..."
@@ -84,18 +89,7 @@ run_data_import() {
         log_info "Checking if database is empty..."
 
         # Check if phenopackets table has data
-        local count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        result = await session.execute(text('SELECT COUNT(*) FROM phenopackets'))
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+        local count=$(get_count phenopackets)
 
         if [ "$count" = "0" ]; then
             # Step 2: Import phenopackets from Google Sheets
@@ -124,18 +118,7 @@ sync_reference_data() {
     log_info "Checking reference data..."
 
     # Check if reference data is initialized (GRCh38 genome exists)
-    local genome_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        result = await session.execute(text('SELECT COUNT(*) FROM genomes WHERE assembly_name = '\''GRCh38'\'''))
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local genome_count=$(get_count genomes)
 
     if [ "$genome_count" = "0" ]; then
         log_info "Initializing reference data (GRCh38 + HNF1B + transcript + domains)..."
@@ -154,39 +137,10 @@ sync_publication_metadata() {
     log_info "Checking publication metadata..."
 
     # Check if publication_metadata table has data
-    local pub_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        result = await session.execute(text('SELECT COUNT(*) FROM publication_metadata'))
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local pub_count=$(get_count publication_metadata)
 
     # Count unique PMIDs in phenopackets
-    local pmid_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        query = text('''
-            SELECT COUNT(DISTINCT REPLACE(ext_ref->>'\''id'\'', '\''PMID:'\'', '\'''\''))
-            FROM phenopackets,
-                 jsonb_array_elements(phenopacket->'\''metaData'\''->'\''externalReferences'\'') as ext_ref
-            WHERE ext_ref->>'\''id'\'' LIKE '\''PMID:%'\''
-              AND deleted_at IS NULL
-        ''')
-        result = await session.execute(query)
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local pmid_count=$(get_count pmids)
 
     if [ "$pub_count" -lt "$pmid_count" ]; then
         log_info "Found $pmid_count PMIDs, $pub_count cached. Syncing publication metadata from PubMed..."
@@ -205,41 +159,10 @@ sync_variant_annotations() {
     log_info "Checking variant annotations..."
 
     # Count unique variants in phenopackets
-    local variant_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        query = text('''
-            SELECT COUNT(DISTINCT expr->>'\''value'\'')
-            FROM phenopackets,
-                 jsonb_array_elements(phenopacket->'\''interpretations'\'') as interp,
-                 jsonb_array_elements(interp->'\''diagnosis'\''->'\''genomicInterpretations'\'') as gi,
-                 jsonb_array_elements(gi->'\''variantInterpretation'\''->'\''variationDescriptor'\''->'\''expressions'\'') as expr
-            WHERE expr->>'\''syntax'\'' = '\''vcf'\''
-              AND deleted_at IS NULL
-        ''')
-        result = await session.execute(query)
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local variant_count=$(get_count variants)
 
     # Count existing annotations
-    local annotation_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        result = await session.execute(text('SELECT COUNT(*) FROM variant_annotations'))
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local annotation_count=$(get_count variant_annotations)
 
     if [ "$annotation_count" -lt "$variant_count" ]; then
         log_info "Found $variant_count variants, $annotation_count annotated. Syncing VEP annotations..."
@@ -258,25 +181,7 @@ sync_chr17q12_genes() {
     log_info "Checking chr17q12 genes..."
 
     # Count chr17q12 genes (in the region 36000000-39900000)
-    local gene_count=$(python -c "
-import asyncio
-from app.database import async_session
-from sqlalchemy import text
-
-async def check():
-    async with async_session() as session:
-        query = text('''
-            SELECT COUNT(*)
-            FROM genes
-            WHERE chromosome = '\''17'\''
-              AND start_position >= 36000000
-              AND end_position <= 39900000
-        ''')
-        result = await session.execute(query)
-        return result.scalar()
-
-print(asyncio.run(check()))
-" 2>/dev/null || echo "0")
+    local gene_count=$(get_count chr17q12_genes)
 
     # Expected ~70 genes in chr17q12 region
     if [ "$gene_count" -lt "60" ]; then
