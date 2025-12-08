@@ -6,13 +6,13 @@
         Publications by Type Over Years
       </div>
       <v-btn-toggle v-model="chartMode" mandatory dense color="primary">
-        <v-btn value="annual" size="small">
-          <v-icon left size="small">mdi-chart-line</v-icon>
-          Annual
-        </v-btn>
         <v-btn value="cumulative" size="small">
           <v-icon left size="small">mdi-chart-timeline-variant</v-icon>
           Cumulative
+        </v-btn>
+        <v-btn value="annual" size="small">
+          <v-icon left size="small">mdi-chart-line</v-icon>
+          Annual
         </v-btn>
       </v-btn-toggle>
     </v-card-title>
@@ -61,11 +61,18 @@ Chart.register(...registerables);
 
 export default {
   name: 'PublicationsTimelineChart',
+  props: {
+    mode: {
+      type: String,
+      default: 'cumulative',
+      validator: (value) => ['annual', 'cumulative'].includes(value),
+    },
+  },
+  emits: ['update:mode'],
   data() {
     return {
       loading: false,
       error: null,
-      chartMode: 'annual', // 'annual' or 'cumulative'
       chartData: {
         labels: [],
         datasets: [],
@@ -74,8 +81,18 @@ export default {
       chart: null,
     };
   },
+  computed: {
+    chartMode: {
+      get() {
+        return this.mode;
+      },
+      set(value) {
+        this.$emit('update:mode', value);
+      },
+    },
+  },
   watch: {
-    chartMode() {
+    mode() {
       // Re-process and render chart when mode changes
       if (this.rawPublications.length > 0) {
         this.processChartData(this.rawPublications);

@@ -8,6 +8,44 @@
  */
 
 /**
+ * Tab definitions for URL-navigatable tabs.
+ * Maps URL-friendly slugs to display labels.
+ */
+export const AGGREGATION_TABS = [
+  { slug: 'donut', label: 'Donut Chart' },
+  { slug: 'stacked-bar', label: 'Stacked Bar Chart' },
+  { slug: 'publications', label: 'Publications Timeline' },
+  { slug: 'variant-comparison', label: 'Variant Comparison' },
+  { slug: 'survival', label: 'Survival Curves' },
+  { slug: 'dna-distance', label: 'DNA Distance Analysis' },
+];
+
+/**
+ * Default tab slug for the aggregations dashboard.
+ */
+export const DEFAULT_TAB = 'donut';
+
+/**
+ * Get tab label from slug.
+ * @param {string} slug - URL-friendly tab slug
+ * @returns {string} Display label or default if not found
+ */
+export function getTabLabel(slug) {
+  const tab = AGGREGATION_TABS.find((t) => t.slug === slug);
+  return tab ? tab.label : AGGREGATION_TABS[0].label;
+}
+
+/**
+ * Get tab slug from label.
+ * @param {string} label - Display label
+ * @returns {string} URL-friendly slug or default if not found
+ */
+export function getTabSlug(label) {
+  const tab = AGGREGATION_TABS.find((t) => t.label === label);
+  return tab ? tab.slug : DEFAULT_TAB;
+}
+
+/**
  * Semantic color maps for specific aggregations.
  * Maps data labels to consistent colors across the application.
  */

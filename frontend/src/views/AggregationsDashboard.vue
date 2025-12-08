@@ -5,16 +5,13 @@
       <v-col cols="12">
         <v-sheet outlined>
           <v-card>
-            <v-tabs v-model="tab" bg-color="primary">
-              <v-tab value="Donut Chart"> Donut Chart </v-tab>
-              <v-tab value="Stacked Bar Chart"> Stacked Bar Chart </v-tab>
-              <v-tab value="Publications Timeline"> Publications Timeline </v-tab>
-              <v-tab value="Variant Comparison"> Variant Comparison </v-tab>
-              <v-tab value="Survival Curves"> Survival Curves </v-tab>
-              <v-tab value="DNA Distance Analysis"> DNA Distance Analysis </v-tab>
+            <v-tabs v-model="activeTabLabel" bg-color="primary">
+              <v-tab v-for="tabDef in AGGREGATION_TABS" :key="tabDef.slug" :value="tabDef.label">
+                {{ tabDef.label }}
+              </v-tab>
             </v-tabs>
             <v-card-text>
-              <v-tabs-window v-model="tab">
+              <v-tabs-window v-model="activeTabLabel">
                 <!-- Donut Chart Tab -->
                 <v-tabs-window-item value="Donut Chart">
                   <v-row class="pa-3">
@@ -24,12 +21,11 @@
                       :md="isVariantAggregation ? 4 : 6"
                     >
                       <v-select
-                        v-model="selectedCategory"
+                        v-model="category"
                         :items="donutCategories"
                         item-title="label"
                         item-value="label"
                         label="Category"
-                        @change="onCategoryChange"
                       />
                     </v-col>
                     <v-col
@@ -38,28 +34,32 @@
                       :md="isVariantAggregation ? 4 : 6"
                     >
                       <v-select
-                        v-model="selectedAggregation"
+                        v-model="aggregation"
                         :items="selectedAggregations"
                         item-title="label"
                         item-value="value"
                         label="Aggregation"
-                        @change="fetchAggregationData"
                       />
                     </v-col>
                     <v-col v-if="isVariantAggregation" cols="12" sm="6" md="4">
                       <v-select
-                        v-model="variantCountMode"
+                        v-model="countMode"
                         :items="countModeOptions"
                         item-title="label"
                         item-value="value"
                         label="Count Mode"
                         hint="'All' counts variant instances (e.g., 864), 'Unique' counts distinct variants"
                         persistent-hint
-                        @change="fetchAggregationData"
                       />
                     </v-col>
                   </v-row>
-                  <component :is="donutChartProps.content" v-bind="donutChartProps.props" />
+                  <DonutChart
+                    :chart-data="chartData"
+                    :color-map="currentColorMap"
+                    :exportable="true"
+                    :width="600"
+                    :height="500"
+                  />
                 </v-tabs-window-item>
 
                 <!-- Stacked Bar Chart Tab -->
@@ -67,12 +67,11 @@
                   <v-row class="pa-3">
                     <v-col cols="12" md="6">
                       <v-select
-                        v-model="stackedBarDisplayLimit"
+                        v-model="displayLimitValue"
                         :items="displayLimitOptions"
                         item-title="label"
                         item-value="value"
                         label="Number of Features to Display"
-                        @change="fetchStackedBarData"
                       />
                     </v-col>
                   </v-row>
@@ -118,7 +117,7 @@
 
                   <StackedBarChart
                     :chart-data="stackedBarChartData"
-                    :display-limit="stackedBarDisplayLimit"
+                    :display-limit="displayLimitValue"
                     :width="1200"
                     :height="800"
                   />
@@ -126,7 +125,7 @@
 
                 <!-- Publications Timeline Tab -->
                 <v-tabs-window-item value="Publications Timeline">
-                  <PublicationsTimelineChart />
+                  <PublicationsTimelineChart v-model:mode="timelineMode" />
                 </v-tabs-window-item>
 
                 <!-- Variant Comparison Tab -->
@@ -134,7 +133,7 @@
                   <v-row class="pa-3">
                     <v-col cols="12" md="4">
                       <v-select
-                        v-model="comparisonType"
+                        v-model="comparison"
                         :items="comparisonTypes"
                         item-title="label"
                         item-value="value"
@@ -143,7 +142,7 @@
                     </v-col>
                     <v-col cols="12" md="4">
                       <v-select
-                        v-model="organSystemFilter"
+                        v-model="organSystem"
                         :items="organSystemOptions"
                         item-title="label"
                         item-value="value"
@@ -184,8 +183,8 @@
                   <VariantComparisonChart
                     v-else-if="comparisonData"
                     :comparison-data="comparisonData"
-                    :comparison-type="comparisonType"
-                    :organ-system-filter="organSystemFilter"
+                    :comparison-type="comparison"
+                    :organ-system-filter="organSystem"
                     :width="1200"
                     :height="600"
                   />
@@ -276,8 +275,8 @@
   </v-container>
 </template>
 
-<script>
-import { markRaw } from 'vue';
+<script setup>
+import { ref, computed, watch, onMounted } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
 import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
@@ -286,7 +285,12 @@ import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
 import DNADistanceAnalysis from '@/components/analyses/DNADistanceAnalysis.vue';
 import SurvivalDataPanels from '@/components/analyses/SurvivalDataPanels.vue';
 import * as API from '@/api';
+import { useUrlState } from '@/composables/useUrlState';
 import {
+  AGGREGATION_TABS,
+  DEFAULT_TAB,
+  getTabLabel,
+  getTabSlug,
   AGGREGATION_COLOR_MAPS,
   DONUT_CATEGORIES,
   COUNT_MODE_OPTIONS,
@@ -300,341 +304,388 @@ import {
   calculateStackedBarStats,
 } from '@/utils/aggregationConfig';
 
-export default {
-  name: 'AggregationsDashboard',
-  components: {
-    DonutChart,
-    PublicationsTimelineChart,
-    StackedBarChart,
-    VariantComparisonChart,
-    KaplanMeierChart,
-    DNADistanceAnalysis,
-    SurvivalDataPanels,
-  },
-  data() {
-    return {
-      tab: 'Donut Chart',
-      chartData: {},
-      stackedBarChartData: [],
-      stackedBarDisplayLimit: 20,
-      // Use imported configuration constants
-      colorMaps: AGGREGATION_COLOR_MAPS,
-      items: [
-        {
-          tab: 'Donut Chart',
-          content: markRaw(DonutChart),
-          props: { exportable: true, width: 600, height: 500 },
-        },
-      ],
-      donutCategories: DONUT_CATEGORIES,
-      selectedCategory: 'Phenopackets',
-      selectedAggregation: 'getSexDistribution',
-      variantCountMode: 'all',
-      countModeOptions: COUNT_MODE_OPTIONS,
-      allDisplayLimitOptions: DISPLAY_LIMIT_OPTIONS,
-      // Variant Comparison data
-      comparisonType: 'truncating_vs_non_truncating',
-      sortBy: 'p_value',
-      comparisonData: null,
-      comparisonLoading: false,
-      comparisonError: null,
-      // Survival Curves data
-      survivalComparison: 'variant_type',
-      survivalEndpoint: 'ckd_stage_3_plus',
-      survivalData: null,
-      survivalLoading: false,
-      survivalError: null,
-      survivalComparisonTypes: SURVIVAL_COMPARISON_TYPES,
-      survivalEndpointOptions: SURVIVAL_ENDPOINT_OPTIONS,
-      comparisonTypes: COMPARISON_TYPES,
-      sortByOptions: SORT_BY_OPTIONS,
-      organSystemFilter: 'all',
-      organSystemOptions: ORGAN_SYSTEM_OPTIONS,
-    };
-  },
-  computed: {
-    donutChartProps() {
-      // Get the color map for the current aggregation if available
-      const colorMap = this.colorMaps[this.selectedAggregation] || null;
-      return {
-        content: this.items[0].content,
-        props: { ...this.items[0].props, chartData: this.chartData, colorMap },
-      };
-    },
-    selectedAggregations() {
-      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
-      return category ? category.aggregations : [];
-    },
-    isVariantAggregation() {
-      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
-      const aggregation = category?.aggregations.find(
-        (agg) => agg.value === this.selectedAggregation
-      );
-      return aggregation?.supportsCountMode || false;
-    },
-    displayLimitOptions() {
-      // Filter options based on available data
-      // Only show "Top N" if we have more than N features
-      const totalFeatures = this.stackedBarChartData.length;
-      return this.allDisplayLimitOptions.filter((option) => {
-        // Always show "All Features" option
-        if (option.threshold === 0) return true;
-        // Only show "Top N" if we have more than N features
-        return totalFeatures > option.threshold;
-      });
-    },
-    stackedBarStats() {
-      return calculateStackedBarStats(this.stackedBarChartData);
-    },
-  },
-  watch: {
-    selectedAggregation() {
-      this.fetchAggregationData();
-    },
-    selectedCategory() {
-      const aggregations = this.selectedAggregations;
-      if (aggregations.length > 0) {
-        this.selectedAggregation = aggregations[0].value;
-      } else {
-        this.selectedAggregation = null;
-      }
-      this.fetchAggregationData();
-    },
-    variantCountMode() {
-      this.fetchAggregationData();
-    },
-    tab(newTab) {
-      // Auto-fetch comparison data when switching to Variant Comparison tab
-      if (newTab === 'Variant Comparison' && !this.comparisonData) {
-        this.fetchComparisonData();
-      }
-      // Auto-fetch survival data when switching to Survival Curves tab
-      if (newTab === 'Survival Curves' && !this.survivalData) {
-        this.fetchSurvivalData();
-      }
-    },
-    // Watch comparison parameters and refetch data
-    comparisonType() {
-      if (this.tab === 'Variant Comparison') {
-        this.fetchComparisonData();
-      }
-    },
-    sortBy() {
-      if (this.tab === 'Variant Comparison') {
-        this.fetchComparisonData();
-      }
-    },
-    // Watch survival parameters and refetch data
-    survivalComparison() {
-      if (this.tab === 'Survival Curves') {
-        this.fetchSurvivalData();
-      }
-    },
-    survivalEndpoint() {
-      if (this.tab === 'Survival Curves') {
-        this.fetchSurvivalData();
-      }
-    },
-  },
-  mounted() {
-    this.fetchAggregationData();
-    this.fetchStackedBarData();
-  },
-  methods: {
-    formatLabel(label) {
-      return formatLabelUtil(label);
-    },
-
-    fetchStackedBarData() {
-      window.logService.debug('Fetching stacked bar chart data');
-
-      API.getPhenotypicFeaturesAggregation()
-        .then((response) => {
-          window.logService.info('Stacked bar chart data loaded', {
-            count: response.data?.length,
-          });
-
-          this.stackedBarChartData = response.data || [];
-        })
-        .catch((error) => {
-          window.logService.error('Error fetching stacked bar chart data', {
-            error: error.message,
-          });
-        });
-    },
-
-    fetchAggregationData() {
-      const category = this.donutCategories.find((cat) => cat.label === this.selectedCategory);
-      const aggregation = category?.aggregations.find(
-        (agg) => agg.value === this.selectedAggregation
-      );
-      const funcName = this.selectedAggregation;
-      const params = { ...(aggregation?.params || {}) };
-
-      // Add count_mode parameter if this is a variant aggregation
-      if (aggregation?.supportsCountMode) {
-        params.count_mode = this.variantCountMode;
-      }
-
-      window.logService.debug('Fetching aggregation data', {
-        category: this.selectedCategory,
-        aggregation: aggregation?.label,
-        funcName: funcName,
-        params: params,
-        supportsCountMode: aggregation?.supportsCountMode || false,
-      });
-
-      if (API[funcName] && typeof API[funcName] === 'function') {
-        API[funcName](params)
-          .then((response) => {
-            window.logService.info('Donut chart data loaded', {
-              aggregation: aggregation.title,
-              count: response.data?.length,
-            });
-
-            window.logService.debug('Transforming aggregation data for chart', {
-              rawDataCount: response.data?.length || 0,
-              totalCount: response.data?.reduce((sum, item) => sum + item.count, 0) || 0,
-              hasLimit: !!params.limit,
-              limit: params.limit,
-            });
-
-            // Transform v2 API format to DonutChart format
-            // v2 API: [{ label: "X", count: 10, percentage: 50 }, ...]
-            // DonutChart expects: { total_count: N, grouped_counts: [{ _id: "X", count: 10 }, ...] }
-            let data = response.data || [];
-            const totalCount = data.reduce((sum, item) => sum + item.count, 0);
-
-            let groupedCounts = [];
-
-            // Apply client-side limit if specified and add "Others" category
-            if (params.limit && data.length > params.limit) {
-              // Take top N items
-              const topItems = data.slice(0, params.limit);
-              const remainingItems = data.slice(params.limit);
-
-              // Sum up remaining items into "Others"
-              const othersCount = remainingItems.reduce((sum, item) => sum + item.count, 0);
-
-              window.logService.debug('Applied client-side limit to data', {
-                originalCount: data.length,
-                limitedCount: topItems.length,
-                othersCount: othersCount,
-              });
-
-              // Build grouped counts with formatted labels
-              groupedCounts = topItems.map((item) => ({
-                _id: this.formatLabel(item.label),
-                count: item.count || 0,
-              }));
-
-              // Add "Others" category if there are remaining items
-              if (othersCount > 0) {
-                groupedCounts.push({
-                  _id: 'Others',
-                  count: othersCount,
-                });
-              }
-            } else {
-              // No limit, show all items with formatted labels
-              groupedCounts = data.map((item) => ({
-                _id: this.formatLabel(item.label),
-                count: item.count || 0,
-              }));
-            }
-
-            this.chartData = {
-              total_count: totalCount,
-              grouped_counts: groupedCounts,
-            };
-          })
-          .catch((error) => {
-            window.logService.error('Error fetching donut chart data', {
-              error: error.message,
-            });
-          });
-      } else {
-        window.logService.error('API function not found', { funcName });
-      }
-    },
-    onCategoryChange() {
-      // Handled by watcher.
-    },
-
-    async fetchComparisonData() {
-      this.comparisonLoading = true;
-      this.comparisonError = null;
-
-      window.logService.debug('Fetching variant comparison data', {
-        comparisonType: this.comparisonType,
-        sortBy: this.sortBy,
-      });
-
-      try {
-        // Fetch all phenotypes (limit=100 is max allowed by API)
-        // Client-side organ system filtering handles the display
-        const response = await API.compareVariantTypes({
-          comparison: this.comparisonType,
-          limit: 100,
-          min_prevalence: 0,
-          sort_by: this.sortBy,
-        });
-
-        this.comparisonData = response.data;
-
-        window.logService.info('Variant comparison data loaded', {
-          groupNames: `${response.data.group1_name} vs ${response.data.group2_name}`,
-          group1Count: response.data.group1_count,
-          group2Count: response.data.group2_count,
-          phenotypesCount: response.data.phenotypes?.length || 0,
-          significantCount: response.data.metadata?.significant_count || 0,
-        });
-      } catch (error) {
-        window.logService.error('Error fetching variant comparison data', {
-          error: error.message,
-        });
-        this.comparisonError =
-          error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
-      } finally {
-        this.comparisonLoading = false;
-      }
-    },
-
-    async fetchSurvivalData() {
-      this.survivalLoading = true;
-      this.survivalError = null;
-
-      window.logService.debug('Fetching survival data', {
-        comparison: this.survivalComparison,
-        endpoint: this.survivalEndpoint,
-      });
-
-      try {
-        const response = await API.getSurvivalData({
-          comparison: this.survivalComparison,
-          endpoint: this.survivalEndpoint,
-        });
-
-        this.survivalData = response.data;
-
-        window.logService.info('Survival data loaded', {
-          comparisonType: response.data.comparison_type,
-          endpoint: response.data.endpoint,
-          groupsCount: response.data.groups?.length || 0,
-          statisticalTestsCount: response.data.statistical_tests?.length || 0,
-        });
-      } catch (error) {
-        window.logService.error('Error fetching survival data', {
-          error: error.message,
-        });
-        this.survivalError =
-          error.response?.data?.detail || 'Failed to load survival data. Please try again.';
-      } finally {
-        this.survivalLoading = false;
-      }
-    },
-  },
+// URL State Schema - defines all URL-synced parameters with their defaults
+const URL_STATE_DEFAULTS = {
+  // Tab selection
+  tab: DEFAULT_TAB,
+  // Donut chart options
+  category: 'Phenopackets',
+  aggregation: 'getSexDistribution',
+  countMode: 'all',
+  // Stacked bar options
+  displayLimit: 20,
+  // Publications timeline options
+  timelineMode: 'cumulative',
+  // Variant comparison options
+  comparison: 'truncating_vs_non_truncating',
+  organSystem: 'all',
+  sortBy: 'p_value',
+  // Survival options
+  survivalComparison: 'variant_type',
+  survivalEndpoint: 'ckd_stage_3_plus',
 };
+
+// Define which parameters belong to which tab (for cleanup on tab switch)
+const TAB_SPECIFIC_PARAMS = {
+  donut: ['category', 'aggregation', 'countMode'],
+  'stacked-bar': ['displayLimit'],
+  publications: ['timelineMode'],
+  'variant-comparison': ['comparison', 'organSystem', 'sortBy'],
+  survival: ['survivalComparison', 'survivalEndpoint'],
+  'dna-distance': [],
+};
+
+// Build schema from defaults
+const urlStateSchema = {
+  tab: { default: URL_STATE_DEFAULTS.tab, type: 'string' },
+  category: { default: URL_STATE_DEFAULTS.category, type: 'string' },
+  aggregation: { default: URL_STATE_DEFAULTS.aggregation, type: 'string' },
+  countMode: { default: URL_STATE_DEFAULTS.countMode, type: 'string' },
+  displayLimit: { default: URL_STATE_DEFAULTS.displayLimit, type: 'number' },
+  timelineMode: { default: URL_STATE_DEFAULTS.timelineMode, type: 'string' },
+  comparison: { default: URL_STATE_DEFAULTS.comparison, type: 'string' },
+  organSystem: { default: URL_STATE_DEFAULTS.organSystem, type: 'string' },
+  sortBy: { default: URL_STATE_DEFAULTS.sortBy, type: 'string' },
+  survivalComparison: { default: URL_STATE_DEFAULTS.survivalComparison, type: 'string' },
+  survivalEndpoint: { default: URL_STATE_DEFAULTS.survivalEndpoint, type: 'string' },
+};
+
+// Initialize URL state with schema
+const {
+  tab,
+  category,
+  aggregation,
+  countMode,
+  displayLimit,
+  timelineMode,
+  comparison,
+  organSystem,
+  sortBy,
+  survivalComparison,
+  survivalEndpoint,
+} = useUrlState(urlStateSchema);
+
+// Computed property to convert between URL slug and v-tabs label value
+const activeTabLabel = computed({
+  get: () => getTabLabel(tab.value),
+  set: (label) => {
+    tab.value = getTabSlug(label);
+  },
+});
+
+// Alias for display limit (used in template)
+const displayLimitValue = computed({
+  get: () => displayLimit.value,
+  set: (val) => {
+    displayLimit.value = val;
+  },
+});
+
+// Static configuration
+const donutCategories = DONUT_CATEGORIES;
+const countModeOptions = COUNT_MODE_OPTIONS;
+const comparisonTypes = COMPARISON_TYPES;
+const sortByOptions = SORT_BY_OPTIONS;
+const organSystemOptions = ORGAN_SYSTEM_OPTIONS;
+const survivalComparisonTypes = SURVIVAL_COMPARISON_TYPES;
+const survivalEndpointOptions = SURVIVAL_ENDPOINT_OPTIONS;
+
+// Reactive data
+const chartData = ref({});
+const stackedBarChartData = ref([]);
+const comparisonData = ref(null);
+const comparisonLoading = ref(false);
+const comparisonError = ref(null);
+const survivalData = ref(null);
+const survivalLoading = ref(false);
+const survivalError = ref(null);
+
+// Computed properties
+const selectedAggregations = computed(() => {
+  const cat = donutCategories.find((c) => c.label === category.value);
+  return cat ? cat.aggregations : [];
+});
+
+const isVariantAggregation = computed(() => {
+  const cat = donutCategories.find((c) => c.label === category.value);
+  const agg = cat?.aggregations.find((a) => a.value === aggregation.value);
+  return agg?.supportsCountMode || false;
+});
+
+const currentColorMap = computed(() => {
+  return AGGREGATION_COLOR_MAPS[aggregation.value] || null;
+});
+
+const displayLimitOptions = computed(() => {
+  const totalFeatures = stackedBarChartData.value.length;
+  return DISPLAY_LIMIT_OPTIONS.filter((option) => {
+    if (option.threshold === 0) return true;
+    return totalFeatures > option.threshold;
+  });
+});
+
+const stackedBarStats = computed(() => {
+  return calculateStackedBarStats(stackedBarChartData.value);
+});
+
+// Methods
+function formatLabel(label) {
+  return formatLabelUtil(label);
+}
+
+function fetchStackedBarData() {
+  window.logService.debug('Fetching stacked bar chart data');
+
+  API.getPhenotypicFeaturesAggregation()
+    .then((response) => {
+      window.logService.info('Stacked bar chart data loaded', {
+        count: response.data?.length,
+      });
+      stackedBarChartData.value = response.data || [];
+    })
+    .catch((error) => {
+      window.logService.error('Error fetching stacked bar chart data', {
+        error: error.message,
+      });
+    });
+}
+
+function fetchAggregationData() {
+  const cat = donutCategories.find((c) => c.label === category.value);
+  const agg = cat?.aggregations.find((a) => a.value === aggregation.value);
+  const funcName = aggregation.value;
+  const params = { ...(agg?.params || {}) };
+
+  if (agg?.supportsCountMode) {
+    params.count_mode = countMode.value;
+  }
+
+  window.logService.debug('Fetching aggregation data', {
+    category: category.value,
+    aggregation: agg?.label,
+    funcName: funcName,
+    params: params,
+    supportsCountMode: agg?.supportsCountMode || false,
+  });
+
+  if (API[funcName] && typeof API[funcName] === 'function') {
+    API[funcName](params)
+      .then((response) => {
+        window.logService.info('Donut chart data loaded', {
+          aggregation: agg?.title,
+          count: response.data?.length,
+        });
+
+        window.logService.debug('Transforming aggregation data for chart', {
+          rawDataCount: response.data?.length || 0,
+          totalCount: response.data?.reduce((sum, item) => sum + item.count, 0) || 0,
+          hasLimit: !!params.limit,
+          limit: params.limit,
+        });
+
+        let data = response.data || [];
+        const totalCount = data.reduce((sum, item) => sum + item.count, 0);
+
+        let groupedCounts = [];
+
+        if (params.limit && data.length > params.limit) {
+          const topItems = data.slice(0, params.limit);
+          const remainingItems = data.slice(params.limit);
+          const othersCount = remainingItems.reduce((sum, item) => sum + item.count, 0);
+
+          window.logService.debug('Applied client-side limit to data', {
+            originalCount: data.length,
+            limitedCount: topItems.length,
+            othersCount: othersCount,
+          });
+
+          groupedCounts = topItems.map((item) => ({
+            _id: formatLabel(item.label),
+            count: item.count || 0,
+          }));
+
+          if (othersCount > 0) {
+            groupedCounts.push({
+              _id: 'Others',
+              count: othersCount,
+            });
+          }
+        } else {
+          groupedCounts = data.map((item) => ({
+            _id: formatLabel(item.label),
+            count: item.count || 0,
+          }));
+        }
+
+        chartData.value = {
+          total_count: totalCount,
+          grouped_counts: groupedCounts,
+        };
+      })
+      .catch((error) => {
+        window.logService.error('Error fetching donut chart data', {
+          error: error.message,
+        });
+      });
+  } else {
+    window.logService.error('API function not found', { funcName });
+  }
+}
+
+async function fetchComparisonData() {
+  comparisonLoading.value = true;
+  comparisonError.value = null;
+
+  window.logService.debug('Fetching variant comparison data', {
+    comparisonType: comparison.value,
+    sortBy: sortBy.value,
+  });
+
+  try {
+    const response = await API.compareVariantTypes({
+      comparison: comparison.value,
+      limit: 100,
+      min_prevalence: 0,
+      sort_by: sortBy.value,
+    });
+
+    comparisonData.value = response.data;
+
+    window.logService.info('Variant comparison data loaded', {
+      groupNames: `${response.data.group1_name} vs ${response.data.group2_name}`,
+      group1Count: response.data.group1_count,
+      group2Count: response.data.group2_count,
+      phenotypesCount: response.data.phenotypes?.length || 0,
+      significantCount: response.data.metadata?.significant_count || 0,
+    });
+  } catch (error) {
+    window.logService.error('Error fetching variant comparison data', {
+      error: error.message,
+    });
+    comparisonError.value =
+      error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
+  } finally {
+    comparisonLoading.value = false;
+  }
+}
+
+async function fetchSurvivalData() {
+  survivalLoading.value = true;
+  survivalError.value = null;
+
+  window.logService.debug('Fetching survival data', {
+    comparison: survivalComparison.value,
+    endpoint: survivalEndpoint.value,
+  });
+
+  try {
+    const response = await API.getSurvivalData({
+      comparison: survivalComparison.value,
+      endpoint: survivalEndpoint.value,
+    });
+
+    survivalData.value = response.data;
+
+    window.logService.info('Survival data loaded', {
+      comparisonType: response.data.comparison_type,
+      endpoint: response.data.endpoint,
+      groupsCount: response.data.groups?.length || 0,
+      statisticalTestsCount: response.data.statistical_tests?.length || 0,
+    });
+  } catch (error) {
+    window.logService.error('Error fetching survival data', {
+      error: error.message,
+    });
+    survivalError.value =
+      error.response?.data?.detail || 'Failed to load survival data. Please try again.';
+  } finally {
+    survivalLoading.value = false;
+  }
+}
+
+// Watchers
+watch(aggregation, () => {
+  fetchAggregationData();
+});
+
+watch(category, () => {
+  const aggregations = selectedAggregations.value;
+  if (aggregations.length > 0 && !aggregations.find((a) => a.value === aggregation.value)) {
+    aggregation.value = aggregations[0].value;
+  }
+  fetchAggregationData();
+});
+
+watch(countMode, () => {
+  fetchAggregationData();
+});
+
+watch(displayLimit, () => {
+  // Stacked bar uses displayLimit reactively via prop, no need to refetch
+});
+
+watch(tab, (newTab, oldTab) => {
+  // Reset parameters from other tabs to their defaults
+  if (oldTab && oldTab !== newTab) {
+    // Get all parameters that belong to the OLD tab
+    const oldTabParams = TAB_SPECIFIC_PARAMS[oldTab] || [];
+
+    // Create a map of all refs for easy access
+    const urlRefs = {
+      category,
+      aggregation,
+      countMode,
+      displayLimit,
+      timelineMode,
+      comparison,
+      organSystem,
+      sortBy,
+      survivalComparison,
+      survivalEndpoint,
+    };
+
+    // Reset old tab's parameters to defaults
+    oldTabParams.forEach((param) => {
+      if (urlRefs[param]) {
+        urlRefs[param].value = URL_STATE_DEFAULTS[param];
+      }
+    });
+  }
+
+  // Auto-fetch data when switching to specific tabs
+  if (newTab === 'variant-comparison' && !comparisonData.value) {
+    fetchComparisonData();
+  }
+  if (newTab === 'survival' && !survivalData.value) {
+    fetchSurvivalData();
+  }
+});
+
+watch([comparison, sortBy], () => {
+  if (tab.value === 'variant-comparison') {
+    fetchComparisonData();
+  }
+});
+
+watch([survivalComparison, survivalEndpoint], () => {
+  if (tab.value === 'survival') {
+    fetchSurvivalData();
+  }
+});
+
+// Lifecycle
+onMounted(() => {
+  fetchAggregationData();
+  fetchStackedBarData();
+
+  // If starting on a tab that needs data, fetch it
+  if (tab.value === 'variant-comparison') {
+    fetchComparisonData();
+  }
+  if (tab.value === 'survival') {
+    fetchSurvivalData();
+  }
+});
 </script>
 
 <style scoped>
