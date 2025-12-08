@@ -476,6 +476,40 @@ export const getVariantSyncStatus = (taskId = null) =>
   });
 
 /**
+ * Initialize reference data (GRCh38 + HNF1B gene + transcript + domains).
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with task info
+ */
+export const startReferenceInit = () => apiClient.post('/admin/sync/reference/init');
+
+/**
+ * Start chr17q12 genes sync from Ensembl REST API.
+ * Requires admin authentication.
+ * @param {boolean} force - If true, re-sync all genes
+ * @returns {Promise} Axios promise with task info
+ */
+export const startGenesSync = (force = false) =>
+  apiClient.post('/admin/sync/genes', null, { params: force ? { force: true } : {} });
+
+/**
+ * Get chr17q12 genes sync task progress.
+ * Requires admin authentication.
+ * @param {string} taskId - Optional task ID
+ * @returns {Promise} Axios promise with progress info
+ */
+export const getGenesSyncStatus = (taskId = null) =>
+  apiClient.get('/admin/sync/genes/status', {
+    params: taskId ? { task_id: taskId } : {},
+  });
+
+/**
+ * Get reference data status.
+ * Requires admin authentication.
+ * @returns {Promise} Axios promise with reference data status
+ */
+export const getReferenceDataStatus = () => apiClient.get('/admin/reference/status');
+
+/**
  * Get publication type distribution (for donut chart).
  * Returns aggregated counts by publication type (case_series, research, case_report, etc.).
  * @returns {Promise} Axios promise with publication type aggregation
@@ -909,6 +943,10 @@ export default {
   getPublicationSyncStatus,
   startVariantSync,
   getVariantSyncStatus,
+  startReferenceInit,
+  startGenesSync,
+  getGenesSyncStatus,
+  getReferenceDataStatus,
 
   // Axios client for custom requests
   client: apiClient,

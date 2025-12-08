@@ -5,7 +5,8 @@
         docker-dev docker-dev-bg docker-health docker-ps docker-db-migrate docker-db-init docker-db-backup \
         docker-shell-api docker-shell-db docker-import-full docker-import-test \
         publications-sync publications-sync-dry publications-sync-test docker-publications-sync \
-        variants-sync variants-sync-dry variants-sync-test docker-variants-sync
+        variants-sync variants-sync-dry variants-sync-test docker-variants-sync \
+        reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -52,6 +53,8 @@ help:  ## Show this help message
 	@echo "  make phenopackets-migrate-test - Import test data (20 individuals)"
 	@echo "  make publications-sync         - Sync publication metadata from PubMed"
 	@echo "  make variants-sync             - Sync variant annotations from VEP"
+	@echo "  make reference-init            - Initialize reference data (GRCh38 + HNF1B)"
+	@echo "  make genes-sync                - Sync chr17q12 region genes from Ensembl"
 	@echo ""
 	@echo "📊 MONITORING:"
 	@echo "  make status          - Show system status"
@@ -197,6 +200,19 @@ variants-sync-dry:  ## Dry run - shows what would be fetched without changes
 variants-sync-test:  ## Sync first 10 variants (for testing)
 	cd backend && uv run python scripts/sync_variant_annotations.py --limit 10
 
+# Reference Data Sync Commands (Initialize genome + genes)
+reference-init:  ## Initialize reference data (GRCh38 + HNF1B gene + transcript + domains)
+	cd backend && uv run python scripts/sync_reference_data.py --init
+
+genes-sync:  ## Sync all chr17q12 region genes from Ensembl
+	cd backend && uv run python scripts/sync_reference_data.py --genes
+
+genes-sync-dry:  ## Dry run - shows what would be synced without changes
+	cd backend && uv run python scripts/sync_reference_data.py --genes --dry-run
+
+genes-sync-test:  ## Sync first 10 genes (for testing)
+	cd backend && uv run python scripts/sync_reference_data.py --genes --limit 10
+
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
 
 clean:  ## Remove virtual environment and cache
@@ -322,14 +338,30 @@ docker-variants-sync:  ## Sync variant annotations from VEP in Docker
 	echo "Using container: $$API_CONTAINER"; \
 	docker exec $$API_CONTAINER python scripts/sync_variant_annotations.py
 
-# Combined data import command (phenopackets + publications + variants)
-docker-import-full-with-sync:  ## Full data import with publication and variant sync
+docker-reference-init:  ## Initialize reference data in Docker
 	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
 	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
 	echo "Using container: $$API_CONTAINER"; \
-	echo "Step 1/3: Importing phenopackets..."; \
+	docker exec $$API_CONTAINER python scripts/sync_reference_data.py --init
+
+docker-genes-sync:  ## Sync chr17q12 genes from Ensembl in Docker
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	docker exec $$API_CONTAINER python scripts/sync_reference_data.py --genes
+
+# Combined data import command (reference + phenopackets + publications + variants + genes)
+docker-import-full-with-sync:  ## Full data import with all syncs (reference, phenopackets, publications, variants, genes)
+	@API_CONTAINER=$$(docker ps --format '{{.Names}}' | grep -E '^hnf1b_api(_npm)?$$' | head -1); \
+	if [ -z "$$API_CONTAINER" ]; then echo "Error: No API container running"; exit 1; fi; \
+	echo "Using container: $$API_CONTAINER"; \
+	echo "Step 1/5: Initializing reference data (GRCh38 + HNF1B)..."; \
+	docker exec $$API_CONTAINER python scripts/sync_reference_data.py --init; \
+	echo "Step 2/5: Importing phenopackets..."; \
 	docker exec $$API_CONTAINER python -m migration.direct_sheets_to_phenopackets; \
-	echo "Step 2/3: Syncing publication metadata from PubMed..."; \
+	echo "Step 3/5: Syncing publication metadata from PubMed..."; \
 	docker exec $$API_CONTAINER python scripts/sync_publication_metadata.py; \
-	echo "Step 3/3: Syncing variant annotations from VEP..."; \
-	docker exec $$API_CONTAINER python scripts/sync_variant_annotations.py
+	echo "Step 4/5: Syncing variant annotations from VEP..."; \
+	docker exec $$API_CONTAINER python scripts/sync_variant_annotations.py; \
+	echo "Step 5/5: Syncing chr17q12 genes from Ensembl..."; \
+	docker exec $$API_CONTAINER python scripts/sync_reference_data.py --genes

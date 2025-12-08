@@ -243,6 +243,146 @@ COALESCE(
 
 
 # =============================================================================
+# Phenopacket-Variant Linking CTE (Survival Analysis)
+# =============================================================================
+# Purpose: Link phenopackets to their variant_annotations via variant_id
+# Used by: survival.py for variant type classification with VEP data
+# Note: Extracts VCF-format variant IDs that match variant_annotations.variant_id
+
+# CTE: Link phenopacket_id to variant_id for JOIN with variant_annotations
+# This enables survival analysis to use VEP impact data from the separate table
+PHENOPACKET_VARIANT_LINK_CTE = """
+phenopacket_variant_link AS (
+    SELECT DISTINCT
+        p.phenopacket_id,
+        UPPER(
+            REGEXP_REPLACE(
+                REGEXP_REPLACE(expr->>'value', '^chr', '', 'i'),
+                ':',
+                '-',
+                'g'
+            )
+        ) as variant_id
+    FROM phenopackets p,
+         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+         jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
+         jsonb_array_elements(
+             gi->'variantInterpretation'->'variationDescriptor'->'expressions'
+         ) as expr
+    WHERE expr->>'syntax' = 'vcf'
+      AND p.deleted_at IS NULL
+)
+"""
+
+
+def get_phenopacket_variant_link_cte() -> str:
+    """Get CTE for linking phenopackets to variant_annotations.
+
+    Returns:
+        SQL CTE string that maps phenopacket_id to variant_id (VCF format).
+        Use with LEFT JOIN to variant_annotations table.
+
+    Example usage in query:
+        WITH {get_phenopacket_variant_link_cte()}
+        SELECT p.*, va.impact
+        FROM phenopackets p
+        LEFT JOIN phenopacket_variant_link pvl ON pvl.phenopacket_id = p.phenopacket_id
+        LEFT JOIN variant_annotations va ON va.variant_id = pvl.variant_id
+    """
+    return PHENOPACKET_VARIANT_LINK_CTE
+
+
+# =============================================================================
+# Variant Type Classification with VEP (Survival Analysis V2)
+# =============================================================================
+# Purpose: Classify variants using VEP data from variant_annotations table
+# Categories: CNV (>=50kb), Truncating (HIGH impact), Non-truncating (MODERATE)
+# Used by: survival.py for Kaplan-Meier analysis
+# Requires: LEFT JOIN to variant_annotations (aliased as 'va') in query
+
+# fmt: off
+def get_variant_type_classification_sql(vep_impact_alias: str = "va.impact") -> str:
+    """Generate variant classification SQL that uses VEP data from variant_annotations.
+
+    This version joins with the variant_annotations table instead of looking
+    for embedded VEP data in phenopacket JSONB extensions.
+
+    Args:
+        vep_impact_alias: SQL alias for the VEP impact column (default: "va.impact")
+            Use when variant_annotations is aliased differently in your query.
+
+    Returns:
+        SQL CASE expression string for variant type classification.
+
+    Classification logic:
+        1. CNV: Large deletions/duplications >= 50kb (from JSONB coordinates)
+        2. Non-truncating: VEP IMPACT = 'MODERATE' (from variant_annotations)
+        3. Truncating: VEP IMPACT = 'HIGH', small indels < 50kb, or HGVS patterns
+
+    Example usage:
+        classification_sql = get_variant_type_classification_sql()
+        query = f'''
+        WITH {get_phenopacket_variant_link_cte()}
+        SELECT {classification_sql} AS variant_group
+        FROM phenopackets p
+        JOIN jsonb_array_elements(...) as interp ON true
+        LEFT JOIN phenopacket_variant_link pvl ON pvl.phenopacket_id = p.phenopacket_id
+        LEFT JOIN variant_annotations va ON va.variant_id = pvl.variant_id
+        '''
+    """
+    return f"""
+CASE
+    -- CNVs: Large deletions or duplications >= 50kb
+    WHEN {VD_ID} ~ ':(DEL|DUP)'
+        AND COALESCE(
+            (SELECT (ext#>>'{{value,length}}')::bigint
+             FROM jsonb_array_elements({VD_EXTENSIONS}) AS ext
+             WHERE ext->>'name' = 'coordinates'
+            ), 0) >= 50000
+        THEN 'CNV'
+
+    -- Non-truncating: VEP IMPACT = MODERATE (from variant_annotations table)
+    WHEN {vep_impact_alias} = 'MODERATE' THEN 'Non-truncating'
+
+    -- Truncating: VEP IMPACT = HIGH
+    WHEN {vep_impact_alias} = 'HIGH' THEN 'Truncating'
+
+    -- Truncating: Intragenic deletions/duplications < 50kb
+    WHEN {VD_ID} ~ ':(DEL|DUP)'
+        AND COALESCE(
+            (SELECT (ext#>>'{{value,length}}')::bigint
+             FROM jsonb_array_elements({VD_EXTENSIONS}) AS ext
+             WHERE ext->>'name' = 'coordinates'
+            ), 0) < 50000
+        THEN 'Truncating'
+
+    -- Truncating: HGVS pattern fallback (frameshift, nonsense, splice)
+    WHEN EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements({VD_EXPRESSIONS}) AS expr
+        WHERE (
+            (expr->>'syntax' = 'hgvs.p' AND expr->>'value' ~* 'fs')
+            OR (expr->>'syntax' = 'hgvs.p'
+                AND (expr->>'value' ~* 'ter' OR expr->>'value' ~ '\\*'))
+            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '\\+[1-6]')
+            OR (expr->>'syntax' = 'hgvs.c' AND expr->>'value' ~ '-[1-3]')
+        )
+    ) THEN 'Truncating'
+
+    -- VEP LOW/MODIFIER impact: classify as Truncating (conservative for P/LP)
+    WHEN {vep_impact_alias} IN ('LOW', 'MODIFIER') THEN 'Truncating'
+
+    -- No VEP annotation and not CNV: default to Truncating (conservative)
+    WHEN {vep_impact_alias} IS NULL AND NOT {VD_ID} ~ ':(DEL|DUP)' THEN 'Truncating'
+
+    -- Default fallback
+    ELSE 'Non-truncating'
+END
+"""
+# fmt: on
+
+
+# =============================================================================
 # Unique Variant Extraction CTEs (Admin Sync)
 # =============================================================================
 # Purpose: Extract unique variant IDs for VEP annotation sync
@@ -315,14 +455,13 @@ internal_cnv_variants AS (
       AND vd_lateral.vd->>'id' ~ {INTERNAL_CNV_PATTERN}
 )"""
 
-# Combined CTE: Union of VCF and internal CNV variants
+# Combined CTE: VCF variants only (internal CNV format is redundant)
+# Note: Internal CNV variants (var:GENE:CHROM:START-END:TYPE) are duplicates
+# of VCF variants stored in a different format. VCF format is preferred for VEP.
 UNIQUE_VARIANTS_CTE = f"""
 {VCF_VARIANTS_CTE},
-{INTERNAL_CNV_VARIANTS_CTE},
 unique_variants AS (
     SELECT variant_id FROM vcf_variants
-    UNION
-    SELECT variant_id FROM internal_cnv_variants
 )"""
 
 
