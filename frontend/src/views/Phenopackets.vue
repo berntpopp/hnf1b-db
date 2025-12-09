@@ -100,52 +100,16 @@
 
       <!-- Column Header: Sex with filter menu -->
       <template #header.sex="{ column, getSortIcon, toggleSort, isSorted }">
-        <div class="d-flex align-center justify-space-between header-wrapper">
-          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
-            <span class="header-title">{{ column.title }}</span>
-            <v-icon v-if="isSorted(column)" size="small" class="ml-1">
-              {{ getSortIcon(column) }}
-            </v-icon>
-          </div>
-          <v-menu :close-on-content-click="false" location="bottom">
-            <template #activator="{ props }">
-              <v-btn
-                icon
-                size="x-small"
-                variant="text"
-                v-bind="props"
-                :color="filterValues.sex ? 'primary' : 'default'"
-              >
-                <v-icon size="small">
-                  {{ filterValues.sex ? 'mdi-filter' : 'mdi-filter-outline' }}
-                </v-icon>
-              </v-btn>
-            </template>
-            <v-card min-width="200" max-width="280">
-              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
-                <v-icon size="small" class="mr-2">mdi-gender-male-female</v-icon>
-                Filter: Sex
-              </v-card-title>
-              <v-divider />
-              <v-card-text class="pa-3">
-                <v-select
-                  v-model="filterValues.sex"
-                  :items="sexOptions"
-                  label="Select sex"
-                  density="compact"
-                  variant="outlined"
-                  clearable
-                  hide-details
-                />
-              </v-card-text>
-              <v-divider />
-              <v-card-actions class="pa-2">
-                <v-spacer />
-                <v-btn size="small" variant="text" @click="clearFilter('sex')">Clear</v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-menu>
-        </div>
+        <ColumnHeaderFilter
+          v-model="sexFilter"
+          :title="column.title"
+          :options="sexOptions"
+          select-label="Select sex"
+          filter-icon="mdi-gender-male-female"
+          :sort-icon="isSorted(column) ? getSortIcon(column) : null"
+          @sort="toggleSort(column)"
+          @clear="clearFilter('sex')"
+        />
       </template>
 
       <!-- Render subject ID with chip -->
@@ -175,24 +139,18 @@
         </v-chip>
       </template>
 
-      <!-- Render variant display -->
-      <template #item.variant_display="{ item }">
-        <v-tooltip v-if="item.variant_display" location="top">
-          <template #activator="{ props }">
-            <v-chip
-              v-bind="props"
-              :color="item.variant_type === 'CNV' ? 'purple-lighten-3' : 'blue-lighten-3'"
-              size="x-small"
-              variant="flat"
-              class="text-truncate"
-              style="max-width: 180px"
-            >
-              {{ item.variant_display }}
-            </v-chip>
-          </template>
-          <span>{{ item.variant_full }}</span>
-        </v-tooltip>
-        <span v-else class="text-body-2 text-medium-emphasis">N/A</span>
+      <!-- Render has variant column -->
+      <template #item.has_variant="{ item }">
+        <v-chip
+          :color="item.has_variant ? 'green-lighten-3' : 'grey-lighten-2'"
+          size="x-small"
+          variant="flat"
+        >
+          <v-icon start size="x-small">
+            {{ item.has_variant ? 'mdi-dna' : 'mdi-minus' }}
+          </v-icon>
+          {{ item.has_variant ? 'Yes' : 'No' }}
+        </v-chip>
       </template>
 
       <template #no-data>
@@ -207,9 +165,11 @@ import { getPhenopackets, searchPhenopackets } from '@/api';
 import { buildSortParameter, extractPaginationMeta } from '@/utils/pagination';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 import { useAuthStore } from '@/stores/authStore';
+import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
 
 export default {
   name: 'Phenopackets',
@@ -217,17 +177,23 @@ export default {
     AppDataTable,
     AppTableToolbar,
     AppPagination,
+    ColumnHeaderFilter,
+  },
+  setup() {
+    // URL state synchronization
+    // Return entire urlState to preserve ref reactivity in Options API
+    const urlState = useTableUrlState({
+      defaultPageSize: 10,
+      defaultSort: null,
+      filters: { sex: null },
+    });
+
+    return { urlState };
   },
   data() {
     return {
       phenopackets: [],
       loading: false,
-      searchQuery: '',
-
-      // Filter state (feature parity with Variants page)
-      filterValues: {
-        sex: null,
-      },
 
       // Sex filter options (GA4GH Phenopackets v2 enum values)
       sexOptions: [
@@ -237,7 +203,7 @@ export default {
         { title: 'Unknown', value: 'UNKNOWN_SEX' },
       ],
 
-      // Offset pagination state
+      // Offset pagination state (synced from URL)
       pagination: {
         currentPage: 1,
         pageSize: 10,
@@ -246,19 +212,18 @@ export default {
       },
 
       // Table configuration
-      // Note: features_count and variant_display are computed client-side
-      // and cannot be sorted server-side
+      // features_count is now server-side sortable via generated column
       headers: [
         { title: 'Subject ID', value: 'subject_id', sortable: true, width: '160px' },
         { title: 'Sex', value: 'sex', sortable: true, width: '100px' },
         {
           title: 'Phenotypes',
           value: 'features_count',
-          sortable: false,
+          sortable: true,
           width: '100px',
           align: 'center',
         },
-        { title: 'Variant', value: 'variant_display', sortable: false, width: '200px' },
+        { title: 'Has Variant', value: 'has_variant', sortable: true, width: '120px' },
       ],
       options: {
         page: 1,
@@ -269,71 +234,156 @@ export default {
     };
   },
   computed: {
+    // Bridge URL state to component properties for v-model bindings
+    searchQuery: {
+      get() {
+        return this.urlState?.search?.value ?? '';
+      },
+      set(value) {
+        if (this.urlState?.search) {
+          this.urlState.search.value = value;
+        }
+      },
+    },
+    // Direct computed for sex filter - v-model compatible
+    sexFilter: {
+      get() {
+        return this.urlState?.filters?.sex?.value ?? null;
+      },
+      set(value) {
+        if (this.urlState?.filters?.sex) {
+          this.urlState.filters.sex.value = value;
+        }
+      },
+    },
+    // Keep filterValues for compatibility but read-only
+    filterValues() {
+      return {
+        sex: this.urlState?.filters?.sex?.value ?? null,
+      };
+    },
     canCreatePhenopacket() {
       const authStore = useAuthStore();
       const userRole = authStore.user?.role;
       return userRole === 'curator' || userRole === 'admin';
     },
     hasActiveFilters() {
-      return !!(this.searchQuery || this.filterValues.sex);
+      return (this.urlState?.activeFilterCount?.value ?? 0) > 0;
     },
     activeFilterCount() {
-      let count = 0;
-      if (this.searchQuery) count++;
-      if (this.filterValues.sex) count++;
-      return count;
+      return this.urlState?.activeFilterCount?.value ?? 0;
     },
   },
   watch: {
     options: {
       handler(newVal, oldVal) {
-        // Only fetch if sort changed (not on initial load which is handled separately)
+        // Sync sort to URL and fetch
         if (oldVal && JSON.stringify(newVal.sortBy) !== JSON.stringify(oldVal.sortBy)) {
-          this.pagination.currentPage = 1;
+          this.syncSortToUrl();
+          this.urlState.resetPage();
           this.fetchPhenopackets();
         }
       },
       deep: true,
     },
-    filterValues: {
+    // Watch URL state changes for page
+    'urlState.page.value': {
+      handler(newVal) {
+        if (this.pagination.currentPage !== newVal) {
+          this.pagination.currentPage = newVal;
+          this.fetchPhenopackets();
+        }
+      },
+      immediate: true,
+    },
+    // Watch URL state changes for pageSize
+    'urlState.pageSize.value': {
+      handler(newVal) {
+        if (this.pagination.pageSize !== newVal) {
+          this.pagination.pageSize = newVal;
+          this.fetchPhenopackets();
+        }
+      },
+      immediate: true,
+    },
+    // Watch URL state changes for search
+    'urlState.search.value': {
       handler() {
-        this.pagination.currentPage = 1;
         this.fetchPhenopackets();
       },
-      deep: true,
+    },
+    // Watch URL state changes for sex filter
+    'urlState.filters.sex.value': {
+      handler() {
+        this.urlState.resetPage();
+        this.fetchPhenopackets();
+      },
     },
   },
   mounted() {
+    // Initial fetch with URL state
+    this.syncPaginationFromUrl();
     this.fetchPhenopackets();
   },
   methods: {
+    syncPaginationFromUrl() {
+      // Sync pagination state from URL refs
+      this.pagination.currentPage = this.urlState?.page?.value ?? 1;
+      this.pagination.pageSize = this.urlState?.pageSize?.value ?? 10;
+    },
+
+    syncSortToUrl() {
+      // Sync current sort state to URL
+      const { sortBy } = this.options;
+      const sortFieldMap = {
+        subject_id: 'subject_id',
+        sex: 'subject_sex',
+        features_count: 'features_count',
+        has_variant: 'has_variant',
+      };
+      const sortParam = buildSortParameter(sortBy, sortFieldMap);
+      if (this.urlState?.sort) {
+        this.urlState.sort.value = sortParam || null;
+      }
+    },
+
     async fetchPhenopackets() {
       this.loading = true;
+      const searchValue = this.urlState?.search?.value ?? '';
       window.logService.debug('Fetching phenopackets', {
         page: this.pagination.currentPage,
-        search: !!this.searchQuery,
+        search: !!searchValue,
       });
 
       try {
-        if (this.searchQuery?.trim()) {
+        if (searchValue?.trim()) {
           await this.performSearch();
           return;
         }
 
         const { sortBy } = this.options;
-        const sortFieldMap = { subject_id: 'subject_id', sex: 'subject_sex' };
+        // Updated sort field map with new columns
+        const sortFieldMap = {
+          subject_id: 'subject_id',
+          sex: 'subject_sex',
+          features_count: 'features_count',
+          has_variant: 'has_variant',
+        };
         const sortParam = buildSortParameter(sortBy, sortFieldMap);
 
-        // Build offset pagination parameters
+        // Build offset pagination parameters from URL state
         const paginationParams = {
-          'page[number]': this.pagination.currentPage,
-          'page[size]': this.pagination.pageSize,
+          'page[number]': this.urlState?.page?.value ?? 1,
+          'page[size]': this.urlState?.pageSize?.value ?? 10,
         };
+
+        // Get sex filter from URL state
+        const sexFilter = this.urlState?.filters?.sex?.value;
 
         const response = await getPhenopackets({
           ...paginationParams,
           ...(sortParam && { sort: sortParam }),
-          ...(this.filterValues.sex && { 'filter[sex]': this.filterValues.sex }),
+          ...(sexFilter && { 'filter[sex]': sexFilter }),
         });
 
         const jsonApiData = response.data || {};
@@ -412,6 +462,7 @@ export default {
         subject_id: subject.id || 'N/A',
         sex: subject.sex || 'UNKNOWN_SEX',
         features_count: presentFeaturesCount,
+        has_variant: interpretations.length > 0,
         variant_display: variantDisplay,
         variant_full: variantFull,
         variant_type: variantType,
@@ -423,6 +474,11 @@ export default {
     },
 
     onPageSizeChange(newSize) {
+      // Update URL state which triggers watch and fetch
+      if (this.urlState?.pageSize) {
+        this.urlState.pageSize.value = newSize;
+      }
+      this.urlState.resetPage();
       this.pagination.pageSize = newSize;
       this.pagination.currentPage = 1;
       this.fetchPhenopackets();
@@ -434,6 +490,10 @@ export default {
 
     goToPage(page) {
       if (page < 1 || page > this.pagination.totalPages) return;
+      // Update URL state
+      if (this.urlState?.page) {
+        this.urlState.page.value = page;
+      }
       this.pagination.currentPage = page;
       this.fetchPhenopackets();
     },
@@ -492,23 +552,29 @@ export default {
     },
 
     applySearch() {
+      this.urlState.resetPage();
       this.pagination.currentPage = 1;
       this.fetchPhenopackets();
     },
 
     clearSearch() {
-      this.searchQuery = '';
+      // Clear URL search state
+      if (this.urlState?.search) {
+        this.urlState.search.value = '';
+      }
+      this.urlState.resetPage();
       this.pagination.currentPage = 1;
       this.fetchPhenopackets();
     },
 
     clearFilter(key) {
-      this.filterValues[key] = null;
+      // Clear filter via URL state
+      this.urlState.clearFilter(key);
     },
 
     clearAllFilters() {
-      this.searchQuery = '';
-      this.filterValues = { sex: null };
+      // Clear all filters via URL state
+      this.urlState.clearAllFilters();
       this.pagination.currentPage = 1;
       this.fetchPhenopackets();
     },
@@ -519,33 +585,5 @@ export default {
 <style scoped>
 :deep(tbody tr) {
   cursor: pointer;
-}
-
-/* Header wrapper for filter buttons */
-.header-wrapper {
-  width: 100%;
-  gap: 4px;
-}
-
-.sortable-header {
-  cursor: pointer;
-  user-select: none;
-  transition: opacity 0.2s;
-  min-width: 0;
-}
-
-.sortable-header:hover {
-  opacity: 0.7;
-}
-
-.header-title {
-  font-weight: 600;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #37474f;
 }
 </style>

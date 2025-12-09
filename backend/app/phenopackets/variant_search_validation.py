@@ -20,7 +20,6 @@ from fastapi import HTTPException
 
 from app.core.patterns import (
     HG38_PATTERN,
-    HG38_SIMPLE_PATTERN,
     HGVS_C_SEARCH_PATTERN,
     HGVS_G_SEARCH_PATTERN,
     HGVS_P_SEARCH_PATTERN,
@@ -113,6 +112,10 @@ def validate_hg38_coordinate(query: str) -> bool:
 def validate_search_query(query: Optional[str]) -> Optional[str]:
     """Validate and sanitize search query input.
 
+    This function performs security validation (length, character whitelist) but
+    intentionally allows partial/incomplete HGVS notation to enable flexible
+    searching. Strict HGVS validation is for data entry, not search queries.
+
     Args:
         query: User-provided search string (HGVS, variant ID, or coordinates)
 
@@ -125,7 +128,11 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
     Security:
         - Enforces length limit (prevents DoS)
         - Character whitelist (prevents SQL injection)
-        - Format validation for HGVS and coordinates
+
+    Note:
+        Partial HGVS queries like "c.826" are allowed for flexible search.
+        The SQL layer uses ILIKE for safe partial matching (same pattern as
+        GlobalSearchRepository in app/search/repositories.py).
     """
     if not query:
         return None
@@ -146,24 +153,12 @@ def validate_search_query(query: Optional[str]) -> Optional[str]:
             ),
         )
 
-    # Optional: Validate HGVS format if it looks like HGVS
-    query_stripped = query.strip()
-    if query_stripped.startswith(("c.", "p.", "g.")):
-        if not validate_hgvs_notation(query_stripped):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid HGVS notation format: {query_stripped}",
-            )
+    # Note: We intentionally DO NOT validate HGVS format for search queries.
+    # Search should allow partial matches like "c.826" to find "c.826C>G".
+    # The SQL layer uses parameterized ILIKE queries for safe partial matching.
+    # Strict HGVS validation should only be applied to data entry/annotation.
 
-    # Optional: Validate HG38 coordinates if they look like coordinates
-    if HG38_SIMPLE_PATTERN.match(query_stripped):
-        if not validate_hg38_coordinate(query_stripped):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid HG38 coordinate format: {query_stripped}",
-            )
-
-    return query_stripped
+    return query.strip()
 
 
 def validate_variant_type(variant_type: Optional[str]) -> Optional[str]:

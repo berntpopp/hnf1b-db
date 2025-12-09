@@ -150,7 +150,7 @@
 
 <script>
 import { getPublications } from '@/api';
-import { buildSortParameter } from '@/utils/pagination';
+import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
@@ -162,10 +162,20 @@ export default {
     AppTableToolbar,
     AppPagination,
   },
+  setup() {
+    // URL state synchronization for shareable/bookmarkable URLs
+    // Return entire urlState to preserve ref reactivity in Options API
+    const urlState = useTableUrlState({
+      defaultPageSize: 10,
+      defaultSort: '-phenopacket_count',
+      filters: {}, // No column filters for publications
+    });
+
+    return { urlState };
+  },
   data() {
     return {
       publications: [],
-      searchQuery: '',
       loading: false,
 
       // Offset pagination state (JSON:API v1.1)
@@ -180,7 +190,7 @@ export default {
       headers: [
         { title: 'PMID', value: 'pmid', sortable: true, width: '140px' },
         { title: 'Title', value: 'title', sortable: true, width: '300px' },
-        { title: 'Authors', value: 'authors', sortable: true, width: '180px' },
+        { title: 'Authors', value: 'authors', sortable: false, width: '180px' },
         {
           title: 'Individuals',
           value: 'phenopacket_count',
@@ -216,42 +226,91 @@ export default {
       previousSortBy: [{ key: 'phenopacket_count', order: 'desc' }],
     };
   },
+  computed: {
+    // Bridge URL state to component for v-model bindings
+    searchQuery: {
+      get() {
+        return this.urlState?.search?.value ?? '';
+      },
+      set(value) {
+        if (this.urlState?.search) {
+          this.urlState.search.value = value;
+        }
+      },
+    },
+  },
+  watch: {
+    // Watch URL search changes
+    'urlState.search.value': {
+      handler() {
+        if (this.loadingInitialized) {
+          this.urlState.resetPage();
+          this.fetchPublications();
+        }
+      },
+    },
+    // Watch URL page changes
+    'urlState.page.value': {
+      handler(newPage) {
+        if (this.loadingInitialized && newPage !== this.pagination.currentPage) {
+          this.pagination.currentPage = newPage;
+          this.fetchPublications();
+        }
+      },
+    },
+    // Watch URL pageSize changes
+    'urlState.pageSize.value': {
+      handler(newPageSize) {
+        if (this.loadingInitialized && newPageSize !== this.pagination.pageSize) {
+          this.pagination.pageSize = newPageSize;
+          this.urlState.resetPage();
+          this.fetchPublications();
+        }
+      },
+    },
+    // Watch URL sort changes
+    'urlState.sort.value': {
+      handler(newSort) {
+        if (this.loadingInitialized) {
+          // Update Vuetify options from URL sort
+          this.options.sortBy = this.parseSortToVuetify(newSort);
+          this.urlState.resetPage();
+          this.fetchPublications();
+        }
+      },
+    },
+  },
   methods: {
     /**
      * Fetch publications from the server with JSON:API offset pagination.
      */
     async fetchPublications() {
       this.loading = true;
+
+      // Read state from URL state refs
+      const currentPage = this.urlState?.page?.value ?? 1;
+      const pageSize = this.urlState?.pageSize?.value ?? 10;
+      const sortValue = this.urlState?.sort?.value ?? '-phenopacket_count';
+      const searchValue = this.urlState?.search?.value ?? '';
+
       window.logService.debug('Fetching publications', {
-        page: this.pagination.currentPage,
-        sortBy: this.options.sortBy,
-        search: this.searchQuery,
+        page: currentPage,
+        pageSize,
+        sort: sortValue,
+        search: searchValue,
       });
 
       try {
-        const { sortBy } = this.options;
-
-        // Map frontend column keys to backend sort field names
-        const sortFieldMap = {
-          pmid: 'pmid',
-          title: 'title',
-          authors: 'authors',
-          phenopacket_count: 'phenopacket_count',
-          first_added: 'first_added',
-        };
-
-        const sortParam = buildSortParameter(sortBy, sortFieldMap) || '-phenopacket_count';
-
         // Build request params for offset pagination
         const requestParams = {
-          'page[number]': this.pagination.currentPage,
-          'page[size]': this.pagination.pageSize,
-          sort: sortParam,
+          'page[number]': currentPage,
+          'page[size]': pageSize,
+          sort: sortValue,
         };
 
         // Add search query if present
-        if (this.searchQuery?.trim()) {
-          requestParams.q = this.searchQuery.trim();
+        if (searchValue?.trim()) {
+          requestParams.q = searchValue.trim();
         }
 
         const response = await getPublications(requestParams);
@@ -262,7 +321,8 @@ export default {
         const meta = jsonApiData.meta?.page || {};
 
         this.publications = publicationItems;
-        this.pagination.currentPage = meta.currentPage || this.pagination.currentPage;
+        this.pagination.currentPage = meta.currentPage || currentPage;
+        this.pagination.pageSize = pageSize;
         this.pagination.totalPages = meta.totalPages || 0;
         this.pagination.totalRecords = meta.totalRecords || 0;
 
@@ -282,22 +342,32 @@ export default {
       }
     },
 
-    resetPaginationAndFetch() {
-      this.pagination.currentPage = 1;
-      this.pagination.totalPages = 0;
-      this.pagination.totalRecords = 0;
-      this.fetchPublications();
+    // URL state helper: Parse sort string to Vuetify sortBy format
+    parseSortToVuetify(sortString) {
+      if (!sortString) return [{ key: 'phenopacket_count', order: 'desc' }];
+      const descending = sortString.startsWith('-');
+      const field = descending ? sortString.slice(1) : sortString;
+      return [{ key: field, order: descending ? 'desc' : 'asc' }];
+    },
+
+    // URL state helper: Convert Vuetify sortBy to sort string
+    vuetifyToSortString(sortBy) {
+      if (!sortBy || sortBy.length === 0) return '-phenopacket_count';
+      const { key, order } = sortBy[0];
+      return order === 'desc' ? `-${key}` : key;
     },
 
     // Event handlers
     onOptionsUpdate(newOptions) {
       // Preserve initial sort if Vuetify sends empty sortBy on first mount
       if (!this.loadingInitialized && (!newOptions.sortBy || newOptions.sortBy.length === 0)) {
-        newOptions.sortBy = [...this.defaultSortBy];
-        this.options.sortBy = [...this.defaultSortBy];
+        // Get sort from URL or use default
+        const urlSortValue = this.urlState?.sort?.value ?? '-phenopacket_count';
+        newOptions.sortBy = this.parseSortToVuetify(urlSortValue);
+        this.options.sortBy = [...newOptions.sortBy];
       }
 
-      // Compare with previousSortBy since v-model updates this.options before handler
+      // Compare with previousSortBy to detect user-initiated sort changes
       const sortChanged = JSON.stringify(this.previousSortBy) !== JSON.stringify(newOptions.sortBy);
 
       // Store current sortBy for next comparison
@@ -305,10 +375,19 @@ export default {
       this.options = { ...newOptions };
 
       if (!this.loadingInitialized) {
+        // Initial load: sync pagination from URL state
+        this.pagination.currentPage = this.urlState?.page?.value ?? 1;
+        this.pagination.pageSize = this.urlState?.pageSize?.value ?? 10;
         this.loadingInitialized = true;
         this.fetchPublications();
       } else if (sortChanged) {
-        this.resetPaginationAndFetch();
+        // User changed sort via table header click - sync to URL
+        const newSortString = this.vuetifyToSortString(newOptions.sortBy);
+        if (this.urlState?.sort) {
+          this.urlState.sort.value = newSortString;
+        }
+        this.urlState.resetPage();
+        this.fetchPublications();
       }
     },
 
@@ -318,23 +397,28 @@ export default {
     },
 
     onSearch() {
-      this.resetPaginationAndFetch();
+      // Search is already bound to urlSearch via computed setter
+      this.urlState.resetPage();
     },
 
     clearSearch() {
       this.searchQuery = '';
-      this.resetPaginationAndFetch();
+      this.urlState.resetPage();
     },
 
     onPageSizeChange(newSize) {
-      this.pagination.pageSize = newSize;
-      this.resetPaginationAndFetch();
+      if (this.urlState?.pageSize) {
+        this.urlState.pageSize.value = newSize;
+      }
+      this.urlState.resetPage();
     },
 
     goToPage(page) {
       if (page < 1 || page > this.pagination.totalPages) return;
-      this.pagination.currentPage = page;
-      this.fetchPublications();
+      // Update URL state, which triggers watch and fetch
+      if (this.urlState?.page) {
+        this.urlState.page.value = page;
+      }
     },
 
     formatDate(dateString) {

@@ -600,7 +600,27 @@ export default {
           throw new Error('NGL container not found');
         }
 
+        // Clean up any existing stage first to prevent Timer warnings
+        // This can happen when component remounts (e.g., tab switching)
+        if (nglStage) {
+          nglStage.dispose();
+          nglStage = null;
+          nglStructureComponent = null;
+          nglVariantRepresentation = null;
+          nglLabelRepresentation = null;
+          nglDistanceShape = null;
+          distanceCalculator = null;
+        }
+
         // Initialize NGL Stage
+        // Temporarily suppress Three.js useLegacyLights deprecation warning
+        // This is a known issue in NGL library (v2.4.0) that hasn't been fixed upstream
+        const originalWarn = console.warn;
+        console.warn = (...args) => {
+          if (args[0]?.includes?.('useLegacyLights')) return;
+          originalWarn.apply(console, args);
+        };
+
         nglStage = markRaw(
           new NGL.Stage(this.$refs.nglContainer, {
             backgroundColor: 'white',
@@ -609,6 +629,9 @@ export default {
             workerDefault: true,
           })
         );
+
+        // Restore original console.warn
+        console.warn = originalWarn;
 
         // Load PDB structure 2H8R (HNF1B DNA-binding domain)
         // Served locally to reduce network dependency and improve load times

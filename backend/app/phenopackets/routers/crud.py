@@ -89,7 +89,8 @@ async def list_phenopackets(
 
     **Sorting:**
     - `sort`: Comma-separated fields (e.g., `-created_at,subject_id`)
-    - Supported: `created_at`, `subject_id`, `subject_sex`
+    - Supported fields: `created_at`, `subject_id`, `subject_sex`,
+      `features_count`, `has_variant`
     """
     # Build base query (exclude soft-deleted)
     query = select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
@@ -168,6 +169,8 @@ def parse_sort_parameter(sort: str) -> list:
         "created_at": Phenopacket.created_at,
         "subject_id": Phenopacket.subject_id,
         "subject_sex": Phenopacket.subject_sex,
+        "features_count": Phenopacket.features_count,
+        "has_variant": Phenopacket.has_variant,
     }
 
     order_clauses = []
