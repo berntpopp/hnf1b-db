@@ -28,46 +28,73 @@
             <v-row>
               <!-- Individuals -->
               <v-col cols="6" md="3">
-                <v-card
-                  class="py-4 px-2 text-center h-100"
-                  variant="elevated"
-                  elevation="2"
-                  rounded="lg"
-                >
-                  <v-icon color="teal" size="large" class="mb-2">mdi-account-group</v-icon>
-                  <div class="text-h4 font-weight-bold text-teal mb-0">
-                    <span v-if="!loadingStats">{{ displayStats.individuals }}</span>
-                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
-                  </div>
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
-                    Individuals
-                  </div>
-                </v-card>
+                <router-link to="/phenopackets" class="stat-card-link">
+                  <v-card
+                    class="py-4 px-2 text-center h-100 stat-card stat-card--clickable"
+                    variant="elevated"
+                    elevation="2"
+                    rounded="lg"
+                  >
+                    <v-icon color="teal" size="large" class="mb-2">mdi-account-group</v-icon>
+                    <div class="text-h4 font-weight-bold text-teal mb-0">
+                      <span v-if="!loadingStats">{{ displayStats.individuals }}</span>
+                      <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                    </div>
+                    <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                      Individuals
+                    </div>
+                  </v-card>
+                </router-link>
               </v-col>
 
               <!-- Variants -->
               <v-col cols="6" md="3">
-                <v-card
-                  class="py-4 px-2 text-center h-100"
-                  variant="elevated"
-                  elevation="2"
-                  rounded="lg"
-                >
-                  <v-icon color="pink" size="large" class="mb-2">mdi-dna</v-icon>
-                  <div class="text-h4 font-weight-bold text-pink mb-0">
-                    <span v-if="!loadingStats">{{ displayStats.variants }}</span>
-                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
-                  </div>
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
-                    Unique Variants
-                  </div>
-                </v-card>
+                <router-link to="/variants" class="stat-card-link">
+                  <v-card
+                    class="py-4 px-2 text-center h-100 stat-card stat-card--clickable"
+                    variant="elevated"
+                    elevation="2"
+                    rounded="lg"
+                  >
+                    <v-icon color="pink" size="large" class="mb-2">mdi-dna</v-icon>
+                    <div class="text-h4 font-weight-bold text-pink mb-0">
+                      <span v-if="!loadingStats">{{ displayStats.variants }}</span>
+                      <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                    </div>
+                    <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                      Unique Variants
+                    </div>
+                  </v-card>
+                </router-link>
               </v-col>
 
-              <!-- Phenotypes -->
+              <!-- Publications -->
+              <v-col cols="6" md="3">
+                <router-link to="/publications" class="stat-card-link">
+                  <v-card
+                    class="py-4 px-2 text-center h-100 stat-card stat-card--clickable"
+                    variant="elevated"
+                    elevation="2"
+                    rounded="lg"
+                  >
+                    <v-icon color="cyan-darken-1" size="large" class="mb-2">
+                      mdi-file-document-multiple
+                    </v-icon>
+                    <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
+                      <span v-if="!loadingStats">{{ displayStats.publications }}</span>
+                      <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
+                    </div>
+                    <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
+                      Publications
+                    </div>
+                  </v-card>
+                </router-link>
+              </v-col>
+
+              <!-- Phenotypes (no link for now) -->
               <v-col cols="6" md="3">
                 <v-card
-                  class="py-4 px-2 text-center h-100"
+                  class="py-4 px-2 text-center h-100 stat-card"
                   variant="elevated"
                   elevation="2"
                   rounded="lg"
@@ -79,27 +106,6 @@
                   </div>
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
                     Phenotypes
-                  </div>
-                </v-card>
-              </v-col>
-
-              <!-- Publications -->
-              <v-col cols="6" md="3">
-                <v-card
-                  class="py-4 px-2 text-center h-100"
-                  variant="elevated"
-                  elevation="2"
-                  rounded="lg"
-                >
-                  <v-icon color="cyan-darken-1" size="large" class="mb-2">
-                    mdi-file-document-multiple
-                  </v-icon>
-                  <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
-                    <span v-if="!loadingStats">{{ displayStats.publications }}</span>
-                    <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
-                  </div>
-                  <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
-                    Publications
                   </div>
                 </v-card>
               </v-col>
@@ -361,5 +367,43 @@ export default {
 
 .border-opacity-12 {
   border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Stat card link wrapper - removes default link styling */
+.stat-card-link {
+  text-decoration: none !important;
+  color: inherit;
+  display: block;
+  height: 100%;
+}
+
+.stat-card-link:hover,
+.stat-card-link:focus,
+.stat-card-link:active {
+  text-decoration: none !important;
+}
+
+/* Base stat card transition */
+.stat-card {
+  transition:
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Clickable stat card hover effects */
+.stat-card--clickable {
+  cursor: pointer;
+}
+
+.stat-card--clickable:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow:
+    0 8px 16px rgba(0, 0, 0, 0.12),
+    0 4px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+.stat-card--clickable:active {
+  transform: translateY(-2px) scale(1.01);
+  transition-duration: 0.1s;
 }
 </style>
