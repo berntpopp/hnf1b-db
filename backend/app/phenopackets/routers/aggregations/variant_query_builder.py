@@ -15,7 +15,11 @@ Usage:
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from .sql_fragments import STRUCTURAL_TYPE_CASE
+from .sql_fragments import (
+    STRUCTURAL_TYPE_CASE,
+    VALID_STRUCTURAL_TYPES,
+    get_structural_type_filter,
+)
 
 
 @dataclass
@@ -35,47 +39,11 @@ class VariantQueryBuilder:
     _params: Dict[str, Any] = field(default_factory=dict)
     _validated_query: Optional[str] = None
 
-    # SQL clause templates for variant type filtering
-    _VARIANT_TYPE_CLAUSES = {
-        "CNV": """EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'value' ~ ':\\d+-\\d+:'
-        )""",
-        "indel": """(
-            EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(vd->'expressions') elem
-                WHERE elem->>'syntax' = 'hgvs.c'
-                AND elem->>'value' ~ 'del|ins|delins'
-            )
-            AND NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(vd->'expressions') elem
-                WHERE elem->>'value' ~ ':\\d+-\\d+:'
-            )
-        )""",
-        "deletion": """(
-            EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(vd->'expressions') elem
-                WHERE elem->>'syntax' = 'hgvs.c'
-                AND elem->>'value' ~ 'del'
-                AND NOT (elem->>'value' ~ 'delins')
-            )
-            AND NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(vd->'expressions') elem
-                WHERE elem->>'value' ~ ':\\d+-\\d+:'
-            )
-        )""",
-        "insertion": """EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(vd->'expressions') elem
-            WHERE elem->>'syntax' = 'hgvs.c'
-            AND elem->>'value' ~ 'ins'
-            AND NOT (elem->>'value' ~ 'delins')
-        )""",
+    # SQL clause templates for functional/classification-based variant type filtering
+    # Note: Structural types (SNV, deletion, duplication, etc.) use centralized
+    # get_structural_type_filter() from sql_fragments.py for DRY compliance.
+    # These are consequence-based classifications (missense, nonsense, etc.)
+    _CLASSIFICATION_TYPE_CLAUSES = {
         "missense": """EXISTS (
             SELECT 1
             FROM jsonb_array_elements(vd->'expressions') elem
@@ -115,23 +83,17 @@ class VariantQueryBuilder:
     }
 
     # SQL clause templates for pathogenicity classification
+    # Keys must match ALLOWED_CLASSIFICATIONS in variant_search_validation.py
+    # Note: In this dataset, pathogenicity is stored in gi->>'interpretationStatus'
+    # (e.g., PATHOGENIC, LIKELY_PATHOGENIC) not acmgPathogenicityClassification
     _CLASSIFICATION_CLAUSES = {
-        "pathogenic": """(
-            COALESCE(vi->>'acmgPathogenicityClassification', '') = 'PATHOGENIC'
-            OR gi->>'interpretationStatus' = 'CAUSATIVE'
-        )""",
-        "likely_pathogenic": """(
-            COALESCE(vi->>'acmgPathogenicityClassification', '') = 'LIKELY_PATHOGENIC'
-            OR gi->>'interpretationStatus' = 'CONTRIBUTORY'
-        )""",
-        "vus": """(
-            COALESCE(vi->>'acmgPathogenicityClassification', '') =
-                'UNCERTAIN_SIGNIFICANCE'
-            OR (
-                gi->>'interpretationStatus' NOT IN ('CAUSATIVE', 'CONTRIBUTORY')
-                AND COALESCE(vi->>'acmgPathogenicityClassification', '') = ''
-            )
-        )""",
+        "PATHOGENIC": "gi->>'interpretationStatus' = 'PATHOGENIC'",
+        "LIKELY_PATHOGENIC": "gi->>'interpretationStatus' = 'LIKELY_PATHOGENIC'",
+        "UNCERTAIN_SIGNIFICANCE": (
+            "gi->>'interpretationStatus' = 'UNCERTAIN_SIGNIFICANCE'"
+        ),
+        "LIKELY_BENIGN": "gi->>'interpretationStatus' = 'LIKELY_BENIGN'",
+        "BENIGN": "gi->>'interpretationStatus' = 'BENIGN'",
     }
 
     # Molecular consequence SQL templates
@@ -261,14 +223,24 @@ class VariantQueryBuilder:
     def with_variant_type(self, variant_type: str) -> "VariantQueryBuilder":
         """Add variant type filter.
 
+        Uses centralized sql_fragments.py for structural types (SNV, deletion,
+        duplication, insertion, indel, inversion, CNV) to ensure DRY compliance.
+        Falls back to classification clauses for functional types (missense, etc.)
+
         Args:
             variant_type: The variant type to filter by
 
         Returns:
             Self for method chaining
         """
-        if variant_type in self._VARIANT_TYPE_CLAUSES:
-            self._where_clauses.append(self._VARIANT_TYPE_CLAUSES[variant_type])
+        # Use centralized filter for structural types (DRY)
+        if variant_type in VALID_STRUCTURAL_TYPES:
+            filter_sql = get_structural_type_filter(variant_type)
+            if filter_sql:
+                self._where_clauses.append(filter_sql)
+        # Use local clauses for functional/classification types
+        elif variant_type in self._CLASSIFICATION_TYPE_CLAUSES:
+            self._where_clauses.append(self._CLASSIFICATION_TYPE_CLAUSES[variant_type])
         return self
 
     def with_classification(self, classification: str) -> "VariantQueryBuilder":
