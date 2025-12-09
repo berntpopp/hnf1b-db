@@ -1,55 +1,71 @@
 <template>
   <v-app-bar app color="teal" dark elevation="2" style="z-index: 1009">
-    <v-container fluid class="d-flex align-center px-4">
+    <v-container fluid class="d-flex align-center px-2 px-sm-4">
       <!-- Mobile: Hamburger Menu (visible < 960px) -->
       <v-app-bar-nav-icon
-        class="d-md-none mr-2"
+        class="d-md-none mr-1 mr-sm-2"
         aria-label="Open navigation menu"
         @click="$emit('toggle-drawer')"
       />
 
-      <!-- Logo (all screen sizes) -->
-      <v-toolbar-title class="mr-4">
-        <v-img
-          src="/HNF1B-db_logo.svg"
-          alt="HNF1B Database Logo"
-          class="app-logo"
-          contain
-          max-height="48"
-          width="184"
-          min-width="140"
-          @click="navigateHome"
-        />
-      </v-toolbar-title>
+      <!-- Logo (all screen sizes) - wrapped in tooltip -->
+      <v-tooltip location="bottom" :text="tooltipText">
+        <template #activator="{ props: tooltipProps }">
+          <div class="logo-container mr-2 mr-sm-4" v-bind="tooltipProps" @click="navigateHome">
+            <img
+              src="/HNF1B-db_logo.svg"
+              alt="HNF1B Database Logo"
+              class="app-logo"
+              :style="{
+                width: logoWidth + 'px',
+                height: 'auto',
+                maxHeight: logoMaxHeight + 'px',
+              }"
+            />
+          </div>
+        </template>
+      </v-tooltip>
 
       <v-spacer />
 
-      <!-- Desktop: Navigation Links (visible >= 960px) -->
-      <div class="d-none d-md-flex align-center">
-        <v-btn
+      <!-- Desktop: Navigation Links (visible >= 960px) - absolutely centered -->
+      <div class="d-none d-md-flex align-center nav-group-centered">
+        <v-tooltip
           v-for="item in navigationItems"
           :key="item.route"
-          :to="item.route"
-          :prepend-icon="item.icon"
-          variant="text"
-          :class="{ 'v-btn--active': isActiveRoute(item.route) }"
-          :aria-label="`Navigate to ${item.label}`"
+          location="bottom"
+          :text="item.tooltip"
         >
-          {{ item.label }}
-        </v-btn>
+          <template #activator="{ props: navTooltipProps }">
+            <v-btn
+              v-bind="navTooltipProps"
+              :to="item.route"
+              :prepend-icon="item.icon"
+              variant="text"
+              :class="{ 'v-btn--active': isActiveRoute(item.route) }"
+              :aria-label="`Navigate to ${item.label}`"
+            >
+              {{ item.label }}
+            </v-btn>
+          </template>
+        </v-tooltip>
 
         <!-- Curate Menu (curator/admin only) -->
         <v-menu v-if="canCurate" location="bottom">
-          <template #activator="{ props }">
-            <v-btn
-              v-bind="props"
-              prepend-icon="mdi-pencil-plus"
-              variant="text"
-              aria-label="Curation menu"
-            >
-              Curate
-              <v-icon right size="small">mdi-menu-down</v-icon>
-            </v-btn>
+          <template #activator="{ props: menuProps }">
+            <v-tooltip location="bottom" text="Data curation actions">
+              <template #activator="{ props: curateTooltipProps }">
+                <v-btn
+                  v-bind="{ ...menuProps, ...curateTooltipProps }"
+                  prepend-icon="mdi-pencil-plus"
+                  variant="text"
+                  aria-label="Curation menu"
+                >
+                  Curate
+                  <v-icon right size="small">mdi-menu-down</v-icon>
+                </v-btn>
+              </template>
+            </v-tooltip>
           </template>
           <v-list role="menu" aria-label="Curation options">
             <v-list-item
@@ -117,9 +133,13 @@
         </v-menu>
       </div>
       <div v-else class="ml-4">
-        <v-btn icon to="/login" aria-label="Login">
-          <v-icon>mdi-login</v-icon>
-        </v-btn>
+        <v-tooltip location="bottom" text="Sign in to your account">
+          <template #activator="{ props: loginTooltipProps }">
+            <v-btn icon to="/login" aria-label="Login" v-bind="loginTooltipProps">
+              <v-icon>mdi-login</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
       </div>
     </v-container>
   </v-app-bar>
@@ -128,6 +148,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useDisplay } from 'vuetify';
 import { useAuthStore } from '@/stores/authStore';
 import { navigationItems } from '@/config/navigationItems';
 
@@ -137,6 +158,30 @@ defineEmits(['toggle-drawer']);
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const { xs, smAndDown } = useDisplay();
+
+/**
+ * Tooltip text describing the project essence
+ */
+const tooltipText = 'HNF1B Database: Curated clinical & genetic variants';
+
+/**
+ * Responsive logo width based on screen size
+ */
+const logoWidth = computed(() => {
+  if (xs.value) return 120; // Extra small screens
+  if (smAndDown.value) return 150; // Small screens
+  return 184; // Default (medium and up)
+});
+
+/**
+ * Responsive logo max height based on screen size
+ */
+const logoMaxHeight = computed(() => {
+  if (xs.value) return 36; // Extra small screens
+  if (smAndDown.value) return 42; // Small screens
+  return 48; // Default (medium and up)
+});
 
 /**
  * Get user initials for avatar
@@ -218,9 +263,43 @@ const handleLogout = async () => {
 </script>
 
 <style scoped>
+/* Logo container - prevents flex shrinking and ensures visibility */
+.logo-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  overflow: visible;
+}
+
 .app-logo {
   cursor: pointer;
-  flex-shrink: 0; /* Prevent logo from shrinking on small screens */
+  flex-shrink: 0;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Subtle pulse animation on hover */
+.logo-container:hover .app-logo {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Navigation group - absolutely centered in appbar */
+.nav-group-centered {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 4px;
 }
 
 /* Active route indicator */
