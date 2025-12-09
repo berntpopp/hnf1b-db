@@ -266,8 +266,11 @@ const getResultLink = (item) => {
       const variantSearch = item.label?.replace(/^[A-Z0-9]+:/, '') || item.label;
       return { path: '/variants', query: { q: variantSearch } };
     }
-    case 'Publication':
-      return { path: '/publications', query: { q: item.id } }; // PMID
+    case 'Publication': {
+      // Extract numeric PMID from id format "pub_PMID:12345678"
+      const pmid = item.id?.replace(/^pub_PMID:/, '') || item.id;
+      return { path: '/publications', query: { q: pmid } };
+    }
     case 'Gene':
       return `/reference?q=${item.label}`;
     case 'Gene Feature':

@@ -282,7 +282,7 @@ class PublicationListItem(BaseModel):
     - Default: `-phenopacket_count` (most individuals first)
 
     **Search:**
-    - `q`: Full-text search in title, authors, journal
+    - `q`: Full-text search in PMID, title, authors, journal
 
     **Response:**
     - Returns JSON:API envelope with `data`, `meta`, `links`
@@ -382,7 +382,8 @@ async def list_publications(
 
     if q:
         where_clauses.append("""(
-            pm.title ILIKE :search_query
+            pc.pmid ILIKE :search_query
+            OR pm.title ILIKE :search_query
             OR pm.journal ILIKE :search_query
             OR pm.authors::text ILIKE :search_query
         )""")
@@ -459,7 +460,8 @@ async def list_publications(
 
     if q:
         count_where_clauses.append("""(
-            pm.title ILIKE :search_query
+            pc.pmid ILIKE :search_query
+            OR pm.title ILIKE :search_query
             OR pm.journal ILIKE :search_query
             OR pm.authors::text ILIKE :search_query
         )""")
