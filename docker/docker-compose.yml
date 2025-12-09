@@ -117,7 +117,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 300s  # Extended for startup sync (publications, VEP, genes)
     logging:
       driver: "json-file"
       options:
