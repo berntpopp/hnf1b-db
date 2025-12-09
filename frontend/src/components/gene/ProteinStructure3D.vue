@@ -613,6 +613,14 @@ export default {
         }
 
         // Initialize NGL Stage
+        // Temporarily suppress Three.js useLegacyLights deprecation warning
+        // This is a known issue in NGL library (v2.4.0) that hasn't been fixed upstream
+        const originalWarn = console.warn;
+        console.warn = (...args) => {
+          if (args[0]?.includes?.('useLegacyLights')) return;
+          originalWarn.apply(console, args);
+        };
+
         nglStage = markRaw(
           new NGL.Stage(this.$refs.nglContainer, {
             backgroundColor: 'white',
@@ -621,6 +629,9 @@ export default {
             workerDefault: true,
           })
         );
+
+        // Restore original console.warn
+        console.warn = originalWarn;
 
         // Load PDB structure 2H8R (HNF1B DNA-binding domain)
         // Served locally to reduce network dependency and improve load times
