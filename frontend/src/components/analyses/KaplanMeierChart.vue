@@ -365,7 +365,7 @@ export default {
         .attr('text-anchor', 'middle')
         .style('font-size', '14px')
         .style('font-weight', 'bold')
-        .text('Survival Probability');
+        .text('Renal Survival Probability');
 
       // Title
       const comparisonTitle = this.getComparisonTitle(this.survivalData.comparison_type);
@@ -376,7 +376,7 @@ export default {
         .attr('text-anchor', 'middle')
         .style('font-size', '18px')
         .style('font-weight', 'bold')
-        .text(`Kaplan-Meier Survival Curves: ${comparisonTitle}`);
+        .text(`Renal Survival ${comparisonTitle}`);
 
       // Subtitle with endpoint
       svg
