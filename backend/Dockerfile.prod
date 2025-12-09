@@ -83,6 +83,7 @@ COPY --chown=hnf1b:hnf1b ./app ./app
 COPY --chown=hnf1b:hnf1b ./alembic ./alembic
 COPY --chown=hnf1b:hnf1b ./alembic.ini ./
 COPY --chown=hnf1b:hnf1b ./migration ./migration
+COPY --chown=hnf1b:hnf1b ./scripts ./scripts
 
 # Copy and make entrypoint executable (fix Windows CRLF line endings)
 COPY --chown=hnf1b:hnf1b ./docker-entrypoint.sh ./

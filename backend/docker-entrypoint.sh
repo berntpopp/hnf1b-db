@@ -63,7 +63,7 @@ run_migrations() {
 create_admin_user() {
     if [ -n "$ADMIN_USERNAME" ] && [ -n "$ADMIN_PASSWORD" ]; then
         log_info "Checking/creating admin user..."
-        python -m app.scripts.create_admin || log_warn "Admin user creation skipped or failed"
+        python scripts/create_admin_user.py || log_warn "Admin user creation skipped or failed"
     else
         log_info "Skipping admin user creation (ADMIN_USERNAME or ADMIN_PASSWORD not set)"
     fi
