@@ -33,7 +33,7 @@ from app.reference.service import (
     initialize_reference_data,
     sync_chr17q12_genes,
 )
-from app.variants.service import get_variant_annotations_batch, is_cnv_variant
+from app.variants.service import get_variant_annotations_batch
 
 logger = logging.getLogger(__name__)
 
@@ -551,13 +551,11 @@ async def _run_variant_sync(task_id: str) -> None:
             # Get unique variants to sync (using shared SQL fragment)
             query = text(get_pending_variants_query())
             result = await db.execute(query)
-            all_variants = [row.variant_id for row in result.fetchall()]
+            variants_to_sync = [row.variant_id for row in result.fetchall()]
 
-            # Filter out CNVs - VEP HGVS API doesn't support them
-            variants_to_sync = [v for v in all_variants if not is_cnv_variant(v)]
-            cnv_count = len(all_variants) - len(variants_to_sync)
-            if cnv_count > 0:
-                logger.info(f"Skipping {cnv_count} CNV variants (not supported by VEP HGVS)")
+            # Note: CNVs ARE supported via VEP's /vep/homo_sapiens/region endpoint
+            # using structural variant format (CHROM START END SV_TYPE STRAND ID).
+            # The service.py _format_variant_for_vep() handles CNV formatting.
 
             task["total"] = len(variants_to_sync)
             task["processed"] = 0
