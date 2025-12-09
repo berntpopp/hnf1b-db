@@ -100,52 +100,16 @@
 
       <!-- Column Header: Sex with filter menu -->
       <template #header.sex="{ column, getSortIcon, toggleSort, isSorted }">
-        <div class="d-flex align-center justify-space-between header-wrapper">
-          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
-            <span class="header-title">{{ column.title }}</span>
-            <v-icon v-if="isSorted(column)" size="small" class="ml-1">
-              {{ getSortIcon(column) }}
-            </v-icon>
-          </div>
-          <v-menu :close-on-content-click="false" location="bottom">
-            <template #activator="{ props }">
-              <v-btn
-                icon
-                size="x-small"
-                variant="text"
-                v-bind="props"
-                :color="filterValues.sex ? 'primary' : 'default'"
-              >
-                <v-icon size="small">
-                  {{ filterValues.sex ? 'mdi-filter' : 'mdi-filter-outline' }}
-                </v-icon>
-              </v-btn>
-            </template>
-            <v-card min-width="200" max-width="280">
-              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
-                <v-icon size="small" class="mr-2">mdi-gender-male-female</v-icon>
-                Filter: Sex
-              </v-card-title>
-              <v-divider />
-              <v-card-text class="pa-3">
-                <v-select
-                  v-model="sexFilter"
-                  :items="sexOptions"
-                  label="Select sex"
-                  density="compact"
-                  variant="outlined"
-                  clearable
-                  hide-details
-                />
-              </v-card-text>
-              <v-divider />
-              <v-card-actions class="pa-2">
-                <v-spacer />
-                <v-btn size="small" variant="text" @click="clearFilter('sex')">Clear</v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-menu>
-        </div>
+        <ColumnHeaderFilter
+          v-model="sexFilter"
+          :title="column.title"
+          :options="sexOptions"
+          select-label="Select sex"
+          filter-icon="mdi-gender-male-female"
+          :sort-icon="isSorted(column) ? getSortIcon(column) : null"
+          @sort="toggleSort(column)"
+          @clear="clearFilter('sex')"
+        />
       </template>
 
       <!-- Render subject ID with chip -->
@@ -205,6 +169,7 @@ import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
 
 export default {
   name: 'Phenopackets',
@@ -212,6 +177,7 @@ export default {
     AppDataTable,
     AppTableToolbar,
     AppPagination,
+    ColumnHeaderFilter,
   },
   setup() {
     // URL state synchronization
@@ -619,33 +585,5 @@ export default {
 <style scoped>
 :deep(tbody tr) {
   cursor: pointer;
-}
-
-/* Header wrapper for filter buttons */
-.header-wrapper {
-  width: 100%;
-  gap: 4px;
-}
-
-.sortable-header {
-  cursor: pointer;
-  user-select: none;
-  transition: opacity 0.2s;
-  min-width: 0;
-}
-
-.sortable-header:hover {
-  opacity: 0.7;
-}
-
-.header-title {
-  font-weight: 600;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #37474f;
 }
 </style>

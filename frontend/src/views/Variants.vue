@@ -70,102 +70,31 @@
       </template>
 
       <!-- Column Header: Type with filter menu -->
-      <template #header.variant_type="{ column, toggleSort }">
-        <div class="d-flex align-center justify-space-between header-wrapper">
-          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
-            <span class="header-title">{{ column.title }}</span>
-          </div>
-          <v-menu :close-on-content-click="false" location="bottom">
-            <template #activator="{ props }">
-              <v-btn
-                icon
-                size="x-small"
-                variant="text"
-                v-bind="props"
-                :color="filterValues.type ? 'primary' : 'default'"
-              >
-                <v-icon size="small">
-                  {{ filterValues.type ? 'mdi-filter' : 'mdi-filter-outline' }}
-                </v-icon>
-              </v-btn>
-            </template>
-            <v-card min-width="200" max-width="280">
-              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
-                <v-icon size="small" class="mr-2">mdi-dna</v-icon>
-                Filter: Type
-              </v-card-title>
-              <v-divider />
-              <v-card-text class="pa-3">
-                <v-select
-                  v-model="typeFilter"
-                  :items="variantTypes"
-                  label="Select type"
-                  density="compact"
-                  variant="outlined"
-                  clearable
-                  hide-details
-                />
-              </v-card-text>
-              <v-divider />
-              <v-card-actions class="pa-2">
-                <v-spacer />
-                <v-btn size="small" variant="text" @click="clearFilter('type')">Clear</v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-menu>
-        </div>
+      <template #header.variant_type="{ column, getSortIcon, toggleSort, isSorted }">
+        <ColumnHeaderFilter
+          v-model="typeFilter"
+          :title="column.title"
+          :options="variantTypes"
+          select-label="Select type"
+          filter-icon="mdi-dna"
+          :sort-icon="isSorted(column) ? getSortIcon(column) : null"
+          @sort="toggleSort(column)"
+          @clear="clearFilter('type')"
+        />
       </template>
 
       <!-- Column Header: Classification with filter menu -->
       <template #header.classificationVerdict="{ column, getSortIcon, toggleSort, isSorted }">
-        <div class="d-flex align-center justify-space-between header-wrapper">
-          <div class="d-flex align-center flex-grow-1 sortable-header" @click="toggleSort(column)">
-            <span class="header-title">{{ column.title }}</span>
-            <v-icon v-if="isSorted(column)" size="small" class="ml-1">
-              {{ getSortIcon(column) }}
-            </v-icon>
-          </div>
-          <v-menu :close-on-content-click="false" location="bottom">
-            <template #activator="{ props }">
-              <v-btn
-                icon
-                size="x-small"
-                variant="text"
-                v-bind="props"
-                :color="filterValues.classification ? 'primary' : 'default'"
-              >
-                <v-icon size="small">
-                  {{ filterValues.classification ? 'mdi-filter' : 'mdi-filter-outline' }}
-                </v-icon>
-              </v-btn>
-            </template>
-            <v-card min-width="220" max-width="300">
-              <v-card-title class="text-subtitle-2 py-2 d-flex align-center">
-                <v-icon size="small" class="mr-2">mdi-alert-circle</v-icon>
-                Filter: Classification
-              </v-card-title>
-              <v-divider />
-              <v-card-text class="pa-3">
-                <v-select
-                  v-model="classificationFilter"
-                  :items="classifications"
-                  label="Select classification"
-                  density="compact"
-                  variant="outlined"
-                  clearable
-                  hide-details
-                />
-              </v-card-text>
-              <v-divider />
-              <v-card-actions class="pa-2">
-                <v-spacer />
-                <v-btn size="small" variant="text" @click="clearFilter('classification')">
-                  Clear
-                </v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-menu>
-        </div>
+        <ColumnHeaderFilter
+          v-model="classificationFilter"
+          :title="column.title"
+          :options="classifications"
+          select-label="Select classification"
+          filter-icon="mdi-alert-circle"
+          :sort-icon="isSorted(column) ? getSortIcon(column) : null"
+          @sort="toggleSort(column)"
+          @clear="clearFilter('classification')"
+        />
       </template>
 
       <!-- Render simple_id as a clickable chip -->
@@ -258,6 +187,7 @@ import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
 
 export default {
   name: 'Variants',
@@ -265,6 +195,7 @@ export default {
     AppDataTable,
     AppTableToolbar,
     AppPagination,
+    ColumnHeaderFilter,
   },
   setup() {
     // URL state synchronization for shareable/bookmarkable URLs
@@ -602,33 +533,5 @@ export default {
 <style scoped>
 :deep(tbody tr) {
   cursor: pointer;
-}
-
-/* Header wrapper for filter buttons */
-.header-wrapper {
-  width: 100%;
-  gap: 4px;
-}
-
-.sortable-header {
-  cursor: pointer;
-  user-select: none;
-  transition: opacity 0.2s;
-  min-width: 0;
-}
-
-.sortable-header:hover {
-  opacity: 0.7;
-}
-
-.header-title {
-  font-weight: 600;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #37474f;
 }
 </style>
