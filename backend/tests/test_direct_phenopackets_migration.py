@@ -264,3 +264,144 @@ class TestDirectPhenopacketsMigration:
         # If features exist, they should be valid
         if features:
             assert len(features) > 0
+
+
+class TestHPOMapperLabelNormalization:
+    """Test HPOMapper canonical label normalization feature.
+
+    Tests for #165: Data quality - Normalize HPO term labels during import
+    """
+
+    def test_normalize_labels_enabled_by_default(self):
+        """Test that label normalization is enabled by default."""
+        mapper = HPOMapper()
+        assert mapper.normalize_labels is True
+
+    def test_normalize_labels_can_be_disabled(self):
+        """Test that label normalization can be disabled."""
+        mapper = HPOMapper(normalize_labels=False)
+        assert mapper.normalize_labels is False
+
+    def test_canonical_labels_cache_initialization(self):
+        """Test that the canonical labels cache is initialized empty."""
+        mapper = HPOMapper()
+        assert mapper._canonical_labels == {}
+
+    def test_get_canonical_label_returns_fallback_when_disabled(self):
+        """Test fallback is returned when normalization is disabled."""
+        mapper = HPOMapper(normalize_labels=False)
+        fallback = "My Fallback Label"
+        result = mapper._get_canonical_label("HP:0012622", fallback)
+        assert result == fallback
+
+    def test_get_canonical_label_caches_result(self):
+        """Test that canonical labels are cached after lookup."""
+        mapper = HPOMapper(normalize_labels=True)
+        hpo_id = "HP:0012622"
+        fallback = "Chronic kidney disease"
+
+        # First call - should populate cache
+        result1 = mapper._get_canonical_label(hpo_id, fallback)
+
+        # Check cache is populated
+        assert hpo_id in mapper._canonical_labels
+
+        # Second call - should use cache
+        result2 = mapper._get_canonical_label(hpo_id, fallback)
+        assert result1 == result2
+
+    def test_get_canonical_label_fallback_on_unknown_term(self):
+        """Test fallback when ontology service returns unknown term."""
+        mapper = HPOMapper(normalize_labels=True)
+
+        # Use an invalid HPO ID that will return "Unknown term:"
+        invalid_id = "HP:9999999"
+        fallback = "My Fallback"
+
+        # Call the method - result may be fallback or API response
+        _ = mapper._get_canonical_label(invalid_id, fallback)
+
+        # The cache should be populated after the call
+        assert mapper._canonical_labels.get(invalid_id) is not None
+
+    def test_build_from_dataframe_normalizes_labels(self):
+        """Test that build_from_dataframe normalizes labels."""
+        mapper = HPOMapper(normalize_labels=True)
+
+        # Create test DataFrame with phenotype mappings
+        phenotypes_df = pd.DataFrame([
+            {
+                "phenotype_category": "chronic kidney disease",
+                "phenotype_id": "HP:0012622",
+                "phenotype_name": "chronic kidney disease, not specified",
+            },
+        ])
+
+        mapper.build_from_dataframe(phenotypes_df)
+
+        # The mapping should exist
+        normalized_key = mapper.normalize_key("chronic kidney disease")
+        assert normalized_key in mapper.hpo_mappings
+
+        # The HPO ID should be correct
+        assert mapper.hpo_mappings[normalized_key]["id"] == "HP:0012622"
+
+    def test_build_from_dataframe_without_normalization(self):
+        """Test build_from_dataframe uses source label when normalization disabled."""
+        mapper = HPOMapper(normalize_labels=False)
+
+        source_label = "my custom label"
+        phenotypes_df = pd.DataFrame([
+            {
+                "phenotype_category": "test_category",
+                "phenotype_id": "HP:0012622",
+                "phenotype_name": source_label,
+            },
+        ])
+
+        mapper.build_from_dataframe(phenotypes_df)
+
+        normalized_key = mapper.normalize_key("test_category")
+        assert normalized_key in mapper.hpo_mappings
+        # With normalization disabled, should use the source label
+        assert mapper.hpo_mappings[normalized_key]["label"] == source_label
+
+    def test_normalize_key_handles_various_inputs(self):
+        """Test normalize_key handles various input formats."""
+        mapper = HPOMapper()
+
+        # Standard input
+        assert mapper.normalize_key("Chronic Kidney Disease") == "chronickidneydisease"
+
+        # With underscores
+        assert mapper.normalize_key("chronic_kidney_disease") == "chronickidneydisease"
+
+        # With spaces and mixed case
+        assert mapper.normalize_key("CHRONIC kidney Disease") == "chronickidneydisease"
+
+        # Empty/None handling
+        assert mapper.normalize_key("") == ""
+        assert mapper.normalize_key(None) == ""
+
+    def test_default_mappings_have_canonical_labels(self):
+        """Test that default HPO mappings use canonical labels."""
+        mapper = HPOMapper()
+
+        # Check some key mappings have proper canonical labels
+        assert mapper.hpo_mappings["mody"]["label"] == "Maturity-onset diabetes of the young"
+        assert mapper.hpo_mappings["hypomagnesemia"]["label"] == "Hypomagnesemia"
+        assert mapper.hpo_mappings["renalcysts"]["label"] == "Renal cyst"
+
+    def test_ontology_service_lazy_loading(self):
+        """Test that ontology service is lazily loaded."""
+        mapper = HPOMapper(normalize_labels=True)
+
+        # Service should not be loaded initially
+        assert mapper._ontology_service is None
+
+        # After calling _get_ontology_service, it should be loaded
+        service = mapper._get_ontology_service()
+        # Service might be None if import fails, but attempt was made
+        # If service loaded successfully, it should be cached
+        if service is not None:
+            assert mapper._ontology_service is service

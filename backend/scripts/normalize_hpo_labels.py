@@ -77,7 +77,7 @@ def normalize_phenopacket_labels(
 
         # Get canonical label from ontology service
         term = ontology_service.get_term(hpo_id)
-        if term and not term.label.startswith("Unknown"):
+        if term and not term.label.startswith("Unknown term:"):
             old_label = feature["type"].get("label", "")
             if old_label != term.label:
                 feature["type"]["label"] = term.label
