@@ -233,13 +233,60 @@ COALESCE(
             WHERE elem->>'syntax' = 'hgvs.c'
             LIMIT 1
         ) ~ 'dup' THEN 'duplication'
+        WHEN (
+            SELECT elem->>'value'
+            FROM jsonb_array_elements(vd->'expressions') elem
+            WHERE elem->>'syntax' = 'hgvs.c'
+            LIMIT 1
+        ) ~ 'inv' THEN 'inversion'
         WHEN vd->'vcfRecord'->>'alt' ~ '^<(DEL|DUP|INS|INV|CNV)' THEN 'CNV'
+        WHEN (
+            SELECT elem->>'value'
+            FROM jsonb_array_elements(vd->'expressions') elem
+            WHERE elem->>'syntax' = 'hgvs.c'
+            LIMIT 1
+        ) ~ '>[ACGT]' THEN 'SNV'
         WHEN vd->>'moleculeContext' = 'genomic' THEN 'SNV'
         ELSE 'OTHER'
     END,
     vd->'molecularConsequences'->0->>'label'
 )
 """
+
+
+# =============================================================================
+# Variant Type Filter SQL Generation (DRY)
+# =============================================================================
+# Purpose: Generate SQL WHERE clauses for filtering by structural type
+# Uses STRUCTURAL_TYPE_CASE as single source of truth
+# Used by: variant_query_builder.py for type filtering
+
+# Valid structural types that can be filtered
+VALID_STRUCTURAL_TYPES = frozenset({
+    "SNV", "deletion", "duplication", "insertion", "indel", "inversion", "CNV"
+})
+
+
+def get_structural_type_filter(variant_type: str) -> str:
+    """Generate SQL WHERE clause to filter by structural type.
+
+    Uses STRUCTURAL_TYPE_CASE as the single source of truth for type classification.
+    This ensures filtering logic matches the display classification exactly.
+
+    Args:
+        variant_type: One of 'SNV', 'deletion', 'duplication', 'insertion',
+                     'indel', 'inversion', 'CNV'
+
+    Returns:
+        SQL expression that can be used in WHERE clause, or empty string if invalid
+
+    Example:
+        >>> filter_sql = get_structural_type_filter("SNV")
+        >>> # Returns: "(COALESCE(vd->'structuralType'->>'label', ...) = 'SNV')"
+    """
+    if variant_type not in VALID_STRUCTURAL_TYPES:
+        return ""
+    return f"({STRUCTURAL_TYPE_CASE}) = '{variant_type}'"
 
 
 # =============================================================================

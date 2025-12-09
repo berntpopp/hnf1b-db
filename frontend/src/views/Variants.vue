@@ -97,7 +97,7 @@
               <v-divider />
               <v-card-text class="pa-3">
                 <v-select
-                  v-model="filterValues.type"
+                  v-model="typeFilter"
                   :items="variantTypes"
                   label="Select type"
                   density="compact"
@@ -147,7 +147,7 @@
               <v-divider />
               <v-card-text class="pa-3">
                 <v-select
-                  v-model="filterValues.classification"
+                  v-model="classificationFilter"
                   :items="classifications"
                   label="Select classification"
                   density="compact"
@@ -254,7 +254,7 @@ import { getVariants } from '@/api';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
-import { buildSortParameter } from '@/utils/pagination';
+import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
@@ -266,15 +266,19 @@ export default {
     AppTableToolbar,
     AppPagination,
   },
+  setup() {
+    // URL state synchronization for shareable/bookmarkable URLs
+    // Return entire urlState to preserve ref reactivity in Options API
+    const urlState = useTableUrlState({
+      defaultPageSize: 10,
+      defaultSort: '-simple_id',
+      filters: { type: null, classification: null },
+    });
+
+    return { urlState };
+  },
   data() {
     return {
-      // Search and filter state
-      searchQuery: '',
-      filterValues: {
-        type: null,
-        classification: null,
-      },
-
       // Table data
       variants: [],
       loading: false,
@@ -335,68 +339,145 @@ export default {
     };
   },
   computed: {
-    hasActiveFilters() {
-      return !!(this.searchQuery || this.filterValues.type || this.filterValues.classification);
+    // Bridge URL state to component for v-model bindings
+    searchQuery: {
+      get() {
+        return this.urlState?.search?.value ?? '';
+      },
+      set(value) {
+        if (this.urlState?.search) {
+          this.urlState.search.value = value;
+        }
+      },
     },
-
+    // Direct computed for type filter - v-model compatible
+    typeFilter: {
+      get() {
+        return this.urlState?.filters?.type?.value ?? null;
+      },
+      set(value) {
+        if (this.urlState?.filters?.type) {
+          this.urlState.filters.type.value = value;
+        }
+      },
+    },
+    // Direct computed for classification filter - v-model compatible
+    classificationFilter: {
+      get() {
+        return this.urlState?.filters?.classification?.value ?? null;
+      },
+      set(value) {
+        if (this.urlState?.filters?.classification) {
+          this.urlState.filters.classification.value = value;
+        }
+      },
+    },
+    // Keep filterValues for compatibility (read-only)
+    filterValues() {
+      return {
+        type: this.urlState?.filters?.type?.value ?? null,
+        classification: this.urlState?.filters?.classification?.value ?? null,
+      };
+    },
+    hasActiveFilters() {
+      return (this.urlState?.activeFilterCount?.value ?? 0) > 0;
+    },
     activeFilterCount() {
-      let count = 0;
-      if (this.searchQuery) count++;
-      if (this.filterValues.type) count++;
-      if (this.filterValues.classification) count++;
-      return count;
+      return this.urlState?.activeFilterCount?.value ?? 0;
     },
   },
   watch: {
-    filterValues: {
+    // Watch URL filter changes
+    'urlState.filters.type.value': {
       handler() {
         if (this.loadingInitialized) {
-          this.resetPaginationAndFetch();
+          this.urlState.resetPage();
+          this.fetchVariants();
         }
       },
-      deep: true,
+    },
+    'urlState.filters.classification.value': {
+      handler() {
+        if (this.loadingInitialized) {
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
+    },
+    // Watch URL search changes
+    'urlState.search.value': {
+      handler() {
+        if (this.loadingInitialized) {
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
+    },
+    // Watch URL page changes
+    'urlState.page.value': {
+      handler(newPage) {
+        if (this.loadingInitialized && newPage !== this.pagination.currentPage) {
+          this.pagination.currentPage = newPage;
+          this.fetchVariants();
+        }
+      },
+    },
+    // Watch URL pageSize changes
+    'urlState.pageSize.value': {
+      handler(newPageSize) {
+        if (this.loadingInitialized && newPageSize !== this.pagination.pageSize) {
+          this.pagination.pageSize = newPageSize;
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
+    },
+    // Watch URL sort changes
+    'urlState.sort.value': {
+      handler(newSort) {
+        if (this.loadingInitialized) {
+          // Update Vuetify options from URL sort
+          this.options.sortBy = this.parseSortToVuetify(newSort);
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
     },
   },
   methods: {
     async fetchVariants() {
       this.loading = true;
+
+      // Read state from URL state refs
+      const currentPage = this.urlState?.page?.value ?? 1;
+      const pageSize = this.urlState?.pageSize?.value ?? 10;
+      const sortValue = this.urlState?.sort?.value ?? '-simple_id';
+      const searchValue = this.urlState?.search?.value ?? '';
+      const typeFilter = this.urlState?.filters?.type?.value ?? null;
+      const classificationFilter = this.urlState?.filters?.classification?.value ?? null;
+
       window.logService.debug('Fetching variants', {
-        page: this.pagination.currentPage,
-        sortBy: this.options.sortBy,
-        filters: { searchQuery: this.searchQuery, ...this.filterValues },
+        page: currentPage,
+        pageSize,
+        sort: sortValue,
+        filters: { search: searchValue, type: typeFilter, classification: classificationFilter },
       });
 
       try {
-        const { sortBy } = this.options;
-
-        // Map frontend column keys to backend sort field names
-        const sortFieldMap = {
-          simple_id: 'simple_id',
-          transcript: 'transcript',
-          protein: 'protein',
-          variant_type: 'variant_type',
-          hg38: 'hg38',
-          classificationVerdict: 'classificationVerdict',
-          individualCount: 'individualCount',
-        };
-
-        const sortParam = buildSortParameter(sortBy, sortFieldMap);
-
         const requestParams = {
-          page: this.pagination.currentPage,
-          pageSize: this.pagination.pageSize,
-          ...(sortParam && { sort: sortParam }),
-          ...(this.searchQuery && { query: this.searchQuery }),
-          ...(this.filterValues.type && { variant_type: this.filterValues.type }),
-          ...(this.filterValues.classification && {
-            classification: this.filterValues.classification,
-          }),
+          page: currentPage,
+          pageSize: pageSize,
+          ...(sortValue && { sort: sortValue }),
+          ...(searchValue && { query: searchValue }),
+          ...(typeFilter && { variant_type: typeFilter }),
+          ...(classificationFilter && { classification: classificationFilter }),
         };
 
         const response = await getVariants(requestParams);
 
         this.variants = response.data;
         this.pagination.currentPage = response.meta.currentPage;
+        this.pagination.pageSize = pageSize;
         this.pagination.totalPages = response.meta.totalPages;
         this.pagination.totalRecords = response.meta.totalRecords;
 
@@ -409,36 +490,49 @@ export default {
       }
     },
 
-    resetPaginationAndFetch() {
-      this.pagination.currentPage = 1;
-      this.pagination.totalPages = 0;
-      this.pagination.totalRecords = 0;
-      this.fetchVariants();
+    // URL state helper: Parse sort string to Vuetify sortBy format
+    parseSortToVuetify(sortString) {
+      if (!sortString) return [{ key: 'simple_id', order: 'desc' }];
+      const descending = sortString.startsWith('-');
+      const field = descending ? sortString.slice(1) : sortString;
+      return [{ key: field, order: descending ? 'desc' : 'asc' }];
+    },
+
+    // URL state helper: Convert Vuetify sortBy to sort string
+    vuetifyToSortString(sortBy) {
+      if (!sortBy || sortBy.length === 0) return '-simple_id';
+      const { key, order } = sortBy[0];
+      return order === 'desc' ? `-${key}` : key;
     },
 
     // Event handlers
     onSearch() {
-      this.resetPaginationAndFetch();
+      // Search is already bound to urlState.search via computed setter
+      // Just need to reset page when searching
+      this.urlState.resetPage();
     },
 
     onClearSearch() {
       this.searchQuery = '';
-      this.resetPaginationAndFetch();
+      this.urlState.resetPage();
     },
 
     onPageSizeChange(newSize) {
-      this.pagination.pageSize = newSize;
-      this.resetPaginationAndFetch();
+      if (this.urlState?.pageSize) {
+        this.urlState.pageSize.value = newSize;
+      }
+      this.urlState.resetPage();
     },
 
     clearFilter(key) {
-      this.filterValues[key] = null;
+      if (this.urlState?.filters?.[key]) {
+        this.urlState.filters[key].value = null;
+      }
+      this.urlState.resetPage();
     },
 
     clearAllFilters() {
-      this.searchQuery = '';
-      this.filterValues = { type: null, classification: null };
-      this.resetPaginationAndFetch();
+      this.urlState.clearAllFilters();
     },
 
     // Utility functions
@@ -450,15 +544,14 @@ export default {
 
     onOptionsUpdate(newOptions) {
       // Preserve initial sort if Vuetify sends empty sortBy on first mount
-      // Note: v-model:options overwrites this.options BEFORE this handler runs,
-      // so we use the separate defaultSortBy constant
       if (!this.loadingInitialized && (!newOptions.sortBy || newOptions.sortBy.length === 0)) {
-        newOptions.sortBy = [...this.defaultSortBy];
-        // Also restore options.sortBy so Vuetify shows the sort indicator
-        this.options.sortBy = [...this.defaultSortBy];
+        // Get sort from URL or use default
+        const urlSortValue = this.urlState?.sort?.value ?? '-simple_id';
+        newOptions.sortBy = this.parseSortToVuetify(urlSortValue);
+        this.options.sortBy = [...newOptions.sortBy];
       }
 
-      // Compare with previousSortBy since v-model updates this.options before handler
+      // Compare with previousSortBy to detect user-initiated sort changes
       const sortChanged = JSON.stringify(this.previousSortBy) !== JSON.stringify(newOptions.sortBy);
 
       // Store current sortBy for next comparison
@@ -466,21 +559,33 @@ export default {
       this.options = { ...newOptions };
 
       if (!this.loadingInitialized) {
+        // Initial load: sync pagination from URL state
+        this.pagination.currentPage = this.urlState?.page?.value ?? 1;
+        this.pagination.pageSize = this.urlState?.pageSize?.value ?? 10;
         this.loadingInitialized = true;
         this.fetchVariants();
       } else if (sortChanged) {
-        this.resetPaginationAndFetch();
+        // User changed sort via table header click - sync to URL
+        const newSortString = this.vuetifyToSortString(newOptions.sortBy);
+        if (this.urlState?.sort) {
+          this.urlState.sort.value = newSortString;
+        }
+        this.urlState.resetPage();
+        this.fetchVariants();
       }
     },
 
     customSort(items) {
+      // Server-side sorting, just return items as-is
       return items;
     },
 
     goToPage(page) {
       if (page < 1 || page > this.pagination.totalPages) return;
-      this.pagination.currentPage = page;
-      this.fetchVariants();
+      // Update URL state, which triggers watch and fetch
+      if (this.urlState?.page) {
+        this.urlState.page.value = page;
+      }
     },
 
     handleRowClick(event, row) {

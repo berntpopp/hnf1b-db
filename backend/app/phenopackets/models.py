@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,6 +57,19 @@ class Phenopacket(Base):
     # Full-text search vector
     search_vector: Mapped[Optional[Any]] = mapped_column(
         TSVECTOR, nullable=True, index=True
+    )
+
+    # Generated columns for server-side sorting (computed by PostgreSQL)
+    # These are STORED generated columns that auto-update when phenopacket changes
+    features_count: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Count of phenotypicFeatures (auto-computed by PostgreSQL)",
+    )
+    has_variant: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Has genomic interpretations (auto-computed by PostgreSQL)",
     )
 
     # Metadata

@@ -600,6 +600,18 @@ export default {
           throw new Error('NGL container not found');
         }
 
+        // Clean up any existing stage first to prevent Timer warnings
+        // This can happen when component remounts (e.g., tab switching)
+        if (nglStage) {
+          nglStage.dispose();
+          nglStage = null;
+          nglStructureComponent = null;
+          nglVariantRepresentation = null;
+          nglLabelRepresentation = null;
+          nglDistanceShape = null;
+          distanceCalculator = null;
+        }
+
         // Initialize NGL Stage
         nglStage = markRaw(
           new NGL.Stage(this.$refs.nglContainer, {

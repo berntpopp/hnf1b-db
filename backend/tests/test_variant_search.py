@@ -100,12 +100,16 @@ class TestSearchQueryValidation:
         assert validate_search_query("c.123+1G>T") is not None
         assert validate_search_query("p.(Arg177*)") is not None
 
-    def test_invalid_hgvs_format(self):
-        """Test HGVS format validation."""
-        with pytest.raises(HTTPException) as exc:
-            validate_search_query("c.invalid")
-        assert exc.value.status_code == 400
-        assert "Invalid HGVS" in exc.value.detail
+    def test_partial_hgvs_allowed_for_search(self):
+        """Test that partial/incomplete HGVS notation is allowed for search queries.
+
+        Unlike data entry, search queries intentionally allow partial HGVS to
+        enable flexible searching (e.g., "c.826" should match "c.826C>G").
+        """
+        # These partial patterns should NOT raise an exception for search
+        assert validate_search_query("c.invalid") == "c.invalid"
+        assert validate_search_query("c.826") == "c.826"
+        assert validate_search_query("p.Arg") == "p.Arg"
 
 
 class TestVariantTypeValidation:

@@ -260,10 +260,14 @@ const getResultLink = (item) => {
   switch (item.type) {
     case 'Phenopacket':
       return `/phenopackets/${item.id}`;
-    case 'Variant':
-      return { name: 'Variants', query: { query: item.label } };
+    case 'Variant': {
+      // Use 'q' parameter (not 'query') to match Variants page URL state
+      // Strip gene prefix (e.g., "HNF1B:") if present for cleaner search
+      const variantSearch = item.label?.replace(/^[A-Z0-9]+:/, '') || item.label;
+      return { path: '/variants', query: { q: variantSearch } };
+    }
     case 'Publication':
-      return { name: 'Publications', query: { q: item.id } }; // PMID
+      return { path: '/publications', query: { q: item.id } }; // PMID
     case 'Gene':
       return `/reference?q=${item.label}`;
     case 'Gene Feature':
