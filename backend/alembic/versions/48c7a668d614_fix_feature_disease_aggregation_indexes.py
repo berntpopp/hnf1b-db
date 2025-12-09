@@ -36,15 +36,16 @@ def upgrade() -> None:
 
     # Create new composite unique indexes (id + label)
     # This handles cases where same HPO ID has different labels
+    # Use IF NOT EXISTS for idempotency (fresh DBs already have these from earlier migration)
     op.execute(
         """
-        CREATE UNIQUE INDEX ix_mv_feature_aggregation_hpo_id_label
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_mv_feature_aggregation_hpo_id_label
         ON mv_feature_aggregation (hpo_id, label)
         """
     )
     op.execute(
         """
-        CREATE UNIQUE INDEX ix_mv_disease_aggregation_disease_id_label
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_mv_disease_aggregation_disease_id_label
         ON mv_disease_aggregation (disease_id, label)
         """
     )
