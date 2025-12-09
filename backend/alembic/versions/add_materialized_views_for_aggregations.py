@@ -88,10 +88,11 @@ def upgrade() -> None:
 
     # Create unique index for CONCURRENTLY refresh
     # Note: Cannot use CONCURRENTLY in migration transaction, but can use CONCURRENTLY later
+    # Using composite key (hpo_id, label) because same HPO ID can have different label text
     op.execute(
         """
-        CREATE UNIQUE INDEX ix_mv_feature_aggregation_hpo_id
-        ON mv_feature_aggregation (hpo_id)
+        CREATE UNIQUE INDEX ix_mv_feature_aggregation_hpo_id_label
+        ON mv_feature_aggregation (hpo_id, label)
         """
     )
 
@@ -138,10 +139,11 @@ def upgrade() -> None:
         """
     )
 
+    # Using composite key (disease_id, label) because same disease ID can have different label text
     op.execute(
         """
-        CREATE UNIQUE INDEX ix_mv_disease_aggregation_disease_id
-        ON mv_disease_aggregation (disease_id)
+        CREATE UNIQUE INDEX ix_mv_disease_aggregation_disease_id_label
+        ON mv_disease_aggregation (disease_id, label)
         """
     )
 
