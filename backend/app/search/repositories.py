@@ -15,13 +15,61 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class GlobalSearchRepository:
     """Repository for global materialized view search.
 
-    Uses PostgreSQL full-text search with websearch_to_tsquery for
-    Google-like query syntax support (quotes, OR, -exclude).
+    Uses hybrid search strategy combining:
+    1. Full-text search with 'simple' config (preserves scientific notation)
+    2. ILIKE fallback with trigram similarity for partial matches
     """
 
     def __init__(self, db: AsyncSession) -> None:
         """Initialize with database session."""
         self.db = db
+
+    def _build_filter_clause(
+        self, type_filter: str | None, params: dict[str, Any]
+    ) -> str:
+        """Build optional type filter clause."""
+        if type_filter:
+            params["type_filter"] = type_filter
+            return "AND type = :type_filter"
+        return ""
+
+    @staticmethod
+    def _sanitize_for_tsquery(word: str) -> str:
+        """Sanitize a word for use in tsquery.
+
+        Removes/escapes special characters that have meaning in tsquery:
+        - : (weight label)
+        - & | ! () (operators)
+        - * (prefix)
+        """
+        import re
+
+        # Replace special chars with spaces, then take first "word"
+        sanitized = re.sub(r"[&|!():*<>]", " ", word)
+        # Take first non-empty part
+        parts = sanitized.split()
+        return parts[0] if parts else word
+
+    @staticmethod
+    def _build_or_tsquery(query: str) -> str:
+        """Build OR-based tsquery for partial word matching.
+
+        Converts 'cystic dysplasia' to 'cystic:* | dysplasia:*'
+        for broader matching with prefix support.
+        Handles special characters like HPO IDs (HP:0004904).
+        """
+        words = query.split()
+        if not words:
+            return query
+
+        # Sanitize each word and build prefix match
+        sanitized_parts = []
+        for word in words:
+            clean = GlobalSearchRepository._sanitize_for_tsquery(word)
+            if clean:
+                sanitized_parts.append(f"{clean}:*")
+
+        return " | ".join(sanitized_parts) if sanitized_parts else query
 
     async def search(
         self,
@@ -30,7 +78,12 @@ class GlobalSearchRepository:
         offset: int = 0,
         type_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Search global index with optional type filter.
+        """Search global index using hybrid full-text + ILIKE strategy.
+
+        Strategy:
+        1. Full-text search with 'simple' config (no stemming, preserves HGVS/HPO)
+        2. ILIKE fallback for partial/substring matches
+        3. Results ranked by match quality and similarity
 
         Args:
             query: Search query string
@@ -41,25 +94,58 @@ class GlobalSearchRepository:
         Returns:
             List of search result dictionaries
         """
+        # Build OR-based tsquery for broader matching
+        or_tsquery = self._build_or_tsquery(query)
         params: dict[str, Any] = {
             "query": query,
+            "or_tsquery": or_tsquery,
+            "query_like": f"%{query}%",
             "limit": limit,
             "offset": offset,
         }
-        filter_clause = ""
+        filter_clause = self._build_filter_clause(type_filter, params)
 
-        if type_filter:
-            filter_clause = "AND type = :type_filter"
-            params["type_filter"] = type_filter
-
+        # Hybrid search: FTS (exact AND + OR prefix) + ILIKE fallback
         sql = text(f"""
-            SELECT id, label, type, subtype, extra_info,
-                   ts_rank(search_vector,
-                           websearch_to_tsquery('english', :query)) as score
-            FROM global_search_index
-            WHERE search_vector @@ websearch_to_tsquery('english', :query)
-            {filter_clause}
-            ORDER BY score DESC, label ASC
+            WITH exact_matches AS (
+                SELECT id, label, type, subtype, extra_info,
+                       ts_rank(search_vector,
+                               plainto_tsquery('simple', :query)) AS score,
+                       1 AS match_priority
+                FROM global_search_index
+                WHERE search_vector @@ plainto_tsquery('simple', :query)
+                {filter_clause}
+            ),
+            prefix_matches AS (
+                SELECT id, label, type, subtype, extra_info,
+                       ts_rank(search_vector,
+                               to_tsquery('simple', :or_tsquery)) * 0.8 AS score,
+                       2 AS match_priority
+                FROM global_search_index
+                WHERE search_vector @@ to_tsquery('simple', :or_tsquery)
+                  AND id NOT IN (SELECT id FROM exact_matches)
+                {filter_clause}
+            ),
+            ilike_matches AS (
+                SELECT id, label, type, subtype, extra_info,
+                       similarity(label, :query) * 0.6 AS score,
+                       3 AS match_priority
+                FROM global_search_index
+                WHERE label ILIKE :query_like
+                  AND id NOT IN (SELECT id FROM exact_matches)
+                  AND id NOT IN (SELECT id FROM prefix_matches)
+                {filter_clause}
+            ),
+            combined AS (
+                SELECT * FROM exact_matches
+                UNION ALL
+                SELECT * FROM prefix_matches
+                UNION ALL
+                SELECT * FROM ilike_matches
+            )
+            SELECT id, label, type, subtype, extra_info, score
+            FROM combined
+            ORDER BY match_priority ASC, score DESC, label ASC
             LIMIT :limit OFFSET :offset
         """)
 
@@ -67,7 +153,7 @@ class GlobalSearchRepository:
         return [dict(row._mapping) for row in result.fetchall()]
 
     async def count(self, query: str, type_filter: str | None = None) -> dict[str, int]:
-        """Get counts grouped by type.
+        """Get counts grouped by type using hybrid search.
 
         Args:
             query: Search query string
@@ -76,14 +162,23 @@ class GlobalSearchRepository:
         Returns:
             Dictionary mapping type names to counts
         """
+        or_tsquery = self._build_or_tsquery(query)
+        # Hybrid count: exact FTS + OR prefix FTS + ILIKE
         sql = text("""
+            WITH all_matches AS (
+                SELECT DISTINCT id, type FROM global_search_index
+                WHERE search_vector @@ plainto_tsquery('simple', :query)
+                   OR search_vector @@ to_tsquery('simple', :or_tsquery)
+                   OR label ILIKE :query_like
+            )
             SELECT type, COUNT(*) as count
-            FROM global_search_index
-            WHERE search_vector @@ websearch_to_tsquery('english', :query)
+            FROM all_matches
             GROUP BY type
             ORDER BY count DESC
         """)
-        result = await self.db.execute(sql, {"query": query})
+        result = await self.db.execute(
+            sql, {"query": query, "or_tsquery": or_tsquery, "query_like": f"%{query}%"}
+        )
         rows = result.fetchall()
         return {str(r._mapping["type"]): int(r._mapping["count"]) for r in rows}
 
@@ -179,13 +274,17 @@ class PhenopacketSearchRepository:
         conditions = ["deleted_at IS NULL"]
         select_extra = ""
 
-        # Full-text search
+        # Full-text search using 'simple' config for scientific notation
         if query:
             select_extra = (
-                ", ts_rank(search_vector, plainto_tsquery('english', :query)) AS rank"
+                ", ts_rank(search_vector, plainto_tsquery('simple', :query)) AS rank"
             )
-            conditions.append("search_vector @@ plainto_tsquery('english', :query)")
+            conditions.append(
+                "(search_vector @@ plainto_tsquery('simple', :query) "
+                "OR phenopacket::text ILIKE :query_like)"
+            )
             params["query"] = query
+            params["query_like"] = f"%{query}%"
 
         # HPO filter
         if filters.get("hpo_id"):
@@ -288,8 +387,12 @@ class PhenopacketSearchRepository:
         conditions = ["deleted_at IS NULL"]
 
         if query:
-            conditions.append("search_vector @@ plainto_tsquery('english', :query)")
+            conditions.append(
+                "(search_vector @@ plainto_tsquery('simple', :query) "
+                "OR phenopacket::text ILIKE :query_like)"
+            )
             params["query"] = query
+            params["query_like"] = f"%{query}%"
 
         if filters.get("hpo_id"):
             conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
