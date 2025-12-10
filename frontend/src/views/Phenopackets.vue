@@ -68,7 +68,7 @@
           <!-- Create Button - Curator/Admin only -->
           <div v-if="canCreatePhenopacket" class="d-flex align-center pr-4">
             <v-divider vertical class="mx-2" />
-            <v-tooltip text="Create New" location="bottom">
+            <v-tooltip text="Create New" location="bottom" aria-label="Create new phenopacket">
               <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
@@ -76,6 +76,7 @@
                   variant="text"
                   color="success"
                   size="small"
+                  aria-label="Create new phenopacket"
                   @click="navigateToCreate"
                 />
               </template>

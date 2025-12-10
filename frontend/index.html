@@ -84,6 +84,25 @@
       #app { min-height: 100vh; }
       /* Hide unhydrated app to prevent FOUC */
       #app:empty { visibility: hidden; }
+      /* Critical above-the-fold styles for faster FCP */
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      /* App bar placeholder to prevent CLS */
+      .v-app-bar { height: 64px; }
+      /* Skeleton loading states */
+      .v-skeleton-loader__bone {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s infinite;
+      }
+      @keyframes skeleton-loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
     </style>
 
     <!-- JSON-LD Structured Data: Organization -->
@@ -202,6 +221,177 @@
           "Genetic variants",
           "Disease classifications (MONDO)",
           "Publication references"
+        ]
+      }
+    </script>
+
+    <!-- Bioschemas: Gene (HNF1B) - Life Sciences extension of Schema.org -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Gene",
+        "@id": "https://hnf1b.org/#gene-hnf1b",
+        "name": "HNF1B",
+        "alternateName": ["TCF2", "HNF1 homeobox B", "Transcription factor 2"],
+        "description": "HNF1 homeobox B encodes a transcription factor required for embryonic development of the liver, kidney, and pancreas. Mutations cause maturity-onset diabetes of the young type 5 (MODY5) and renal cysts and diabetes syndrome (RCAD).",
+        "identifier": [
+          {
+            "@type": "PropertyValue",
+            "name": "HGNC",
+            "value": "11630",
+            "url": "https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/HGNC:11630"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Ensembl",
+            "value": "ENSG00000275410",
+            "url": "https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=ENSG00000275410"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "NCBI Gene",
+            "value": "6928",
+            "url": "https://www.ncbi.nlm.nih.gov/gene/6928"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "OMIM",
+            "value": "189907",
+            "url": "https://omim.org/entry/189907"
+          }
+        ],
+        "taxonomicRange": {
+          "@type": "Taxon",
+          "name": "Homo sapiens",
+          "identifier": "9606"
+        },
+        "encodesBioChemEntity": {
+          "@type": "Protein",
+          "name": "Hepatocyte nuclear factor 1-beta",
+          "identifier": "P35680"
+        },
+        "isPartOfBioChemEntity": {
+          "@type": "BioChemEntity",
+          "name": "Chromosome 17",
+          "description": "Human chromosome 17, band q12 (17q12)",
+          "identifier": "NC_000017.11"
+        },
+        "subjectOf": {
+          "@id": "https://hnf1b.org/#dataset"
+        }
+      }
+    </script>
+
+    <!-- Bioschemas: MedicalCondition (RCAD/MODY5) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "MedicalCondition",
+        "@id": "https://hnf1b.org/#condition-rcad",
+        "name": "Renal cysts and diabetes syndrome",
+        "alternateName": ["RCAD", "MODY5", "Maturity-onset diabetes of the young type 5", "HNF1B-related disorder"],
+        "description": "A rare genetic condition caused by mutations in the HNF1B gene, characterized by renal cysts, diabetes mellitus, and other developmental abnormalities of the kidneys, liver, and pancreas.",
+        "code": [
+          {
+            "@type": "MedicalCode",
+            "codeValue": "MONDO:0010894",
+            "codingSystem": "MONDO",
+            "url": "https://monarchinitiative.org/disease/MONDO:0010894"
+          },
+          {
+            "@type": "MedicalCode",
+            "codeValue": "ORPHA:2106",
+            "codingSystem": "Orphanet",
+            "url": "https://www.orpha.net/en/disease/detail/2106"
+          },
+          {
+            "@type": "MedicalCode",
+            "codeValue": "137920",
+            "codingSystem": "OMIM",
+            "url": "https://omim.org/entry/137920"
+          }
+        ],
+        "associatedAnatomy": [
+          {
+            "@type": "AnatomicalStructure",
+            "name": "Kidney"
+          },
+          {
+            "@type": "AnatomicalStructure",
+            "name": "Pancreas"
+          },
+          {
+            "@type": "AnatomicalStructure",
+            "name": "Liver"
+          }
+        ],
+        "signOrSymptom": [
+          {
+            "@type": "MedicalSignOrSymptom",
+            "name": "Renal cysts",
+            "code": {
+              "@type": "MedicalCode",
+              "codeValue": "HP:0000107",
+              "codingSystem": "HPO"
+            }
+          },
+          {
+            "@type": "MedicalSignOrSymptom",
+            "name": "Diabetes mellitus",
+            "code": {
+              "@type": "MedicalCode",
+              "codeValue": "HP:0000819",
+              "codingSystem": "HPO"
+            }
+          },
+          {
+            "@type": "MedicalSignOrSymptom",
+            "name": "Hypomagnesemia",
+            "code": {
+              "@type": "MedicalCode",
+              "codeValue": "HP:0002917",
+              "codingSystem": "HPO"
+            }
+          }
+        ],
+        "possibleTreatment": {
+          "@type": "MedicalTherapy",
+          "name": "Management of individual symptoms including diabetes control and renal monitoring"
+        }
+      }
+    </script>
+
+    <!-- Bioschemas: DataCatalog (links datasets together) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "DataCatalog",
+        "@id": "https://hnf1b.org/#datacatalog",
+        "name": "HNF1B Database Collections",
+        "description": "Data catalog containing phenopackets, variants, and publications related to HNF1B gene disorders",
+        "url": "https://hnf1b.org",
+        "provider": {
+          "@id": "https://hnf1b.org/#organization"
+        },
+        "dataset": [
+          {
+            "@type": "Dataset",
+            "name": "HNF1B Phenopackets",
+            "url": "https://hnf1b.org/phenopackets",
+            "description": "864 clinical phenotype records in GA4GH Phenopackets v2 format"
+          },
+          {
+            "@type": "Dataset",
+            "name": "HNF1B Variants",
+            "url": "https://hnf1b.org/variants",
+            "description": "198 curated genetic variants with VEP annotations"
+          },
+          {
+            "@type": "Dataset",
+            "name": "HNF1B Publications",
+            "url": "https://hnf1b.org/publications",
+            "description": "141 peer-reviewed publications on HNF1B-related disorders"
+          }
         ]
       }
     </script>

@@ -124,12 +124,19 @@
 
       <!-- Render HG38 with truncation for long values -->
       <template #item.hg38="{ item }">
-        <v-tooltip v-if="item.hg38 && item.hg38.length > 30" location="top">
+        <v-tooltip
+          v-if="item.hg38 && item.hg38.length > 30"
+          location="top"
+          :aria-label="`Full HG38 coordinate: ${item.hg38}`"
+        >
           <template #activator="{ props }">
             <span
               v-bind="props"
               class="text-truncate d-inline-block text-body-2"
               style="max-width: 200px; cursor: help"
+              role="button"
+              tabindex="0"
+              :aria-label="`HG38 coordinate: ${item.hg38}`"
             >
               {{ item.hg38 }}
             </span>

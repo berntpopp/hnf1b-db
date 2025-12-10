@@ -17,6 +17,7 @@
           :key="index"
           location="top"
           max-width="320"
+          :aria-label="`${feature.type.label} - ${feature.type.id}`"
         >
           <template #activator="{ props }">
             <v-chip
@@ -28,6 +29,7 @@
               size="small"
               class="feature-chip"
               label
+              :aria-label="`${feature.type.label} (${feature.type.id}) - Click to view in HPO Browser`"
             >
               <!-- Feature name -->
               <span class="feature-name">{{ feature.type.label }}</span>
