@@ -155,10 +155,10 @@ const healthTooltip = computed(() => {
     const lastCheck = backendHealth.value.lastCheck
       ? new Date(backendHealth.value.lastCheck).toLocaleTimeString()
       : 'Never';
-    return `Backend Online\nResponse Time: ${responseTime.value}ms\nLast Check: ${lastCheck}`;
+    return `${healthStatus.value.text}, ${responseTime.value}ms response time, last check ${lastCheck}`;
   } else {
     const error = backendHealth.value.error || 'Unknown error';
-    return `Backend Offline\nError: ${error}`;
+    return `Backend Offline - ${error}`;
   }
 });
 

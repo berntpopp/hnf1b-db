@@ -103,7 +103,7 @@
                         <v-icon :color="`${section.color}-darken-2`">{{ feature.icon }}</v-icon>
                       </v-avatar>
                       <div>
-                        <h4 class="text-subtitle-1 font-weight-bold">{{ feature.title }}</h4>
+                        <p class="text-subtitle-1 font-weight-bold mb-0">{{ feature.title }}</p>
                         <p class="text-body-2 text-grey-darken-1">
                           {{ feature.description }}
                         </p>
