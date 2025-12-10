@@ -85,7 +85,12 @@
       <template #item.external_links="{ item }">
         <div class="d-flex align-center ga-1">
           <!-- PubMed external link -->
-          <v-tooltip v-if="item.pmid" location="top" text="View on PubMed">
+          <v-tooltip
+            v-if="item.pmid"
+            location="top"
+            text="View on PubMed"
+            aria-label="View on PubMed"
+          >
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
@@ -95,13 +100,14 @@
                 size="x-small"
                 variant="text"
                 color="orange-darken-2"
+                aria-label="View on PubMed"
               >
                 <v-icon size="small">mdi-book-open-variant</v-icon>
               </v-btn>
             </template>
           </v-tooltip>
           <!-- DOI external link -->
-          <v-tooltip v-if="item.doi" location="top" text="View DOI">
+          <v-tooltip v-if="item.doi" location="top" text="View DOI" aria-label="View DOI">
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
@@ -111,6 +117,7 @@
                 size="x-small"
                 variant="text"
                 color="blue-darken-2"
+                aria-label="View DOI"
               >
                 <v-icon size="small">mdi-link-variant</v-icon>
               </v-btn>

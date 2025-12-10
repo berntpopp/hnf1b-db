@@ -5,7 +5,7 @@
     <v-card-title class="text-h6 bg-grey-lighten-4">
       <v-icon left color="secondary"> mdi-cube-outline </v-icon>
       HNF1B 3D Structure (PDB: 2H8R)
-      <v-tooltip location="bottom">
+      <v-tooltip location="bottom" aria-label="View in RCSB PDB">
         <template #activator="{ props }">
           <v-btn
             icon
@@ -15,6 +15,7 @@
             href="https://www.rcsb.org/structure/2H8R"
             target="_blank"
             class="ml-1"
+            aria-label="View in RCSB PDB"
           >
             <v-icon size="small"> mdi-open-in-new </v-icon>
           </v-btn>

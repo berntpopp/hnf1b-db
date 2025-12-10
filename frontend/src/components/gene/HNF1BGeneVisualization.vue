@@ -10,7 +10,14 @@
           ? '17q12 Region - Copy Number Variants'
           : 'HNF1B Gene - SNVs and Small Variants'
       }}
-      <v-tooltip location="bottom">
+      <v-tooltip
+        location="bottom"
+        :aria-label="
+          effectiveViewMode === 'cnv'
+            ? 'View 17q12 region in UCSC Genome Browser'
+            : 'View HNF1B in UCSC Genome Browser'
+        "
+      >
         <template #activator="{ props }">
           <v-btn
             icon
@@ -24,6 +31,11 @@
             "
             target="_blank"
             class="ml-1"
+            :aria-label="
+              effectiveViewMode === 'cnv'
+                ? 'View 17q12 region in UCSC Genome Browser (GRCh38)'
+                : 'View HNF1B in UCSC Genome Browser (GRCh38)'
+            "
           >
             <v-icon size="small"> mdi-open-in-new </v-icon>
           </v-btn>

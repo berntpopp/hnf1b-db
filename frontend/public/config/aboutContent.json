@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "title": "About HNF1B Database",
+    "subtitle": "A curated resource for HNF1B-related clinical and genetic data",
+    "icon": "mdi-information-outline"
+  },
+  "sections": [
+    {
+      "id": "background",
+      "title": "Background",
+      "icon": "mdi-book-open-variant",
+      "color": "teal",
+      "content": {
+        "intro": "Pathogenic variants in **HNF1B** (Hepatocyte Nuclear Factor 1-Beta) are associated with a variety of inherited kidney diseases including:",
+        "conditions": [
+          {
+            "acronym": "RCAD",
+            "name": "Renal Cysts and Diabetes Syndrome"
+          },
+          {
+            "acronym": "CAKUT",
+            "name": "Congenital Anomalies of Kidney and Urinary Tract"
+          },
+          {
+            "acronym": "ADTKD",
+            "name": "Autosomal Dominant Tubulointerstitial Kidney Disease"
+          },
+          {
+            "acronym": "MODY5",
+            "name": "Maturity-Onset Diabetes of the Young, type 5"
+          },
+          {
+            "acronym": "17q12 Deletion",
+            "name": "17q12 Deletion Syndrome"
+          }
+        ],
+        "outro": "Variable extrarenal manifestations have also been linked to HNF1B defects, including genital tract abnormalities, gout, pancreatic insufficiency, electrolyte abnormalities, liver disease, and neuropsychological disorders."
+      }
+    },
+    {
+      "id": "mission",
+      "title": "Mission",
+      "icon": "mdi-target",
+      "color": "blue",
+      "content": {
+        "paragraphs": [
+          "Although high-throughput sequencing has greatly advanced diagnostic variant detection, there is a lack of specific databases gathering both genotypic and phenotypic information to establish valid genotype-phenotype correlations.",
+          "By introducing the **HNF1B Database**, we aim to gather published and unpublished cases for identification of reliable variant-disease associations, ultimately improving clinical management and genetic counseling."
+        ]
+      }
+    },
+    {
+      "id": "methodology",
+      "title": "Methodology",
+      "icon": "mdi-flask",
+      "color": "purple",
+      "content": {
+        "features": [
+          {
+            "icon": "mdi-file-document-multiple",
+            "title": "Systematic Literature Review",
+            "description": "Comprehensive review of all published cases with HNF1B-associated disease from 1997 onwards."
+          },
+          {
+            "icon": "mdi-account-group",
+            "title": "Unpublished Cohorts",
+            "description": "Integration of locally recruited cohorts with comprehensive clinical and genetic data."
+          },
+          {
+            "icon": "mdi-medical-bag",
+            "title": "HPO Ontology",
+            "description": "Phenotypes annotated using Human Phenotype Ontology (HPO) terms for standardized clinical characterization."
+          },
+          {
+            "icon": "mdi-dna",
+            "title": "Variant Harmonization",
+            "description": "Variants harmonized to HGVS nomenclature (NM_000458.4) with ACMG/AMP classification."
+          }
+        ]
+      }
+    },
+    {
+      "id": "standards",
+      "title": "Data Standards",
+      "icon": "mdi-database-check",
+      "color": "green",
+      "content": {
+        "features": [
+          {
+            "icon": "mdi-card-account-details",
+            "title": "GA4GH Phenopackets v2",
+            "description": "All clinical data stored using the international standard for phenotypic data exchange."
+          },
+          {
+            "icon": "mdi-dna",
+            "title": "VRS 2.0 Compliant",
+            "description": "Variant representations follow the GA4GH Variation Representation Specification."
+          },
+          {
+            "icon": "mdi-api",
+            "title": "Open REST API",
+            "description": "Programmatic access via JSON:API v1.1 compliant endpoints."
+          },
+          {
+            "icon": "mdi-code-braces",
+            "title": "Open Source",
+            "description": "Built with Vue.js 3, FastAPI, and PostgreSQL. Source code available on GitHub."
+          }
+        ]
+      }
+    },
+    {
+      "id": "citation",
+      "title": "How to Cite",
+      "icon": "mdi-format-quote-close",
+      "color": "amber",
+      "content": {
+        "intro": "If you use data from the HNF1B Database in your research, please cite:",
+        "formats": {
+          "apa": {
+            "label": "APA 7th Edition",
+            "template": "HNF1B Database. ({year}). *HNF1B Database: Clinical phenotype and variant registry*. https://hnf1b.org"
+          },
+          "bibtex": {
+            "label": "BibTeX",
+            "template": "@misc{hnf1b_database_{year},\n  author = {{HNF1B Database}},\n  title = {HNF1B Database: Clinical Phenotype and Variant Registry},\n  year = {{year}},\n  url = {https://hnf1b.org},\n  note = {Accessed: {date}}\n}"
+          }
+        }
+      }
+    },
+    {
+      "id": "contributing",
+      "title": "Contributing",
+      "icon": "mdi-account-group",
+      "color": "orange",
+      "content": {
+        "intro": "We welcome contributions from the clinical and research community. If you have:",
+        "items": [
+          {
+            "icon": "mdi-plus-circle",
+            "text": "New cases with HNF1B variants"
+          },
+          {
+            "icon": "mdi-pencil",
+            "text": "Corrections or updates to existing data"
+          },
+          {
+            "icon": "mdi-file-document",
+            "text": "Published literature not yet included"
+          }
+        ],
+        "contact": {
+          "text": "Please contact us via",
+          "linkText": "GitHub Issues",
+          "linkUrl": "https://github.com/berntpopp/hnf1b-db/issues"
+        }
+      }
+    },
+    {
+      "id": "license",
+      "title": "License",
+      "icon": "mdi-license",
+      "color": "grey",
+      "content": {
+        "type": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "badgeUrl": "https://licensebuttons.net/l/by/4.0/88x31.png",
+        "name": "Creative Commons Attribution 4.0 International License",
+        "description": "You are free to share and adapt the data with proper attribution."
+      }
+    }
+  ]
+}

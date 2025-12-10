@@ -9,9 +9,17 @@
       />
 
       <!-- Logo (all screen sizes) - wrapped in tooltip -->
-      <v-tooltip location="bottom" :text="tooltipText">
+      <v-tooltip location="bottom" :text="tooltipText" :aria-label="tooltipText">
         <template #activator="{ props: tooltipProps }">
-          <div class="logo-container mr-2 mr-sm-4" v-bind="tooltipProps" @click="navigateHome">
+          <div
+            class="logo-container mr-2 mr-sm-4"
+            v-bind="tooltipProps"
+            role="button"
+            tabindex="0"
+            aria-label="HNF1B Database - Click to go home"
+            @click="navigateHome"
+            @keydown.enter="navigateHome"
+          >
             <img
               src="/HNF1B-db_logo.svg"
               alt="HNF1B Database Logo"
@@ -35,6 +43,7 @@
           :key="item.route"
           location="bottom"
           :text="item.tooltip"
+          :aria-label="item.tooltip"
         >
           <template #activator="{ props: navTooltipProps }">
             <v-btn
@@ -43,7 +52,7 @@
               :prepend-icon="item.icon"
               variant="text"
               :class="{ 'v-btn--active': isActiveRoute(item.route) }"
-              :aria-label="`Navigate to ${item.label}`"
+              :aria-label="`${item.label} - ${item.tooltip}`"
             >
               {{ item.label }}
             </v-btn>
@@ -53,13 +62,17 @@
         <!-- Curate Menu (curator/admin only) -->
         <v-menu v-if="canCurate" location="bottom">
           <template #activator="{ props: menuProps }">
-            <v-tooltip location="bottom" text="Data curation actions">
+            <v-tooltip
+              location="bottom"
+              text="Data curation actions"
+              aria-label="Data curation actions"
+            >
               <template #activator="{ props: curateTooltipProps }">
                 <v-btn
                   v-bind="{ ...menuProps, ...curateTooltipProps }"
                   prepend-icon="mdi-pencil-plus"
                   variant="text"
-                  aria-label="Curation menu"
+                  aria-label="Curate - Data curation actions"
                 >
                   Curate
                   <v-icon right size="small">mdi-menu-down</v-icon>
@@ -133,7 +146,11 @@
         </v-menu>
       </div>
       <div v-else class="ml-4">
-        <v-tooltip location="bottom" text="Sign in to your account">
+        <v-tooltip
+          location="bottom"
+          text="Sign in to your account"
+          aria-label="Sign in to your account"
+        >
           <template #activator="{ props: loginTooltipProps }">
             <v-btn icon to="/login" aria-label="Login" v-bind="loginTooltipProps">
               <v-icon>mdi-login</v-icon>

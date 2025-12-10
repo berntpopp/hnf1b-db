@@ -1,19 +1,34 @@
-# HNF1B Database - Robots.txt
-# https://hnf1b.org/robots.txt
+# robots.txt for HNF1B Database
+# https://hnf1b.org
 
+# Allow all crawlers access to public pages
 User-agent: *
 Allow: /
+Allow: /phenopackets
+Allow: /publications
+Allow: /variants
+Allow: /aggregations
 
-# Disallow admin/internal pages
+# Disallow admin and authentication pages
 Disallow: /login
+Disallow: /admin
 Disallow: /user
-Disallow: /phenopacket/create
-Disallow: /phenopacket/edit
-Disallow: /phenopackets/create
-Disallow: /phenopackets/*/edit
+
+# Disallow API endpoints (use api.hnf1b.org instead)
+Disallow: /api/
+
+# Crawl rate limiting (be nice to the server)
+Crawl-delay: 1
 
 # Sitemap location
 Sitemap: https://hnf1b.org/sitemap.xml
 
-# Crawl-delay for polite crawling
-Crawl-delay: 1
+# Special rules for Google Scholar
+# Allow indexing of publication pages for academic discovery
+User-agent: Googlebot-Scholar
+Allow: /publications
+Allow: /publications/*
+
+# Special rules for Google News (not applicable but good practice)
+User-agent: Googlebot-News
+Disallow: /
