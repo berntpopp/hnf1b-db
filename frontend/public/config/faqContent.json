@@ -1,0 +1,312 @@
+{
+  "meta": {
+    "title": "Frequently Asked Questions",
+    "subtitle": "Common questions about HNF1B-related disease and our database",
+    "icon": "mdi-frequently-asked-questions"
+  },
+  "categories": [
+    {
+      "id": "disease",
+      "name": "About HNF1B Disease",
+      "color": "teal",
+      "questions": [
+        {
+          "id": "what-is-hnf1b",
+          "question": "What is HNF1B-related disease?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "HNF1B-related disease refers to a spectrum of conditions caused by pathogenic variants in the **HNF1B** gene (Hepatocyte Nuclear Factor 1-Beta), also known as TCF2 (Transcription Factor 2). HNF1B is a transcription factor crucial for the development and function of the kidney, liver, intestine, and pancreatic beta cells."
+              },
+              {
+                "type": "paragraph",
+                "text": "Associated conditions include:"
+              },
+              {
+                "type": "list",
+                "items": [
+                  "**RCAD** (Renal Cysts and Diabetes Syndrome) - the most common presentation",
+                  "**MODY5** (Maturity-Onset Diabetes of the Young, type 5)",
+                  "**17q12 Deletion Syndrome** - often includes neurodevelopmental features",
+                  "**ADTKD** (Autosomal Dominant Tubulointerstitial Kidney Disease)",
+                  "**CAKUT** (Congenital Anomalies of Kidney and Urinary Tract)"
+                ]
+              },
+              {
+                "type": "paragraph",
+                "text": "The condition follows autosomal dominant inheritance, though approximately 50% of cases occur de novo (new mutations not inherited from parents)."
+              }
+            ]
+          }
+        },
+        {
+          "id": "symptoms",
+          "question": "What symptoms are associated with HNF1B variants?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "HNF1B-related disease shows remarkable phenotypic variability. Common manifestations include:"
+              },
+              {
+                "type": "columns",
+                "columns": [
+                  {
+                    "title": "Renal Features",
+                    "items": [
+                      "Renal cysts (most common)",
+                      "Renal hypoplasia/dysplasia",
+                      "Chronic kidney disease",
+                      "Hyperuricemia/Gout",
+                      "Hypomagnesemia"
+                    ]
+                  },
+                  {
+                    "title": "Extrarenal Features",
+                    "items": [
+                      "Diabetes mellitus (MODY5)",
+                      "Pancreatic hypoplasia",
+                      "Genital tract abnormalities",
+                      "Liver abnormalities",
+                      "Neurodevelopmental delay (especially in 17q12 deletions)"
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "alert",
+                "alertType": "info",
+                "text": "Genotype-phenotype correlations suggest that variant type (CNV vs. missense vs. truncating) influences which features predominate."
+              }
+            ]
+          }
+        },
+        {
+          "id": "variant-types",
+          "question": "What types of HNF1B variants are there?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "HNF1B variants fall into several categories:"
+              },
+              {
+                "type": "variantList",
+                "variants": [
+                  {
+                    "chip": "CNV",
+                    "chipColor": "error",
+                    "title": "17q12 Deletion/Duplication",
+                    "description": "Large ~1.4Mb deletions affecting HNF1B and neighboring genes. Most common variant type (~45% of cases)."
+                  },
+                  {
+                    "chip": "SNV",
+                    "chipColor": "warning",
+                    "title": "Missense Variants",
+                    "description": "Single amino acid changes. May have dominant-negative effects on protein function."
+                  },
+                  {
+                    "chip": "SNV",
+                    "chipColor": "purple",
+                    "title": "Truncating Variants",
+                    "description": "Frameshift, nonsense, or splice site variants causing premature protein termination."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "database",
+      "name": "About the Database",
+      "color": "blue",
+      "questions": [
+        {
+          "id": "database-content",
+          "question": "What data does this database contain?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "The HNF1B Database currently contains:"
+              },
+              {
+                "type": "stats",
+                "stats": [
+                  { "value": "864", "label": "Individuals", "color": "teal" },
+                  { "value": "198", "label": "Unique Variants", "color": "pink" },
+                  { "value": "141", "label": "Publications", "color": "blue" },
+                  { "value": "36", "label": "HPO Phenotypes", "color": "purple" }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "text": "Data sources include a systematic literature review (1997-2021) and unpublished cohorts from collaborating centers."
+              }
+            ]
+          }
+        },
+        {
+          "id": "data-standards",
+          "question": "What data standards does the database use?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "We use internationally recognized standards to ensure data interoperability:"
+              },
+              {
+                "type": "checklist",
+                "items": [
+                  { "text": "**GA4GH Phenopackets v2** - Clinical data schema" },
+                  { "text": "**HPO** - Human Phenotype Ontology for phenotype annotation" },
+                  { "text": "**HGVS** - Variant nomenclature (NM_000458.4)" },
+                  { "text": "**VRS 2.0** - GA4GH Variation Representation Specification" },
+                  { "text": "**ACMG/AMP** - Variant classification guidelines" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "api-access",
+          "question": "Can I access the data programmatically?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "Yes! The database provides a RESTful API compliant with JSON:API v1.1 specification. You can:"
+              },
+              {
+                "type": "list",
+                "items": [
+                  "Retrieve phenopackets with pagination",
+                  "Search by clinical and genetic parameters",
+                  "Access aggregation endpoints for statistical summaries",
+                  "Query variant annotations via Ensembl VEP integration"
+                ]
+              },
+              {
+                "type": "button",
+                "text": "View API Documentation",
+                "icon": "mdi-api",
+                "url": "/api/v2/docs",
+                "external": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "clinical",
+      "name": "Clinical Information",
+      "color": "orange",
+      "questions": [
+        {
+          "id": "pathogenicity",
+          "question": "How is variant pathogenicity determined?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "Variant pathogenicity is assessed according to **ACMG/AMP criteria** via InterVar, with subsequent manual curation by expert physicians. Variants are classified as:"
+              },
+              {
+                "type": "chips",
+                "chips": [
+                  { "label": "Pathogenic (P)", "color": "error" },
+                  { "label": "Likely Pathogenic (LP)", "color": "orange" },
+                  { "label": "VUS", "color": "grey" },
+                  { "label": "Likely Benign (LB)", "color": "info" },
+                  { "label": "Benign (B)", "color": "success" }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "text": "Additional annotations include CADD scores, gnomAD population frequencies, and computational predictions from dbNSFP."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "contributing",
+      "name": "Contributing & Citation",
+      "color": "green",
+      "questions": [
+        {
+          "id": "submit-data",
+          "question": "How can I submit data to the database?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "We welcome contributions from clinicians and researchers. To submit data:"
+              },
+              {
+                "type": "numberedList",
+                "items": [
+                  {
+                    "text": "**Contact us** via [GitHub Issues](https://github.com/berntpopp/hnf1b-db/issues)"
+                  },
+                  {
+                    "text": "**Curator access** can be granted for direct data entry through our web interface"
+                  },
+                  { "text": "**Bulk submissions** are possible via phenopacket JSON format" }
+                ]
+              },
+              {
+                "type": "alert",
+                "alertType": "info",
+                "text": "All data is reviewed by expert physicians before inclusion in the public database."
+              }
+            ]
+          }
+        },
+        {
+          "id": "citation",
+          "question": "How should I cite this database?",
+          "answer": {
+            "type": "mixed",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "Please cite (APA 7th Edition format):"
+              },
+              {
+                "type": "citation",
+                "text": "HNF1B Database. (2025). *HNF1B Database: Clinical phenotype and variant registry*. https://hnf1b.org"
+              },
+              {
+                "type": "paragraph",
+                "text": "For detailed citation formats including BibTeX, see the [About page](/about)."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "contact": {
+    "title": "Still have questions?",
+    "text": "If you couldn't find the answer you're looking for, please reach out:",
+    "button": {
+      "text": "Open an Issue on GitHub",
+      "icon": "mdi-github",
+      "url": "https://github.com/berntpopp/hnf1b-db/issues"
+    }
+  }
+}

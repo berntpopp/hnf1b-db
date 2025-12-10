@@ -1,357 +1,272 @@
 <!-- src/views/About.vue -->
+<!--
+  About page rendered from JSON configuration.
+
+  Features:
+  - Content loaded from /config/aboutContent.json
+  - Flexible section rendering based on JSON structure
+  - Supports markdown-like syntax for bold text
+  - Dynamic citation generation with current date
+-->
 <template>
   <v-container class="py-8">
     <v-row justify="center">
       <v-col cols="12" md="10" lg="8">
-        <!-- Page Header -->
-        <div class="text-center mb-8">
-          <v-avatar color="teal" size="80" class="mb-4">
-            <v-icon size="48" color="white">mdi-information-outline</v-icon>
-          </v-avatar>
-          <h1 class="text-h3 font-weight-bold text-grey-darken-3 mb-2">About HNF1B Database</h1>
-          <p class="text-h6 text-grey-darken-1">
-            A curated resource for HNF1B-related clinical and genetic data
-          </p>
+        <!-- Loading State -->
+        <div v-if="loading" class="text-center py-12">
+          <v-progress-circular indeterminate color="teal" size="64" />
+          <p class="mt-4 text-grey-darken-1">Loading content...</p>
         </div>
 
-        <!-- Background Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-teal-lighten-5">
-            <v-icon left color="teal">mdi-book-open-variant</v-icon>
-            Background
-          </v-card-title>
-          <v-card-text class="text-body-1 pa-6">
-            <p class="mb-4">
-              Pathogenic variants in <strong>HNF1B</strong> (Hepatocyte Nuclear Factor 1-Beta) are
-              associated with a variety of inherited kidney diseases including:
-            </p>
-            <v-list density="compact" class="mb-4">
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="teal" size="small">mdi-check-circle</v-icon>
-                </template>
-                <v-list-item-title>
-                  <strong>RCAD</strong> - Renal Cysts and Diabetes Syndrome
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="teal" size="small">mdi-check-circle</v-icon>
-                </template>
-                <v-list-item-title>
-                  <strong>CAKUT</strong> - Congenital Anomalies of Kidney and Urinary Tract
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="teal" size="small">mdi-check-circle</v-icon>
-                </template>
-                <v-list-item-title>
-                  <strong>ADTKD</strong> - Autosomal Dominant Tubulointerstitial Kidney Disease
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="teal" size="small">mdi-check-circle</v-icon>
-                </template>
-                <v-list-item-title>
-                  <strong>MODY5</strong> - Maturity-Onset Diabetes of the Young, type 5
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="teal" size="small">mdi-check-circle</v-icon>
-                </template>
-                <v-list-item-title>
-                  <strong>17q12 Deletion Syndrome</strong>
-                </v-list-item-title>
-              </v-list-item>
-            </v-list>
-            <p>
-              Variable extrarenal manifestations have also been linked to HNF1B defects, including
-              genital tract abnormalities, gout, pancreatic insufficiency, electrolyte
-              abnormalities, liver disease, and neuropsychological disorders.
-            </p>
-          </v-card-text>
-        </v-card>
+        <!-- Error State -->
+        <v-alert v-else-if="error" type="error" variant="tonal" class="mb-6">
+          {{ error }}
+        </v-alert>
 
-        <!-- Mission Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-blue-lighten-5">
-            <v-icon left color="blue">mdi-target</v-icon>
-            Mission
-          </v-card-title>
-          <v-card-text class="text-body-1 pa-6">
-            <p class="mb-4">
-              Although high-throughput sequencing has greatly advanced diagnostic variant detection,
-              there is a lack of specific databases gathering both genotypic and phenotypic
-              information to establish valid genotype-phenotype correlations.
+        <!-- Content Loaded -->
+        <template v-else-if="content">
+          <!-- Page Header -->
+          <div class="text-center mb-8">
+            <v-avatar color="teal" size="80" class="mb-4">
+              <v-icon size="48" color="white">{{ content.meta.icon }}</v-icon>
+            </v-avatar>
+            <h1 class="text-h3 font-weight-bold text-grey-darken-3 mb-2">
+              {{ content.meta.title }}
+            </h1>
+            <p class="text-h6 text-grey-darken-1">
+              {{ content.meta.subtitle }}
             </p>
-            <p>
-              By introducing the <strong>HNF1B Database</strong>, we aim to gather published and
-              unpublished cases for identification of reliable variant-disease associations,
-              ultimately improving clinical management and genetic counseling.
-            </p>
-          </v-card-text>
-        </v-card>
+          </div>
 
-        <!-- Methods Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-purple-lighten-5">
-            <v-icon left color="purple">mdi-flask</v-icon>
-            Methodology
-          </v-card-title>
-          <v-card-text class="pa-6">
-            <v-row>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start mb-4">
-                  <v-avatar color="purple-lighten-4" size="40" class="mr-3">
-                    <v-icon color="purple-darken-2">mdi-file-document-multiple</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">Systematic Literature Review</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Comprehensive review of all published cases with HNF1B-associated disease from
-                      1997 onwards.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start mb-4">
-                  <v-avatar color="purple-lighten-4" size="40" class="mr-3">
-                    <v-icon color="purple-darken-2">mdi-account-group</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">Unpublished Cohorts</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Integration of locally recruited cohorts with comprehensive clinical and
-                      genetic data.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start">
-                  <v-avatar color="purple-lighten-4" size="40" class="mr-3">
-                    <v-icon color="purple-darken-2">mdi-medical-bag</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">HPO Ontology</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Phenotypes annotated using Human Phenotype Ontology (HPO) terms for
-                      standardized clinical characterization.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start">
-                  <v-avatar color="purple-lighten-4" size="40" class="mr-3">
-                    <v-icon color="purple-darken-2">mdi-dna</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">Variant Harmonization</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Variants harmonized to HGVS nomenclature (NM_000458.4) with ACMG/AMP
-                      classification.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-            </v-row>
-          </v-card-text>
-        </v-card>
-
-        <!-- Data Standards Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-green-lighten-5">
-            <v-icon left color="green">mdi-database-check</v-icon>
-            Data Standards
-          </v-card-title>
-          <v-card-text class="pa-6">
-            <v-row>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start mb-4">
-                  <v-avatar color="green-lighten-4" size="40" class="mr-3">
-                    <v-icon color="green-darken-2">mdi-card-account-details</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">GA4GH Phenopackets v2</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      All clinical data stored using the international standard for phenotypic data
-                      exchange.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start mb-4">
-                  <v-avatar color="green-lighten-4" size="40" class="mr-3">
-                    <v-icon color="green-darken-2">mdi-dna</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">VRS 2.0 Compliant</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Variant representations follow the GA4GH Variation Representation
-                      Specification.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start">
-                  <v-avatar color="green-lighten-4" size="40" class="mr-3">
-                    <v-icon color="green-darken-2">mdi-api</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">Open REST API</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Programmatic access via JSON:API v1.1 compliant endpoints.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="d-flex align-start">
-                  <v-avatar color="green-lighten-4" size="40" class="mr-3">
-                    <v-icon color="green-darken-2">mdi-code-braces</v-icon>
-                  </v-avatar>
-                  <div>
-                    <h4 class="text-subtitle-1 font-weight-bold">Open Source</h4>
-                    <p class="text-body-2 text-grey-darken-1">
-                      Built with Vue.js 3, FastAPI, and PostgreSQL. Source code available on GitHub.
-                    </p>
-                  </div>
-                </div>
-              </v-col>
-            </v-row>
-          </v-card-text>
-        </v-card>
-
-        <!-- How to Cite Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-amber-lighten-5">
-            <v-icon left color="amber-darken-2">mdi-format-quote-close</v-icon>
-            How to Cite
-          </v-card-title>
-          <v-card-text class="pa-6">
-            <p class="text-body-1 mb-4">
-              If you use data from the HNF1B Database in your research, please cite:
-            </p>
-            <v-sheet color="grey-lighten-4" rounded class="pa-4 mb-4">
-              <p class="text-body-2 mb-2"><strong>APA 7th Edition:</strong></p>
-              <p class="text-body-2 font-italic mb-0">
-                HNF1B Database. (2025).
-                <em>HNF1B Database: Clinical phenotype and variant registry</em>.
-                <a href="https://hnf1b.org" target="_blank">https://hnf1b.org</a>
-              </p>
-            </v-sheet>
-            <v-sheet color="grey-lighten-4" rounded class="pa-4">
-              <p class="text-body-2 mb-2"><strong>BibTeX:</strong></p>
-              <pre
-                class="text-body-2"
-                style="white-space: pre-wrap; font-family: monospace; margin: 0"
-                >{{ bibtexCitation }}</pre
-              >
-            </v-sheet>
-          </v-card-text>
-        </v-card>
-
-        <!-- Contact & Contributing Section -->
-        <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-orange-lighten-5">
-            <v-icon left color="orange">mdi-account-group</v-icon>
-            Contributing
-          </v-card-title>
-          <v-card-text class="pa-6">
-            <p class="text-body-1 mb-4">
-              We welcome contributions from the clinical and research community. If you have:
-            </p>
-            <v-list density="compact">
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="orange" size="small">mdi-plus-circle</v-icon>
-                </template>
-                <v-list-item-title>New cases with HNF1B variants</v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="orange" size="small">mdi-pencil</v-icon>
-                </template>
-                <v-list-item-title>Corrections or updates to existing data</v-list-item-title>
-              </v-list-item>
-              <v-list-item>
-                <template #prepend>
-                  <v-icon color="orange" size="small">mdi-file-document</v-icon>
-                </template>
-                <v-list-item-title>Published literature not yet included</v-list-item-title>
-              </v-list-item>
-            </v-list>
-            <v-divider class="my-4" />
-            <p class="text-body-2 text-grey-darken-1">
-              Please contact us via
-              <a href="https://github.com/berntpopp/hnf1b-db/issues" target="_blank">
-                GitHub Issues
-              </a>
-              or submit a pull request.
-            </p>
-          </v-card-text>
-        </v-card>
-
-        <!-- License Section -->
-        <v-card elevation="2">
-          <v-card-title class="bg-grey-lighten-4">
-            <v-icon left color="grey-darken-2">mdi-license</v-icon>
-            License
-          </v-card-title>
-          <v-card-text class="pa-6">
-            <div class="d-flex align-center">
-              <v-img
-                src="https://licensebuttons.net/l/by/4.0/88x31.png"
-                alt="CC BY 4.0"
-                max-width="88"
-                class="mr-4"
-              />
-              <div>
-                <p class="text-body-1 mb-2">
-                  This work is licensed under a
-                  <a
-                    href="https://creativecommons.org/licenses/by/4.0/"
-                    target="_blank"
-                    rel="noopener"
+          <!-- Dynamic Sections -->
+          <template v-for="section in content.sections" :key="section.id">
+            <!-- Background Section -->
+            <v-card v-if="section.id === 'background'" class="mb-6" elevation="2">
+              <v-card-title :class="`bg-${section.color}-lighten-5`">
+                <v-icon left :color="section.color">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="text-body-1 pa-6">
+                <p class="mb-4" v-html="renderMarkdown(section.content.intro)" />
+                <v-list density="compact" class="mb-4">
+                  <v-list-item
+                    v-for="condition in section.content.conditions"
+                    :key="condition.acronym"
                   >
-                    Creative Commons Attribution 4.0 International License </a
-                  >.
+                    <template #prepend>
+                      <v-icon :color="section.color" size="small">mdi-check-circle</v-icon>
+                    </template>
+                    <v-list-item-title>
+                      <strong>{{ condition.acronym }}</strong> - {{ condition.name }}
+                    </v-list-item-title>
+                  </v-list-item>
+                </v-list>
+                <p>{{ section.content.outro }}</p>
+              </v-card-text>
+            </v-card>
+
+            <!-- Mission Section -->
+            <v-card v-else-if="section.id === 'mission'" class="mb-6" elevation="2">
+              <v-card-title :class="`bg-${section.color}-lighten-5`">
+                <v-icon left :color="section.color">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="text-body-1 pa-6">
+                <p
+                  v-for="(para, idx) in section.content.paragraphs"
+                  :key="idx"
+                  :class="{ 'mb-4': idx < section.content.paragraphs.length - 1 }"
+                  v-html="renderMarkdown(para)"
+                />
+              </v-card-text>
+            </v-card>
+
+            <!-- Features Section (Methodology, Data Standards) -->
+            <v-card v-else-if="section.content.features" class="mb-6" elevation="2">
+              <v-card-title :class="`bg-${section.color}-lighten-5`">
+                <v-icon left :color="section.color">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="pa-6">
+                <v-row>
+                  <v-col
+                    v-for="(feature, idx) in section.content.features"
+                    :key="idx"
+                    cols="12"
+                    md="6"
+                  >
+                    <div
+                      class="d-flex align-start"
+                      :class="{ 'mb-4': idx < section.content.features.length - 2 }"
+                    >
+                      <v-avatar :color="`${section.color}-lighten-4`" size="40" class="mr-3">
+                        <v-icon :color="`${section.color}-darken-2`">{{ feature.icon }}</v-icon>
+                      </v-avatar>
+                      <div>
+                        <h4 class="text-subtitle-1 font-weight-bold">{{ feature.title }}</h4>
+                        <p class="text-body-2 text-grey-darken-1">
+                          {{ feature.description }}
+                        </p>
+                      </div>
+                    </div>
+                  </v-col>
+                </v-row>
+              </v-card-text>
+            </v-card>
+
+            <!-- Citation Section -->
+            <v-card v-else-if="section.id === 'citation'" class="mb-6" elevation="2">
+              <v-card-title :class="`bg-${section.color}-lighten-5`">
+                <v-icon left :color="`${section.color}-darken-2`">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="pa-6">
+                <p class="text-body-1 mb-4">{{ section.content.intro }}</p>
+                <v-sheet color="grey-lighten-4" rounded class="pa-4 mb-4">
+                  <p class="text-body-2 mb-2">
+                    <strong>{{ section.content.formats.apa.label }}:</strong>
+                  </p>
+                  <p
+                    class="text-body-2 font-italic mb-0"
+                    v-html="formatCitation(section.content.formats.apa.template)"
+                  />
+                </v-sheet>
+                <v-sheet color="grey-lighten-4" rounded class="pa-4">
+                  <p class="text-body-2 mb-2">
+                    <strong>{{ section.content.formats.bibtex.label }}:</strong>
+                  </p>
+                  <pre
+                    class="text-body-2"
+                    style="white-space: pre-wrap; font-family: monospace; margin: 0"
+                    >{{ formatBibtex(section.content.formats.bibtex.template) }}</pre
+                  >
+                </v-sheet>
+              </v-card-text>
+            </v-card>
+
+            <!-- Contributing Section -->
+            <v-card v-else-if="section.id === 'contributing'" class="mb-6" elevation="2">
+              <v-card-title :class="`bg-${section.color}-lighten-5`">
+                <v-icon left :color="section.color">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="pa-6">
+                <p class="text-body-1 mb-4">{{ section.content.intro }}</p>
+                <v-list density="compact">
+                  <v-list-item v-for="(item, idx) in section.content.items" :key="idx">
+                    <template #prepend>
+                      <v-icon :color="section.color" size="small">{{ item.icon }}</v-icon>
+                    </template>
+                    <v-list-item-title>{{ item.text }}</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+                <v-divider class="my-4" />
+                <p class="text-body-2 text-grey-darken-1">
+                  {{ section.content.contact.text }}
+                  <a :href="section.content.contact.linkUrl" target="_blank">
+                    {{ section.content.contact.linkText }}
+                  </a>
+                  or submit a pull request.
                 </p>
-                <p class="text-body-2 text-grey-darken-1 mb-0">
-                  You are free to share and adapt the data with proper attribution.
-                </p>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
+              </v-card-text>
+            </v-card>
+
+            <!-- License Section -->
+            <v-card v-else-if="section.id === 'license'" elevation="2">
+              <v-card-title class="bg-grey-lighten-4">
+                <v-icon left color="grey-darken-2">{{ section.icon }}</v-icon>
+                {{ section.title }}
+              </v-card-title>
+              <v-card-text class="pa-6">
+                <div class="d-flex align-center">
+                  <v-img
+                    :src="section.content.badgeUrl"
+                    :alt="section.content.type"
+                    max-width="88"
+                    class="mr-4"
+                  />
+                  <div>
+                    <p class="text-body-1 mb-2">
+                      This work is licensed under a
+                      <a :href="section.content.url" target="_blank" rel="noopener">
+                        {{ section.content.name }} </a
+                      >.
+                    </p>
+                    <p class="text-body-2 text-grey-darken-1 mb-0">
+                      {{ section.content.description }}
+                    </p>
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
+          </template>
+        </template>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
-// Computed property for current date in YYYY-MM-DD format
+// Reactive state
+const content = ref(null);
+const loading = ref(true);
+const error = ref(null);
+
+// Current date for citation
 const currentDate = computed(() => {
   return new Date().toISOString().split('T')[0];
 });
 
-// BibTeX citation with proper escaping (double braces for corporate author)
-const bibtexCitation = computed(() => {
-  return `@misc{hnf1b_database_2025,
-  author = {{HNF1B Database}},
-  title = {HNF1B Database: Clinical Phenotype and Variant Registry},
-  year = {2025},
-  url = {https://hnf1b.org},
-  note = {Accessed: ${currentDate.value}}
-}`;
+const currentYear = computed(() => {
+  return new Date().getFullYear();
+});
+
+// Methods
+const loadContent = async () => {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const response = await fetch('/config/aboutContent.json');
+    if (!response.ok) {
+      throw new Error(`Failed to load content: ${response.status}`);
+    }
+    content.value = await response.json();
+    window.logService.info('About page content loaded', {
+      sectionsCount: content.value.sections?.length,
+    });
+  } catch (err) {
+    window.logService.error('Failed to load about content', {
+      error: err.message,
+    });
+    error.value = 'Failed to load page content. Please try again later.';
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Render markdown-like syntax (bold only)
+const renderMarkdown = (text) => {
+  if (!text) return '';
+  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+};
+
+// Format citation with current year
+const formatCitation = (template) => {
+  if (!template) return '';
+  return template.replace('{year}', currentYear.value).replace(/\*(.+?)\*/g, '<em>$1</em>');
+};
+
+// Format BibTeX with current date and year
+const formatBibtex = (template) => {
+  if (!template) return '';
+  return template.replace(/{year}/g, currentYear.value).replace('{date}', currentDate.value);
+};
+
+// Lifecycle
+onMounted(() => {
+  loadContent();
 });
 </script>
