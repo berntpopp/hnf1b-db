@@ -21,6 +21,46 @@
 
     <!-- Footer Links -->
     <div class="d-flex align-center ml-auto">
+      <!-- Internal Page Links (About, FAQ) -->
+      <v-tooltip location="top" text="About HNF1B Database" aria-label="About HNF1B Database">
+        <template #activator="{ props }">
+          <v-btn
+            v-bind="props"
+            to="/about"
+            icon
+            variant="text"
+            size="small"
+            class="mx-1"
+            aria-label="About"
+          >
+            <v-icon size="small">mdi-information-outline</v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <v-tooltip
+        location="top"
+        text="Frequently Asked Questions"
+        aria-label="Frequently Asked Questions"
+      >
+        <template #activator="{ props }">
+          <v-btn
+            v-bind="props"
+            to="/faq"
+            icon
+            variant="text"
+            size="small"
+            class="mx-1"
+            aria-label="FAQ"
+          >
+            <v-icon size="small">mdi-frequently-asked-questions</v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <v-divider vertical class="mx-1" />
+
+      <!-- External Links -->
       <v-btn
         v-for="link in footerLinks"
         :key="link.id"

@@ -88,6 +88,18 @@ const routes = [
     meta: { title: 'Search Results' },
   },
   {
+    path: '/about',
+    name: 'About',
+    component: () => import(/* webpackChunkName: "about" */ '../views/About.vue'),
+    meta: { title: 'About' },
+  },
+  {
+    path: '/faq',
+    name: 'FAQ',
+    component: () => import(/* webpackChunkName: "faq" */ '../views/FAQ.vue'),
+    meta: { title: 'FAQ' },
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import(/* webpackChunkName: "login" */ '../views/Login.vue'),
