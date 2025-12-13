@@ -708,3 +708,40 @@ def get_cnv_exclusion_filter() -> str:
         >>> # Use in WHERE: AND {sql}
     """
     return f"NOT {VD_ID} ~ ':(DEL|DUP)'"
+
+
+def get_vcf_id_extraction_sql(
+    vd_path: str = "gi->'variantInterpretation'->'variationDescriptor'",
+) -> str:
+    """Generate SQL to extract normalized VCF ID for variant_annotations JOIN.
+
+    Extracts the VCF expression value from a variationDescriptor and normalizes
+    it to match the format stored in variant_annotations table:
+    - Removes 'chr' prefix (case insensitive)
+    - Converts ':' to '-'
+    - Uppercases the result
+
+    Args:
+        vd_path: SQL path to variationDescriptor (default assumes 'gi' alias)
+
+    Returns:
+        SQL expression that extracts the normalized VCF ID
+
+    Example:
+        >>> join_sql = get_vcf_id_extraction_sql()
+        >>> query = f"LEFT JOIN variant_annotations va ON va.variant_id = ({join_sql})"
+    """
+    return f"""UPPER(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                (SELECT expr->>'value'
+                 FROM jsonb_array_elements({vd_path}->'expressions') expr
+                 WHERE expr->>'syntax' = 'vcf'
+                 LIMIT 1),
+                '^chr', '', 'i'
+            ),
+            ':',
+            '-',
+            'g'
+        )
+    )"""

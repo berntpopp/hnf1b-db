@@ -26,10 +26,11 @@ from .sql_fragments import (
     CURRENT_AGE_PATH,
     HNF1B_PROTEIN_DOMAINS,
     INTERP_STATUS_PATH,
-    VARIANT_TYPE_CLASSIFICATION_SQL,
     get_cnv_exclusion_filter,
     get_missense_filter_sql,
     get_protein_domain_classification_sql,
+    get_variant_type_classification_sql,
+    get_vcf_id_extraction_sql,
 )
 
 
@@ -302,11 +303,12 @@ class VariantTypeHandler(SurvivalHandler):
     def build_current_age_query(self) -> str:  # noqa: D102
         kidney_failure_terms = settings.hpo_terms.kidney_failure
         ckd_terms = settings.hpo_terms.ckd_stages
+        variant_type_sql = get_variant_type_classification_sql()
         return f"""
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+                {variant_type_sql} AS variant_group,
                 {CURRENT_AGE_PATH} as current_age,
                 EXISTS (
                     SELECT 1
@@ -315,7 +317,9 @@ class VariantTypeHandler(SurvivalHandler):
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 ) as has_kidney_failure
             FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+            LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -330,14 +334,17 @@ class VariantTypeHandler(SurvivalHandler):
         """
 
     def build_standard_query(self, endpoint_hpo_terms: List[str]) -> str:
+        variant_type_sql = get_variant_type_classification_sql()
         return f"""
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+                {variant_type_sql} AS variant_group,
                 {CURRENT_AGE_PATH} as current_age
             FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+            LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -346,7 +353,7 @@ class VariantTypeHandler(SurvivalHandler):
             SELECT
                 vc.variant_group,
                 vc.current_age,
-                pf->>'onset' as onset_age,
+                COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM variant_classification vc
             JOIN phenopackets p ON vc.phenopacket_id = p.phenopacket_id,
@@ -359,14 +366,17 @@ class VariantTypeHandler(SurvivalHandler):
         """
 
     def _build_censored_query(self, endpoint_hpo_terms: List[str]) -> str:
+        variant_type_sql = get_variant_type_classification_sql()
         return f"""
         WITH variant_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                {VARIANT_TYPE_CLASSIFICATION_SQL} AS variant_group,
+                {variant_type_sql} AS variant_group,
                 {CURRENT_AGE_PATH} as current_age
             FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+            LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -488,7 +498,7 @@ class PathogenicityHandler(SurvivalHandler):
             SELECT
                 pc.pathogenicity_group,
                 pc.current_age,
-                pf->>'onset' as onset_age,
+                COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM pathogenicity_classification pc
             JOIN phenopackets p ON pc.phenopacket_id = p.phenopacket_id,
@@ -667,7 +677,7 @@ class DiseaseSubtypeHandler(SurvivalHandler):
             SELECT
                 c.disease_group,
                 c.current_age,
-                pf->>'onset' as onset_age,
+                COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM classified c,
                 jsonb_array_elements(c.phenopacket_data->'phenotypicFeatures') as pf
@@ -919,7 +929,7 @@ class ProteinDomainHandler(SurvivalHandler):
             SELECT
                 dc.domain_group,
                 dc.current_age,
-                pf->>'onset' as onset_age,
+                COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM domain_classification dc
             JOIN phenopackets p ON dc.phenopacket_id = p.phenopacket_id,
