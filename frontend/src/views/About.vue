@@ -138,8 +138,7 @@
                   <pre
                     class="text-body-2"
                     style="white-space: pre-wrap; font-family: monospace; margin: 0"
-                    >{{ formatBibtex(section.content.formats.bibtex.template) }}</pre
-                  >
+                    >{{ formatBibtex(section.content.formats.bibtex.template) }}</pre>
                 </v-sheet>
               </v-card-text>
             </v-card>
@@ -189,8 +188,7 @@
                     <p class="text-body-1 mb-2">
                       This work is licensed under a
                       <a :href="section.content.url" target="_blank" rel="noopener">
-                        {{ section.content.name }} </a
-                      >.
+                        {{ section.content.name }} </a>.
                     </p>
                     <p class="text-body-2 text-grey-darken-1 mb-0">
                       {{ section.content.description }}

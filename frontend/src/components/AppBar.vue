@@ -29,7 +29,7 @@
                 height: 'auto',
                 maxHeight: logoMaxHeight + 'px',
               }"
-            />
+            >
           </div>
         </template>
       </v-tooltip>

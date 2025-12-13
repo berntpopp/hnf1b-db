@@ -6,13 +6,13 @@
       <v-container>
         <v-row justify="center" align="center">
           <v-col cols="12" md="10" lg="8" class="text-center">
-            <h1 class="text-h3 font-weight-bold text-teal-darken-2 mb-2">HNF1B-db</h1>
+            <h1 class="text-h3 font-weight-bold text-teal-darken-2 mb-2">HNF1B Database</h1>
             <p
               class="text-subtitle-1 text-medium-emphasis mb-6"
               style="max-width: 800px; margin: 0 auto"
             >
-              A curated database of HNF1B gene variants and associated phenotypes, integrating
-              clinical reports and genomic data.
+              The definitive resource for HNF1B gene variants and clinical phenotypes. Search 800+
+              phenopackets with MODY5 and RCAD syndrome data from peer-reviewed publications.
             </p>
 
             <!-- Search Bar Integrated in Hero -->
@@ -23,8 +23,9 @@
         </v-row>
 
         <!-- STATS GRID (Stable Layout) -->
-        <v-row justify="center" class="mt-2">
+        <v-row justify="center">
           <v-col cols="12" md="10">
+            <h2 class="text-h6 text-center text-medium-emphasis mb-4">Explore Clinical Data</h2>
             <v-row>
               <!-- Individuals -->
               <v-col cols="6" md="3">
@@ -115,14 +116,87 @@
       </v-container>
     </section>
 
+    <!-- ABOUT SECTION - SEO Content with improved UI -->
+    <section class="about-section py-8 bg-grey-lighten-5">
+      <v-container>
+        <v-row justify="center" class="mb-6">
+          <v-col cols="12" md="10" lg="8" class="text-center">
+            <h2 class="text-h5 font-weight-medium text-grey-darken-3 mb-2">
+              About the HNF1B Database
+            </h2>
+            <p class="text-body-2 text-grey-darken-1" style="max-width: 600px; margin: 0 auto">
+              The definitive resource for MODY5 and RCAD syndrome research
+            </p>
+          </v-col>
+        </v-row>
+
+        <!-- Feature Cards -->
+        <v-row justify="center">
+          <v-col cols="12" sm="6" lg="4">
+            <v-card variant="flat" class="pa-4 h-100 feature-card">
+              <div class="d-flex align-start">
+                <v-avatar color="teal-lighten-4" size="48" class="mr-4 flex-shrink-0">
+                  <v-icon color="teal-darken-2">mdi-database-search</v-icon>
+                </v-avatar>
+                <div>
+                  <h3 class="text-subtitle-1 font-weight-medium mb-1">Comprehensive Data</h3>
+                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                    Clinical phenotypes using HPO terms, curated genetic variants with pathogenicity
+                    classifications, and peer-reviewed publication references.
+                  </p>
+                </div>
+              </div>
+            </v-card>
+          </v-col>
+
+          <v-col cols="12" sm="6" lg="4">
+            <v-card variant="flat" class="pa-4 h-100 feature-card">
+              <div class="d-flex align-start">
+                <v-avatar color="blue-lighten-4" size="48" class="mr-4 flex-shrink-0">
+                  <v-icon color="blue-darken-2">mdi-swap-horizontal</v-icon>
+                </v-avatar>
+                <div>
+                  <h3 class="text-subtitle-1 font-weight-medium mb-1">GA4GH Standard</h3>
+                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                    All data follows the GA4GH Phenopackets v2 standard for seamless
+                    interoperability with other genetic resources and databases.
+                  </p>
+                </div>
+              </div>
+            </v-card>
+          </v-col>
+
+          <v-col cols="12" sm="6" lg="4">
+            <v-card variant="flat" class="pa-4 h-100 feature-card">
+              <div class="d-flex align-start">
+                <v-avatar color="purple-lighten-4" size="48" class="mr-4 flex-shrink-0">
+                  <v-icon color="purple-darken-2">mdi-medical-bag</v-icon>
+                </v-avatar>
+                <div>
+                  <h3 class="text-subtitle-1 font-weight-medium mb-1">Clinical Insights</h3>
+                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                    Understand genotype-phenotype correlations for renal cysts, diabetes mellitus,
+                    hypomagnesemia, and other HNF1B-related presentations.
+                  </p>
+                </div>
+              </div>
+            </v-card>
+          </v-col>
+        </v-row>
+      </v-container>
+    </section>
+
     <!-- VISUALIZATIONS SECTION -->
     <v-container class="pb-12">
       <v-row justify="center">
         <v-col cols="12" xl="10">
+          <h2 class="text-h5 font-weight-medium text-grey-darken-3 mb-4">
+            Gene &amp; Protein Visualization
+          </h2>
           <v-card variant="outlined" class="border-opacity-12" rounded="lg">
             <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
               <v-icon color="primary" class="mr-2">mdi-chart-timeline-variant</v-icon>
-              <span class="text-h6 font-weight-medium">Variant Visualizations</span>
+              <h3 class="text-h6 font-weight-medium">Variant Visualizations</h3>
             </div>
 
             <v-tabs
@@ -208,6 +282,7 @@ import { useRouter } from 'vue-router';
 import SearchCard from '@/components/SearchCard.vue';
 import { useVariantStore } from '@/stores/variantStore';
 import { getSummaryStats } from '@/api/index.js';
+import { usePageSeo } from '@/composables/useSeoMeta';
 
 /**
  * Loading placeholder component using render function (no runtime compiler needed).
@@ -249,6 +324,14 @@ export default {
   setup() {
     const router = useRouter();
     const variantStore = useVariantStore();
+
+    // SEO meta tags for homepage
+    usePageSeo({
+      title: 'HNF1B Database - Clinical Variants & Phenotypes for MODY5/RCAD',
+      description:
+        'Search 800+ HNF1B clinical cases with phenotypes, genetic variants, and publications. The definitive resource for MODY5 and RCAD research.',
+      path: '/',
+    });
 
     // Stats
     const displayStats = ref({
@@ -405,5 +488,16 @@ export default {
 .stat-card--clickable:active {
   transform: translateY(-2px) scale(1.01);
   transition-duration: 0.1s;
+}
+
+/* Feature cards in About section */
+.feature-card {
+  background: white;
+  border-radius: 12px;
+  transition: box-shadow 0.2s ease;
+}
+
+.feature-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 </style>

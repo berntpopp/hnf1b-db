@@ -216,9 +216,7 @@
                           :aria-label="`View ${variant.geneSymbol} on HGNC (opens in new tab)`"
                         >
                           {{ variant.geneSymbol }}
-                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
-                            >mdi-open-in-new</v-icon
-                          >
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true">mdi-open-in-new</v-icon>
                         </a>
                         <span class="text-caption text-grey ml-1">({{ variant.geneId }})</span>
                       </v-list-item-subtitle>
@@ -241,9 +239,7 @@
                           :aria-label="`View transcript ${extractTranscriptId(variant.transcript)} on NCBI (opens in new tab)`"
                         >
                           {{ extractTranscriptId(variant.transcript) }}
-                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
-                            >mdi-open-in-new</v-icon
-                          >
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true">mdi-open-in-new</v-icon>
                         </a>
                         <span class="ml-1">{{ extractCNotation(variant.transcript) }}</span>
                       </v-list-item-subtitle>
@@ -266,9 +262,7 @@
                           :aria-label="`View protein ${extractProteinId(variant.protein)} on NCBI (opens in new tab)`"
                         >
                           {{ extractProteinId(variant.protein) }}
-                          <v-icon size="x-small" class="ml-1" aria-hidden="true"
-                            >mdi-open-in-new</v-icon
-                          >
+                          <v-icon size="x-small" class="ml-1" aria-hidden="true">mdi-open-in-new</v-icon>
                         </a>
                         <span class="ml-1">{{ extractPNotation(variant.protein) }}</span>
                       </v-list-item-subtitle>

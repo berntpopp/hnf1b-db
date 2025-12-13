@@ -98,8 +98,7 @@
                       item.subtype
                     }}</span>
                     <span v-if="item.extra_info" class="text-body-2 text-medium-emphasis">
-                      • {{ item.extra_info }}</span
-                    >
+                      • {{ item.extra_info }}</span>
                   </v-list-item-subtitle>
                   <template #append>
                     <v-icon size="small" color="grey-lighten-1">mdi-chevron-right</v-icon>
