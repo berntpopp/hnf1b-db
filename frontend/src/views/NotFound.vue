@@ -94,28 +94,50 @@
 </template>
 
 <script>
+import { useHead, useSeoMeta } from '@unhead/vue';
+import { computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
 export default {
   name: 'NotFound',
-  computed: {
-    requestedPath() {
-      return this.$route.fullPath;
-    },
-  },
-  created() {
+  setup() {
+    const route = useRoute();
+    const router = useRouter();
+
+    const requestedPath = computed(() => route.fullPath);
+
+    // SEO: Tell crawlers not to index 404 pages
+    // This is the proper client-side solution for SPAs
+    useSeoMeta({
+      title: 'Page Not Found | HNF1B Database',
+      description: 'The requested page could not be found.',
+      robots: 'noindex, nofollow',
+    });
+
+    // Add prerender status code hint for prerendering services
+    useHead({
+      meta: [{ name: 'prerender-status-code', content: '404' }],
+    });
+
+    // Log the 404 event
     window.logService.warn('404 Page Not Found', {
-      path: this.$route.fullPath,
+      path: route.fullPath,
       referrer: document.referrer || 'direct',
     });
-  },
-  methods: {
-    goBack() {
+
+    const goBack = () => {
       // Go back in history, or go home if no history
       if (window.history.length > 2) {
-        this.$router.go(-1);
+        router.go(-1);
       } else {
-        this.$router.push({ name: 'Home' });
+        router.push({ name: 'Home' });
       }
-    },
+    };
+
+    return {
+      requestedPath,
+      goBack,
+    };
   },
 };
 </script>

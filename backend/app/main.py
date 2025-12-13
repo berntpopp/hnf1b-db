@@ -17,6 +17,7 @@ from app.phenopackets.routers import router as phenopackets_router
 from app.publications import endpoints as publication_endpoints
 from app.reference import router as reference_router
 from app.search.routers import router as search_router
+from app.seo import router as seo_router
 
 
 @asynccontextmanager
@@ -74,6 +75,7 @@ app.include_router(variant_validator_endpoint.router)
 app.include_router(ontology_router.router, prefix="/api/v2")
 app.include_router(reference_router.router, prefix="/api/v2")
 app.include_router(search_router, prefix="/api/v2")
+app.include_router(seo_router, prefix="/api/v2/seo")
 
 
 # Root endpoint

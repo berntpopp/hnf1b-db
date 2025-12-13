@@ -5,23 +5,38 @@
 User-agent: *
 Allow: /
 Allow: /phenopackets
+Allow: /phenopackets/*
 Allow: /publications
+Allow: /publications/*
 Allow: /variants
+Allow: /variants/*
 Allow: /aggregations
+Allow: /search
+Allow: /about
+Allow: /faq
 
 # Disallow admin and authentication pages
 Disallow: /login
 Disallow: /admin
 Disallow: /user
 
-# Disallow API endpoints (use api.hnf1b.org instead)
+# Disallow API endpoints (except SEO sitemaps)
 Disallow: /api/
+Allow: /api/v2/seo/
 
 # Crawl rate limiting (be nice to the server)
 Crawl-delay: 1
 
-# Sitemap location
-Sitemap: https://hnf1b.org/sitemap.xml
+# Sitemap location - dynamic sitemap index
+Sitemap: https://hnf1b.org/api/v2/seo/sitemap-index.xml
+
+# Special rules for Googlebot
+# Allow indexing of individual variant pages for mutation discoverability
+User-agent: Googlebot
+Allow: /variants/*
+Allow: /phenopackets/*
+Allow: /publications/*
+Allow: /api/v2/seo/
 
 # Special rules for Google Scholar
 # Allow indexing of publication pages for academic discovery

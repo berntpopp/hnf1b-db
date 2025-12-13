@@ -253,6 +253,8 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { getPhenopacket, deletePhenopacket } from '@/api';
 import { useAuthStore } from '@/stores/authStore';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
@@ -263,6 +265,7 @@ import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
 import PhenotypeTimeline from '@/components/timeline/PhenotypeTimeline.vue';
+import { usePhenopacketSeo, useBreadcrumbStructuredData } from '@/composables/useSeoMeta';
 
 export default {
   name: 'PagePhenopacket',
@@ -274,6 +277,33 @@ export default {
     MetadataCard,
     DeleteConfirmationDialog,
     PhenotypeTimeline,
+  },
+  setup() {
+    const route = useRoute();
+
+    // Reactive phenopacket data for SEO
+    const phenopacketForSeo = ref(null);
+
+    // Breadcrumbs for structured data
+    const seoBreadcrumbs = computed(() => [
+      { name: 'Home', url: '/' },
+      { name: 'Individuals', url: '/phenopackets' },
+      {
+        name: phenopacketForSeo.value?.id || 'Case',
+        url: `/phenopackets/${encodeURIComponent(route.params.phenopacket_id || '')}`,
+      },
+    ]);
+
+    // Apply SEO meta tags
+    usePhenopacketSeo(phenopacketForSeo);
+    useBreadcrumbStructuredData(seoBreadcrumbs);
+
+    // Expose setter for Options API
+    const updateSeoPhenopacket = (pp) => {
+      phenopacketForSeo.value = pp;
+    };
+
+    return { updateSeoPhenopacket };
   },
   data() {
     return {
@@ -444,6 +474,9 @@ export default {
           interpretationsCount: this.phenopacket.interpretations?.length || 0,
           measurementsCount: this.phenopacket.measurements?.length || 0,
         });
+
+        // Update SEO meta tags with phenopacket data
+        this.updateSeoPhenopacket(this.phenopacket);
 
         window.logService.info('Phenopacket loaded successfully', {
           phenopacketId: phenopacketId,

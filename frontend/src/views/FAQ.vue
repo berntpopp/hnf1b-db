@@ -204,11 +204,23 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { usePageSeo, useFaqStructuredData } from '@/composables/useSeoMeta';
 
 // Reactive state
 const content = ref(null);
 const loading = ref(true);
 const error = ref(null);
+
+// Apply static SEO meta tags for FAQ page
+usePageSeo({
+  title: 'Frequently Asked Questions',
+  description:
+    'Common questions about HNF1B-related disease, MODY5, RCAD syndrome, genetic variants, and how to use the HNF1B Database. Get answers about symptoms, diagnosis, and data standards.',
+  path: '/faq',
+});
+
+// Apply FAQPage structured data when content loads
+useFaqStructuredData(content);
 
 // Methods
 const loadContent = async () => {

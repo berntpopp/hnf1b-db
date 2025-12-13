@@ -551,6 +551,8 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
@@ -564,6 +566,11 @@ import {
 import { getPathogenicityColor } from '@/utils/colors';
 import { getVariantType, isCNV, getCNVDetails, getVariantSize } from '@/utils/variants';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import {
+  useVariantSeo,
+  useVariantStructuredData,
+  useBreadcrumbStructuredData,
+} from '@/composables/useSeoMeta';
 
 export default {
   name: 'PageVariant',
@@ -571,6 +578,61 @@ export default {
     HNF1BGeneVisualization,
     HNF1BProteinVisualization,
     ProteinStructure3D,
+  },
+  setup() {
+    const route = useRoute();
+
+    // Reactive variant data for SEO
+    const variantForSeo = ref(null);
+
+    // Breadcrumbs for structured data
+    const seoBreadcrumbs = computed(() => [
+      { name: 'Home', url: '/' },
+      { name: 'Variants', url: '/variants' },
+      {
+        name: variantForSeo.value?.simple_id || variantForSeo.value?.hgvs_c || 'Variant',
+        url: `/variants/${encodeURIComponent(route.params.variant_id || '')}`,
+      },
+    ]);
+
+    // Apply SEO meta tags - these update reactively when variantForSeo changes
+    useVariantSeo(variantForSeo);
+    useVariantStructuredData(variantForSeo);
+    useBreadcrumbStructuredData(seoBreadcrumbs);
+
+    // Expose the setter for the Options API part
+    const updateSeoVariant = (variant) => {
+      if (variant && variant.variant_id) {
+        // Map variant data to SEO-friendly format
+        variantForSeo.value = {
+          variant_id: variant.variant_id,
+          simple_id: variant.simple_id,
+          hgvs_c: extractCNotation(variant.transcript),
+          hgvs_p: extractPNotation(variant.protein),
+          type: variant.variant_type,
+          classification: variant.classificationVerdict?.toLowerCase(),
+          consequence: variant.molecular_consequence,
+          individual_count: 0, // Will be updated after phenopackets load
+          cadd_score: variant.cadd_score,
+          gnomad_af: variant.gnomad_af,
+          rsid: variant.rsid,
+        };
+      }
+    };
+
+    const updateSeoIndividualCount = (count) => {
+      if (variantForSeo.value) {
+        variantForSeo.value = {
+          ...variantForSeo.value,
+          individual_count: count,
+        };
+      }
+    };
+
+    return {
+      updateSeoVariant,
+      updateSeoIndividualCount,
+    };
   },
   data() {
     return {
@@ -736,6 +798,10 @@ export default {
             day: 'numeric',
           }),
         }));
+
+        // Update SEO meta tags with variant data for mutation discoverability
+        this.updateSeoVariant(this.variant);
+        this.updateSeoIndividualCount(this.phenopacketsWithVariant.length);
 
         window.logService.info('Variant detail loaded successfully', {
           variantId: this.variant.variant_id,
