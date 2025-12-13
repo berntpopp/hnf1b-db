@@ -258,8 +258,11 @@ const getTypeIcon = (type) => {
 
 const getResultLink = (item) => {
   switch (item.type) {
-    case 'Phenopacket':
-      return `/phenopackets/${item.id}`;
+    case 'Phenopacket': {
+      // Strip "pp_" prefix added by materialized view for uniqueness
+      const phenopacketId = item.id?.replace(/^pp_/, '') || item.id;
+      return `/phenopackets/${phenopacketId}`;
+    }
     case 'Variant': {
       // Use 'q' parameter (not 'query') to match Variants page URL state
       // Strip gene prefix (e.g., "HNF1B:") if present for cleaner search

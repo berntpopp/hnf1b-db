@@ -356,16 +356,51 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { getPublicationMetadata, getPhenopacketsByPublication } from '@/api';
 import { buildSortParameter } from '@/utils/pagination';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import {
+  usePublicationSeo,
+  usePublicationStructuredData,
+  useBreadcrumbStructuredData,
+} from '@/composables/useSeoMeta';
 
 export default {
   name: 'PagePublication',
   components: {
     AppDataTable,
     AppPagination,
+  },
+  setup() {
+    const route = useRoute();
+
+    // Reactive publication data for SEO
+    const publicationForSeo = ref(null);
+
+    // Breadcrumbs for structured data
+    const seoBreadcrumbs = computed(() => [
+      { name: 'Home', url: '/' },
+      { name: 'Publications', url: '/publications' },
+      {
+        name: `PMID: ${route.params.publication_id || ''}`,
+        url: `/publications/${route.params.publication_id || ''}`,
+      },
+    ]);
+
+    // Apply SEO meta tags
+    usePublicationSeo(publicationForSeo);
+    usePublicationStructuredData(publicationForSeo);
+    useBreadcrumbStructuredData(seoBreadcrumbs);
+
+    // Expose setter for Options API
+    const updateSeoPublication = (pub) => {
+      publicationForSeo.value = pub;
+    };
+
+    return { updateSeoPublication };
   },
   data() {
     return {
@@ -452,6 +487,12 @@ export default {
 
         // Fetch initial phenopackets
         await this.fetchPhenopackets();
+
+        // Update SEO meta tags with publication data
+        this.updateSeoPublication({
+          ...this.publication,
+          pmid: this.publicationId,
+        });
 
         window.logService.info('Publication loaded successfully', {
           publicationId: this.publicationId,

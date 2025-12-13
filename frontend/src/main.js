@@ -1,6 +1,7 @@
 // src/main.js
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { createHead } from '@unhead/vue';
 import App from './App.vue';
 import router from './router';
 import { createVuetify } from 'vuetify';
@@ -16,6 +17,11 @@ import { useAuthStore } from '@/stores/authStore';
 
 const pinia = createPinia();
 const vuetify = createVuetify();
+
+// Create head manager for SEO meta tags
+// @see https://unhead.unjs.io/setup/vue/installation
+const head = createHead();
+
 const app = createApp(App);
 
 app.use(pinia); // Pinia must be registered before router
@@ -34,4 +40,5 @@ authStore.initialize().catch((err) => {
 
 app.use(router);
 app.use(vuetify);
+app.use(head); // Enable per-page meta tags with useHead()
 app.mount('#app');
