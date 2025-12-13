@@ -116,9 +116,7 @@ export default {
 
     // Add prerender status code hint for prerendering services
     useHead({
-      meta: [
-        { name: 'prerender-status-code', content: '404' },
-      ],
+      meta: [{ name: 'prerender-status-code', content: '404' }],
     });
 
     // Log the 404 event
