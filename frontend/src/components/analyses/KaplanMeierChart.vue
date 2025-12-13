@@ -434,6 +434,7 @@ export default {
         variant_type: 'By Variant Type',
         pathogenicity: 'By Pathogenicity Classification',
         disease_subtype: 'By Disease Subtype',
+        protein_domain: 'By Protein Domain',
       };
       return titles[comparisonType] || comparisonType;
     },
