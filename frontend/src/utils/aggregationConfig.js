@@ -192,6 +192,11 @@ export const SURVIVAL_COMPARISON_TYPES = [
     value: 'disease_subtype',
     description: 'Compare CAKUT vs CAKUT+MODY vs MODY vs Other phenotypes',
   },
+  {
+    label: 'Protein Domain',
+    value: 'protein_domain',
+    description: 'Compare variants by HNF1B protein domain location (missense only)',
+  },
 ];
 
 /**

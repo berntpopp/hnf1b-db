@@ -972,7 +972,10 @@ async def _handle_disease_subtype_standard(
 async def get_survival_data(
     comparison: str = Query(
         ...,
-        description="Comparison type: variant_type, disease_subtype, or pathogenicity",
+        description=(
+            "Comparison type: variant_type, pathogenicity, "
+            "disease_subtype, or protein_domain"
+        ),
     ),
     endpoint: str = Query(
         "ckd_stage_3_plus",
@@ -989,6 +992,7 @@ async def get_survival_data(
     - variant_type: CNV vs Truncating vs Non-truncating
     - disease_subtype: CAKUT vs CAKUT+MODY vs MODY
     - pathogenicity: P/LP vs VUS vs LB
+    - protein_domain: POU-S vs POU-H vs TAD vs Other (missense only)
 
     Supports multiple clinical endpoints:
     - ckd_stage_3_plus: CKD Stage 3+ (GFR <60)
@@ -999,6 +1003,8 @@ async def get_survival_data(
     Returns:
         Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
+    from .survival_handlers import SurvivalHandlerFactory
+
     endpoint_config = _get_endpoint_config()
     if endpoint not in endpoint_config:
         valid_options = ", ".join(endpoint_config.keys())
@@ -1010,30 +1016,10 @@ async def get_survival_data(
     endpoint_hpo_terms: Optional[List[str]] = config["hpo_terms"]
     endpoint_label: str = config["label"]
 
-    # Dispatch to appropriate handler based on comparison type and endpoint
-    if comparison == "variant_type":
-        if endpoint_hpo_terms is None:
-            return await _handle_variant_type_current_age(db, endpoint_label)
-        return await _handle_variant_type_standard(
-            db, endpoint_label, endpoint_hpo_terms
-        )
+    # Use factory to get appropriate handler for comparison type
+    try:
+        handler = SurvivalHandlerFactory.get_handler(comparison)
+    except ValueError as e:
+        raise ValueError(str(e)) from e
 
-    elif comparison == "pathogenicity":
-        if endpoint_hpo_terms is None:
-            return await _handle_pathogenicity_current_age(db, endpoint_label)
-        return await _handle_pathogenicity_standard(
-            db, endpoint_label, endpoint_hpo_terms
-        )
-
-    elif comparison == "disease_subtype":
-        if endpoint_hpo_terms is None:
-            return await _handle_disease_subtype_current_age(db, endpoint_label)
-        return await _handle_disease_subtype_standard(
-            db, endpoint_label, endpoint_hpo_terms
-        )
-
-    else:
-        raise ValueError(
-            f"Unknown comparison type: {comparison}. "
-            "Valid options: variant_type, disease_subtype, pathogenicity"
-        )
+    return await handler.handle(db, endpoint_label, endpoint_hpo_terms)
