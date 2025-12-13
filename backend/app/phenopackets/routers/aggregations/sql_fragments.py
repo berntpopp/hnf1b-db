@@ -624,12 +624,13 @@ def get_missense_filter_sql(vd_path: str = "vd") -> str:
         >>> sql = get_missense_filter_sql(vd)
     """
     # Note: PostgreSQL regex doesn't support lookahead, so we use AND NOT
-    # to exclude nonsense variants ending in 'Ter'
+    # to exclude nonsense variants ending in 'Ter'.
+    # The pattern does NOT anchor at the start to handle NP_xxx:p.Xxx123Yyy format.
     return f"""EXISTS (
         SELECT 1
         FROM jsonb_array_elements({vd_path}->'expressions') elem
         WHERE elem->>'syntax' = 'hgvs.p'
-        AND elem->>'value' ~ '^p\\.[A-Z][a-z]{{2}}\\d+[A-Z][a-z]{{2}}$'
+        AND elem->>'value' ~ 'p\\.[A-Z][a-z]{{2}}\\d+[A-Z][a-z]{{2}}$'
         AND elem->>'value' !~ 'Ter$'
     )"""
 

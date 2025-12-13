@@ -862,6 +862,9 @@ class ProteinDomainHandler(SurvivalHandler):
         missense_filter = get_missense_filter_sql(self._VD_PATH)
         cnv_exclusion = get_cnv_exclusion_filter()
 
+        # Note: We use gi->>'interpretationStatus' directly since we unnest
+        # genomicInterpretations into gi, unlike INTERP_STATUS_PATH which assumes
+        # the interp alias structure.
         return f"""
         WITH domain_classification AS (
             SELECT DISTINCT
@@ -879,7 +882,7 @@ class ProteinDomainHandler(SurvivalHandler):
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
-                AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
                 AND {cnv_exclusion}
                 AND EXISTS (
@@ -908,7 +911,7 @@ class ProteinDomainHandler(SurvivalHandler):
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
-                AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
                 AND {cnv_exclusion}
         ),
@@ -944,7 +947,7 @@ class ProteinDomainHandler(SurvivalHandler):
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE p.deleted_at IS NULL
                 AND {CURRENT_AGE_PATH} IS NOT NULL
-                AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+                AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
                 AND {cnv_exclusion}
         ),
