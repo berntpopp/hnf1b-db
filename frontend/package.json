@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
-    "@unhead/vue": "^2.0.8",
+    "@unhead/vue": "^2.1.2",
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
     "d3": "^7.9.0",
