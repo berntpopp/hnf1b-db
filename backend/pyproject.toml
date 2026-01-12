@@ -21,8 +21,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
     "psycopg2-binary>=2.9.9",
-    # Scientific dependencies (for sheets import)
-    "biopython>=1.84",
+    # HTTP client
     "requests>=2.31.0",
     # Phenopackets and ontology dependencies
     "phenopackets>=2.0.0", # GA4GH Phenopackets schema
@@ -75,7 +74,7 @@ warn_unused_ignores = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["pandas.*", "passlib.*", "biopython.*", "Bio.*", "scipy.*", "jsonpatch.*"]
+module = ["pandas.*", "passlib.*", "scipy.*", "jsonpatch.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
