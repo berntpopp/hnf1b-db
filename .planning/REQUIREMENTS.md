@@ -24,10 +24,10 @@ Requirements grouped by logical category, derived from GitHub issues.
 - [ ] **QUAL-10**: Create `StructureViewer.vue` for NGL.js canvas (#133)
 - [ ] **QUAL-11**: Create `StructureControls.vue` for representation toggles (#133)
 - [ ] **QUAL-12**: Create `VariantPanel.vue` for variant list/selection (#133)
-- [ ] **QUAL-13**: Create `DistanceStatsCard.vue` for distance statistics (#133)
+- [ ] **QUAL-13**: Create `DistanceDisplay.vue` for distance alerts and legends (#133)
 - [ ] **QUAL-14**: Create `frontend/src/constants/` module with documented constants (#137)
-- [ ] **QUAL-15**: Create `frontend/src/config/` with centralized configuration (#91)
-- [ ] **QUAL-16**: Move visualization dimensions to config (#91)
+- [x] **QUAL-15**: Create `frontend/src/config/` with centralized configuration (#91) - Already exists: `app.js`, `navigationItems.js`
+- [x] **QUAL-16**: Move visualization dimensions to config (#91) - Already in `VIZ_CONFIG`
 - [ ] **QUAL-17**: Move API timeouts to config (#91)
 - [ ] **QUAL-18**: Add config validation on app startup (#91)
 
@@ -86,10 +86,10 @@ Requirements grouped by logical category, derived from GitHub issues.
 ### Testing
 
 - [ ] **TEST-01**: Install and configure Playwright (#48)
-- [ ] **TEST-02**: Add navigation E2E tests (home → phenopackets → detail) (#48)
+- [ ] **TEST-02**: Add navigation E2E tests (home -> phenopackets -> detail) (#48)
 - [ ] **TEST-03**: Add search E2E tests (query, filters, results) (#48)
 - [ ] **TEST-04**: Add aggregations E2E tests (all charts load) (#48)
-- [ ] **TEST-05**: Add variant flow E2E tests (list → detail → individuals) (#48)
+- [ ] **TEST-05**: Add variant flow E2E tests (list -> detail -> individuals) (#48)
 - [ ] **TEST-06**: Configure E2E tests in CI/CD (#48)
 
 ### Documentation
@@ -135,8 +135,8 @@ Deferred to future milestone. Not in current scope.
 | QUAL-12 | Phase 2 | Pending |
 | QUAL-13 | Phase 2 | Pending |
 | QUAL-14 | Phase 2 | Pending |
-| QUAL-15 | Phase 2 | Pending |
-| QUAL-16 | Phase 2 | Pending |
+| QUAL-15 | Phase 2 | Complete (pre-existing) |
+| QUAL-16 | Phase 2 | Complete (pre-existing) |
 | QUAL-17 | Phase 2 | Pending |
 | QUAL-18 | Phase 2 | Pending |
 | UIUX-01 | Phase 4 | Pending |
@@ -188,8 +188,9 @@ Deferred to future milestone. Not in current scope.
 **Coverage:**
 - v1 requirements: 53 total
 - Mapped to phases: 53
-- Unmapped: 0 ✓
+- Unmapped: 0
+- Pre-existing (complete): 2 (QUAL-15, QUAL-16)
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 after Phase 1 completion*
+*Last updated: 2026-01-19 - Phase 2 revision (QUAL-13 renamed, QUAL-15/16 marked complete)*
