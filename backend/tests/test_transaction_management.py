@@ -5,6 +5,11 @@ while successful requests DO commit changes.
 
 NOTE: These are integration tests that require a running database.
 Run `make hybrid-up` before executing these tests.
+
+Fixtures used from conftest.py:
+- fixture_db_session
+- fixture_valid_phenopacket_data
+- fixture_invalid_phenopacket_data
 """
 
 import pytest
@@ -13,33 +18,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.phenopackets.models import Phenopacket
-
-
-@pytest.fixture
-def valid_phenopacket_data():
-    """Fixture for valid phenopacket data."""
-    return {
-        "id": "test_phenopacket_transaction",
-        "subject": {"id": "patient_tx_test", "sex": "FEMALE"},
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0012622", "label": "Chronic kidney disease"}}
-        ],
-        "metaData": {
-            "created": "2024-01-01T00:00:00Z",
-            "phenopacketSchemaVersion": "2.0.0",
-        },
-    }
-
-
-@pytest.fixture
-def invalid_phenopacket_data():
-    """Fixture for invalid phenopacket data (missing required fields)."""
-    return {
-        "id": "test_phenopacket_invalid",
-        "subject": {"id": "patient_invalid", "sex": "FEMALE"},
-        # Missing phenotypicFeatures - validation should fail
-        # Missing metaData - validation should fail
-    }
 
 
 class TestTransactionRollback:

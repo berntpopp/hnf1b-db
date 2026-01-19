@@ -2,6 +2,11 @@
 
 Tests the audit utility functions for phenopacket change tracking,
 including JSON Patch generation, change summaries, and conflict detection.
+
+Fixtures used from conftest.py:
+- fixture_sample_phenopacket_minimal
+- fixture_sample_phenopacket_with_data
+- fixture_db_session
 """
 
 import copy
@@ -17,60 +22,6 @@ from app.utils.audit import (
     generate_change_summary,
     generate_json_patch,
 )
-
-
-# Test Fixtures
-@pytest.fixture
-def sample_phenopacket_minimal() -> Dict[str, Any]:
-    """Minimal phenopacket for testing."""
-    return {
-        "id": "phenopacket:HNF1B:001",
-        "subject": {"id": "patient-001", "sex": "MALE"},
-        "phenotypicFeatures": [],
-        "interpretations": [],
-        "metaData": {
-            "created": "2025-01-01T00:00:00Z",
-            "createdBy": "curator@example.com",
-            "resources": [],
-            "phenopacketSchemaVersion": "2.0.0",
-        },
-    }
-
-
-@pytest.fixture
-def sample_phenopacket_with_data() -> Dict[str, Any]:
-    """Phenopacket with phenotypes and variants for testing."""
-    return {
-        "id": "phenopacket:HNF1B:002",
-        "subject": {"id": "patient-002", "sex": "FEMALE"},
-        "phenotypicFeatures": [
-            {
-                "type": {"id": "HP:0000001", "label": "Phenotype 1"},
-                "excluded": False,
-            },
-            {
-                "type": {"id": "HP:0000002", "label": "Phenotype 2"},
-                "excluded": False,
-            },
-        ],
-        "interpretations": [
-            {
-                "id": "interpretation-1",
-                "progressStatus": "SOLVED",
-                "diagnosis": {
-                    "disease": {"id": "MONDO:0001", "label": "Disease 1"},
-                    "genomicInterpretations": [],
-                },
-            }
-        ],
-        "diseases": [{"term": {"id": "MONDO:0001", "label": "Disease 1"}}],
-        "metaData": {
-            "created": "2025-01-01T00:00:00Z",
-            "createdBy": "curator@example.com",
-            "resources": [],
-            "phenopacketSchemaVersion": "2.0.0",
-        },
-    }
 
 
 # JSON Patch Tests

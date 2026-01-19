@@ -3,6 +3,7 @@
 import asyncio
 import warnings
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
@@ -231,6 +232,104 @@ async def fixture_cleanup_test_phenopackets(fixture_db_session):
     await fixture_db_session.commit()
 
 
+# Sample phenopacket fixtures (shared across test files)
+
+
+@pytest.fixture
+def fixture_sample_phenopacket_minimal():
+    """Minimal phenopacket for testing.
+
+    Contains only required fields with empty feature lists.
+    Used for testing audit, transaction, and utility functions.
+    """
+    return {
+        "id": "phenopacket:HNF1B:001",
+        "subject": {"id": "patient-001", "sex": "MALE"},
+        "phenotypicFeatures": [],
+        "interpretations": [],
+        "metaData": {
+            "created": "2025-01-01T00:00:00Z",
+            "createdBy": "curator@example.com",
+            "resources": [],
+            "phenopacketSchemaVersion": "2.0.0",
+        },
+    }
+
+
+@pytest.fixture
+def fixture_sample_phenopacket_with_data():
+    """Phenopacket with phenotypes and variants for testing.
+
+    Contains phenotypic features, interpretations, and diseases.
+    Used for testing audit summaries and change detection.
+    """
+    return {
+        "id": "phenopacket:HNF1B:002",
+        "subject": {"id": "patient-002", "sex": "FEMALE"},
+        "phenotypicFeatures": [
+            {
+                "type": {"id": "HP:0000001", "label": "Phenotype 1"},
+                "excluded": False,
+            },
+            {
+                "type": {"id": "HP:0000002", "label": "Phenotype 2"},
+                "excluded": False,
+            },
+        ],
+        "interpretations": [
+            {
+                "id": "interpretation-1",
+                "progressStatus": "SOLVED",
+                "diagnosis": {
+                    "disease": {"id": "MONDO:0001", "label": "Disease 1"},
+                    "genomicInterpretations": [],
+                },
+            }
+        ],
+        "diseases": [{"term": {"id": "MONDO:0001", "label": "Disease 1"}}],
+        "metaData": {
+            "created": "2025-01-01T00:00:00Z",
+            "createdBy": "curator@example.com",
+            "resources": [],
+            "phenopacketSchemaVersion": "2.0.0",
+        },
+    }
+
+
+@pytest.fixture
+def fixture_valid_phenopacket_data():
+    """Valid phenopacket data for transaction testing.
+
+    Contains all required fields for successful creation.
+    """
+    return {
+        "id": "test_phenopacket_transaction",
+        "subject": {"id": "patient_tx_test", "sex": "FEMALE"},
+        "phenotypicFeatures": [
+            {"type": {"id": "HP:0012622", "label": "Chronic kidney disease"}}
+        ],
+        "metaData": {
+            "created": "2024-01-01T00:00:00Z",
+            "phenopacketSchemaVersion": "2.0.0",
+        },
+    }
+
+
+@pytest.fixture
+def fixture_invalid_phenopacket_data():
+    """Invalid phenopacket data for transaction testing.
+
+    Missing required fields (phenotypicFeatures, metaData).
+    Used to verify validation errors prevent commits.
+    """
+    return {
+        "id": "test_phenopacket_invalid",
+        "subject": {"id": "patient_invalid", "sex": "FEMALE"},
+        # Missing phenotypicFeatures - validation should fail
+        # Missing metaData - validation should fail
+    }
+
+
 # Backward-compatibility aliases (remove after test migration complete)
 db_session = fixture_db_session
 test_user = fixture_test_user
@@ -239,3 +338,7 @@ async_client = fixture_async_client
 auth_headers = fixture_auth_headers
 admin_headers = fixture_admin_headers
 cleanup_test_phenopackets = fixture_cleanup_test_phenopackets
+sample_phenopacket_minimal = fixture_sample_phenopacket_minimal
+sample_phenopacket_with_data = fixture_sample_phenopacket_with_data
+valid_phenopacket_data = fixture_valid_phenopacket_data
+invalid_phenopacket_data = fixture_invalid_phenopacket_data
