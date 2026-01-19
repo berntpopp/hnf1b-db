@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-19
 **Current Phase:** Phase 1 - Pydantic Deprecation Fixes (Complete)
-**Next Action:** `/gsd:execute-phase` or `/gsd:plan-phase 2`
+**Next Action:** `/gsd:discuss-phase 2` or `/gsd:plan-phase 2`
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 
 | Phase | Name | Status | Progress |
 |-------|------|--------|----------|
-| 1 | Pydantic Deprecation Fixes | COMPLETE | 100% |
+| 1 | Pydantic Deprecation Fixes | ✓ Complete | 100% |
 | 2 | Component & Constants | Pending | 0% |
 | 3 | Test Modernization | Pending | 0% |
 | 4 | UI/UX Normalization | Pending | 0% |

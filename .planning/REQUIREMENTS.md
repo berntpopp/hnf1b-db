@@ -9,9 +9,9 @@ Requirements grouped by logical category, derived from GitHub issues.
 
 ### Code Quality - Backend
 
-- [ ] **QUAL-01**: Fix Pydantic `regex` deprecation by replacing with `pattern` in all Query parameters (#134)
-- [ ] **QUAL-02**: Fix Pydantic `example` deprecation by replacing with `examples=[]` in all Field definitions (#134)
-- [ ] **QUAL-03**: Replace class-based `Config` with `ConfigDict` in all Pydantic models (#134)
+- [x] **QUAL-01**: Fix Pydantic `regex` deprecation by replacing with `pattern` in all Query parameters (#134)
+- [x] **QUAL-02**: Fix Pydantic `example` deprecation by replacing with `examples=[]` in all Field definitions (#134)
+- [x] **QUAL-03**: Replace class-based `Config` with `ConfigDict` in all Pydantic models (#134)
 - [ ] **QUAL-04**: Create `backend/app/constants.py` with documented named constants (#137)
 - [ ] **QUAL-05**: Modernize test suite with async context manager fixtures (#94)
 - [ ] **QUAL-06**: Standardize test naming to `test_<feature>_<scenario>_<expected_result>` (#94)
@@ -121,9 +121,9 @@ Deferred to future milestone. Not in current scope.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| QUAL-01 | Phase 1 | Pending |
-| QUAL-02 | Phase 1 | Pending |
-| QUAL-03 | Phase 1 | Pending |
+| QUAL-01 | Phase 1 | Complete |
+| QUAL-02 | Phase 1 | Complete |
+| QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 2 | Pending |
 | QUAL-05 | Phase 3 | Pending |
 | QUAL-06 | Phase 3 | Pending |
@@ -192,4 +192,4 @@ Deferred to future milestone. Not in current scope.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 after initial definition*
+*Last updated: 2026-01-19 after Phase 1 completion*
