@@ -12,7 +12,7 @@ Requirements grouped by logical category, derived from GitHub issues.
 - [x] **QUAL-01**: Fix Pydantic `regex` deprecation by replacing with `pattern` in all Query parameters (#134)
 - [x] **QUAL-02**: Fix Pydantic `example` deprecation by replacing with `examples=[]` in all Field definitions (#134)
 - [x] **QUAL-03**: Replace class-based `Config` with `ConfigDict` in all Pydantic models (#134)
-- [ ] **QUAL-04**: Create `backend/app/constants.py` with documented named constants (#137)
+- [x] **QUAL-04**: Create `backend/app/constants.py` with documented named constants (#137)
 - [ ] **QUAL-05**: Modernize test suite with async context manager fixtures (#94)
 - [ ] **QUAL-06**: Standardize test naming to `test_<feature>_<scenario>_<expected_result>` (#94)
 - [ ] **QUAL-07**: Consolidate test utilities in `conftest.py` (#94)
@@ -20,16 +20,16 @@ Requirements grouped by logical category, derived from GitHub issues.
 
 ### Code Quality - Frontend
 
-- [ ] **QUAL-09**: Extract ProteinStructure3D.vue into sub-components (<500 lines each) (#133)
-- [ ] **QUAL-10**: Create `StructureViewer.vue` for NGL.js canvas (#133)
-- [ ] **QUAL-11**: Create `StructureControls.vue` for representation toggles (#133)
-- [ ] **QUAL-12**: Create `VariantPanel.vue` for variant list/selection (#133)
-- [ ] **QUAL-13**: Create `DistanceDisplay.vue` for distance alerts and legends (#133)
-- [ ] **QUAL-14**: Create `frontend/src/constants/` module with documented constants (#137)
+- [x] **QUAL-09**: Extract ProteinStructure3D.vue into sub-components (<500 lines each) (#133)
+- [x] **QUAL-10**: Create `StructureViewer.vue` for NGL.js canvas (#133)
+- [x] **QUAL-11**: Create `StructureControls.vue` for representation toggles (#133)
+- [x] **QUAL-12**: Create `VariantPanel.vue` for variant list/selection (#133)
+- [x] **QUAL-13**: Create `DistanceDisplay.vue` for distance alerts and legends (#133)
+- [x] **QUAL-14**: Create `frontend/src/constants/` module with documented constants (#137)
 - [x] **QUAL-15**: Create `frontend/src/config/` with centralized configuration (#91) - Already exists: `app.js`, `navigationItems.js`
 - [x] **QUAL-16**: Move visualization dimensions to config (#91) - Already in `VIZ_CONFIG`
-- [ ] **QUAL-17**: Move API timeouts to config (#91)
-- [ ] **QUAL-18**: Add config validation on app startup (#91)
+- [x] **QUAL-17**: Move API timeouts to config (#91)
+- [x] **QUAL-18**: Add config validation on app startup (#91)
 
 ### UI/UX Normalization
 
@@ -124,21 +124,21 @@ Deferred to future milestone. Not in current scope.
 | QUAL-01 | Phase 1 | Complete |
 | QUAL-02 | Phase 1 | Complete |
 | QUAL-03 | Phase 1 | Complete |
-| QUAL-04 | Phase 2 | Pending |
+| QUAL-04 | Phase 2 | Complete |
 | QUAL-05 | Phase 3 | Pending |
 | QUAL-06 | Phase 3 | Pending |
 | QUAL-07 | Phase 3 | Pending |
 | QUAL-08 | Phase 3 | Pending |
-| QUAL-09 | Phase 2 | Pending |
-| QUAL-10 | Phase 2 | Pending |
-| QUAL-11 | Phase 2 | Pending |
-| QUAL-12 | Phase 2 | Pending |
-| QUAL-13 | Phase 2 | Pending |
-| QUAL-14 | Phase 2 | Pending |
+| QUAL-09 | Phase 2 | Complete |
+| QUAL-10 | Phase 2 | Complete |
+| QUAL-11 | Phase 2 | Complete |
+| QUAL-12 | Phase 2 | Complete |
+| QUAL-13 | Phase 2 | Complete |
+| QUAL-14 | Phase 2 | Complete |
 | QUAL-15 | Phase 2 | Complete (pre-existing) |
 | QUAL-16 | Phase 2 | Complete (pre-existing) |
-| QUAL-17 | Phase 2 | Pending |
-| QUAL-18 | Phase 2 | Pending |
+| QUAL-17 | Phase 2 | Complete |
+| QUAL-18 | Phase 2 | Complete |
 | UIUX-01 | Phase 4 | Pending |
 | UIUX-02 | Phase 4 | Pending |
 | UIUX-03 | Phase 4 | Pending |
@@ -193,4 +193,4 @@ Deferred to future milestone. Not in current scope.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 - Phase 2 revision (QUAL-13 renamed, QUAL-15/16 marked complete)*
+*Last updated: 2026-01-19 - Phase 2 complete (QUAL-04, QUAL-09-14, QUAL-17-18 marked complete)*
