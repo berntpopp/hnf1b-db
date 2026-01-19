@@ -1,3 +1,5 @@
+"""Tests for HPO ontology autocomplete functionality."""
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
@@ -5,19 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.fixture
-async def populate_hpo_terms(db_session: AsyncSession):
-    """Populate hpo_terms_lookup table with sample data."""
+async def fixture_populate_hpo_terms(fixture_db_session: AsyncSession):
+    """Populate hpo_terms_lookup table with sample data for testing."""
     # Pre-cleanup: Remove any leftover test data
     try:
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:000000%'")
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
     except Exception:
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
     # Ensure fresh session state
-    await db_session.rollback()
+    await fixture_db_session.rollback()
 
     hpo_terms_data = [
         ("HP:0000001", "Abnormality of the kidney", 100),
@@ -33,7 +35,7 @@ async def populate_hpo_terms(db_session: AsyncSession):
     ]
 
     for hpo_id, label, count in hpo_terms_data:
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
                 INSERT INTO hpo_terms_lookup (hpo_id, label, phenopacket_count)
@@ -45,32 +47,34 @@ async def populate_hpo_terms(db_session: AsyncSession):
             ),
             {"hpo_id": hpo_id, "label": label, "count": count},
         )
-    await db_session.commit()
+    await fixture_db_session.commit()
 
     yield
 
     # Cleanup
     try:
-        await db_session.rollback()
-        await db_session.execute(
+        await fixture_db_session.rollback()
+        await fixture_db_session.execute(
             text("DELETE FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:000000%'")
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
     except Exception:
         try:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
         except Exception:
             # Ignore exceptions during rollback in cleanup; session may already be closed or in an invalid state.
             pass
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_basic(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_basic_query_returns_matches(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test basic HPO autocomplete functionality."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=kidney", headers=auth_headers
+    """Test basic HPO autocomplete returns matching terms for keyword query."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=kidney", headers=fixture_auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -80,12 +84,14 @@ async def test_hpo_autocomplete_basic(
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_fuzzy_matching(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_fuzzy_query_returns_matches(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test HPO autocomplete with fuzzy matching (typo)."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=kidny", headers=auth_headers
+    """Test HPO autocomplete returns matches for fuzzy/typo queries."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=kidny", headers=fixture_auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -94,12 +100,14 @@ async def test_hpo_autocomplete_fuzzy_matching(
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_limit(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_limit_param_caps_results(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test HPO autocomplete limit parameter."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=renal&limit=2", headers=auth_headers
+    """Test HPO autocomplete limit parameter caps result count."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=renal&limit=2", headers=fixture_auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -107,23 +115,28 @@ async def test_hpo_autocomplete_limit(
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_min_length(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_short_query_returns_422(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test HPO autocomplete with query string less than min_length."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=k", headers=auth_headers
+    """Test HPO autocomplete with query shorter than min_length returns 422."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=k", headers=fixture_auth_headers
     )
     assert response.status_code == 422  # Unprocessable Entity due to validation error
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_no_results(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_nonexistent_term_returns_empty(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test HPO autocomplete with a query that yields no results."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=nonexistentterm", headers=auth_headers
+    """Test HPO autocomplete with nonexistent term returns empty list."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=nonexistentterm",
+        headers=fixture_auth_headers,
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -131,12 +144,14 @@ async def test_hpo_autocomplete_no_results(
 
 
 @pytest.mark.asyncio
-async def test_hpo_autocomplete_ranking(
-    async_client: AsyncClient, populate_hpo_terms, auth_headers
+async def test_ontology_hpo_autocomplete_ranking_prioritizes_similarity(
+    fixture_async_client: AsyncClient,
+    fixture_populate_hpo_terms,
+    fixture_auth_headers,
 ):
-    """Test HPO autocomplete results are ranked by similarity first, then count."""
-    response = await async_client.get(
-        "/api/v2/ontology/hpo/autocomplete?q=magnesium", headers=auth_headers
+    """Test HPO autocomplete ranks results by similarity first, then by count."""
+    response = await fixture_async_client.get(
+        "/api/v2/ontology/hpo/autocomplete?q=magnesium", headers=fixture_auth_headers
     )
     assert response.status_code == 200
     data = response.json()["data"]
