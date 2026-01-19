@@ -166,8 +166,23 @@ Plans:
 
 **GitHub Issue:** #98
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Design tokens + Vuetify theme update
+- [ ] 04-02-PLAN.md — Create PageHeader.vue component
+- [ ] 04-03-PLAN.md — Create DataTableToolbar.vue component
+- [ ] 04-04-PLAN.md — Migrate list views (Phenopackets, Variants, Publications)
+- [ ] 04-05-PLAN.md — Migrate detail views + Home page
+
 **Requirements:**
-- UIUX-01 through UIUX-07 (design tokens, theme, components)
+- UIUX-01: Create design tokens file with consistent color palette (#98)
+- UIUX-02: Update Vuetify theme with standardized colors (#98)
+- UIUX-03: Create reusable `PageHeader.vue` component (#98)
+- UIUX-04: Create reusable `DataTableToolbar.vue` component (#98)
+- UIUX-05: Standardize icon usage across all views (#98)
+- UIUX-06: Normalize typography hierarchy (h4/h5/h6 usage) (#98)
+- UIUX-07: Standardize card styles and spacing (#98)
 
 **Success Criteria:**
 1. Design tokens file created with color palette
@@ -187,7 +202,14 @@ Plans:
 
 **Files to modify:**
 - `frontend/src/plugins/vuetify.js`
-- All view files for consistency
+- `frontend/src/utils/aggregationConfig.js`
+- `frontend/src/views/Phenopackets.vue`
+- `frontend/src/views/Variants.vue`
+- `frontend/src/views/Publications.vue`
+- `frontend/src/views/PagePhenopacket.vue`
+- `frontend/src/views/PageVariant.vue`
+- `frontend/src/views/PagePublication.vue`
+- `frontend/src/views/Home.vue`
 
 ---
 
@@ -374,4 +396,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-19 after phase 3 execution complete*
+*Last updated: 2026-01-20 after phase 4 planning complete*
