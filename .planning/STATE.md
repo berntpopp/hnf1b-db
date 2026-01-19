@@ -1,22 +1,22 @@
 # Project State
 
 **Last Updated:** 2026-01-19
-**Current Phase:** Phase 1 - Pydantic Deprecation Fixes (Complete)
-**Next Action:** `/gsd:discuss-phase 2` or `/gsd:plan-phase 2`
+**Current Phase:** Phase 2 - Component & Constants (In Progress)
+**Next Action:** `/gsd:execute-phase 02-03` or next plan in phase
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Ship a production-quality codebase with improved maintainability, accessibility, and documentation
-**Current focus:** Phase 1 - Pydantic Deprecation Fixes (Complete)
+**Current focus:** Phase 2 - Component & Constants (In Progress)
 
 ## Phase Status
 
 | Phase | Name | Status | Progress |
 |-------|------|--------|----------|
-| 1 | Pydantic Deprecation Fixes | ✓ Complete | 100% |
-| 2 | Component & Constants | Pending | 0% |
+| 1 | Pydantic Deprecation Fixes | Complete | 100% |
+| 2 | Component & Constants | In Progress | 67% (2/3 plans) |
 | 3 | Test Modernization | Pending | 0% |
 | 4 | UI/UX Normalization | Pending | 0% |
 | 5 | Chart Polish | Pending | 0% |
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [==========]------------------------------- 11% (1/9 phases)
+Progress: [==============]--------------------------- 15% (1.67/9 phases)
 
 ## Issue Mapping
 
 | GitHub Issue | Phase | Status |
 |--------------|-------|--------|
 | #134 - Pydantic deprecation | Phase 1 | COMPLETE |
-| #133 - ProteinStructure3D | Phase 2 | Pending |
-| #137 - Magic numbers | Phase 2 | Pending |
-| #91 - Hardcoded values | Phase 2 | Pending |
+| #133 - ProteinStructure3D | Phase 2 | Pending (02-03) |
+| #137 - Magic numbers | Phase 2 | COMPLETE (02-01, 02-02) |
+| #91 - Hardcoded values | Phase 2 | COMPLETE (02-01, 02-02) |
 | #94 - Test modernization | Phase 3 | Pending |
 | #98 - UI/UX normalization | Phase 4 | Pending |
 | #135 - Chart accessibility | Phase 5 | Pending |
@@ -48,12 +48,14 @@ Progress: [==========]------------------------------- 11% (1/9 phases)
 
 ## Session Continuity
 
-Last session: 2026-01-19T16:32Z
-Stopped at: Completed 01-01-PLAN.md (Phase 1 complete)
+Last session: 2026-01-19T17:56Z
+Stopped at: Completed 02-02-PLAN.md (Frontend constants module)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-19: Completed Phase 2 Plan 2 - Frontend constants module
+- 2026-01-19: Completed Phase 2 Plan 1 - Backend constants module
 - 2026-01-19: Completed Phase 1 Plan 1 - Pydantic ConfigDict migration
 - 2026-01-19: Project initialized
 - 2026-01-19: Requirements defined (53 requirements)
@@ -65,6 +67,10 @@ Resume file: None
 |----------|-------|-----------|
 | Use ConfigDict pattern for Pydantic configuration | 01-01 | Replaces deprecated class Config, Pydantic v3 compatible |
 | model_config placement after docstring | 01-01 | Consistent positioning across all schema classes |
+| Use SCREAMING_SNAKE_CASE for constants | 02-01 | PEP 8 standard for Python, industry standard for JS |
+| Separate constants.py from config.py | 02-01 | Constants are domain values, config is environment-based |
+| Re-export for backward compatibility | 02-02 | Existing imports continue to work during transition |
+| Dev-mode only config validation | 02-02 | Catch issues early without impacting production |
 
 ## Blockers
 
@@ -75,7 +81,7 @@ None currently.
 This milestone addresses 14 GitHub issues across code quality, UI/UX, features, testing, and documentation. The issues are sorted by priority and dependencies:
 
 1. Bug fixes first (Pydantic deprecations) - COMPLETE
-2. Refactoring next (cleaner code for features)
+2. Refactoring next (cleaner code for features) - IN PROGRESS
 3. Features after clean foundation
 4. High-risk work (migrations) near end
 5. Testing and documentation last (test/document final state)
