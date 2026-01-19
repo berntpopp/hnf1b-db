@@ -44,6 +44,28 @@ export const API_CONFIG = {
    * Maximum page size allowed by backend API.
    */
   MAX_PAGE_SIZE: 1000,
+
+  /**
+   * API request timeouts (milliseconds)
+   */
+  TIMEOUTS: {
+    /** Default timeout for API requests */
+    DEFAULT: import.meta.env.VITE_API_TIMEOUT || 30000,
+    /** Timeout for long-running operations (exports, large queries) */
+    LONG: import.meta.env.VITE_API_TIMEOUT_LONG || 60000,
+    /** Timeout for quick lookups (autocomplete, validation) */
+    SHORT: import.meta.env.VITE_API_TIMEOUT_SHORT || 10000,
+  },
+
+  /**
+   * Retry configuration for failed requests
+   */
+  RETRY: {
+    /** Maximum number of retries for transient failures */
+    MAX_RETRIES: 3,
+    /** Base delay between retries (ms), doubles on each retry */
+    BASE_DELAY: 1000,
+  },
 };
 
 /**

@@ -15,6 +15,17 @@ import { logService } from '@/services/logService';
 import { useLogStore } from '@/stores/logStore';
 import { useAuthStore } from '@/stores/authStore';
 
+// Import config validation
+import { validateConfig } from '@/config/validation';
+
+// Validate configuration on startup (dev mode only)
+if (import.meta.env.DEV) {
+  const { valid } = validateConfig();
+  if (!valid) {
+    console.warn('[App] Starting with configuration warnings');
+  }
+}
+
 const pinia = createPinia();
 const vuetify = createVuetify();
 
