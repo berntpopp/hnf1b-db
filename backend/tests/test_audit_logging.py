@@ -18,7 +18,7 @@ from app.utils.audit_logger import (
 class TestVariantSearchLogging:
     """Test variant search audit logging."""
 
-    def test_log_variant_search_all_fields(self, caplog):
+    def test_audit_log_variant_search_all_fields_logged(self, caplog):
         """Test logging with all search criteria filled."""
         with caplog.at_level(logging.INFO, logger="audit"):
             log_variant_search(
@@ -58,7 +58,7 @@ class TestVariantSearchLogging:
         assert criteria["gene"] == "HNF1B"
         assert criteria["consequence"] == "Splice Acceptor"
 
-    def test_log_variant_search_minimal_fields(self, caplog):
+    def test_audit_log_variant_search_minimal_fields_uses_defaults(self, caplog):
         """Test logging with minimal fields (only required)."""
         with caplog.at_level(logging.INFO, logger="audit"):
             log_variant_search(
@@ -83,7 +83,7 @@ class TestVariantSearchLogging:
         criteria = record.search_criteria
         assert criteria == {}  # Should be empty dict, not contain None values
 
-    def test_log_variant_search_partial_filters(self, caplog):
+    def test_audit_log_variant_search_partial_filters_omits_null(self, caplog):
         """Test logging with some filters applied."""
         with caplog.at_level(logging.INFO, logger="audit"):
             log_variant_search(
@@ -109,7 +109,7 @@ class TestVariantSearchLogging:
         assert "gene" not in criteria
         assert "consequence" not in criteria
 
-    def test_log_includes_timestamp(self, caplog):
+    def test_audit_log_variant_search_includes_timestamp(self, caplog):
         """Test that log includes ISO formatted timestamp."""
         with caplog.at_level(logging.INFO, logger="audit"):
             log_variant_search(
@@ -135,7 +135,7 @@ class TestVariantSearchLogging:
 class TestRateLimitLogging:
     """Test rate limit violation logging."""
 
-    def test_log_rate_limit_exceeded(self, caplog):
+    def test_audit_log_rate_limit_exceeded_logs_warning(self, caplog):
         """Test logging of rate limit violations."""
         with caplog.at_level(logging.WARNING, logger="audit"):
             log_rate_limit_exceeded(
@@ -159,7 +159,7 @@ class TestRateLimitLogging:
 class TestValidationErrorLogging:
     """Test validation error logging."""
 
-    def test_log_sql_injection_attempt(self, caplog):
+    def test_audit_log_sql_injection_attempt_logs_warning(self, caplog):
         """Test logging of SQL injection attempts."""
         with caplog.at_level(logging.WARNING, logger="audit"):
             log_validation_error(
@@ -182,7 +182,7 @@ class TestValidationErrorLogging:
         assert record.invalid_input == "'; DROP TABLE phenopackets;--"
         assert record.severity == "WARNING"
 
-    def test_log_invalid_hgvs(self, caplog):
+    def test_audit_log_invalid_hgvs_logs_warning(self, caplog):
         """Test logging of invalid HGVS notation."""
         with caplog.at_level(logging.WARNING, logger="audit"):
             log_validation_error(
@@ -206,13 +206,13 @@ class TestValidationErrorLogging:
 class TestAuditLoggerConfiguration:
     """Test audit logger configuration."""
 
-    def test_audit_logger_exists(self):
+    def test_audit_logger_exists_configured_info_level(self):
         """Test that audit logger exists and is properly configured."""
         audit_logger = logging.getLogger("audit")
         assert audit_logger is not None
         assert audit_logger.level == logging.INFO
 
-    def test_configure_file_handler(self, tmp_path):
+    def test_audit_logger_file_handler_creates_file(self, tmp_path):
         """Test configuring audit logger with file handler."""
         log_file = tmp_path / "test_audit.log"
         configure_audit_logger(str(log_file))

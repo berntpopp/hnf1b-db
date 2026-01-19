@@ -28,19 +28,21 @@ from app.utils.audit import (
 class TestGenerateJsonPatch:
     """Test RFC 6902 JSON Patch generation."""
 
-    def test_no_changes(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
+    def test_audit_json_patch_identical_inputs_returns_empty(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
+    ) -> None:
         """Test that identical phenopackets produce empty patch."""
         patch = generate_json_patch(
-            sample_phenopacket_minimal, sample_phenopacket_minimal
+            fixture_sample_phenopacket_minimal, fixture_sample_phenopacket_minimal
         )
         assert patch == []
 
-    def test_simple_field_change(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_json_patch_field_change_returns_replace_op(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test patch for simple field modification."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
 
         patch = generate_json_patch(old, new)
@@ -50,10 +52,12 @@ class TestGenerateJsonPatch:
         assert patch[0]["path"] == "/subject/sex"
         assert patch[0]["value"] == "FEMALE"
 
-    def test_add_phenotype(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
+    def test_audit_json_patch_add_phenotype_returns_add_op(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
+    ) -> None:
         """Test patch for adding phenotypic features."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["phenotypicFeatures"] = [
             {"type": {"id": "HP:0000118", "label": "Phenotypic abnormality"}}
         ]
@@ -67,10 +71,12 @@ class TestGenerateJsonPatch:
             "/phenotypicFeatures" in p for p in paths
         )
 
-    def test_multiple_changes(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
+    def test_audit_json_patch_multiple_changes_returns_multiple_ops(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
+    ) -> None:
         """Test patch with multiple simultaneous changes."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
         new["phenotypicFeatures"] = [
             {"type": {"id": "HP:0000001", "label": "Phenotype"}}
@@ -87,51 +93,57 @@ class TestGenerateJsonPatch:
 class TestGenerateChangeSummary:
     """Test human-readable change summary generation."""
 
-    def test_create_summary_minimal(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_create_minimal_returns_counts(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test CREATE summary for minimal phenopacket."""
-        summary = generate_change_summary("CREATE", None, sample_phenopacket_minimal)
+        summary = generate_change_summary(
+            "CREATE", None, fixture_sample_phenopacket_minimal
+        )
         assert "Initial import" in summary
         assert "0 phenotype(s)" in summary
         assert "0 variant(s)" in summary
 
-    def test_create_summary_with_data(
-        self, sample_phenopacket_with_data: Dict[str, Any]
+    def test_audit_summary_create_with_data_returns_counts(
+        self, fixture_sample_phenopacket_with_data: Dict[str, Any]
     ) -> None:
         """Test CREATE summary with phenotypes and variants."""
-        summary = generate_change_summary("CREATE", None, sample_phenopacket_with_data)
+        summary = generate_change_summary(
+            "CREATE", None, fixture_sample_phenopacket_with_data
+        )
         assert "Initial import" in summary
         assert "2 phenotype(s)" in summary
         assert "1 variant(s)" in summary
 
-    def test_update_summary_no_changes(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_no_changes_returns_metadata(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary when no changes detected."""
         summary = generate_change_summary(
-            "UPDATE", sample_phenopacket_minimal, sample_phenopacket_minimal
+            "UPDATE",
+            fixture_sample_phenopacket_minimal,
+            fixture_sample_phenopacket_minimal,
         )
         assert "Updated phenopacket metadata" in summary
 
-    def test_update_summary_sex_change(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_sex_change_returns_description(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary for sex field change."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
 
         summary = generate_change_summary("UPDATE", old, new)
         assert "Updated:" in summary
         assert "changed sex to FEMALE" in summary
 
-    def test_update_summary_added_phenotypes(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_added_phenotypes_returns_count(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary for adding phenotypes."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["phenotypicFeatures"] = [
             {"type": {"id": "HP:0000001", "label": "Phenotype 1"}},
             {"type": {"id": "HP:0000002", "label": "Phenotype 2"}},
@@ -142,24 +154,24 @@ class TestGenerateChangeSummary:
         assert "Updated:" in summary
         assert "added 3 phenotype(s)" in summary
 
-    def test_update_summary_removed_phenotypes(
-        self, sample_phenopacket_with_data: Dict[str, Any]
+    def test_audit_summary_update_removed_phenotypes_returns_count(
+        self, fixture_sample_phenopacket_with_data: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary for removing phenotypes."""
-        old = copy.deepcopy(sample_phenopacket_with_data)
-        new = copy.deepcopy(sample_phenopacket_with_data)
+        old = copy.deepcopy(fixture_sample_phenopacket_with_data)
+        new = copy.deepcopy(fixture_sample_phenopacket_with_data)
         new["phenotypicFeatures"] = []
 
         summary = generate_change_summary("UPDATE", old, new)
         assert "Updated:" in summary
         assert "removed 2 phenotype(s)" in summary
 
-    def test_update_summary_added_variants(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_added_variants_returns_count(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary for adding variants."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["interpretations"] = [
             {"id": "int-1", "progressStatus": "SOLVED"},
             {"id": "int-2", "progressStatus": "IN_PROGRESS"},
@@ -169,24 +181,24 @@ class TestGenerateChangeSummary:
         assert "Updated:" in summary
         assert "added 2 variant(s)" in summary
 
-    def test_update_summary_added_diseases(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_added_diseases_returns_count(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary for adding diseases."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["diseases"] = [{"term": {"id": "MONDO:0001", "label": "Disease 1"}}]
 
         summary = generate_change_summary("UPDATE", old, new)
         assert "Updated:" in summary
         assert "added 1 disease(s)" in summary
 
-    def test_update_summary_multiple_changes(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_summary_update_multiple_changes_returns_all(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test UPDATE summary with multiple changes."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
         new["phenotypicFeatures"] = [
             {"type": {"id": "HP:0000001", "label": "Phenotype"}}
@@ -199,17 +211,21 @@ class TestGenerateChangeSummary:
         assert "added 1 variant(s)" in summary
         assert "changed sex to FEMALE" in summary
 
-    def test_delete_summary(self, sample_phenopacket_minimal: Dict[str, Any]) -> None:
+    def test_audit_summary_delete_returns_soft_deleted(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
+    ) -> None:
         """Test DELETE summary."""
-        summary = generate_change_summary("DELETE", sample_phenopacket_minimal, None)
+        summary = generate_change_summary(
+            "DELETE", fixture_sample_phenopacket_minimal, None
+        )
         assert summary == "Soft deleted phenopacket"
 
-    def test_create_summary_null_phenopacket(self) -> None:
+    def test_audit_summary_create_null_phenopacket_returns_default(self) -> None:
         """Test CREATE summary with None phenopacket."""
         summary = generate_change_summary("CREATE", None, None)
         assert summary == "Created phenopacket"
 
-    def test_update_summary_null_values(self) -> None:
+    def test_audit_summary_update_null_values_returns_default(self) -> None:
         """Test UPDATE summary with None values."""
         summary = generate_change_summary("UPDATE", None, None)
         assert summary == "Updated phenopacket"
@@ -219,12 +235,12 @@ class TestGenerateChangeSummary:
 class TestComparePhenopackets:
     """Test phenopacket comparison and conflict detection."""
 
-    def test_no_conflicts_identical(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_identical_returns_no_conflicts(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test that identical phenopackets have no conflicts."""
         result = compare_phenopackets(
-            sample_phenopacket_minimal, sample_phenopacket_minimal
+            fixture_sample_phenopacket_minimal, fixture_sample_phenopacket_minimal
         )
 
         assert result["has_conflicts"] is False
@@ -232,12 +248,12 @@ class TestComparePhenopackets:
         assert result["patch"] == []
         assert result["patch_count"] == 0
 
-    def test_no_conflicts_safe_changes(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_safe_changes_returns_no_conflicts(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test that safe changes don't trigger conflicts."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["phenotypicFeatures"] = [
             {"type": {"id": "HP:0000001", "label": "Phenotype"}}
         ]
@@ -248,12 +264,12 @@ class TestComparePhenopackets:
         assert result["conflicts"] == []
         assert result["patch_count"] > 0
 
-    def test_conflict_subject_sex_change(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_sex_change_returns_conflict(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test that changing subject sex triggers conflict."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
 
         result = compare_phenopackets(old, new)
@@ -263,12 +279,12 @@ class TestComparePhenopackets:
         assert "Modified critical field: /subject/sex" in result["conflicts"]
         assert result["patch_count"] == 1
 
-    def test_conflict_subject_id_change(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_subject_id_change_returns_conflict(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test that changing subject ID triggers conflict."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["id"] = "different-patient-id"
 
         result = compare_phenopackets(old, new)
@@ -278,12 +294,12 @@ class TestComparePhenopackets:
         assert isinstance(conflicts_list, list)
         assert any("Modified critical field: /subject/id" in c for c in conflicts_list)
 
-    def test_conflict_schema_version_change(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_schema_version_change_returns_conflict(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test that changing schema version triggers conflict."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["metaData"]["phenopacketSchemaVersion"] = "3.0.0"
 
         result = compare_phenopackets(old, new)
@@ -296,12 +312,12 @@ class TestComparePhenopackets:
             for c in conflicts_list
         )
 
-    def test_multiple_conflicts(
-        self, sample_phenopacket_minimal: Dict[str, Any]
+    def test_audit_compare_multiple_critical_changes_returns_multiple_conflicts(
+        self, fixture_sample_phenopacket_minimal: Dict[str, Any]
     ) -> None:
         """Test detection of multiple conflicts."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
         new["subject"]["id"] = "different-patient"
 
@@ -316,16 +332,18 @@ class TestCreateAuditEntry:
     """Test audit entry creation in database."""
 
     @pytest.mark.asyncio
-    async def test_create_audit_create_action(
-        self, db_session: AsyncSession, sample_phenopacket_minimal: Dict[str, Any]
+    async def test_audit_entry_create_action_records_change(
+        self,
+        fixture_db_session: AsyncSession,
+        fixture_sample_phenopacket_minimal: Dict[str, Any],
     ) -> None:
         """Test creating CREATE audit entry."""
         audit = await create_audit_entry(
-            db=db_session,
+            db=fixture_db_session,
             phenopacket_id="phenopacket:HNF1B:001",
             action="CREATE",
             old_value=None,
-            new_value=sample_phenopacket_minimal,
+            new_value=fixture_sample_phenopacket_minimal,
             changed_by="curator@example.com",
             change_reason="Initial import from Google Sheets",
         )
@@ -343,18 +361,18 @@ class TestCreateAuditEntry:
         assert audit.changed_at is not None
 
     @pytest.mark.asyncio
-    async def test_create_audit_update_action(
+    async def test_audit_entry_update_action_generates_patch(
         self,
-        db_session: AsyncSession,
-        sample_phenopacket_minimal: Dict[str, Any],
+        fixture_db_session: AsyncSession,
+        fixture_sample_phenopacket_minimal: Dict[str, Any],
     ) -> None:
         """Test creating UPDATE audit entry with JSON Patch."""
-        old = copy.deepcopy(sample_phenopacket_minimal)
-        new = copy.deepcopy(sample_phenopacket_minimal)
+        old = copy.deepcopy(fixture_sample_phenopacket_minimal)
+        new = copy.deepcopy(fixture_sample_phenopacket_minimal)
         new["subject"]["sex"] = "FEMALE"
 
         audit = await create_audit_entry(
-            db=db_session,
+            db=fixture_db_session,
             phenopacket_id="phenopacket:HNF1B:001",
             action="UPDATE",
             old_value=old,
@@ -373,15 +391,17 @@ class TestCreateAuditEntry:
         assert "changed sex to FEMALE" in audit.change_summary
 
     @pytest.mark.asyncio
-    async def test_create_audit_delete_action(
-        self, db_session: AsyncSession, sample_phenopacket_minimal: Dict[str, Any]
+    async def test_audit_entry_delete_action_records_soft_delete(
+        self,
+        fixture_db_session: AsyncSession,
+        fixture_sample_phenopacket_minimal: Dict[str, Any],
     ) -> None:
         """Test creating DELETE audit entry."""
         audit = await create_audit_entry(
-            db=db_session,
+            db=fixture_db_session,
             phenopacket_id="phenopacket:HNF1B:001",
             action="DELETE",
-            old_value=sample_phenopacket_minimal,
+            old_value=fixture_sample_phenopacket_minimal,
             new_value=None,
             changed_by="admin@example.com",
             change_reason="Patient withdrew consent",
@@ -395,32 +415,36 @@ class TestCreateAuditEntry:
         assert audit.change_summary == "Soft deleted phenopacket"
 
     @pytest.mark.asyncio
-    async def test_create_audit_invalid_action(
-        self, db_session: AsyncSession, sample_phenopacket_minimal: Dict[str, Any]
+    async def test_audit_entry_invalid_action_raises_error(
+        self,
+        fixture_db_session: AsyncSession,
+        fixture_sample_phenopacket_minimal: Dict[str, Any],
     ) -> None:
         """Test that invalid action raises ValueError."""
         with pytest.raises(ValueError, match="Invalid action"):
             await create_audit_entry(
-                db=db_session,
+                db=fixture_db_session,
                 phenopacket_id="phenopacket:HNF1B:001",
                 action="INVALID_ACTION",
                 old_value=None,
-                new_value=sample_phenopacket_minimal,
+                new_value=fixture_sample_phenopacket_minimal,
                 changed_by="curator@example.com",
                 change_reason="Test",
             )
 
     @pytest.mark.asyncio
-    async def test_create_audit_persists(
-        self, db_session: AsyncSession, sample_phenopacket_minimal: Dict[str, Any]
+    async def test_audit_entry_persists_to_database(
+        self,
+        fixture_db_session: AsyncSession,
+        fixture_sample_phenopacket_minimal: Dict[str, Any],
     ) -> None:
         """Test that audit entry is properly persisted to database."""
         _ = await create_audit_entry(
-            db=db_session,
+            db=fixture_db_session,
             phenopacket_id="phenopacket:HNF1B:TEST",
             action="CREATE",
             old_value=None,
-            new_value=sample_phenopacket_minimal,
+            new_value=fixture_sample_phenopacket_minimal,
             changed_by="test@example.com",
             change_reason="Unit test",
         )
@@ -429,7 +453,7 @@ class TestCreateAuditEntry:
         query = text(
             "SELECT * FROM phenopacket_audit WHERE phenopacket_id = :phenopacket_id"
         )
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             query, {"phenopacket_id": "phenopacket:HNF1B:TEST"}
         )
         row = result.fetchone()
