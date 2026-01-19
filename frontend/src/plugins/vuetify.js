@@ -1,29 +1,34 @@
 // src/plugins/vuetify.js
 // Framework documentation: https://vuetifyjs.com/
+//
+// Theme colors are imported from designTokens.js for single source of truth.
+// See: frontend/src/utils/designTokens.js
 
 import { createVuetify } from 'vuetify';
 import 'vuetify/styles';
 import '@mdi/font/css/materialdesignicons.css';
 import { aliases, mdi } from 'vuetify/iconsets/mdi';
+import { COLORS } from '@/utils/designTokens';
 
-// Current Teal Theme
-// Primary: #009688 (Teal)
-// Secondary: #37474F (Slate)
-// Accent: #FF8A65 (Soft Coral)
+// HNF1B Database Theme
+// Colors imported from designTokens.js:
+// - Primary: Teal (#009688)
+// - Secondary: Slate (#37474F)
+// - Accent: Gold/Amber (#FFB300) - changed from coral for better harmony
 const hnf1bTheme = {
   dark: false,
   colors: {
-    background: '#F5F7FA', // Soft off-white for depth
-    surface: '#FFFFFF',
-    primary: '#009688', // Maintaining established brand Teal
-    'primary-darken-1': '#00796B',
-    secondary: '#37474F',
-    'secondary-darken-1': '#263238',
-    accent: '#FF8A65',
-    error: '#B00020',
-    info: '#2196F3',
-    success: '#4CAF50',
-    warning: '#FB8C00',
+    background: COLORS.BACKGROUND,
+    surface: COLORS.SURFACE,
+    primary: COLORS.PRIMARY,
+    'primary-darken-1': COLORS.PRIMARY_DARKEN_1,
+    secondary: COLORS.SECONDARY,
+    'secondary-darken-1': COLORS.SECONDARY_DARKEN_1,
+    accent: COLORS.ACCENT,
+    error: COLORS.ERROR,
+    info: COLORS.INFO,
+    success: COLORS.SUCCESS,
+    warning: COLORS.WARNING,
   },
 };
 
