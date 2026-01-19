@@ -4,8 +4,13 @@
  * Centralized configuration for the AggregationsDashboard component.
  * Extracted to reduce component size and improve maintainability.
  *
+ * Colors for sex and pathogenicity charts are imported from designTokens.js
+ * for consistency with chips throughout the application.
+ *
  * @module utils/aggregationConfig
  */
+
+import { SEX_COLORS, PATHOGENICITY_COLORS } from '@/utils/designTokens';
 
 /**
  * Tab definitions for URL-navigatable tabs.
@@ -48,17 +53,20 @@ export function getTabSlug(label) {
 /**
  * Semantic color maps for specific aggregations.
  * Maps data labels to consistent colors across the application.
+ *
+ * Colors for sex and pathogenicity are imported from designTokens.js
+ * for consistency with chips throughout the application.
  */
 export const AGGREGATION_COLOR_MAPS = {
-  // Pathogenicity: red=pathogenic, orange=LP, yellow=VUS, green=benign
+  // Pathogenicity colors imported from designTokens.js for consistency with chips
   getVariantPathogenicity: {
-    Pathogenic: '#D32F2F', // Red
-    'Likely Pathogenic': '#FF9800', // Orange
-    'Uncertain Significance': '#FDD835', // Bright yellow for VUS
-    'Likely Benign': '#81C784', // Light green
-    Benign: '#388E3C', // Dark green
+    Pathogenic: PATHOGENICITY_COLORS.PATHOGENIC.hex,
+    'Likely Pathogenic': PATHOGENICITY_COLORS.LIKELY_PATHOGENIC.hex,
+    'Uncertain Significance': PATHOGENICITY_COLORS.VUS.hex,
+    'Likely Benign': PATHOGENICITY_COLORS.LIKELY_BENIGN.hex,
+    Benign: PATHOGENICITY_COLORS.BENIGN.hex,
   },
-  // Variant types
+  // Variant types (no existing semantic tokens - using hardcoded hex)
   getVariantTypes: {
     'Copy Number Loss': '#D32F2F', // Red
     'Copy Number Gain': '#1976D2', // Blue
@@ -69,14 +77,14 @@ export const AGGREGATION_COLOR_MAPS = {
     Indel: '#E91E63', // Pink
     NA: '#9E9E9E', // Grey
   },
-  // Sex distribution
+  // Sex colors imported from designTokens.js for consistency with chips
   getSexDistribution: {
-    MALE: '#1976D2', // Blue
-    FEMALE: '#E91E63', // Pink
-    OTHER_SEX: '#9C27B0', // Purple
-    UNKNOWN_SEX: '#9E9E9E', // Grey
+    MALE: SEX_COLORS.MALE.hex,
+    FEMALE: SEX_COLORS.FEMALE.hex,
+    OTHER_SEX: SEX_COLORS.OTHER_SEX.hex,
+    UNKNOWN_SEX: SEX_COLORS.UNKNOWN_SEX.hex,
   },
-  // Publication types
+  // Publication types (no existing semantic tokens - using hardcoded hex)
   getPublicationTypes: {
     'Case Series': '#1976D2', // Blue
     Research: '#4CAF50', // Green
