@@ -21,7 +21,7 @@ from app.phenopackets.validator import PhenopacketSanitizer
 
 
 @pytest.fixture(scope="function")
-async def large_phenopacket_set(db_session: AsyncSession):
+async def fixture_large_phenopacket_set(fixture_db_session: AsyncSession):
     """Create a larger set of phenopackets for integration testing.
 
     Creates 100 phenopackets to test pagination across multiple pages.
@@ -34,13 +34,13 @@ async def large_phenopacket_set(db_session: AsyncSession):
 
     # Clean up any leftover test data from failed previous runs
     # This is critical because tests may have failed mid-execution
-    await db_session.execute(
+    await fixture_db_session.execute(
         delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test_integration_%"))
     )
-    await db_session.commit()
+    await fixture_db_session.commit()
 
     # Ensure the session is fresh
-    await db_session.rollback()
+    await fixture_db_session.rollback()
 
     phenopackets_data = []
 
@@ -89,28 +89,28 @@ async def large_phenopacket_set(db_session: AsyncSession):
             created_by="integration_test",
         )
 
-        db_session.add(phenopacket)
+        fixture_db_session.add(phenopacket)
         phenopackets_data.append(phenopacket)
 
-    await db_session.commit()
+    await fixture_db_session.commit()
 
     yield phenopackets_data
 
     # Cleanup: Use delete query instead of iterating over objects
     # This is robust even if the test fails or session is in bad state
     try:
-        await db_session.rollback()  # Clear any pending transactions
-        await db_session.execute(
+        await fixture_db_session.rollback()  # Clear any pending transactions
+        await fixture_db_session.execute(
             delete(Phenopacket).where(
                 Phenopacket.phenopacket_id.like("test_integration_%")
             )
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
     except Exception as e:
         # Log but don't fail - cleanup is best effort
         print(f"Warning: Cleanup failed: {e}")
         try:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
         except Exception:
             # Ignore exceptions during rollback; session may be in unrecoverable state after failed test cleanup.
             pass
@@ -120,8 +120,8 @@ class TestPaginationWorkflows:
     """Test complete pagination workflows."""
 
     @pytest.mark.asyncio
-    async def test_paginate_through_all_records(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_paginate_through_records_returns_no_duplicates(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test paginating through a subset of records without duplicates."""
         page_size = 20
@@ -129,9 +129,9 @@ class TestPaginationWorkflows:
 
         # Get first 3 pages
         for page in range(1, 4):
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -151,14 +151,14 @@ class TestPaginationWorkflows:
         )
 
     @pytest.mark.asyncio
-    async def test_follow_navigation_links(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_follow_navigation_links_navigates_correctly(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test following next/prev links correctly navigates pages."""
         # Get first page with sorting for consistency
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/?page[number]=1&page[size]=15&sort=subject_id",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         assert response.status_code == 200
         page1_data = response.json()
@@ -169,7 +169,7 @@ class TestPaginationWorkflows:
             # Remove base URL if present
             next_url = next_url.replace("http://test", "")
 
-            response = await async_client.get(next_url, headers=auth_headers)
+            response = await fixture_async_client.get(next_url, headers=fixture_auth_headers)
             assert response.status_code == 200
             page2_data = response.json()
 
@@ -199,7 +199,7 @@ class TestPaginationWorkflows:
             if prev_url:
                 prev_url = prev_url.replace("http://test", "")
 
-                response = await async_client.get(prev_url, headers=auth_headers)
+                response = await fixture_async_client.get(prev_url, headers=fixture_auth_headers)
                 assert response.status_code == 200
                 page1_again = response.json()
 
@@ -207,14 +207,14 @@ class TestPaginationWorkflows:
                 assert page1_again["meta"]["page"]["currentPage"] == 1
 
     @pytest.mark.asyncio
-    async def test_last_link_goes_to_last_page(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_last_link_navigates_to_last_page(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that last link correctly navigates to last page."""
         # Get first page
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/?page[number]=1&page[size]=20",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         assert response.status_code == 200
         data = response.json()
@@ -223,7 +223,7 @@ class TestPaginationWorkflows:
         last_url = data["links"]["last"]
         last_url = last_url.replace("http://test", "")
 
-        response = await async_client.get(last_url, headers=auth_headers)
+        response = await fixture_async_client.get(last_url, headers=fixture_auth_headers)
         assert response.status_code == 200
         last_page_data = response.json()
 
@@ -239,8 +239,8 @@ class TestDataConsistency:
     """Test data consistency across pagination."""
 
     @pytest.mark.asyncio
-    async def test_no_duplicate_records_across_pages(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_no_duplicate_records_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that no test records appear on multiple pages."""
         page_size = 25
@@ -248,9 +248,9 @@ class TestDataConsistency:
         all_ids = set()
 
         for page in range(1, total_pages + 1):
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -266,8 +266,8 @@ class TestDataConsistency:
                     all_ids.add(phenopacket_id)
 
     @pytest.mark.asyncio
-    async def test_data_consistency_with_filters(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_filter_produces_consistent_results_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that filtering produces consistent results across paginated requests."""
         # Get first 2 pages with MALE filter
@@ -275,9 +275,9 @@ class TestDataConsistency:
         all_male_ids = set()
 
         for page in range(1, 3):
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&filter[sex]=MALE&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -294,16 +294,16 @@ class TestDataConsistency:
         )
 
     @pytest.mark.asyncio
-    async def test_sorted_data_consistency(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_sorted_data_maintains_order_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that sorted pagination returns records in consistent order."""
         page_size = 20
 
         # Get page 1 sorted
-        response1 = await async_client.get(
+        response1 = await fixture_async_client.get(
             f"/api/v2/phenopackets/?page[number]=1&page[size]={page_size}&sort=subject_id",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         # Filter to test data only - the API uses natural sorting (Var2 before Var10)
         # which differs from Python's lexicographic sort
@@ -314,9 +314,9 @@ class TestDataConsistency:
         ]
 
         # Get page 2 sorted
-        response2 = await async_client.get(
+        response2 = await fixture_async_client.get(
             f"/api/v2/phenopackets/?page[number]=2&page[size]={page_size}&sort=subject_id",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         page2_ids = [
             p["subject"]["id"]
@@ -342,8 +342,8 @@ class TestFilteringConsistency:
     """Test that filtering works consistently across pagination."""
 
     @pytest.mark.asyncio
-    async def test_filter_results_match_across_pages(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_filter_criteria_maintained_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that filter criteria are maintained across all pages."""
         filter_params = "filter[sex]=FEMALE&filter[has_variants]=true"
@@ -351,9 +351,9 @@ class TestFilteringConsistency:
         max_pages = 10
 
         while page <= max_pages:
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]=10&{filter_params}",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -370,8 +370,8 @@ class TestFilteringConsistency:
             page += 1
 
     @pytest.mark.asyncio
-    async def test_combined_filters_pagination(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_combined_filters_with_pagination_returns_matches(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test pagination with multiple filters combined."""
         # Get first 2 pages with combined filters
@@ -379,9 +379,9 @@ class TestFilteringConsistency:
         all_filtered_ids = set()
 
         for page in range(1, 3):
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&filter[sex]=MALE&filter[has_variants]=true&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -406,8 +406,8 @@ class TestSortingConsistency:
     """Test that sorting is consistent across pagination."""
 
     @pytest.mark.asyncio
-    async def test_ascending_sort_across_pages(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_ascending_sort_maintained_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test ascending sort order is maintained across pages."""
         all_ids = []
@@ -415,9 +415,9 @@ class TestSortingConsistency:
         page_size = 20
 
         for _ in range(3):  # Get first 3 pages
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -444,8 +444,8 @@ class TestSortingConsistency:
             )
 
     @pytest.mark.asyncio
-    async def test_descending_sort_across_pages(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_descending_sort_maintained_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test descending sort order is maintained across pages."""
         all_ids = []
@@ -453,9 +453,9 @@ class TestSortingConsistency:
         page_size = 20
 
         for _ in range(3):  # Get first 3 pages
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&sort=-subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -486,8 +486,8 @@ class TestComplexScenarios:
     """Test complex real-world pagination scenarios."""
 
     @pytest.mark.asyncio
-    async def test_filter_sort_paginate_combined(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_filter_sort_paginate_combined_works(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test combining filtering, sorting, and pagination."""
         # Get MALE phenopackets, sorted by subject_id, paginated
@@ -496,9 +496,9 @@ class TestComplexScenarios:
         page_size = 15
 
         while page <= 5:  # Safety limit
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}&filter[sex]=MALE&sort=subject_id",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -522,8 +522,8 @@ class TestComplexScenarios:
             assert all_ids == sorted(all_ids), "Test results should be sorted"
 
     @pytest.mark.asyncio
-    async def test_pagination_metadata_consistency(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_pagination_metadata_consistent_across_pages(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that metadata is consistent across all pages."""
         page_size = 20
@@ -531,9 +531,9 @@ class TestComplexScenarios:
         total_records_expected = None
 
         for page in range(1, 6):  # Check first 5 pages
-            response = await async_client.get(
+            response = await fixture_async_client.get(
                 f"/api/v2/phenopackets/?page[number]={page}&page[size]={page_size}",
-                headers=auth_headers,
+                headers=fixture_auth_headers,
             )
 
             assert response.status_code == 200
@@ -561,22 +561,22 @@ class TestComplexScenarios:
                 break
 
     @pytest.mark.asyncio
-    async def test_page_boundary_accuracy(
-        self, async_client: AsyncClient, large_phenopacket_set, auth_headers
+    async def test_jsonapi_page_boundary_no_overlap_or_gaps(
+        self, fixture_async_client: AsyncClient, fixture_large_phenopacket_set, fixture_auth_headers
     ):
         """Test that page boundaries are accurate (no overlap or gaps)."""
         page_size = 17  # Use odd number to test boundary calculation
 
         # Get two consecutive pages
-        response1 = await async_client.get(
+        response1 = await fixture_async_client.get(
             f"/api/v2/phenopackets/?page[number]=1&page[size]={page_size}&sort=subject_id",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         page1_data = response1.json()
 
-        response2 = await async_client.get(
+        response2 = await fixture_async_client.get(
             f"/api/v2/phenopackets/?page[number]=2&page[size]={page_size}&sort=subject_id",
-            headers=auth_headers,
+            headers=fixture_auth_headers,
         )
         page2_data = response2.json()
 
