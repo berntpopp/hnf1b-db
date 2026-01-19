@@ -116,28 +116,42 @@ Plans:
 
 ## Phase 3: Backend Test Modernization
 
-**Goal:** Upgrade test suite to modern pytest patterns
+**Goal:** Upgrade test suite to modern pytest patterns with standardized naming and coverage measurement
+
+**Status:** Planned
 
 **GitHub Issue:** #94
+
+**Plans:** 7 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Configure pytest-cov and modernize conftest.py fixture naming
+- [ ] 03-02-PLAN.md — Migrate test naming Batch 1 (auth, config, phenopackets, ontology)
+- [ ] 03-03-PLAN.md — Migrate test naming Batch 2 (audit, patterns, batch, transaction) + consolidate fixtures
+- [ ] 03-04-PLAN.md — Migrate test naming Batch 3 (JSON:API, search, performance)
+- [ ] 03-05-PLAN.md — Migrate test naming Batch 4 (variant, CNV tests)
+- [ ] 03-06-PLAN.md — Migrate test naming Batch 5 (classification, survival, remaining)
+- [ ] 03-07-PLAN.md — Finalize: remove backward-compat aliases, verify full suite
 
 **Requirements:**
 - QUAL-05: Async context manager fixtures
 - QUAL-06: Standardized test naming
 - QUAL-07: Consolidated conftest.py
-- QUAL-08: 80% coverage minimum
+- QUAL-08: 80% coverage minimum (CONTEXT.md: 60% overall, 40% per-file floor)
 
 **Success Criteria:**
-1. All fixtures use async context managers
+1. All fixtures use async context managers (already done - verified in conftest.py)
 2. Test names follow `test_<feature>_<scenario>_<expected_result>`
 3. Duplicate utilities consolidated in conftest.py
-4. Coverage report shows ≥80%
+4. Coverage report shows ≥60% (per CONTEXT.md decision)
 5. No deprecated unittest.mock patterns
 
 **Dependencies:** Phase 1 complete
 
 **Files to modify:**
 - `backend/tests/conftest.py`
-- All test files in `backend/tests/`
+- `backend/pyproject.toml`
+- All 35 test files in `backend/tests/`
 
 ---
 
@@ -355,4 +369,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-19 after phase 2 execution complete*
+*Last updated: 2026-01-19 after phase 3 planning complete*
