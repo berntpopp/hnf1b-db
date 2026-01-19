@@ -31,14 +31,19 @@
 
 ## Phase 1: Pydantic Deprecation Fixes
 
-**Goal:** Eliminate all 12 Pydantic deprecation warnings from backend code
+**Goal:** Eliminate all 7 Pydantic class-based Config deprecation warnings from backend code
 
 **GitHub Issue:** #134
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Migrate class-based Config to ConfigDict in 2 schema files
+
 **Requirements:**
-- QUAL-01: Fix `regex` → `pattern` in Query parameters
-- QUAL-02: Fix `example` → `examples=[]` in Field definitions
-- QUAL-03: Replace class-based `Config` with `ConfigDict`
+- QUAL-01: Fix `regex` → `pattern` in Query parameters (ALREADY DONE - verified)
+- QUAL-02: Fix `example` → `examples=[]` in Field definitions (ALREADY DONE - verified)
+- QUAL-03: Replace class-based `Config` with `ConfigDict` (7 instances)
 
 **Success Criteria:**
 1. `make backend && make test` produces zero Pydantic deprecation warnings
@@ -48,10 +53,10 @@
 **Dependencies:** None (can start immediately)
 
 **Files to modify:**
-- `backend/app/phenopackets/routers/aggregations.py` (lines 203, 276)
-- `backend/app/phenopackets/routers/crud.py` (line 1146)
-- `backend/app/variants/routers/variant_validator_endpoint.py` (lines 269, 435)
-- All Pydantic models with class-based Config
+- `backend/app/reference/schemas.py` (5 Config classes)
+- `backend/app/phenopackets/models.py` (2 Config classes)
+
+**Research Note:** Original issue #134 mentioned 12 warnings. Research revealed only 7 remain - all class-based Config. The `regex=` and `example=` patterns are already migrated.
 
 ---
 
@@ -331,4 +336,4 @@
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-19 after initial planning*
+*Last updated: 2026-01-19 after phase 1 planning*
