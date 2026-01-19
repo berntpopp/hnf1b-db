@@ -1,0 +1,334 @@
+# Roadmap: HNF1B Database Final Polish
+
+**Created:** 2026-01-19
+**Milestone:** Final Polish
+**Status:** Planning
+
+## Overview
+
+| Metric | Value |
+|--------|-------|
+| Total Phases | 9 |
+| Total Requirements | 53 |
+| GitHub Issues | 14 |
+| Priority | Bug fixes → Refactoring → Features → Testing → Docs |
+
+## Phase Summary
+
+| # | Phase | Goal | Issues | Requirements | Priority |
+|---|-------|------|--------|--------------|----------|
+| 1 | Pydantic Fixes | Eliminate deprecation warnings | #134 | 3 | P2-Medium |
+| 2 | Component & Constants | Extract large components, add constants | #133, #137, #91 | 13 | P1-High |
+| 3 | Test Modernization | Upgrade backend test suite | #94 | 4 | P2-Medium |
+| 4 | UI/UX Normalization | Consistent design system | #98 | 7 | P2-Medium |
+| 5 | Chart Polish | Accessibility, animations, export | #135, #139, #136 | 15 | P2-Medium |
+| 6 | Backend Features & PWA | User tracking, service worker | #140, #138 | 8 | P3-Low |
+| 7 | Migration Consolidation | Clean alembic history | #102 | 4 | P3-Low |
+| 8 | E2E Testing | Playwright test coverage | #48 | 6 | P3-Low |
+| 9 | Documentation | User & developer docs | #50 | 5 | P1-High |
+
+---
+
+## Phase 1: Pydantic Deprecation Fixes
+
+**Goal:** Eliminate all 12 Pydantic deprecation warnings from backend code
+
+**GitHub Issue:** #134
+
+**Requirements:**
+- QUAL-01: Fix `regex` → `pattern` in Query parameters
+- QUAL-02: Fix `example` → `examples=[]` in Field definitions
+- QUAL-03: Replace class-based `Config` with `ConfigDict`
+
+**Success Criteria:**
+1. `make backend && make test` produces zero Pydantic deprecation warnings
+2. All existing tests pass
+3. API responses unchanged (no breaking changes)
+
+**Dependencies:** None (can start immediately)
+
+**Files to modify:**
+- `backend/app/phenopackets/routers/aggregations.py` (lines 203, 276)
+- `backend/app/phenopackets/routers/crud.py` (line 1146)
+- `backend/app/variants/routers/variant_validator_endpoint.py` (lines 269, 435)
+- All Pydantic models with class-based Config
+
+---
+
+## Phase 2: Component Refactoring & Constants
+
+**Goal:** Extract ProteinStructure3D.vue and create centralized constants
+
+**GitHub Issues:** #133, #137, #91
+
+**Requirements:**
+- QUAL-09 through QUAL-18 (component extraction and configuration)
+- QUAL-04 (backend constants)
+- QUAL-14-18 (frontend constants/config)
+
+**Success Criteria:**
+1. ProteinStructure3D.vue reduced to <500 lines
+2. 5 sub-components created in `protein-structure/` directory
+3. `backend/app/constants.py` exists with documented constants
+4. `frontend/src/constants/` module exists
+5. `frontend/src/config/` has centralized configuration
+6. All existing functionality preserved
+7. All tests pass
+
+**Dependencies:** Phase 1 complete
+
+**Files to create:**
+- `frontend/src/components/gene/protein-structure/StructureViewer.vue`
+- `frontend/src/components/gene/protein-structure/StructureControls.vue`
+- `frontend/src/components/gene/protein-structure/VariantPanel.vue`
+- `frontend/src/components/gene/protein-structure/DistanceStatsCard.vue`
+- `frontend/src/components/gene/protein-structure/StructureTooltip.vue`
+- `backend/app/constants.py`
+- `frontend/src/constants/thresholds.js`
+- `frontend/src/constants/pubmed.js`
+- `frontend/src/config/index.js`
+
+---
+
+## Phase 3: Backend Test Modernization
+
+**Goal:** Upgrade test suite to modern pytest patterns
+
+**GitHub Issue:** #94
+
+**Requirements:**
+- QUAL-05: Async context manager fixtures
+- QUAL-06: Standardized test naming
+- QUAL-07: Consolidated conftest.py
+- QUAL-08: 80% coverage minimum
+
+**Success Criteria:**
+1. All fixtures use async context managers
+2. Test names follow `test_<feature>_<scenario>_<expected_result>`
+3. Duplicate utilities consolidated in conftest.py
+4. Coverage report shows ≥80%
+5. No deprecated unittest.mock patterns
+
+**Dependencies:** Phase 1 complete
+
+**Files to modify:**
+- `backend/tests/conftest.py`
+- All test files in `backend/tests/`
+
+---
+
+## Phase 4: UI/UX Normalization
+
+**Goal:** Consistent design system across all views
+
+**GitHub Issue:** #98
+
+**Requirements:**
+- UIUX-01 through UIUX-07 (design tokens, theme, components)
+
+**Success Criteria:**
+1. Design tokens file created with color palette
+2. Vuetify theme updated with standardized colors
+3. `PageHeader.vue` component created and used
+4. `DataTableToolbar.vue` component created and used
+5. Consistent icon usage across views
+6. Consistent typography hierarchy
+7. Consistent card styles and spacing
+
+**Dependencies:** Phase 2 complete (config files exist)
+
+**Files to create:**
+- `frontend/src/utils/designTokens.js`
+- `frontend/src/components/common/PageHeader.vue`
+- `frontend/src/components/common/DataTableToolbar.vue`
+
+**Files to modify:**
+- `frontend/src/plugins/vuetify.js`
+- All view files for consistency
+
+---
+
+## Phase 5: Chart Polish
+
+**Goal:** Accessible, animated charts with export functionality
+
+**GitHub Issues:** #135, #139, #136
+
+**Requirements:**
+- A11Y-01 through A11Y-06 (accessibility)
+- CHART-01 through CHART-09 (animations and export)
+
+**Success Criteria:**
+1. All charts have `aria-describedby` with text summaries
+2. Screen reader text (sr-only) added to all charts
+3. `prefers-reduced-motion` respected
+4. Arc tween animation on donut charts
+5. Height tween animation on bar charts
+6. Path drawing animation on line charts
+7. PNG export at 2x resolution working
+8. CSV export with headers working
+9. Export menu on all chart components
+
+**Dependencies:** Phase 4 complete (design tokens for consistency)
+
+**Files to create:**
+- `frontend/src/utils/export.js`
+- `frontend/src/components/common/ChartExportMenu.vue`
+
+**Files to modify:**
+- `frontend/src/components/charts/DonutChart.vue`
+- `frontend/src/components/charts/StackedBarChart.vue`
+- `frontend/src/components/charts/KaplanMeierChart.vue`
+- `frontend/src/components/charts/VariantComparisonChart.vue`
+- `frontend/src/components/charts/DNADistanceAnalysis.vue`
+
+---
+
+## Phase 6: Backend Features & PWA
+
+**Goal:** User tracking for aggregations and service worker caching
+
+**GitHub Issues:** #140, #138
+
+**Requirements:**
+- FEAT-01 through FEAT-04 (user tracking)
+- PWA-01 through PWA-04 (service worker)
+
+**Success Criteria:**
+1. Aggregation endpoints accept optional user dependency
+2. User ID logged for authenticated requests
+3. Anonymous logged for unauthenticated requests
+4. TODO comment removed from aggregations.py
+5. vite-plugin-pwa installed and configured
+6. Service worker caches static assets
+7. Structure file (2h8r.cif) cached with CacheFirst
+8. Offline fallback page works
+
+**Dependencies:** Phase 2 complete (constants defined)
+
+**Files to create:**
+- `frontend/public/offline.html`
+
+**Files to modify:**
+- `backend/app/phenopackets/routers/aggregations.py`
+- `frontend/vite.config.js`
+- `frontend/package.json`
+
+---
+
+## Phase 7: Migration Consolidation
+
+**Goal:** Clean alembic migration history
+
+**GitHub Issue:** #102
+
+**Requirements:**
+- DB-01 through DB-04 (migration cleanup)
+
+**Success Criteria:**
+1. Single `001_initial_schema.py` migration exists
+2. Old migrations archived in `versions/archive/`
+3. Fresh database setup works with single migration
+4. All indexes and constraints present
+5. Production migration procedure documented
+
+**Dependencies:** All code changes complete (Phases 1-6)
+
+**Risk Level:** HIGH - requires backup/restore procedure
+
+**Files to create:**
+- `backend/alembic/versions/001_initial_schema.py`
+- `backend/alembic/versions/archive/` (directory)
+
+**Files to modify:**
+- Move all existing migrations to archive
+
+---
+
+## Phase 8: E2E Testing
+
+**Goal:** Playwright E2E test coverage for critical flows
+
+**GitHub Issue:** #48
+
+**Requirements:**
+- TEST-01 through TEST-06 (Playwright setup and tests)
+
+**Success Criteria:**
+1. Playwright installed and configured
+2. Navigation tests pass (home → phenopackets → detail)
+3. Search tests pass (query, filters, results)
+4. Aggregations tests pass (all charts load)
+5. Variant flow tests pass (list → detail → individuals)
+6. E2E tests run in CI/CD
+
+**Dependencies:** Phase 7 complete (stable codebase to test)
+
+**Files to create:**
+- `frontend/playwright.config.js`
+- `frontend/e2e/navigation.spec.js`
+- `frontend/e2e/search.spec.js`
+- `frontend/e2e/aggregations.spec.js`
+- `frontend/e2e/variants.spec.js`
+
+---
+
+## Phase 9: Documentation
+
+**Goal:** Complete user and developer documentation
+
+**GitHub Issue:** #50
+
+**Requirements:**
+- DOCS-01 through DOCS-05 (documentation)
+
+**Success Criteria:**
+1. User guide written (getting started, features, FAQ)
+2. Developer guide updated (setup, architecture, testing)
+3. All v2 API endpoints documented
+4. Changelog created (v2.0.0 release notes)
+5. Screenshots added to documentation
+
+**Dependencies:** Phase 8 complete (document final state)
+
+**Files to create/modify:**
+- `docs/user-guide.md`
+- `docs/developer-guide.md`
+- `docs/api-reference.md`
+- `CHANGELOG.md`
+- `README.md` (update)
+
+---
+
+## Execution Order Rationale
+
+1. **Phase 1 (Pydantic):** Bug fixes first - eliminates warnings that could mask other issues
+2. **Phase 2 (Components/Constants):** Code quality foundation - cleaner code makes features easier
+3. **Phase 3 (Tests):** Quality assurance - ensures refactoring didn't break anything
+4. **Phase 4 (UI/UX):** Visual consistency - uses config from Phase 2
+5. **Phase 5 (Charts):** Chart polish - builds on UI normalization
+6. **Phase 6 (Features):** New capabilities - clean codebase ready for features
+7. **Phase 7 (Migrations):** High risk - do after all code changes complete
+8. **Phase 8 (E2E):** Test final state - verify everything works together
+9. **Phase 9 (Docs):** Document final state - accurate documentation
+
+---
+
+## Risk Assessment
+
+| Phase | Risk | Mitigation |
+|-------|------|------------|
+| 1 | Low | Well-defined deprecation fixes |
+| 2 | Medium | Extensive testing of refactored components |
+| 3 | Low | Test improvements don't affect production |
+| 4 | Low | Visual changes, no logic changes |
+| 5 | Medium | D3.js animations need careful testing |
+| 6 | Medium | Service worker can break offline behavior |
+| 7 | **HIGH** | Backup before migration consolidation |
+| 8 | Low | Tests don't affect production |
+| 9 | Low | Documentation only |
+
+---
+
+*Roadmap created: 2026-01-19*
+*Last updated: 2026-01-19 after initial planning*
