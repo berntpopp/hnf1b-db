@@ -1,4 +1,8 @@
-"""Tests for batch endpoints to prevent N+1 query problems."""
+"""Tests for batch endpoints to prevent N+1 query problems.
+
+Fixtures used from conftest.py:
+- fixture_db_session
+"""
 
 import pytest
 from sqlalchemy import select
@@ -9,8 +13,8 @@ from app.phenopackets.validator import PhenopacketSanitizer
 
 
 @pytest.fixture
-async def sample_phenopackets(db_session: AsyncSession):
-    """Create sample phenopackets for testing."""
+async def fixture_sample_phenopackets(fixture_db_session: AsyncSession):
+    """Create sample phenopackets for testing batch endpoints."""
     sanitizer = PhenopacketSanitizer()
 
     phenopackets_data = []
@@ -54,17 +58,17 @@ async def sample_phenopackets(db_session: AsyncSession):
             created_by="test_user",
         )
 
-        db_session.add(phenopacket)
+        fixture_db_session.add(phenopacket)
         phenopackets_data.append(phenopacket)
 
-    await db_session.commit()
+    await fixture_db_session.commit()
 
     yield phenopackets_data
 
     # Cleanup
     for pp in phenopackets_data:
-        await db_session.delete(pp)
-    await db_session.commit()
+        await fixture_db_session.delete(pp)
+    await fixture_db_session.commit()
 
 
 class TestBatchEndpointsQueryCount:
@@ -75,14 +79,14 @@ class TestBatchEndpointsQueryCount:
     Performance benchmarks in test_batch_performance.py show the actual improvement.
     """
 
-    async def test_batch_phenopackets_uses_where_in_clause(
-        self, db_session: AsyncSession, sample_phenopackets
+    async def test_batch_phenopackets_where_in_clause_returns_all(
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch phenopacket endpoint uses WHERE...IN clause."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:5]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:5]]
 
         # Execute batch query with WHERE...IN
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(Phenopacket.phenopacket_id.in_(phenopacket_ids))
         )
         phenopackets = result.scalars().all()
@@ -92,14 +96,14 @@ class TestBatchEndpointsQueryCount:
         returned_ids = {pp.phenopacket_id for pp in phenopackets}
         assert returned_ids == set(phenopacket_ids)
 
-    async def test_batch_features_uses_where_in_clause(
-        self, db_session: AsyncSession, sample_phenopackets
+    async def test_batch_features_where_in_clause_returns_features(
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch features endpoint uses WHERE...IN clause."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:5]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:5]]
 
         # Execute batch features query
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(
                 Phenopacket.phenopacket_id,
                 Phenopacket.phenopacket["phenotypicFeatures"].label("features"),
@@ -112,14 +116,14 @@ class TestBatchEndpointsQueryCount:
         returned_ids = {row.phenopacket_id for row in rows}
         assert returned_ids == set(phenopacket_ids)
 
-    async def test_batch_variants_uses_where_in_clause(
-        self, db_session: AsyncSession, sample_phenopackets
+    async def test_batch_variants_where_in_clause_returns_interpretations(
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch variants endpoint uses WHERE...IN clause."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:5]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:5]]
 
         # Execute batch variants query
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(
                 Phenopacket.phenopacket_id,
                 Phenopacket.phenopacket["interpretations"].label("interpretations"),
@@ -137,12 +141,12 @@ class TestBatchEndpointsFunctionality:
     """Test that batch endpoints return correct data."""
 
     async def test_batch_phenopackets_returns_all_requested(
-        self, db_session: AsyncSession, sample_phenopackets
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch endpoint returns all requested phenopackets."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:3]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:3]]
 
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(Phenopacket.phenopacket_id.in_(phenopacket_ids))
         )
         phenopackets = result.scalars().all()
@@ -151,13 +155,13 @@ class TestBatchEndpointsFunctionality:
         returned_ids = {pp.phenopacket_id for pp in phenopackets}
         assert returned_ids == set(phenopacket_ids)
 
-    async def test_batch_features_includes_features(
-        self, db_session: AsyncSession, sample_phenopackets
+    async def test_batch_features_returns_phenotypic_features(
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch features endpoint includes phenotypic features."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:3]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:3]]
 
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(
                 Phenopacket.phenopacket_id,
                 Phenopacket.phenopacket["phenotypicFeatures"].label("features"),
@@ -171,13 +175,13 @@ class TestBatchEndpointsFunctionality:
             assert row.features is not None
             assert len(row.features) > 0
 
-    async def test_batch_variants_includes_interpretations(
-        self, db_session: AsyncSession, sample_phenopackets
+    async def test_batch_variants_returns_interpretations(
+        self, fixture_db_session: AsyncSession, fixture_sample_phenopackets
     ):
         """Verify batch variants endpoint includes interpretations."""
-        phenopacket_ids = [pp.phenopacket_id for pp in sample_phenopackets[:3]]
+        phenopacket_ids = [pp.phenopacket_id for pp in fixture_sample_phenopackets[:3]]
 
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(
                 Phenopacket.phenopacket_id,
                 Phenopacket.phenopacket["interpretations"].label("interpretations"),
@@ -191,22 +195,24 @@ class TestBatchEndpointsFunctionality:
             assert row.interpretations is not None
             assert len(row.interpretations) > 0
 
-    async def test_batch_endpoints_handle_empty_input(self, db_session: AsyncSession):
+    async def test_batch_endpoints_empty_input_returns_empty(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify batch endpoints handle empty input gracefully."""
         # Empty list should return empty results
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(Phenopacket.phenopacket_id.in_([]))
         )
         phenopackets = result.scalars().all()
         assert len(phenopackets) == 0
 
-    async def test_batch_endpoints_handle_nonexistent_ids(
-        self, db_session: AsyncSession
+    async def test_batch_endpoints_nonexistent_ids_returns_empty(
+        self, fixture_db_session: AsyncSession
     ):
         """Verify batch endpoints handle non-existent IDs gracefully."""
         fake_ids = ["nonexistent_1", "nonexistent_2", "nonexistent_3"]
 
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(Phenopacket.phenopacket_id.in_(fake_ids))
         )
         phenopackets = result.scalars().all()

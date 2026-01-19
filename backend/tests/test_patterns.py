@@ -53,7 +53,7 @@ class TestVCFPatterns:
             "M-200-C-G",
         ],
     )
-    def test_vcf_pattern_valid(self, variant):
+    def test_patterns_vcf_valid_input_matches(self, variant):
         """Test VCF pattern matches valid formats."""
         assert VCF_PATTERN.match(variant)
         assert is_vcf_format(variant)
@@ -69,11 +69,11 @@ class TestVCFPatterns:
             "17-abc-A-G",  # Non-numeric position
         ],
     )
-    def test_vcf_pattern_invalid(self, variant):
+    def test_patterns_vcf_invalid_input_no_match(self, variant):
         """Test VCF pattern rejects invalid formats."""
         assert not is_vcf_format(variant)
 
-    def test_vcf_simple_pattern(self):
+    def test_patterns_vcf_simple_quick_check_matches(self):
         """Test simple VCF pattern for quick checks."""
         assert VCF_SIMPLE_PATTERN.match("17-36459258-A-G")
         assert VCF_SIMPLE_PATTERN.match("chr17-100-ACGT-T")
@@ -92,7 +92,7 @@ class TestCNVPatterns:
             "22:5000-10000:INV",
         ],
     )
-    def test_cnv_pattern_valid(self, variant):
+    def test_patterns_cnv_valid_input_matches(self, variant):
         """Test CNV pattern matches valid formats."""
         assert CNV_PATTERN.match(variant)
         assert is_cnv_format(variant)
@@ -107,7 +107,7 @@ class TestCNVPatterns:
             "0:100-200:DEL",  # Invalid chromosome
         ],
     )
-    def test_cnv_pattern_invalid(self, variant):
+    def test_patterns_cnv_invalid_input_no_match(self, variant):
         """Test CNV pattern rejects invalid formats."""
         assert not is_cnv_format(variant)
 
@@ -128,7 +128,7 @@ class TestHGVSCPatterns:
             "c.123delinsAT",
         ],
     )
-    def test_hgvs_c_pattern_valid(self, variant):
+    def test_patterns_hgvs_c_valid_input_matches(self, variant):
         """Test HGVS c. pattern matches valid formats."""
         assert is_hgvs_c(variant)
 
@@ -142,11 +142,11 @@ class TestHGVSCPatterns:
             "invalid",
         ],
     )
-    def test_hgvs_c_pattern_invalid(self, variant):
+    def test_patterns_hgvs_c_invalid_input_no_match(self, variant):
         """Test HGVS c. pattern rejects invalid formats."""
         assert not is_hgvs_c(variant)
 
-    def test_hgvs_c_search_pattern(self):
+    def test_patterns_hgvs_c_search_pattern_validates_user_input(self):
         """Test HGVS c. search pattern for user input validation."""
         assert HGVS_C_SEARCH_PATTERN.match("c.544+1G>A")
         assert HGVS_C_SEARCH_PATTERN.match("c.123del")
@@ -168,7 +168,7 @@ class TestHGVSPPatterns:
             "p.Lys100del",
         ],
     )
-    def test_hgvs_p_pattern_valid(self, variant):
+    def test_patterns_hgvs_p_valid_input_matches(self, variant):
         """Test HGVS p. pattern matches valid formats."""
         assert is_hgvs_p(variant)
 
@@ -182,11 +182,11 @@ class TestHGVSPPatterns:
             "invalid",
         ],
     )
-    def test_hgvs_p_pattern_invalid(self, variant):
+    def test_patterns_hgvs_p_invalid_input_no_match(self, variant):
         """Test HGVS p. pattern rejects invalid formats."""
         assert not is_hgvs_p(variant)
 
-    def test_hgvs_p_search_pattern(self):
+    def test_patterns_hgvs_p_search_pattern_validates_user_input(self):
         """Test HGVS p. search pattern for user input validation."""
         assert HGVS_P_SEARCH_PATTERN.match("p.Arg181Ter")
         assert HGVS_P_SEARCH_PATTERN.match("p.(Val123Phe)")
@@ -203,7 +203,7 @@ class TestHGVSGPatterns:
             "NC_000001.10:g.12345C>T",
         ],
     )
-    def test_hgvs_g_pattern_valid(self, variant):
+    def test_patterns_hgvs_g_valid_input_matches(self, variant):
         """Test HGVS g. pattern matches valid formats."""
         assert HGVS_G_PATTERN.match(variant)
         assert is_hgvs_g(variant)
@@ -217,11 +217,11 @@ class TestHGVSGPatterns:
             "invalid",
         ],
     )
-    def test_hgvs_g_pattern_invalid(self, variant):
+    def test_patterns_hgvs_g_invalid_input_no_match(self, variant):
         """Test HGVS g. pattern rejects invalid formats."""
         assert not is_hgvs_g(variant)
 
-    def test_hgvs_g_search_pattern(self):
+    def test_patterns_hgvs_g_search_pattern_validates_user_input(self):
         """Test HGVS g. search pattern for user input validation."""
         assert HGVS_G_SEARCH_PATTERN.match("g.36459258A>G")
         assert HGVS_G_SEARCH_PATTERN.match("g.123del")
@@ -242,7 +242,7 @@ class TestHG38Patterns:
             "Y:500-1000",
         ],
     )
-    def test_hg38_pattern_valid(self, coord):
+    def test_patterns_hg38_valid_input_matches(self, coord):
         """Test HG38 pattern matches valid coordinates."""
         assert HG38_PATTERN.match(coord)
         assert is_hg38_coordinate(coord)
@@ -255,11 +255,11 @@ class TestHG38Patterns:
             "17",  # Missing position
         ],
     )
-    def test_hg38_pattern_invalid(self, coord):
+    def test_patterns_hg38_invalid_input_no_match(self, coord):
         """Test HG38 pattern rejects invalid coordinates."""
         assert not is_hg38_coordinate(coord)
 
-    def test_hg38_simple_pattern(self):
+    def test_patterns_hg38_simple_quick_check_matches(self):
         """Test simple HG38 pattern for quick checks."""
         assert HG38_SIMPLE_PATTERN.match("chr17:36098063")
         assert HG38_SIMPLE_PATTERN.match("17-36098063")
@@ -277,7 +277,7 @@ class TestIdentifierPatterns:
             "PMID:123",
         ],
     )
-    def test_pmid_pattern_valid(self, pmid):
+    def test_patterns_pmid_valid_input_matches(self, pmid):
         """Test PMID pattern matches valid formats."""
         assert PMID_PATTERN.match(pmid)
         assert is_valid_pmid(pmid)
@@ -292,25 +292,25 @@ class TestIdentifierPatterns:
             "invalid",
         ],
     )
-    def test_pmid_pattern_invalid(self, pmid):
+    def test_patterns_pmid_invalid_input_no_match(self, pmid):
         """Test PMID pattern rejects invalid formats."""
         assert not is_valid_pmid(pmid)
 
-    def test_normalize_pmid_with_prefix(self):
+    def test_patterns_pmid_normalize_with_prefix_unchanged(self):
         """Test normalize_pmid with existing prefix."""
         assert normalize_pmid("PMID:12345678") == "PMID:12345678"
 
-    def test_normalize_pmid_without_prefix(self):
+    def test_patterns_pmid_normalize_without_prefix_adds_prefix(self):
         """Test normalize_pmid adds prefix."""
         assert normalize_pmid("12345678") == "PMID:12345678"
         assert normalize_pmid("123") == "PMID:123"
 
-    def test_normalize_pmid_invalid_raises(self):
+    def test_patterns_pmid_normalize_invalid_raises_error(self):
         """Test normalize_pmid raises for invalid format."""
         with pytest.raises(ValueError, match="Invalid PMID format"):
             normalize_pmid("123456789")  # Too long
 
-    def test_spdi_pattern(self):
+    def test_patterns_spdi_valid_input_matches(self):
         """Test SPDI pattern."""
         assert SPDI_PATTERN.match("NC_000017.11:36459257:A:G")
         assert SPDI_PATTERN.match("NC_000001.10:100::T")  # Empty deleted
@@ -328,7 +328,7 @@ class TestOntologyPatterns:
             "HP:0001622",
         ],
     )
-    def test_hpo_pattern_valid(self, term):
+    def test_patterns_hpo_valid_input_matches(self, term):
         """Test HPO pattern matches valid formats."""
         assert HPO_PATTERN.match(term)
 
@@ -342,7 +342,7 @@ class TestOntologyPatterns:
             "MONDO:0000001",  # Wrong ontology
         ],
     )
-    def test_hpo_pattern_invalid(self, term):
+    def test_patterns_hpo_invalid_input_no_match(self, term):
         """Test HPO pattern rejects invalid formats."""
         assert not HPO_PATTERN.match(term)
 
@@ -353,7 +353,7 @@ class TestOntologyPatterns:
             "MONDO:1234567",
         ],
     )
-    def test_mondo_pattern_valid(self, term):
+    def test_patterns_mondo_valid_input_matches(self, term):
         """Test MONDO pattern matches valid formats."""
         assert MONDO_PATTERN.match(term)
 
@@ -365,7 +365,7 @@ class TestOntologyPatterns:
             "HP:0000001",  # Wrong ontology
         ],
     )
-    def test_mondo_pattern_invalid(self, term):
+    def test_patterns_mondo_invalid_input_no_match(self, term):
         """Test MONDO pattern rejects invalid formats."""
         assert not MONDO_PATTERN.match(term)
 
@@ -385,7 +385,7 @@ class TestSecurityPatterns:
             "score=10",
         ],
     )
-    def test_search_whitelist_valid(self, query):
+    def test_patterns_search_whitelist_valid_input_allowed(self, query):
         """Test search whitelist accepts safe queries."""
         assert SEARCH_WHITELIST_PATTERN.match(query)
         assert is_safe_search_query(query)
@@ -406,11 +406,11 @@ class TestSecurityPatterns:
             "test`backtick`",
         ],
     )
-    def test_search_whitelist_blocks_injection(self, query):
+    def test_patterns_search_whitelist_injection_attempt_blocked(self, query):
         """Test search whitelist rejects SQL injection attempts."""
         assert not is_safe_search_query(query)
 
-    def test_empty_query_invalid(self):
+    def test_patterns_search_whitelist_empty_query_rejected(self):
         """Test that empty queries are rejected."""
         assert not is_safe_search_query("")
 
@@ -418,7 +418,7 @@ class TestSecurityPatterns:
 class TestPatternConsistency:
     """Tests to ensure patterns are consistent across modules."""
 
-    def test_patterns_are_compiled(self):
+    def test_patterns_all_precompiled_for_performance(self):
         """Verify all patterns are pre-compiled for performance."""
         import re
 
@@ -445,7 +445,7 @@ class TestPatternConsistency:
                 f"{pattern} is not a compiled pattern"
             )
 
-    def test_hgvs_c_patterns_list(self):
+    def test_patterns_hgvs_c_list_contains_compiled_patterns(self):
         """Verify HGVS_C_PATTERNS is a list of patterns."""
         import re
 
@@ -471,7 +471,7 @@ class TestRealWorldVariants:
             "17:36459258-37832869:DEL",  # CNV
         ],
     )
-    def test_real_hnf1b_variants(self, variant):
+    def test_patterns_real_hnf1b_variant_matches_pattern(self, variant):
         """Test patterns work with real HNF1B variants."""
         # Should match at least one pattern
         matched = (

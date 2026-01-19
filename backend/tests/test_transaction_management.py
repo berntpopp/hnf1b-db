@@ -14,7 +14,7 @@ Fixtures used from conftest.py:
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.phenopackets.models import Phenopacket
@@ -23,8 +23,8 @@ from app.phenopackets.models import Phenopacket
 class TestTransactionRollback:
     """Test suite for transaction rollback scenarios."""
 
-    async def test_validation_failure_does_not_commit(
-        self, db_session: AsyncSession, invalid_phenopacket_data
+    async def test_transaction_validation_failure_prevents_commit(
+        self, fixture_db_session: AsyncSession, fixture_invalid_phenopacket_data
     ):
         """Test that validation errors prevent database commits.
 
@@ -38,23 +38,23 @@ class TestTransactionRollback:
         validator = PhenopacketValidator()
 
         # Validate the invalid data
-        errors = validator.validate(invalid_phenopacket_data)
+        errors = validator.validate(fixture_invalid_phenopacket_data)
 
         # Should have validation errors
         assert len(errors) > 0, "Expected validation errors for invalid data"
 
         # Check database is clean (no record created)
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(
-                Phenopacket.phenopacket_id == invalid_phenopacket_data["id"]
+                Phenopacket.phenopacket_id == fixture_invalid_phenopacket_data["id"]
             )
         )
         phenopacket = result.scalar_one_or_none()
 
         assert phenopacket is None, "Invalid phenopacket should not exist in database"
 
-    async def test_successful_request_commits_changes(
-        self, db_session: AsyncSession, valid_phenopacket_data
+    async def test_transaction_successful_request_commits_changes(
+        self, fixture_db_session: AsyncSession, fixture_valid_phenopacket_data
     ):
         """Test that successful requests DO commit changes.
 
@@ -68,7 +68,7 @@ class TestTransactionRollback:
         sanitizer = PhenopacketSanitizer()
 
         # Sanitize and create phenopacket
-        sanitized = sanitizer.sanitize_phenopacket(valid_phenopacket_data)
+        sanitized = sanitizer.sanitize_phenopacket(fixture_valid_phenopacket_data)
 
         new_phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -78,29 +78,29 @@ class TestTransactionRollback:
             created_by="test_user",
         )
 
-        db_session.add(new_phenopacket)
-        await db_session.commit()
-        await db_session.refresh(new_phenopacket)
+        fixture_db_session.add(new_phenopacket)
+        await fixture_db_session.commit()
+        await fixture_db_session.refresh(new_phenopacket)
 
         # Verify it exists in database
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(
-                Phenopacket.phenopacket_id == valid_phenopacket_data["id"]
+                Phenopacket.phenopacket_id == fixture_valid_phenopacket_data["id"]
             )
         )
         fetched = result.scalar_one_or_none()
 
         assert fetched is not None, "Valid phenopacket should exist in database"
-        assert fetched.phenopacket_id == valid_phenopacket_data["id"], (
+        assert fetched.phenopacket_id == fixture_valid_phenopacket_data["id"], (
             "Phenopacket ID should match"
         )
 
         # Cleanup
-        await db_session.delete(fetched)
-        await db_session.commit()
+        await fixture_db_session.delete(fetched)
+        await fixture_db_session.commit()
 
-    async def test_exception_during_request_triggers_rollback(
-        self, db_session: AsyncSession, valid_phenopacket_data
+    async def test_transaction_exception_triggers_rollback(
+        self, fixture_db_session: AsyncSession, fixture_valid_phenopacket_data
     ):
         """Test that exceptions trigger automatic rollback.
 
@@ -112,7 +112,7 @@ class TestTransactionRollback:
         from app.phenopackets.validator import PhenopacketSanitizer
 
         sanitizer = PhenopacketSanitizer()
-        sanitized = sanitizer.sanitize_phenopacket(valid_phenopacket_data)
+        sanitized = sanitizer.sanitize_phenopacket(fixture_valid_phenopacket_data)
 
         new_phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -122,26 +122,26 @@ class TestTransactionRollback:
             created_by="test_user",
         )
 
-        db_session.add(new_phenopacket)
+        fixture_db_session.add(new_phenopacket)
 
         # Simulate exception before commit
         try:
             raise Exception("Simulated error during request")
         except Exception:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
 
         # Verify data was NOT committed
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(
-                Phenopacket.phenopacket_id == valid_phenopacket_data["id"]
+                Phenopacket.phenopacket_id == fixture_valid_phenopacket_data["id"]
             )
         )
         phenopacket = result.scalar_one_or_none()
 
         assert phenopacket is None, "Phenopacket should not exist after rollback"
 
-    async def test_duplicate_id_prevents_commit(
-        self, db_session: AsyncSession, valid_phenopacket_data
+    async def test_transaction_duplicate_id_triggers_rollback(
+        self, fixture_db_session: AsyncSession, fixture_valid_phenopacket_data
     ):
         """Test that duplicate ID errors trigger rollback.
 
@@ -155,7 +155,7 @@ class TestTransactionRollback:
         sanitizer = PhenopacketSanitizer()
 
         # Create first phenopacket
-        data1 = valid_phenopacket_data.copy()
+        data1 = fixture_valid_phenopacket_data.copy()
         data1["id"] = "test_duplicate_tx"
         sanitized1 = sanitizer.sanitize_phenopacket(data1)
 
@@ -167,18 +167,18 @@ class TestTransactionRollback:
             created_by="test_user",
         )
 
-        db_session.add(phenopacket1)
-        await db_session.commit()
+        fixture_db_session.add(phenopacket1)
+        await fixture_db_session.commit()
 
         # Count records before duplicate attempt
-        count_before = await db_session.scalar(
+        count_before = await fixture_db_session.scalar(
             select(func.count())
             .select_from(Phenopacket)
             .where(Phenopacket.phenopacket_id == "test_duplicate_tx")
         )
 
         # Attempt to create duplicate
-        data2 = valid_phenopacket_data.copy()
+        data2 = fixture_valid_phenopacket_data.copy()
         data2["id"] = "test_duplicate_tx"  # Same ID
         sanitized2 = sanitizer.sanitize_phenopacket(data2)
 
@@ -190,17 +190,17 @@ class TestTransactionRollback:
             created_by="test_user",
         )
 
-        db_session.add(phenopacket2)
+        fixture_db_session.add(phenopacket2)
 
         # Should raise integrity error
         with pytest.raises(Exception):  # IntegrityError or similar
-            await db_session.commit()
+            await fixture_db_session.commit()
 
         # Rollback the failed transaction
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
         # Count records after failed attempt
-        count_after = await db_session.scalar(
+        count_after = await fixture_db_session.scalar(
             select(func.count())
             .select_from(Phenopacket)
             .where(Phenopacket.phenopacket_id == "test_duplicate_tx")
@@ -211,15 +211,17 @@ class TestTransactionRollback:
         )
 
         # Cleanup
-        result = await db_session.execute(
-            select(Phenopacket).where(Phenopacket.phenopacket_id == "test_duplicate_tx")
+        result = await fixture_db_session.execute(
+            select(Phenopacket).where(
+                Phenopacket.phenopacket_id == "test_duplicate_tx"
+            )
         )
         phenopacket = result.scalar_one()
-        await db_session.delete(phenopacket)
-        await db_session.commit()
+        await fixture_db_session.delete(phenopacket)
+        await fixture_db_session.commit()
 
-    async def test_http_exception_does_not_commit(
-        self, db_session: AsyncSession, valid_phenopacket_data
+    async def test_transaction_http_exception_prevents_commit(
+        self, fixture_db_session: AsyncSession, fixture_valid_phenopacket_data
     ):
         """Test that HTTPException prevents commit.
 
@@ -231,7 +233,7 @@ class TestTransactionRollback:
         from app.phenopackets.validator import PhenopacketSanitizer
 
         sanitizer = PhenopacketSanitizer()
-        sanitized = sanitizer.sanitize_phenopacket(valid_phenopacket_data)
+        sanitized = sanitizer.sanitize_phenopacket(fixture_valid_phenopacket_data)
 
         new_phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -241,18 +243,18 @@ class TestTransactionRollback:
             created_by="test_user",
         )
 
-        db_session.add(new_phenopacket)
+        fixture_db_session.add(new_phenopacket)
 
         # Simulate business logic error (e.g., authorization failure)
         try:
             raise HTTPException(status_code=403, detail="Permission denied")
         except HTTPException:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
 
         # Verify no data committed
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             select(Phenopacket).where(
-                Phenopacket.phenopacket_id == valid_phenopacket_data["id"]
+                Phenopacket.phenopacket_id == fixture_valid_phenopacket_data["id"]
             )
         )
         phenopacket = result.scalar_one_or_none()
@@ -263,15 +265,13 @@ class TestTransactionRollback:
 class TestReadOnlyOperations:
     """Test that read-only operations don't require commits."""
 
-    async def test_read_operations_work_without_commit(self, db_session: AsyncSession):
+    async def test_transaction_read_operation_succeeds_without_commit(
+        self, fixture_db_session: AsyncSession
+    ):
         """Test that GET requests work without commits."""
         # Query should work without any commit
-        result = await db_session.execute(select(Phenopacket).limit(5))
+        result = await fixture_db_session.execute(select(Phenopacket).limit(5))
         phenopackets = result.scalars().all()
 
         # Should execute successfully (may return empty list)
         assert isinstance(phenopackets, list)
-
-
-# Need to add func import for count tests
-from sqlalchemy import func  # noqa: E402
