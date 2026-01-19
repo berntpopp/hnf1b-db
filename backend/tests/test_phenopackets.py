@@ -8,8 +8,8 @@ from jsonpath_ng import parse
 # We'll create a simple test without the specific phenopackets classes
 
 
-def test_phenopackets():
-    """Test creating a basic phenopacket structure."""
+def test_phenopackets_create_valid_structure_succeeds():
+    """Test creating a valid phenopacket JSON structure succeeds."""
     # The phenopackets library creates protobuf-based structures
     # For now, we'll create a JSON structure that follows the phenopackets schema
 
@@ -25,27 +25,27 @@ def test_phenopackets():
         },
     }
 
-    print("✓ Created phenopacket structure with ID:", phenopacket_json["id"])
-    print("✓ Subject ID:", phenopacket_json["subject"]["id"])
-    print("✓ Phenotypic features:", len(phenopacket_json["phenotypicFeatures"]))
+    print("Created phenopacket structure with ID:", phenopacket_json["id"])
+    print("Subject ID:", phenopacket_json["subject"]["id"])
+    print("Phenotypic features:", len(phenopacket_json["phenotypicFeatures"]))
 
     # Test that phenopackets module is importable
     try:
         import phenopackets  # noqa: F401
 
-        print("✓ phenopackets module is installed")
+        print("phenopackets module is installed")
     except ImportError as e:
-        print(f"⚠ phenopackets module import issue: {e}")
+        print(f"phenopackets module import issue: {e}")
 
     # Assert phenopacket structure is valid
     assert phenopacket_json["id"] == "test_phenopacket_1"
     assert phenopacket_json["subject"]["id"] == "patient1"
 
 
-def test_pronto_hpo():
-    """Test that pronto can handle HPO terms."""
+def test_phenopackets_pronto_import_succeeds():
+    """Test that pronto library is available for HPO ontology parsing."""
     # This would normally load from a file, but we'll create a minimal example
-    print("\n✓ Pronto library is available for ontology parsing")
+    print("\nProonto library is available for ontology parsing")
 
     # Example of how it would be used:
     # hpo = pronto.Ontology("data/ontologies/hp.obo")
@@ -58,8 +58,8 @@ def test_pronto_hpo():
     assert True  # Test passes if import succeeds
 
 
-def test_jsonpath():
-    """Test JSONPath queries on phenopacket data."""
+def test_phenopackets_jsonpath_query_finds_hpo_terms():
+    """Test JSONPath queries on phenopacket data find HPO terms correctly."""
     phenopacket_json = {
         "subject": {"id": "patient1"},
         "phenotypicFeatures": [
@@ -72,7 +72,7 @@ def test_jsonpath():
     jsonpath_expr = parse("$.phenotypicFeatures[*].type.id")
     matches = [match.value for match in jsonpath_expr.find(phenopacket_json)]
 
-    print("\n✓ JSONPath found HPO terms:", matches)
+    print("\nJSONPath found HPO terms:", matches)
 
     # Assert matches are correct
     assert len(matches) == 2
@@ -80,8 +80,8 @@ def test_jsonpath():
     assert "HP:0000078" in matches
 
 
-def test_vrs():
-    """Test VRS models are available."""
+def test_phenopackets_vrs_models_create_location():
+    """Test GA4GH VRS models create valid sequence locations."""
     # Create a simple sequence location with valid refget accession (32 char hash)
     location = models.SequenceLocation(
         sequenceReference=models.SequenceReference(
@@ -92,7 +92,7 @@ def test_vrs():
         end=200,
     )
 
-    print("\n✓ GA4GH VRS models available")
+    print("\nGA4GH VRS models available")
     print(f"  Location: {location.start}-{location.end}")
 
     # Assert location is valid
@@ -109,19 +109,19 @@ if __name__ == "__main__":
 
     try:
         # Test phenopackets
-        phenopacket = test_phenopackets()
+        phenopacket = test_phenopackets_create_valid_structure_succeeds()
 
         # Test pronto
-        test_pronto_hpo()
+        test_phenopackets_pronto_import_succeeds()
 
         # Test JSONPath
-        test_jsonpath()
+        test_phenopackets_jsonpath_query_finds_hpo_terms()
 
         # Test VRS
-        test_vrs()
+        test_phenopackets_vrs_models_create_location()
 
         print("\n" + "=" * 40)
-        print("✅ All tests passed! Phenopackets environment is ready.")
+        print("All tests passed! Phenopackets environment is ready.")
         print("\nYou can now start implementing the phenopackets refactoring.")
         print("\nNext steps:")
         print("1. Download HPO and MONDO ontology files (if needed)")
@@ -129,5 +129,5 @@ if __name__ == "__main__":
         print("3. Start implementing the phenopacket converters")
 
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\nTest failed: {e}")
         print("Please check the installation and try again.")

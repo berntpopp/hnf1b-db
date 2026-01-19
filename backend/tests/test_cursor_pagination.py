@@ -12,11 +12,11 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_crud_endpoint_uses_offset_pagination(
-    async_client: AsyncClient, db_session
+async def test_pagination_offset_crud_endpoint_returns_page_metadata(
+    fixture_async_client: AsyncClient, fixture_db_session
 ):
-    """Test that CRUD endpoint uses offset pagination (not cursor)."""
-    response = await async_client.get(
+    """Test that CRUD endpoint uses offset pagination with page metadata."""
+    response = await fixture_async_client.get(
         "/api/v2/phenopackets/",
         params={
             "page[size]": 5,
@@ -36,8 +36,8 @@ async def test_crud_endpoint_uses_offset_pagination(
 
 
 @pytest.mark.asyncio
-async def test_cursor_encode_decode_functions():
-    """Test cursor encoding and decoding functions.
+async def test_pagination_cursor_encode_decode_preserves_data():
+    """Test cursor encoding and decoding preserves ID and timestamp data.
 
     These utilities are still used by the search endpoint for cursor pagination.
     """
