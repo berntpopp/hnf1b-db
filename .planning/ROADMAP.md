@@ -64,36 +64,51 @@ Plans:
 
 ## Phase 2: Component Refactoring & Constants
 
-**Goal:** Extract ProteinStructure3D.vue and create centralized constants
+**Goal:** Extract ProteinStructure3D.vue into sub-components and create centralized constants for backend and frontend
 
 **GitHub Issues:** #133, #137, #91
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Create backend constants module
+- [ ] 02-02-PLAN.md — Create frontend constants module
+- [ ] 02-03-PLAN.md — Extract ProteinStructure3D.vue into sub-components
+
 **Requirements:**
-- QUAL-09 through QUAL-18 (component extraction and configuration)
-- QUAL-04 (backend constants)
-- QUAL-14-18 (frontend constants/config)
+- QUAL-04: Create `backend/app/constants.py` with documented constants
+- QUAL-09: Extract ProteinStructure3D.vue into sub-components (<500 lines each)
+- QUAL-10: Create `StructureViewer.vue` for NGL.js canvas
+- QUAL-11: Create `StructureControls.vue` for representation toggles
+- QUAL-12: Create `VariantPanel.vue` for variant list/selection
+- QUAL-13: Create `DistanceDisplay.vue` for distance info and legends
+- QUAL-14: Create `frontend/src/constants/` module with documented constants
+- QUAL-15: Create `frontend/src/config/` with centralized configuration
+- QUAL-16: Move visualization dimensions to config
+- QUAL-17: Move API timeouts to config
+- QUAL-18: Add config validation on app startup
 
 **Success Criteria:**
 1. ProteinStructure3D.vue reduced to <500 lines
-2. 5 sub-components created in `protein-structure/` directory
+2. 4 sub-components created in `protein-structure/` directory
 3. `backend/app/constants.py` exists with documented constants
-4. `frontend/src/constants/` module exists
-5. `frontend/src/config/` has centralized configuration
-6. All existing functionality preserved
-7. All tests pass
+4. `frontend/src/constants/` module exists with domain-specific files
+5. All existing functionality preserved
+6. All tests pass
 
 **Dependencies:** Phase 1 complete
 
 **Files to create:**
+- `backend/app/constants.py`
+- `frontend/src/constants/index.js`
+- `frontend/src/constants/thresholds.js`
+- `frontend/src/constants/structure.js`
+- `frontend/src/constants/ui.js`
 - `frontend/src/components/gene/protein-structure/StructureViewer.vue`
 - `frontend/src/components/gene/protein-structure/StructureControls.vue`
 - `frontend/src/components/gene/protein-structure/VariantPanel.vue`
-- `frontend/src/components/gene/protein-structure/DistanceStatsCard.vue`
-- `frontend/src/components/gene/protein-structure/StructureTooltip.vue`
-- `backend/app/constants.py`
-- `frontend/src/constants/thresholds.js`
-- `frontend/src/constants/pubmed.js`
-- `frontend/src/config/index.js`
+- `frontend/src/components/gene/protein-structure/DistanceDisplay.vue`
+- `frontend/src/components/gene/protein-structure/styles.css`
 
 ---
 
@@ -338,4 +353,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-19 after phase 1 completion*
+*Last updated: 2026-01-19 after phase 2 planning*
