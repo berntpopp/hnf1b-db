@@ -12,11 +12,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class TestAggregationQueryPerformance:
+class TestIndexPerformanceAggregationQueries:
     """Benchmark aggregation query performance with JSONB indexes."""
 
-    async def test_phenotypic_features_aggregation_performance(
-        self, db_session: AsyncSession
+    @pytest.mark.asyncio
+    async def test_index_performance_phenotypic_features_aggregation(
+        self, fixture_db_session: AsyncSession
     ):
         """Benchmark HPO term aggregation query."""
         query = text("""
@@ -32,11 +33,11 @@ class TestAggregationQueryPerformance:
         """)
 
         # Warm-up query
-        await db_session.execute(query)
+        await fixture_db_session.execute(query)
 
         # Timed execution
         start = time.time()
-        result = await db_session.execute(query)
+        result = await fixture_db_session.execute(query)
         rows = result.fetchall()
         elapsed = time.time() - start
 
@@ -57,7 +58,10 @@ class TestAggregationQueryPerformance:
             f"Aggregation query should complete in <1s, took {elapsed * 1000:.2f}ms"
         )
 
-    async def test_disease_aggregation_performance(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_disease_aggregation(
+        self, fixture_db_session: AsyncSession
+    ):
         """Benchmark disease term aggregation query."""
         query = text("""
             SELECT
@@ -73,11 +77,11 @@ class TestAggregationQueryPerformance:
         """)
 
         # Warm-up
-        await db_session.execute(query)
+        await fixture_db_session.execute(query)
 
         # Timed execution
         start = time.time()
-        result = await db_session.execute(query)
+        result = await fixture_db_session.execute(query)
         rows = result.fetchall()
         elapsed = time.time() - start
 
@@ -93,8 +97,9 @@ class TestAggregationQueryPerformance:
             f"Disease aggregation should complete in <1s, took {elapsed * 1000:.2f}ms"
         )
 
-    async def test_variant_pathogenicity_aggregation_performance(
-        self, db_session: AsyncSession
+    @pytest.mark.asyncio
+    async def test_index_performance_variant_pathogenicity_aggregation(
+        self, fixture_db_session: AsyncSession
     ):
         """Benchmark variant pathogenicity aggregation query."""
         query = text("""
@@ -110,11 +115,11 @@ class TestAggregationQueryPerformance:
         """)
 
         # Warm-up
-        await db_session.execute(query)
+        await fixture_db_session.execute(query)
 
         # Timed execution
         start = time.time()
-        result = await db_session.execute(query)
+        result = await fixture_db_session.execute(query)
         rows = result.fetchall()
         elapsed = time.time() - start
 
@@ -129,10 +134,13 @@ class TestAggregationQueryPerformance:
         )
 
 
-class TestComplexJSONBQueries:
+class TestIndexPerformanceComplexJSONBQueries:
     """Test performance of complex JSONB queries that benefit from indexes."""
 
-    async def test_contains_query_performance(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_contains_query(
+        self, fixture_db_session: AsyncSession
+    ):
         """Test @> (contains) operator performance with GIN index."""
         # Search for phenopackets with a specific HPO term
         query = text("""
@@ -142,11 +150,11 @@ class TestComplexJSONBQueries:
         """)
 
         # Warm-up
-        await db_session.execute(query)
+        await fixture_db_session.execute(query)
 
         # Timed execution
         start = time.time()
-        result = await db_session.execute(query)
+        result = await fixture_db_session.execute(query)
         rows = result.fetchall()
         elapsed = time.time() - start
 
@@ -161,7 +169,10 @@ class TestComplexJSONBQueries:
             f"Contains query should complete in <500ms, took {elapsed * 1000:.2f}ms"
         )
 
-    async def test_existence_query_performance(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_existence_query(
+        self, fixture_db_session: AsyncSession
+    ):
         """Test ? (existence) operator performance with GIN index."""
         query = text("""
             SELECT phenopacket_id, subject_sex
@@ -171,11 +182,11 @@ class TestComplexJSONBQueries:
         """)
 
         # Warm-up
-        await db_session.execute(query)
+        await fixture_db_session.execute(query)
 
         # Timed execution
         start = time.time()
-        result = await db_session.execute(query)
+        result = await fixture_db_session.execute(query)
         rows = result.fetchall()
         elapsed = time.time() - start
 
@@ -190,7 +201,7 @@ class TestComplexJSONBQueries:
         )
 
 
-class TestQueryPlanVerification:
+class TestIndexPerformanceQueryPlanVerification:
     """Verify that query plans are reasonable and queries execute correctly.
 
     Note: On small test datasets (<1000 rows), PostgreSQL may choose sequential
@@ -198,9 +209,12 @@ class TestQueryPlanVerification:
     behavior. Index benefits appear on larger production datasets.
     """
 
-    async def test_aggregation_query_plan_is_reasonable(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_aggregation_query_plan(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify aggregation queries have reasonable query plans."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 EXPLAIN (FORMAT TEXT)
                 SELECT
@@ -230,9 +244,12 @@ class TestQueryPlanVerification:
         # On small datasets, seq scan is expected and optimal
         # On large datasets (>1000 rows), would use index/bitmap scan
 
-    async def test_contains_query_plan_is_reasonable(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_contains_query_plan(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify @> queries have reasonable query plans."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 EXPLAIN (FORMAT TEXT)
                 SELECT phenopacket_id
@@ -258,7 +275,7 @@ class TestQueryPlanVerification:
 
 
 @pytest.mark.benchmark
-class TestBeforeAfterComparison:
+class TestIndexPerformanceBeforeAfterComparison:
     """Manual tests to compare performance before/after adding indexes.
 
     To use:
@@ -268,12 +285,18 @@ class TestBeforeAfterComparison:
     4. Compare improvement (should be 5-60x faster)
     """
 
-    async def test_measure_baseline_without_indexes(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_baseline_without_indexes(
+        self, fixture_db_session: AsyncSession
+    ):
         """Measure query performance without JSONB path indexes."""
         # Would need to drop indexes first for accurate comparison
         pass
 
-    async def test_measure_improvement_with_indexes(self, db_session: AsyncSession):
+    @pytest.mark.asyncio
+    async def test_index_performance_improvement_with_indexes(
+        self, fixture_db_session: AsyncSession
+    ):
         """Measure query performance with JSONB path indexes."""
         # Run after migration and compare to baseline
         pass
