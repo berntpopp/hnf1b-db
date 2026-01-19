@@ -8,7 +8,7 @@ from app.phenopackets.models import Phenopacket, PhenopacketAudit
 
 @pytest.mark.asyncio
 async def test_curation_update_phenopacket_success_increments_revision(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test successful phenopacket update with optimistic locking."""
     # Create test phenopacket
@@ -114,7 +114,7 @@ async def test_curation_update_phenopacket_success_increments_revision(
 
 @pytest.mark.asyncio
 async def test_curation_update_phenopacket_wrong_revision_returns_409(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test optimistic locking conflict detection."""
     # Create test phenopacket
@@ -237,7 +237,7 @@ async def test_curation_update_phenopacket_not_found_returns_404(
 
 @pytest.mark.asyncio
 async def test_curation_delete_phenopacket_soft_delete_creates_audit(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test soft delete with audit trail."""
     # Create test phenopacket
@@ -320,7 +320,7 @@ async def test_curation_delete_phenopacket_soft_delete_creates_audit(
 
 @pytest.mark.asyncio
 async def test_curation_delete_phenopacket_missing_reason_returns_422(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test delete without change_reason parameter."""
     # Create test phenopacket
@@ -375,7 +375,7 @@ async def test_curation_delete_phenopacket_missing_reason_returns_422(
 
 @pytest.mark.asyncio
 async def test_curation_delete_already_deleted_returns_404(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test deleting already soft-deleted phenopacket."""
     from datetime import datetime, timezone
@@ -433,7 +433,7 @@ async def test_curation_delete_already_deleted_returns_404(
 
 @pytest.mark.asyncio
 async def test_curation_update_soft_deleted_phenopacket_returns_404(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test updating soft-deleted phenopacket should fail."""
     from datetime import datetime, timezone
@@ -513,7 +513,7 @@ async def test_curation_update_soft_deleted_phenopacket_returns_404(
 
 @pytest.mark.asyncio
 async def test_curation_get_audit_history_returns_ordered_entries(
-    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
+    fixture_async_client, fixture_db_session, fixture_admin_headers, fixture_cleanup_test_phenopackets
 ):
     """Test retrieving audit history for a phenopacket."""
     from app.phenopackets.models import Phenopacket

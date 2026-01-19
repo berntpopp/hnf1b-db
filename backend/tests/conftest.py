@@ -330,15 +330,3 @@ def fixture_invalid_phenopacket_data():
     }
 
 
-# Backward-compatibility aliases (remove after test migration complete)
-db_session = fixture_db_session
-test_user = fixture_test_user
-admin_user = fixture_admin_user
-async_client = fixture_async_client
-auth_headers = fixture_auth_headers
-admin_headers = fixture_admin_headers
-cleanup_test_phenopackets = fixture_cleanup_test_phenopackets
-sample_phenopacket_minimal = fixture_sample_phenopacket_minimal
-sample_phenopacket_with_data = fixture_sample_phenopacket_with_data
-valid_phenopacket_data = fixture_valid_phenopacket_data
-invalid_phenopacket_data = fixture_invalid_phenopacket_data
