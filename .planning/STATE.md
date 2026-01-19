@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-19
 **Current Phase:** Phase 3 - Test Modernization (In Progress)
-**Next Action:** `/gsd:execute-phase 03-06` to continue test modernization
+**Next Action:** `/gsd:execute-phase 03-07` to complete test modernization
 
 ## Project Reference
 
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 |-------|------|--------|----------|
 | 1 | Pydantic Deprecation Fixes | Complete | 100% |
 | 2 | Component & Constants | Complete | 100% (3/3 plans) |
-| 3 | Test Modernization | In Progress | 71% (5/7 plans) |
+| 3 | Test Modernization | In Progress | 86% (6/7 plans) |
 | 4 | UI/UX Normalization | Pending | 0% |
 | 5 | Chart Polish | Pending | 0% |
 | 6 | Backend Features & PWA | Pending | 0% |
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [=========================]-------------------- 30% (2.71/9 phases)
+Progress: [==============================]--------------- 33% (2.86/9 phases)
 
 ## Issue Mapping
 
@@ -35,7 +35,7 @@ Progress: [=========================]-------------------- 30% (2.71/9 phases)
 | #133 - ProteinStructure3D | Phase 2 | COMPLETE (02-03) |
 | #137 - Magic numbers | Phase 2 | COMPLETE (02-01, 02-02) |
 | #91 - Hardcoded values | Phase 2 | COMPLETE (02-01, 02-02) |
-| #94 - Test modernization | Phase 3 | In Progress (03-01 through 03-05 complete) |
+| #94 - Test modernization | Phase 3 | In Progress (03-01 through 03-06 complete) |
 | #98 - UI/UX normalization | Phase 4 | Pending |
 | #135 - Chart accessibility | Phase 5 | Pending |
 | #139 - Chart animations | Phase 5 | Pending |
@@ -48,12 +48,13 @@ Progress: [=========================]-------------------- 30% (2.71/9 phases)
 
 ## Session Continuity
 
-Last session: 2026-01-19T22:18Z
-Stopped at: Completed 03-05-PLAN.md (Batch 4 - Variant and CNV Tests)
+Last session: 2026-01-19T23:10Z
+Stopped at: Completed 03-06-PLAN.md (Batch 5 - Specialized Tests)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-19: Completed Phase 3 Plan 6 - Batch 5 specialized test migration (8 files)
 - 2026-01-19: Completed Phase 3 Plan 5 - Batch 4 variant/CNV test migration (227 tests)
 - 2026-01-19: Completed Phase 3 Plan 3 - Batch 2 utility test migration
 - 2026-01-19: Completed Phase 3 Plan 1 - Coverage configuration and fixture naming
@@ -84,6 +85,7 @@ Resume file: None
 | Consolidated sample fixtures | 03-03 | Avoid duplication, share phenopacket test data across files |
 | test_variant_ naming pattern | 03-05 | Consistent naming for all variant/CNV related tests |
 | Convert script files to pytest | 03-05 | Manual scripts converted to proper pytest format |
+| Feature-specific test prefixes | 03-06 | classification_, comparison_, curation_, survival_, domain_, index_, sync_, migration_ |
 
 ## Blockers
 
