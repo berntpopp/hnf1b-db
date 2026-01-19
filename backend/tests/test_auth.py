@@ -5,11 +5,13 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_login_success(async_client: AsyncClient, test_user):
-    """Test successful login."""
-    response = await async_client.post(
+async def test_auth_login_valid_credentials_returns_token(
+    fixture_async_client: AsyncClient, fixture_test_user
+):
+    """Test successful login with valid credentials returns access and refresh tokens."""
+    response = await fixture_async_client.post(
         "/api/v2/auth/login",
-        json={"username": test_user.username, "password": "TestPass123!"},
+        json={"username": fixture_test_user.username, "password": "TestPass123!"},
     )
 
     assert response.status_code == 200
@@ -21,11 +23,13 @@ async def test_login_success(async_client: AsyncClient, test_user):
 
 
 @pytest.mark.asyncio
-async def test_login_invalid_credentials(async_client: AsyncClient, test_user):
-    """Test login with invalid credentials."""
-    response = await async_client.post(
+async def test_auth_login_wrong_password_returns_401(
+    fixture_async_client: AsyncClient, fixture_test_user
+):
+    """Test login with wrong password returns 401 Unauthorized."""
+    response = await fixture_async_client.post(
         "/api/v2/auth/login",
-        json={"username": test_user.username, "password": "WrongPassword"},
+        json={"username": fixture_test_user.username, "password": "WrongPassword"},
     )
 
     assert response.status_code == 401
@@ -33,9 +37,9 @@ async def test_login_invalid_credentials(async_client: AsyncClient, test_user):
 
 
 @pytest.mark.asyncio
-async def test_login_nonexistent_user(async_client: AsyncClient):
-    """Test login with nonexistent user."""
-    response = await async_client.post(
+async def test_auth_login_unknown_user_returns_401(fixture_async_client: AsyncClient):
+    """Test login with nonexistent user returns 401 Unauthorized."""
+    response = await fixture_async_client.post(
         "/api/v2/auth/login",
         json={"username": "nonexistent", "password": "password"},
     )
@@ -44,9 +48,13 @@ async def test_login_nonexistent_user(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_current_user(async_client: AsyncClient, auth_headers):
-    """Test getting current user info."""
-    response = await async_client.get("/api/v2/auth/me", headers=auth_headers)
+async def test_auth_me_valid_token_returns_user_info(
+    fixture_async_client: AsyncClient, fixture_auth_headers
+):
+    """Test getting current user info with valid token returns user details."""
+    response = await fixture_async_client.get(
+        "/api/v2/auth/me", headers=fixture_auth_headers
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -56,25 +64,27 @@ async def test_get_current_user(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_no_token(async_client: AsyncClient):
-    """Test accessing protected endpoint without token."""
-    response = await async_client.get("/api/v2/auth/me")
+async def test_auth_me_no_token_returns_403(fixture_async_client: AsyncClient):
+    """Test accessing protected endpoint without token returns 403 Forbidden."""
+    response = await fixture_async_client.get("/api/v2/auth/me")
 
     assert response.status_code == 403  # No token provided
 
 
 @pytest.mark.asyncio
-async def test_token_refresh(async_client: AsyncClient, test_user):
-    """Test token refresh."""
+async def test_auth_refresh_valid_token_returns_new_tokens(
+    fixture_async_client: AsyncClient, fixture_test_user
+):
+    """Test token refresh with valid refresh token returns new token pair."""
     # Login first
-    login_response = await async_client.post(
+    login_response = await fixture_async_client.post(
         "/api/v2/auth/login",
-        json={"username": test_user.username, "password": "TestPass123!"},
+        json={"username": fixture_test_user.username, "password": "TestPass123!"},
     )
     refresh_token = login_response.json()["refresh_token"]
 
     # Refresh token
-    response = await async_client.post(
+    response = await fixture_async_client.post(
         "/api/v2/auth/refresh",
         json={"refresh_token": refresh_token},
     )
@@ -88,20 +98,26 @@ async def test_token_refresh(async_client: AsyncClient, test_user):
 
 
 @pytest.mark.asyncio
-async def test_logout(async_client: AsyncClient, auth_headers):
-    """Test logout."""
-    response = await async_client.post("/api/v2/auth/logout", headers=auth_headers)
+async def test_auth_logout_valid_session_returns_success(
+    fixture_async_client: AsyncClient, fixture_auth_headers
+):
+    """Test logout with valid session returns success message."""
+    response = await fixture_async_client.post(
+        "/api/v2/auth/logout", headers=fixture_auth_headers
+    )
 
     assert response.status_code == 200
     assert "Successfully logged out" in response.json()["message"]
 
 
 @pytest.mark.asyncio
-async def test_change_password(async_client: AsyncClient, auth_headers):
-    """Test password change."""
-    response = await async_client.post(
+async def test_auth_password_change_valid_current_succeeds(
+    fixture_async_client: AsyncClient, fixture_auth_headers
+):
+    """Test password change with valid current password succeeds."""
+    response = await fixture_async_client.post(
         "/api/v2/auth/change-password",
-        headers=auth_headers,
+        headers=fixture_auth_headers,
         json={
             "current_password": "TestPass123!",
             "new_password": "NewPass456!",
@@ -112,9 +128,13 @@ async def test_change_password(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
-async def test_list_roles(async_client: AsyncClient, auth_headers):
-    """Test listing roles."""
-    response = await async_client.get("/api/v2/auth/roles", headers=auth_headers)
+async def test_auth_roles_authenticated_user_returns_all_roles(
+    fixture_async_client: AsyncClient, fixture_auth_headers
+):
+    """Test listing roles as authenticated user returns all available roles."""
+    response = await fixture_async_client.get(
+        "/api/v2/auth/roles", headers=fixture_auth_headers
+    )
 
     assert response.status_code == 200
     roles = response.json()
@@ -129,22 +149,26 @@ async def test_list_roles(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
-async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_session):
-    """Test creating user as admin."""
+async def test_auth_create_user_admin_role_succeeds(
+    fixture_async_client: AsyncClient, fixture_admin_headers, fixture_db_session
+):
+    """Test creating user as admin succeeds with new user data."""
     # Pre-cleanup: Remove any leftover newuser from failed previous runs
     from sqlalchemy import delete
 
     from app.models.user import User
 
     try:
-        await db_session.execute(delete(User).where(User.email == "new@example.com"))
-        await db_session.commit()
+        await fixture_db_session.execute(
+            delete(User).where(User.email == "new@example.com")
+        )
+        await fixture_db_session.commit()
     except Exception:
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
-    response = await async_client.post(
+    response = await fixture_async_client.post(
         "/api/v2/auth/users",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
         json={
             "username": "newuser",
             "email": "new@example.com",
@@ -160,18 +184,22 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_se
 
     # Cleanup: Remove the created user
     try:
-        await db_session.execute(delete(User).where(User.email == "new@example.com"))
-        await db_session.commit()
+        await fixture_db_session.execute(
+            delete(User).where(User.email == "new@example.com")
+        )
+        await fixture_db_session.commit()
     except Exception:
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
 
 @pytest.mark.asyncio
-async def test_create_user_non_admin(async_client: AsyncClient, auth_headers):
-    """Test creating user as non-admin (should fail)."""
-    response = await async_client.post(
+async def test_auth_create_user_non_admin_returns_403(
+    fixture_async_client: AsyncClient, fixture_auth_headers
+):
+    """Test creating user as non-admin returns 403 Forbidden."""
+    response = await fixture_async_client.post(
         "/api/v2/auth/users",
-        headers=auth_headers,
+        headers=fixture_auth_headers,
         json={
             "username": "newuser",
             "email": "new@example.com",
@@ -184,9 +212,13 @@ async def test_create_user_non_admin(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
-async def test_list_users_admin(async_client: AsyncClient, admin_headers):
-    """Test listing users as admin."""
-    response = await async_client.get("/api/v2/auth/users", headers=admin_headers)
+async def test_auth_list_users_admin_role_returns_list(
+    fixture_async_client: AsyncClient, fixture_admin_headers
+):
+    """Test listing users as admin returns list of users."""
+    response = await fixture_async_client.get(
+        "/api/v2/auth/users", headers=fixture_admin_headers
+    )
 
     assert response.status_code == 200
     users = response.json()
@@ -195,11 +227,13 @@ async def test_list_users_admin(async_client: AsyncClient, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_delete_user_self(async_client: AsyncClient, admin_headers, admin_user):
-    """Test deleting own account (should fail)."""
-    response = await async_client.delete(
-        f"/api/v2/auth/users/{admin_user.id}",
-        headers=admin_headers,
+async def test_auth_delete_self_returns_400(
+    fixture_async_client: AsyncClient, fixture_admin_headers, fixture_admin_user
+):
+    """Test deleting own account returns 400 Bad Request."""
+    response = await fixture_async_client.delete(
+        f"/api/v2/auth/users/{fixture_admin_user.id}",
+        headers=fixture_admin_headers,
     )
 
     assert response.status_code == 400
