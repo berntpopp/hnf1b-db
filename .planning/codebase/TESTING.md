@@ -4,222 +4,127 @@
 
 ## Test Framework
 
-### Backend
+**Backend:**
+- **Runner:** pytest 9.0.2 with pytest-asyncio >= 1.2.0
+- **Config:** `backend/pytest.ini`
+- **Coverage:** pytest-cov 7.0.0
 
-**Runner:**
-- pytest 9.0.2
-- Config: `backend/pyproject.toml` (tool.pytest section)
-
-**Async Support:**
-- pytest-asyncio >= 1.2.0
-- All async tests marked with `@pytest.mark.asyncio`
-
-**Coverage:**
-- pytest-cov 7.0.0
-- Target: No enforced minimum, but full coverage encouraged
+**Frontend:**
+- **Runner:** Vitest (latest)
+- **Config:** `frontend/vitest.config.js`
+- **Coverage:** V8 provider (native, faster than Istanbul)
 
 **Run Commands:**
+
+Backend:
 ```bash
 cd backend
-make test              # Run all tests
-make check             # Lint + typecheck + tests
-uv run pytest tests/test_specific.py -v          # Single file
-uv run pytest -k "test_pattern" -v               # Pattern match
-uv run pytest --cov=app --cov-report=html tests/ # With coverage
+make test                    # Run all tests (excluding benchmarks)
+make test-all                # Run all tests including benchmarks
+make test-benchmark          # Run only benchmark tests
+uv run pytest tests/test_specific.py -v              # Single file
+uv run pytest tests/test_auth.py::test_login_success # Single test
 ```
 
-### Frontend
-
-**Runner:**
-- Vitest 4.0.7
-- Config: `frontend/vitest.config.js`
-
-**Environment:**
-- happy-dom (faster than jsdom)
-- Pool: vmThreads (WSL2 compatible)
-
-**Coverage:**
-- @vitest/coverage-v8 (V8 native coverage)
-
-**Run Commands:**
+Frontend:
 ```bash
 cd frontend
-make test              # Run all tests (vitest run)
-make check             # Test + lint + format
-npm test -- tests/unit/specific.spec.js  # Single file
-npm run test:watch     # Watch mode
-npm run test:coverage  # With coverage
+make test                    # Run tests once
+make test-watch              # Watch mode
+make test-coverage           # With coverage report
+npm test -- tests/specific.test.js   # Single file
 ```
 
 ## Test File Organization
 
-### Backend
-
-**Location:** Co-located tests in `backend/tests/`
-
-**Naming:** `test_*.py`
-
-**Structure:**
+**Backend Location:** `backend/tests/`
 ```
 backend/tests/
-├── conftest.py                    # Shared fixtures
-├── README.md                      # Test documentation
-├── test_auth.py                   # Authentication tests
-├── test_phenopackets.py           # Basic CRUD tests
-├── test_variant_validator_enhanced.py  # Comprehensive unit tests
-├── test_json_api_pagination.py    # Pagination behavior
-├── test_survival_analysis.py      # Statistical functions
-└── test_global_search.py          # Search functionality
+├── conftest.py                           # Shared fixtures
+├── __init__.py
+├── test_auth.py                          # Authentication tests
+├── test_batch_endpoints.py               # Batch API tests
+├── test_cursor_pagination.py             # Cursor pagination tests
+├── test_json_api_pagination.py           # JSON:API pagination tests
+├── test_variant_annotation_vep.py        # VEP annotation tests
+├── test_phenopackets.py                  # Phenopacket model tests
+├── test_survival_analysis.py             # Statistical analysis tests
+└── ... (35 test files total)
 ```
 
-### Frontend
-
-**Location:** Dedicated `frontend/tests/` directory
-
-**Naming:** `*.spec.js`
-
-**Structure:**
+**Frontend Location:** `frontend/tests/`
 ```
 frontend/tests/
-├── setup.js                       # Global test setup (Vuetify)
+├── setup.js                              # Global test setup (Vuetify)
 ├── unit/
-│   ├── components/
-│   │   ├── KaplanMeierChart.spec.js
-│   │   └── VariantComparisonChart.spec.js
-│   ├── composables/
+│   ├── components/                       # Component tests
+│   │   ├── HNF1BProteinVisualization.spec.js
+│   │   ├── VariantComparisonChart.spec.js
+│   │   └── KaplanMeierChart.spec.js
+│   ├── composables/                      # Composable tests
 │   │   └── useTableUrlState.spec.js
-│   ├── stores/
+│   ├── stores/                           # Pinia store tests
 │   │   ├── authStore.spec.js
 │   │   └── variantStore.spec.js
 │   ├── config/
 │   │   └── app.spec.js
 │   └── logSanitizer.spec.js
-└── e2e/
+└── e2e/                                  # End-to-end tests
+    ├── phenopacket-ui-review.spec.js
     └── table-url-state.spec.js
 ```
 
+**Naming Convention:**
+- Backend: `test_*.py`
+- Frontend: `*.spec.js`
+
 ## Test Structure
 
-### Backend Pattern
-
-**Suite Organization:**
+**Backend Suite Organization:**
 ```python
-"""Comprehensive unit tests for VEP annotation system.
+"""Tests for JSON:API pagination implementation.
 
-Tests the VariantValidator class including:
-- Format detection (VCF vs HGVS)
-- VEP API annotation
-- Rate limiting
-
-Related: Issue #117, #100
+Test coverage:
+- Offset pagination (page[number], page[size])
+- Filtering (filter[sex], filter[has_variants])
+- Sorting (sort parameter with asc/desc)
+- Response structure (data, meta, links)
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from httpx import AsyncClient
 
-from app.phenopackets.validation.variant_validator import VariantValidator
-
-
-@pytest.fixture(autouse=True)
-def clear_cache_between_tests():
-    """Clear the in-memory cache between tests."""
-    cache.use_fallback_only()
-    yield
-    cache.clear_fallback()
-
-
-class TestVariantFormatDetection:
-    """Test format detection methods."""
-
-    def test_is_vcf_format_valid(self):
-        """Test VCF format detection with valid inputs."""
-        validator = VariantValidator()
-        assert validator._is_vcf_format("17-36459258-A-G") is True
-
-
-class TestVEPAnnotation:
-    """Test VEP annotation functionality."""
+class TestJsonApiResponseStructure:
+    """Test JSON:API response structure compliance."""
 
     @pytest.mark.asyncio
-    async def test_annotate_vcf_format_success(self):
-        """Test successful VCF format annotation."""
-        validator = VariantValidator()
-        # Test implementation...
+    async def test_response_contains_data_meta_links(
+        self, async_client: AsyncClient, sample_phenopackets
+    ):
+        """Test that response contains required JSON:API fields."""
+        response = await async_client.get("/api/v2/phenopackets/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert "meta" in data
+        assert "links" in data
 ```
 
-**Async Test Pattern:**
-```python
-@pytest.mark.asyncio
-async def test_login_success(async_client: AsyncClient, test_user):
-    """Test successful login."""
-    response = await async_client.post(
-        "/api/v2/auth/login",
-        json={"username": test_user.username, "password": "TestPass123!"},
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-```
-
-### Frontend Pattern
-
-**Suite Organization:**
+**Frontend Suite Organization:**
 ```javascript
 /**
- * Unit tests for KaplanMeierChart component
+ * Unit tests for the authentication store (authStore)
  *
  * Tests cover:
- * - Survival data validation
- * - Kaplan-Meier calculation verification
- * - Edge cases (empty data, all censored)
+ * - State initialization
+ * - Computed properties (isAuthenticated, isAdmin, isCurator)
+ * - Login flow with token storage
+ * - Logout with cleanup
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { shallowMount } from '@vue/test-utils';
-import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
-
-// Mock D3 to avoid DOM rendering issues
-vi.mock('d3', () => ({
-  select: vi.fn(() => mockSelection()),
-  // ...
-}));
-
-describe('KaplanMeierChart', () => {
-  describe('Component Mounting', () => {
-    it('should mount successfully with valid survival data', () => {
-      const wrapper = shallowMount(KaplanMeierChart, {
-        props: { survivalData: createSampleSurvivalData() },
-      });
-      expect(wrapper.exists()).toBe(true);
-    });
-  });
-
-  describe('Props Validation', () => {
-    it('should accept custom width', () => {
-      const wrapper = shallowMount(KaplanMeierChart, {
-        props: { survivalData: null, width: 800 },
-      });
-      expect(wrapper.props('width')).toBe(800);
-    });
-  });
-});
-```
-
-**Pinia Store Testing:**
-```javascript
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useAuthStore } from '@/stores/authStore';
-
-// Mock API before imports
-vi.mock('@/api', () => ({
-  apiClient: {
-    post: vi.fn(),
-    get: vi.fn(),
-  },
-}));
 
 describe('Auth Store', () => {
   beforeEach(() => {
@@ -227,65 +132,62 @@ describe('Auth Store', () => {
     vi.clearAllMocks();
   });
 
-  it('should login successfully', async () => {
-    const authStore = useAuthStore();
-    apiClient.post.mockResolvedValueOnce({ data: { access_token: 'token' } });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
-    await authStore.login({ username: 'test', password: 'pass' });
+  describe('Initial State', () => {
+    it('should initialize with null user and tokens', () => {
+      const authStore = useAuthStore();
+      expect(authStore.user).toBeNull();
+      expect(authStore.accessToken).toBeNull();
+    });
+  });
 
-    expect(authStore.accessToken).toBe('token');
+  describe('Login Action', () => {
+    it('should login successfully and store tokens', async () => {
+      // ... test implementation
+    });
   });
 });
 ```
 
 ## Mocking
 
-### Backend Framework
-
-**unittest.mock** (standard library)
-
-**Patterns:**
+**Backend Mocking (unittest.mock):**
 ```python
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 @pytest.mark.asyncio
-async def test_annotate_vcf_format_success(self):
-    """Test successful VCF format annotation with CADD and gnomAD."""
-    validator = VariantValidator()
+async def test_annotate_variant_vcf_success(
+    self, validator, mock_vep_annotation_response
+):
+    """Test VCF variant annotation with mock response."""
+    with (
+        patch("httpx.AsyncClient") as mock_client,
+        patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+    ):
+        # Mock cache miss
+        mock_cache.get_json = AsyncMock(return_value=None)
+        mock_cache.set_json = AsyncMock(return_value=True)
 
-    # Mock VEP API response
-    mock_response_data = {
-        "assembly_name": "GRCh38",
-        "most_severe_consequence": "missense_variant",
-        "transcript_consequences": [
-            {"gene_symbol": "HNF1B", "impact": "MODERATE"}
-        ],
-    }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [mock_vep_annotation_response]
+        mock_response.headers = {}
 
-    with patch.object(validator, '_call_vep_api', new_callable=AsyncMock) as mock:
-        mock.return_value = mock_response_data
-        result = await validator.annotate("17-36459258-A-G")
+        mock_client_instance = AsyncMock()
+        mock_client_instance.post.return_value = mock_response
+        mock_client_instance.__aenter__.return_value = mock_client_instance
+        mock_client.return_value = mock_client_instance
 
-    assert result["most_severe_consequence"] == "missense_variant"
+        result = await validator.annotate_variant_with_vep("17-36459258-A-G")
+        assert result is not None
 ```
 
-**What to Mock:**
-- External API calls (VEP, PubMed, OLS)
-- Redis cache (use fallback mode)
-- Network requests (httpx)
-
-**What NOT to Mock:**
-- Database queries in integration tests
-- Business logic under test
-- Standard library functions
-
-### Frontend Framework
-
-**Vitest mocking** (vi.mock, vi.fn)
-
-**Patterns:**
+**Frontend Mocking (Vitest vi):**
 ```javascript
-// Mock modules before imports
+// Mock modules before import
 vi.mock('@/api', () => ({
   apiClient: {
     post: vi.fn(),
@@ -293,36 +195,26 @@ vi.mock('@/api', () => ({
   },
 }));
 
-// Mock vue-router
-vi.mock('vue-router', () => ({
-  useRoute: () => mockRoute,
-  useRouter: () => ({ replace: mockReplace }),
-}));
-
-// Mock D3 for visualization tests
-vi.mock('d3', () => ({
-  select: vi.fn(() => mockSelection()),
-  scaleLinear: vi.fn(() => {
-    const scale = vi.fn((val) => val * 10);
-    scale.domain = vi.fn(() => scale);
-    scale.range = vi.fn(() => scale);
-    return scale;
-  }),
-}));
+// Import after mock
+import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/api';
 
 // Mock localStorage
 const localStorageMock = (() => {
   let store = {};
   return {
     getItem: vi.fn((key) => store[key] || null),
-    setItem: vi.fn((key, value) => { store[key] = value; }),
-    removeItem: vi.fn((key) => { delete store[key]; }),
+    setItem: vi.fn((key, value) => {
+      store[key] = value != null ? value.toString() : '';
+    }),
+    removeItem: vi.fn((key) => delete store[key]),
     clear: vi.fn(() => { store = {}; }),
   };
 })();
+
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-// Mock window.logService
+// Mock logService
 window.logService = {
   info: vi.fn(),
   error: vi.fn(),
@@ -332,30 +224,29 @@ window.logService = {
 ```
 
 **What to Mock:**
-- API client calls
-- Vue Router
-- D3 and visualization libraries
+- External API calls (VEP, PubMed)
+- Database sessions (use test fixtures instead)
 - localStorage/sessionStorage
+- Router (vue-router)
 - Global services (logService)
 
 **What NOT to Mock:**
-- Vue reactivity system
-- Component props/emits
-- Vuetify (use real instance from setup.js)
+- The code under test
+- Pydantic validation
+- Pure utility functions
+- Simple data transformations
 
 ## Fixtures and Factories
 
-### Backend Fixtures
-
-**Location:** `backend/tests/conftest.py`
-
-**Key Fixtures:**
+**Backend Fixtures (`backend/tests/conftest.py`):**
 ```python
 @pytest_asyncio.fixture
 async def db_session():
     """Provide a database session for testing."""
-    engine = create_async_engine(settings.DATABASE_URL)
-    async_session_factory = async_sessionmaker(engine, class_=AsyncSession)
+    engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True)
+    async_session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
     session = async_session_factory()
 
     try:
@@ -382,6 +273,7 @@ async def test_user(db_session):
     )
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)
 
     yield user
 
@@ -398,28 +290,12 @@ async def async_client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-
     app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture
-async def auth_headers(test_user, async_client):
-    """Get auth headers for authenticated requests."""
-    response = await async_client.post(
-        "/api/v2/auth/login",
-        json={"username": test_user.username, "password": "TestPass123!"},
-    )
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
 ```
 
-### Frontend Test Setup
-
-**Location:** `frontend/tests/setup.js`
-
+**Frontend Setup (`frontend/tests/setup.js`):**
 ```javascript
 import { config } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
@@ -433,73 +309,58 @@ globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-// Create Vuetify instance
-const vuetify = createVuetify({
-  components,
-  directives,
-});
-
-// Register globally
+// Create Vuetify instance for tests
+const vuetify = createVuetify({ components, directives });
 config.global.plugins = [vuetify];
 ```
 
-### Test Data Factories
-
-**Frontend Pattern:**
-```javascript
-const createSampleSurvivalData = () => ({
-  comparison_type: 'variant_type',
-  endpoint: 'ESRD',
-  groups: [
-    {
-      name: 'Missense',
-      n: 50,
-      events: 35,
-      survival_data: [
-        { time: 0, survival_probability: 1.0, at_risk: 50, events: 0 },
-        { time: 10, survival_probability: 0.75, at_risk: 38, events: 7 },
-      ],
-    },
-  ],
-});
-```
-
-**Backend Pattern:**
+**Test Data Factory Pattern (Backend):**
 ```python
-def create_test_phenopacket(id: str = "TEST001") -> dict:
-    """Create a test phenopacket structure."""
-    return {
-        "id": f"phenopacket-{id}",
-        "subject": {"id": id, "sex": "MALE"},
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0012622", "label": "Chronic kidney disease"}}
-        ],
-        "metaData": {
-            "created": "2024-01-01T00:00:00Z",
-            "phenopacketSchemaVersion": "2.0.0",
-        },
-    }
+@pytest.fixture(scope="function")
+async def sample_phenopackets(db_session: AsyncSession):
+    """Create sample phenopackets for pagination testing."""
+    sanitizer = PhenopacketSanitizer()
+    phenopackets_data = []
+
+    for i in range(50):
+        data = {
+            "id": f"test_pagination_{i:03d}",
+            "subject": {"id": f"patient_{i:03d}", "sex": "MALE" if i % 2 == 0 else "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000001", "label": f"Test feature {i}"}}
+            ],
+            "metaData": {
+                "created": "2024-01-01T00:00:00Z",
+                "phenopacketSchemaVersion": "2.0.0",
+            },
+        }
+        sanitized = sanitizer.sanitize_phenopacket(data)
+        phenopacket = Phenopacket(
+            phenopacket_id=sanitized["id"],
+            phenopacket=sanitized,
+            subject_id=sanitized["subject"]["id"],
+            subject_sex=sanitized["subject"].get("sex"),
+        )
+        db_session.add(phenopacket)
+        phenopackets_data.append(phenopacket)
+
+    await db_session.commit()
+    yield phenopackets_data
+
+    # Cleanup
+    await db_session.execute(
+        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test_pagination_%"))
+    )
+    await db_session.commit()
 ```
 
 ## Coverage
 
-**Backend Requirements:** No enforced minimum
+**Backend Requirements:** No enforced minimum, but critical paths tested
 
-**Backend Commands:**
-```bash
-uv run pytest --cov=app --cov-report=html tests/
-uv run pytest --cov=app --cov-report=term-missing tests/
-```
-
-**Frontend Requirements:** No enforced minimum
-
-**Frontend Commands:**
-```bash
-npm run test:coverage
-```
-
-**Vitest Coverage Config** (`frontend/vitest.config.js`):
+**Frontend Configuration:**
 ```javascript
+// vitest.config.js
 coverage: {
   provider: 'v8',
   reporter: ['text', 'json', 'html'],
@@ -513,70 +374,77 @@ coverage: {
 },
 ```
 
-## Test Types
+**View Coverage:**
+```bash
+# Backend
+cd backend && uv run pytest --cov=app --cov-report=html
 
-### Unit Tests
-
-**Scope:** Individual functions, classes, methods
-
-**Backend Examples:**
-- `test_variant_validator_enhanced.py` - VariantValidator class methods
-- `test_patterns.py` - Regex pattern validation
-- `test_config.py` - Configuration loading
-
-**Frontend Examples:**
-- `logSanitizer.spec.js` - Sanitization functions
-- `useTableUrlState.spec.js` - Composable logic
-- `authStore.spec.js` - Store actions/getters
-
-### Integration Tests
-
-**Scope:** API endpoints, database interactions
-
-**Backend Examples:**
-- `test_auth.py` - Full authentication flow
-- `test_json_api_pagination.py` - Pagination with database
-- `test_global_search.py` - Search with materialized views
-
-**Markers:**
-```python
-@pytest.mark.integration
-async def test_phenopacket_crud_flow(async_client, auth_headers):
-    """Test complete CRUD lifecycle."""
+# Frontend
+cd frontend && npm run test:coverage
 ```
 
-### E2E Tests
+## Test Types
 
-**Framework:** Playwright (`@playwright/test`)
+**Unit Tests:**
+- Backend: Test individual functions and classes in isolation
+- Frontend: Test composables, stores, utility functions
 
-**Location:** `frontend/tests/e2e/`
+**Integration Tests (Backend):**
+- Test API endpoints with database fixtures
+- Use `async_client` fixture with real app routing
+- Test full request/response cycles
 
-**Examples:**
-- `table-url-state.spec.js` - URL state synchronization
-- `phenopacket-ui-review.spec.js` - User interface flows
+**Component Tests (Frontend):**
+- Mount Vue components with test-utils
+- Test props, events, slots
+- Verify DOM output
+
+**E2E Tests (Frontend):**
+- Location: `frontend/tests/e2e/`
+- Full user flow testing
 
 ## Common Patterns
 
-### Async Testing (Backend)
-
+**Async Testing (Backend):**
 ```python
 @pytest.mark.asyncio
-async def test_async_operation(async_client):
-    """Test async endpoint."""
-    response = await async_client.get("/api/v2/phenopackets/")
-    assert response.status_code == 200
+async def test_login_success(async_client: AsyncClient, test_user):
+    """Test successful login."""
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
 
+    assert response.status_code == 200
     data = response.json()
-    assert "data" in data
-    assert "meta" in data
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
 ```
 
-### Error Testing
+**Async Testing (Frontend):**
+```javascript
+it('should login successfully and store tokens', async () => {
+  const authStore = useAuthStore();
 
-**Backend:**
+  apiClient.post.mockResolvedValueOnce({
+    data: { access_token: 'token', refresh_token: 'refresh' },
+  });
+  apiClient.get.mockResolvedValueOnce({
+    data: { id: 1, username: 'testuser' },
+  });
+
+  const success = await authStore.login({ username: 'test', password: 'pass' });
+
+  expect(success).toBe(true);
+  expect(authStore.accessToken).toBe('token');
+  expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'token');
+});
+```
+
+**Error Testing (Backend):**
 ```python
 @pytest.mark.asyncio
-async def test_login_invalid_credentials(async_client, test_user):
+async def test_login_invalid_credentials(async_client: AsyncClient, test_user):
     """Test login with invalid credentials."""
     response = await async_client.post(
         "/api/v2/auth/login",
@@ -587,95 +455,90 @@ async def test_login_invalid_credentials(async_client, test_user):
     assert "Incorrect username or password" in response.json()["detail"]
 ```
 
-**Frontend:**
+**Error Testing (Frontend):**
 ```javascript
 it('should handle login failure', async () => {
   const authStore = useAuthStore();
 
-  apiClient.post.mockRejectedValueOnce({
+  const mockError = {
     response: { data: { detail: 'Invalid credentials' } },
-  });
+  };
+  apiClient.post.mockRejectedValueOnce(mockError);
 
   await expect(
     authStore.login({ username: 'test', password: 'wrong' })
   ).rejects.toThrow();
 
   expect(authStore.error).toBe('Invalid credentials');
+  expect(window.logService.error).toHaveBeenCalled();
 });
 ```
 
-### Component Testing (Frontend)
+## Test Markers (Backend)
 
-```javascript
-describe('Component Mounting', () => {
-  it('should mount successfully with valid props', () => {
-    const wrapper = shallowMount(KaplanMeierChart, {
-      props: { survivalData: createSampleSurvivalData() },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-    expect(wrapper.find('.kaplan-meier-container').exists()).toBe(true);
-  });
-
-  it('should handle null props gracefully', () => {
-    const wrapper = shallowMount(KaplanMeierChart, {
-      props: { survivalData: null },
-    });
-
-    expect(wrapper.exists()).toBe(true);
-  });
-});
+```ini
+# pytest.ini
+markers =
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    benchmark: marks tests as benchmarks (deselect with '-m "not benchmark"')
 ```
 
-### Cleanup Best Practices
-
-**Backend:**
+**Usage:**
 ```python
-@pytest_asyncio.fixture
-async def test_user(db_session):
-    """Create test user with cleanup."""
-    # Pre-cleanup: Remove leftovers from failed tests
-    await db_session.execute(delete(User).where(User.email == "test@example.com"))
-    await db_session.commit()
+@pytest.mark.slow
+async def test_large_dataset_processing():
+    ...
 
-    user = User(username="testuser", email="test@example.com")
-    db_session.add(user)
-    await db_session.commit()
-
-    yield user
-
-    # Post-cleanup
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
+@pytest.mark.benchmark
+async def test_query_performance():
+    ...
 ```
 
-**Frontend:**
+## Vitest Configuration Details
+
 ```javascript
-beforeEach(() => {
-  setActivePinia(createPinia());
-  vi.clearAllMocks();
-  localStorageMock.clear();
-});
+// vitest.config.js
+export default defineConfig({
+  test: {
+    globals: true,  // Jest-compatible API
+    environment: 'happy-dom',  // Faster than jsdom
 
-afterEach(() => {
-  vi.restoreAllMocks();
+    // WSL2 compatibility
+    pool: process.env.CI ? 'threads' : 'vmThreads',
+    poolOptions: {
+      vmThreads: { memoryLimit: '512MB' },
+    },
+
+    testTimeout: 10000,  // 10 seconds
+    hookTimeout: 10000,
+
+    include: ['tests/unit/**/*.spec.js', 'tests/components/**/*.spec.js'],
+  },
+
+  resolve: {
+    alias: { '@': path.resolve(__dirname, 'src') },
+  },
 });
 ```
 
-## CI Integration
+## Best Practices from CLAUDE.md
 
-**GitHub Actions** (`.github/workflows/ci.yml`):
-- Runs on push/PR
-- Backend: ruff lint, mypy typecheck, pytest
-- Frontend: ESLint, Prettier check, Vitest
+1. **Tests use PUBLIC APIs only**
+   - Test `builder.build_phenopacket(id, rows)` not `migration._build_subject(row)`
 
-**Pre-commit Hooks** (`.pre-commit-config.yaml`):
-- pytest-check on pre-push
-- Non-deterministic hash detection
-- Test import validation
+2. **Deterministic code only**
+   - Use `hashlib.sha256()` not `abs(hash(data))`
+
+3. **Fix broken tests immediately**
+   - Never commit failing tests
+   - Update tests when refactoring APIs
+
+4. **Use pytest caplog for logging tests**
+   - Modern approach over mocking
+
+5. **Always clean up test data**
+   - Pre-cleanup and post-cleanup in fixtures
+   - Use `like("test_%")` patterns for isolation
 
 ---
 

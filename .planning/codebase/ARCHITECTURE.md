@@ -4,201 +4,221 @@
 
 ## Pattern Overview
 
-**Overall:** Monorepo with separate full-stack layers (FastAPI backend + Vue.js SPA frontend)
+**Overall:** Layered Monorepo Architecture
+
+The HNF1B Database is a full-stack monorepo implementing a layered architecture with clear separation between:
+- **Frontend (Vue.js 3):** Client-side SPA with Material Design UI
+- **Backend (FastAPI):** GA4GH Phenopackets v2 compliant REST API
+- **Database (PostgreSQL):** Document-oriented storage using JSONB
 
 **Key Characteristics:**
-- GA4GH Phenopackets v2 compliant REST API with JSON:API pagination
-- PostgreSQL JSONB document storage for phenopacket data
-- Async/await throughout backend with SQLAlchemy 2.0
-- Vue 3 Composition API with Vuetify Material Design
-- Modular router architecture in backend (domain-split routers)
-- Centralized API client with auth interceptors in frontend
+- Monorepo with independent frontend/backend packages
+- Async-first backend design (asyncio, asyncpg)
+- Document-oriented data model (GA4GH Phenopackets in JSONB)
+- JSON:API v1.1 compliant pagination
+- VRS 2.0 compliant variant identifiers
+- Centralized configuration (YAML for behavior, .env for secrets)
 
 ## Layers
 
-**API Layer (Backend):**
-- Purpose: HTTP request/response handling, validation, routing
-- Location: `backend/app/api/`, `backend/app/phenopackets/routers/`
-- Contains: FastAPI routers, endpoint definitions, request validation
-- Depends on: Services, Database, Models
-- Used by: Frontend API client
+**Presentation Layer (Frontend):**
+- Purpose: User interface and client-side state management
+- Location: `frontend/src/`
+- Contains: Vue components, views, routing, Pinia stores
+- Depends on: Backend API via Axios client
+- Used by: End users via browser
 
-**Service Layer (Backend):**
+**API Layer (Backend Routers):**
+- Purpose: HTTP request handling, validation, response formatting
+- Location: `backend/app/api/`, `backend/app/phenopackets/routers/`
+- Contains: FastAPI routers, endpoint definitions, Pydantic schemas
+- Depends on: Service layer, database layer, auth dependencies
+- Used by: Frontend API client, external consumers
+
+**Service Layer (Backend Services):**
 - Purpose: Business logic, external API integration, data transformation
-- Location: `backend/app/services/`, `backend/app/search/services.py`, `backend/app/reference/service.py`, `backend/app/variants/service.py`
-- Contains: OntologyService, GlobalSearchService, ReferenceService, VariantService
-- Depends on: Database, External APIs (VEP, OLS, PubMed)
+- Location: `backend/app/services/`, `backend/app/variants/service.py`, `backend/app/publications/service.py`
+- Contains: Ontology services, VEP annotation, PubMed fetching
+- Depends on: External APIs (Ensembl, PubMed, OLS), cache layer
 - Used by: API routers
 
-**Repository Layer (Backend):**
-- Purpose: Data access abstraction for database operations
-- Location: `backend/app/repositories/`
-- Contains: `user_repository.py`, search repositories
-- Depends on: Database, SQLAlchemy models
-- Used by: Services, API routers
+**Data Access Layer (Backend Repositories/Models):**
+- Purpose: Database operations, query building, ORM models
+- Location: `backend/app/phenopackets/models.py`, `backend/app/database.py`, `backend/app/repositories/`
+- Contains: SQLAlchemy models, async session management, query builders
+- Depends on: PostgreSQL database
+- Used by: Service layer, API routers
 
-**Models Layer (Backend):**
-- Purpose: SQLAlchemy ORM models and Pydantic schemas
-- Location: `backend/app/models/`, `backend/app/phenopackets/models.py`
-- Contains: `Phenopacket`, `PhenopacketAudit`, `User`, JSON:API response models
-- Depends on: SQLAlchemy Base
-- Used by: All backend layers
-
-**Database Layer (Backend):**
-- Purpose: Connection management, session factory, migrations
-- Location: `backend/app/database.py`, `backend/alembic/`
-- Contains: Engine config, session maker, `get_db` dependency
-- Depends on: PostgreSQL, asyncpg driver
-- Used by: All backend layers via dependency injection
-
-**Views Layer (Frontend):**
-- Purpose: Page-level routed components
-- Location: `frontend/src/views/`
-- Contains: `Home.vue`, `Phenopackets.vue`, `PagePhenopacket.vue`, `Variants.vue`, `Publications.vue`, etc.
-- Depends on: Components, API, Composables, Stores
-- Used by: Vue Router
-
-**Components Layer (Frontend):**
-- Purpose: Reusable UI components
-- Location: `frontend/src/components/`
-- Contains: Domain components (`phenopacket/`, `gene/`, `analyses/`), common components (`common/`)
-- Depends on: Vuetify, Composables, Utils
-- Used by: Views, other components
-
-**API Client Layer (Frontend):**
-- Purpose: Centralized HTTP client with auth handling
-- Location: `frontend/src/api/index.js`
-- Contains: Axios instance, request/response interceptors, API functions
-- Depends on: Axios, Auth store
-- Used by: Views, Composables
-
-**Stores Layer (Frontend):**
-- Purpose: Global state management
-- Location: `frontend/src/stores/`
-- Contains: `authStore.js`, `logStore.js`, `variantStore.js`
-- Depends on: Pinia
-- Used by: Views, Components, API client
-
-**Composables Layer (Frontend):**
-- Purpose: Reusable composition functions (Vue hooks)
-- Location: `frontend/src/composables/`
-- Contains: `useSeoMeta.js`, `useTableUrlState.js`, `useHPOAutocomplete.js`, `useNGLStructure.js`
-- Depends on: Vue reactivity, API
-- Used by: Views, Components
+**Core/Infrastructure Layer:**
+- Purpose: Cross-cutting concerns (config, auth, caching, middleware)
+- Location: `backend/app/core/`, `backend/app/auth/`, `backend/app/middleware/`
+- Contains: Settings, JWT auth, rate limiting, Redis cache
+- Depends on: External services (Redis)
+- Used by: All other layers
 
 ## Data Flow
 
-**Phenopacket List Flow:**
+**Read Flow (GET /api/v2/phenopackets):**
 
-1. User navigates to `/phenopackets` -> Vue Router loads `Phenopackets.vue`
-2. View calls `getPhenopackets()` from `frontend/src/api/index.js`
-3. API client sends GET to `/api/v2/phenopackets/` with JSON:API pagination params
-4. FastAPI routes to `backend/app/phenopackets/routers/crud.py::list_phenopackets()`
-5. Router builds SQLAlchemy query with filters, executes via async session
-6. Query results transformed to JSON:API response format
-7. Response returned to frontend, data rendered in `AppDataTable.vue`
+1. Frontend calls `getPhenopackets()` from `frontend/src/api/index.js`
+2. Axios client adds JWT token via request interceptor
+3. FastAPI router in `backend/app/phenopackets/routers/crud.py` receives request
+4. Query builder constructs SQLAlchemy query with filters/sort/pagination
+5. Async database session executes query against PostgreSQL
+6. Response formatted as JSON:API v1.1 with pagination links
+7. Frontend extracts `data`, `meta.page`, `links` from response
 
-**Phenopacket Detail Flow:**
+**Write Flow (POST /api/v2/phenopackets):**
 
-1. User clicks phenopacket row -> Router navigates to `/phenopackets/:id`
-2. `PagePhenopacket.vue` calls `getPhenopacket(id)`
-3. Backend returns full phenopacket JSONB document
-4. View renders domain cards: `SubjectCard`, `PhenotypicFeaturesCard`, `InterpretationsCard`, etc.
+1. Frontend calls `createPhenopacket()` with phenopacket data
+2. `require_curator` dependency validates JWT and role
+3. `PhenopacketSanitizer` cleans input data
+4. `PhenopacketValidator` validates against GA4GH schema
+5. SQLAlchemy model created and committed to database
+6. Audit entry created in `phenopacket_audit` table
+7. Response returns created phenopacket with metadata
 
-**Global Search Flow:**
+**Search Flow (GET /api/v2/search/global):**
 
-1. User types in global search -> `AppBar.vue` debounces input
-2. Autocomplete calls `/api/v2/search/autocomplete?q=...`
-3. `backend/app/search/routers.py` delegates to `GlobalSearchService`
-4. Service queries across phenopackets, variants, publications using trigram matching
-5. Results returned with type facets
+1. Frontend calls `searchGlobal()` with query string
+2. Backend search router queries materialized views if available
+3. Full-text search uses PostgreSQL `tsvector` column
+4. Results aggregated across phenopackets, variants, publications
+5. Ranked results returned with type indicators
 
 **State Management:**
-- Auth state managed in `authStore.js` with JWT tokens in localStorage
-- API client intercepts 401 responses for automatic token refresh
-- Log service (`logStore.js`) captures sanitized logs for debugging
+- Frontend uses Pinia stores for auth (`authStore.js`), logs (`logStore.js`), variants (`variantStore.js`)
+- Backend uses Redis for caching (with in-memory fallback)
+- PostgreSQL materialized views cache expensive aggregations
 
 ## Key Abstractions
 
-**Phenopacket:**
-- Purpose: Core domain entity representing a patient case
-- Examples: `backend/app/phenopackets/models.py::Phenopacket`, JSONB `phenopacket` column
-- Pattern: Document storage in PostgreSQL JSONB with denormalized index columns
+**Phenopacket (Core Domain Entity):**
+- Purpose: Represents clinical/genetic patient data per GA4GH standard
+- Examples: `backend/app/phenopackets/models.py::Phenopacket`, `backend/app/phenopackets/models.py::PhenopacketSchema`
+- Pattern: Document model stored as JSONB with denormalized columns for fast queries
 
-**JSON:API Response:**
-- Purpose: Standardized pagination response format
-- Examples: `backend/app/models/json_api.py::JsonApiResponse`
-- Pattern: `{ data: [], meta: { page: {...} }, links: {...} }`
+**API Client (Frontend-Backend Communication):**
+- Purpose: Centralized HTTP client with auth interceptors
+- Examples: `frontend/src/api/index.js::apiClient`
+- Pattern: Axios instance with request/response interceptors for JWT handling
 
-**Aggregation Router:**
-- Purpose: Statistical queries split by domain
-- Examples: `backend/app/phenopackets/routers/aggregations/survival.py`, `features.py`, `demographics.py`
-- Pattern: Modular sub-routers combined via `include_router()`
+**Settings (Configuration):**
+- Purpose: Unified configuration combining .env secrets and YAML behavior config
+- Examples: `backend/app/core/config.py::Settings`, `backend/config.yaml`
+- Pattern: Pydantic settings with lazy-loaded YAML config
 
-**Composable:**
-- Purpose: Reusable reactive logic in Vue components
-- Examples: `frontend/src/composables/useSeoMeta.js`, `useTableUrlState.js`
-- Pattern: Functions returning reactive state and methods
+**Router (API Endpoint Organization):**
+- Purpose: Group related endpoints with shared prefix/tags
+- Examples: `backend/app/phenopackets/routers/__init__.py::router`
+- Pattern: FastAPI APIRouter composition with include_router()
+
+**Composable (Vue Reusable Logic):**
+- Purpose: Share stateful logic between Vue components
+- Examples: `frontend/src/composables/useVEPAnnotation.js`, `frontend/src/composables/useTableUrlState.js`
+- Pattern: Vue 3 Composition API with reactive state
 
 ## Entry Points
 
-**Backend Main:**
+**Backend Application:**
 - Location: `backend/app/main.py`
 - Triggers: `uvicorn app.main:app` or `make backend`
-- Responsibilities: FastAPI app creation, CORS config, router registration, lifespan management (cache init)
+- Responsibilities: FastAPI app initialization, lifespan management, router registration, CORS middleware
 
-**Frontend Main:**
+**Frontend Application:**
 - Location: `frontend/src/main.js`
-- Triggers: Vite dev server or production bundle
-- Responsibilities: Vue app creation, Pinia/Vuetify/Router setup, auth initialization
+- Triggers: Vite dev server or production build
+- Responsibilities: Vue app creation, Pinia/Vuetify plugin registration, router initialization
 
-**Migration Entry:**
+**Database Migrations:**
+- Location: `backend/alembic/env.py`
+- Triggers: `alembic upgrade head` or `make db-upgrade`
+- Responsibilities: Schema migrations, table creation, index management
+
+**Data Migration (Import):**
 - Location: `backend/migration/direct_sheets_to_phenopackets.py`
 - Triggers: `make phenopackets-migrate`
-- Responsibilities: Import phenopackets from Google Sheets to database
+- Responsibilities: Google Sheets to GA4GH Phenopackets conversion, database insertion
 
-**Alembic Migrations:**
-- Location: `backend/alembic/versions/`
-- Triggers: `make db-upgrade`
-- Responsibilities: Database schema evolution
+**CLI Scripts:**
+- Location: `backend/scripts/`
+- Triggers: Various make targets
+- Responsibilities: Admin user creation, publication sync, variant annotation
 
 ## Error Handling
 
-**Strategy:** Layer-appropriate error handling with HTTP status codes
+**Strategy:** Fail-fast with structured error responses
 
-**Patterns:**
-- FastAPI HTTPException for API errors with detail messages
-- SQLAlchemy rollback on transaction failures in `get_db` dependency
-- Axios interceptor catches 401, triggers token refresh or redirect
-- Frontend uses `window.logService.error()` for sanitized error logging
-- Pydantic validators raise ValueError for config validation (e.g., missing JWT_SECRET)
+**Backend Patterns:**
+- FastAPI HTTPException for API errors with status codes
+- Pydantic validation errors auto-converted to 422 responses
+- Database errors caught and wrapped with user-friendly messages
+- Optimistic locking via revision field returns 409 on conflict
+- Soft delete pattern preserves data for audit trail
+
+**Frontend Patterns:**
+- Axios interceptors handle 401 with automatic token refresh
+- Try/catch blocks in API calls with logService logging
+- User-friendly error messages via Vuetify snackbars
+- Graceful degradation when optional data unavailable
+
+**Example (Backend Optimistic Locking):**
+```python
+# backend/app/phenopackets/routers/crud.py
+if phenopacket_data.revision is not None and existing.revision != phenopacket_data.revision:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "error": "Conflict detected",
+            "current_revision": existing.revision,
+            "expected_revision": phenopacket_data.revision,
+        },
+    )
+```
+
+**Example (Frontend Token Refresh):**
+```javascript
+// frontend/src/api/index.js
+if (error.response?.status === 401 && !originalRequest._retry) {
+    const newAccessToken = await authStore.refreshAccessToken();
+    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+    return apiClient(originalRequest);
+}
+```
 
 ## Cross-Cutting Concerns
 
 **Logging:**
-- Backend: Python `logging` module configured per-module
-- Frontend: `window.logService` with automatic PII sanitization via `logSanitizer.js`
+- Backend: Python `logging` module with structured output
+- Frontend: Custom `logService` with PII/PHI redaction (`frontend/src/services/logService.js`)
+- Pattern: Never use `console.log()` in frontend - always use `window.logService`
 
 **Validation:**
 - Backend: Pydantic models for request/response validation
-- Backend: `PhenopacketValidator` and `PhenopacketSanitizer` for domain validation
-- Frontend: Vuetify form validation rules
+- Backend: Custom `PhenopacketValidator` for GA4GH schema compliance
+- Frontend: Vee-validate with Yup schemas (`frontend/src/schemas/phenopacketSchema.js`)
 
 **Authentication:**
-- JWT tokens with access/refresh pattern
-- Backend: `backend/app/auth/` module (dependencies, tokens, permissions)
-- Frontend: `authStore.js` manages tokens, API client adds Bearer header
-- Protected routes use `require_curator` dependency or route meta guards
+- JWT-based with access/refresh token pattern
+- Backend: `backend/app/auth/` module with tokens, dependencies, permissions
+- Frontend: `authStore` manages tokens in localStorage
+- Protected routes use `requiresAuth` meta in Vue Router
 
 **Caching:**
-- Redis for backend cache (with in-memory fallback)
-- Materialized views for aggregation queries (`mv_feature_aggregation`, etc.)
-- VEP API responses cached locally
+- Redis cache for expensive operations (with in-memory fallback)
+- PostgreSQL materialized views for aggregation queries
+- VEP annotation cache (configurable TTL)
+- Publication metadata cache (90-day TTL)
 
-**Configuration:**
-- Backend: `.env` for secrets, `config.yaml` for behavior settings
-- Frontend: `.env` for build-time config (VITE_API_URL)
-- Centralized in `backend/app/core/config.py` with Pydantic Settings
+**Pagination:**
+- JSON:API v1.1 standard with dual modes (offset and cursor)
+- Offset: `page[number]`, `page[size]` for page numbers display
+- Cursor: `page[after]`, `page[before]` for stable browsing
+- Database index: `(created_at DESC, id DESC)` for efficient cursor queries
+
+**Rate Limiting:**
+- External API rate limits (VEP: 15/s, PubMed: 3/s or 10/s with API key)
+- Configurable via `backend/config.yaml`
 
 ---
 

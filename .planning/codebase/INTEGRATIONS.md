@@ -4,188 +4,365 @@
 
 ## APIs & External Services
 
-**Bioinformatics APIs:**
+### Ensembl VEP (Variant Effect Predictor)
 
-- **Ensembl VEP (Variant Effect Predictor)** - Variant annotation
-  - Endpoint: `https://rest.ensembl.org/vep/homo_sapiens/region`
-  - SDK/Client: `httpx` (async)
-  - Service: `backend/app/variants/service.py`
-  - Auth: None (rate limited to 15 req/sec)
-  - Features: CADD scores, gnomAD frequencies, consequence predictions, HGVS notation
-  - Caching: Database-backed permanent cache (`variant_annotations` table)
+**Purpose:** Variant annotation with consequence predictions, CADD scores, gnomAD frequencies
 
-- **Ensembl REST API** - Gene/genomic data
-  - Endpoint: `https://rest.ensembl.org/overlap/region/human/{region}`
-  - SDK/Client: `httpx` (async)
-  - Service: `backend/app/reference/service.py`
-  - Auth: None (rate limited to 10 req/sec)
-  - Used for: chr17q12 region gene sync
+**Configuration (`backend/config.yaml`):**
+```yaml
+external_apis:
+  vep:
+    base_url: "https://rest.ensembl.org"
+    timeout_seconds: 30
+    max_retries: 3
+    retry_backoff_factor: 2.0
+    batch_size: 50
+    cache_enabled: true
+    cache_size_limit: 1000
+    cache_ttl_seconds: 86400
+```
 
-- **NCBI PubMed E-utilities** - Publication metadata
-  - Endpoint: `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi`
-  - SDK/Client: `aiohttp` (async)
-  - Service: `backend/app/publications/service.py`
-  - Auth: `PUBMED_API_KEY` env var (optional, 3 req/sec without key, 10 with key)
-  - Caching: Database-backed permanent cache (`publication_metadata` table)
+**Implementation:**
+- Client: `backend/app/variants/service.py`
+- HTTP: `httpx` async client
+- Rate limit: 15 req/sec (configurable)
+- Storage: Permanent database caching in `variant_annotation_cache` table
 
-- **HPO JAX API** - Human Phenotype Ontology terms
-  - Endpoint: `https://hpo.jax.org/api/hpo`
-  - SDK/Client: `requests` (sync)
-  - Service: `backend/app/services/ontology_service.py`
-  - Auth: None
-  - Caching: File cache (`.ontology_cache/`) with 24-hour TTL
+**Endpoints Used:**
+- `POST /vep/human/hgvs` - HGVS notation annotation
+- `POST /vep/human/region` - VCF-style annotation
 
-- **EBI OLS (Ontology Lookup Service)** - Multi-ontology support
-  - Endpoint: `https://www.ebi.ac.uk/ols4/api`
-  - SDK/Client: `requests` (sync)
-  - Service: `backend/app/services/ontology_service.py`
-  - Auth: None
-  - Supports: HPO, MONDO, ORDO (Orphanet)
+### PubMed E-Utilities
 
-- **Monarch Initiative API** - Disease/phenotype data
-  - Endpoint: `https://api.monarchinitiative.org/v3`
-  - SDK/Client: `requests` (sync)
-  - Service: `backend/app/services/ontology_service.py`
-  - Auth: None
-  - Used as: Fallback for ontology term lookup
+**Purpose:** Publication metadata fetching (title, authors, year, DOI, abstract)
 
-**Data Sources:**
+**Configuration (`backend/config.yaml`):**
+```yaml
+external_apis:
+  pubmed:
+    base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+    timeout_seconds: 5
+    version: "2.0"
+```
 
-- **Google Sheets** - Primary data source for phenopacket import
-  - Access: Public CSV export URLs
-  - SDK/Client: `pandas.read_csv()` with Google Sheets export URL
-  - Service: `backend/migration/data_sources/google_sheets.py`
-  - Auth: None (public sheets)
-  - Used for: Initial data migration (864 phenopackets)
+**Implementation:**
+- Client: `backend/app/publications/service.py`
+- HTTP: `aiohttp` async client
+- Rate limit: 3 req/sec (without API key), 10 req/sec (with key)
+- Storage: Permanent database caching in `publication_metadata` table
+
+**Environment:**
+```bash
+PUBMED_API_KEY=<optional-ncbi-api-key>  # Increases rate limit
+```
+
+### HPO JAX API
+
+**Purpose:** Human Phenotype Ontology term lookup and validation
+
+**Implementation:**
+- Client: `backend/app/services/ontology_service.py` (HPOAPIClient)
+- Base URL: `https://hpo.jax.org/api/hpo`
+- HTTP: `requests` sync client
+- Fallback: Local hardcoded mappings in `migration/phenopackets/hpo_mapper.py`
+
+**Endpoints Used:**
+- `GET /term/{hpo_id}` - Get term details
+
+### EBI Ontology Lookup Service (OLS)
+
+**Purpose:** Ontology term autocomplete and lookup (HPO, MONDO, etc.)
+
+**Configuration (`backend/config.yaml`):**
+```yaml
+external_apis:
+  ols:
+    base_url: "https://www.ebi.ac.uk/ols4/api"
+    timeout_seconds: 10
+    cache_size_limit: 100
+    cache_ttl_seconds: 3600
+```
+
+**Implementation:**
+- Client: `backend/app/services/ontology_service.py` (OLSAPIClient)
+- Provides fallback when HPO JAX API fails
+
+### Ensembl REST API (Reference Data)
+
+**Purpose:** Gene, transcript, and exon coordinates for chr17q12 region
+
+**Implementation:**
+- Client: `backend/app/reference/service.py`
+- Base URL: `https://rest.ensembl.org`
+- HTTP: `httpx` async client
+- Rate limit: 10 req/sec (0.1s delay between requests)
+
+**Endpoints Used:**
+- `GET /overlap/region/human/{region}?feature=gene` - Genes in region
+- `GET /lookup/id/{gene_id}?expand=1` - Gene details with transcripts
+
+### Google Sheets (Data Source)
+
+**Purpose:** Source data for phenopacket migration
+
+**Implementation:**
+- Module: `backend/migration/direct_sheets_to_phenopackets.py`
+- Reads from public Google Sheets export URLs
+- One-time import, not a runtime integration
 
 ## Data Storage
 
-**Databases:**
+### PostgreSQL Database
 
-- **PostgreSQL 15** - Primary data store
-  - Connection: `DATABASE_URL` env var
-  - Format: `postgresql+asyncpg://user:pass@host:port/db`
-  - Client: SQLAlchemy 2.0 async with asyncpg driver
-  - Features: JSONB storage for phenopackets, GIN indexes for full-text search
-  - Tables: `phenopackets`, `publication_metadata`, `variant_annotations`, `reference_genomes`, `genes`, `transcripts`, `exons`, `protein_domains`, `users`
+**Type:** PostgreSQL 15-alpine
 
-**Caching:**
+**Connection:**
+```bash
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5433/db
+```
 
-- **Redis 7** - Distributed cache
-  - Connection: `REDIS_URL` env var (default: `redis://localhost:6379/0`)
-  - Client: `redis-py` async
-  - Used for: Session cache, rate limiting state
-  - Config: 256MB memory limit, LRU eviction
+**Configuration (`backend/config.yaml`):**
+```yaml
+database:
+  pool_size: 20
+  max_overflow: 0
+  pool_recycle_seconds: 3600
+  command_timeout_seconds: 60
+  pool_pre_ping: true
+```
 
-**File Storage:**
+**Implementation:**
+- ORM: SQLAlchemy 2.0 async (`backend/app/database.py`)
+- Driver: asyncpg
+- Migrations: Alembic (`backend/alembic/`)
 
-- Local filesystem only
-  - Ontology cache: `backend/.ontology_cache/`
-  - Uploaded files: Not implemented
+**Key Tables:**
+- `phenopackets` - Main data with JSONB storage
+- `publication_metadata` - Cached PubMed data
+- `variant_annotation_cache` - Cached VEP annotations
+- `reference_genomes`, `genes`, `transcripts`, `exons`, `protein_domains` - Reference data
+- `users` - Authentication
+- `audit_log` - Change tracking
+- `mv_*` - Materialized views for aggregations
+
+### Redis Cache
+
+**Type:** Redis 7-alpine
+
+**Connection:**
+```bash
+REDIS_URL=redis://localhost:6379/0
+```
+
+**Configuration:**
+```yaml
+# Docker compose settings
+maxmemory: 256mb
+maxmemory-policy: allkeys-lru
+appendonly: yes
+```
+
+**Purpose:**
+- Rate limiting state
+- Session caching (potential)
+- API response caching (potential)
+
+**Implementation:**
+- Client: `redis` Python package
+- Currently used primarily for rate limiting middleware
+
+### File Storage
+
+**Approach:** Local filesystem only (no cloud storage)
+
+**Generated Files:**
+- `backend/migration/output/` - Migration dry-run output (JSON)
+- `frontend/dist/` - Built frontend assets
+- `frontend/dist/bundle-analysis.html` - Build analysis
 
 ## Authentication & Identity
 
-**Auth Provider:** Custom JWT implementation
+### Custom JWT Authentication
 
 **Implementation:**
-- Token creation/verification: `backend/app/auth/tokens.py`
-- Password hashing: bcrypt via passlib (`backend/app/auth/password.py`)
-- Dependencies: `backend/app/auth/dependencies.py`
-- Permissions: `backend/app/auth/permissions.py`
+- Module: `backend/app/auth/` (endpoints, dependencies)
+- Token Generation: PyJWT
+- Password Hashing: passlib with bcrypt
+- Storage: `users` table in PostgreSQL
 
-**Token Flow:**
-1. Login via `/api/v2/auth/login` returns access + refresh tokens
-2. Access token: 30-minute expiry (configurable)
-3. Refresh token: 7-day expiry (configurable)
-4. Frontend stores tokens in localStorage
-5. Axios interceptor adds Bearer token to requests
-6. Auto-refresh on 401 response
+**Configuration (`backend/config.yaml`):**
+```yaml
+security:
+  jwt_algorithm: "HS256"
+  access_token_expire_minutes: 30
+  refresh_token_expire_days: 7
+  password_min_length: 8
+  max_login_attempts: 5
+  account_lockout_minutes: 15
+```
 
-**Roles:**
-- `admin` - Full access including user management
-- `curator` - Can create/edit/delete phenopackets
-- `viewer` - Read-only access (default)
+**Environment:**
+```bash
+JWT_SECRET=<32-byte-hex-string>  # REQUIRED - app exits if empty
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@hnf1b-db.local
+ADMIN_PASSWORD=ChangeMe!Admin2025
+```
+
+**Endpoints:**
+- `POST /api/v2/auth/login` - Get access and refresh tokens
+- `POST /api/v2/auth/refresh` - Refresh access token
+- `GET /api/v2/auth/me` - Get current user
+- `POST /api/v2/auth/logout` - Invalidate session
+
+**Frontend:**
+- Token storage: localStorage (`access_token`, `refresh_token`)
+- Auto-refresh: Axios interceptor in `frontend/src/api/index.js`
+- State: Pinia store in `frontend/src/stores/authStore.js`
 
 ## Monitoring & Observability
 
-**Error Tracking:**
-- None (no Sentry/Bugsnag integration)
+### Error Tracking
 
-**Logs:**
-- Backend: Python `logging` module, JSON format in Docker
-- Frontend: Custom `logService` with automatic PII redaction
-- Docker: json-file driver with rotation (50MB max, 5 files)
+**Approach:** Custom logging (no external service)
 
-**Health Checks:**
-- Backend: `GET /health` endpoint
-- Docker: Built-in health checks with configurable intervals
+**Backend:**
+- Python logging module
+- Configurable via `LOG_LEVEL` env var
+
+**Frontend:**
+- Custom `logService` with PII/PHI redaction
+- Access via `window.logService.debug/info/warn/error()`
+- Automatic redaction of HPO terms, emails, variants, tokens
+
+### Logs
+
+**Backend:**
+- JSON-formatted Docker logs
+- Max size: 50m per file, 5 files retained
+- Log rotation handled by Docker
+
+**Frontend:**
+- Browser console via logService
+- Production builds strip console.log (terser config)
+
+### Health Checks
+
+**Backend:**
+- `GET /health` - Health endpoint
+- Docker healthcheck: `curl --fail http://localhost:8000/health`
+
+**Frontend:**
+- Docker healthcheck: `wget --spider http://127.0.0.1:80/`
 
 ## CI/CD & Deployment
 
-**Hosting:**
-- Docker Compose (self-hosted)
-- Nginx Proxy Manager for SSL termination (production)
+### Hosting
 
-**CI Pipeline:**
-- GitHub Actions (`.github/workflows/ci.yml`)
-- Runs on push/PR: lint, typecheck, test for both backend and frontend
+**Platform:** Docker Compose self-hosted
 
-**Deployment Modes:**
-1. Hybrid (development): PostgreSQL + Redis in Docker, apps run locally
-2. Full Docker: All services containerized
-3. Production (NPM): Full Docker with Nginx Proxy Manager overlay
+**Modes:**
+1. **Hybrid Development:** PostgreSQL + Redis in Docker, apps run locally
+2. **Full Docker:** All services containerized
+3. **Production (NPM):** Behind Nginx Proxy Manager
+
+**Docker Files:**
+- `docker/docker-compose.yml` - Base configuration
+- `docker/docker-compose.dev.yml` - Development services only
+- `docker/docker-compose.npm.yml` - Production overlay
+
+### CI Pipeline
+
+**Platform:** GitHub Actions
+
+**Workflow:** `.github/workflows/ci.yml`
+
+**Triggers:**
+- Push to main, develop, refactor--* branches
+- Pull requests to main, develop
+
+**Jobs:**
+1. **Backend Tests:**
+   - PostgreSQL 15 + Redis 7 services
+   - Alembic migrations
+   - Ruff linting
+   - Mypy type checking
+   - Pytest with coverage
+   - Codecov upload
+
+2. **Frontend Tests:**
+   - Node.js 20
+   - Vitest tests
+   - ESLint check
+   - Prettier format check
 
 ## Environment Configuration
 
-**Required env vars:**
-- `DATABASE_URL` - PostgreSQL connection (required)
-- `JWT_SECRET` - JWT signing secret (required, app exits if empty)
+### Required Environment Variables
 
-**Optional env vars:**
-- `REDIS_URL` - Redis connection (default: `redis://localhost:6379/0`)
-- `PUBMED_API_KEY` - Increases PubMed rate limit from 3 to 10 req/sec
-- `CORS_ORIGINS` - Comma-separated allowed origins
-- `DEBUG` - Enable debug mode
-- `ADMIN_USERNAME/EMAIL/PASSWORD` - Initial admin user credentials
-- `USE_ONTOLOGY_APIS` - Enable/disable ontology API calls (default: true)
-- `ONTOLOGY_API_TIMEOUT` - API timeout in seconds (default: 5)
-- `ONTOLOGY_CACHE_TTL_HOURS` - Cache TTL (default: 24)
+**Backend (`.env`):**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | 32-byte hex string for JWT signing |
+| `REDIS_URL` | No | Redis connection (default: localhost:6379) |
+| `PUBMED_API_KEY` | No | NCBI API key for higher rate limits |
+| `ADMIN_USERNAME` | No | Initial admin username |
+| `ADMIN_EMAIL` | No | Initial admin email |
+| `ADMIN_PASSWORD` | No | Initial admin password |
+| `CORS_ORIGINS` | No | Allowed origins (comma-separated) |
+| `DEBUG` | No | Enable debug mode |
 
-**Secrets location:**
-- Development: `backend/.env` (gitignored)
-- Production: `.env.docker` or Docker secrets
+**Frontend (`.env`):**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | No | Backend API URL (default: /api/v2) |
+
+### Secrets Location
+
+**Development:**
+- `backend/.env` - Backend secrets
+- `frontend/.env` - Frontend config
+
+**Production:**
+- `.env.docker` - Docker Compose environment
+- Secrets passed via Docker environment variables
 
 ## Webhooks & Callbacks
 
-**Incoming:**
-- None
+### Incoming Webhooks
 
-**Outgoing:**
-- None
+**None** - No external webhook integrations
 
-## API Standards Compliance
+### Outgoing Webhooks
 
-**GA4GH Standards:**
-- Phenopackets v2 - Full compliance for phenotype data exchange
-- VRS 2.0 - Deterministic variant identifiers with proper digests
+**None** - No outgoing webhook integrations
 
-**REST API Standards:**
-- JSON:API v1.1 - Pagination format (offset + cursor modes)
-- OpenAPI 3.0 - Auto-generated docs at `/docs`
+## Data Sync Commands
 
-## Rate Limiting
+**Publication Metadata:**
+```bash
+make publications-sync      # Sync all
+make publications-sync-dry  # Dry run
+```
 
-**External APIs (configured in `config.yaml`):**
-| Service | Limit | Notes |
-|---------|-------|-------|
-| VEP | 15 req/sec | Ensembl guideline |
-| PubMed (no key) | 3 req/sec | NCBI default |
-| PubMed (with key) | 10 req/sec | With `PUBMED_API_KEY` |
-| Ensembl REST | 10 req/sec | Self-imposed delay |
+**Variant Annotations:**
+```bash
+make variants-sync      # Sync all
+make variants-sync-dry  # Dry run
+```
 
-**Internal API:**
-- 5 req/sec per endpoint (configurable)
-- Implemented via rate limiting middleware
+**Reference Data:**
+```bash
+make reference-init  # Initialize GRCh38 + HNF1B
+make genes-sync      # Sync chr17q12 genes from Ensembl
+```
+
+**Phenopacket Import:**
+```bash
+make phenopackets-migrate       # Full import (864 records)
+make phenopackets-migrate-test  # Test import (20 records)
+```
 
 ---
 
