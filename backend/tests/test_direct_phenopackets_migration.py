@@ -7,36 +7,36 @@ from migration.direct_sheets_to_phenopackets import DirectSheetsToPhenopackets
 from migration.phenopackets.hpo_mapper import HPOMapper
 
 
-class TestDirectPhenopacketsMigration:
+class TestMigrationDirectPhenopackets:
     """Test the direct phenopackets migration process."""
 
     @pytest.fixture
-    def migration(self):
+    def fixture_migration(self):
         """Create migration instance."""
         # Use test database URL
         test_db_url = "postgresql+asyncpg://test:test@localhost/test_db"
         return DirectSheetsToPhenopackets(test_db_url)
 
     @pytest.fixture
-    def hpo_mapper(self):
+    def fixture_hpo_mapper(self):
         """Create HPO mapper instance."""
         return HPOMapper()
 
-    def test_hpo_mapping_initialization(self, hpo_mapper):
+    def test_migration_hpo_mapping_initialization_correct(self, fixture_hpo_mapper):
         """Test that HPO mappings are properly initialized."""
         # Check key mappings exist (note: uses hpo_mappings attribute)
         # NOTE: "renalinsufficiency" was removed - now maps to specific CKD stages
         # via the phenotypes sheet during migration
-        assert "mody" in hpo_mapper.hpo_mappings  # Diabetes is mapped as "mody"
-        assert "hypomagnesemia" in hpo_mapper.hpo_mappings
-        assert "renalcysts" in hpo_mapper.hpo_mappings
+        assert "mody" in fixture_hpo_mapper.hpo_mappings  # Diabetes is mapped as "mody"
+        assert "hypomagnesemia" in fixture_hpo_mapper.hpo_mappings
+        assert "renalcysts" in fixture_hpo_mapper.hpo_mappings
 
         # Check correct HPO terms are used
-        assert hpo_mapper.hpo_mappings["mentaldisease"]["id"] == "HP:0000708"
-        assert hpo_mapper.hpo_mappings["brainabnormality"]["id"] == "HP:0012443"
-        assert hpo_mapper.hpo_mappings["abnormalliverphysiology"]["id"] == "HP:0031865"
+        assert fixture_hpo_mapper.hpo_mappings["mentaldisease"]["id"] == "HP:0000708"
+        assert fixture_hpo_mapper.hpo_mappings["brainabnormality"]["id"] == "HP:0012443"
+        assert fixture_hpo_mapper.hpo_mappings["abnormalliverphysiology"]["id"] == "HP:0031865"
 
-    def test_phenopacket_building(self, migration):
+    def test_migration_phenopacket_building_correct_structure(self, fixture_migration):
         """Test actual phenopacket construction."""
         # Create test data
         rows = pd.DataFrame(
@@ -54,18 +54,18 @@ class TestDirectPhenopacketsMigration:
         )
 
         # Initialize required components
-        migration.individuals_df = rows
-        migration.phenotypes_df = None
-        migration.publications_df = None
+        fixture_migration.individuals_df = rows
+        fixture_migration.phenotypes_df = None
+        fixture_migration.publications_df = None
 
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
-        migration.phenopacket_builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+        fixture_migration.phenopacket_builder = PhenopacketBuilder(
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         # Use actual method that exists
-        phenopacket = migration.phenopacket_builder.build_phenopacket("TEST001", rows)
+        phenopacket = fixture_migration.phenopacket_builder.build_phenopacket("TEST001", rows)
 
         # Basic structure validation
         assert phenopacket["id"] == "phenopacket-TEST001"
@@ -80,7 +80,7 @@ class TestDirectPhenopacketsMigration:
         # Should have renal insufficiency and diabetes
         assert any("HP:" in fid for fid in feature_ids)
 
-    def test_subject_id_mapping(self, migration):
+    def test_migration_subject_id_mapping_correct(self, fixture_migration):
         """Test that subject IDs are correctly mapped."""
         rows = pd.DataFrame(
             [
@@ -97,7 +97,7 @@ class TestDirectPhenopacketsMigration:
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
         builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         phenopacket = builder.build_phenopacket("IND001", rows)
@@ -109,7 +109,7 @@ class TestDirectPhenopacketsMigration:
         assert "HNF1B-001" in phenopacket["subject"]["alternateIds"]
         assert phenopacket["subject"]["sex"] == "MALE"
 
-    def test_age_parsing(self):
+    def test_migration_age_parsing_valid_format(self):
         """Test age field parsing."""
         from migration.phenopackets.age_parser import AgeParser
 
@@ -125,7 +125,7 @@ class TestDirectPhenopacketsMigration:
         assert parser.parse_age(None) is None
         assert parser.parse_age("") is None
 
-    def test_phenotype_extraction(self, migration):
+    def test_migration_phenotype_extraction_correct(self, fixture_migration):
         """Test phenotypic feature extraction."""
         rows = pd.DataFrame(
             [
@@ -144,7 +144,7 @@ class TestDirectPhenopacketsMigration:
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
         builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
@@ -158,7 +158,7 @@ class TestDirectPhenopacketsMigration:
         # Should have HPO terms for positive features
         assert len([fid for fid in feature_ids if "HP:" in fid]) > 0
 
-    def test_mondo_disease_mapping(self, migration):
+    def test_migration_mondo_disease_mapping_correct(self, fixture_migration):
         """Test MONDO disease ontology mapping."""
         rows = pd.DataFrame(
             [
@@ -173,7 +173,7 @@ class TestDirectPhenopacketsMigration:
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
         builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
@@ -184,7 +184,7 @@ class TestDirectPhenopacketsMigration:
         assert diseases[0]["term"]["id"] == "MONDO:0011593"
         assert "Renal cysts and diabetes" in diseases[0]["term"]["label"]
 
-    def test_metadata_creation(self, migration):
+    def test_migration_metadata_creation_correct(self, fixture_migration):
         """Test metadata creation for phenopackets."""
         rows = pd.DataFrame(
             [
@@ -199,7 +199,7 @@ class TestDirectPhenopacketsMigration:
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
         builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
@@ -216,15 +216,15 @@ class TestDirectPhenopacketsMigration:
         assert "hp" in resource_ids
         assert "mondo" in resource_ids
 
-    def test_valid_id_checking(self, migration):
+    def test_migration_valid_id_checking_correct(self, fixture_migration):
         """Test ID validation logic."""
-        assert migration._is_valid_id("TEST001") is True
-        assert migration._is_valid_id("") is False
-        assert migration._is_valid_id(None) is False
-        assert migration._is_valid_id(pd.NA) is False
-        assert migration._is_valid_id("   ") is False
+        assert fixture_migration._is_valid_id("TEST001") is True
+        assert fixture_migration._is_valid_id("") is False
+        assert fixture_migration._is_valid_id(None) is False
+        assert fixture_migration._is_valid_id(pd.NA) is False
+        assert fixture_migration._is_valid_id("   ") is False
 
-    def test_phenopacket_validation(self, migration):
+    def test_migration_phenopacket_validation_passes(self, fixture_migration):
         """Test that created phenopackets pass basic validation."""
         rows = pd.DataFrame(
             [
@@ -243,7 +243,7 @@ class TestDirectPhenopacketsMigration:
         from migration.phenopackets.builder_simple import PhenopacketBuilder
 
         builder = PhenopacketBuilder(
-            migration.ontology_mapper, migration.publication_mapper
+            fixture_migration.ontology_mapper, fixture_migration.publication_mapper
         )
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
@@ -266,35 +266,35 @@ class TestDirectPhenopacketsMigration:
             assert len(features) > 0
 
 
-class TestHPOMapperLabelNormalization:
+class TestMigrationHPOMapperLabelNormalization:
     """Test HPOMapper canonical label normalization feature.
 
     Tests for #165: Data quality - Normalize HPO term labels during import
     """
 
-    def test_normalize_labels_enabled_by_default(self):
+    def test_migration_normalize_labels_enabled_by_default(self):
         """Test that label normalization is enabled by default."""
         mapper = HPOMapper()
         assert mapper.normalize_labels is True
 
-    def test_normalize_labels_can_be_disabled(self):
+    def test_migration_normalize_labels_can_be_disabled(self):
         """Test that label normalization can be disabled."""
         mapper = HPOMapper(normalize_labels=False)
         assert mapper.normalize_labels is False
 
-    def test_canonical_labels_cache_initialization(self):
+    def test_migration_canonical_labels_cache_initialized_empty(self):
         """Test that the canonical labels cache is initialized empty."""
         mapper = HPOMapper()
         assert mapper._canonical_labels == {}
 
-    def test_get_canonical_label_returns_fallback_when_disabled(self):
+    def test_migration_get_canonical_label_returns_fallback_when_disabled(self):
         """Test fallback is returned when normalization is disabled."""
         mapper = HPOMapper(normalize_labels=False)
         fallback = "My Fallback Label"
         result = mapper._get_canonical_label("HP:0012622", fallback)
         assert result == fallback
 
-    def test_get_canonical_label_caches_result(self):
+    def test_migration_get_canonical_label_caches_result(self):
         """Test that canonical labels are cached after lookup."""
         mapper = HPOMapper(normalize_labels=True)
         hpo_id = "HP:0012622"
@@ -310,7 +310,7 @@ class TestHPOMapperLabelNormalization:
         result2 = mapper._get_canonical_label(hpo_id, fallback)
         assert result1 == result2
 
-    def test_get_canonical_label_fallback_on_unknown_term(self):
+    def test_migration_get_canonical_label_fallback_on_unknown_term(self):
         """Test fallback when ontology service returns unknown term."""
         mapper = HPOMapper(normalize_labels=True)
 
@@ -324,7 +324,7 @@ class TestHPOMapperLabelNormalization:
         # The cache should be populated after the call
         assert mapper._canonical_labels.get(invalid_id) is not None
 
-    def test_build_from_dataframe_normalizes_labels(self):
+    def test_migration_build_from_dataframe_normalizes_labels(self):
         """Test that build_from_dataframe normalizes labels."""
         mapper = HPOMapper(normalize_labels=True)
 
@@ -346,7 +346,7 @@ class TestHPOMapperLabelNormalization:
         # The HPO ID should be correct
         assert mapper.hpo_mappings[normalized_key]["id"] == "HP:0012622"
 
-    def test_build_from_dataframe_without_normalization(self):
+    def test_migration_build_from_dataframe_without_normalization(self):
         """Test build_from_dataframe uses source label when normalization disabled."""
         mapper = HPOMapper(normalize_labels=False)
 
@@ -366,7 +366,7 @@ class TestHPOMapperLabelNormalization:
         # With normalization disabled, should use the source label
         assert mapper.hpo_mappings[normalized_key]["label"] == source_label
 
-    def test_normalize_key_handles_various_inputs(self):
+    def test_migration_normalize_key_handles_various_inputs(self):
         """Test normalize_key handles various input formats."""
         mapper = HPOMapper()
 
@@ -383,7 +383,7 @@ class TestHPOMapperLabelNormalization:
         assert mapper.normalize_key("") == ""
         assert mapper.normalize_key(None) == ""
 
-    def test_default_mappings_have_canonical_labels(self):
+    def test_migration_default_mappings_have_canonical_labels(self):
         """Test that default HPO mappings use canonical labels."""
         mapper = HPOMapper()
 
@@ -392,7 +392,7 @@ class TestHPOMapperLabelNormalization:
         assert mapper.hpo_mappings["hypomagnesemia"]["label"] == "Hypomagnesemia"
         assert mapper.hpo_mappings["renalcysts"]["label"] == "Renal cyst"
 
-    def test_ontology_service_lazy_loading(self):
+    def test_migration_ontology_service_lazy_loading(self):
         """Test that ontology service is lazily loaded."""
         mapper = HPOMapper(normalize_labels=True)
 
