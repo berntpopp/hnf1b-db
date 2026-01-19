@@ -31,45 +31,45 @@ from app.phenopackets.routers.aggregations.survival_handlers import (
 )
 
 
-class TestProteinDomainHandlerRegistration:
+class TestDomainHandlerRegistration:
     """Tests for handler registration in factory."""
 
-    def test_handler_registered_in_factory(self):
+    def test_domain_handler_registered_in_factory_returns_instance(self):
         """Verify protein_domain handler is registered in factory."""
         handler = SurvivalHandlerFactory.get_handler("protein_domain")
         assert isinstance(handler, ProteinDomainHandler)
 
-    def test_protein_domain_in_valid_types(self):
+    def test_domain_protein_domain_in_valid_types_exists(self):
         """Verify protein_domain is in valid comparison types."""
         valid_types = SurvivalHandlerFactory.get_valid_comparison_types()
         assert "protein_domain" in valid_types
 
-    def test_factory_returns_new_instances(self):
+    def test_domain_factory_returns_new_instances_different(self):
         """Factory should return new handler instances each call."""
         handler1 = SurvivalHandlerFactory.get_handler("protein_domain")
         handler2 = SurvivalHandlerFactory.get_handler("protein_domain")
         assert handler1 is not handler2
 
 
-class TestProteinDomainHandlerProperties:
+class TestDomainHandlerProperties:
     """Tests for handler properties."""
 
-    def test_comparison_type(self):
+    def test_domain_comparison_type_returns_protein_domain(self):
         """Verify comparison type identifier."""
         handler = ProteinDomainHandler()
         assert handler.comparison_type == "protein_domain"
 
-    def test_group_names(self):
+    def test_domain_group_names_correct_domains(self):
         """Verify correct domain groups."""
         handler = ProteinDomainHandler()
         assert handler.group_names == ["POU-S", "POU-H", "TAD", "Other"]
 
-    def test_group_field(self):
+    def test_domain_group_field_returns_domain_group(self):
         """Verify group field name for SQL queries."""
         handler = ProteinDomainHandler()
         assert handler.get_group_field() == "domain_group"
 
-    def test_group_definitions_contains_all_groups(self):
+    def test_domain_group_definitions_contains_all_groups(self):
         """Verify all groups have definitions."""
         handler = ProteinDomainHandler()
         definitions = handler.group_definitions
@@ -77,7 +77,7 @@ class TestProteinDomainHandlerProperties:
             assert group in definitions
             assert len(definitions[group]) > 0
 
-    def test_group_definitions_contain_amino_acid_ranges(self):
+    def test_domain_group_definitions_contain_amino_acid_ranges(self):
         """Verify domain definitions include amino acid ranges."""
         handler = ProteinDomainHandler()
         definitions = handler.group_definitions
@@ -87,16 +87,16 @@ class TestProteinDomainHandlerProperties:
         assert "314-557" in definitions["TAD"]
 
 
-class TestHNF1BProteinDomains:
+class TestDomainHNF1BProteinDomains:
     """Tests for HNF1B protein domain constants."""
 
-    def test_domain_structure(self):
+    def test_domain_structure_contains_all_domains(self):
         """Verify domain constant structure."""
         assert "POU-S" in HNF1B_PROTEIN_DOMAINS
         assert "POU-H" in HNF1B_PROTEIN_DOMAINS
         assert "TAD" in HNF1B_PROTEIN_DOMAINS
 
-    def test_domain_boundaries(self):
+    def test_domain_boundaries_correct_values(self):
         """Verify domain boundary values."""
         pou_s = HNF1B_PROTEIN_DOMAINS["POU-S"]
         assert pou_s["start"] == 90
@@ -110,7 +110,7 @@ class TestHNF1BProteinDomains:
         assert tad["start"] == 314
         assert tad["end"] == 557
 
-    def test_domains_non_overlapping(self):
+    def test_domain_domains_non_overlapping_validated(self):
         """Verify domains do not overlap."""
         pou_s = HNF1B_PROTEIN_DOMAINS["POU-S"]
         pou_h = HNF1B_PROTEIN_DOMAINS["POU-H"]
@@ -121,14 +121,14 @@ class TestHNF1BProteinDomains:
         # POU-H ends before TAD starts
         assert pou_h["end"] < tad["start"]
 
-    def test_domains_have_labels(self):
+    def test_domain_domains_have_labels_present(self):
         """Verify all domains have human-readable labels."""
         for name, domain in HNF1B_PROTEIN_DOMAINS.items():
             assert "label" in domain
             assert len(domain["label"]) > 0
 
 
-class TestMissenseHGVSPattern:
+class TestDomainMissenseHGVSPattern:
     """Tests for missense variant HGVS.p pattern matching."""
 
     @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ class TestMissenseHGVSPattern:
             "p.Lys556Asn",
         ],
     )
-    def test_valid_missense_matches(self, hgvs_p):
+    def test_domain_valid_missense_matches_pattern(self, hgvs_p):
         """Valid missense variants should match the pattern."""
         assert re.match(MISSENSE_HGVS_P_PATTERN, hgvs_p)
 
@@ -157,7 +157,7 @@ class TestMissenseHGVSPattern:
             "p.Met1?",  # Start lost
         ],
     )
-    def test_truncating_variants_excluded(self, hgvs_p):
+    def test_domain_truncating_variants_excluded_from_pattern(self, hgvs_p):
         """Truncating variants should NOT match missense pattern."""
         assert not re.match(MISSENSE_HGVS_P_PATTERN, hgvs_p)
 
@@ -171,12 +171,12 @@ class TestMissenseHGVSPattern:
             "p.R177C",  # Single-letter amino acid code (not supported)
         ],
     )
-    def test_invalid_formats_excluded(self, invalid):
+    def test_domain_invalid_formats_excluded_from_pattern(self, invalid):
         """Invalid formats should NOT match."""
         assert not re.match(MISSENSE_HGVS_P_PATTERN, invalid)
 
 
-class TestAminoAcidPositionExtraction:
+class TestDomainAminoAcidPositionExtraction:
     """Tests for amino acid position extraction from HGVS.p."""
 
     @pytest.mark.parametrize(
@@ -189,14 +189,14 @@ class TestAminoAcidPositionExtraction:
             ("p.Lys556Asn", 556),
         ],
     )
-    def test_position_extraction(self, hgvs_p, expected_position):
+    def test_domain_position_extraction_correct_value(self, hgvs_p, expected_position):
         """Extract correct amino acid position from HGVS.p notation."""
         match = re.search(AMINO_ACID_POSITION_PATTERN, hgvs_p)
         assert match is not None
         position = int(match.group(1))
         assert position == expected_position
 
-    def test_position_extraction_from_nonsense(self):
+    def test_domain_position_extraction_from_nonsense_works(self):
         """Position extraction should work even for nonsense variants."""
         # This is for testing the regex - domain classification
         # would still exclude these via the missense filter
@@ -245,14 +245,14 @@ class TestDomainClassification:
             ("p.Arg310Cys", "Other"),  # Between POU-H and TAD
         ],
     )
-    def test_domain_classification(self, hgvs_p, expected_domain):
+    def test_domain_classification_correct_mapping(self, hgvs_p, expected_domain):
         """Test amino acid position to domain mapping."""
         match = re.search(AMINO_ACID_POSITION_PATTERN, hgvs_p)
         position = int(match.group(1))
         domain = self.classify_position(position)
         assert domain == expected_domain
 
-    def test_boundary_positions(self):
+    def test_domain_boundary_positions_classified_correctly(self):
         """Test exact boundary positions."""
         # Just inside POU-S
         assert self.classify_position(90) == "POU-S"
@@ -275,23 +275,23 @@ class TestDomainClassification:
         assert self.classify_position(313) == "Other"
 
 
-class TestSQLGenerators:
+class TestDomainSQLGenerators:
     """Tests for SQL fragment generators."""
 
-    def test_missense_filter_sql_structure(self):
+    def test_domain_missense_filter_sql_structure_valid(self):
         """Verify missense filter SQL structure."""
         sql = get_missense_filter_sql("vd")
         assert "EXISTS" in sql
         assert "hgvs.p" in sql
         assert "expressions" in sql
 
-    def test_missense_filter_sql_custom_path(self):
+    def test_domain_missense_filter_sql_custom_path_used(self):
         """Verify custom path is used in SQL."""
         custom_path = "gi->'variantInterpretation'->'variationDescriptor'"
         sql = get_missense_filter_sql(custom_path)
         assert custom_path in sql
 
-    def test_domain_classification_sql_structure(self):
+    def test_domain_classification_sql_structure_valid(self):
         """Verify domain classification SQL structure."""
         sql = get_protein_domain_classification_sql("vd")
         assert "CASE" in sql
@@ -314,7 +314,7 @@ class TestSQLGenerators:
         assert "314" in sql
         assert "557" in sql
 
-    def test_cnv_exclusion_filter_structure(self):
+    def test_domain_cnv_exclusion_filter_structure_valid(self):
         """Verify CNV exclusion filter structure."""
         sql = get_cnv_exclusion_filter()
         assert "NOT" in sql
@@ -322,32 +322,32 @@ class TestSQLGenerators:
         assert "DUP" in sql
 
 
-class TestProteinDomainHandlerMetadata:
+class TestDomainHandlerMetadata:
     """Tests for handler metadata generation."""
 
-    def test_inclusion_criteria_mentions_missense(self):
+    def test_domain_inclusion_criteria_mentions_missense(self):
         """Inclusion criteria should mention missense-only."""
         handler = ProteinDomainHandler()
         criteria = handler._get_inclusion_exclusion_criteria()
         assert "missense" in criteria["inclusion_criteria"].lower()
 
-    def test_exclusion_criteria_mentions_cnv(self):
+    def test_domain_exclusion_criteria_mentions_cnv(self):
         """Exclusion criteria should mention CNV exclusion."""
         handler = ProteinDomainHandler()
         criteria = handler._get_inclusion_exclusion_criteria()
         assert "cnv" in criteria["exclusion_criteria"].lower()
 
-    def test_exclusion_criteria_mentions_truncating(self):
+    def test_domain_exclusion_criteria_mentions_truncating(self):
         """Exclusion criteria should mention truncating exclusion."""
         handler = ProteinDomainHandler()
         criteria = handler._get_inclusion_exclusion_criteria()
         assert "truncating" in criteria["exclusion_criteria"].lower()
 
 
-class TestProteinDomainHandlerQueries:
+class TestDomainHandlerQueries:
     """Tests for SQL query generation."""
 
-    def test_current_age_query_includes_missense_filter(self):
+    def test_domain_current_age_query_includes_missense_filter(self):
         """Current age query should include missense filter."""
         handler = ProteinDomainHandler()
         query = handler.build_current_age_query()
@@ -355,7 +355,7 @@ class TestProteinDomainHandlerQueries:
         assert "hgvs.p" in query
         assert "expressions" in query
 
-    def test_current_age_query_excludes_cnv(self):
+    def test_domain_current_age_query_excludes_cnv(self):
         """Current age query should exclude CNVs."""
         handler = ProteinDomainHandler()
         query = handler.build_current_age_query()
@@ -363,14 +363,14 @@ class TestProteinDomainHandlerQueries:
         assert "DUP" in query
         assert "NOT" in query
 
-    def test_standard_query_includes_domain_classification(self):
+    def test_domain_standard_query_includes_domain_classification(self):
         """Standard query should include domain classification."""
         handler = ProteinDomainHandler()
         query = handler.build_standard_query(["HP:0012626"])
         assert "domain_group" in query
         assert "CASE" in query
 
-    def test_censored_query_includes_filters(self):
+    def test_domain_censored_query_includes_filters(self):
         """Censored query should include same filters."""
         handler = ProteinDomainHandler()
         query = handler._build_censored_query(["HP:0012626"])

@@ -11,12 +11,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+@pytest.mark.asyncio
 class TestJSONBIndexesExist:
     """Verify that JSONB indexes are created."""
 
-    async def test_phenotypic_features_index_exists(self, db_session: AsyncSession):
+    async def test_index_phenotypic_features_gin_exists(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify idx_phenopacket_features_gin index exists."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 SELECT indexname, indexdef
                 FROM pg_indexes
@@ -32,9 +35,11 @@ class TestJSONBIndexesExist:
             "Should index phenotypicFeatures"
         )
 
-    async def test_interpretations_index_exists(self, db_session: AsyncSession):
+    async def test_index_interpretations_gin_exists(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify idx_phenopacket_interpretations_gin index exists."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 SELECT indexname, indexdef
                 FROM pg_indexes
@@ -47,9 +52,9 @@ class TestJSONBIndexesExist:
         assert row is not None, "idx_phenopacket_interpretations_gin index should exist"
         assert "gin" in row.indexdef.lower(), "Should be a GIN index"
 
-    async def test_diseases_index_exists(self, db_session: AsyncSession):
+    async def test_index_diseases_gin_exists(self, fixture_db_session: AsyncSession):
         """Verify idx_phenopacket_diseases_gin index exists."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 SELECT indexname, indexdef
                 FROM pg_indexes
@@ -63,6 +68,7 @@ class TestJSONBIndexesExist:
         assert "gin" in row.indexdef.lower(), "Should be a GIN index"
 
 
+@pytest.mark.asyncio
 class TestJSONBIndexUsage:
     """Verify that queries CAN use the JSONB indexes when beneficial.
 
@@ -71,12 +77,12 @@ class TestJSONBIndexUsage:
     Index usage is verified on larger datasets in production/staging environments.
     """
 
-    async def test_contains_operator_query_can_use_index(
-        self, db_session: AsyncSession
+    async def test_index_contains_operator_query_can_use_index(
+        self, fixture_db_session: AsyncSession
     ):
         """Verify @> (contains) operator queries can leverage GIN index."""
         # This query uses the @> operator which GIN indexes support
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 EXPLAIN (FORMAT TEXT)
                 SELECT phenopacket_id
@@ -97,10 +103,12 @@ class TestJSONBIndexUsage:
         # This test just verifies the query executes without error
         assert "phenopackets" in explain_text.lower(), "Should query phenopackets table"
 
-    async def test_jsonb_array_elements_query_executes(self, db_session: AsyncSession):
+    async def test_index_jsonb_array_elements_query_executes(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify jsonb_array_elements queries execute correctly."""
         # These queries expand JSONB arrays and aggregate results
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 EXPLAIN (FORMAT TEXT)
                 SELECT
@@ -126,12 +134,13 @@ class TestJSONBIndexUsage:
         )
 
 
-class TestIndexStatistics:
+@pytest.mark.asyncio
+class TestJSONBIndexStatistics:
     """Verify index statistics and size."""
 
-    async def test_index_sizes_are_reasonable(self, db_session: AsyncSession):
+    async def test_index_sizes_are_reasonable(self, fixture_db_session: AsyncSession):
         """Verify JSONB indexes don't use excessive storage."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 SELECT
                     indexname,
@@ -154,9 +163,11 @@ class TestIndexStatistics:
             print(f"  {idx.indexname}: {idx.size}")
         print(f"{'=' * 60}")
 
-    async def test_table_statistics_updated(self, db_session: AsyncSession):
+    async def test_index_table_statistics_updated(
+        self, fixture_db_session: AsyncSession
+    ):
         """Verify table statistics are up-to-date (ANALYZE was run)."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text("""
                 SELECT
                     schemaname,
@@ -177,14 +188,15 @@ class TestIndexStatistics:
 
 
 @pytest.mark.benchmark
-class TestIndexPerformanceManual:
+@pytest.mark.asyncio
+class TestJSONBIndexPerformanceManual:
     """Manual tests for verifying index performance improvements.
 
     Run these manually with real data to see performance improvements.
     """
 
-    async def test_compare_query_cost_with_without_index(
-        self, db_session: AsyncSession
+    async def test_index_compare_query_cost_with_without_index(
+        self, fixture_db_session: AsyncSession
     ):
         """Compare query costs with and without indexes (manual verification)."""
         # This would require:
@@ -194,7 +206,9 @@ class TestIndexPerformanceManual:
         # 4. Compare costs (should be 50%+ reduction)
         pass
 
-    async def test_measure_aggregation_query_time(self, db_session: AsyncSession):
+    async def test_index_measure_aggregation_query_time(
+        self, fixture_db_session: AsyncSession
+    ):
         """Measure actual query execution time (manual verification)."""
         # This would require:
         # 1. Time query execution before indexes
