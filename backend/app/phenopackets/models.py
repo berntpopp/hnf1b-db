@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Computed, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -418,6 +418,8 @@ class PhenopacketDelete(BaseModel):
 class PhenopacketResponse(BaseModel):
     """Response model for phenopacket queries."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     phenopacket_id: str
     version: str  # GA4GH schema version
@@ -428,11 +430,6 @@ class PhenopacketResponse(BaseModel):
     schema_version: str
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
-
-    class Config:
-        """Pydantic config for ORM mode."""
-
-        from_attributes = True
 
 
 class PhenopacketSearchQuery(BaseModel):
@@ -458,6 +455,8 @@ class PhenopacketSearchQuery(BaseModel):
 class PhenopacketAuditResponse(BaseModel):
     """Response model for phenopacket audit trail entries."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     phenopacket_id: str
     action: str
@@ -468,11 +467,6 @@ class PhenopacketAuditResponse(BaseModel):
     change_patch: Optional[Any] = None  # JSONB can store arrays or objects
     old_value: Optional[Dict[str, Any]] = None
     new_value: Optional[Dict[str, Any]] = None
-
-    class Config:
-        """Pydantic config for ORM mode."""
-
-        from_attributes = True
 
 
 class AggregationResult(BaseModel):
