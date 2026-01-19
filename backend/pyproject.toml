@@ -137,3 +137,24 @@ convention = "google"
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = [
+    "*/alembic/versions/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
+fail_under = 60
+show_missing = true
+
+[tool.coverage.html]
+skip_empty = true
