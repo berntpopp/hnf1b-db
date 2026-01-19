@@ -15,70 +15,70 @@ from app.variants.service import (
 )
 
 
-class TestCNVDetection:
+class TestVariantCNVAnnotationDetection:
     """Test CNV/structural variant detection."""
 
-    def test_is_cnv_symbolic_del(self):
+    def test_variant_cnv_symbolic_del_detected(self):
         """Test detection of symbolic DEL allele."""
         assert is_cnv_variant("17-36459258-A-<DEL>") is True
         assert is_cnv_variant("chr17-36459258-A-<DEL>") is True
 
-    def test_is_cnv_symbolic_dup(self):
+    def test_variant_cnv_symbolic_dup_detected(self):
         """Test detection of symbolic DUP allele."""
         assert is_cnv_variant("17-36459258-A-<DUP>") is True
 
-    def test_is_cnv_region_format(self):
+    def test_variant_cnv_region_format_detected(self):
         """Test detection of region format CNVs."""
         assert is_cnv_variant("17-36459258-37832869-DEL") is True
         assert is_cnv_variant("17:36459258-37832869:DEL") is True
         assert is_cnv_variant("17-36459258-37832869-DUP") is True
 
-    def test_is_cnv_other_sv_types(self):
+    def test_variant_cnv_other_sv_types_detected(self):
         """Test detection of other SV types."""
         assert is_cnv_variant("17-36459258-A-<INS>") is True
         assert is_cnv_variant("17-36459258-A-<INV>") is True
         assert is_cnv_variant("17-36459258-A-<CNV>") is True
 
-    def test_is_cnv_negative_snv(self):
+    def test_variant_cnv_snv_not_detected(self):
         """Test that SNVs are not detected as CNVs."""
         assert is_cnv_variant("17-36459258-A-G") is False
         assert is_cnv_variant("17-36459258-AT-G") is False
 
-    def test_is_cnv_case_insensitive(self):
+    def test_variant_cnv_case_insensitive_detected(self):
         """Test case insensitivity."""
         assert is_cnv_variant("17-36459258-A-<del>") is True
         assert is_cnv_variant("17-36459258-37832869-Del") is True
 
 
-class TestCNVValidation:
+class TestVariantCNVAnnotationValidation:
     """Test CNV variant ID validation."""
 
-    def test_validate_cnv_symbolic_format(self):
+    def test_variant_cnv_symbolic_format_validated(self):
         """Test validation of symbolic CNV format."""
         result = validate_variant_id("17-36459258-A-<DEL>")
         assert result == "17-36459258-A-<DEL>"
 
-    def test_validate_cnv_symbolic_with_chr(self):
+    def test_variant_cnv_symbolic_chr_prefix_normalized(self):
         """Test validation with chr prefix."""
         result = validate_variant_id("chr17-36459258-A-<DEL>")
         assert result == "17-36459258-A-<DEL>"
 
-    def test_validate_cnv_region_format(self):
+    def test_variant_cnv_region_format_validated(self):
         """Test validation of region format."""
         result = validate_variant_id("17-36459258-37832869-DEL")
         assert result == "17-36459258-37832869-DEL"
 
-    def test_validate_cnv_region_colon_format(self):
+    def test_variant_cnv_region_colon_format_normalized(self):
         """Test validation of region format with colons."""
         result = validate_variant_id("17:36459258-37832869:DEL")
         assert result == "17-36459258-37832869-DEL"
 
-    def test_validate_cnv_disabled(self):
+    def test_variant_cnv_disabled_raises_error(self):
         """Test that CNVs are rejected when allow_cnv=False."""
         with pytest.raises(ValueError):
             validate_variant_id("17-36459258-A-<DEL>", allow_cnv=False)
 
-    def test_validate_cnv_all_sv_types(self):
+    def test_variant_cnv_all_sv_types_validated(self):
         """Test validation of all SV types."""
         sv_types = ["DEL", "DUP", "INS", "INV", "CNV"]
         for sv_type in sv_types:
@@ -90,54 +90,54 @@ class TestCNVValidation:
             result = validate_variant_id(f"17-36459258-37832869-{sv_type}")
             assert sv_type in result
 
-    def test_validate_snv_still_works(self):
+    def test_variant_cnv_snv_validation_still_works(self):
         """Test that SNV validation still works."""
         result = validate_variant_id("17-36459258-A-G")
         assert result == "17-36459258-A-G"
 
-    def test_validate_indel_still_works(self):
+    def test_variant_cnv_indel_validation_still_works(self):
         """Test that indel validation still works."""
         result = validate_variant_id("17-36459258-AT-G")
         assert result == "17-36459258-AT-G"
 
 
-class TestCNVVEPFormatting:
+class TestVariantCNVAnnotationVEPFormatting:
     """Test VEP formatting for CNVs."""
 
-    def test_format_cnv_region(self):
+    def test_variant_cnv_vep_region_format_succeeds(self):
         """Test VEP format for region-style CNV."""
         result = _format_variant_for_vep("17-36459258-37832869-DEL")
         # Expected: "CHROM START END SV_TYPE STRAND ID"
         assert result == "17 36459258 37832869 DEL + 17-36459258-37832869-DEL"
 
-    def test_format_cnv_dup(self):
+    def test_variant_cnv_vep_dup_format_succeeds(self):
         """Test VEP format for DUP variant."""
         result = _format_variant_for_vep("17-36459258-37832869-DUP")
         assert result == "17 36459258 37832869 DUP + 17-36459258-37832869-DUP"
 
-    def test_format_cnv_symbolic(self):
+    def test_variant_cnv_vep_symbolic_format_succeeds(self):
         """Test VEP format for symbolic CNV."""
         result = _format_variant_for_vep("17-36459258-A-<DEL>")
         # For symbolic without end, use same start/end
         assert result == "17 36459258 36459258 DEL + 17-36459258-A-<DEL>"
 
-    def test_format_snv(self):
+    def test_variant_cnv_vep_snv_format_succeeds(self):
         """Test VEP format for SNV (existing behavior)."""
         result = _format_variant_for_vep("17-36459258-A-G")
         # VCF format: "CHROM POS ID REF ALT . . ."
         assert result == "17 36459258 17-36459258-A-G A G . . ."
 
-    def test_format_indel(self):
+    def test_variant_cnv_vep_indel_format_succeeds(self):
         """Test VEP format for indel (existing behavior)."""
         result = _format_variant_for_vep("17-36459258-AT-G")
         assert result == "17 36459258 17-36459258-AT-G AT G . . ."
 
-    def test_format_invalid_returns_none(self):
+    def test_variant_cnv_vep_invalid_returns_none(self):
         """Test that invalid format returns None."""
         result = _format_variant_for_vep("invalid-format")
         assert result is None
 
-    def test_format_all_sv_types(self):
+    def test_variant_cnv_vep_all_sv_types_format_succeeds(self):
         """Test VEP formatting for all SV types."""
         sv_types = ["DEL", "DUP", "INS", "INV", "CNV"]
         for sv_type in sv_types:
@@ -146,32 +146,32 @@ class TestCNVVEPFormatting:
             assert "17 36459258 37832869" in result
 
 
-class TestCNVEdgeCases:
+class TestVariantCNVAnnotationEdgeCases:
     """Test edge cases and corner cases for CNV handling."""
 
-    def test_x_chromosome_cnv(self):
+    def test_variant_cnv_x_chromosome_accepted(self):
         """Test CNV on X chromosome."""
         result = validate_variant_id("X-12345678-98765432-DEL")
         assert result == "X-12345678-98765432-DEL"
         formatted = _format_variant_for_vep(result)
         assert formatted.startswith("X ")
 
-    def test_y_chromosome_cnv(self):
+    def test_variant_cnv_y_chromosome_accepted(self):
         """Test CNV on Y chromosome."""
         result = validate_variant_id("Y-12345678-98765432-DUP")
         assert result == "Y-12345678-98765432-DUP"
 
-    def test_cnv_uppercase_normalization(self):
+    def test_variant_cnv_uppercase_normalized(self):
         """Test that CNV types are normalized to uppercase."""
         result = validate_variant_id("17-36459258-37832869-del")
         assert result == "17-36459258-37832869-DEL"
 
-    def test_mixed_case_symbolic(self):
+    def test_variant_cnv_mixed_case_symbolic_normalized(self):
         """Test mixed case symbolic allele."""
         result = validate_variant_id("17-36459258-a-<Del>")
         assert "<DEL>" in result or "DEL" in result
 
-    def test_real_world_cnv_variant(self):
+    def test_variant_cnv_real_world_hnf1b_format(self):
         """Test real-world CNV variant from the database.
 
         This tests the actual variant format found in the HNF1B database:
@@ -186,7 +186,7 @@ class TestCNVEdgeCases:
         assert formatted == "17 36466613 36466613 DEL + 17-36466613-T-<DEL>"
 
 
-class TestCNVDatabaseConstraintPatterns:
+class TestVariantCNVAnnotationDatabaseConstraints:
     """Test that CNV formats match the database constraint patterns.
 
     The variant_annotations table has a CHECK constraint that validates variant_id:
@@ -195,7 +195,7 @@ class TestCNVDatabaseConstraintPatterns:
     - CNVs region: ^[0-9XYM]+-[0-9]+-[0-9]+-(DEL|DUP|INS|INV|CNV)$
     """
 
-    def test_snv_matches_constraint_pattern(self):
+    def test_variant_cnv_snv_matches_db_constraint(self):
         """Test SNV format matches database constraint."""
         import re
 
@@ -211,7 +211,7 @@ class TestCNVDatabaseConstraintPatterns:
             result = validate_variant_id(vid)
             assert re.match(snv_pattern, result), f"{result} should match SNV pattern"
 
-    def test_cnv_symbolic_matches_constraint_pattern(self):
+    def test_variant_cnv_symbolic_matches_db_constraint(self):
         """Test CNV symbolic format matches database constraint."""
         import re
 
@@ -229,7 +229,7 @@ class TestCNVDatabaseConstraintPatterns:
                 f"{result} should match CNV symbolic pattern"
             )
 
-    def test_cnv_region_matches_constraint_pattern(self):
+    def test_variant_cnv_region_matches_db_constraint(self):
         """Test CNV region format matches database constraint."""
         import re
 
@@ -247,7 +247,7 @@ class TestCNVDatabaseConstraintPatterns:
                 f"{result} should match CNV region pattern"
             )
 
-    def test_invalid_formats_rejected(self):
+    def test_variant_cnv_invalid_formats_rejected(self):
         """Test that invalid formats are rejected."""
         invalid_variants = [
             "invalid",
@@ -262,10 +262,10 @@ class TestCNVDatabaseConstraintPatterns:
                 validate_variant_id(vid)
 
 
-class TestCNVIntegration:
+class TestVariantCNVAnnotationIntegration:
     """Integration tests for CNV handling with mocked VEP API."""
 
-    def test_cnv_variant_id_normalization_chain(self):
+    def test_variant_cnv_normalization_chain_complete(self):
         """Test complete normalization chain for CNV variants."""
         # Input from external source with various formats
         test_cases = [
@@ -278,7 +278,7 @@ class TestCNVIntegration:
             result = validate_variant_id(input_id)
             assert result == expected, f"Expected {expected} for input {input_id}"
 
-    def test_vep_format_preserves_variant_id(self):
+    def test_variant_cnv_vep_format_preserves_id(self):
         """Test that VEP format includes original variant ID for matching."""
         # The variant ID should be included in VEP format for result matching
         test_cases = [
@@ -290,7 +290,7 @@ class TestCNVIntegration:
             formatted = _format_variant_for_vep(vid)
             assert vid in formatted, f"Variant ID {vid} should be in VEP format"
 
-    def test_all_sv_types_have_valid_vep_format(self):
+    def test_variant_cnv_all_sv_types_valid_vep_format(self):
         """Test all SV types produce valid VEP format."""
         sv_types = ["DEL", "DUP", "INS", "INV", "CNV"]
         for sv_type in sv_types:
