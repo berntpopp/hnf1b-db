@@ -18,6 +18,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.constants import CACHE_MAX_AGE_SECONDS
 from app.database import get_db
 from app.reference.models import (
     Gene,
@@ -36,9 +37,6 @@ from app.reference.schemas import (
 router = APIRouter(prefix="/reference", tags=["reference"])
 logger = logging.getLogger(__name__)
 
-# Cache-Control header for reference data (24 hours)
-CACHE_MAX_AGE = 86400
-
 
 @router.get("/genomes", response_model=List[ReferenceGenomeSchema])
 async def list_genomes(
@@ -53,7 +51,7 @@ async def list_genomes(
     Example:
         GET /api/v2/reference/genomes
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     stmt = select(ReferenceGenome).order_by(
         ReferenceGenome.is_default.desc(), ReferenceGenome.name
@@ -89,7 +87,7 @@ async def list_genes(
     Example:
         GET /api/v2/reference/genes?symbol=HNF1B&genome_build=GRCh38
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     # Get genome
     genome = await _get_genome(db, genome_build)
@@ -137,7 +135,7 @@ async def get_gene(
     Example:
         GET /api/v2/reference/genes/HNF1B?genome_build=GRCh38
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     # Get genome
     genome = await _get_genome(db, genome_build)
@@ -190,7 +188,7 @@ async def get_gene_transcripts(
     Example:
         GET /api/v2/reference/genes/HNF1B/transcripts
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     # Get genome
     genome = await _get_genome(db, genome_build)
@@ -243,7 +241,7 @@ async def get_gene_domains(
     Example:
         GET /api/v2/reference/genes/HNF1B/domains
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     # Resolve genome build name (default to GRCh38 if not specified)
     resolved_genome_build = genome_build or "GRCh38"
@@ -357,7 +355,7 @@ async def get_genomic_region(
     Example:
         GET /api/v2/reference/regions/17:36000000-37000000
     """
-    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE_SECONDS}"
 
     # Resolve genome build name (default to GRCh38 if not specified)
     resolved_genome_build = genome_build or "GRCh38"

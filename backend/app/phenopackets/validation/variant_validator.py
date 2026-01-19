@@ -13,13 +13,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from app.constants import VARIANT_RECODER_BATCH_SIZE
 from app.core.cache import cache
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-# Maximum batch size for Variant Recoder POST endpoint (per Ensembl docs)
-VARIANT_RECODER_BATCH_SIZE = 200
 
 
 class VariantValidator:

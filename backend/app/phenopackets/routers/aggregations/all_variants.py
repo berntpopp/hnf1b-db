@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import DOMAIN_BOUNDARIES_DISPLAY
 from app.database import get_db
 from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.models.json_api import JsonApiResponse
@@ -27,15 +28,6 @@ from app.utils.pagination import build_offset_response
 from .variant_query_builder import VariantQueryBuilder
 
 router = APIRouter()
-
-
-# HNF1B protein domain boundaries from UniProt P35680
-DOMAIN_BOUNDARIES = {
-    "Dimerization Domain": (1, 31),
-    "POU-Specific Domain": (8, 173),
-    "POU Homeodomain": (232, 305),
-    "Transactivation Domain": (314, 557),
-}
 
 # Map frontend field names to SQL column names for sorting
 SORT_FIELD_MAP = {
@@ -131,8 +123,8 @@ async def aggregate_all_variants(
         builder.with_gene_filter(validated_gene)
     if validated_consequence:
         builder.with_consequence(validated_consequence)
-    if domain and domain in DOMAIN_BOUNDARIES:
-        start_pos, end_pos = DOMAIN_BOUNDARIES[domain]
+    if domain and domain in DOMAIN_BOUNDARIES_DISPLAY:
+        start_pos, end_pos = DOMAIN_BOUNDARIES_DISPLAY[domain]
         builder.with_domain_filter(start_pos, end_pos)
 
     # Build ORDER BY clause

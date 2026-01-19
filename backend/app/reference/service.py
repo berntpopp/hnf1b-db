@@ -25,6 +25,7 @@ import httpx
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import CHR17Q12_REGION_END, CHR17Q12_REGION_START
 from app.reference.models import (
     Exon,
     Gene,
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Ensembl REST API settings
 ENSEMBL_API_BASE = "https://rest.ensembl.org"
-CHR17Q12_REGION = "17:36000000-39900000"
+CHR17Q12_REGION = f"17:{CHR17Q12_REGION_START}-{CHR17Q12_REGION_END}"
 ENSEMBL_RATE_LIMIT_DELAY = 0.1  # 10 req/sec
 
 # Valid biotypes to import (exclude pseudogenes)
