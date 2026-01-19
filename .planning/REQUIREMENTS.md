@@ -14,9 +14,9 @@ Requirements grouped by logical category, derived from GitHub issues.
 - [x] **QUAL-03**: Replace class-based `Config` with `ConfigDict` in all Pydantic models (#134)
 - [x] **QUAL-04**: Create `backend/app/constants.py` with documented named constants (#137)
 - [x] **QUAL-05**: Modernize test suite with async context manager fixtures (#94) - Already uses @pytest_asyncio.fixture with async def
-- [ ] **QUAL-06**: Standardize test naming to `test_<feature>_<scenario>_<expected_result>` (#94)
-- [ ] **QUAL-07**: Consolidate test utilities in `conftest.py` (#94)
-- [ ] **QUAL-08**: Achieve 60% test coverage minimum with 40% per-file floor (#94) - Updated per CONTEXT.md decision
+- [x] **QUAL-06**: Standardize test naming to `test_<feature>_<scenario>_<expected_result>` (#94)
+- [x] **QUAL-07**: Consolidate test utilities in `conftest.py` (#94)
+- [ ] **QUAL-08**: Achieve 60% test coverage minimum (#94) - DEFERRED: Current 53.50%, improvement to future milestone
 
 ### Code Quality - Frontend
 
@@ -126,9 +126,9 @@ Deferred to future milestone. Not in current scope.
 | QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 2 | Complete |
 | QUAL-05 | Phase 3 | Complete (pre-existing) |
-| QUAL-06 | Phase 3 | Pending |
-| QUAL-07 | Phase 3 | Pending |
-| QUAL-08 | Phase 3 | Pending |
+| QUAL-06 | Phase 3 | Complete |
+| QUAL-07 | Phase 3 | Complete |
+| QUAL-08 | Phase 3 | Deferred (53.50% coverage) |
 | QUAL-09 | Phase 2 | Complete |
 | QUAL-10 | Phase 2 | Complete |
 | QUAL-11 | Phase 2 | Complete |
@@ -193,4 +193,4 @@ Deferred to future milestone. Not in current scope.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 - Phase 2 complete (QUAL-04, QUAL-09-14, QUAL-17-18 marked complete)*
+*Last updated: 2026-01-19 - Phase 3 complete (QUAL-06, QUAL-07 complete; QUAL-08 deferred)*
