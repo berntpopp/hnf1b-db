@@ -25,7 +25,7 @@ from app.phenopackets.validation.variant_validator import VariantValidator
 
 
 @pytest.fixture(autouse=True)
-def clear_cache_between_tests():
+def fixture_clear_cache():
     """Clear the in-memory cache between tests to prevent cross-test contamination.
 
     This ensures that tests checking error scenarios don't get cached results
@@ -41,10 +41,14 @@ def clear_cache_between_tests():
     cache.clear_fallback()
 
 
+# Backward-compatibility alias
+clear_cache_between_tests = fixture_clear_cache
+
+
 class TestVariantFormatDetection:
     """Test format detection methods."""
 
-    def test_is_vcf_format_valid(self):
+    def test_variant_vcf_valid_format_detected(self):
         """Test VCF format detection with valid inputs."""
         validator = VariantValidator()
 
@@ -58,7 +62,7 @@ class TestVariantFormatDetection:
         # Case insensitive
         assert validator._is_vcf_format("CHR17-36459258-A-G") is True
 
-    def test_is_vcf_format_invalid(self):
+    def test_variant_vcf_invalid_format_rejected(self):
         """Test VCF format detection with invalid inputs."""
         validator = VariantValidator()
 
@@ -71,7 +75,7 @@ class TestVariantFormatDetection:
         assert validator._is_vcf_format("17-36459258") is False  # Missing ref/alt
         assert validator._is_vcf_format("invalid-format") is False
 
-    def test_vcf_to_vep_format_valid(self):
+    def test_variant_vcf_to_vep_valid_conversion_succeeds(self):
         """Test VCF to VEP format conversion with valid inputs."""
         validator = VariantValidator()
 
@@ -98,7 +102,7 @@ class TestVariantFormatDetection:
         assert validator._vcf_to_vep_format("X-123456-G-C") == "X 123456 . G C . . ."
         assert validator._vcf_to_vep_format("Y-987654-T-A") == "Y 987654 . T A . . ."
 
-    def test_vcf_to_vep_format_invalid(self):
+    def test_variant_vcf_to_vep_invalid_returns_none(self):
         """Test VCF to VEP format conversion with invalid inputs."""
         validator = VariantValidator()
 
@@ -114,7 +118,7 @@ class TestVEPAnnotation:
     """Test VEP annotation functionality."""
 
     @pytest.mark.asyncio
-    async def test_annotate_vcf_format_success(self):
+    async def test_variant_vep_vcf_format_returns_annotation(self):
         """Test successful VCF format annotation with CADD and gnomAD."""
         validator = VariantValidator()
 
@@ -179,7 +183,7 @@ class TestVEPAnnotation:
             assert result["assembly_name"] == "GRCh38"
 
     @pytest.mark.asyncio
-    async def test_annotate_hgvs_format_success(self):
+    async def test_variant_vep_hgvs_format_returns_annotation(self):
         """Test successful HGVS format annotation."""
         validator = VariantValidator()
 
@@ -217,7 +221,7 @@ class TestVEPAnnotation:
             assert result["transcript_consequences"][0]["gene_symbol"] == "HNF1B"
 
     @pytest.mark.asyncio
-    async def test_annotate_invalid_variant_format(self):
+    async def test_variant_vep_invalid_format_returns_none(self):
         """Test annotation with invalid variant format returns None."""
         validator = VariantValidator()
 
@@ -238,7 +242,7 @@ class TestVEPAnnotation:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_annotate_vcf_conversion_fails(self):
+    async def test_variant_vep_vcf_conversion_fails_returns_none(self):
         """Test annotation when VCF format conversion fails."""
         validator = VariantValidator()
 
@@ -251,7 +255,7 @@ class TestVEPAnnotation:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_annotate_unexpected_status_code(self):
+    async def test_variant_vep_unexpected_status_returns_none(self):
         """Test annotation with unexpected HTTP status code."""
         validator = VariantValidator()
 
@@ -272,7 +276,7 @@ class TestVEPAnnotation:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_annotate_rate_limit_warning(self):
+    async def test_variant_vep_rate_limit_warning_printed(self):
         """Test rate limit warning is printed when < 10% remaining."""
         validator = VariantValidator()
 
@@ -299,7 +303,7 @@ class TestVEPAnnotation:
                 assert "Rate limit warning" in str(mock_print.call_args)
 
     @pytest.mark.asyncio
-    async def test_extract_cadd_score_missing(self):
+    async def test_variant_vep_cadd_missing_returns_none_field(self):
         """Test CADD score extraction when missing from response."""
         validator = VariantValidator()
 
@@ -336,7 +340,7 @@ class TestRateLimiting:
     """Test rate limiting functionality."""
 
     @pytest.mark.asyncio
-    async def test_rate_limiting_enforced(self):
+    async def test_variant_rate_limiter_enforces_limit(self):
         """Test rate limiter enforces 15 req/sec."""
         validator = VariantValidator()
 
@@ -370,7 +374,7 @@ class TestRateLimiting:
             assert duration < 2.5  # But not too slow
 
     @pytest.mark.asyncio
-    async def test_rate_limiter_allows_burst(self):
+    async def test_variant_rate_limiter_allows_burst(self):
         """Test rate limiter allows immediate burst up to limit."""
         validator = VariantValidator()
 
@@ -406,7 +410,7 @@ class TestCaching:
     """Test Redis-based caching functionality (with in-memory fallback)."""
 
     @pytest.mark.asyncio
-    async def test_cache_hit_skips_api_call(self):
+    async def test_variant_cache_hit_skips_api(self):
         """Test cache hit returns cached data without API call."""
         validator = VariantValidator()
 
@@ -431,7 +435,7 @@ class TestCaching:
             mock_client.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_cache_miss_calls_api_and_caches(self):
+    async def test_variant_cache_miss_calls_api_and_stores(self):
         """Test cache miss triggers API call and stores result."""
         validator = VariantValidator()
 
@@ -466,7 +470,7 @@ class TestCaching:
             assert result["cadd_phred"] == 28.5
 
     @pytest.mark.asyncio
-    async def test_lru_cache_eviction(self):
+    async def test_variant_cache_ttl_passed_to_redis(self):
         """Test that cache TTL is used for expiration (Redis handles LRU)."""
         validator = VariantValidator()
 
@@ -498,7 +502,7 @@ class TestCaching:
             assert "ttl" in call_args.kwargs or len(call_args.args) > 2
 
     @pytest.mark.asyncio
-    async def test_cache_lru_ordering(self):
+    async def test_variant_cache_returns_correct_data_on_hit(self):
         """Test that cache returns correct data on hit."""
         validator = VariantValidator()
 
@@ -529,7 +533,7 @@ class TestErrorHandling:
     """Test error handling for various failure scenarios."""
 
     @pytest.mark.asyncio
-    async def test_vep_api_timeout_error(self):
+    async def test_variant_vep_timeout_returns_none_after_retries(self):
         """Test error handling for VEP API timeout."""
         validator = VariantValidator()
         validator._max_retries = 2  # Reduce retries for faster test
@@ -550,7 +554,7 @@ class TestErrorHandling:
             assert mock_client.return_value.__aenter__.return_value.post.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_vep_api_429_rate_limit_error(self):
+    async def test_variant_vep_429_rate_limit_respects_retry_after(self):
         """Test error handling for VEP API 429 (too many requests)."""
         validator = VariantValidator()
 
@@ -574,7 +578,7 @@ class TestErrorHandling:
                 # For this test, we just verify sleep was called
 
     @pytest.mark.asyncio
-    async def test_vep_api_500_server_error_with_retry(self):
+    async def test_variant_vep_500_error_retries_with_backoff(self):
         """Test error handling for VEP API 500 (server error) with retry."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -600,7 +604,7 @@ class TestErrorHandling:
                 assert mock_sleep.call_count == 1  # Backoff sleep between retries
 
     @pytest.mark.asyncio
-    async def test_vep_api_network_error(self):
+    async def test_variant_vep_network_error_returns_none(self):
         """Test error handling for network errors."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -618,7 +622,7 @@ class TestErrorHandling:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_vep_api_retry_success_after_failure(self):
+    async def test_variant_vep_retry_succeeds_after_initial_failure(self):
         """Test successful retry after initial failure."""
         validator = VariantValidator()
 
@@ -653,7 +657,7 @@ class TestVariantRecoding:
     """Test variant recoding functionality."""
 
     @pytest.mark.asyncio
-    async def test_recode_variant_success(self):
+    async def test_variant_recode_vcf_returns_multiple_formats(self):
         """Test successful variant recoding to multiple formats."""
         validator = VariantValidator()
 
@@ -698,7 +702,7 @@ class TestVariantRecoding:
             assert "NC_000017.11:g.36459258A>G" in result["hgvsg"]
 
     @pytest.mark.asyncio
-    async def test_recode_hgvs_variant_success(self):
+    async def test_variant_recode_hgvs_skips_annotation_step(self):
         """Test recoding HGVS variant (no annotation step needed)."""
         validator = VariantValidator()
 
@@ -727,7 +731,7 @@ class TestVariantRecoding:
             assert "rs56116432" in result["id"]
 
     @pytest.mark.asyncio
-    async def test_recode_variant_429_rate_limit(self):
+    async def test_variant_recode_429_respects_retry_after(self):
         """Test recoding with 429 rate limit error."""
         validator = VariantValidator()
 
@@ -750,7 +754,7 @@ class TestVariantRecoding:
                 # (rate limit keeps hitting, so never succeeds)
 
     @pytest.mark.asyncio
-    async def test_recode_variant_400_invalid_format(self):
+    async def test_variant_recode_400_invalid_returns_none(self):
         """Test recoding with 400 invalid format error."""
         validator = VariantValidator()
 
@@ -770,7 +774,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_500_server_error_with_retry(self):
+    async def test_variant_recode_500_retries_with_backoff(self):
         """Test recoding with 500 server error and retry."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -795,7 +799,7 @@ class TestVariantRecoding:
                 assert mock_sleep.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_recode_variant_503_service_unavailable(self):
+    async def test_variant_recode_503_returns_none_after_retries(self):
         """Test recoding with 503 service unavailable error."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -817,7 +821,7 @@ class TestVariantRecoding:
                 assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_timeout_error(self):
+    async def test_variant_recode_timeout_returns_none(self):
         """Test recoding with timeout error."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -838,7 +842,7 @@ class TestVariantRecoding:
                 assert mock_sleep.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_recode_variant_network_error(self):
+    async def test_variant_recode_network_error_returns_none(self):
         """Test recoding with network error."""
         validator = VariantValidator()
         validator._max_retries = 2
@@ -859,7 +863,7 @@ class TestVariantRecoding:
                 assert mock_sleep.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_recode_variant_unexpected_exception(self):
+    async def test_variant_recode_unexpected_exception_returns_none(self):
         """Test recoding with unexpected exception."""
         validator = VariantValidator()
 
@@ -875,7 +879,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_unexpected_status_code(self):
+    async def test_variant_recode_unexpected_status_returns_none(self):
         """Test recoding with unexpected HTTP status code (e.g., 418 I'm a teapot)."""
         validator = VariantValidator()
 
@@ -895,7 +899,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_invalid_response_format(self):
+    async def test_variant_recode_invalid_response_format_returns_none(self):
         """Test recoding with invalid response format (not a list)."""
         validator = VariantValidator()
 
@@ -916,7 +920,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_empty_response_list(self):
+    async def test_variant_recode_empty_response_returns_none(self):
         """Test recoding with empty response list."""
         validator = VariantValidator()
 
@@ -937,7 +941,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_vcf_annotation_fails(self):
+    async def test_variant_recode_vcf_annotation_failure_returns_none(self):
         """Test recoding VCF format when annotation step fails."""
         validator = VariantValidator()
 
@@ -957,7 +961,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_vcf_no_variant_id(self):
+    async def test_variant_recode_vcf_no_id_returns_none(self):
         """Test recoding VCF format when annotation returns no variant ID."""
         validator = VariantValidator()
 
@@ -979,7 +983,7 @@ class TestVariantRecoding:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_recode_variant_with_cache_hit(self):
+    async def test_variant_recode_cache_hit_returns_cached(self):
         """Test recoding uses cache when available."""
         validator = VariantValidator()
 
@@ -1003,7 +1007,7 @@ class TestPhenopacketValidation:
     """Test phenopacket-level validation methods."""
 
     @pytest.mark.asyncio
-    async def test_validate_variant_with_vep_success(self):
+    async def test_variant_validation_vep_valid_returns_data(self):
         """Test validate_variant_with_vep returns valid VEP data."""
         validator = VariantValidator()
 
@@ -1034,7 +1038,7 @@ class TestPhenopacketValidation:
             assert suggestions == []
 
     @pytest.mark.asyncio
-    async def test_validate_variant_with_vep_invalid(self):
+    async def test_variant_validation_vep_invalid_returns_suggestions(self):
         """Test validate_variant_with_vep returns suggestions for invalid variant."""
         validator = VariantValidator()
 
@@ -1054,7 +1058,7 @@ class TestPhenopacketValidation:
             assert len(suggestions) > 0
 
     @pytest.mark.asyncio
-    async def test_validate_variant_with_vep_service_unavailable(self):
+    async def test_variant_validation_vep_service_unavailable_message(self):
         """Test validate_variant_with_vep handles service unavailable."""
         validator = VariantValidator()
 
@@ -1074,7 +1078,7 @@ class TestPhenopacketValidation:
             assert "VEP service temporarily unavailable" in suggestions
 
     @pytest.mark.asyncio
-    async def test_validate_variant_with_vep_unexpected_exception(self):
+    async def test_variant_validation_vep_exception_falls_back_to_regex(self):
         """Test validate_variant_with_vep falls back to regex validation on exception."""
         validator = VariantValidator()
 
@@ -1093,7 +1097,7 @@ class TestPhenopacketValidation:
             assert vep_data is None  # No VEP data from fallback
             assert suggestions == []  # No suggestions from fallback
 
-    def test_validate_variant_formats_valid(self):
+    def test_variant_formats_valid_descriptor_no_errors(self):
         """Test validate_variant_formats with valid variant descriptor."""
         validator = VariantValidator()
 
@@ -1109,7 +1113,7 @@ class TestPhenopacketValidation:
 
         assert errors == []
 
-    def test_validate_variant_formats_invalid_hgvs_c(self):
+    def test_variant_formats_invalid_hgvs_c_detected(self):
         """Test validate_variant_formats detects invalid HGVS c. notation."""
         validator = VariantValidator()
 
@@ -1126,7 +1130,7 @@ class TestPhenopacketValidation:
         assert "Invalid HGVS c. notation" in errors[0]
         assert "c123G>A" in errors[0]
 
-    def test_validate_variant_formats_invalid_hgvs_p(self):
+    def test_variant_formats_invalid_hgvs_p_detected(self):
         """Test validate_variant_formats detects invalid HGVS p. notation."""
         validator = VariantValidator()
 
@@ -1142,7 +1146,7 @@ class TestPhenopacketValidation:
         assert len(errors) == 1
         assert "Invalid HGVS p. notation" in errors[0]
 
-    def test_validate_variant_formats_invalid_hgvs_g(self):
+    def test_variant_formats_invalid_hgvs_g_detected(self):
         """Test validate_variant_formats detects invalid HGVS g. notation."""
         validator = VariantValidator()
 
@@ -1158,7 +1162,7 @@ class TestPhenopacketValidation:
         assert len(errors) == 1
         assert "Invalid HGVS g. notation" in errors[0]
 
-    def test_validate_variant_formats_invalid_vcf(self):
+    def test_variant_formats_invalid_vcf_detected(self):
         """Test validate_variant_formats detects invalid VCF format."""
         validator = VariantValidator()
 
@@ -1177,7 +1181,7 @@ class TestPhenopacketValidation:
         assert len(errors) == 1
         assert "Invalid VCF format" in errors[0]
 
-    def test_validate_variant_formats_invalid_spdi(self):
+    def test_variant_formats_invalid_spdi_detected(self):
         """Test validate_variant_formats detects invalid SPDI format."""
         validator = VariantValidator()
 
@@ -1193,7 +1197,7 @@ class TestPhenopacketValidation:
         assert len(errors) == 1
         assert "Invalid SPDI format" in errors[0]
 
-    def test_validate_variant_formats_missing_id(self):
+    def test_variant_formats_missing_id_detected(self):
         """Test validate_variant_formats detects missing variant ID."""
         validator = VariantValidator()
 
@@ -1209,7 +1213,7 @@ class TestPhenopacketValidation:
         assert len(errors) == 1
         assert "missing 'id' field" in errors[0]
 
-    def test_validate_variant_formats_vrs_allele_invalid(self):
+    def test_variant_formats_vrs_allele_invalid_type_detected(self):
         """Test validate_variant_formats detects invalid VRS allele."""
         validator = VariantValidator()
 
@@ -1225,7 +1229,7 @@ class TestPhenopacketValidation:
 
         assert any("VRS allele must have type 'Allele'" in e for e in errors)
 
-    def test_validate_variant_formats_vrs_allele_missing_location(self):
+    def test_variant_formats_vrs_allele_missing_location_detected(self):
         """Test VRS allele validation detects missing location."""
         validator = VariantValidator()
 
@@ -1243,7 +1247,7 @@ class TestPhenopacketValidation:
 
         assert any("missing 'location' field" in e for e in errors)
 
-    def test_validate_variant_formats_vrs_allele_invalid_location_type(self):
+    def test_variant_formats_vrs_allele_invalid_location_type_detected(self):
         """Test VRS allele validation detects invalid location type."""
         validator = VariantValidator()
 
@@ -1261,7 +1265,7 @@ class TestPhenopacketValidation:
 
         assert any("location must have type 'SequenceLocation'" in e for e in errors)
 
-    def test_validate_variant_formats_vrs_allele_missing_state(self):
+    def test_variant_formats_vrs_allele_missing_state_detected(self):
         """Test VRS allele validation detects missing state."""
         validator = VariantValidator()
 
@@ -1279,7 +1283,7 @@ class TestPhenopacketValidation:
 
         assert any("missing 'state' field" in e for e in errors)
 
-    def test_validate_variant_formats_vrs_allele_invalid_state_type(self):
+    def test_variant_formats_vrs_allele_invalid_state_type_detected(self):
         """Test VRS allele validation detects invalid state type."""
         validator = VariantValidator()
 
@@ -1300,7 +1304,7 @@ class TestPhenopacketValidation:
             for e in errors
         )
 
-    def test_validate_variant_formats_structural_variant_missing_cnv(self):
+    def test_variant_formats_structural_variant_missing_cnv_detected(self):
         """Test validation detects structural variant without CNV notation."""
         validator = VariantValidator()
 
@@ -1316,7 +1320,7 @@ class TestPhenopacketValidation:
 
         assert any("Structural variant missing valid CNV notation" in e for e in errors)
 
-    def test_validate_variant_formats_structural_variant_with_iscn(self):
+    def test_variant_formats_structural_variant_iscn_accepted(self):
         """Test validation accepts structural variant with ISCN notation."""
         validator = VariantValidator()
 
@@ -1335,7 +1339,7 @@ class TestPhenopacketValidation:
             "Structural variant missing valid CNV notation" in e for e in errors
         )
 
-    def test_validate_variants_in_phenopacket(self):
+    def test_variant_phenopacket_validates_all_variants(self):
         """Test validate_variants_in_phenopacket validates all variants."""
         validator = VariantValidator()
 
@@ -1376,7 +1380,7 @@ class TestPhenopacketValidation:
 class TestNotationSuggestions:
     """Test notation suggestion generation."""
 
-    def test_get_notation_suggestions_missing_transcript(self):
+    def test_variant_suggestion_missing_transcript_includes_example(self):
         """Test suggestions for HGVS notation missing transcript."""
         validator = VariantValidator()
 
@@ -1384,7 +1388,7 @@ class TestNotationSuggestions:
 
         assert any("NM_000458.4:c.544G>A" in s for s in suggestions)
 
-    def test_get_notation_suggestions_missing_dot(self):
+    def test_variant_suggestion_missing_dot_provides_fix(self):
         """Test suggestions for notation missing dot."""
         validator = VariantValidator()
 
@@ -1394,7 +1398,7 @@ class TestNotationSuggestions:
         assert len(suggestions) > 0
         assert any("c." in s for s in suggestions)
 
-    def test_get_notation_suggestions_p_missing_dot(self):
+    def test_variant_suggestion_p_missing_dot_provides_guidance(self):
         """Test suggestions for p. notation missing dot (e.g., pGly182)."""
         validator = VariantValidator()
 
@@ -1408,7 +1412,7 @@ class TestNotationSuggestions:
             "NM_" in s or "chr" in s or "format" in s.lower() for s in suggestions
         )
 
-    def test_get_notation_suggestions_vcf_format(self):
+    def test_variant_suggestion_vcf_format_provides_alternatives(self):
         """Test suggestions for VCF-like format."""
         validator = VariantValidator()
 
@@ -1420,7 +1424,7 @@ class TestNotationSuggestions:
             "chr" in s.lower() or "vcf" in s.lower() or "NC_" in s for s in suggestions
         )
 
-    def test_get_notation_suggestions_cnv_format(self):
+    def test_variant_suggestion_cnv_format_provides_examples(self):
         """Test suggestions for CNV-related input."""
         validator = VariantValidator()
 
@@ -1428,7 +1432,7 @@ class TestNotationSuggestions:
 
         assert any("DEL" in s or "DUP" in s for s in suggestions)
 
-    def test_get_notation_suggestions_close_matches(self):
+    def test_variant_suggestion_close_match_provides_options(self):
         """Test suggestions include close matches."""
         validator = VariantValidator()
 
@@ -1437,7 +1441,7 @@ class TestNotationSuggestions:
         # Should find similar valid patterns
         assert len(suggestions) > 0
 
-    def test_get_notation_suggestions_default(self):
+    def test_variant_suggestion_unrecognized_provides_format_list(self):
         """Test default suggestions for unrecognized format."""
         validator = VariantValidator()
 
@@ -1449,31 +1453,31 @@ class TestNotationSuggestions:
 class TestFallbackValidation:
     """Test fallback validation method."""
 
-    def test_fallback_validation_hgvs_c(self):
+    def test_variant_fallback_hgvs_c_valid_accepted(self):
         """Test fallback accepts valid HGVS c. notation."""
         validator = VariantValidator()
 
         assert validator._fallback_validation("NM_000458.4:c.544G>A") is True
 
-    def test_fallback_validation_hgvs_p(self):
+    def test_variant_fallback_hgvs_p_valid_accepted(self):
         """Test fallback accepts valid HGVS p. notation."""
         validator = VariantValidator()
 
         assert validator._fallback_validation("NP_000449.3:p.Arg181*") is True
 
-    def test_fallback_validation_vcf(self):
+    def test_variant_fallback_vcf_valid_accepted(self):
         """Test fallback accepts valid VCF format."""
         validator = VariantValidator()
 
         assert validator._fallback_validation("17-36459258-A-G") is True
 
-    def test_fallback_validation_cnv(self):
+    def test_variant_fallback_cnv_valid_accepted(self):
         """Test fallback accepts valid CNV notation."""
         validator = VariantValidator()
 
         assert validator._fallback_validation("17:36459258-37832869:DEL") is True
 
-    def test_fallback_validation_invalid(self):
+    def test_variant_fallback_invalid_rejected(self):
         """Test fallback rejects invalid notation."""
         validator = VariantValidator()
 
@@ -1483,7 +1487,7 @@ class TestFallbackValidation:
 class TestValidationMethods:
     """Test various validation methods."""
 
-    def test_validate_hgvs_c_valid(self):
+    def test_variant_hgvs_c_valid_notations_accepted(self):
         """Test HGVS c. notation validation with valid inputs."""
         validator = VariantValidator()
 
@@ -1502,7 +1506,7 @@ class TestValidationMethods:
         assert validator._validate_hgvs_c("c.123_456insATCG") is True  # Insertion
         assert validator._validate_hgvs_c("c.544-2A>G") is True  # Intronic with minus
 
-    def test_validate_hgvs_c_invalid(self):
+    def test_variant_hgvs_c_invalid_notations_rejected(self):
         """Test HGVS c. notation validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1513,7 +1517,7 @@ class TestValidationMethods:
         )  # Wrong type
         assert validator._validate_hgvs_c("m.123A>G") is False  # Mitochondrial (not c.)
 
-    def test_validate_hgvs_p_valid(self):
+    def test_variant_hgvs_p_valid_notations_accepted(self):
         """Test HGVS p. notation validation with valid inputs."""
         validator = VariantValidator()
 
@@ -1524,7 +1528,7 @@ class TestValidationMethods:
         assert validator._validate_hgvs_p("p.Gly182Serfs") is True  # Frameshift
         assert validator._validate_hgvs_p("p.?") is True  # Unknown effect
 
-    def test_validate_hgvs_p_invalid(self):
+    def test_variant_hgvs_p_invalid_notations_rejected(self):
         """Test HGVS p. notation validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1533,14 +1537,14 @@ class TestValidationMethods:
         assert validator._validate_hgvs_p("p.A181*") is False  # Single letter code
         assert validator._validate_hgvs_p("NM_000458.4:c.544G>A") is False  # Wrong type
 
-    def test_validate_hgvs_g_valid(self):
+    def test_variant_hgvs_g_valid_notations_accepted(self):
         """Test HGVS g. notation validation with valid inputs."""
         validator = VariantValidator()
 
         # Valid HGVS g. notations
         assert validator._validate_hgvs_g("NC_000017.11:g.36459258A>G") is True
 
-    def test_validate_hgvs_g_invalid(self):
+    def test_variant_hgvs_g_invalid_notations_rejected(self):
         """Test HGVS g. notation validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1550,7 +1554,7 @@ class TestValidationMethods:
             validator._validate_hgvs_g("NC_000017.11:g.36459258del") is False
         )  # Not substitution
 
-    def test_validate_spdi_valid(self):
+    def test_variant_spdi_valid_notations_accepted(self):
         """Test SPDI notation validation with valid inputs."""
         validator = VariantValidator()
 
@@ -1558,7 +1562,7 @@ class TestValidationMethods:
         assert validator._validate_spdi("NC_000017.11:36459257:A:G") is True
         assert validator._validate_spdi("NC_000017.11:36459257::G") is True  # Insertion
 
-    def test_validate_spdi_invalid(self):
+    def test_variant_spdi_invalid_notations_rejected(self):
         """Test SPDI notation validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1566,7 +1570,7 @@ class TestValidationMethods:
         assert validator._validate_spdi("17:36459257:A:G") is False  # Missing NC_
         assert validator._validate_spdi("NC_000017.11-36459257-A-G") is False  # Dashes
 
-    def test_validate_vcf_valid(self):
+    def test_variant_vcf_valid_formats_accepted(self):
         """Test VCF format validation with valid inputs."""
         validator = VariantValidator()
 
@@ -1575,7 +1579,7 @@ class TestValidationMethods:
         assert validator._validate_vcf("chr17-36459258-A-G") is True
         assert validator._validate_vcf("X-123456-G-C") is True
 
-    def test_validate_vcf_invalid(self):
+    def test_variant_vcf_invalid_formats_rejected(self):
         """Test VCF format validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1584,7 +1588,7 @@ class TestValidationMethods:
         assert validator._validate_vcf("17-abc-A-G") is False  # Non-numeric pos
         assert validator._validate_vcf("99-36459258-A-G") is False  # Invalid chr
 
-    def test_is_ga4gh_cnv_notation_valid(self):
+    def test_variant_cnv_notation_valid_formats_accepted(self):
         """Test GA4GH CNV notation validation."""
         validator = VariantValidator()
 
@@ -1593,7 +1597,7 @@ class TestValidationMethods:
         assert validator._is_ga4gh_cnv_notation("17:36459258-37832869:DUP") is True
         assert validator._is_ga4gh_cnv_notation("X:123456-789012:DEL") is True
 
-    def test_is_ga4gh_cnv_notation_invalid(self):
+    def test_variant_cnv_notation_invalid_formats_rejected(self):
         """Test GA4GH CNV notation validation with invalid inputs."""
         validator = VariantValidator()
 
@@ -1609,7 +1613,7 @@ class TestValidationMethods:
 class TestConfigurableSettings:
     """Test that settings are properly loaded from config.yaml."""
 
-    def test_rate_limit_from_config(self):
+    def test_variant_config_rate_limit_from_settings(self):
         """Test rate limiter uses settings from config.yaml."""
         validator = VariantValidator()
 
@@ -1620,7 +1624,7 @@ class TestConfigurableSettings:
         )
         assert validator._requests_per_second > 0  # Sanity check
 
-    def test_retry_config_from_config(self):
+    def test_variant_config_retry_from_settings(self):
         """Test retry uses settings from config.yaml."""
         validator = VariantValidator()
 
@@ -1632,7 +1636,7 @@ class TestConfigurableSettings:
         assert validator._max_retries > 0  # Sanity check
         assert validator._backoff_factor > 0  # Sanity check
 
-    def test_cache_ttl_from_config(self):
+    def test_variant_config_cache_ttl_from_settings(self):
         """Test cache TTL uses settings from config.yaml."""
         validator = VariantValidator()
 
@@ -1640,7 +1644,7 @@ class TestConfigurableSettings:
         assert validator._cache_ttl == settings.external_apis.vep.cache_ttl_seconds
         assert validator._cache_ttl > 0  # Sanity check
 
-    def test_custom_settings_with_mock(self):
+    def test_variant_config_custom_settings_with_mock(self):
         """Test that mocked settings are used by validator."""
         with patch(
             "app.phenopackets.validation.variant_validator.settings"
