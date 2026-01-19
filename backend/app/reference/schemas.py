@@ -4,11 +4,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReferenceGenomeSchema(BaseModel):
     """Reference genome assembly schema."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     name: str = Field(..., description="Assembly name (e.g., 'GRCh38', 'hg38')")
@@ -25,14 +27,11 @@ class ReferenceGenomeSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
-
 
 class ExonSchema(BaseModel):
     """Exon schema."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     exon_number: int = Field(..., description="Exon number (1-based)")
@@ -44,14 +43,11 @@ class ExonSchema(BaseModel):
     source: str = Field(..., description="Data source")
     extra_data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
-
 
 class ProteinDomainSchema(BaseModel):
     """Protein domain schema."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     name: str = Field(..., description="Domain name")
@@ -68,14 +64,11 @@ class ProteinDomainSchema(BaseModel):
     source_url: Optional[str] = Field(None, description="URL to domain annotation")
     extra_data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
-
 
 class TranscriptSchema(BaseModel):
     """Transcript schema."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     transcript_id: str = Field(..., description="RefSeq or Ensembl transcript ID")
@@ -92,11 +85,6 @@ class TranscriptSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
-
 
 class TranscriptDetailSchema(TranscriptSchema):
     """Transcript schema with exons."""
@@ -106,6 +94,8 @@ class TranscriptDetailSchema(TranscriptSchema):
 
 class GeneSchema(BaseModel):
     """Gene schema."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     symbol: str = Field(..., description="Gene symbol")
@@ -124,11 +114,6 @@ class GeneSchema(BaseModel):
     extra_data: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
 
 
 class GeneDetailSchema(GeneSchema):
