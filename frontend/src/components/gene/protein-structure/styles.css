@@ -1,0 +1,73 @@
+/**
+ * Shared styles for protein structure sub-components
+ *
+ * These styles are extracted from ProteinStructure3D.vue to be shared
+ * across multiple sub-components for consistent styling.
+ */
+
+.protein-3d-card {
+  margin-bottom: 16px;
+}
+
+.ngl-viewport {
+  width: 100%;
+  height: 500px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.legend-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Variant panel styles */
+.variant-panel {
+  height: 500px;
+  border: 1px solid #e0e0e0;
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+}
+
+.variant-panel-header {
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+}
+
+.variant-panel-controls {
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sort-select,
+.filter-select {
+  font-size: 12px;
+}
+
+.variant-list {
+  flex: 1;
+  overflow-y: auto;
+  background-color: transparent;
+}
+
+.variant-item-active {
+  background-color: #e3f2fd !important;
+  border-left: 3px solid #1976d2;
+}
+
+.variant-item-hover {
+  background-color: #f5f5f5;
+}
