@@ -17,14 +17,16 @@ from sqlalchemy import text
 class TestClassificationConsistency:
     """Test that classification rules are applied consistently with R logic."""
 
-    async def test_high_impact_always_truncating(self, db_session):
+    async def test_classification_high_impact_always_truncating(
+        self, fixture_db_session
+    ):
         """Verify that ALL HIGH impact variants are classified as truncating.
 
         R logic (line 78): IMPACT == "HIGH" ~ "T"
         No exceptions - HIGH impact should ALWAYS be truncating.
         """
         # Get all HIGH impact variants
-        high_impact_result = await db_session.execute(
+        high_impact_result = await fixture_db_session.execute(
             text(
                 """
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -43,7 +45,7 @@ class TestClassificationConsistency:
 
         if high_impact_count > 0:
             # Verify ALL are classified as truncating by our logic
-            truncating_result = await db_session.execute(
+            truncating_result = await fixture_db_session.execute(
                 text(
                     """
                 SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -70,14 +72,16 @@ class TestClassificationConsistency:
                 f"✓ Verified: All {high_impact_count} HIGH impact variants classified as truncating"
             )
 
-    async def test_moderate_impact_always_non_truncating(self, db_session):
+    async def test_classification_moderate_impact_never_reclassified(
+        self, fixture_db_session
+    ):
         """Verify that MODERATE impact variants are NEVER reclassified.
 
         R logic (line 77): IMPACT == "MODERATE" ~ "nT"
         Even if pathogenic, MODERATE stays non-truncating.
         """
         # Get MODERATE impact pathogenic variants
-        moderate_pathogenic_result = await db_session.execute(
+        moderate_pathogenic_result = await fixture_db_session.execute(
             text(
                 """
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -102,14 +106,16 @@ class TestClassificationConsistency:
             )
             print("✓ These should remain non-truncating (no reclassification)")
 
-    async def test_low_impact_pathogenic_reclassified(self, db_session):
+    async def test_classification_low_impact_pathogenic_reclassified(
+        self, fixture_db_session
+    ):
         """Verify that LOW impact + pathogenic variants ARE reclassified as truncating.
 
         R logic (line 79): IMPACT == "LOW" & ACMG_groups == "LP/P" ~ "T"
         This is the key edge case for cryptic splice effects.
         """
         # Get LOW impact pathogenic variants
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -132,13 +138,15 @@ class TestClassificationConsistency:
             print(f"Found {low_pathogenic_count} LOW impact pathogenic variants")
             print("✓ These should be reclassified as truncating (edge case handling)")
 
-    async def test_low_impact_vus_not_reclassified(self, db_session):
+    async def test_classification_low_impact_vus_not_reclassified(
+        self, fixture_db_session
+    ):
         """Verify that LOW impact VUS variants are NOT reclassified.
 
         Only LOW + LP/P should be reclassified, not LOW + VUS.
         """
         # Get LOW impact VUS variants
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -161,11 +169,13 @@ class TestClassificationConsistency:
             print(f"Found {low_vus_count} LOW impact VUS variants")
             print("✓ These should remain non-truncating (not pathogenic)")
 
-    async def test_cnv_del_never_classified_as_dup(self, db_session):
+    async def test_classification_cnv_del_never_classified_as_dup(
+        self, fixture_db_session
+    ):
         """Verify that deletion CNVs are never misclassified as duplications."""
         # Get variants with :DEL in ID
         # Use backslash escape to prevent SQLAlchemy from treating :DEL as bind parameter
-        del_result = await db_session.execute(
+        del_result = await fixture_db_session.execute(
             text(
                 r"""
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -179,7 +189,7 @@ class TestClassificationConsistency:
         del_count = del_result.scalar()
 
         # Check if any are also classified as DUP (should be 0)
-        both_result = await db_session.execute(
+        both_result = await fixture_db_session.execute(
             text(
                 r"""
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -205,7 +215,9 @@ class TestClassificationConsistency:
 class TestDistributionReasonableness:
     """Test that classification distributions are reasonable."""
 
-    async def test_both_groups_have_variants(self, async_client):
+    async def test_classification_distribution_both_groups_exist(
+        self, fixture_async_client
+    ):
         """Verify that both truncating and non-truncating groups exist.
 
         Uses the actual API endpoint for classification, which applies the full
@@ -215,7 +227,7 @@ class TestDistributionReasonableness:
         If one group is empty, the classification logic may be broken.
         """
         # Use the API endpoint which applies proper multi-tier classification
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -258,11 +270,13 @@ class TestDistributionReasonableness:
 
         print("\n✓ Both groups have reasonable representation")
 
-    async def test_cnv_distribution_if_present(self, db_session):
+    async def test_classification_cnv_distribution_if_present(
+        self, fixture_db_session
+    ):
         """Test CNV distribution is reasonable if CNVs exist."""
         # Get CNV counts
         # Use backslash escape to prevent SQLAlchemy from treating :DEL/:DUP as bind parameters
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 r"""
             SELECT
@@ -305,14 +319,16 @@ class TestDistributionReasonableness:
 class TestEdgeCaseHandling:
     """Test that edge cases are handled correctly."""
 
-    async def test_missing_vep_impact_handled(self, db_session):
+    async def test_classification_missing_vep_impact_handled(
+        self, fixture_db_session
+    ):
         """Test that variants without VEP IMPACT data are handled.
 
         R logic (line 82): is.na(IMPACT) & ACMG_groups == "LP/P" ~ "T"
         Missing IMPACT + pathogenic should still be classifiable via HGVS fallback.
         """
         # Get variants without VEP impact
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -338,7 +354,7 @@ class TestEdgeCaseHandling:
             print("✓ These should use HGVS fallback classification")
 
             # Verify some have HGVS patterns (fallback works)
-            hgvs_result = await db_session.execute(
+            hgvs_result = await fixture_db_session.execute(
                 text(
                     """
                 SELECT COUNT(DISTINCT p.phenopacket_id) as count
@@ -374,12 +390,14 @@ class TestEdgeCaseHandling:
         else:
             print("✓ All variants have VEP IMPACT data")
 
-    async def test_multiple_interpretations_handled(self, db_session):
+    async def test_classification_multiple_interpretations_handled(
+        self, fixture_db_session
+    ):
         """Test that phenopackets with multiple variant interpretations work.
 
         Some phenopackets may have multiple variants - ensure we handle this.
         """
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -410,9 +428,11 @@ class TestEdgeCaseHandling:
                 "\n✓ All phenopackets have single variant interpretations (simple case)"
             )
 
-    async def test_pathogenicity_values_are_valid(self, db_session):
+    async def test_classification_pathogenicity_values_valid(
+        self, fixture_db_session
+    ):
         """Test that all pathogenicity values are standard ACMG terms."""
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT DISTINCT
@@ -453,9 +473,11 @@ class TestEdgeCaseHandling:
 class TestStatisticalValidity:
     """Test that statistical calculations produce valid results."""
 
-    async def test_comparison_endpoint_produces_valid_statistics(self, async_client):
+    async def test_classification_comparison_endpoint_valid_statistics(
+        self, fixture_async_client
+    ):
         """Test that comparison endpoint produces valid statistical results."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -503,12 +525,14 @@ class TestStatisticalValidity:
 
             print(f"✓ All {len(data['phenotypes'])} phenotypes have valid statistics")
 
-    async def test_effect_sizes_correlate_with_significance(self, async_client):
+    async def test_classification_effect_sizes_correlate_with_significance(
+        self, fixture_async_client
+    ):
         """Test that larger effect sizes tend to correlate with significance.
 
         This is a sanity check - not always true, but generally expected.
         """
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",

@@ -16,7 +16,7 @@ from app.phenopackets.routers.comparisons import (
 class TestStatisticalFunctions:
     """Test statistical calculation functions."""
 
-    def test_calculate_fisher_exact_test_small_samples(self):
+    def test_comparison_fisher_exact_small_samples_returns_valid(self):
         """Test Fisher's exact test with small samples."""
         # Small sample sizes
         # Example: 3 present vs 2 absent in group1, 1 present vs 4 absent in group2
@@ -34,7 +34,7 @@ class TestStatisticalFunctions:
         assert abs(p_value - expected_p) < 0.0001
         assert abs(odds_ratio - expected_or) < 0.0001
 
-    def test_calculate_fisher_exact_test_large_samples(self):
+    def test_comparison_fisher_exact_large_samples_uses_fisher(self):
         """Test Fisher's exact test with large samples (always uses Fisher now)."""
         # Large sample sizes - should still use Fisher's exact
         p_value, odds_ratio = calculate_fisher_exact_test(
@@ -54,7 +54,7 @@ class TestStatisticalFunctions:
         assert abs(p_value - expected_p) < 0.0001
         assert abs(odds_ratio - expected_or) < 0.0001
 
-    def test_calculate_fisher_exact_test_edge_case_all_zeros(self):
+    def test_comparison_fisher_exact_all_zeros_returns_defaults(self):
         """Test handling of edge case with all zeros."""
         p_value, odds_ratio = calculate_fisher_exact_test(
             group1_present=0, group1_absent=0, group2_present=0, group2_absent=0
@@ -63,7 +63,7 @@ class TestStatisticalFunctions:
         assert p_value == 1.0
         assert odds_ratio is None  # Undefined odds ratio returns None for JSON safety
 
-    def test_calculate_fisher_exact_test_significant_difference(self):
+    def test_comparison_fisher_exact_significant_difference_detected(self):
         """Test with data that should show significant difference."""
         # Very different proportions: 90% vs 10%
         p_value, odds_ratio = calculate_fisher_exact_test(
@@ -76,7 +76,7 @@ class TestStatisticalFunctions:
         assert p_value < 0.001  # Should be highly significant
         assert odds_ratio > 1  # Group 1 has higher odds of "present"
 
-    def test_calculate_fisher_exact_test_no_difference(self):
+    def test_comparison_fisher_exact_no_difference_not_significant(self):
         """Test with identical proportions (should not be significant)."""
         # Identical proportions: 50% vs 50%
         p_value, odds_ratio = calculate_fisher_exact_test(
@@ -86,7 +86,7 @@ class TestStatisticalFunctions:
         assert p_value > 0.05  # Should not be significant
         assert abs(odds_ratio - 1.0) < 0.0001  # Odds ratio should be ~1
 
-    def test_calculate_fdr_correction_basic(self):
+    def test_comparison_fdr_correction_basic_values_valid(self):
         """Test FDR correction with known p-values."""
         # Test with a simple set of p-values
         p_values = [0.01, 0.04, 0.03, 0.005]
@@ -100,19 +100,19 @@ class TestStatisticalFunctions:
         for fdr in fdr_values:
             assert fdr <= 1.0
 
-    def test_calculate_fdr_correction_empty(self):
+    def test_comparison_fdr_correction_empty_list_returns_empty(self):
         """Test FDR correction with empty list."""
         fdr_values = calculate_fdr_correction([])
         assert fdr_values == []
 
-    def test_calculate_fdr_correction_single_value(self):
+    def test_comparison_fdr_correction_single_value_unchanged(self):
         """Test FDR correction with single p-value."""
         p_values = [0.03]
         fdr_values = calculate_fdr_correction(p_values)
         assert len(fdr_values) == 1
         assert fdr_values[0] == 0.03  # Single value unchanged
 
-    def test_calculate_fdr_correction_monotonicity(self):
+    def test_comparison_fdr_correction_monotonicity_preserved(self):
         """Test that FDR-corrected values maintain order."""
         # Sorted p-values should give sorted FDR values
         p_values = [0.001, 0.01, 0.02, 0.05, 0.1]
@@ -122,13 +122,13 @@ class TestStatisticalFunctions:
         for i in range(len(fdr_values) - 1):
             assert fdr_values[i] <= fdr_values[i + 1]
 
-    def test_calculate_cohens_h_identical_proportions(self):
+    def test_comparison_cohens_h_identical_proportions_zero(self):
         """Test Cohen's h with identical proportions."""
         effect_size = calculate_cohens_h(p1=0.5, p2=0.5)
 
         assert effect_size == 0.0
 
-    def test_calculate_cohens_h_small_effect(self):
+    def test_comparison_cohens_h_small_effect_range(self):
         """Test Cohen's h with small effect size."""
         # Small effect: h ≈ 0.2
         # For example, 50% vs 55%
@@ -136,7 +136,7 @@ class TestStatisticalFunctions:
 
         assert 0.1 < effect_size < 0.3  # Should be small effect
 
-    def test_calculate_cohens_h_medium_effect(self):
+    def test_comparison_cohens_h_medium_effect_range(self):
         """Test Cohen's h with medium effect size."""
         # Medium effect: h ≈ 0.5
         # For example, 50% vs 70%
@@ -144,7 +144,7 @@ class TestStatisticalFunctions:
 
         assert 0.4 < effect_size < 0.6  # Should be medium effect
 
-    def test_calculate_cohens_h_large_effect(self):
+    def test_comparison_cohens_h_large_effect_range(self):
         """Test Cohen's h with large effect size."""
         # Large effect: h ≈ 0.8
         # For example, 30% vs 70%
@@ -152,7 +152,7 @@ class TestStatisticalFunctions:
 
         assert effect_size > 0.7  # Should be large effect
 
-    def test_calculate_cohens_h_extreme_difference(self):
+    def test_comparison_cohens_h_extreme_difference_max_value(self):
         """Test Cohen's h with extreme difference."""
         # Maximum difference: 0% vs 100%
         effect_size = calculate_cohens_h(p1=0.0, p2=1.0)
@@ -160,7 +160,7 @@ class TestStatisticalFunctions:
         # Maximum Cohen's h is π (approximately 3.14)
         assert effect_size > 3.0
 
-    def test_calculate_cohens_h_edge_cases(self):
+    def test_comparison_cohens_h_edge_cases_valid(self):
         """Test Cohen's h with edge case proportions."""
         # Test with 0%
         effect_size_zero = calculate_cohens_h(p1=0.0, p2=0.0)
@@ -174,7 +174,7 @@ class TestStatisticalFunctions:
         effect_size_invalid = calculate_cohens_h(p1=-0.1, p2=1.1)
         assert isinstance(effect_size_invalid, float)
 
-    def test_calculate_cohens_h_symmetry(self):
+    def test_comparison_cohens_h_symmetry_preserved(self):
         """Test that Cohen's h is symmetric (h(p1,p2) = h(p2,p1))."""
         h1 = calculate_cohens_h(p1=0.3, p2=0.7)
         h2 = calculate_cohens_h(p1=0.7, p2=0.3)
@@ -186,9 +186,11 @@ class TestStatisticalFunctions:
 class TestComparisonEndpoint:
     """Test the variant type comparison API endpoint."""
 
-    async def test_compare_truncating_vs_non_truncating(self, async_client, db_session):
+    async def test_comparison_truncating_vs_non_truncating_returns_200(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test truncating vs non-truncating comparison endpoint."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -256,9 +258,11 @@ class TestComparisonEndpoint:
             assert 0.0 <= phenotype["group1_percentage"] <= 100.0
             assert 0.0 <= phenotype["group2_percentage"] <= 100.0
 
-    async def test_compare_cnv_vs_point_mutation(self, async_client, db_session):
+    async def test_comparison_cnv_vs_point_mutation_returns_200(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test CNV vs point mutation comparison endpoint."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "cnv_vs_point_mutation", "limit": 10},
         )
@@ -273,11 +277,11 @@ class TestComparisonEndpoint:
         # Check metadata
         assert data["metadata"]["comparison_type"] == "cnv_vs_point_mutation"
 
-    async def test_compare_truncating_vs_non_truncating_excl_cnv(
-        self, async_client, db_session
+    async def test_comparison_truncating_excl_cnv_correct_counts(
+        self, fixture_async_client, fixture_db_session
     ):
         """Test truncating vs non-truncating comparison excluding large CNVs."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating_excl_cnv",
@@ -301,7 +305,7 @@ class TestComparisonEndpoint:
 
         # Use min_prevalence=0 to get accurate total counts across all phenotypes
         # (min_prevalence filtering can affect which phenotypes are included)
-        response_excl = await async_client.get(
+        response_excl = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating_excl_cnv",
@@ -309,7 +313,7 @@ class TestComparisonEndpoint:
                 "min_prevalence": 0,
             },
         )
-        response_with_cnv = await async_client.get(
+        response_with_cnv = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -329,10 +333,12 @@ class TestComparisonEndpoint:
         # affect the non-truncating count)
         assert data_excl["group2_count"] == data_with_cnv["group2_count"]
 
-    async def test_compare_with_different_sort_orders(self, async_client, db_session):
+    async def test_comparison_sort_by_pvalue_ascending(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test different sorting options."""
         # Sort by p-value (default)
-        response_pvalue = await async_client.get(
+        response_pvalue = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "truncating_vs_non_truncating", "sort_by": "p_value"},
         )
@@ -340,7 +346,7 @@ class TestComparisonEndpoint:
         data_pvalue = response_pvalue.json()
 
         # Sort by effect size
-        response_effect = await async_client.get(
+        response_effect = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -351,7 +357,7 @@ class TestComparisonEndpoint:
         data_effect = response_effect.json()
 
         # Sort by prevalence difference
-        response_prev = await async_client.get(
+        response_prev = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -382,10 +388,12 @@ class TestComparisonEndpoint:
             if len(effect_sizes) > 1:
                 assert effect_sizes == sorted(effect_sizes, reverse=True)
 
-    async def test_compare_with_min_prevalence_filter(self, async_client, db_session):
+    async def test_comparison_min_prevalence_filter_reduces_results(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test minimum prevalence filtering."""
         # Low threshold (should return more results)
-        response_low = await async_client.get(
+        response_low = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -397,7 +405,7 @@ class TestComparisonEndpoint:
         data_low = response_low.json()
 
         # High threshold (should return fewer results)
-        response_high = await async_client.get(
+        response_high = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -411,9 +419,11 @@ class TestComparisonEndpoint:
         # High threshold should have fewer or equal results
         assert len(data_high["phenotypes"]) <= len(data_low["phenotypes"])
 
-    async def test_compare_with_limit_parameter(self, async_client, db_session):
+    async def test_comparison_limit_parameter_respected(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test limit parameter."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "truncating_vs_non_truncating", "limit": 5},
         )
@@ -424,9 +434,11 @@ class TestComparisonEndpoint:
         # Should respect limit
         assert len(data["phenotypes"]) <= 5
 
-    async def test_compare_invalid_comparison_type(self, async_client, db_session):
+    async def test_comparison_invalid_comparison_type_returns_422(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test with invalid comparison type."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "invalid_comparison"},
         )
@@ -434,9 +446,11 @@ class TestComparisonEndpoint:
         # Should return 422 validation error
         assert response.status_code == 422
 
-    async def test_compare_invalid_sort_by(self, async_client, db_session):
+    async def test_comparison_invalid_sort_by_returns_422(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test with invalid sort_by parameter."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -447,10 +461,12 @@ class TestComparisonEndpoint:
         # Should return 422 validation error
         assert response.status_code == 422
 
-    async def test_compare_invalid_prevalence_range(self, async_client, db_session):
+    async def test_comparison_invalid_prevalence_range_returns_422(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test with invalid prevalence values."""
         # Prevalence < 0
-        response_low = await async_client.get(
+        response_low = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -460,7 +476,7 @@ class TestComparisonEndpoint:
         assert response_low.status_code == 422
 
         # Prevalence > 1
-        response_high = await async_client.get(
+        response_high = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "truncating_vs_non_truncating",
@@ -469,25 +485,29 @@ class TestComparisonEndpoint:
         )
         assert response_high.status_code == 422
 
-    async def test_compare_limit_bounds(self, async_client, db_session):
+    async def test_comparison_limit_bounds_validated(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test limit parameter bounds."""
         # Limit < 1
-        response_low = await async_client.get(
+        response_low = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "truncating_vs_non_truncating", "limit": 0},
         )
         assert response_low.status_code == 422
 
         # Limit > 100
-        response_high = await async_client.get(
+        response_high = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "truncating_vs_non_truncating", "limit": 101},
         )
         assert response_high.status_code == 422
 
-    async def test_compare_counts_consistency(self, async_client, db_session):
+    async def test_comparison_counts_consistency_validated(
+        self, fixture_async_client, fixture_db_session
+    ):
         """Test that counts are consistent."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={"comparison": "truncating_vs_non_truncating"},
         )
@@ -532,7 +552,9 @@ class TestVEPImpactBasedClassification:
     4. Default → other (excluded from analysis)
     """
 
-    async def test_vep_impact_high_classified_as_truncating(self, db_session):
+    async def test_comparison_vep_impact_high_classified_truncating(
+        self, fixture_db_session
+    ):
         """Test that variants with VEP IMPACT = HIGH are classified as truncating.
 
         R logic (line 78):
@@ -584,7 +606,7 @@ class TestVEPImpactBasedClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -598,10 +620,10 @@ class TestVEPImpactBasedClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query variant classification
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -629,13 +651,15 @@ class TestVEPImpactBasedClassification:
         assert row[0] == "Truncating"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-high-impact"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_vep_impact_moderate_classified_as_non_truncating(self, db_session):
+    async def test_comparison_vep_impact_moderate_classified_non_truncating(
+        self, fixture_db_session
+    ):
         """Test that variants with VEP IMPACT = MODERATE are non-truncating.
 
         R logic (line 77):
@@ -686,7 +710,7 @@ class TestVEPImpactBasedClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -700,10 +724,10 @@ class TestVEPImpactBasedClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - MODERATE should NOT be truncating even if pathogenic
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -731,13 +755,15 @@ class TestVEPImpactBasedClassification:
         assert row[0] == "Non-truncating"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-moderate-impact"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_vep_impact_low_pathogenic_classified_as_truncating(self, db_session):
+    async def test_comparison_vep_impact_low_pathogenic_classified_truncating(
+        self, fixture_db_session
+    ):
         """Test LOW impact + pathogenic → truncating (edge case handling).
 
         R logic (line 79):
@@ -791,7 +817,7 @@ class TestVEPImpactBasedClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -805,10 +831,10 @@ class TestVEPImpactBasedClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - LOW + LIKELY_PATHOGENIC should be truncating
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -841,13 +867,15 @@ class TestVEPImpactBasedClassification:
         assert row[0] == "Truncating"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-low-pathogenic"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_vep_impact_low_vus_classified_as_non_truncating(self, db_session):
+    async def test_comparison_vep_impact_low_vus_classified_non_truncating(
+        self, fixture_db_session
+    ):
         """Test LOW impact + VUS → non-truncating (not pathogenic).
 
         R logic: Only LOW + LP/P → T, so LOW + VUS should be nT or other.
@@ -897,7 +925,7 @@ class TestVEPImpactBasedClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -911,10 +939,10 @@ class TestVEPImpactBasedClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - LOW + VUS should NOT be truncating
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -947,13 +975,15 @@ class TestVEPImpactBasedClassification:
         assert row[0] == "Non-truncating"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-low-vus"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_hgvs_fallback_when_no_vep_impact(self, db_session):
+    async def test_comparison_hgvs_fallback_when_no_vep_impact(
+        self, fixture_db_session
+    ):
         """Test HGVS pattern fallback when VEP IMPACT is missing.
 
         R logic (line 82):
@@ -998,7 +1028,7 @@ class TestVEPImpactBasedClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -1012,10 +1042,10 @@ class TestVEPImpactBasedClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - Should use HGVS pattern (Ter = nonsense = truncating)
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -1043,11 +1073,11 @@ class TestVEPImpactBasedClassification:
         assert row[0] == "Truncating"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-hgvs-fallback"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -1061,7 +1091,9 @@ class TestCNVSubtypeClassification:
         EFFECT == "transcript_amplification" ~ "17qDup"
     """
 
-    async def test_cnv_deletion_classified_by_variant_id(self, db_session):
+    async def test_comparison_cnv_deletion_classified_by_variant_id(
+        self, fixture_db_session
+    ):
         """Test that CNVs with :DEL suffix are classified as deletions."""
         test_phenopacket = {
             "id": "test-cnv-del",
@@ -1099,7 +1131,7 @@ class TestCNVSubtypeClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -1113,11 +1145,11 @@ class TestCNVSubtypeClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - Should be classified as deletion
         # Use raw string and escape : to prevent SQLAlchemy bind parameter interpretation
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 r"""
             SELECT
@@ -1141,13 +1173,15 @@ class TestCNVSubtypeClassification:
         assert row[0] == "17q Deletion"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-cnv-del"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_cnv_duplication_classified_by_variant_id(self, db_session):
+    async def test_comparison_cnv_duplication_classified_by_variant_id(
+        self, fixture_db_session
+    ):
         """Test that CNVs with :DUP suffix are classified as duplications."""
         test_phenopacket = {
             "id": "test-cnv-dup",
@@ -1185,7 +1219,7 @@ class TestCNVSubtypeClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -1199,11 +1233,11 @@ class TestCNVSubtypeClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - Should be classified as duplication
         # Use raw string and escape : to prevent SQLAlchemy bind parameter interpretation
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 r"""
             SELECT
@@ -1227,13 +1261,15 @@ class TestCNVSubtypeClassification:
         assert row[0] == "17q Duplication"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-cnv-dup"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_cnv_deletion_classified_by_vep_consequence(self, db_session):
+    async def test_comparison_cnv_deletion_classified_by_vep_consequence(
+        self, fixture_db_session
+    ):
         """Test deletion classification by VEP consequence (transcript_ablation).
 
         R logic (line 87):
@@ -1284,7 +1320,7 @@ class TestCNVSubtypeClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -1298,10 +1334,10 @@ class TestCNVSubtypeClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - Should be classified as deletion by VEP consequence
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -1329,13 +1365,15 @@ class TestCNVSubtypeClassification:
         assert row[0] == "17q Deletion"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-cnv-del-vep"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_cnv_duplication_classified_by_vep_consequence(self, db_session):
+    async def test_comparison_cnv_duplication_classified_by_vep_consequence(
+        self, fixture_db_session
+    ):
         """Test duplication classification by VEP consequence (transcript_amplification).
 
         R logic (line 88):
@@ -1386,7 +1424,7 @@ class TestCNVSubtypeClassification:
 
         # Insert test phenopacket
         # Use CAST() instead of :: to avoid SQLAlchemy interpreting :pk::jsonb incorrectly
-        await db_session.execute(
+        await fixture_db_session.execute(
             text(
                 """
             INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex, revision)
@@ -1400,10 +1438,10 @@ class TestCNVSubtypeClassification:
                 "sex": "UNKNOWN_SEX",
             },
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
         # Query - Should be classified as duplication by VEP consequence
-        result = await db_session.execute(
+        result = await fixture_db_session.execute(
             text(
                 """
             SELECT
@@ -1431,17 +1469,17 @@ class TestCNVSubtypeClassification:
         assert row[0] == "17q Duplication"
 
         # Cleanup
-        await db_session.execute(
+        await fixture_db_session.execute(
             text("DELETE FROM phenopackets WHERE phenopacket_id = :pid"),
             {"pid": "test-cnv-dup-vep"},
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
 
-    async def test_compare_cnv_deletion_vs_duplication_endpoint(
-        self, async_client, db_session
+    async def test_comparison_cnv_deletion_vs_duplication_endpoint_returns_200(
+        self, fixture_async_client, fixture_db_session
     ):
         """Test the CNV deletion vs duplication comparison endpoint."""
-        response = await async_client.get(
+        response = await fixture_async_client.get(
             "/api/v2/phenopackets/compare/variant-types",
             params={
                 "comparison": "cnv_deletion_vs_duplication",
