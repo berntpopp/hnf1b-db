@@ -13,20 +13,25 @@
  * the two homeodomains). Variants in this range cannot have distances calculated.
  */
 
-// Structure boundaries
-// PDB 2H8R maps to UniProt P35680 residues 90-308 (author numbering in mmCIF)
-// NGL uses auth_seq_id which matches UniProt numbering directly
-export const STRUCTURE_START = 90;
-export const STRUCTURE_END = 308;
+// Import constants from centralized module
+import {
+  STRUCTURE_START as _STRUCTURE_START,
+  STRUCTURE_END as _STRUCTURE_END,
+  STRUCTURE_GAP_START as _STRUCTURE_GAP_START,
+  STRUCTURE_GAP_END as _STRUCTURE_GAP_END,
+} from '@/constants/structure';
+import { DISTANCE_CLOSE_THRESHOLD, DISTANCE_MEDIUM_THRESHOLD } from '@/constants/thresholds';
 
-// Gap in structure (linker region not resolved in crystal)
-export const STRUCTURE_GAP_START = 187;
-export const STRUCTURE_GAP_END = 230;
+// Re-export structure boundaries for backward compatibility
+export const STRUCTURE_START = _STRUCTURE_START;
+export const STRUCTURE_END = _STRUCTURE_END;
+export const STRUCTURE_GAP_START = _STRUCTURE_GAP_START;
+export const STRUCTURE_GAP_END = _STRUCTURE_GAP_END;
 
-// Distance thresholds (in Angstroms)
+// Distance thresholds (using imported constants)
 export const DISTANCE_THRESHOLDS = {
-  CLOSE: 5, // < 5 Angstroms - very close, likely direct DNA contact
-  MEDIUM: 10, // 5-10 Angstroms - medium distance
+  CLOSE: DISTANCE_CLOSE_THRESHOLD, // < 5 Angstroms - very close, likely direct DNA contact
+  MEDIUM: DISTANCE_MEDIUM_THRESHOLD, // 5-10 Angstroms - medium distance
   // >= 10 Angstroms - far from DNA
 };
 

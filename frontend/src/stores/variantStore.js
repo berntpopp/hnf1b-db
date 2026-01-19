@@ -2,6 +2,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { getVariants } from '@/api';
+import { HNF1B_GENE } from '@/constants/structure';
+import { CACHE_TTL_MS } from '@/constants/ui';
+import { STRUCTURAL_VARIANT_SIZE_THRESHOLD } from '@/constants/thresholds';
 
 /**
  * Pinia store for managing variant data with progressive loading.
@@ -21,12 +24,12 @@ export const useVariantStore = defineStore('variants', () => {
   const lastFetchTime = ref(null);
   const error = ref(null);
 
-  // Cache TTL (5 minutes - appropriate for open research database)
-  const CACHE_TTL = 5 * 60 * 1000;
+  // Cache TTL (from constants)
+  const CACHE_TTL = CACHE_TTL_MS;
 
-  // HNF1B gene boundaries (GRCh38) - centralized for DRY
-  const HNF1B_START = 37686430;
-  const HNF1B_END = 37745059;
+  // HNF1B gene boundaries (from constants)
+  const HNF1B_START = HNF1B_GENE.start;
+  const HNF1B_END = HNF1B_GENE.end;
 
   // Classification loading order by clinical relevance
   const CLASSIFICATION_PRIORITY = [
@@ -58,10 +61,10 @@ export const useVariantStore = defineStore('variants', () => {
       const size = end - start;
 
       // Only consider it a "CNV track variant" if:
-      // 1. Size >= 50bp (structural variant)
+      // 1. Size >= threshold (structural variant)
       // 2. Extends beyond HNF1B gene boundaries
       const extendsBeyondHNF1B = start < HNF1B_START || end > HNF1B_END;
-      return size >= 50 && extendsBeyondHNF1B;
+      return size >= STRUCTURAL_VARIANT_SIZE_THRESHOLD && extendsBeyondHNF1B;
     }
     return false;
   }

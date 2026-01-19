@@ -1,5 +1,6 @@
+import { MAX_RECENT_SEARCHES } from '@/constants/ui';
+
 const RECENT_SEARCHES_KEY = 'hnf1b_recent_searches';
-const MAX_RECENT_SEARCHES = 5;
 
 /**
  * Gets the list of recent searches from localStorage.
