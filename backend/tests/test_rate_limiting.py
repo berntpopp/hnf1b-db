@@ -2,6 +2,8 @@
 
 This module tests the rate limiting functionality using Redis (with in-memory fallback).
 Tests the async rate limiting with distributed counter support.
+
+Test naming convention: test_rate_limiting_*
 """
 
 from typing import Optional
@@ -37,36 +39,8 @@ class MockRequest:
             self.headers["X-Forwarded-For"] = forwarded_for
 
 
-class TestGetClientIP:
-    """Test client IP extraction from request."""
-
-    def test_direct_client_ip(self):
-        """Test extraction of direct client IP."""
-        request = MockRequest(client_host="192.168.1.100")
-        assert get_client_ip(request) == "192.168.1.100"
-
-    def test_forwarded_for_single_ip(self):
-        """Test X-Forwarded-For with single IP."""
-        request = MockRequest(client_host="127.0.0.1", forwarded_for="203.0.113.42")
-        assert get_client_ip(request) == "203.0.113.42"
-
-    def test_forwarded_for_multiple_ips(self):
-        """Test X-Forwarded-For with multiple IPs (takes first)."""
-        request = MockRequest(
-            client_host="127.0.0.1",
-            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1",
-        )
-        assert get_client_ip(request) == "203.0.113.42"
-
-    def test_no_client_info(self):
-        """Test fallback when no client info available."""
-        request = MockRequest(client_host="127.0.0.1")
-        request.client = None
-        assert get_client_ip(request) == "unknown"
-
-
 @pytest.fixture
-def reset_cache():
+def fixture_reset_cache():
     """Fixture to reset rate limits before each test.
 
     Uses in-memory fallback mode to avoid Redis connection issues in CI.
@@ -80,11 +54,39 @@ def reset_cache():
     cache.clear_fallback()
 
 
+class TestRateLimitingClientIP:
+    """Test client IP extraction from request."""
+
+    def test_rate_limiting_client_ip_extracts_direct_ip(self):
+        """Test extraction of direct client IP."""
+        request = MockRequest(client_host="192.168.1.100")
+        assert get_client_ip(request) == "192.168.1.100"
+
+    def test_rate_limiting_client_ip_extracts_forwarded_for_single(self):
+        """Test X-Forwarded-For with single IP."""
+        request = MockRequest(client_host="127.0.0.1", forwarded_for="203.0.113.42")
+        assert get_client_ip(request) == "203.0.113.42"
+
+    def test_rate_limiting_client_ip_extracts_forwarded_for_first_of_multiple(self):
+        """Test X-Forwarded-For with multiple IPs (takes first)."""
+        request = MockRequest(
+            client_host="127.0.0.1",
+            forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1",
+        )
+        assert get_client_ip(request) == "203.0.113.42"
+
+    def test_rate_limiting_client_ip_returns_unknown_when_no_client(self):
+        """Test fallback when no client info available."""
+        request = MockRequest(client_host="127.0.0.1")
+        request.client = None
+        assert get_client_ip(request) == "unknown"
+
+
 @pytest.mark.asyncio
-class TestRateLimiting:
+class TestRateLimitingRequestLimits:
     """Test rate limiting functionality (async with Redis/in-memory fallback)."""
 
-    async def test_within_rate_limit(self, reset_cache):
+    async def test_rate_limiting_allows_requests_under_limit(self, fixture_reset_cache):
         """Test that requests within limit pass."""
         request = MockRequest(client_host="192.168.1.100")
 
@@ -92,7 +94,9 @@ class TestRateLimiting:
         for i in range(RATE_LIMIT - 1):
             await check_rate_limit(request)  # Should not raise
 
-    async def test_exactly_at_rate_limit(self, reset_cache):
+    async def test_rate_limiting_allows_requests_at_exact_limit(
+        self, fixture_reset_cache
+    ):
         """Test that request at limit still passes."""
         request = MockRequest(client_host="192.168.1.101")
 
@@ -100,7 +104,7 @@ class TestRateLimiting:
         for i in range(RATE_LIMIT):
             await check_rate_limit(request)  # Should not raise
 
-    async def test_exceed_rate_limit(self, reset_cache):
+    async def test_rate_limiting_blocks_requests_over_limit(self, fixture_reset_cache):
         """Test that exceeding limit raises 429."""
         request = MockRequest(client_host="192.168.1.102")
 
@@ -116,7 +120,9 @@ class TestRateLimiting:
         assert "Rate limit exceeded" in exc.value.detail["error"]
         assert exc.value.detail["retry_after"] == RATE_WINDOW
 
-    async def test_rate_limit_per_ip(self, reset_cache):
+    async def test_rate_limiting_tracks_limits_per_ip_address(
+        self, fixture_reset_cache
+    ):
         """Test that rate limits are tracked per IP address."""
         request1 = MockRequest(client_host="192.168.1.103")
         request2 = MockRequest(client_host="192.168.1.104")
@@ -134,7 +140,7 @@ class TestRateLimiting:
             await check_rate_limit(request1)
         assert exc.value.status_code == 429
 
-    async def test_reset_rate_limits(self, reset_cache):
+    async def test_rate_limiting_resets_after_reset_called(self, fixture_reset_cache):
         """Test that reset clears all rate limit counters."""
         request = MockRequest(client_host="192.168.1.105")
 
@@ -150,10 +156,10 @@ class TestRateLimiting:
             await check_rate_limit(request)  # Should not raise
 
 
-class TestRateLimitStatus:
+class TestRateLimitingStatus:
     """Test rate limit status query (synchronous helper)."""
 
-    def test_status_returns_config_values(self):
+    def test_rate_limiting_status_returns_config_values(self):
         """Test status returns configured rate limit values."""
         request = MockRequest(client_host="192.168.1.200")
         status = get_rate_limit_status(request)
@@ -163,10 +169,10 @@ class TestRateLimitStatus:
 
 
 @pytest.mark.asyncio
-class TestRateLimitErrorDetails:
+class TestRateLimitingErrorDetails:
     """Test rate limit error response details."""
 
-    async def test_error_contains_retry_after(self, reset_cache):
+    async def test_rate_limiting_error_includes_retry_after(self, fixture_reset_cache):
         """Test that error includes retry_after header."""
         request = MockRequest(client_host="192.168.1.110")
 
@@ -180,7 +186,9 @@ class TestRateLimitErrorDetails:
         assert "retry_after" in exc.value.detail
         assert exc.value.detail["retry_after"] == RATE_WINDOW
 
-    async def test_error_contains_current_count(self, reset_cache):
+    async def test_rate_limiting_error_includes_current_count(
+        self, fixture_reset_cache
+    ):
         """Test that error includes current request count."""
         request = MockRequest(client_host="192.168.1.111")
 
@@ -195,7 +203,7 @@ class TestRateLimitErrorDetails:
         # Count should be > RATE_LIMIT (the one that triggered the error)
         assert exc.value.detail["current_count"] > RATE_LIMIT
 
-    async def test_error_message_helpful(self, reset_cache):
+    async def test_rate_limiting_error_message_is_helpful(self, fixture_reset_cache):
         """Test that error message is user-friendly."""
         request = MockRequest(client_host="192.168.1.112")
 
@@ -211,7 +219,9 @@ class TestRateLimitErrorDetails:
         assert f"{RATE_LIMIT} requests" in detail["message"]
         assert f"{RATE_WINDOW} seconds" in detail["message"]
 
-    async def test_retry_after_header_set(self, reset_cache):
+    async def test_rate_limiting_error_sets_retry_after_header(
+        self, fixture_reset_cache
+    ):
         """Test that Retry-After header is set on 429 response."""
         request = MockRequest(client_host="192.168.1.113")
 
