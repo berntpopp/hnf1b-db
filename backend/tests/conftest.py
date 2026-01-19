@@ -23,7 +23,7 @@ warnings.filterwarnings(
 
 
 @pytest_asyncio.fixture
-async def db_session():
+async def fixture_db_session():
     """Provide a database session for testing.
 
     Creates a fresh session for each test and handles cleanup.
@@ -77,17 +77,19 @@ async def db_session():
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session):
+async def fixture_test_user(fixture_db_session):
     """Create test user for authentication tests."""
     # Pre-cleanup: Remove any leftover test users from failed previous runs
     try:
-        await db_session.execute(delete(User).where(User.email == "test@example.com"))
-        await db_session.commit()
+        await fixture_db_session.execute(
+            delete(User).where(User.email == "test@example.com")
+        )
+        await fixture_db_session.commit()
     except Exception:
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
     # Ensure fresh session state
-    await db_session.rollback()
+    await fixture_db_session.rollback()
 
     user = User(
         username="testuser",
@@ -97,38 +99,38 @@ async def test_user(db_session):
         is_active=True,
         is_verified=True,
     )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
+    fixture_db_session.add(user)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(user)
 
     yield user
 
     # Cleanup
     try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
+        await fixture_db_session.execute(delete(User).where(User.id == user.id))
+        await fixture_db_session.commit()
     except Exception:
         try:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
         except Exception:
             # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 
 @pytest_asyncio.fixture
-async def admin_user(db_session):
+async def fixture_admin_user(fixture_db_session):
     """Create admin user for permission tests."""
     # Pre-cleanup: Remove any leftover admin users from failed previous runs
     try:
-        await db_session.execute(
+        await fixture_db_session.execute(
             delete(User).where(User.email == "testadmin@example.com")
         )
-        await db_session.commit()
+        await fixture_db_session.commit()
     except Exception:
-        await db_session.rollback()
+        await fixture_db_session.rollback()
 
     # Ensure fresh session state
-    await db_session.rollback()
+    await fixture_db_session.rollback()
 
     user = User(
         username="testadmin",
@@ -138,32 +140,32 @@ async def admin_user(db_session):
         is_active=True,
         is_verified=True,
     )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
+    fixture_db_session.add(user)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(user)
 
     yield user
 
     # Cleanup
     try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
+        await fixture_db_session.execute(delete(User).where(User.id == user.id))
+        await fixture_db_session.commit()
     except Exception:
         try:
-            await db_session.rollback()
+            await fixture_db_session.rollback()
         except Exception:
             # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 
 @pytest_asyncio.fixture
-async def async_client(db_session):
+async def fixture_async_client(fixture_db_session):
     """Async HTTP client for API testing."""
     from app.database import get_db
 
     # Override get_db to use test session
     async def override_get_db():
-        yield db_session
+        yield fixture_db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -175,12 +177,12 @@ async def async_client(db_session):
 
 
 @pytest_asyncio.fixture
-async def auth_headers(test_user, async_client):
+async def fixture_auth_headers(fixture_test_user, fixture_async_client):
     """Get auth headers for authenticated requests."""
-    response = await async_client.post(
+    response = await fixture_async_client.post(
         "/api/v2/auth/login",
         json={
-            "username": test_user.username,
+            "username": fixture_test_user.username,
             "password": "TestPass123!",
         },
     )
@@ -189,12 +191,12 @@ async def auth_headers(test_user, async_client):
 
 
 @pytest_asyncio.fixture
-async def admin_headers(admin_user, async_client):
+async def fixture_admin_headers(fixture_admin_user, fixture_async_client):
     """Get auth headers for admin requests."""
-    response = await async_client.post(
+    response = await fixture_async_client.post(
         "/api/v2/auth/login",
         json={
-            "username": admin_user.username,
+            "username": fixture_admin_user.username,
             "password": "AdminPass123!",
         },
     )
@@ -203,27 +205,37 @@ async def admin_headers(admin_user, async_client):
 
 
 @pytest_asyncio.fixture
-async def cleanup_test_phenopackets(db_session):
+async def fixture_cleanup_test_phenopackets(fixture_db_session):
     """Cleanup test phenopackets before and after tests."""
     from app.phenopackets.models import Phenopacket, PhenopacketAudit
 
     # Pre-cleanup: Remove leftover test data from failed previous runs
-    await db_session.execute(
+    await fixture_db_session.execute(
         delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
     )
-    await db_session.execute(
+    await fixture_db_session.execute(
         delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
     )
-    await db_session.commit()
+    await fixture_db_session.commit()
 
     # Yield control to test
     yield
 
     # Post-cleanup: Clean up after test
-    await db_session.execute(
+    await fixture_db_session.execute(
         delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
     )
-    await db_session.execute(
+    await fixture_db_session.execute(
         delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
     )
-    await db_session.commit()
+    await fixture_db_session.commit()
+
+
+# Backward-compatibility aliases (remove after test migration complete)
+db_session = fixture_db_session
+test_user = fixture_test_user
+admin_user = fixture_admin_user
+async_client = fixture_async_client
+auth_headers = fixture_auth_headers
+admin_headers = fixture_admin_headers
+cleanup_test_phenopackets = fixture_cleanup_test_phenopackets
