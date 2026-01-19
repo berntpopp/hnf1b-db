@@ -7,8 +7,8 @@ from app.phenopackets.models import Phenopacket, PhenopacketAudit
 
 
 @pytest.mark.asyncio
-async def test_update_phenopacket_success(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_update_phenopacket_success_increments_revision(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test successful phenopacket update with optimistic locking."""
     # Create test phenopacket
@@ -41,9 +41,9 @@ async def test_update_phenopacket_success(
         created_by="test",
         updated_by="test",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Update phenopacket
     updated_data = {
@@ -75,10 +75,10 @@ async def test_update_phenopacket_success(
         "change_reason": "Changed sex and added phenotype",
     }
 
-    response = await async_client.put(
+    response = await fixture_async_client.put(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         json=updated_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     assert response.status_code == 200
@@ -90,7 +90,7 @@ async def test_update_phenopacket_success(
     assert len(data["phenopacket"]["phenotypicFeatures"]) == 2
 
     # Verify audit entry created
-    audit_result = await db_session.execute(
+    audit_result = await fixture_db_session.execute(
         select(PhenopacketAudit).where(
             PhenopacketAudit.phenopacket_id == "test-update-001"
         )
@@ -105,16 +105,16 @@ async def test_update_phenopacket_success(
     assert "added 1 phenotype(s)" in audit.change_summary
 
     # Cleanup
-    await db_session.execute(
+    await fixture_db_session.execute(
         select(Phenopacket).where(Phenopacket.phenopacket_id == "test-update-001")
     )
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_update_phenopacket_conflict(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_update_phenopacket_wrong_revision_returns_409(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test optimistic locking conflict detection."""
     # Create test phenopacket
@@ -145,9 +145,9 @@ async def test_update_phenopacket_conflict(
         subject_sex="MALE",
         created_by="test",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Attempt update with old revision
     updated_data = {
@@ -174,10 +174,10 @@ async def test_update_phenopacket_conflict(
         "change_reason": "Update sex",
     }
 
-    response = await async_client.put(
+    response = await fixture_async_client.put(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         json=updated_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     # Should return 409 Conflict
@@ -188,17 +188,19 @@ async def test_update_phenopacket_conflict(
     assert error["detail"]["expected_revision"] == 3
 
     # Verify phenopacket not modified
-    await db_session.refresh(test_phenopacket)
+    await fixture_db_session.refresh(test_phenopacket)
     assert test_phenopacket.revision == 5
     assert test_phenopacket.phenopacket["subject"]["sex"] == "MALE"
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_update_phenopacket_not_found(async_client, admin_headers):
+async def test_curation_update_phenopacket_not_found_returns_404(
+    fixture_async_client, fixture_admin_headers
+):
     """Test updating non-existent phenopacket."""
     updated_data = {
         "phenopacket": {
@@ -224,18 +226,18 @@ async def test_update_phenopacket_not_found(async_client, admin_headers):
         "change_reason": "Test",
     }
 
-    response = await async_client.put(
+    response = await fixture_async_client.put(
         "/api/v2/phenopackets/nonexistent",
         json=updated_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_delete_phenopacket_soft_delete(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_delete_phenopacket_soft_delete_creates_audit(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test soft delete with audit trail."""
     # Create test phenopacket
@@ -266,15 +268,15 @@ async def test_delete_phenopacket_soft_delete(
         subject_sex="FEMALE",
         created_by="test",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Soft delete
-    response = await async_client.request(
+    response = await fixture_async_client.request(
         "DELETE",
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
         json={"change_reason": "Test deletion"},
     )
 
@@ -285,12 +287,12 @@ async def test_delete_phenopacket_soft_delete(
     assert "deleted_at" in data
 
     # Verify soft delete in database
-    await db_session.refresh(test_phenopacket)
+    await fixture_db_session.refresh(test_phenopacket)
     assert test_phenopacket.deleted_at is not None
     assert test_phenopacket.deleted_by == "testadmin"
 
     # Verify audit entry created
-    audit_result = await db_session.execute(
+    audit_result = await fixture_db_session.execute(
         select(PhenopacketAudit).where(
             PhenopacketAudit.phenopacket_id == "test-delete-001"
         )
@@ -303,8 +305,8 @@ async def test_delete_phenopacket_soft_delete(
     assert audit.change_summary == "Soft deleted phenopacket"
 
     # Verify phenopacket not returned in list (soft-deleted filter)
-    list_response = await async_client.get(
-        "/api/v2/phenopackets/", headers=admin_headers
+    list_response = await fixture_async_client.get(
+        "/api/v2/phenopackets/", headers=fixture_admin_headers
     )
     # List endpoint returns JSON:API format with "data" key containing GA4GH phenopackets
     response_data = list_response.json()
@@ -312,13 +314,13 @@ async def test_delete_phenopacket_soft_delete(
     assert "test-delete-001" not in phenopacket_ids
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_delete_phenopacket_missing_reason(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_delete_phenopacket_missing_reason_returns_422(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test delete without change_reason parameter."""
     # Create test phenopacket
@@ -349,31 +351,31 @@ async def test_delete_phenopacket_missing_reason(
         subject_sex="MALE",
         created_by="test",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Attempt delete without change_reason
-    response = await async_client.delete(
+    response = await fixture_async_client.delete(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     # Should return 422 Unprocessable Entity (missing required query parameter)
     assert response.status_code == 422
 
     # Verify phenopacket not deleted
-    await db_session.refresh(test_phenopacket)
+    await fixture_db_session.refresh(test_phenopacket)
     assert test_phenopacket.deleted_at is None
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_delete_already_deleted(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_delete_already_deleted_returns_404(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test deleting already soft-deleted phenopacket."""
     from datetime import datetime, timezone
@@ -408,15 +410,15 @@ async def test_delete_already_deleted(
         deleted_at=datetime.now(timezone.utc),
         deleted_by="previous_user",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Attempt to delete again
-    response = await async_client.request(
+    response = await fixture_async_client.request(
         "DELETE",
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
         json={"change_reason": "Delete again"},
     )
 
@@ -425,13 +427,13 @@ async def test_delete_already_deleted(
     assert "not found or already deleted" in response.json()["detail"]
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_update_soft_deleted_phenopacket(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+async def test_curation_update_soft_deleted_phenopacket_returns_404(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test updating soft-deleted phenopacket should fail."""
     from datetime import datetime, timezone
@@ -466,9 +468,9 @@ async def test_update_soft_deleted_phenopacket(
         deleted_at=datetime.now(timezone.utc),
         deleted_by="curator",
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Attempt update
     updated_data = {
@@ -495,26 +497,29 @@ async def test_update_soft_deleted_phenopacket(
         "change_reason": "Try to update deleted",
     }
 
-    response = await async_client.put(
+    response = await fixture_async_client.put(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         json=updated_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     # Should return 404 (soft-deleted records are filtered)
     assert response.status_code == 404
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_get_audit_history(
-    async_client, db_session, admin_user, admin_headers, cleanup_test_phenopackets
+async def test_curation_get_audit_history_returns_ordered_entries(
+    fixture_async_client, fixture_db_session, fixture_admin_headers, cleanup_test_phenopackets
 ):
     """Test retrieving audit history for a phenopacket."""
     from app.phenopackets.models import Phenopacket
+
+    # Use a fixed admin username since we don't need the actual user object
+    admin_username = "testadmin"
 
     # Create test phenopacket directly in DB (like other tests)
     test_phenopacket = Phenopacket(
@@ -527,7 +532,7 @@ async def test_get_audit_history(
             "interpretations": [],
             "metaData": {
                 "created": "2025-01-01T00:00:00Z",
-                "createdBy": admin_user.username,
+                "createdBy": admin_username,
                 "phenopacketSchemaVersion": "2.0.0",
                 "resources": [
                     {
@@ -543,12 +548,12 @@ async def test_get_audit_history(
         },
         subject_id="patient-audit-001",
         subject_sex="UNKNOWN_SEX",
-        created_by=admin_user.username,
-        updated_by=admin_user.username,
+        created_by=admin_username,
+        updated_by=admin_username,
     )
-    db_session.add(test_phenopacket)
-    await db_session.commit()
-    await db_session.refresh(test_phenopacket)
+    fixture_db_session.add(test_phenopacket)
+    await fixture_db_session.commit()
+    await fixture_db_session.refresh(test_phenopacket)
 
     # Update phenopacket twice to create audit trail
     update1_data = {
@@ -563,10 +568,10 @@ async def test_get_audit_history(
         "change_reason": "Updated sex to FEMALE",
     }
 
-    update1_response = await async_client.put(
+    update1_response = await fixture_async_client.put(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         json=update1_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
     assert update1_response.status_code == 200
     updated1 = update1_response.json()
@@ -583,17 +588,17 @@ async def test_get_audit_history(
         "change_reason": "Updated sex to MALE",
     }
 
-    update2_response = await async_client.put(
+    update2_response = await fixture_async_client.put(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         json=update2_data,
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
     assert update2_response.status_code == 200
 
     # Test audit history endpoint
-    audit_response = await async_client.get(
+    audit_response = await fixture_async_client.get(
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}/audit",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     assert audit_response.status_code == 200
@@ -607,7 +612,7 @@ async def test_get_audit_history(
     assert latest_entry["action"] == "UPDATE"
     assert latest_entry["change_reason"] == "Updated sex to MALE"
     assert latest_entry["phenopacket_id"] == test_phenopacket.phenopacket_id
-    assert latest_entry["changed_by"] == admin_user.username
+    assert latest_entry["changed_by"] == admin_username
     assert latest_entry["change_summary"] is not None
     assert "changed sex to MALE" in latest_entry["change_summary"]
 
@@ -623,16 +628,18 @@ async def test_get_audit_history(
         assert current_time >= next_time
 
     # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    await fixture_db_session.delete(test_phenopacket)
+    await fixture_db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_get_audit_history_not_found(async_client, admin_headers):
+async def test_curation_get_audit_history_not_found_returns_404(
+    fixture_async_client, fixture_admin_headers
+):
     """Test getting audit history for non-existent phenopacket."""
-    response = await async_client.get(
+    response = await fixture_async_client.get(
         "/api/v2/phenopackets/nonexistent/audit",
-        headers=admin_headers,
+        headers=fixture_admin_headers,
     )
 
     assert response.status_code == 404
