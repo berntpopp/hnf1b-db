@@ -12,13 +12,17 @@ from app.phenopackets.validation.variant_validator import VariantValidator
 
 
 @pytest.fixture
-def validator():
+def fixture_validator():
     """Create a VariantValidator instance."""
     return VariantValidator()
 
 
+# Backward-compatibility alias
+validator = fixture_validator
+
+
 @pytest.fixture
-def mock_vep_annotation_response():
+def fixture_mock_vep_annotation_response():
     """Mock VEP annotation API response."""
     return {
         "assembly_name": "GRCh38",
@@ -51,8 +55,12 @@ def mock_vep_annotation_response():
     }
 
 
+# Backward-compatibility alias
+mock_vep_annotation_response = fixture_mock_vep_annotation_response
+
+
 @pytest.fixture
-def mock_vep_recoder_response():
+def fixture_mock_vep_recoder_response():
     """Mock VEP variant_recoder API response."""
     return [
         {
@@ -72,48 +80,57 @@ def mock_vep_recoder_response():
     ]
 
 
+# Backward-compatibility alias
+mock_vep_recoder_response = fixture_mock_vep_recoder_response
+
+
 class TestVariantValidator:
     """Test VariantValidator VEP integration."""
 
-    def test_init(self, validator):
+    def test_variant_validator_init_loads_config(self, fixture_validator):
         """Test validator initialization with config values."""
         # Rate limiting state
-        assert validator._last_request_time == 0.0
-        assert validator._request_count == 0
+        assert fixture_validator._last_request_time == 0.0
+        assert fixture_validator._request_count == 0
 
         # Values from config (may differ from defaults)
         assert (
-            validator._requests_per_second
+            fixture_validator._requests_per_second
             == settings.rate_limiting.vep.requests_per_second
         )
-        assert validator._max_retries == settings.external_apis.vep.max_retries
         assert (
-            validator._backoff_factor == settings.external_apis.vep.retry_backoff_factor
+            fixture_validator._max_retries == settings.external_apis.vep.max_retries
         )
-        assert validator._cache_ttl == settings.external_apis.vep.cache_ttl_seconds
+        assert (
+            fixture_validator._backoff_factor
+            == settings.external_apis.vep.retry_backoff_factor
+        )
+        assert (
+            fixture_validator._cache_ttl == settings.external_apis.vep.cache_ttl_seconds
+        )
 
-    def test_is_vcf_format(self, validator):
+    def test_variant_vcf_format_detection_works(self, fixture_validator):
         """Test VCF format detection."""
-        assert validator._is_vcf_format("17-36459258-A-G") is True
-        assert validator._is_vcf_format("chr17-36459258-A-G") is True
-        assert validator._is_vcf_format("X-12345-C-T") is True
-        assert validator._is_vcf_format("NM_000458.4:c.544+1G>A") is False
-        assert validator._is_vcf_format("rs56116432") is False
+        assert fixture_validator._is_vcf_format("17-36459258-A-G") is True
+        assert fixture_validator._is_vcf_format("chr17-36459258-A-G") is True
+        assert fixture_validator._is_vcf_format("X-12345-C-T") is True
+        assert fixture_validator._is_vcf_format("NM_000458.4:c.544+1G>A") is False
+        assert fixture_validator._is_vcf_format("rs56116432") is False
 
-    def test_vcf_to_vep_format(self, validator):
+    def test_variant_vcf_to_vep_conversion_succeeds(self, fixture_validator):
         """Test VCF to VEP format conversion."""
-        result = validator._vcf_to_vep_format("17-36459258-A-G")
+        result = fixture_validator._vcf_to_vep_format("17-36459258-A-G")
         assert result == "17 36459258 . A G . . ."
 
-        result = validator._vcf_to_vep_format("chr17-36459258-A-G")
+        result = fixture_validator._vcf_to_vep_format("chr17-36459258-A-G")
         assert result == "17 36459258 . A G . . ."
 
-        result = validator._vcf_to_vep_format("invalid-format")
+        result = fixture_validator._vcf_to_vep_format("invalid-format")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_vcf_success(
-        self, validator, mock_vep_annotation_response
+    async def test_variant_vep_vcf_annotation_returns_data(
+        self, fixture_validator, fixture_mock_vep_annotation_response
     ):
         """Test VCF variant annotation with mock response."""
         with (
@@ -126,7 +143,7 @@ class TestVariantValidator:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_vep_annotation_response]
+            mock_response.json.return_value = [fixture_mock_vep_annotation_response]
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -135,7 +152,9 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep("17-36459258-A-G")
+            result = await fixture_validator.annotate_variant_with_vep(
+                "17-36459258-A-G"
+            )
 
             assert result is not None
             assert result["most_severe_consequence"] == "splice_donor_variant"
@@ -143,8 +162,8 @@ class TestVariantValidator:
             assert len(result["transcript_consequences"]) > 0
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_hgvs_success(
-        self, validator, mock_vep_annotation_response
+    async def test_variant_vep_hgvs_annotation_returns_data(
+        self, fixture_validator, fixture_mock_vep_annotation_response
     ):
         """Test HGVS variant annotation with mock response."""
         with (
@@ -157,7 +176,7 @@ class TestVariantValidator:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_vep_annotation_response]
+            mock_response.json.return_value = [fixture_mock_vep_annotation_response]
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -166,14 +185,16 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
+            result = await fixture_validator.annotate_variant_with_vep(
+                "NM_000458.4:c.544+1G>A"
+            )
 
             assert result is not None
             assert result["most_severe_consequence"] == "splice_donor_variant"
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_caching(
-        self, validator, mock_vep_annotation_response
+    async def test_variant_vep_caching_stores_and_retrieves(
+        self, fixture_validator, fixture_mock_vep_annotation_response
     ):
         """Test that annotations are cached using Redis."""
         with (
@@ -186,7 +207,7 @@ class TestVariantValidator:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_vep_annotation_response]
+            mock_response.json.return_value = [fixture_mock_vep_annotation_response]
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -195,7 +216,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result1 = await validator.annotate_variant_with_vep(
+            result1 = await fixture_validator.annotate_variant_with_vep(
                 "NM_000458.4:c.544+1G>A"
             )
             assert result1 is not None
@@ -204,18 +225,20 @@ class TestVariantValidator:
             mock_cache.set_json.assert_called_once()
 
             # Second call - cache hit
-            mock_cache.get_json = AsyncMock(return_value=mock_vep_annotation_response)
-            result2 = await validator.annotate_variant_with_vep(
+            mock_cache.get_json = AsyncMock(
+                return_value=fixture_mock_vep_annotation_response
+            )
+            result2 = await fixture_validator.annotate_variant_with_vep(
                 "NM_000458.4:c.544+1G>A"
             )
             assert result2 is not None
-            assert result2 == mock_vep_annotation_response
+            assert result2 == fixture_mock_vep_annotation_response
 
             # API should NOT have been called again (only 1 call)
             assert mock_client_instance.get.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_rate_limiting_429(self, validator):
+    async def test_variant_vep_429_rate_limit_retries(self, fixture_validator):
         """Test handling of 429 rate limit response."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -244,13 +267,15 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
+            result = await fixture_validator.annotate_variant_with_vep(
+                "NM_000458.4:c.544+1G>A"
+            )
 
             assert result is not None
             assert result["id"] == "test"
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_invalid_format(self, validator):
+    async def test_variant_vep_400_invalid_returns_none(self, fixture_validator):
         """Test handling of invalid variant format (400 error)."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -269,12 +294,12 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep("invalid-variant")
+            result = await fixture_validator.annotate_variant_with_vep("invalid-variant")
 
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_annotate_variant_retry_on_500(self, validator):
+    async def test_variant_vep_500_retry_succeeds(self, fixture_validator):
         """Test retry logic on 500 server error."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -303,13 +328,17 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.annotate_variant_with_vep("NM_000458.4:c.544+1G>A")
+            result = await fixture_validator.annotate_variant_with_vep(
+                "NM_000458.4:c.544+1G>A"
+            )
 
             assert result is not None
             assert result["id"] == "test"
 
     @pytest.mark.asyncio
-    async def test_recode_variant_success(self, validator, mock_vep_recoder_response):
+    async def test_variant_recode_rsid_returns_formats(
+        self, fixture_validator, fixture_mock_vep_recoder_response
+    ):
         """Test variant recoding with mock response."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -321,7 +350,7 @@ class TestVariantValidator:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_vep_recoder_response
+            mock_response.json.return_value = fixture_mock_vep_recoder_response
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -330,7 +359,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.recode_variant_with_vep("rs56116432")
+            result = await fixture_validator.recode_variant_with_vep("rs56116432")
 
             assert result is not None
             assert result["input"] == "rs56116432"
@@ -339,8 +368,11 @@ class TestVariantValidator:
             assert "vcf_string" in result
 
     @pytest.mark.asyncio
-    async def test_recode_variant_vcf_format(
-        self, validator, mock_vep_annotation_response, mock_vep_recoder_response
+    async def test_variant_recode_vcf_format_returns_data(
+        self,
+        fixture_validator,
+        fixture_mock_vep_annotation_response,
+        fixture_mock_vep_recoder_response,
     ):
         """Test recoding VCF format variant."""
         with (
@@ -354,13 +386,15 @@ class TestVariantValidator:
             # Mock annotation call first
             mock_annotation_response = Mock()
             mock_annotation_response.status_code = 200
-            mock_annotation_response.json.return_value = [mock_vep_annotation_response]
+            mock_annotation_response.json.return_value = [
+                fixture_mock_vep_annotation_response
+            ]
             mock_annotation_response.headers = {}
 
             # Mock recoder call
             mock_recoder_response = Mock()
             mock_recoder_response.status_code = 200
-            mock_recoder_response.json.return_value = mock_vep_recoder_response
+            mock_recoder_response.json.return_value = fixture_mock_vep_recoder_response
             mock_recoder_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -370,7 +404,7 @@ class TestVariantValidator:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            result = await validator.recode_variant_with_vep("17-36459258-A-G")
+            result = await fixture_validator.recode_variant_with_vep("17-36459258-A-G")
 
             assert result is not None
 
@@ -379,7 +413,7 @@ class TestBatchRecoding:
     """Test batch variant recoding functionality."""
 
     @pytest.fixture
-    def mock_batch_recoder_response(self):
+    def fixture_mock_batch_recoder_response(self):
         """Mock VEP variant_recoder POST API response."""
         return [
             {
@@ -400,9 +434,12 @@ class TestBatchRecoding:
             },
         ]
 
+    # Backward-compatibility alias
+    mock_batch_recoder_response = fixture_mock_batch_recoder_response
+
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_success(
-        self, validator, mock_batch_recoder_response
+    async def test_variant_batch_recode_multiple_succeeds(
+        self, fixture_validator, fixture_mock_batch_recoder_response
     ):
         """Test successful batch recoding."""
         with (
@@ -415,7 +452,7 @@ class TestBatchRecoding:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_batch_recoder_response
+            mock_response.json.return_value = fixture_mock_batch_recoder_response
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -424,7 +461,7 @@ class TestBatchRecoding:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            results = await validator.recode_variants_batch(
+            results = await fixture_validator.recode_variants_batch(
                 ["rs56116432", "NM_000458.4:c.721C>T"]
             )
 
@@ -435,17 +472,17 @@ class TestBatchRecoding:
             assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_empty_input(self, validator):
+    async def test_variant_batch_recode_empty_returns_empty(self, fixture_validator):
         """Test batch recoding with empty input."""
-        results = await validator.recode_variants_batch([])
+        results = await fixture_validator.recode_variants_batch([])
         assert results == {}
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_with_cache_hits(
-        self, validator, mock_batch_recoder_response
+    async def test_variant_batch_recode_cache_hit_skips_api(
+        self, fixture_validator, fixture_mock_batch_recoder_response
     ):
         """Test batch recoding with some variants already cached."""
-        cached_result = mock_batch_recoder_response[0]
+        cached_result = fixture_mock_batch_recoder_response[0]
 
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -462,7 +499,7 @@ class TestBatchRecoding:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = [mock_batch_recoder_response[1]]
+            mock_response.json.return_value = [fixture_mock_batch_recoder_response[1]]
             mock_response.headers = {}
 
             mock_client_instance = AsyncMock()
@@ -471,7 +508,7 @@ class TestBatchRecoding:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            results = await validator.recode_variants_batch(
+            results = await fixture_validator.recode_variants_batch(
                 ["rs56116432", "NM_000458.4:c.721C>T"]
             )
 
@@ -481,9 +518,7 @@ class TestBatchRecoding:
             assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_partial_failure(
-        self, validator
-    ):
+    async def test_variant_batch_recode_partial_failure_handled(self, fixture_validator):
         """Test batch recoding with some variants failing."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -511,7 +546,7 @@ class TestBatchRecoding:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            results = await validator.recode_variants_batch(
+            results = await fixture_validator.recode_variants_batch(
                 ["rs56116432", "invalid_variant"]
             )
 
@@ -520,9 +555,7 @@ class TestBatchRecoding:
             assert results["invalid_variant"] is None
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_rate_limit_handling(
-        self, validator
-    ):
+    async def test_variant_batch_recode_429_rate_limit_retries(self, fixture_validator):
         """Test batch recoding handles rate limiting."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -556,7 +589,7 @@ class TestBatchRecoding:
             mock_client_instance.__aexit__.return_value = AsyncMock()
             mock_client.return_value = mock_client_instance
 
-            results = await validator.recode_variants_batch(["rs56116432"])
+            results = await fixture_validator.recode_variants_batch(["rs56116432"])
 
             # Should succeed after retry
             assert results["rs56116432"] is not None
@@ -568,13 +601,13 @@ class TestCacheIntegration:
     """Test cache integration with Redis/in-memory fallback."""
 
     @pytest.mark.asyncio
-    async def test_cache_enabled_setting(self, validator):
+    async def test_variant_cache_enabled_from_config(self, fixture_validator):
         """Test that cache behavior respects settings."""
         # Cache should be enabled by default in config
         assert settings.external_apis.vep.cache_enabled is True
 
     @pytest.mark.asyncio
-    async def test_cache_ttl_from_config(self, validator):
+    async def test_variant_cache_ttl_loaded_from_config(self, fixture_validator):
         """Test that cache TTL is loaded from config."""
         expected_ttl = settings.external_apis.vep.cache_ttl_seconds
-        assert validator._cache_ttl == expected_ttl
+        assert fixture_validator._cache_ttl == expected_ttl

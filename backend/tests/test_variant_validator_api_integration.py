@@ -10,7 +10,7 @@ from app.main import app
 
 
 @pytest.fixture
-def mock_vep_annotation_response():
+def fixture_mock_vep_annotation_response():
     """Mock VEP annotation API response."""
     return {
         "assembly_name": "GRCh38",
@@ -42,8 +42,12 @@ def mock_vep_annotation_response():
     }
 
 
+# Backward-compatibility alias
+mock_vep_annotation_response = fixture_mock_vep_annotation_response
+
+
 @pytest.fixture
-def mock_vep_recoder_response():
+def fixture_mock_vep_recoder_response():
     """Mock VEP variant_recoder API response."""
     return [
         {
@@ -58,17 +62,25 @@ def mock_vep_recoder_response():
     ]
 
 
+# Backward-compatibility alias
+mock_vep_recoder_response = fixture_mock_vep_recoder_response
+
+
 class TestValidateEndpoint:
     """Test POST /api/v2/variants/validate endpoint."""
 
     @pytest.mark.asyncio
-    async def test_validate_valid_hgvs_c_notation(self, mock_vep_annotation_response):
+    async def test_variant_api_validate_hgvs_c_returns_200(
+        self, fixture_mock_vep_annotation_response
+    ):
         """Test validating valid HGVS c. notation."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=[mock_vep_annotation_response])
+            mock_response.json = MagicMock(
+                return_value=[fixture_mock_vep_annotation_response]
+            )
             mock_response.headers = {}
 
             mock_get = AsyncMock(return_value=mock_response)
@@ -89,7 +101,7 @@ class TestValidateEndpoint:
             assert data["vep_annotation"]["id"] == "rs56116432"
 
     @pytest.mark.asyncio
-    async def test_validate_invalid_notation(self):
+    async def test_variant_api_validate_invalid_returns_200_with_invalid_flag(self):
         """Test validating invalid notation."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API 400 response
@@ -115,7 +127,7 @@ class TestValidateEndpoint:
             assert "suggestions" in data
 
     @pytest.mark.asyncio
-    async def test_validate_missing_notation(self):
+    async def test_variant_api_validate_missing_notation_returns_422(self):
         """Test validation with missing notation field."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -129,13 +141,17 @@ class TestValidateEndpoint:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     @pytest.mark.asyncio
-    async def test_validate_vcf_format(self, mock_vep_annotation_response):
+    async def test_variant_api_validate_vcf_format_returns_200(
+        self, fixture_mock_vep_annotation_response
+    ):
         """Test validating VCF format variant."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=[mock_vep_annotation_response])
+            mock_response.json = MagicMock(
+                return_value=[fixture_mock_vep_annotation_response]
+            )
             mock_response.headers = {}
 
             mock_post = AsyncMock(return_value=mock_response)
@@ -158,13 +174,17 @@ class TestAnnotateEndpoint:
     """Test POST /api/v2/variants/annotate endpoint."""
 
     @pytest.mark.asyncio
-    async def test_annotate_hgvs_notation(self, mock_vep_annotation_response):
+    async def test_variant_api_annotate_hgvs_returns_vep_data(
+        self, fixture_mock_vep_annotation_response
+    ):
         """Test annotating HGVS notation variant."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=[mock_vep_annotation_response])
+            mock_response.json = MagicMock(
+                return_value=[fixture_mock_vep_annotation_response]
+            )
             mock_response.headers = {}
 
             mock_get = AsyncMock(return_value=mock_response)
@@ -186,13 +206,17 @@ class TestAnnotateEndpoint:
             assert data["full_annotation"]["id"] == "rs56116432"
 
     @pytest.mark.asyncio
-    async def test_annotate_vcf_format(self, mock_vep_annotation_response):
+    async def test_variant_api_annotate_vcf_returns_data(
+        self, fixture_mock_vep_annotation_response
+    ):
         """Test annotating VCF format variant."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=[mock_vep_annotation_response])
+            mock_response.json = MagicMock(
+                return_value=[fixture_mock_vep_annotation_response]
+            )
             mock_response.headers = {}
 
             mock_post = AsyncMock(return_value=mock_response)
@@ -212,7 +236,7 @@ class TestAnnotateEndpoint:
             assert "full_annotation" in data
 
     @pytest.mark.asyncio
-    async def test_annotate_invalid_variant(self):
+    async def test_variant_api_annotate_invalid_returns_400(self):
         """Test annotating invalid variant returns 400."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API 400 response
@@ -239,13 +263,17 @@ class TestRecodeEndpoint:
     """Test POST /api/v2/variants/recode endpoint."""
 
     @pytest.mark.asyncio
-    async def test_recode_rs_id(self, mock_vep_recoder_response):
+    async def test_variant_api_recode_rsid_returns_formats(
+        self, fixture_mock_vep_recoder_response
+    ):
         """Test recoding dbSNP rs ID to multiple formats."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP recoder API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=mock_vep_recoder_response)
+            mock_response.json = MagicMock(
+                return_value=fixture_mock_vep_recoder_response
+            )
             mock_response.headers = {}
 
             mock_get = AsyncMock(return_value=mock_response)
@@ -267,13 +295,17 @@ class TestRecodeEndpoint:
             assert "vcf_string" in data
 
     @pytest.mark.asyncio
-    async def test_recode_hgvs_notation(self, mock_vep_recoder_response):
+    async def test_variant_api_recode_hgvs_returns_formats(
+        self, fixture_mock_vep_recoder_response
+    ):
         """Test recoding HGVS notation."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP recoder API response
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=mock_vep_recoder_response)
+            mock_response.json = MagicMock(
+                return_value=fixture_mock_vep_recoder_response
+            )
             mock_response.headers = {}
 
             mock_get = AsyncMock(return_value=mock_response)
@@ -292,8 +324,8 @@ class TestRecodeEndpoint:
             assert "hgvsg" in data or "hgvsc" in data
 
     @pytest.mark.asyncio
-    async def test_recode_vcf_format(
-        self, mock_vep_annotation_response, mock_vep_recoder_response
+    async def test_variant_api_recode_vcf_format_returns_data(
+        self, fixture_mock_vep_annotation_response, fixture_mock_vep_recoder_response
     ):
         """Test recoding VCF format variant (requires annotation first)."""
         with patch("httpx.AsyncClient") as mock_client:
@@ -301,7 +333,7 @@ class TestRecodeEndpoint:
             mock_annotation_response = MagicMock()
             mock_annotation_response.status_code = 200
             mock_annotation_response.json = MagicMock(
-                return_value=[mock_vep_annotation_response]
+                return_value=[fixture_mock_vep_annotation_response]
             )
             mock_annotation_response.headers = {}
 
@@ -309,7 +341,7 @@ class TestRecodeEndpoint:
             mock_recoder_response_obj = MagicMock()
             mock_recoder_response_obj.status_code = 200
             mock_recoder_response_obj.json = MagicMock(
-                return_value=mock_vep_recoder_response
+                return_value=fixture_mock_vep_recoder_response
             )
             mock_recoder_response_obj.headers = {}
 
@@ -332,7 +364,7 @@ class TestRecodeEndpoint:
             assert "hgvsg" in data or "hgvsc" in data
 
     @pytest.mark.asyncio
-    async def test_recode_invalid_variant(self):
+    async def test_variant_api_recode_invalid_returns_400(self):
         """Test recoding invalid variant returns 400."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API 400 response
@@ -359,7 +391,7 @@ class TestSuggestEndpoint:
     """Test GET /api/v2/variants/suggest/{partial_notation} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_suggest_missing_dot(self):
+    async def test_variant_api_suggest_c_prefix_returns_suggestions(self):
         """Test getting suggestions for notation missing dot."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -374,7 +406,7 @@ class TestSuggestEndpoint:
         assert any("c." in s for s in data["suggestions"])
 
     @pytest.mark.asyncio
-    async def test_suggest_missing_transcript(self):
+    async def test_variant_api_suggest_missing_transcript_returns_suggestions(self):
         """Test getting suggestions for notation missing transcript."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -389,7 +421,7 @@ class TestSuggestEndpoint:
         assert any("NM_" in s or "ENST" in s for s in data["suggestions"])
 
     @pytest.mark.asyncio
-    async def test_suggest_vcf_format(self):
+    async def test_variant_api_suggest_vcf_format_returns_suggestions(self):
         """Test getting suggestions for VCF-like notation."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -405,7 +437,7 @@ class TestSuggestEndpoint:
             assert any("17:" in s or "17-" in s for s in data["suggestions"])
 
     @pytest.mark.asyncio
-    async def test_suggest_empty_notation(self):
+    async def test_variant_api_suggest_empty_returns_404(self):
         """Test suggestions with empty notation."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -423,7 +455,7 @@ class TestEndpointErrorHandling:
     @pytest.mark.xfail(
         reason="Error handling behavior may vary with fallback validation"
     )
-    async def test_validate_vep_service_unavailable(self):
+    async def test_variant_api_validate_503_handles_gracefully(self):
         """Test handling when VEP service is unavailable."""
         with patch("httpx.AsyncClient") as mock_client:
             # Mock VEP API 503 response
@@ -452,7 +484,7 @@ class TestEndpointErrorHandling:
     @pytest.mark.xfail(
         reason="Error handling behavior may vary with fallback validation"
     )
-    async def test_annotate_vep_timeout(self):
+    async def test_variant_api_annotate_timeout_returns_400(self):
         """Test handling VEP API timeout."""
         with patch("httpx.AsyncClient") as mock_client:
             import httpx
@@ -474,7 +506,7 @@ class TestEndpointErrorHandling:
     @pytest.mark.xfail(
         reason="Error handling behavior may vary with fallback validation"
     )
-    async def test_recode_network_error(self):
+    async def test_variant_api_recode_network_error_returns_400(self):
         """Test handling network errors during recoding."""
         with patch("httpx.AsyncClient") as mock_client:
             import httpx
