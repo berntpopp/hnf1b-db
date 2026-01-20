@@ -13,6 +13,7 @@
 // Import D3 and utilities for accessibility, animation, and export.
 import * as d3 from 'd3';
 import { addChartAccessibility, generateDonutDescription } from '@/utils/chartAccessibility';
+import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
 
 export default {
   name: 'DonutChart',
@@ -70,6 +71,7 @@ export default {
     return {
       mdiDownload: 'mdi-download',
       chartId: Math.random().toString(36).substring(2, 9),
+      isInitialRender: true,
     };
   },
   watch: {
@@ -85,6 +87,22 @@ export default {
     this.renderChart();
   },
   methods: {
+    /**
+     * Create an arc tween function for smooth transitions.
+     * Interpolates from the starting angle to the ending angle.
+     * @param {Function} arc - D3 arc generator
+     * @returns {Function} Tween function for D3 transitions
+     */
+    arcTween(arc) {
+      return function (d) {
+        const interpolate = d3.interpolate(this._current || { startAngle: 0, endAngle: 0 }, d);
+        this._current = interpolate(1);
+        return function (t) {
+          return arc(interpolate(t));
+        };
+      };
+    },
+
     /**
      * Render the donut chart using D3.
      */
@@ -161,37 +179,80 @@ export default {
       const description = generateDonutDescription(accessibilityData, totalValue);
       addChartAccessibility(rootSvg, titleId, descId, 'Distribution Chart', description);
 
-      // Append the donut slices.
-      svg
+      // Calculate animation parameters
+      const duration = this.isInitialRender ? getAnimationDuration(400) : getAnimationDuration(200);
+      const staggerDelayMs = 50;
+      const arcTweenFn = this.arcTween(arc);
+
+      // Append the donut slices with staggered entry animation.
+      const slices = svg
         .selectAll('path.slice')
         .data(dataReady)
         .enter()
         .append('path')
         .attr('class', 'slice')
-        .attr('d', arc)
         .attr('fill', (d) => color(d.data[0]))
         .attr('stroke', 'white')
         .style('stroke-width', '2px')
         .style('opacity', 0.7)
         .attr('aria-hidden', 'true') // Decorative - data is in the description
-        .on('mouseover', (event, d) => {
-          d3.select(event.currentTarget).style('stroke', 'black');
-          tooltip.transition().duration(200).style('opacity', 1);
-          tooltip.html(
-            `Group: <strong>${d.data[0]}</strong><br>Count: <strong>${d.data[1]}</strong>`
-          );
-        })
-        .on('mousemove', (event) => {
-          // Recalculate container's bounding rectangle on each mousemove.
-          const rect = this.$refs.chart.getBoundingClientRect();
-          tooltip
-            .style('left', event.clientX - rect.left + 5 + 'px')
-            .style('top', event.clientY - rect.top + 5 + 'px');
-        })
-        .on('mouseout', (event) => {
-          d3.select(event.currentTarget).style('stroke', 'white');
-          tooltip.transition().duration(200).style('opacity', 0);
+        .each(function () {
+          this._current = { startAngle: 0, endAngle: 0 };
         });
+
+      // Apply animated transition if duration > 0, otherwise set path immediately
+      if (duration > 0) {
+        slices
+          .transition()
+          .duration(duration)
+          .delay((d, i) => getStaggerDelay(i, staggerDelayMs))
+          .attrTween('d', arcTweenFn)
+          .on('end', function (d) {
+            // Attach mouse event handlers after animation completes
+            d3.select(this)
+              .on('mouseover', (event) => {
+                d3.select(event.currentTarget).style('stroke', 'black');
+                tooltip.transition().duration(200).style('opacity', 1);
+                tooltip.html(
+                  `Group: <strong>${d.data[0]}</strong><br>Count: <strong>${d.data[1]}</strong>`
+                );
+              })
+              .on('mousemove', (event) => {
+                const rect = this.closest('.chart').getBoundingClientRect();
+                tooltip
+                  .style('left', event.clientX - rect.left + 5 + 'px')
+                  .style('top', event.clientY - rect.top + 5 + 'px');
+              })
+              .on('mouseout', (event) => {
+                d3.select(event.currentTarget).style('stroke', 'white');
+                tooltip.transition().duration(200).style('opacity', 0);
+              });
+          });
+      } else {
+        // No animation - set path immediately and attach events
+        slices.attr('d', arc);
+        slices
+          .on('mouseover', (event, d) => {
+            d3.select(event.currentTarget).style('stroke', 'black');
+            tooltip.transition().duration(200).style('opacity', 1);
+            tooltip.html(
+              `Group: <strong>${d.data[0]}</strong><br>Count: <strong>${d.data[1]}</strong>`
+            );
+          })
+          .on('mousemove', (event) => {
+            const rect = this.$refs.chart.getBoundingClientRect();
+            tooltip
+              .style('left', event.clientX - rect.left + 5 + 'px')
+              .style('top', event.clientY - rect.top + 5 + 'px');
+          })
+          .on('mouseout', (event) => {
+            d3.select(event.currentTarget).style('stroke', 'white');
+            tooltip.transition().duration(200).style('opacity', 0);
+          });
+      }
+
+      // Mark initial render complete
+      this.isInitialRender = false;
 
       // Append a central text element that shows the total count.
       svg
