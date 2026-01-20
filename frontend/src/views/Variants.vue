@@ -1,5 +1,11 @@
 <!-- src/views/Variants.vue -->
 <template>
+  <PageHeader
+    title="Variants Registry"
+    subtitle="Browse and search genetic variants in HNF1B"
+    icon="mdi-dna"
+    icon-color="pink"
+  />
   <v-container fluid>
     <!-- Unified Table with Column-Based Filtering -->
     <AppDataTable
@@ -10,35 +16,23 @@
       :items-length="variants.length"
       :custom-sort="customSort"
       hide-default-footer
-      title="Variants Registry"
       @update:options="onOptionsUpdate"
       @click:row="handleRowClick"
     >
       <!-- Simplified Search Toolbar -->
       <template #toolbar>
-        <AppTableToolbar
+        <DataTableToolbar
           v-model:search-query="searchQuery"
           search-placeholder="Search HGVS, gene symbol, or variant ID..."
           :result-count="pagination.totalRecords"
           result-label="variants"
           :loading="loading"
+          :active-filters="computedActiveFilters"
           @search="onSearch"
           @clear-search="onClearSearch"
-        >
-          <template #actions>
-            <!-- Clear filters button -->
-            <v-btn
-              v-if="hasActiveFilters"
-              variant="text"
-              size="small"
-              color="warning"
-              @click="clearAllFilters"
-            >
-              <v-icon start size="small">mdi-filter-off</v-icon>
-              Clear Filters ({{ activeFilterCount }})
-            </v-btn>
-          </template>
-        </AppTableToolbar>
+          @remove-filter="removeFilter"
+          @clear-all-filters="clearAllFilters"
+        />
       </template>
 
       <!-- Pagination controls above table -->
@@ -192,17 +186,19 @@ import { getPathogenicityColor, getVariantTypeColor } from '@/utils/colors';
 import { getVariantType } from '@/utils/variants';
 import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
-import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
 import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
+import DataTableToolbar from '@/components/common/DataTableToolbar.vue';
 
 export default {
   name: 'Variants',
   components: {
     AppDataTable,
-    AppTableToolbar,
     AppPagination,
     ColumnHeaderFilter,
+    PageHeader,
+    DataTableToolbar,
   },
   setup() {
     // URL state synchronization for shareable/bookmarkable URLs
@@ -322,6 +318,30 @@ export default {
     },
     activeFilterCount() {
       return this.urlState?.activeFilterCount?.value ?? 0;
+    },
+    /**
+     * Computed active filters for DataTableToolbar chip display.
+     * Returns an array of filter objects with key, label, icon, and color.
+     */
+    computedActiveFilters() {
+      const filters = [];
+      if (this.typeFilter) {
+        filters.push({
+          key: 'type',
+          label: this.typeFilter,
+          icon: 'mdi-dna',
+          color: getVariantTypeColor(this.typeFilter),
+        });
+      }
+      if (this.classificationFilter) {
+        filters.push({
+          key: 'classification',
+          label: this.classificationFilter,
+          icon: 'mdi-shield-check',
+          color: getPathogenicityColor(this.classificationFilter),
+        });
+      }
+      return filters;
     },
   },
   watch: {
@@ -467,6 +487,19 @@ export default {
         this.urlState.filters[key].value = null;
       }
       this.urlState.resetPage();
+    },
+
+    /**
+     * Remove a specific filter by key (used by DataTableToolbar chip close).
+     */
+    removeFilter(key) {
+      if (key === 'type') {
+        this.typeFilter = null;
+      } else if (key === 'classification') {
+        this.classificationFilter = null;
+      }
+      this.urlState.resetPage();
+      this.fetchVariants();
     },
 
     clearAllFilters() {
