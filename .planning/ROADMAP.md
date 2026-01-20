@@ -219,35 +219,62 @@ Plans:
 
 **Goal:** Accessible, animated charts with export functionality
 
+**Status:** Planned
+
 **GitHub Issues:** #135, #139, #136
 
+**Plans:** 6 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Create shared chart utilities (export, accessibility, animation, ChartExportMenu)
+- [ ] 05-02-PLAN.md — Add accessibility, animation, export to DonutChart
+- [ ] 05-03-PLAN.md — Add accessibility, animation, export to StackedBarChart
+- [ ] 05-04-PLAN.md — Upgrade KaplanMeierChart with accessibility, animation, PNG/CSV export
+- [ ] 05-05-PLAN.md — Polish VariantComparisonChart and BoxPlotChart
+- [ ] 05-06-PLAN.md — Human verification of all chart behaviors
+
 **Requirements:**
-- A11Y-01 through A11Y-06 (accessibility)
-- CHART-01 through CHART-09 (animations and export)
+- A11Y-01: Add `aria-describedby` to all chart components (#135)
+- A11Y-02: Add screen reader text summaries for charts (#135)
+- A11Y-03: Add pattern fills option for colorblind mode (#135) - Deferred
+- A11Y-04: Test charts with screen readers (VoiceOver/NVDA) (#135)
+- A11Y-05: Meet WCAG 2.1 Level A for non-text content (1.1.1) (#135)
+- A11Y-06: Meet WCAG 2.1 Level A for use of color (1.4.1) (#135)
+- CHART-01: Add arc tween animation to donut charts (#139)
+- CHART-02: Add height tween animation to bar charts with stagger (#139)
+- CHART-03: Add path drawing animation to line charts (#139)
+- CHART-04: Respect `prefers-reduced-motion` media query (#139)
+- CHART-05: Create `frontend/src/utils/export.js` with export utilities (#136)
+- CHART-06: Create `ChartExportMenu.vue` component (#136)
+- CHART-07: Add PNG export at 2x resolution (#136)
+- CHART-08: Add CSV export with headers (#136)
+- CHART-09: Add export button to all chart components (#136)
 
 **Success Criteria:**
-1. All charts have `aria-describedby` with text summaries
-2. Screen reader text (sr-only) added to all charts
-3. `prefers-reduced-motion` respected
+1. All charts have `aria-labelledby` with title and desc elements
+2. Screen reader descriptions generated for all chart types
+3. `prefers-reduced-motion` respected (animations disabled)
 4. Arc tween animation on donut charts
-5. Height tween animation on bar charts
+5. Height tween animation on bar charts with stagger
 6. Path drawing animation on line charts
 7. PNG export at 2x resolution working
-8. CSV export with headers working
+8. CSV export with snake_case headers working
 9. Export menu on all chart components
 
 **Dependencies:** Phase 4 complete (design tokens for consistency)
 
 **Files to create:**
 - `frontend/src/utils/export.js`
+- `frontend/src/utils/chartAccessibility.js`
+- `frontend/src/utils/chartAnimation.js`
 - `frontend/src/components/common/ChartExportMenu.vue`
 
 **Files to modify:**
-- `frontend/src/components/charts/DonutChart.vue`
-- `frontend/src/components/charts/StackedBarChart.vue`
-- `frontend/src/components/charts/KaplanMeierChart.vue`
-- `frontend/src/components/charts/VariantComparisonChart.vue`
-- `frontend/src/components/charts/DNADistanceAnalysis.vue`
+- `frontend/src/components/analyses/DonutChart.vue`
+- `frontend/src/components/analyses/StackedBarChart.vue`
+- `frontend/src/components/analyses/KaplanMeierChart.vue`
+- `frontend/src/components/analyses/VariantComparisonChart.vue`
+- `frontend/src/components/analyses/BoxPlotChart.vue`
 
 ---
 
@@ -398,4 +425,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 after phase 4 execution complete*
+*Last updated: 2026-01-20 after phase 5 planning complete*
