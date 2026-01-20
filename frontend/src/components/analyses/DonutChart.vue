@@ -10,8 +10,9 @@
 </template>
 
 <script>
-// Import D3 and utilities for exporting.
+// Import D3 and utilities for accessibility, animation, and export.
 import * as d3 from 'd3';
+import { addChartAccessibility, generateDonutDescription } from '@/utils/chartAccessibility';
 
 export default {
   name: 'DonutChart',
@@ -68,6 +69,7 @@ export default {
   data() {
     return {
       mdiDownload: 'mdi-download',
+      chartId: Math.random().toString(36).substring(2, 9),
     };
   },
   watch: {
@@ -93,16 +95,17 @@ export default {
       const { width, height, margin } = this;
       const radius = Math.min(width, height) / 2 - margin;
 
-      // Create the SVG element.
-      const svg = d3
+      // Create the root SVG element.
+      const rootSvg = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${width / 2}, ${height / 2})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+
+      // Create inner group for chart content
+      const svg = rootSvg.append('g').attr('transform', `translate(${width / 2}, ${height / 2})`);
 
       // Create a tooltip div within the chart container.
       const tooltip = d3
@@ -151,6 +154,13 @@ export default {
         .innerRadius(radius * 0.5) // Size of the donut hole.
         .outerRadius(radius * 0.8);
 
+      // Add accessibility attributes to SVG
+      const titleId = `donut-title-${this.chartId}`;
+      const descId = `donut-desc-${this.chartId}`;
+      const accessibilityData = dataEntries.map(([label, count]) => ({ label, count }));
+      const description = generateDonutDescription(accessibilityData, totalValue);
+      addChartAccessibility(rootSvg, titleId, descId, 'Distribution Chart', description);
+
       // Append the donut slices.
       svg
         .selectAll('path.slice')
@@ -163,6 +173,7 @@ export default {
         .attr('stroke', 'white')
         .style('stroke-width', '2px')
         .style('opacity', 0.7)
+        .attr('aria-hidden', 'true') // Decorative - data is in the description
         .on('mouseover', (event, d) => {
           d3.select(event.currentTarget).style('stroke', 'black');
           tooltip.transition().duration(200).style('opacity', 1);
@@ -189,6 +200,7 @@ export default {
         .attr('dy', '.35em')
         .attr('font-size', '40px')
         .attr('fill', '#5CB85C')
+        .attr('aria-hidden', 'true') // Decorative - total is in the description
         .text(totalValue);
 
       // Create legend
