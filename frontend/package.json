@@ -52,6 +52,7 @@
     "terser": "^5.44.1",
     "vite": "^7.3.1",
     "vite-plugin-compression": "^0.5.1",
+    "vite-plugin-pwa": "^1.2.0",
     "vite-plugin-vuetify": "^2.1.2",
     "vitest": "^4.0.7"
   }
