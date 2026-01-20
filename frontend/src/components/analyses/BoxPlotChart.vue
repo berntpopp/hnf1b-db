@@ -2,8 +2,9 @@
 <template>
   <div class="box-plot-wrapper">
     <div class="export-controls">
+      <ChartExportMenu @export-png="handleExportPNG" @export-csv="handleExportCSV" />
       <button class="export-btn" title="Download as SVG" @click="exportSVG">
-        <span class="export-icon">⬇</span> Export SVG
+        <span class="export-icon">mdi-file-image</span> SVG
       </button>
     </div>
     <div ref="chartContainer" class="chart-container" />
@@ -13,9 +14,16 @@
 <script>
 import * as d3 from 'd3';
 import { formatPValue } from '@/utils/statistics';
+import { addChartAccessibility } from '@/utils/chartAccessibility';
+import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
+import { exportToPNG, exportToCSV, getTimestamp } from '@/utils/export';
+import ChartExportMenu from '@/components/common/ChartExportMenu.vue';
 
 export default {
   name: 'BoxPlotChart',
+  components: {
+    ChartExportMenu,
+  },
   props: {
     pathogenicDistances: {
       type: Array,
@@ -65,6 +73,46 @@ export default {
     d3.select('body').select('.dna-distance-tooltip').remove();
   },
   methods: {
+    handleExportPNG() {
+      const svg = this.$refs.chartContainer?.querySelector('svg');
+      if (!svg) return;
+      const filename = `dna-distance-violin-plot-${getTimestamp()}`;
+      exportToPNG(svg, filename, 2);
+    },
+    handleExportCSV() {
+      const data = [
+        ...this.pathogenicDistances.map((v) => ({
+          classification: 'P/LP',
+          protein_change: v.protein || v.label || '',
+          aa_position: v.aaPosition,
+          distance_angstroms: v.distance.toFixed(2),
+          category: v.category,
+          verdict: v.classificationVerdict || '',
+        })),
+        ...this.vusDistances.map((v) => ({
+          classification: 'VUS',
+          protein_change: v.protein || v.label || '',
+          aa_position: v.aaPosition,
+          distance_angstroms: v.distance.toFixed(2),
+          category: v.category,
+          verdict: v.classificationVerdict || '',
+        })),
+      ];
+
+      const filename = `dna-distance-data-${getTimestamp()}`;
+      exportToCSV(
+        data,
+        [
+          'classification',
+          'protein_change',
+          'aa_position',
+          'distance_angstroms',
+          'category',
+          'verdict',
+        ],
+        filename
+      );
+    },
     exportSVG() {
       const svgElement = this.$refs.chartContainer?.querySelector('svg');
       if (!svgElement) {
@@ -135,20 +183,33 @@ export default {
         return;
       }
 
-      const svg = d3
+      const rootSvg = d3
         .select(this.$refs.chartContainer)
         .append('svg')
         .attr('width', containerWidth)
         .attr('height', this.height)
         .style('display', 'block');
 
-      const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+      const g = rootSvg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Prepare data - filter out groups with no data
       const groups = [
         { name: 'P/LP', data: this.pathogenicDistances, color: '#D32F2F' },
         { name: 'VUS', data: this.vusDistances, color: '#FBC02D' },
       ].filter((group) => group.data.length > 0);
+
+      // Add accessibility attributes
+      const pathogenicN = this.pathogenicDistances.length;
+      const vusN = this.vusDistances.length;
+      const description = `DNA distance violin plot. Pathogenic/Likely Pathogenic: ${pathogenicN} variants. VUS: ${vusN} variants.${this.pValueSignificant ? ' Difference is statistically significant.' : ''}`;
+      const uniqueId = this._uid || Math.random().toString(36).substring(2, 11);
+      addChartAccessibility(
+        rootSvg,
+        `boxplot-title-${uniqueId}`,
+        `boxplot-desc-${uniqueId}`,
+        'DNA Distance by Pathogenicity',
+        description
+      );
 
       if (groups.length === 0) {
         return;
@@ -200,7 +261,7 @@ export default {
       }
 
       // Title
-      svg
+      rootSvg
         .append('text')
         .attr('x', containerWidth / 2)
         .attr('y', 20)
@@ -265,6 +326,9 @@ export default {
         .domain([0, maxDensity])
         .range([0, violinWidth / 2]);
 
+      // Animation config
+      const animDuration = getAnimationDuration(600);
+
       // Draw violin shape
       const violinArea = d3
         .area()
@@ -273,29 +337,69 @@ export default {
         .y((d) => y(d[0]))
         .curve(d3.curveCatmullRom);
 
-      g.append('path')
+      // Zero-width violin for animation start
+      const violinAreaStart = d3
+        .area()
+        .x0(() => centerX)
+        .x1(() => centerX)
+        .y((d) => y(d[0]))
+        .curve(d3.curveCatmullRom);
+
+      const violinPath = g
+        .append('path')
         .datum(density)
-        .attr('d', violinArea)
+        .attr('aria-hidden', 'true')
         .attr('fill', group.color)
         .attr('fill-opacity', 0.15)
         .attr('stroke', group.color)
         .attr('stroke-width', 1)
         .attr('stroke-opacity', 0.5);
 
+      // Animate violin from zero width to full width
+      if (animDuration > 0) {
+        violinPath
+          .attr('d', violinAreaStart)
+          .transition()
+          .duration(animDuration)
+          .attr('d', violinArea);
+      } else {
+        violinPath.attr('d', violinArea);
+      }
+
       // Box (narrower, overlaid on violin)
       const innerBoxWidth = boxWidth * 0.25;
-      g.append('rect')
+      const boxRect = g
+        .append('rect')
+        .attr('aria-hidden', 'true')
         .attr('x', centerX - innerBoxWidth / 2)
-        .attr('y', y(q3))
         .attr('width', innerBoxWidth)
-        .attr('height', y(q1) - y(q3))
         .attr('fill', group.color)
-        .attr('fill-opacity', 0.5)
         .attr('stroke', group.color)
         .attr('stroke-width', 1.5);
 
+      // Animate box from center to full size
+      if (animDuration > 0) {
+        const boxCenterY = y((q1 + q3) / 2);
+        boxRect
+          .attr('y', boxCenterY)
+          .attr('height', 0)
+          .attr('fill-opacity', 0)
+          .transition()
+          .duration(animDuration)
+          .delay(animDuration / 3)
+          .attr('y', y(q3))
+          .attr('height', y(q1) - y(q3))
+          .attr('fill-opacity', 0.5);
+      } else {
+        boxRect
+          .attr('y', y(q3))
+          .attr('height', y(q1) - y(q3))
+          .attr('fill-opacity', 0.5);
+      }
+
       // Median line
       g.append('line')
+        .attr('aria-hidden', 'true')
         .attr('x1', centerX - innerBoxWidth / 2)
         .attr('x2', centerX + innerBoxWidth / 2)
         .attr('y1', y(median))
@@ -305,6 +409,7 @@ export default {
 
       // Whiskers
       g.append('line')
+        .attr('aria-hidden', 'true')
         .attr('x1', centerX)
         .attr('x2', centerX)
         .attr('y1', y(min))
@@ -313,6 +418,7 @@ export default {
         .attr('stroke-width', 1);
 
       g.append('line')
+        .attr('aria-hidden', 'true')
         .attr('x1', centerX)
         .attr('x2', centerX)
         .attr('y1', y(q3))
@@ -321,28 +427,44 @@ export default {
         .attr('stroke-width', 1);
 
       // Individual points with tooltips
-      this.drawDataPoints(g, group, x, y, tooltip, violinWidth);
+      this.drawDataPoints(g, group, x, y, tooltip, violinWidth, animDuration);
     },
 
-    drawDataPoints(g, group, x, y, tooltip, violinWidth) {
+    drawDataPoints(g, group, x, y, tooltip, violinWidth, animDuration) {
       const boxWidth = x.bandwidth();
       const xPos = x(group.name);
       const jitterWidth = violinWidth * 0.85;
       const pointClass = `point-${group.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
-      g.selectAll(`.${pointClass}`)
+      const points = g
+        .selectAll(`.${pointClass}`)
         .data(group.data)
         .enter()
         .append('circle')
         .attr('class', pointClass)
+        .attr('aria-hidden', 'true')
         .attr('cx', () => xPos + boxWidth / 2 + (Math.random() - 0.5) * jitterWidth)
         .attr('cy', (d) => y(d.distance))
         .attr('r', 4)
         .attr('fill', group.color)
-        .attr('fill-opacity', 0.7)
         .attr('stroke', 'white')
         .attr('stroke-width', 1.5)
-        .style('cursor', 'pointer')
+        .style('cursor', 'pointer');
+
+      // Animate points fade in with stagger
+      if (animDuration > 0) {
+        points
+          .attr('fill-opacity', 0)
+          .transition()
+          .duration(animDuration / 2)
+          .delay((d, i) => getStaggerDelay(i, 10) + animDuration / 2)
+          .attr('fill-opacity', 0.7);
+      } else {
+        points.attr('fill-opacity', 0.7);
+      }
+
+      // Add event handlers
+      points
         .on('mouseover', (event, d) => {
           d3.select(event.currentTarget)
             .attr('r', 6)
@@ -444,6 +566,7 @@ export default {
 .export-controls {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 8px;
 }
 

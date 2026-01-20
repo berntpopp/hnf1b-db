@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-20
 **Current Phase:** Phase 5 - Chart Polish (In Progress)
-**Next Action:** `/gsd:execute-plan 05-02` to add accessibility and export to DonutChart
+**Next Action:** `/gsd:execute-plan 05-05` to add accessibility and export to BoxPlotChart
 
 ## Project Reference
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 2 | Component & Constants | Complete | 100% (3/3 plans) |
 | 3 | Test Modernization | Complete | 100% (7/7 plans) |
 | 4 | UI/UX Normalization | Complete | 100% (5/5 plans) |
-| 5 | Chart Polish | In Progress | 20% (1/5 plans) |
+| 5 | Chart Polish | In Progress | 80% (4/5 plans) |
 | 6 | Backend Features & PWA | Pending | 0% |
 | 7 | Migration Consolidation | Pending | 0% |
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [=================================================]--- 46% (17/37 plans)
+Progress: [========================================================]-- 54% (20/37 plans)
 
 ## Issue Mapping
 
@@ -37,9 +37,9 @@ Progress: [=================================================]--- 46% (17/37 plan
 | #91 - Hardcoded values | Phase 2 | COMPLETE (02-01, 02-02) |
 | #94 - Test modernization | Phase 3 | COMPLETE (03-01 through 03-07) |
 | #98 - UI/UX normalization | Phase 4 | COMPLETE (04-01 through 04-05) |
-| #135 - Chart accessibility | Phase 5 | IN PROGRESS (utilities ready) |
-| #139 - Chart animations | Phase 5 | IN PROGRESS (utilities ready) |
-| #136 - Chart export | Phase 5 | IN PROGRESS (utilities ready) |
+| #135 - Chart accessibility | Phase 5 | IN PROGRESS (4/5 charts) |
+| #139 - Chart animations | Phase 5 | IN PROGRESS (4/5 charts) |
+| #136 - Chart export | Phase 5 | IN PROGRESS (4/5 charts) |
 | #140 - User ID tracking | Phase 6 | Pending |
 | #138 - Service worker | Phase 6 | Pending |
 | #102 - Migration consolidation | Phase 7 | Pending |
@@ -48,12 +48,13 @@ Progress: [=================================================]--- 46% (17/37 plan
 
 ## Session Continuity
 
-Last session: 2026-01-20T00:42Z
-Stopped at: Completed 05-01-PLAN.md (Shared Chart Utilities)
+Last session: 2026-01-20T01:48Z
+Stopped at: Completed 05-04-PLAN.md (KaplanMeierChart Polish)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-20: Completed Phase 5 Plan 4 - KaplanMeierChart accessibility, animation, export (50 tests)
 - 2026-01-20: Completed Phase 5 Plan 1 - Shared chart utilities (export, accessibility, animation)
 - 2026-01-20: Completed Phase 4 Plan 5 - Detail views and Home page migration
 - 2026-01-20: Completed Phase 4 Plan 4 - List views migration (Phenopackets, Variants, Publications)
@@ -110,6 +111,10 @@ Resume file: None
 | D3 and raw SVG support | 05-01 | Accessibility utility supports both D3 selections and raw SVG |
 | BOM for CSV exports | 05-01 | Excel compatibility for UTF-8 encoded files |
 | .spec.js test file extension | 05-01 | Consistent with existing codebase test naming |
+| Path drawing animation for line charts | 05-04 | stroke-dasharray/dashoffset for curve drawing effect |
+| 2000ms duration for line charts | 05-04 | Per CONTEXT.md, longer duration for line chart types |
+| Staggered group animation (300ms) | 05-04 | Visual separation between multiple survival curves |
+| Event markers fade after curve | 05-04 | Sequential flow - curve draws first, then markers appear |
 
 ## Blockers
 
@@ -123,7 +128,7 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 2. Refactoring next (cleaner code for features) - COMPLETE
 3. Test modernization (consistent patterns) - COMPLETE
 4. UI/UX normalization (design system) - COMPLETE
-5. Chart polish (accessibility, animation, export) - IN PROGRESS
+5. Chart polish (accessibility, animation, export) - IN PROGRESS (80%)
 6. High-risk work (migrations) near end
 7. Testing and documentation last (test/document final state)
 
@@ -148,11 +153,13 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 
 ### Phase 5 Chart Polish Summary (In Progress)
 
-- **05-01:** Shared chart utilities - export.js, chartAccessibility.js, chartAnimation.js, ChartExportMenu.vue
+- **05-01:** Shared chart utilities - export.js, chartAccessibility.js, chartAnimation.js, ChartExportMenu.vue (85 tests)
+- **05-04:** KaplanMeierChart - accessibility, animation, export (50 tests)
 
+**Charts polished:** KaplanMeierChart
+**Remaining:** BoxPlotChart (05-05)
 **Utilities created:** export.js, chartAccessibility.js, chartAnimation.js
 **Components created:** ChartExportMenu
-**New tests:** 85 passing
 
 ---
 *State updated: 2026-01-20*
