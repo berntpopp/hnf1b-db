@@ -1,5 +1,8 @@
 <template>
   <div class="donut-chart-container">
+    <div class="chart-header">
+      <ChartExportMenu @export-png="handleExportPNG" @export-csv="handleExportCSV" />
+    </div>
     <div class="chart-wrapper">
       <!-- The div where the chart will be rendered -->
       <div ref="chart" class="chart" />
@@ -14,9 +17,14 @@
 import * as d3 from 'd3';
 import { addChartAccessibility, generateDonutDescription } from '@/utils/chartAccessibility';
 import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
+import { exportToPNG, exportToCSV, getTimestamp } from '@/utils/export';
+import ChartExportMenu from '@/components/common/ChartExportMenu.vue';
 
 export default {
   name: 'DonutChart',
+  components: {
+    ChartExportMenu,
+  },
   props: {
     /**
      * The data to be plotted.
@@ -307,6 +315,31 @@ export default {
           return `<strong>${d.data[0]}</strong>: ${d.data[1]} (${percentage}%)`;
         });
     },
+
+    /**
+     * Export the chart as a PNG image at 2x resolution.
+     */
+    handleExportPNG() {
+      const svg = this.$refs.chart?.querySelector('svg');
+      if (!svg) return;
+      const filename = `donut-chart-${getTimestamp()}`;
+      exportToPNG(svg, filename, 2);
+    },
+
+    /**
+     * Export the chart data as a CSV file.
+     */
+    handleExportCSV() {
+      if (!this.chartData?.grouped_counts) return;
+      const total = this.chartData.total_count || 0;
+      const data = this.chartData.grouped_counts.map((item) => ({
+        category: item._id,
+        count: item.count,
+        percentage: total > 0 ? ((item.count / total) * 100).toFixed(1) : '0.0',
+      }));
+      const filename = `donut-chart-${getTimestamp()}`;
+      exportToCSV(data, ['category', 'count', 'percentage'], filename);
+    },
   },
 };
 </script>
@@ -316,6 +349,12 @@ export default {
   position: relative;
   width: 100%;
   margin: auto;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .chart-wrapper {
