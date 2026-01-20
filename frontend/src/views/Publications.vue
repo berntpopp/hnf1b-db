@@ -10,6 +10,12 @@
   - Consistent UI/UX with Variants and Phenopackets tables
 -->
 <template>
+  <PageHeader
+    title="Publications"
+    subtitle="Scientific literature on HNF1B variants and phenotypes"
+    icon="mdi-file-document-multiple"
+    icon-color="cyan-darken-1"
+  />
   <v-container fluid>
     <!-- Unified Table with Integrated Search Toolbar -->
     <AppDataTable
@@ -20,21 +26,23 @@
       :items-length="publications.length"
       :custom-sort="customSort"
       hide-default-footer
-      title="Publications Registry"
       row-class="clickable-row"
       @update:options="onOptionsUpdate"
       @click:row="handleRowClick"
     >
       <!-- Integrated Search Toolbar -->
       <template #toolbar>
-        <AppTableToolbar
+        <DataTableToolbar
           v-model:search-query="searchQuery"
           search-placeholder="Search PMID, DOI, title, or author..."
           :result-count="pagination.totalRecords"
           result-label="publications"
           :loading="loading"
+          :active-filters="computedActiveFilters"
           @search="onSearch"
           @clear-search="clearSearch"
+          @remove-filter="removeFilter"
+          @clear-all-filters="clearAllFilters"
         />
       </template>
 
@@ -159,15 +167,17 @@
 import { getPublications } from '@/api';
 import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
-import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
+import DataTableToolbar from '@/components/common/DataTableToolbar.vue';
 
 export default {
   name: 'Publications',
   components: {
     AppDataTable,
-    AppTableToolbar,
     AppPagination,
+    PageHeader,
+    DataTableToolbar,
   },
   setup() {
     // URL state synchronization for shareable/bookmarkable URLs
@@ -244,6 +254,14 @@ export default {
           this.urlState.search.value = value;
         }
       },
+    },
+    /**
+     * Computed active filters for DataTableToolbar chip display.
+     * Publications has no column filters, returns empty array.
+     */
+    computedActiveFilters() {
+      // Publications doesn't have column filters (only search)
+      return [];
     },
   },
   watch: {
@@ -411,6 +429,22 @@ export default {
     clearSearch() {
       this.searchQuery = '';
       this.urlState.resetPage();
+    },
+
+    /**
+     * Remove a specific filter by key (used by DataTableToolbar chip close).
+     * Publications has no column filters, so this is a no-op.
+     */
+    removeFilter() {
+      // No column filters for publications, no-op
+    },
+
+    /**
+     * Clear all filters (used by DataTableToolbar clear all button).
+     * Publications only has search, so just clear search.
+     */
+    clearAllFilters() {
+      this.clearSearch();
     },
 
     onPageSizeChange(newSize) {
