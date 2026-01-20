@@ -12,76 +12,49 @@
 -->
 <template>
   <div class="publication-container">
-    <!-- HERO SECTION - Compact Publication Header -->
-    <section class="hero-section py-2 px-4 mb-2">
-      <v-container>
-        <v-row justify="center" align="center">
-          <v-col cols="12" xl="10">
-            <!-- Compact Header with Breadcrumbs -->
-            <div class="d-flex align-center flex-wrap gap-2 mb-2">
-              <v-btn
-                icon="mdi-arrow-left"
-                variant="text"
-                size="small"
-                aria-label="Go back to publications list"
-                @click="$router.push('/publications')"
-              />
-              <v-breadcrumbs :items="breadcrumbs" class="pa-0 flex-grow-0" density="compact" />
-            </div>
-
-            <!-- Title Row with Inline Stats Chips -->
-            <div class="d-flex flex-wrap align-center gap-3">
-              <v-icon color="orange-darken-2" size="large" aria-hidden="true">
-                mdi-book-open-variant
-              </v-icon>
-              <div class="flex-grow-1">
-                <div class="d-flex flex-wrap align-center gap-2">
-                  <h1 class="text-h6 font-weight-bold text-orange-darken-2 ma-0">
-                    Publication Details
-                  </h1>
-                  <!-- Loading skeleton -->
-                  <template v-if="loading">
-                    <v-skeleton-loader type="chip" width="100" class="ma-0" />
-                    <v-skeleton-loader type="chip" width="80" class="ma-0" />
-                  </template>
-                  <!-- Loaded: Inline Stats Chips -->
-                  <template v-else-if="publication">
-                    <v-chip
-                      :href="`https://pubmed.ncbi.nlm.nih.gov/${publicationId}`"
-                      color="orange-lighten-3"
-                      size="small"
-                      variant="flat"
-                      target="_blank"
-                      link
-                      class="font-weight-medium"
-                    >
-                      <v-icon start size="x-small">mdi-book-open-variant</v-icon>
-                      PMID: {{ publicationId }}
-                      <v-icon end size="x-small">mdi-open-in-new</v-icon>
-                    </v-chip>
-                    <v-chip
-                      v-if="publication.year"
-                      color="grey-lighten-2"
-                      size="small"
-                      variant="flat"
-                    >
-                      <v-icon start size="x-small">mdi-calendar</v-icon>
-                      {{ publication.year }}
-                    </v-chip>
-                    <v-chip color="green-lighten-3" size="small" variant="flat">
-                      <v-icon start size="x-small">mdi-account-multiple</v-icon>
-                      {{ pagination.totalRecords }} Individual{{
-                        pagination.totalRecords === 1 ? '' : 's'
-                      }}
-                    </v-chip>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </v-col>
-        </v-row>
-      </v-container>
-    </section>
+    <!-- HERO SECTION - Using PageHeader component -->
+    <PageHeader
+      title="Publication Details"
+      icon="mdi-book-open-variant"
+      icon-color="orange-darken-2"
+      title-class="text-orange-darken-2"
+      :breadcrumbs="breadcrumbs"
+      variant="hero"
+      show-back
+      @back="$router.push('/publications')"
+    >
+      <template #prepend>
+        <!-- Loading skeleton -->
+        <template v-if="loading">
+          <v-skeleton-loader type="chip" width="100" class="ma-0" />
+          <v-skeleton-loader type="chip" width="80" class="ma-0" />
+        </template>
+        <!-- Loaded: Inline Stats Chips -->
+        <template v-else-if="publication">
+          <v-chip
+            :href="`https://pubmed.ncbi.nlm.nih.gov/${publicationId}`"
+            color="orange-lighten-3"
+            size="small"
+            variant="flat"
+            target="_blank"
+            link
+            class="font-weight-medium"
+          >
+            <v-icon start size="x-small">mdi-book-open-variant</v-icon>
+            PMID: {{ publicationId }}
+            <v-icon end size="x-small">mdi-open-in-new</v-icon>
+          </v-chip>
+          <v-chip v-if="publication.year" color="grey-lighten-2" size="small" variant="flat">
+            <v-icon start size="x-small">mdi-calendar</v-icon>
+            {{ publication.year }}
+          </v-chip>
+          <v-chip color="green-lighten-3" size="small" variant="flat">
+            <v-icon start size="x-small">mdi-account-multiple</v-icon>
+            {{ pagination.totalRecords }} Individual{{ pagination.totalRecords === 1 ? '' : 's' }}
+          </v-chip>
+        </template>
+      </template>
+    </PageHeader>
 
     <!-- MAIN CONTENT -->
     <v-container class="pb-12">
@@ -362,6 +335,7 @@ import { getPublicationMetadata, getPhenopacketsByPublication } from '@/api';
 import { buildSortParameter } from '@/utils/pagination';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
 import {
   usePublicationSeo,
   usePublicationStructuredData,
@@ -373,6 +347,7 @@ export default {
   components: {
     AppDataTable,
     AppPagination,
+    PageHeader,
   },
   setup() {
     const route = useRoute();
@@ -687,9 +662,14 @@ export default {
   min-height: 100vh;
 }
 
-.hero-section {
-  background: linear-gradient(180deg, rgba(251, 140, 0, 0.05) 0%, transparent 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+/* Override PageHeader hero background for orange publication page */
+.publication-container :deep(.page-header--hero) {
+  background: linear-gradient(
+    180deg,
+    rgba(251, 140, 0, 0.15) 0%,
+    rgba(251, 140, 0, 0.05) 50%,
+    transparent 100%
+  );
 }
 
 /* Clickable row styling for phenopacket navigation */

@@ -1,63 +1,51 @@
 <!-- src/views/PageVariant.vue -->
 <template>
   <div class="variant-container">
-    <!-- HERO SECTION - Variant Header -->
-    <section class="hero-section py-4 px-4 mb-4">
+    <!-- HERO SECTION - Using PageHeader component -->
+    <PageHeader
+      title="Variant Details"
+      icon="mdi-dna"
+      icon-color="pink-darken-2"
+      title-class="text-pink-darken-2"
+      :breadcrumbs="breadcrumbs"
+      variant="hero"
+      show-back
+      @back="$router.back()"
+    >
+      <template #prepend>
+        <template v-if="!loading && variant.variant_id">
+          <v-chip color="pink-lighten-4" size="small" variant="flat" class="font-weight-medium">
+            {{ variant.simple_id || formatVariantId(variant.variant_id) }}
+          </v-chip>
+          <v-chip
+            v-if="variant.classificationVerdict"
+            :color="getPathogenicityColor(variant.classificationVerdict)"
+            size="small"
+            variant="flat"
+          >
+            <v-icon start size="small">
+              {{ getPathogenicityIcon(variant.classificationVerdict) }}
+            </v-icon>
+            {{ formatClassification(variant.classificationVerdict) }}
+          </v-chip>
+          <v-chip
+            v-if="getVariantType(variant)"
+            color="purple-lighten-3"
+            size="small"
+            variant="flat"
+          >
+            {{ getVariantType(variant) }}
+          </v-chip>
+        </template>
+        <v-skeleton-loader v-else type="chip" width="200" />
+      </template>
+    </PageHeader>
+
+    <!-- Quick Stats Section (below PageHeader) -->
+    <section class="stats-section py-4 px-4 mb-4">
       <v-container>
-        <v-row justify="center" align="center">
+        <v-row justify="center">
           <v-col cols="12" xl="10">
-            <!-- Breadcrumb Navigation -->
-            <v-breadcrumbs :items="breadcrumbs" class="pa-0 mb-3">
-              <template #prepend>
-                <v-btn
-                  icon="mdi-arrow-left"
-                  variant="text"
-                  size="small"
-                  class="mr-2"
-                  aria-label="Go back to previous page"
-                  @click="$router.back()"
-                />
-              </template>
-            </v-breadcrumbs>
-
-            <!-- Variant Title Row -->
-            <div class="d-flex flex-wrap align-center gap-3 mb-4">
-              <v-icon color="pink-darken-2" size="x-large">mdi-dna</v-icon>
-              <div>
-                <h1 class="text-h5 font-weight-bold text-pink-darken-2 mb-1">Variant Details</h1>
-                <div v-if="!loading && variant.variant_id" class="d-flex flex-wrap gap-2">
-                  <v-chip
-                    color="pink-lighten-4"
-                    size="small"
-                    variant="flat"
-                    class="font-weight-medium"
-                  >
-                    {{ variant.simple_id || formatVariantId(variant.variant_id) }}
-                  </v-chip>
-                  <v-chip
-                    v-if="variant.classificationVerdict"
-                    :color="getPathogenicityColor(variant.classificationVerdict)"
-                    size="small"
-                    variant="flat"
-                  >
-                    <v-icon start size="small">
-                      {{ getPathogenicityIcon(variant.classificationVerdict) }}
-                    </v-icon>
-                    {{ formatClassification(variant.classificationVerdict) }}
-                  </v-chip>
-                  <v-chip
-                    v-if="getVariantType(variant)"
-                    color="purple-lighten-3"
-                    size="small"
-                    variant="flat"
-                  >
-                    {{ getVariantType(variant) }}
-                  </v-chip>
-                </div>
-                <v-skeleton-loader v-else type="chip" width="200" />
-              </div>
-            </div>
-
             <!-- Quick Stats Row -->
             <v-row v-if="!loading">
               <!-- Individuals Count -->
@@ -557,6 +545,7 @@ import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
 import {
   extractCNotation,
   extractPNotation,
@@ -578,6 +567,7 @@ export default {
     HNF1BGeneVisualization,
     HNF1BProteinVisualization,
     ProteinStructure3D,
+    PageHeader,
   },
   setup() {
     const route = useRoute();
@@ -1009,9 +999,13 @@ export default {
   background-color: #fafafa;
 }
 
-.hero-section {
+/* Override PageHeader hero background for pink variant page */
+.variant-container :deep(.page-header--hero) {
   background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 50%, #f5f7fa 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.stats-section {
+  background: linear-gradient(180deg, #f8bbd9 0%, #f5f7fa 50%);
 }
 
 .border-bottom {
