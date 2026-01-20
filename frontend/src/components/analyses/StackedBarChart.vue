@@ -8,6 +8,7 @@
 <script>
 import * as d3 from 'd3';
 import { addChartAccessibility, generateBarChartDescription } from '@/utils/chartAccessibility';
+import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
 
 /**
  * Unique ID counter for generating unique ARIA IDs.
@@ -280,54 +281,87 @@ export default {
         .style('z-index', '1000')
         .style('box-shadow', '0 2px 4px rgba(0,0,0,0.2)');
 
-      // Show the horizontal bars.
-      svg
+      // Animation configuration
+      const duration = getAnimationDuration(400);
+      const staggerDelay = 30;
+
+      // Capture chart ref for use in event handlers
+      const chartRef = this.$refs.chart;
+
+      // Helper function to attach mouse event handlers to bar elements
+      const attachBarEventHandlers = (selection) => {
+        selection
+          .on('mouseover', function (event, d) {
+            const subgroupName = d3.select(this.parentNode).datum().key;
+            const subgroupValue = d.data[subgroupName];
+            const subgroupLabel = subgroupLabels[subgroupName];
+
+            // Calculate penetrance (present / (present + absent))
+            const present = d.data.present;
+            const absent = d.data.absent;
+            const totalReported = present + absent;
+            const penetrance =
+              totalReported > 0 ? ((present / totalReported) * 100).toFixed(1) : 'N/A';
+
+            tooltip
+              .html(
+                `<strong>${d.data.group}</strong><br/>${subgroupLabel}: <strong>${subgroupValue}</strong><br/>Penetrance: <strong>${penetrance}%</strong> (${present}/${totalReported} reported)<br/><em>${d.data.hpo_id}</em>`
+              )
+              .transition()
+              .duration(200)
+              .style('opacity', 1);
+            d3.select(this).style('stroke', 'black').style('stroke-width', 2);
+          })
+          .on('mousemove', (event) => {
+            const rect = chartRef.getBoundingClientRect();
+            tooltip
+              .style('left', event.clientX - rect.left + 10 + 'px')
+              .style('top', event.clientY - rect.top - 28 + 'px');
+          })
+          .on('mouseleave', function () {
+            tooltip.transition().duration(200).style('opacity', 0);
+            d3.select(this).style('stroke', 'white').style('stroke-width', 1);
+          });
+      };
+
+      // Show the horizontal bars with staggered animation.
+      // Bars animate from width 0 to their final width.
+      const barGroups = svg
         .append('g')
         .selectAll('g')
         .data(stackedData)
         .join('g')
-        .attr('fill', (d) => color(d.key))
+        .attr('fill', (d) => color(d.key));
+
+      const bars = barGroups
         .selectAll('rect')
         .data((d) => d)
         .join('rect')
         .attr('y', (d) => y(d.data.group))
-        .attr('x', (d) => x(d[0]))
-        .attr('width', (d) => x(d[1]) - x(d[0]))
+        .attr('x', 0) // Start at x=0 for animation
+        .attr('width', 0) // Start with width 0 for animation
         .attr('height', y.bandwidth())
         .attr('stroke', 'white')
         .attr('stroke-width', 1)
-        .attr('aria-hidden', 'true')
-        .on('mouseover', function (event, d) {
-          const subgroupName = d3.select(this.parentNode).datum().key;
-          const subgroupValue = d.data[subgroupName];
-          const subgroupLabel = subgroupLabels[subgroupName];
+        .attr('aria-hidden', 'true');
 
-          // Calculate penetrance (present / (present + absent))
-          const present = d.data.present;
-          const absent = d.data.absent;
-          const totalReported = present + absent;
-          const penetrance =
-            totalReported > 0 ? ((present / totalReported) * 100).toFixed(1) : 'N/A';
-
-          tooltip
-            .html(
-              `<strong>${d.data.group}</strong><br/>${subgroupLabel}: <strong>${subgroupValue}</strong><br/>Penetrance: <strong>${penetrance}%</strong> (${present}/${totalReported} reported)<br/><em>${d.data.hpo_id}</em>`
-            )
-            .transition()
-            .duration(200)
-            .style('opacity', 1);
-          d3.select(this).style('stroke', 'black').style('stroke-width', 2);
-        })
-        .on('mousemove', (event) => {
-          const rect = this.$refs.chart.getBoundingClientRect();
-          tooltip
-            .style('left', event.clientX - rect.left + 10 + 'px')
-            .style('top', event.clientY - rect.top - 28 + 'px');
-        })
-        .on('mouseleave', function () {
-          tooltip.transition().duration(200).style('opacity', 0);
-          d3.select(this).style('stroke', 'white').style('stroke-width', 1);
+      // Animate bars to final position
+      bars
+        .transition()
+        .duration(duration)
+        .delay((d, i) => getStaggerDelay(i, staggerDelay))
+        .attr('x', (d) => x(d[0]))
+        .attr('width', (d) => x(d[1]) - x(d[0]))
+        .on('end', function () {
+          // Re-attach mouse event handlers after animation completes
+          attachBarEventHandlers(d3.select(this));
         });
+
+      // For reduced motion (duration=0), attach handlers immediately
+      // since the transition ends synchronously
+      if (duration === 0) {
+        attachBarEventHandlers(bars);
+      }
 
       // Add legend
       const legend = svg.append('g').attr('transform', `translate(${svgWidth + 20}, 0)`);
