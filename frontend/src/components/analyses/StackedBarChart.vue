@@ -7,6 +7,13 @@
 
 <script>
 import * as d3 from 'd3';
+import { addChartAccessibility, generateBarChartDescription } from '@/utils/chartAccessibility';
+
+/**
+ * Unique ID counter for generating unique ARIA IDs.
+ * Incremented each time a new StackedBarChart component renders.
+ */
+let chartIdCounter = 0;
 
 /**
  * CKD stage HPO IDs to aggregate into a single "Chronic Kidney Disease" entry.
@@ -179,16 +186,21 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
+      // Generate unique IDs for accessibility
+      const chartId = ++chartIdCounter;
+      const titleId = `stacked-bar-chart-title-${chartId}`;
+      const descId = `stacked-bar-chart-desc-${chartId}`;
+
       // Append the SVG element.
-      const svg = d3
+      const rootSvg = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+
+      const svg = rootSvg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Aggregate CKD stages into a single entry
       const aggregatedData = this.aggregateCKDStages(this.chartData);
@@ -204,6 +216,15 @@ export default {
         absent: d.details?.absent_count || 0,
         not_reported: d.details?.not_reported_count || 0,
       }));
+
+      // Add accessibility attributes to the SVG
+      const descriptionData = data.map((d) => ({
+        label: d.group,
+        present: d.present,
+        absent: d.absent,
+      }));
+      const description = generateBarChartDescription(descriptionData);
+      addChartAccessibility(rootSvg, titleId, descId, 'Phenotype Prevalence Chart', description);
 
       // Define subgroups and groups.
       const subgroups = ['present', 'absent', 'not_reported'];
@@ -275,6 +296,7 @@ export default {
         .attr('height', y.bandwidth())
         .attr('stroke', 'white')
         .attr('stroke-width', 1)
+        .attr('aria-hidden', 'true')
         .on('mouseover', function (event, d) {
           const subgroupName = d3.select(this.parentNode).datum().key;
           const subgroupValue = d.data[subgroupName];
