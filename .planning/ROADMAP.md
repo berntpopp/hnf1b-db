@@ -2,7 +2,7 @@
 
 **Created:** 2026-01-19
 **Milestone:** Final Polish
-**Status:** In Progress (4/9 phases complete)
+**Status:** In Progress (5/9 phases complete)
 
 ## Overview
 
@@ -21,7 +21,7 @@
 | 2 | Component & Constants ✓ | Extract large components, add constants | #133, #137, #91 | 13 | P1-High |
 | 3 | Test Modernization ✓ | Upgrade backend test suite | #94 | 4 | P2-Medium |
 | 4 | UI/UX Normalization ✓ | Consistent design system | #98 | 7 | P2-Medium |
-| 5 | Chart Polish | Accessibility, animations, export | #135, #139, #136 | 15 | P2-Medium |
+| 5 | Chart Polish ✓ | Accessibility, animations, export | #135, #139, #136 | 15 | P2-Medium |
 | 6 | Backend Features & PWA | User tracking, service worker | #140, #138 | 8 | P3-Low |
 | 7 | Migration Consolidation | Clean alembic history | #102 | 4 | P3-Low |
 | 8 | E2E Testing | Playwright test coverage | #48 | 6 | P3-Low |
@@ -215,23 +215,23 @@ Plans:
 
 ---
 
-## Phase 5: Chart Polish
+## Phase 5: Chart Polish ✓
 
 **Goal:** Accessible, animated charts with export functionality
 
-**Status:** Planned
+**Status:** Complete (2026-01-20)
 
 **GitHub Issues:** #135, #139, #136
 
 **Plans:** 6 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Create shared chart utilities (export, accessibility, animation, ChartExportMenu)
-- [ ] 05-02-PLAN.md — Add accessibility, animation, export to DonutChart
-- [ ] 05-03-PLAN.md — Add accessibility, animation, export to StackedBarChart
-- [ ] 05-04-PLAN.md — Upgrade KaplanMeierChart with accessibility, animation, PNG/CSV export
-- [ ] 05-05-PLAN.md — Polish VariantComparisonChart and BoxPlotChart
-- [ ] 05-06-PLAN.md — Human verification of all chart behaviors
+- [x] 05-01-PLAN.md — Create shared chart utilities (export, accessibility, animation, ChartExportMenu)
+- [x] 05-02-PLAN.md — Add accessibility, animation, export to DonutChart
+- [x] 05-03-PLAN.md — Add accessibility, animation, export to StackedBarChart
+- [x] 05-04-PLAN.md — Upgrade KaplanMeierChart with accessibility, animation, PNG/CSV export
+- [x] 05-05-PLAN.md — Polish VariantComparisonChart and BoxPlotChart
+- [x] 05-06-PLAN.md — Human verification of all chart behaviors
 
 **Requirements:**
 - A11Y-01: Add `aria-describedby` to all chart components (#135)
@@ -262,6 +262,12 @@ Plans:
 9. Export menu on all chart components
 
 **Dependencies:** Phase 4 complete (design tokens for consistency)
+
+**Summary:**
+- 6 plans executed across 3 waves
+- 487 frontend tests passing (85 utility + 202 chart component + existing)
+- All 5 chart components have ARIA accessibility, entry animations, and export menus
+- Human verification confirmed all behaviors work correctly
 
 **Files to create:**
 - `frontend/src/utils/export.js`
@@ -425,4 +431,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 after phase 5 planning complete*
+*Last updated: 2026-01-20 after phase 5 execution complete*

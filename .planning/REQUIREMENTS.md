@@ -43,24 +43,24 @@ Requirements grouped by logical category, derived from GitHub issues.
 
 ### Accessibility
 
-- [ ] **A11Y-01**: Add `aria-describedby` to all chart components (#135)
-- [ ] **A11Y-02**: Add screen reader text summaries for charts (#135)
-- [ ] **A11Y-03**: Add pattern fills option for colorblind mode (#135)
-- [ ] **A11Y-04**: Test charts with screen readers (VoiceOver/NVDA) (#135)
-- [ ] **A11Y-05**: Meet WCAG 2.1 Level A for non-text content (1.1.1) (#135)
-- [ ] **A11Y-06**: Meet WCAG 2.1 Level A for use of color (1.4.1) (#135)
+- [x] **A11Y-01**: Add `aria-describedby` to all chart components (#135)
+- [x] **A11Y-02**: Add screen reader text summaries for charts (#135)
+- [ ] **A11Y-03**: Add pattern fills option for colorblind mode (#135) - DEFERRED
+- [x] **A11Y-04**: Test charts with screen readers (VoiceOver/NVDA) (#135)
+- [x] **A11Y-05**: Meet WCAG 2.1 Level A for non-text content (1.1.1) (#135)
+- [x] **A11Y-06**: Meet WCAG 2.1 Level A for use of color (1.4.1) (#135)
 
 ### Chart Enhancements
 
-- [ ] **CHART-01**: Add arc tween animation to donut charts (#139)
-- [ ] **CHART-02**: Add height tween animation to bar charts with stagger (#139)
-- [ ] **CHART-03**: Add path drawing animation to line charts (#139)
-- [ ] **CHART-04**: Respect `prefers-reduced-motion` media query (#139)
-- [ ] **CHART-05**: Create `frontend/src/utils/export.js` with export utilities (#136)
-- [ ] **CHART-06**: Create `ChartExportMenu.vue` component (#136)
-- [ ] **CHART-07**: Add PNG export at 2x resolution (#136)
-- [ ] **CHART-08**: Add CSV export with headers (#136)
-- [ ] **CHART-09**: Add export button to all chart components (#136)
+- [x] **CHART-01**: Add arc tween animation to donut charts (#139)
+- [x] **CHART-02**: Add height tween animation to bar charts with stagger (#139)
+- [x] **CHART-03**: Add path drawing animation to line charts (#139)
+- [x] **CHART-04**: Respect `prefers-reduced-motion` media query (#139)
+- [x] **CHART-05**: Create `frontend/src/utils/export.js` with export utilities (#136)
+- [x] **CHART-06**: Create `ChartExportMenu.vue` component (#136)
+- [x] **CHART-07**: Add PNG export at 2x resolution (#136)
+- [x] **CHART-08**: Add CSV export with headers (#136)
+- [x] **CHART-09**: Add export button to all chart components (#136)
 
 ### Backend Features
 
@@ -139,28 +139,28 @@ Deferred to future milestone. Not in current scope.
 | QUAL-16 | Phase 2 | Complete (pre-existing) |
 | QUAL-17 | Phase 2 | Complete |
 | QUAL-18 | Phase 2 | Complete |
-| UIUX-01 | Phase 4 | Pending |
-| UIUX-02 | Phase 4 | Pending |
-| UIUX-03 | Phase 4 | Pending |
-| UIUX-04 | Phase 4 | Pending |
-| UIUX-05 | Phase 4 | Pending |
-| UIUX-06 | Phase 4 | Pending |
-| UIUX-07 | Phase 4 | Pending |
-| A11Y-01 | Phase 5 | Pending |
-| A11Y-02 | Phase 5 | Pending |
-| A11Y-03 | Phase 5 | Pending |
-| A11Y-04 | Phase 5 | Pending |
-| A11Y-05 | Phase 5 | Pending |
-| A11Y-06 | Phase 5 | Pending |
-| CHART-01 | Phase 5 | Pending |
-| CHART-02 | Phase 5 | Pending |
-| CHART-03 | Phase 5 | Pending |
-| CHART-04 | Phase 5 | Pending |
-| CHART-05 | Phase 5 | Pending |
-| CHART-06 | Phase 5 | Pending |
-| CHART-07 | Phase 5 | Pending |
-| CHART-08 | Phase 5 | Pending |
-| CHART-09 | Phase 5 | Pending |
+| UIUX-01 | Phase 4 | Complete |
+| UIUX-02 | Phase 4 | Complete |
+| UIUX-03 | Phase 4 | Complete |
+| UIUX-04 | Phase 4 | Complete |
+| UIUX-05 | Phase 4 | Complete |
+| UIUX-06 | Phase 4 | Complete |
+| UIUX-07 | Phase 4 | Complete |
+| A11Y-01 | Phase 5 | Complete |
+| A11Y-02 | Phase 5 | Complete |
+| A11Y-03 | Phase 5 | Deferred |
+| A11Y-04 | Phase 5 | Complete |
+| A11Y-05 | Phase 5 | Complete |
+| A11Y-06 | Phase 5 | Complete |
+| CHART-01 | Phase 5 | Complete |
+| CHART-02 | Phase 5 | Complete |
+| CHART-03 | Phase 5 | Complete |
+| CHART-04 | Phase 5 | Complete |
+| CHART-05 | Phase 5 | Complete |
+| CHART-06 | Phase 5 | Complete |
+| CHART-07 | Phase 5 | Complete |
+| CHART-08 | Phase 5 | Complete |
+| CHART-09 | Phase 5 | Complete |
 | FEAT-01 | Phase 6 | Pending |
 | FEAT-02 | Phase 6 | Pending |
 | FEAT-03 | Phase 6 | Pending |
@@ -193,4 +193,4 @@ Deferred to future milestone. Not in current scope.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 - Phase 3 complete (QUAL-06, QUAL-07 complete; QUAL-08 deferred)*
+*Last updated: 2026-01-20 - Phase 5 complete (A11Y-01/02/04/05/06, CHART-01 through CHART-09 complete; A11Y-03 deferred)*

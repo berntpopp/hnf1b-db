@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-20
 **Current Phase:** Phase 5 - Chart Polish (Complete)
-**Next Action:** `/gsd:execute-plan 06-01` to begin Backend Features & PWA phase
+**Next Action:** `/gsd:discuss-phase 06` to gather context for Backend Features & PWA phase
 
 ## Project Reference
 
