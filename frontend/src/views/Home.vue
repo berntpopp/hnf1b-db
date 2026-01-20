@@ -100,9 +100,9 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon :color="dataColors.PHENOTYPE.vuetify" size="large" class="mb-2"
-                    >mdi-medical-bag</v-icon
-                  >
+                  <v-icon :color="dataColors.PHENOTYPE.vuetify" size="large" class="mb-2">
+                    mdi-medical-bag
+                  </v-icon>
                   <div class="text-h4 font-weight-bold text-green-darken-1 mb-0">
                     <span v-if="!loadingStats">{{ displayStats.total_reports }}</span>
                     <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
