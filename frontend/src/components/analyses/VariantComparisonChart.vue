@@ -1,8 +1,9 @@
 <template>
   <div class="variant-comparison-container">
     <div class="export-controls">
+      <ChartExportMenu @export-png="handleExportPNG" @export-csv="handleExportCSV" />
       <button class="export-btn" title="Download as SVG" @click="exportSVG">
-        <span class="export-icon">⬇</span> Export SVG
+        <span class="export-icon">mdi-file-image</span> SVG
       </button>
     </div>
     <div ref="chart" />
@@ -11,9 +12,16 @@
 
 <script>
 import * as d3 from 'd3';
+import { addChartAccessibility } from '@/utils/chartAccessibility';
+import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
+import { exportToPNG, exportToCSV, getTimestamp } from '@/utils/export';
+import ChartExportMenu from '@/components/common/ChartExportMenu.vue';
 
 export default {
   name: 'VariantComparisonChart',
+  components: {
+    ChartExportMenu,
+  },
   props: {
     comparisonData: {
       type: Object,
@@ -125,6 +133,55 @@ export default {
         return !ckdStagePatterns.some((pattern) => lowerLabel.includes(pattern));
       });
     },
+    handleExportPNG() {
+      const svg = this.$refs.chart.querySelector('svg');
+      if (!svg) return;
+      const filename = `variant-comparison-${this.comparisonType}-${this.organSystemFilter}-${getTimestamp()}`;
+      exportToPNG(svg, filename, 2);
+    },
+    handleExportCSV() {
+      const allPhenotypes = this.comparisonData?.phenotypes || [];
+      const informativePhenotypes = this.filterUninformativePhenotypes(allPhenotypes);
+      const data = this.filterPhenotypesByOrganSystem(
+        informativePhenotypes,
+        this.organSystemFilter
+      );
+
+      const csvData = data.map((d) => ({
+        phenotype: d.hpo_label,
+        hpo_id: d.hpo_id || '',
+        group1_present: d.group1_present,
+        group1_total: d.group1_total,
+        group1_percentage: d.group1_percentage.toFixed(1),
+        group2_present: d.group2_present,
+        group2_total: d.group2_total,
+        group2_percentage: d.group2_percentage.toFixed(1),
+        p_value_fisher: d.p_value?.toFixed(4) ?? '',
+        p_value_fdr: d.p_value_fdr?.toFixed(4) ?? '',
+        effect_size_cohens_h: d.effect_size?.toFixed(3) ?? '',
+        significant: d.significant ? 'yes' : 'no',
+      }));
+
+      const filename = `variant-comparison-${this.comparisonType}-${this.organSystemFilter}-${getTimestamp()}`;
+      exportToCSV(
+        csvData,
+        [
+          'phenotype',
+          'hpo_id',
+          'group1_present',
+          'group1_total',
+          'group1_percentage',
+          'group2_present',
+          'group2_total',
+          'group2_percentage',
+          'p_value_fisher',
+          'p_value_fdr',
+          'effect_size_cohens_h',
+          'significant',
+        ],
+        filename
+      );
+    },
     exportSVG() {
       const svgElement = this.$refs.chart.querySelector('svg');
       if (!svgElement) {
@@ -205,15 +262,16 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
-      const svg = d3
+      // Create root SVG and add accessibility attributes
+      const rootSvg = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+
+      const svg = rootSvg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Apply filtering: first remove uninformative phenotypes, then filter by organ system
       const allPhenotypes = this.comparisonData.phenotypes;
@@ -236,6 +294,22 @@ export default {
 
       const group1Name = this.comparisonData.group1_name;
       const group2Name = this.comparisonData.group2_name;
+
+      // Add accessibility attributes
+      const chartDescription = `Phenotype comparison chart. ${group1Name} (n=${this.comparisonData.group1_count}) vs ${group2Name} (n=${this.comparisonData.group2_count}). Showing prevalence of ${data.length} phenotypes.`;
+      const uniqueId = this._uid || Math.random().toString(36).substring(2, 11);
+      addChartAccessibility(
+        rootSvg,
+        `variant-comp-title-${uniqueId}`,
+        `variant-comp-desc-${uniqueId}`,
+        'Variant Type Phenotype Comparison',
+        chartDescription
+      );
+
+      // Animation configuration
+      const animDuration = getAnimationDuration(400);
+      const staggerDelay = 20;
+      let barIndex = 0;
 
       // Tooltip div - positioned to the right of cursor to avoid cutoff
       const tooltip = d3
@@ -275,15 +349,16 @@ export default {
       // Draw bars for each phenotype
       data.forEach((d) => {
         const xPos = x(d.hpo_label);
+        const currentBarIndex = barIndex;
+        barIndex += 4; // 4 bars per phenotype (2 groups x 2 segments)
 
         // Group 1 (e.g., Truncating) - "Yes" segment (bottom, stacked first)
-        svg
+        const bar1Yes = svg
           .append('rect')
           .attr('class', 'bar-group1-yes')
+          .attr('aria-hidden', 'true')
           .attr('x', xPos)
-          .attr('y', y(d.group1_percentage))
           .attr('width', barWidth - 2)
-          .attr('height', svgHeight - y(d.group1_percentage))
           .attr('fill', colorYes)
           .attr('opacity', 0.9)
           .on('mouseover', (event) => {
@@ -303,14 +378,29 @@ export default {
             tooltip.transition().duration(200).style('opacity', 0);
           });
 
+        // Animate bar from baseline
+        if (animDuration > 0) {
+          bar1Yes
+            .attr('y', svgHeight)
+            .attr('height', 0)
+            .transition()
+            .duration(animDuration)
+            .delay(getStaggerDelay(currentBarIndex, staggerDelay))
+            .attr('y', y(d.group1_percentage))
+            .attr('height', svgHeight - y(d.group1_percentage));
+        } else {
+          bar1Yes
+            .attr('y', y(d.group1_percentage))
+            .attr('height', svgHeight - y(d.group1_percentage));
+        }
+
         // Group 1 - "No" segment (on top of yes segment)
-        svg
+        const bar1No = svg
           .append('rect')
           .attr('class', 'bar-group1-no')
+          .attr('aria-hidden', 'true')
           .attr('x', xPos)
-          .attr('y', y(100))
           .attr('width', barWidth - 2)
-          .attr('height', y(d.group1_percentage) - y(100))
           .attr('fill', colorNo)
           .attr('opacity', 0.9)
           .on('mouseover', (event) => {
@@ -332,14 +422,26 @@ export default {
             tooltip.transition().duration(200).style('opacity', 0);
           });
 
+        // Animate bar from top
+        if (animDuration > 0) {
+          bar1No
+            .attr('y', y(100))
+            .attr('height', 0)
+            .transition()
+            .duration(animDuration)
+            .delay(getStaggerDelay(currentBarIndex + 1, staggerDelay))
+            .attr('height', y(d.group1_percentage) - y(100));
+        } else {
+          bar1No.attr('y', y(100)).attr('height', y(d.group1_percentage) - y(100));
+        }
+
         // Group 2 (e.g., Non-truncating) - "Yes" segment
-        svg
+        const bar2Yes = svg
           .append('rect')
           .attr('class', 'bar-group2-yes')
+          .attr('aria-hidden', 'true')
           .attr('x', xPos + barWidth + 2)
-          .attr('y', y(d.group2_percentage))
           .attr('width', barWidth - 2)
-          .attr('height', svgHeight - y(d.group2_percentage))
           .attr('fill', colorYes)
           .attr('opacity', 0.9)
           .on('mouseover', (event) => {
@@ -359,14 +461,29 @@ export default {
             tooltip.transition().duration(200).style('opacity', 0);
           });
 
+        // Animate bar from baseline
+        if (animDuration > 0) {
+          bar2Yes
+            .attr('y', svgHeight)
+            .attr('height', 0)
+            .transition()
+            .duration(animDuration)
+            .delay(getStaggerDelay(currentBarIndex + 2, staggerDelay))
+            .attr('y', y(d.group2_percentage))
+            .attr('height', svgHeight - y(d.group2_percentage));
+        } else {
+          bar2Yes
+            .attr('y', y(d.group2_percentage))
+            .attr('height', svgHeight - y(d.group2_percentage));
+        }
+
         // Group 2 - "No" segment
-        svg
+        const bar2No = svg
           .append('rect')
           .attr('class', 'bar-group2-no')
+          .attr('aria-hidden', 'true')
           .attr('x', xPos + barWidth + 2)
-          .attr('y', y(100))
           .attr('width', barWidth - 2)
-          .attr('height', y(d.group2_percentage) - y(100))
           .attr('fill', colorNo)
           .attr('opacity', 0.9)
           .on('mouseover', (event) => {
@@ -387,6 +504,19 @@ export default {
           .on('mouseout', () => {
             tooltip.transition().duration(200).style('opacity', 0);
           });
+
+        // Animate bar from top
+        if (animDuration > 0) {
+          bar2No
+            .attr('y', y(100))
+            .attr('height', 0)
+            .transition()
+            .duration(animDuration)
+            .delay(getStaggerDelay(currentBarIndex + 3, staggerDelay))
+            .attr('height', y(d.group2_percentage) - y(100));
+        } else {
+          bar2No.attr('y', y(100)).attr('height', y(d.group2_percentage) - y(100));
+        }
 
         // Add group labels below each bar pair
         const shortLabels = this.getShortLabels();
@@ -616,6 +746,7 @@ export default {
 .export-controls {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 8px;
   padding-right: 10px;
 }

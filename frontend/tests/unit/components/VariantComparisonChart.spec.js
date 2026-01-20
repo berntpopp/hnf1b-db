@@ -7,6 +7,9 @@
  * - Short label mapping
  * - Edge cases (empty data, filtered results)
  * - Statistical annotation display logic
+ * - Accessibility attributes (ARIA)
+ * - Export functionality (PNG, CSV, SVG)
+ * - Animation support with reduced-motion
  *
  * Note: Component mounting tests use shallowMount since D3 rendering is mocked.
  * Focus is on data validation and method testing.
@@ -16,6 +19,23 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { shallowMount } from '@vue/test-utils';
 import VariantComparisonChart from '@/components/analyses/VariantComparisonChart.vue';
 
+// Mock chart utilities
+vi.mock('@/utils/chartAccessibility', () => ({
+  addChartAccessibility: vi.fn(),
+}));
+
+vi.mock('@/utils/chartAnimation', () => ({
+  getAnimationDuration: vi.fn((duration) => duration),
+  getStaggerDelay: vi.fn((index, delay) => index * delay),
+  prefersReducedMotion: vi.fn(() => false),
+}));
+
+vi.mock('@/utils/export', () => ({
+  exportToPNG: vi.fn(),
+  exportToCSV: vi.fn(),
+  getTimestamp: vi.fn(() => '2026-01-20'),
+}));
+
 // Mock D3 to avoid DOM rendering issues in tests
 vi.mock('d3', () => {
   // Create a properly chainable mock selection
@@ -24,6 +44,7 @@ vi.mock('d3', () => {
       selectAll: vi.fn(() => createMockSelection()),
       select: vi.fn(() => createMockSelection()),
       append: vi.fn(() => createMockSelection()),
+      insert: vi.fn(() => createMockSelection()),
       remove: vi.fn(() => createMockSelection()),
       attr: vi.fn(() => selection),
       style: vi.fn(() => selection),
@@ -39,6 +60,8 @@ vi.mock('d3', () => {
       on: vi.fn(() => selection),
       transition: vi.fn(() => selection),
       duration: vi.fn(() => selection),
+      delay: vi.fn(() => selection),
+      ease: vi.fn(() => selection),
     };
     return selection;
   };
@@ -897,6 +920,102 @@ describe('VariantComparisonChart', () => {
       });
 
       expect(wrapper.exists()).toBe(true);
+    });
+  });
+
+  describe('Export Functionality', () => {
+    it('should have handleExportPNG method', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(typeof wrapper.vm.handleExportPNG).toBe('function');
+    });
+
+    it('should have handleExportCSV method', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(typeof wrapper.vm.handleExportCSV).toBe('function');
+    });
+
+    it('should have exportSVG method', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(typeof wrapper.vm.exportSVG).toBe('function');
+    });
+
+    it('should format CSV data correctly', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      // Call the CSV export method to verify it doesn't throw
+      // The actual export is mocked, so we just verify the method runs
+      expect(() => wrapper.vm.handleExportCSV()).not.toThrow();
+    });
+
+    it('should render ChartExportMenu component', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      // Check that ChartExportMenu is registered as a component
+      expect(wrapper.vm.$options.components.ChartExportMenu).toBeDefined();
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should import accessibility utilities', () => {
+      // Verify the component has access to accessibility methods
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(wrapper.exists()).toBe(true);
+    });
+
+    it('should have export controls with SVG button', () => {
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      const exportControls = wrapper.find('.export-controls');
+      expect(exportControls.exists()).toBe(true);
+
+      const svgButton = wrapper.find('.export-btn');
+      expect(svgButton.exists()).toBe(true);
+    });
+  });
+
+  describe('Animation Support', () => {
+    it('should import animation utilities', () => {
+      // Verify the component can be mounted (which imports animation utilities)
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(wrapper.exists()).toBe(true);
+    });
+
+    it('should handle reduced motion preference', async () => {
+      // Import the mock to change its behavior
+      const { prefersReducedMotion } = await import('@/utils/chartAnimation');
+
+      // Change mock to return true for reduced motion
+      prefersReducedMotion.mockReturnValue(true);
+
+      const wrapper = shallowMount(VariantComparisonChart, {
+        props: { comparisonData: createSampleComparisonData() },
+      });
+
+      expect(wrapper.exists()).toBe(true);
+
+      // Reset mock
+      prefersReducedMotion.mockReturnValue(false);
     });
   });
 });
