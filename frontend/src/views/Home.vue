@@ -69,7 +69,7 @@
                 </router-link>
               </v-col>
 
-              <!-- Publications -->
+              <!-- Publications (using PUBLICATION token color) -->
               <v-col cols="6" md="3">
                 <router-link to="/publications" class="stat-card-link">
                   <v-card
@@ -78,10 +78,10 @@
                     elevation="2"
                     rounded="lg"
                   >
-                    <v-icon color="cyan-darken-1" size="large" class="mb-2">
+                    <v-icon :color="dataColors.PUBLICATION.vuetify" size="large" class="mb-2">
                       mdi-file-document-multiple
                     </v-icon>
-                    <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
+                    <div class="text-h4 font-weight-bold text-orange-darken-1 mb-0">
                       <span v-if="!loadingStats">{{ displayStats.publications }}</span>
                       <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
                     </div>
@@ -92,7 +92,7 @@
                 </router-link>
               </v-col>
 
-              <!-- Phenotypes (no link for now) -->
+              <!-- Phenotypes (using PHENOTYPE token color, no link for now) -->
               <v-col cols="6" md="3">
                 <v-card
                   class="py-4 px-2 text-center h-100 stat-card"
@@ -100,8 +100,10 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon color="amber-darken-2" size="large" class="mb-2">mdi-medical-bag</v-icon>
-                  <div class="text-h4 font-weight-bold text-amber-darken-2 mb-0">
+                  <v-icon :color="dataColors.PHENOTYPE.vuetify" size="large" class="mb-2"
+                    >mdi-medical-bag</v-icon
+                  >
+                  <div class="text-h4 font-weight-bold text-green-darken-1 mb-0">
                     <span v-if="!loadingStats">{{ displayStats.total_reports }}</span>
                     <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
                   </div>
@@ -283,6 +285,7 @@ import SearchCard from '@/components/SearchCard.vue';
 import { useVariantStore } from '@/stores/variantStore';
 import { getSummaryStats } from '@/api/index.js';
 import { usePageSeo } from '@/composables/useSeoMeta';
+import { DATA_COLORS } from '@/utils/designTokens';
 
 /**
  * Loading placeholder component using render function (no runtime compiler needed).
@@ -433,6 +436,8 @@ export default {
       activeTab,
       handleTabChange,
       navigateToVariant,
+      // Design tokens for consistent colors
+      dataColors: DATA_COLORS,
     };
   },
 };
