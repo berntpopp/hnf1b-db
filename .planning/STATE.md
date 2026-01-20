@@ -1,8 +1,8 @@
 # Project State
 
 **Last Updated:** 2026-01-20
-**Current Phase:** Phase 5 - Chart Polish (Complete)
-**Next Action:** `/gsd:discuss-phase 06` to gather context for Backend Features & PWA phase
+**Current Phase:** Phase 6 - Backend Features & PWA (In Progress)
+**Next Action:** Execute 06-03-PLAN.md or continue with Phase 6 plans
 
 ## Project Reference
 
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 3 | Test Modernization | Complete | 100% (7/7 plans) |
 | 4 | UI/UX Normalization | Complete | 100% (5/5 plans) |
 | 5 | Chart Polish | Complete | 100% (6/6 plans) |
-| 6 | Backend Features & PWA | Pending | 0% |
+| 6 | Backend Features & PWA | In Progress | 67% (2/3 plans) |
 | 7 | Migration Consolidation | Pending | 0% |
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [=========================================================]--- 59% (22/37 plans)
+Progress: [=============================================================]- 65% (24/37 plans)
 
 ## Issue Mapping
 
@@ -40,20 +40,22 @@ Progress: [=========================================================]--- 59% (22
 | #135 - Chart accessibility | Phase 5 | COMPLETE (5/5 charts) |
 | #139 - Chart animations | Phase 5 | COMPLETE (5/5 charts) |
 | #136 - Chart export | Phase 5 | COMPLETE (5/5 charts) |
-| #140 - User ID tracking | Phase 6 | Pending |
-| #138 - Service worker | Phase 6 | Pending |
+| #140 - User ID tracking | Phase 6 | COMPLETE (06-01) |
+| #138 - Service worker | Phase 6 | COMPLETE (06-02) |
 | #102 - Migration consolidation | Phase 7 | Pending |
 | #48 - E2E tests | Phase 8 | Pending |
 | #50 - Documentation | Phase 9 | Pending |
 
 ## Session Continuity
 
-Last session: 2026-01-20T00:55Z
-Stopped at: Completed 05-06-PLAN.md (Human Verification and Final Cleanup)
+Last session: 2026-01-20T08:02Z
+Stopped at: Completed 06-02-PLAN.md (PWA Service Worker)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-20: Completed Phase 6 Plan 2 - PWA service worker with vite-plugin-pwa
+- 2026-01-20: Completed Phase 6 Plan 1 - Optional auth and audit logging for aggregations
 - 2026-01-20: Completed Phase 5 Plan 6 - Human verification and final cleanup (487 tests total)
 - 2026-01-20: Completed Phase 5 Plan 5 - VariantComparisonChart + BoxPlotChart (89 tests)
 - 2026-01-20: Completed Phase 5 Plan 4 - KaplanMeierChart accessibility, animation, export (51 tests)
@@ -126,6 +128,10 @@ Resume file: None
 | Bar index tracking for stagger | 05-05 | Track bar index across all bars per phenotype for staggered animation |
 | Violin expand animation | 05-05 | Violin shape expands from center line to full distribution |
 | Points delay after violin | 05-05 | Individual points fade in after violin animation completes |
+| CacheFirst for 2h8r.cif | 06-02 | Structure file rarely changes, 30-day cache for offline viewing |
+| NetworkFirst for API | 06-02 | Fresh data when online, cached fallback with 1-hour expiry |
+| autoUpdate register type | 06-02 | Service worker updates automatically without user prompt |
+| navigateFallbackDenylist for /api/ | 06-02 | API routes should not serve offline.html |
 
 ## Blockers
 
@@ -140,8 +146,9 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 3. Test modernization (consistent patterns) - COMPLETE
 4. UI/UX normalization (design system) - COMPLETE
 5. Chart polish (accessibility, animation, export) - COMPLETE
-6. High-risk work (migrations) near end
-7. Testing and documentation last (test/document final state)
+6. Backend features & PWA - IN PROGRESS (2/3 plans complete)
+7. High-risk work (migrations) near end
+8. Testing and documentation last (test/document final state)
 
 ### Phase 3 Test Modernization Summary
 
@@ -177,5 +184,15 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 **New tests in Phase 5:** 199 passing
 **Frontend tests total:** 487 passing
 
+### Phase 6 Backend Features & PWA Summary (In Progress)
+
+- **06-01:** Optional auth dependency and audit logging for aggregations - COMPLETE
+- **06-02:** PWA service worker with vite-plugin-pwa - COMPLETE
+- **06-03:** Pending
+
+**PWA setup:** vite-plugin-pwa, workbox caching, offline.html fallback
+**Caching strategies:** CacheFirst for structure files, NetworkFirst for API
+**Frontend tests total:** 487 passing
+
 ---
-*State updated: 2026-01-20 (after 05-06)*
+*State updated: 2026-01-20 (after 06-02)*
