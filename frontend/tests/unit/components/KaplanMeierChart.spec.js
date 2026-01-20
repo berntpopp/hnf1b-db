@@ -7,6 +7,8 @@
  * - Median survival point detection
  * - Comparison title mapping
  * - Edge cases (empty data, all censored, ties)
+ * - Accessibility (ARIA attributes)
+ * - Export functionality (PNG, CSV, SVG)
  *
  * Note: Component mounting tests are minimal since D3 rendering is mocked.
  * Focus is on data validation and logic testing.
@@ -29,6 +31,7 @@ vi.mock('d3', () => {
       style: vi.fn(() => mockSelection()),
     })),
     append: vi.fn(() => mockSelection()),
+    insert: vi.fn(() => mockSelection()),
     attr: vi.fn(function () {
       return this;
     }),
@@ -43,6 +46,21 @@ vi.mock('d3', () => {
     }),
     datum: vi.fn(() => mockSelection()),
     on: vi.fn(function () {
+      return this;
+    }),
+    node: vi.fn(() => ({
+      getTotalLength: vi.fn(() => 100),
+    })),
+    transition: vi.fn(function () {
+      return this;
+    }),
+    delay: vi.fn(function () {
+      return this;
+    }),
+    duration: vi.fn(function () {
+      return this;
+    }),
+    ease: vi.fn(function () {
       return this;
     }),
   });
@@ -89,6 +107,7 @@ vi.mock('d3', () => {
       }),
     })),
     curveStepAfter: {},
+    easeLinear: vi.fn(),
     axisBottom: vi.fn(() => ({
       ticks: vi.fn(function () {
         return this;
@@ -114,6 +133,27 @@ vi.mock('d3', () => {
   };
 });
 
+// Mock chartAnimation utilities
+vi.mock('@/utils/chartAnimation', () => ({
+  getAnimationDuration: vi.fn(() => 0),
+  prefersReducedMotion: vi.fn(() => true),
+}));
+
+// Mock chartAccessibility utilities
+vi.mock('@/utils/chartAccessibility', () => ({
+  addChartAccessibility: vi.fn(),
+  generateLineChartDescription: vi.fn(
+    (groups) => `Survival chart showing ${groups.length} groups.`
+  ),
+}));
+
+// Mock export utilities
+vi.mock('@/utils/export', () => ({
+  exportToPNG: vi.fn(),
+  exportToCSV: vi.fn(),
+  getTimestamp: vi.fn(() => '2026-01-20'),
+}));
+
 // Sample survival data matching backend format
 const createSampleSurvivalData = () => ({
   comparison_type: 'variant_type',
@@ -124,11 +164,51 @@ const createSampleSurvivalData = () => ({
       n: 50,
       events: 35, // Sum of events in survival_data
       survival_data: [
-        { time: 0, survival_probability: 1.0, ci_lower: 1.0, ci_upper: 1.0, at_risk: 50, events: 0, censored: 0 },
-        { time: 5, survival_probability: 0.9, ci_lower: 0.82, ci_upper: 0.98, at_risk: 45, events: 5, censored: 0 },
-        { time: 10, survival_probability: 0.75, ci_lower: 0.65, ci_upper: 0.85, at_risk: 38, events: 7, censored: 0 },
-        { time: 15, survival_probability: 0.5, ci_lower: 0.38, ci_upper: 0.62, at_risk: 25, events: 13, censored: 0 },
-        { time: 20, survival_probability: 0.3, ci_lower: 0.18, ci_upper: 0.42, at_risk: 15, events: 10, censored: 0 },
+        {
+          time: 0,
+          survival_probability: 1.0,
+          ci_lower: 1.0,
+          ci_upper: 1.0,
+          at_risk: 50,
+          events: 0,
+          censored: 0,
+        },
+        {
+          time: 5,
+          survival_probability: 0.9,
+          ci_lower: 0.82,
+          ci_upper: 0.98,
+          at_risk: 45,
+          events: 5,
+          censored: 0,
+        },
+        {
+          time: 10,
+          survival_probability: 0.75,
+          ci_lower: 0.65,
+          ci_upper: 0.85,
+          at_risk: 38,
+          events: 7,
+          censored: 0,
+        },
+        {
+          time: 15,
+          survival_probability: 0.5,
+          ci_lower: 0.38,
+          ci_upper: 0.62,
+          at_risk: 25,
+          events: 13,
+          censored: 0,
+        },
+        {
+          time: 20,
+          survival_probability: 0.3,
+          ci_lower: 0.18,
+          ci_upper: 0.42,
+          at_risk: 15,
+          events: 10,
+          censored: 0,
+        },
       ],
     },
     {
@@ -136,10 +216,42 @@ const createSampleSurvivalData = () => ({
       n: 30,
       events: 22, // Sum of events in survival_data
       survival_data: [
-        { time: 0, survival_probability: 1.0, ci_lower: 1.0, ci_upper: 1.0, at_risk: 30, events: 0, censored: 0 },
-        { time: 3, survival_probability: 0.8, ci_lower: 0.68, ci_upper: 0.92, at_risk: 24, events: 6, censored: 0 },
-        { time: 8, survival_probability: 0.5, ci_lower: 0.35, ci_upper: 0.65, at_risk: 15, events: 9, censored: 0 },
-        { time: 12, survival_probability: 0.25, ci_lower: 0.12, ci_upper: 0.38, at_risk: 8, events: 7, censored: 0 },
+        {
+          time: 0,
+          survival_probability: 1.0,
+          ci_lower: 1.0,
+          ci_upper: 1.0,
+          at_risk: 30,
+          events: 0,
+          censored: 0,
+        },
+        {
+          time: 3,
+          survival_probability: 0.8,
+          ci_lower: 0.68,
+          ci_upper: 0.92,
+          at_risk: 24,
+          events: 6,
+          censored: 0,
+        },
+        {
+          time: 8,
+          survival_probability: 0.5,
+          ci_lower: 0.35,
+          ci_upper: 0.65,
+          at_risk: 15,
+          events: 9,
+          censored: 0,
+        },
+        {
+          time: 12,
+          survival_probability: 0.25,
+          ci_lower: 0.12,
+          ci_upper: 0.38,
+          at_risk: 8,
+          events: 7,
+          censored: 0,
+        },
       ],
     },
   ],
@@ -152,6 +264,11 @@ describe('KaplanMeierChart', () => {
         props: {
           survivalData: createSampleSurvivalData(),
         },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.exists()).toBe(true);
@@ -162,6 +279,11 @@ describe('KaplanMeierChart', () => {
       const wrapper = shallowMount(KaplanMeierChart, {
         props: {
           survivalData: null,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
 
@@ -177,9 +299,29 @@ describe('KaplanMeierChart', () => {
             groups: [],
           },
         },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.exists()).toBe(true);
+    });
+
+    it('should render ChartExportMenu component', () => {
+      const wrapper = shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      expect(wrapper.findComponent({ name: 'ChartExportMenu' }).exists()).toBe(true);
     });
   });
 
@@ -189,6 +331,11 @@ describe('KaplanMeierChart', () => {
         props: {
           survivalData: null,
           width: 800,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
 
@@ -200,6 +347,11 @@ describe('KaplanMeierChart', () => {
         props: {
           survivalData: null,
           height: 600,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
 
@@ -213,6 +365,11 @@ describe('KaplanMeierChart', () => {
           survivalData: null,
           margin: customMargin,
         },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.props('margin')).toEqual(customMargin);
@@ -222,6 +379,11 @@ describe('KaplanMeierChart', () => {
       const wrapper = shallowMount(KaplanMeierChart, {
         props: {
           survivalData: null,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
 
@@ -238,6 +400,11 @@ describe('KaplanMeierChart', () => {
       wrapper = shallowMount(KaplanMeierChart, {
         props: {
           survivalData: null,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
     });
@@ -265,6 +432,163 @@ describe('KaplanMeierChart', () => {
     it('should handle undefined comparison type', () => {
       const title = wrapper.vm.getComparisonTitle(undefined);
       expect(title).toBe(undefined);
+    });
+  });
+
+  describe('Export Functionality', () => {
+    let wrapper;
+
+    beforeEach(() => {
+      wrapper = shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+    });
+
+    it('should have handleExportPNG method', () => {
+      expect(wrapper.vm.handleExportPNG).toBeDefined();
+      expect(typeof wrapper.vm.handleExportPNG).toBe('function');
+    });
+
+    it('should have handleExportCSV method', () => {
+      expect(wrapper.vm.handleExportCSV).toBeDefined();
+      expect(typeof wrapper.vm.handleExportCSV).toBe('function');
+    });
+
+    it('should have exportSVG method', () => {
+      expect(wrapper.vm.exportSVG).toBeDefined();
+      expect(typeof wrapper.vm.exportSVG).toBe('function');
+    });
+
+    it('should call handleExportCSV with correct data structure', async () => {
+      const { exportToCSV } = await import('@/utils/export');
+
+      wrapper.vm.handleExportCSV();
+
+      expect(exportToCSV).toHaveBeenCalled();
+      const [data, headers, filename] = exportToCSV.mock.calls[0];
+
+      // Verify headers include all survival data fields
+      expect(headers).toContain('group_name');
+      expect(headers).toContain('time_years');
+      expect(headers).toContain('survival_probability');
+      expect(headers).toContain('ci_lower');
+      expect(headers).toContain('ci_upper');
+      expect(headers).toContain('at_risk');
+      expect(headers).toContain('events');
+      expect(headers).toContain('censored');
+
+      // Verify data is flattened from all groups
+      expect(data.length).toBe(9); // 5 points from Missense + 4 from Truncating
+      expect(data[0].group_name).toBe('Missense');
+      expect(data[5].group_name).toBe('Truncating');
+
+      // Verify filename includes comparison type and timestamp
+      expect(filename).toContain('kaplan-meier');
+      expect(filename).toContain('variant_type');
+    });
+
+    it('should not call exportToCSV when survivalData is null', async () => {
+      const nullWrapper = shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: null,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      const { exportToCSV } = await import('@/utils/export');
+      exportToCSV.mockClear();
+
+      nullWrapper.vm.handleExportCSV();
+
+      expect(exportToCSV).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should call addChartAccessibility when rendering', async () => {
+      const { addChartAccessibility } = await import('@/utils/chartAccessibility');
+
+      shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      expect(addChartAccessibility).toHaveBeenCalled();
+    });
+
+    it('should call generateLineChartDescription with groups', async () => {
+      const { generateLineChartDescription } = await import('@/utils/chartAccessibility');
+
+      shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      expect(generateLineChartDescription).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'Missense' }),
+          expect.objectContaining({ name: 'Truncating' }),
+        ])
+      );
+    });
+  });
+
+  describe('Animation', () => {
+    it('should call getAnimationDuration with 2000ms for line charts', async () => {
+      const { getAnimationDuration } = await import('@/utils/chartAnimation');
+
+      shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      expect(getAnimationDuration).toHaveBeenCalledWith(2000);
+    });
+
+    it('should call prefersReducedMotion to check user preference', async () => {
+      const { prefersReducedMotion } = await import('@/utils/chartAnimation');
+
+      shallowMount(KaplanMeierChart, {
+        props: {
+          survivalData: createSampleSurvivalData(),
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
+      });
+
+      expect(prefersReducedMotion).toHaveBeenCalled();
     });
   });
 
@@ -438,7 +762,9 @@ describe('KaplanMeierChart', () => {
       expectedFromR.times.forEach((time, idx) => {
         const point = group.survival_data.find((d) => d.time === time);
         expect(point).toBeDefined();
-        expect(Math.abs(point.survival_probability - expectedFromR.survival[idx])).toBeLessThan(0.01);
+        expect(Math.abs(point.survival_probability - expectedFromR.survival[idx])).toBeLessThan(
+          0.01
+        );
       });
     });
 
@@ -512,6 +838,11 @@ describe('KaplanMeierChart', () => {
 
       const wrapper = shallowMount(KaplanMeierChart, {
         props: { survivalData: singlePointData },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.exists()).toBe(true);
@@ -534,6 +865,11 @@ describe('KaplanMeierChart', () => {
 
       const wrapper = shallowMount(KaplanMeierChart, {
         props: { survivalData: manyGroups },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.exists()).toBe(true);
@@ -560,6 +896,11 @@ describe('KaplanMeierChart', () => {
 
       const wrapper = shallowMount(KaplanMeierChart, {
         props: { survivalData: longFollowup },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.exists()).toBe(true);
@@ -625,6 +966,11 @@ describe('KaplanMeierChart', () => {
         props: {
           survivalData: null,
         },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       // The component defines a deep watcher on survivalData
@@ -643,6 +989,11 @@ describe('KaplanMeierChart', () => {
         props: {
           survivalData: null,
         },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(addEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
@@ -655,6 +1006,11 @@ describe('KaplanMeierChart', () => {
       const wrapper = shallowMount(KaplanMeierChart, {
         props: {
           survivalData: null,
+        },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
         },
       });
 
@@ -676,6 +1032,11 @@ describe('KaplanMeierChart', () => {
       it(`should map '${type}' to '${expectedTitle}'`, () => {
         const wrapper = shallowMount(KaplanMeierChart, {
           props: { survivalData: null },
+          global: {
+            stubs: {
+              ChartExportMenu: true,
+            },
+          },
         });
 
         expect(wrapper.vm.getComparisonTitle(type)).toBe(expectedTitle);
@@ -685,6 +1046,11 @@ describe('KaplanMeierChart', () => {
     it('should return input for unknown types as fallback', () => {
       const wrapper = shallowMount(KaplanMeierChart, {
         props: { survivalData: null },
+        global: {
+          stubs: {
+            ChartExportMenu: true,
+          },
+        },
       });
 
       expect(wrapper.vm.getComparisonTitle('new_type')).toBe('new_type');
@@ -709,7 +1075,8 @@ describe('KaplanMeierChart', () => {
         const prev = testData[i - 1];
         const curr = testData[i];
 
-        const expectedSurvival = prev.survival_probability * (curr.at_risk - curr.events) / curr.at_risk;
+        const expectedSurvival =
+          (prev.survival_probability * (curr.at_risk - curr.events)) / curr.at_risk;
         expect(Math.abs(curr.survival_probability - expectedSurvival)).toBeLessThan(0.01);
       }
     });
