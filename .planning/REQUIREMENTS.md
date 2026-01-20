@@ -33,13 +33,13 @@ Requirements grouped by logical category, derived from GitHub issues.
 
 ### UI/UX Normalization
 
-- [ ] **UIUX-01**: Create design tokens file with consistent color palette (#98)
-- [ ] **UIUX-02**: Update Vuetify theme with standardized colors (#98)
-- [ ] **UIUX-03**: Create reusable `PageHeader.vue` component (#98)
-- [ ] **UIUX-04**: Create reusable `DataTableToolbar.vue` component (#98)
-- [ ] **UIUX-05**: Standardize icon usage across all views (#98)
-- [ ] **UIUX-06**: Normalize typography hierarchy (h4/h5/h6 usage) (#98)
-- [ ] **UIUX-07**: Standardize card styles and spacing (#98)
+- [x] **UIUX-01**: Create design tokens file with consistent color palette (#98)
+- [x] **UIUX-02**: Update Vuetify theme with standardized colors (#98)
+- [x] **UIUX-03**: Create reusable `PageHeader.vue` component (#98)
+- [x] **UIUX-04**: Create reusable `DataTableToolbar.vue` component (#98)
+- [x] **UIUX-05**: Standardize icon usage across all views (#98)
+- [x] **UIUX-06**: Normalize typography hierarchy (h4/h5/h6 usage) (#98)
+- [x] **UIUX-07**: Standardize card styles and spacing (#98)
 
 ### Accessibility
 

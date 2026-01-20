@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-20
 **Current Phase:** Phase 4 - UI/UX Normalization (Complete)
-**Next Action:** Begin Phase 5 - Chart Polish
+**Next Action:** `/gsd:discuss-phase 05` to gather context for Chart Polish phase
 
 ## Project Reference
 
