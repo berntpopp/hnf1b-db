@@ -1,15 +1,15 @@
 # Project State
 
 **Last Updated:** 2026-01-20
-**Current Phase:** Phase 5 - Chart Polish (In Progress)
-**Next Action:** `/gsd:execute-plan 05-04` to add accessibility and export to KaplanMeierChart
+**Current Phase:** Phase 5 - Chart Polish (Complete)
+**Next Action:** `/gsd:execute-plan 06-01` to begin Backend Features & PWA phase
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Ship a production-quality codebase with improved maintainability, accessibility, and documentation
-**Current focus:** Phase 5 - Chart Polish
+**Current focus:** Phase 6 - Backend Features & PWA
 
 ## Phase Status
 
@@ -19,13 +19,13 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 2 | Component & Constants | Complete | 100% (3/3 plans) |
 | 3 | Test Modernization | Complete | 100% (7/7 plans) |
 | 4 | UI/UX Normalization | Complete | 100% (5/5 plans) |
-| 5 | Chart Polish | In Progress | 60% (3/5 plans) |
+| 5 | Chart Polish | Complete | 100% (5/5 plans) |
 | 6 | Backend Features & PWA | Pending | 0% |
 | 7 | Migration Consolidation | Pending | 0% |
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [====================================================]--- 51% (19/37 plans)
+Progress: [========================================================]---- 57% (21/37 plans)
 
 ## Issue Mapping
 
@@ -37,9 +37,9 @@ Progress: [====================================================]--- 51% (19/37 p
 | #91 - Hardcoded values | Phase 2 | COMPLETE (02-01, 02-02) |
 | #94 - Test modernization | Phase 3 | COMPLETE (03-01 through 03-07) |
 | #98 - UI/UX normalization | Phase 4 | COMPLETE (04-01 through 04-05) |
-| #135 - Chart accessibility | Phase 5 | IN PROGRESS (3/5 charts: DonutChart, StackedBarChart) |
-| #139 - Chart animations | Phase 5 | IN PROGRESS (3/5 charts: DonutChart, StackedBarChart) |
-| #136 - Chart export | Phase 5 | IN PROGRESS (3/5 charts: DonutChart, StackedBarChart) |
+| #135 - Chart accessibility | Phase 5 | COMPLETE (5/5 charts) |
+| #139 - Chart animations | Phase 5 | COMPLETE (5/5 charts) |
+| #136 - Chart export | Phase 5 | COMPLETE (5/5 charts) |
 | #140 - User ID tracking | Phase 6 | Pending |
 | #138 - Service worker | Phase 6 | Pending |
 | #102 - Migration consolidation | Phase 7 | Pending |
@@ -48,12 +48,14 @@ Progress: [====================================================]--- 51% (19/37 p
 
 ## Session Continuity
 
-Last session: 2026-01-20T00:49Z
-Stopped at: Completed 05-03-PLAN.md (StackedBarChart Polish)
+Last session: 2026-01-20T00:50Z
+Stopped at: Completed 05-05-PLAN.md (VariantComparisonChart + BoxPlotChart Polish)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-20: Completed Phase 5 Plan 5 - VariantComparisonChart + BoxPlotChart (89 tests)
+- 2026-01-20: Completed Phase 5 Plan 4 - KaplanMeierChart accessibility, animation, export (51 tests)
 - 2026-01-20: Completed Phase 5 Plan 3 - StackedBarChart accessibility, animation, export (27 tests)
 - 2026-01-20: Completed Phase 5 Plan 2 - DonutChart accessibility, animation, export (36 tests)
 - 2026-01-20: Completed Phase 5 Plan 1 - Shared chart utilities (export, accessibility, animation)
@@ -118,6 +120,11 @@ Resume file: None
 | Staggered bar animation pattern | 05-03 | Bars animate from width 0 with 30ms delay per bar |
 | Event handler reattachment | 05-03 | Mouse handlers attached after D3 transition completes |
 | Helper function for event handlers | 05-03 | Avoid duplication between animation and reduced-motion paths |
+| Path animation with attrTween | 05-04 | Kaplan-Meier curves animate along path using D3 attrTween |
+| Staggered group animation | 05-04 | Each survival curve group animates sequentially |
+| Bar index tracking for stagger | 05-05 | Track bar index across all bars per phenotype for staggered animation |
+| Violin expand animation | 05-05 | Violin shape expands from center line to full distribution |
+| Points delay after violin | 05-05 | Individual points fade in after violin animation completes |
 
 ## Blockers
 
@@ -131,7 +138,7 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 2. Refactoring next (cleaner code for features) - COMPLETE
 3. Test modernization (consistent patterns) - COMPLETE
 4. UI/UX normalization (design system) - COMPLETE
-5. Chart polish (accessibility, animation, export) - IN PROGRESS (60%)
+5. Chart polish (accessibility, animation, export) - COMPLETE
 6. High-risk work (migrations) near end
 7. Testing and documentation last (test/document final state)
 
@@ -154,17 +161,18 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 **Design system:** Centralized tokens, consistent hero sections, standardized toolbars
 **Frontend tests:** 295 passing
 
-### Phase 5 Chart Polish Summary (In Progress)
+### Phase 5 Chart Polish Summary (Complete)
 
 - **05-01:** Shared chart utilities - export.js, chartAccessibility.js, chartAnimation.js, ChartExportMenu.vue (85 tests)
 - **05-02:** DonutChart - accessibility, animation, export (36 tests)
 - **05-03:** StackedBarChart - accessibility, animation, export (27 tests)
+- **05-04:** KaplanMeierChart - accessibility, animation, export (51 tests)
+- **05-05:** VariantComparisonChart + BoxPlotChart - accessibility, animation, export (89 tests)
 
-**Charts polished:** DonutChart, StackedBarChart
-**Remaining:** KaplanMeierChart (05-04), BoxPlotChart (05-05)
+**Charts polished:** DonutChart, StackedBarChart, KaplanMeierChart, VariantComparisonChart, BoxPlotChart
 **Utilities created:** export.js, chartAccessibility.js, chartAnimation.js
 **Components created:** ChartExportMenu
-**New tests:** 148 passing
+**New tests in Phase 5:** 199 passing
 
 ---
-*State updated: 2026-01-20 (after 05-03)*
+*State updated: 2026-01-20 (after 05-05)*
