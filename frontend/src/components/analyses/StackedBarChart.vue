@@ -1,5 +1,8 @@
 <template>
   <div class="stacked-bar-chart-container">
+    <div class="chart-header">
+      <ChartExportMenu @export-png="handleExportPNG" @export-csv="handleExportCSV" />
+    </div>
     <!-- The div where the chart will be rendered -->
     <div ref="chart" />
   </div>
@@ -9,6 +12,8 @@
 import * as d3 from 'd3';
 import { addChartAccessibility, generateBarChartDescription } from '@/utils/chartAccessibility';
 import { getAnimationDuration, getStaggerDelay } from '@/utils/chartAnimation';
+import { exportToPNG, exportToCSV, getTimestamp } from '@/utils/export';
+import ChartExportMenu from '@/components/common/ChartExportMenu.vue';
 
 /**
  * Unique ID counter for generating unique ARIA IDs.
@@ -36,6 +41,9 @@ const CKD_HPO_IDS = [
 
 export default {
   name: 'StackedBarChart',
+  components: {
+    ChartExportMenu,
+  },
   props: {
     /**
      * The data to be plotted.
@@ -99,6 +107,55 @@ export default {
     window.removeEventListener('resize', this.renderChart);
   },
   methods: {
+    /**
+     * Handle PNG export of the chart.
+     * Exports the SVG at 2x resolution for high-quality output.
+     */
+    handleExportPNG() {
+      const svg = this.$refs.chart.querySelector('svg');
+      if (!svg) return;
+      const filename = `phenotype-prevalence-${getTimestamp()}`;
+      exportToPNG(svg, filename, 2);
+    },
+
+    /**
+     * Handle CSV export of the chart data.
+     * Exports phenotype data with penetrance calculations.
+     */
+    handleExportCSV() {
+      const aggregatedData = this.aggregateCKDStages(this.chartData);
+      const limitedData = aggregatedData.slice(0, this.displayLimit);
+
+      const data = limitedData.map((d) => ({
+        phenotype: d.label,
+        hpo_id: d.details?.hpo_id || '',
+        present_count: d.details?.present_count || 0,
+        absent_count: d.details?.absent_count || 0,
+        not_reported_count: d.details?.not_reported_count || 0,
+        penetrance_percent:
+          d.details && d.details.present_count + d.details.absent_count > 0
+            ? (
+                (d.details.present_count / (d.details.present_count + d.details.absent_count)) *
+                100
+              ).toFixed(1)
+            : 'N/A',
+      }));
+
+      const filename = `phenotype-prevalence-${getTimestamp()}`;
+      exportToCSV(
+        data,
+        [
+          'phenotype',
+          'hpo_id',
+          'present_count',
+          'absent_count',
+          'not_reported_count',
+          'penetrance_percent',
+        ],
+        filename
+      );
+    },
+
     /**
      * Aggregate CKD stages into a single entry.
      * - Present: any CKD stage reported as present
@@ -443,6 +500,11 @@ export default {
   width: 100%;
   margin: auto;
   position: relative;
+}
+.chart-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 .tooltip {
   pointer-events: none;
