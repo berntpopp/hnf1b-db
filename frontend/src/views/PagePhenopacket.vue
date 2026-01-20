@@ -1,91 +1,52 @@
 <!-- src/views/PagePhenopacket.vue -->
 <template>
   <div class="phenopacket-container">
-    <!-- HERO SECTION - Compact Phenopacket Header -->
-    <section class="hero-section py-2 px-4 mb-2">
-      <v-container>
-        <v-row justify="center" align="center">
-          <v-col cols="12" xl="10">
-            <!-- Compact Header with Breadcrumbs + Title + Stats inline -->
-            <div class="d-flex align-center flex-wrap gap-2 mb-2">
-              <v-btn
-                icon="mdi-arrow-left"
-                variant="text"
-                size="small"
-                aria-label="Go back to previous page"
-                @click="$router.back()"
-              />
-              <v-breadcrumbs :items="breadcrumbs" class="pa-0 flex-grow-0" density="compact" />
-            </div>
-
-            <!-- Title Row with Inline Stats Chips -->
-            <div class="d-flex flex-wrap align-center gap-3">
-              <v-icon color="teal-darken-2" size="large" aria-hidden="true">
-                mdi-account-details
-              </v-icon>
-              <div class="flex-grow-1">
-                <div class="d-flex flex-wrap align-center gap-2">
-                  <h1 class="text-h6 font-weight-bold text-teal-darken-2 ma-0">
-                    Individual Details
-                  </h1>
-                  <!-- Loading skeleton -->
-                  <template v-if="loading">
-                    <v-skeleton-loader type="chip" width="80" class="ma-0" />
-                    <v-skeleton-loader type="chip" width="60" class="ma-0" />
-                  </template>
-                  <!-- Loaded: Inline Stats Chips -->
-                  <template v-else-if="phenopacket">
-                    <v-chip
-                      color="teal-lighten-4"
-                      size="small"
-                      variant="flat"
-                      class="font-weight-medium"
-                    >
-                      {{ phenopacket.id }}
-                    </v-chip>
-                    <v-chip
-                      v-if="subjectSex"
-                      :color="getSexChipColor(subjectSex)"
-                      size="small"
-                      variant="flat"
-                    >
-                      <v-icon start size="x-small" aria-hidden="true">
-                        {{ getSexIcon(subjectSex) }}
-                      </v-icon>
-                      {{ formatSex(subjectSex) }}
-                    </v-chip>
-                    <v-chip
-                      v-if="ageDisplay !== 'N/A'"
-                      color="amber-lighten-4"
-                      size="small"
-                      variant="flat"
-                    >
-                      <v-icon start size="x-small" aria-hidden="true">mdi-calendar-clock</v-icon>
-                      {{ ageDisplay }}
-                    </v-chip>
-                    <v-chip color="green-lighten-4" size="small" variant="flat">
-                      <v-icon start size="x-small" aria-hidden="true">
-                        mdi-format-list-checks
-                      </v-icon>
-                      {{ phenotypicFeaturesCount }} HPO
-                    </v-chip>
-                    <v-chip
-                      v-if="variantsCount > 0"
-                      color="red-lighten-4"
-                      size="small"
-                      variant="flat"
-                    >
-                      <v-icon start size="x-small" aria-hidden="true">mdi-dna</v-icon>
-                      {{ variantsCount }} Variant{{ variantsCount === 1 ? '' : 's' }}
-                    </v-chip>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </v-col>
-        </v-row>
-      </v-container>
-    </section>
+    <!-- HERO SECTION - Using PageHeader component -->
+    <PageHeader
+      title="Individual Details"
+      icon="mdi-account-details"
+      :breadcrumbs="breadcrumbs"
+      variant="hero"
+      show-back
+      @back="$router.back()"
+    >
+      <template #prepend>
+        <!-- Loading skeleton -->
+        <template v-if="loading">
+          <v-skeleton-loader type="chip" width="80" class="ma-0" />
+          <v-skeleton-loader type="chip" width="60" class="ma-0" />
+        </template>
+        <!-- Loaded: Inline Stats Chips -->
+        <template v-else-if="phenopacket">
+          <v-chip color="teal-lighten-4" size="small" variant="flat" class="font-weight-medium">
+            {{ phenopacket.id }}
+          </v-chip>
+          <v-chip
+            v-if="subjectSex"
+            :color="getSexChipColor(subjectSex)"
+            size="small"
+            variant="flat"
+          >
+            <v-icon start size="x-small" aria-hidden="true">
+              {{ getSexIcon(subjectSex) }}
+            </v-icon>
+            {{ formatSex(subjectSex) }}
+          </v-chip>
+          <v-chip v-if="ageDisplay !== 'N/A'" color="amber-lighten-4" size="small" variant="flat">
+            <v-icon start size="x-small" aria-hidden="true">mdi-calendar-clock</v-icon>
+            {{ ageDisplay }}
+          </v-chip>
+          <v-chip color="green-lighten-4" size="small" variant="flat">
+            <v-icon start size="x-small" aria-hidden="true"> mdi-format-list-checks </v-icon>
+            {{ phenotypicFeaturesCount }} HPO
+          </v-chip>
+          <v-chip v-if="variantsCount > 0" color="red-lighten-4" size="small" variant="flat">
+            <v-icon start size="x-small" aria-hidden="true">mdi-dna</v-icon>
+            {{ variantsCount }} Variant{{ variantsCount === 1 ? '' : 's' }}
+          </v-chip>
+        </template>
+      </template>
+    </PageHeader>
 
     <!-- MAIN CONTENT -->
     <v-container class="pb-12">
@@ -265,6 +226,7 @@ import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
 import PhenotypeTimeline from '@/components/timeline/PhenotypeTimeline.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
 import { usePhenopacketSeo, useBreadcrumbStructuredData } from '@/composables/useSeoMeta';
 
 export default {
@@ -277,6 +239,7 @@ export default {
     MetadataCard,
     DeleteConfirmationDialog,
     PhenotypeTimeline,
+    PageHeader,
   },
   setup() {
     const route = useRoute();
@@ -605,11 +568,6 @@ export default {
 .phenopacket-container {
   min-height: 100vh;
   background-color: #fafafa;
-}
-
-.hero-section {
-  background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 50%, #f5f7fa 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .border-bottom {
