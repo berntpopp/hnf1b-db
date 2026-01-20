@@ -226,3 +226,41 @@ async def log_user_action(
     # Future: Store in audit_log table
     logger = logging.getLogger(__name__)
     logger.info(f"User action: user_id={user_id}, action={action}, details={details}")
+
+
+def log_aggregation_access(
+    user_id: int,
+    endpoint: str,
+    timestamp: datetime,
+) -> None:
+    """Log authenticated user access to aggregation endpoints.
+
+    This function is ONLY called for authenticated users. Anonymous users
+    are not tracked per CONTEXT.md requirements.
+
+    Args:
+        user_id: Authenticated user's ID (integer, not email for GDPR compliance)
+        endpoint: Aggregation endpoint path (e.g., "/aggregate/summary")
+        timestamp: UTC timestamp of the access
+
+    GDPR Compliance:
+        - Logs user_id (integer) only, NOT email or other PII
+        - Used for audit trail and usage analytics
+        - Can be used to demonstrate authorized data access
+
+    Example Log Entry:
+        {
+            "event": "AGGREGATION_ACCESS",
+            "timestamp": "2025-10-27T12:34:56Z",
+            "user_id": 42,
+            "endpoint": "/aggregate/summary"
+        }
+    """
+    log_entry = {
+        "event": "AGGREGATION_ACCESS",
+        "timestamp": timestamp.isoformat().replace("+00:00", "Z"),
+        "user_id": user_id,
+        "endpoint": endpoint,
+    }
+
+    audit_logger.info("AGGREGATION_ACCESS", extra=log_entry)
