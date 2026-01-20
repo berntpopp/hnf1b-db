@@ -64,17 +64,17 @@ Requirements grouped by logical category, derived from GitHub issues.
 
 ### Backend Features
 
-- [ ] **FEAT-01**: Add optional user dependency to aggregation endpoints (#140)
-- [ ] **FEAT-02**: Log user_id for authenticated aggregation requests (#140)
-- [ ] **FEAT-03**: Log as anonymous for unauthenticated requests (#140)
-- [ ] **FEAT-04**: Remove TODO comment in aggregations.py:1247 (#140)
+- [x] **FEAT-01**: Add optional user dependency to aggregation endpoints (#140)
+- [x] **FEAT-02**: Log user_id for authenticated aggregation requests (#140)
+- [x] **FEAT-03**: Skip tracking for unauthenticated requests (per CONTEXT.md - no anonymous tracking) (#140)
+- [x] **FEAT-04**: Remove TODO comment in aggregations.py:1247 (#140) - N/A, already removed during planning
 
 ### PWA/Caching
 
-- [ ] **PWA-01**: Add `vite-plugin-pwa` dependency (#138)
-- [ ] **PWA-02**: Configure service worker with workbox (#138)
-- [ ] **PWA-03**: Cache structure files (2h8r.cif) with CacheFirst strategy (#138)
-- [ ] **PWA-04**: Add offline fallback page (#138)
+- [x] **PWA-01**: Add `vite-plugin-pwa` dependency (#138)
+- [x] **PWA-02**: Configure service worker with workbox (#138)
+- [x] **PWA-03**: Cache structure files (2h8r.cif) with CacheFirst strategy (#138)
+- [x] **PWA-04**: Add offline fallback page (#138)
 
 ### Database Maintenance
 
@@ -161,14 +161,14 @@ Deferred to future milestone. Not in current scope.
 | CHART-07 | Phase 5 | Complete |
 | CHART-08 | Phase 5 | Complete |
 | CHART-09 | Phase 5 | Complete |
-| FEAT-01 | Phase 6 | Pending |
-| FEAT-02 | Phase 6 | Pending |
-| FEAT-03 | Phase 6 | Pending |
-| FEAT-04 | Phase 6 | Pending |
-| PWA-01 | Phase 6 | Pending |
-| PWA-02 | Phase 6 | Pending |
-| PWA-03 | Phase 6 | Pending |
-| PWA-04 | Phase 6 | Pending |
+| FEAT-01 | Phase 6 | Complete |
+| FEAT-02 | Phase 6 | Complete |
+| FEAT-03 | Phase 6 | Complete |
+| FEAT-04 | Phase 6 | Complete (N/A) |
+| PWA-01 | Phase 6 | Complete |
+| PWA-02 | Phase 6 | Complete |
+| PWA-03 | Phase 6 | Complete |
+| PWA-04 | Phase 6 | Complete |
 | DB-01 | Phase 7 | Pending |
 | DB-02 | Phase 7 | Pending |
 | DB-03 | Phase 7 | Pending |
@@ -193,4 +193,4 @@ Deferred to future milestone. Not in current scope.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-20 - Phase 5 complete (A11Y-01/02/04/05/06, CHART-01 through CHART-09 complete; A11Y-03 deferred)*
+*Last updated: 2026-01-20 - Phase 6 complete (FEAT-01 through FEAT-04, PWA-01 through PWA-04 complete)*
