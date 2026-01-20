@@ -9,18 +9,27 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Optional,
     Phenopacket,
+    User,
+    datetime,
     func,
+    get_current_user_optional,
     get_db,
+    log_aggregation_access,
     select,
     text,
+    timezone,
 )
 
 router = APIRouter()
 
 
 @router.get("/summary", response_model=Dict[str, int])
-async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
+async def get_summary_statistics(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
     """Get lightweight summary statistics for home page.
 
     Returns:
@@ -34,6 +43,14 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         - female: Number of female subjects
         - unknown_sex: Number of subjects with unknown sex
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/summary",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     # 1. Total phenopackets
     total_result = await db.execute(select(func.count()).select_from(Phenopacket))
     total_phenopackets = total_result.scalar()

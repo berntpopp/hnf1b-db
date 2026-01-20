@@ -10,8 +10,14 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Optional,
+    User,
+    datetime,
+    get_current_user_optional,
     get_db,
+    log_aggregation_access,
     text,
+    timezone,
 )
 
 router = APIRouter()
@@ -20,6 +26,7 @@ router = APIRouter()
 @router.get("/publication-types", response_model=List[AggregationResult])
 async def aggregate_publication_types(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get distribution of publication types.
 
@@ -29,6 +36,14 @@ async def aggregate_publication_types(
     Returns:
         List of aggregation results with publication type labels and counts
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/publication-types",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     SELECT
         ext_ref->>'reference' as pub_type,
@@ -63,6 +78,7 @@ async def aggregate_publication_types(
 @router.get("/publications-timeline", response_model=List[Dict])
 async def get_publications_timeline(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get timeline of phenopackets added over time by publication year.
 
@@ -81,6 +97,14 @@ async def get_publications_timeline(
             ...
         ]
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/publications-timeline",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     WITH publication_years AS (
         SELECT
@@ -140,6 +164,7 @@ async def get_publications_timeline(
 @router.get("/publications-by-type", response_model=List[Dict])
 async def get_publications_by_type(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get publication counts grouped by PMID and type with year from cached metadata.
 
@@ -160,6 +185,14 @@ async def get_publications_by_type(
             ...
         ]
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/publications-by-type",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     SELECT
         ext_ref->>'id' as pmid,
@@ -196,6 +229,7 @@ async def get_publications_by_type(
 @router.get("/publications-timeline-data", response_model=List[Dict])
 async def get_publications_timeline_data(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get aggregated timeline data for publications chart.
 
@@ -218,6 +252,14 @@ async def get_publications_timeline_data(
             ...
         ]
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/publications-timeline-data",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     WITH pub_data AS (
         SELECT

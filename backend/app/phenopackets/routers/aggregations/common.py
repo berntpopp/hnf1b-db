@@ -5,19 +5,23 @@ sub-modules to reduce code duplication and ensure consistency.
 """
 
 import logging
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user_optional
 from app.core.config import settings
 from app.core.mv_cache import mv_cache
 from app.database import get_db
+from app.models.user import User
 from app.phenopackets.models import (
     AggregationResult,
     Phenopacket,
 )
+from app.utils.audit_logger import log_aggregation_access
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,14 @@ __all__ = [
     "Any",
     "Dict",
     "List",
+    "Optional",
+    # Auth and audit
+    "get_current_user_optional",
+    "log_aggregation_access",
+    "User",
+    # Date/time
+    "datetime",
+    "timezone",
 ]
 
 

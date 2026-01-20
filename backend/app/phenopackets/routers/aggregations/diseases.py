@@ -11,10 +11,16 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Optional,
+    User,
     check_materialized_view_exists,
+    datetime,
+    get_current_user_optional,
     get_db,
+    log_aggregation_access,
     logger,
     text,
+    timezone,
 )
 
 router = APIRouter()
@@ -23,11 +29,20 @@ router = APIRouter()
 @router.get("/by-disease", response_model=List[AggregationResult])
 async def aggregate_by_disease(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Aggregate phenopackets by disease.
 
     Performance: Uses mv_disease_aggregation materialized view when available.
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/by-disease",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     # Try materialized view first (O(1) indexed lookup)
     if await check_materialized_view_exists(db, "mv_disease_aggregation"):
         logger.debug("Using mv_disease_aggregation materialized view")
@@ -89,8 +104,17 @@ async def aggregate_by_disease(
 @router.get("/kidney-stages", response_model=List[AggregationResult])
 async def aggregate_kidney_stages(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get distribution of kidney disease stages."""
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/kidney-stages",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     SELECT
         modifier->>'label' as stage,

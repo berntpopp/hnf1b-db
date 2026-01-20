@@ -11,10 +11,16 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Optional,
+    User,
     check_materialized_view_exists,
+    datetime,
+    get_current_user_optional,
     get_db,
+    log_aggregation_access,
     logger,
     text,
+    timezone,
 )
 
 router = APIRouter()
@@ -23,11 +29,20 @@ router = APIRouter()
 @router.get("/sex-distribution", response_model=List[AggregationResult])
 async def aggregate_sex_distribution(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get sex distribution of subjects.
 
     Performance: Uses mv_sex_distribution materialized view when available.
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/sex-distribution",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     # Try materialized view first (O(1) indexed lookup)
     if await check_materialized_view_exists(db, "mv_sex_distribution"):
         logger.debug("Using mv_sex_distribution materialized view")
@@ -84,8 +99,17 @@ async def aggregate_sex_distribution(
 @router.get("/age-of-onset", response_model=List[AggregationResult])
 async def aggregate_age_of_onset(
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get distribution of age of disease onset."""
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/age-of-onset",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     query = """
     SELECT
         disease->'onset'->'ontologyClass'->>'label' as onset_label,

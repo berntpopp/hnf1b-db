@@ -4,16 +4,19 @@ Provides comprehensive variant search with filtering, pagination, and sorting.
 Extracted from the monolithic aggregations.py for better maintainability.
 """
 
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user_optional
 from app.constants import DOMAIN_BOUNDARIES_DISPLAY
 from app.database import get_db
 from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.models.json_api import JsonApiResponse
+from app.models.user import User
 from app.phenopackets.molecular_consequence import compute_molecular_consequence
 from app.phenopackets.variant_search_validation import (
     validate_classification,
@@ -22,7 +25,7 @@ from app.phenopackets.variant_search_validation import (
     validate_search_query,
     validate_variant_type,
 )
-from app.utils.audit_logger import log_variant_search
+from app.utils.audit_logger import log_aggregation_access, log_variant_search
 from app.utils.pagination import build_offset_response
 
 from .variant_query_builder import VariantQueryBuilder
@@ -76,6 +79,7 @@ async def aggregate_all_variants(
         None, description="Sort field with optional '-' prefix for descending"
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Search and filter variants with offset pagination.
 
@@ -94,6 +98,14 @@ async def aggregate_all_variants(
     - consequence: Frameshift, Nonsense, Missense, etc.
     - domain: POU-Specific Domain, POU Homeodomain, etc.
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/all-variants",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     # Rate limiting (security layer)
     await check_rate_limit(request)
 

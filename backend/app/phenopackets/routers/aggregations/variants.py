@@ -10,9 +10,15 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    Optional,
     Query,
+    User,
+    datetime,
+    get_current_user_optional,
     get_db,
+    log_aggregation_access,
     text,
+    timezone,
 )
 from .sql_fragments import VARIANT_TYPE_CASE
 
@@ -30,6 +36,7 @@ async def aggregate_variant_pathogenicity(
         ),
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get distribution of variant pathogenicity classifications.
 
@@ -40,7 +47,16 @@ async def aggregate_variant_pathogenicity(
             - "unique": Count only unique variants (deduplicates by
               variant ID)
         db: Database session dependency
+        current_user: Optional authenticated user for audit logging
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/variant-pathogenicity",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     if count_mode == "unique":
         # Count unique variants by variant ID
         query = """
@@ -103,6 +119,7 @@ async def aggregate_variant_types(
         ),
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get distribution of variant types (SNV, CNV, etc.).
 
@@ -113,7 +130,16 @@ async def aggregate_variant_types(
             - "unique": Count only unique variants (deduplicates by
               variant ID)
         db: Database session dependency
+        current_user: Optional authenticated user for audit logging
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/variant-types",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     if count_mode == "unique":
         # Count unique variants by variant ID
         query = f"""

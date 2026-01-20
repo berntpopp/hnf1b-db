@@ -4,14 +4,18 @@ Provides Kaplan-Meier survival analysis with multiple comparison strategies.
 Supports variant type, pathogenicity, and disease subtype comparisons.
 """
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user_optional
 from app.core.config import settings
 from app.database import get_db
+from app.models.user import User
+from app.utils.audit_logger import log_aggregation_access
 
 from .sql_fragments import (
     CURRENT_AGE_PATH,
@@ -985,6 +989,7 @@ async def get_survival_data(
         ),
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get Kaplan-Meier survival data with configurable clinical endpoints.
 
@@ -1003,6 +1008,14 @@ async def get_survival_data(
     Returns:
         Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
+    # Log access for authenticated users only
+    if current_user:
+        log_aggregation_access(
+            user_id=current_user.id,
+            endpoint="/aggregate/survival-data",
+            timestamp=datetime.now(timezone.utc),
+        )
+
     from .survival_handlers import SurvivalHandlerFactory
 
     endpoint_config = _get_endpoint_config()
