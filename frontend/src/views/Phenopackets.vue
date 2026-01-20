@@ -10,6 +10,11 @@
   - Full-text search
 -->
 <template>
+  <PageHeader
+    title="Phenopacket Registry"
+    subtitle="Browse and search clinical phenotype data"
+    icon="mdi-account-group"
+  />
   <v-container fluid>
     <!-- Unified Table with Integrated Search Toolbar -->
     <AppDataTable
@@ -20,55 +25,26 @@
       :items-length="phenopackets.length"
       :custom-sort="customSort"
       hide-default-footer
-      title="Phenopacket Registry"
       @update:options="onOptionsUpdate"
       @click:row="handleRowClick"
     >
       <!-- Integrated Search Toolbar -->
       <template #toolbar>
-        <AppTableToolbar
+        <DataTableToolbar
           v-model:search-query="searchQuery"
           search-placeholder="Search phenopackets..."
           :result-count="pagination.totalRecords"
           result-label="phenopackets"
           :loading="loading"
+          :active-filters="computedActiveFilters"
           @search="applySearch"
           @clear-search="clearSearch"
+          @remove-filter="removeFilter"
+          @clear-all-filters="clearAllFilters"
         >
           <template #actions>
-            <!-- Clear filters button -->
-            <v-btn
-              v-if="hasActiveFilters"
-              variant="text"
-              size="small"
-              color="warning"
-              @click="clearAllFilters"
-            >
-              <v-icon start size="small">mdi-filter-off</v-icon>
-              Clear Filters ({{ activeFilterCount }})
-            </v-btn>
-          </template>
-        </AppTableToolbar>
-      </template>
-
-      <!-- Pagination controls above table -->
-      <template #top>
-        <div class="d-flex align-center justify-space-between">
-          <AppPagination
-            :current-count="phenopackets.length"
-            :current-page="pagination.currentPage"
-            :page-size="pagination.pageSize"
-            :total-pages="pagination.totalPages"
-            :total-records="pagination.totalRecords"
-            :items-per-page-options="itemsPerPageOptions"
-            class="flex-grow-1"
-            @go-to-page="goToPage"
-            @update:page-size="onPageSizeChange"
-          />
-          <!-- Create Button - Curator/Admin only -->
-          <div v-if="canCreatePhenopacket" class="d-flex align-center pr-4">
-            <v-divider vertical class="mx-2" />
-            <v-tooltip text="Create New" location="bottom" aria-label="Create new phenopacket">
+            <!-- Create Button - Curator/Admin only -->
+            <v-tooltip v-if="canCreatePhenopacket" text="Create New" location="bottom">
               <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
@@ -81,8 +57,22 @@
                 />
               </template>
             </v-tooltip>
-          </div>
-        </div>
+          </template>
+        </DataTableToolbar>
+      </template>
+
+      <!-- Pagination controls above table -->
+      <template #top>
+        <AppPagination
+          :current-count="phenopackets.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
       </template>
 
       <!-- Pagination controls below table -->
@@ -168,17 +158,19 @@ import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 import { useAuthStore } from '@/stores/authStore';
 import { useTableUrlState } from '@/composables/useTableUrlState';
 import AppDataTable from '@/components/common/AppDataTable.vue';
-import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
 import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
+import DataTableToolbar from '@/components/common/DataTableToolbar.vue';
 
 export default {
   name: 'Phenopackets',
   components: {
     AppDataTable,
-    AppTableToolbar,
     AppPagination,
     ColumnHeaderFilter,
+    PageHeader,
+    DataTableToolbar,
   },
   setup() {
     // URL state synchronization
@@ -273,6 +265,22 @@ export default {
     },
     activeFilterCount() {
       return this.urlState?.activeFilterCount?.value ?? 0;
+    },
+    /**
+     * Computed active filters for DataTableToolbar chip display.
+     * Returns an array of filter objects with key, label, icon, and color.
+     */
+    computedActiveFilters() {
+      const filters = [];
+      if (this.sexFilter) {
+        filters.push({
+          key: 'sex',
+          label: formatSex(this.sexFilter),
+          icon: getSexIcon(this.sexFilter),
+          color: getSexChipColor(this.sexFilter),
+        });
+      }
+      return filters;
     },
   },
   watch: {
@@ -571,6 +579,17 @@ export default {
     clearFilter(key) {
       // Clear filter via URL state
       this.urlState.clearFilter(key);
+    },
+
+    /**
+     * Remove a specific filter by key (used by DataTableToolbar chip close).
+     */
+    removeFilter(key) {
+      if (key === 'sex') {
+        this.sexFilter = null;
+        this.urlState.resetPage();
+        this.fetchPhenopackets();
+      }
     },
 
     clearAllFilters() {
