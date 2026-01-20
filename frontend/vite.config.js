@@ -5,6 +5,7 @@ import path from 'path';
 import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
@@ -35,6 +36,73 @@ export default defineConfig({
       gzipSize: true,
       brotliSize: true,
       template: 'treemap',
+    }),
+
+    // Progressive Web App (PWA) support
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', '2h8r.cif', 'offline.html'],
+      manifest: {
+        name: 'HNF1B Database',
+        short_name: 'HNF1B-DB',
+        description: 'Clinical and genetic data for HNF1B-related disorders',
+        theme_color: '#009688',
+        background_color: '#F5F7FA',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            // Structure file: CacheFirst (rarely changes, 30-day expiry)
+            urlPattern: /\/2h8r\.cif$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'structure-files',
+              expiration: {
+                maxEntries: 1,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+          {
+            // API responses: NetworkFirst (fresh data when online, cached fallback)
+            urlPattern: /\/api\/v2\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+        navigateFallback: '/offline.html',
+        navigateFallbackDenylist: [/^\/api\//],
+      },
     }),
   ],
 
