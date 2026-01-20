@@ -83,7 +83,7 @@ Plans:
 - QUAL-10: Create `StructureViewer.vue` for NGL.js canvas
 - QUAL-11: Create `StructureControls.vue` for representation toggles
 - QUAL-12: Create `VariantPanel.vue` for variant list/selection
-- QUAL-13: Create `DistanceDisplay.vue` for distance info and legends
+- QUAL-13: Create `DistanceDisplay.vue` for distance alerts and legends
 - QUAL-14: Create `frontend/src/constants/` module with documented constants
 - QUAL-15: Create `frontend/src/config/` with centralized configuration
 - QUAL-16: Move visualization dimensions to config
@@ -335,18 +335,28 @@ Plans:
 
 ## Phase 7: Migration Consolidation
 
-**Goal:** Clean alembic migration history
+**Goal:** Consolidate 30 Alembic migrations into a single `001_initial_schema.py` for cleaner history and faster setup
 
 **GitHub Issue:** #102
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Create database backup infrastructure (db-backup Makefile targets)
+- [ ] 07-02-PLAN.md — Extract schema and create consolidated migration
+- [ ] 07-03-PLAN.md — Verify migration, delete old files, document procedure
+
 **Requirements:**
-- DB-01 through DB-04 (migration cleanup)
+- DB-01: Create `001_initial_schema.py` merged migration (#102)
+- DB-02: Delete old migrations (git history preserves them) (#102)
+- DB-03: Verify fresh database setup with single migration (#102)
+- DB-04: Document production migration procedure (#102)
 
 **Success Criteria:**
 1. Single `001_initial_schema.py` migration exists
-2. Old migrations archived in `versions/archive/`
+2. Old migrations deleted (30 files removed)
 3. Fresh database setup works with single migration
-4. All indexes and constraints present
+4. All indexes, triggers, functions, and MVs present
 5. Production migration procedure documented
 
 **Dependencies:** All code changes complete (Phases 1-6)
@@ -354,11 +364,14 @@ Plans:
 **Risk Level:** HIGH - requires backup/restore procedure
 
 **Files to create:**
+- `backend/scripts/db_backup.py`
 - `backend/alembic/versions/001_initial_schema.py`
-- `backend/alembic/versions/archive/` (directory)
+- `backend/alembic/versions/001_initial_schema.sql`
+- `docs/MIGRATION_CONSOLIDATION.md`
 
 **Files to modify:**
-- Move all existing migrations to archive
+- `Makefile` (add db-backup targets)
+- Delete all old migration files in `backend/alembic/versions/`
 
 ---
 
@@ -448,4 +461,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 after phase 6 execution complete*
+*Last updated: 2026-01-20 after phase 7 planning complete*
