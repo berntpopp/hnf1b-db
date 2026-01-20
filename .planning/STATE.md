@@ -1,15 +1,15 @@
 # Project State
 
 **Last Updated:** 2026-01-20
-**Current Phase:** Phase 4 - UI/UX Normalization (In Progress)
-**Next Action:** Continue with 04-04 (Views Migration) or complete phase
+**Current Phase:** Phase 4 - UI/UX Normalization (Complete)
+**Next Action:** Begin Phase 5 - Chart Polish
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Ship a production-quality codebase with improved maintainability, accessibility, and documentation
-**Current focus:** Phase 4 - UI/UX Normalization
+**Current focus:** Phase 5 - Chart Polish
 
 ## Phase Status
 
@@ -18,14 +18,14 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | 1 | Pydantic Deprecation Fixes | Complete | 100% |
 | 2 | Component & Constants | Complete | 100% (3/3 plans) |
 | 3 | Test Modernization | Complete | 100% (7/7 plans) |
-| 4 | UI/UX Normalization | In Progress | 75% (3/4 plans) |
+| 4 | UI/UX Normalization | Complete | 100% (5/5 plans) |
 | 5 | Chart Polish | Pending | 0% |
 | 6 | Backend Features & PWA | Pending | 0% |
 | 7 | Migration Consolidation | Pending | 0% |
 | 8 | E2E Testing | Pending | 0% |
 | 9 | Documentation | Pending | 0% |
 
-Progress: [=============================================]------ 37% (3.5/9 phases)
+Progress: [================================================]---- 44% (4/9 phases)
 
 ## Issue Mapping
 
@@ -36,7 +36,7 @@ Progress: [=============================================]------ 37% (3.5/9 phase
 | #137 - Magic numbers | Phase 2 | COMPLETE (02-01, 02-02) |
 | #91 - Hardcoded values | Phase 2 | COMPLETE (02-01, 02-02) |
 | #94 - Test modernization | Phase 3 | COMPLETE (03-01 through 03-07) |
-| #98 - UI/UX normalization | Phase 4 | IN PROGRESS (04-01, 04-02, 04-03 complete) |
+| #98 - UI/UX normalization | Phase 4 | COMPLETE (04-01 through 04-05) |
 | #135 - Chart accessibility | Phase 5 | Pending |
 | #139 - Chart animations | Phase 5 | Pending |
 | #136 - Chart export | Phase 5 | Pending |
@@ -48,12 +48,14 @@ Progress: [=============================================]------ 37% (3.5/9 phase
 
 ## Session Continuity
 
-Last session: 2026-01-19T23:57Z
-Stopped at: Completed 04-03-PLAN.md (DataTableToolbar Component)
+Last session: 2026-01-20T00:03Z
+Stopped at: Completed 04-05-PLAN.md (Detail Views & Home Page Migration)
 Resume file: None
 
 ## Recent Activity
 
+- 2026-01-20: Completed Phase 4 Plan 5 - Detail views and Home page migration
+- 2026-01-20: Completed Phase 4 Plan 4 - List views migration (Phenopackets, Variants, Publications)
 - 2026-01-20: Completed Phase 4 Plan 3 - DataTableToolbar.vue component (43 tests)
 - 2026-01-20: Completed Phase 4 Plan 2 - PageHeader.vue component (26 tests)
 - 2026-01-20: Completed Phase 4 Plan 1 - Design tokens foundation (designTokens.js, Vuetify theme)
@@ -101,6 +103,8 @@ Resume file: None
 | Options API for DataTableToolbar | 04-03 | Consistent with existing codebase style |
 | Filter chip format with key/label | 04-03 | Array of {key, label, icon?, color?} for active filters |
 | shallowMount with Vuetify stubs | 04-03 | Avoids full Vuetify resolution issues in tests |
+| Custom hero gradients via deep selectors | 04-05 | Page-specific color schemes while reusing PageHeader |
+| Design token colors for stat cards | 04-05 | Publications=orange, Phenotypes=green per DATA_COLORS |
 
 ## Blockers
 
@@ -113,7 +117,7 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 1. Bug fixes first (Pydantic deprecations) - COMPLETE
 2. Refactoring next (cleaner code for features) - COMPLETE
 3. Test modernization (consistent patterns) - COMPLETE
-4. UI/UX normalization (design system) - IN PROGRESS
+4. UI/UX normalization (design system) - COMPLETE
 5. High-risk work (migrations) near end
 6. Testing and documentation last (test/document final state)
 
@@ -124,17 +128,17 @@ This milestone addresses 14 GitHub issues across code quality, UI/UX, features, 
 - **Coverage:** 53.50% (below 60% goal, to be addressed in future)
 - **Patterns established:** fixture_ prefix, test_module_behavior naming
 
-### Phase 4 UI/UX Normalization Progress
+### Phase 4 UI/UX Normalization Summary
 
-- **04-01:** Design tokens foundation - COMPLETE (designTokens.js, Vuetify theme, chart colors)
-- **04-02:** PageHeader.vue component with 26 tests - COMPLETE
-- **04-03:** DataTableToolbar.vue component with 43 tests - COMPLETE
-- **04-04:** View migration - PENDING
+- **04-01:** Design tokens foundation - designTokens.js, Vuetify theme, chart colors
+- **04-02:** PageHeader.vue component with 26 tests
+- **04-03:** DataTableToolbar.vue component with 43 tests
+- **04-04:** List views migration - Phenopackets.vue, Variants.vue, Publications.vue
+- **04-05:** Detail views and Home page - PagePhenopacket.vue, PageVariant.vue, PagePublication.vue, Home.vue
 
-### Frontend Test Summary
-
-- **Total tests:** 295 passing
-- **Component tests:** 43 (DataTableToolbar), 26 (PageHeader), 40 (KaplanMeierChart), 55 (VariantComparisonChart), etc.
+**Components created:** PageHeader, DataTableToolbar
+**Design system:** Centralized tokens, consistent hero sections, standardized toolbars
+**Frontend tests:** 295 passing
 
 ---
 *State updated: 2026-01-20*
