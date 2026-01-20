@@ -290,27 +290,42 @@ Plans:
 
 **GitHub Issues:** #140, #138
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Add optional user tracking to aggregation endpoints
+- [ ] 06-02-PLAN.md — Configure PWA with service worker caching
+
 **Requirements:**
-- FEAT-01 through FEAT-04 (user tracking)
-- PWA-01 through PWA-04 (service worker)
+- FEAT-01: Add optional user dependency to aggregation endpoints (#140)
+- FEAT-02: Log user_id for authenticated aggregation requests (#140)
+- FEAT-03: Skip tracking for unauthenticated requests (per CONTEXT.md) (#140)
+- FEAT-04: TODO comment already removed (verified during planning)
+- PWA-01: Add vite-plugin-pwa dependency (#138)
+- PWA-02: Configure service worker with workbox (#138)
+- PWA-03: Cache structure files (2h8r.cif) with CacheFirst strategy (#138)
+- PWA-04: Add offline fallback page (#138)
 
 **Success Criteria:**
 1. Aggregation endpoints accept optional user dependency
 2. User ID logged for authenticated requests
-3. Anonymous logged for unauthenticated requests
-4. TODO comment removed from aggregations.py
-5. vite-plugin-pwa installed and configured
-6. Service worker caches static assets
-7. Structure file (2h8r.cif) cached with CacheFirst
-8. Offline fallback page works
+3. Unauthenticated requests work without tracking
+4. vite-plugin-pwa installed and configured
+5. Service worker caches static assets
+6. Structure file (2h8r.cif) cached with CacheFirst
+7. Offline fallback page works
 
 **Dependencies:** Phase 2 complete (constants defined)
 
 **Files to create:**
 - `frontend/public/offline.html`
+- `frontend/public/pwa-192x192.png`
+- `frontend/public/pwa-512x512.png`
 
 **Files to modify:**
-- `backend/app/phenopackets/routers/aggregations.py`
+- `backend/app/auth/dependencies.py`
+- `backend/app/utils/audit_logger.py`
+- `backend/app/phenopackets/routers/aggregations/*.py`
 - `frontend/vite.config.js`
 - `frontend/package.json`
 
@@ -431,4 +446,4 @@ Plans:
 ---
 
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 after phase 5 execution complete*
+*Last updated: 2026-01-20 after phase 6 planning complete*
