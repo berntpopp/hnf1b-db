@@ -142,7 +142,7 @@ python-dotenv==1.2.1
     #   hnf1b-api (pyproject.toml)
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.21
+python-multipart==0.0.22
     # via hnf1b-api (pyproject.toml)
 pytz==2025.2
     # via pandas
