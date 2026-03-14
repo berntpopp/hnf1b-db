@@ -131,7 +131,7 @@ pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.12.0
     # via hnf1b-api (pyproject.toml)
-pyjwt==2.10.1
+pyjwt==2.12.0
     # via hnf1b-api (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
