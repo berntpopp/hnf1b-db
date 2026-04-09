@@ -149,9 +149,7 @@ class TestSyncStatusEndpoints:
         assert "total" in data or "pending" in data or "synced" in data
 
     @pytest.mark.asyncio
-    async def test_variant_sync_status_requires_admin(
-        self, async_client, auth_headers
-    ):
+    async def test_variant_sync_status_requires_admin(self, async_client, auth_headers):
         """Test that variant sync status requires admin role."""
         response = await async_client.get(
             "/api/v2/admin/sync/variants/status",
@@ -193,9 +191,7 @@ class TestSyncResponseSchema:
         assert "task_id" in data
 
     @pytest.mark.asyncio
-    async def test_variant_sync_response_has_task_id(
-        self, async_client, admin_headers
-    ):
+    async def test_variant_sync_response_has_task_id(self, async_client, admin_headers):
         """Test that variant sync response includes task_id."""
         response = await async_client.post(
             "/api/v2/admin/sync/variants",

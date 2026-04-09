@@ -5,39 +5,46 @@
 ## Naming Patterns
 
 **Files:**
-- Python: `snake_case.py` (e.g., `variant_validator.py`, `auth_endpoints.py`)
-- Vue Components: `PascalCase.vue` (e.g., `KaplanMeierChart.vue`, `AppDataTable.vue`)
-- JavaScript: `camelCase.js` (e.g., `authStore.js`, `logSanitizer.js`)
-- Test files: Python `test_*.py`, JavaScript `*.spec.js`
+- Backend Python: `snake_case.py` (e.g., `variant_validator.py`, `crud.py`)
+- Frontend Vue: `PascalCase.vue` for components (e.g., `AppDataTable.vue`, `HNF1BProteinVisualization.vue`)
+- Frontend JS utils: `camelCase.js` (e.g., `logSanitizer.js`, `sex.js`)
+- Test files: Backend `test_*.py`, Frontend `*.spec.js`
 
 **Functions:**
-- Python: `snake_case` (e.g., `get_phenopackets`, `validate_hgvs_notation`)
-- JavaScript: `camelCase` (e.g., `getPhenopackets`, `sanitizeLogData`)
-- Vue composables: `use*` prefix (e.g., `useAsyncState`, `useTableUrlState`)
-- Pinia stores: `use*Store` suffix (e.g., `useAuthStore`, `useVariantStore`)
+- Backend: `snake_case` (e.g., `get_password_hash`, `build_offset_response`)
+- Frontend: `camelCase` (e.g., `getSexIcon`, `sanitizeLogData`, `processQueue`)
 
 **Variables:**
-- Python: `snake_case` for variables, `UPPER_SNAKE_CASE` for constants
-- JavaScript: `camelCase` for variables, `UPPER_SNAKE_CASE` for constants
-- Vue refs: `camelCase` (e.g., `isLoading`, `accessToken`)
+- Backend: `snake_case` (e.g., `filter_sex`, `page_number`, `db_session`)
+- Frontend: `camelCase` (e.g., `accessToken`, `isRefreshing`, `mockResponse`)
 
-**Types:**
-- Python Pydantic models: `PascalCase` (e.g., `PhenopacketCreate`, `JsonApiResponse`)
-- Python dataclasses: `PascalCase` with descriptive suffixes (`*Config`, `*Response`)
-- TypeScript/JSDoc: `PascalCase` for interfaces
+**Types/Classes:**
+- Backend: `PascalCase` (e.g., `Phenopacket`, `PhenopacketCreate`, `VariantValidator`)
+- Frontend: `PascalCase` for stores (e.g., `useAuthStore`)
 
-**Classes:**
-- Python: `PascalCase` (e.g., `VariantValidator`, `PhenopacketBuilder`)
-- Exception classes: `*Error` suffix (e.g., `ValidationError`)
+**Constants:**
+- Backend: `UPPER_SNAKE_CASE` (in config)
+- Frontend: `UPPER_SNAKE_CASE` for mappings (e.g., `SEX_ICONS`, `REDACTION_PATTERNS`)
 
 ## Code Style
 
 **Formatting:**
-- Python: ruff formatter (replaces black, isort)
-- JavaScript/Vue: Prettier with config at `frontend/.prettierrc`
-- Line length: 88 chars (Python), 100 chars (JavaScript)
+- Backend: ruff with line-length 88
+- Frontend: Prettier with printWidth 100
 
-**Prettier Settings** (`frontend/.prettierrc`):
+**Backend (ruff):**
+```toml
+# From backend/pyproject.toml
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+```
+
+**Frontend (Prettier):**
 ```json
 {
   "printWidth": 100,
@@ -51,310 +58,232 @@
 ```
 
 **Linting:**
-- Python: ruff (E, W, F, I, D rules enabled)
-- JavaScript: ESLint with Vue plugin
-- TypeScript: Not used (plain JS with JSDoc)
-
-**Ruff Rules** (from `backend/pyproject.toml`):
-```toml
-select = ["E", "W", "F", "I", "D"]  # pycodestyle, pyflakes, isort, pydocstyle
-ignore = ["D100", "D104", "D203", "D213"]
-```
-
-**ESLint Rules** (`frontend/eslint.config.js`):
-- Vue recommended rules with some relaxations
-- `vue/multi-word-component-names`: off
-- `vue/require-default-prop`: error
-- `vue/require-prop-types`: error
-- `vue/block-order`: error (template, script, style)
-- Unused vars with `_` prefix allowed
+- Backend: ruff (replaces black, isort, flake8)
+  - Enabled: E (pycodestyle errors), W (warnings), F (pyflakes), I (isort), D (pydocstyle)
+  - Docstring style: Google convention
+- Frontend: ESLint with Vue plugin
+  - Unused vars with `_` prefix ignored: `argsIgnorePattern: '^_'`
+  - Required: `vue/require-default-prop`, `vue/require-prop-types`
+  - Block order enforced: `template`, `script`, `style`
 
 ## Import Organization
 
-**Python Order:**
-1. Standard library
-2. Third-party packages
-3. Local application imports
+**Backend Order:**
+1. Standard library imports (`import json`, `import logging`)
+2. Third-party imports (`from fastapi import...`, `from sqlalchemy import...`)
+3. Local application imports (`from app.database import...`, `from app.phenopackets.models import...`)
 
-**Python Example:**
-```python
-import json
-import logging
-from typing import Any, Dict, List, Optional
-
-import httpx
-import pytest
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
-
-from app.auth import require_curator
-from app.database import get_db
-from app.phenopackets.models import Phenopacket
-```
-
-**JavaScript Order:**
-1. Node/Vue built-ins
-2. Third-party packages
-3. Local imports with `@/` alias
-
-**JavaScript Example:**
-```javascript
-import { ref, computed } from 'vue';
-import { defineStore } from 'pinia';
-import axios from 'axios';
-
-import { apiClient } from '@/api';
-import { sanitizeLogData } from '@/utils/logSanitizer';
-```
+**Frontend Order:**
+1. Vue/framework imports (`import { describe, it, expect } from 'vitest'`)
+2. Third-party libraries (`import axios from 'axios'`)
+3. Local imports with `@/` alias (`import { useAuthStore } from '@/stores/authStore'`)
 
 **Path Aliases:**
-- Frontend: `@/` maps to `frontend/src/`
-- Configured in `frontend/vite.config.js` and `frontend/vitest.config.js`
+- Frontend: `@` maps to `src/` (configured in `vitest.config.js` and `vite.config.js`)
 
 ## Error Handling
 
-**Python Patterns:**
-- Use FastAPI `HTTPException` for API errors with appropriate status codes
-- Custom exception types for domain errors
-- Always include descriptive `detail` messages
-
+**Backend Patterns:**
 ```python
+# HTTP exceptions with detail
 from fastapi import HTTPException
 
-raise HTTPException(
-    status_code=404,
-    detail=f"Phenopacket with ID {phenopacket_id} not found"
-)
+raise HTTPException(status_code=404, detail="Phenopacket not found")
+raise HTTPException(status_code=403, detail="Cannot delete your own account")
 
-raise HTTPException(
-    status_code=400,
-    detail="Invalid variant format. Expected HGVS or VCF notation."
-)
+# Async cleanup with rollback
+try:
+    await db_session.execute(delete_stmt)
+    await db_session.commit()
+except Exception:
+    await db_session.rollback()
+    raise
 ```
 
-**JavaScript Patterns:**
-- API calls wrapped in try/catch with logging
-- Error state tracked in refs/stores
-- User-friendly error messages extracted from response
-
+**Frontend Patterns:**
 ```javascript
+// Try-catch with logService
 try {
   const response = await apiClient.post('/auth/login', credentials);
-  // ...
-} catch (err) {
-  error.value = err.response?.data?.detail || 'Login failed';
-  window.logService.error('Login failed', { error: error.value });
-  throw err;
+  return response.data;
+} catch (error) {
+  window.logService.error('Login failed', { error: error.message });
+  throw error;
 }
-```
 
-**Async Error Handling:**
-- Python: `async/await` with try/except
-- JavaScript: `async/await` with try/catch
-- Always clean up loading states in `finally` blocks
+// Graceful degradation
+apiClient.post.mockRejectedValueOnce(new Error('API Error'));
+await authStore.logout();
+// Should still clear local state even if API call fails
+```
 
 ## Logging
 
-**Python Framework:** Standard `logging` module
-
-**Python Pattern:**
+**Backend Framework:** Python `logging` module
 ```python
 import logging
 logger = logging.getLogger(__name__)
 
-logger.info("Processing phenopacket", extra={"id": phenopacket_id})
-logger.error("Validation failed", extra={"errors": errors})
-logger.debug("Query executed", extra={"sql": str(query)})
+logger.info("User logged in")
+logger.error("Database connection failed", exc_info=True)
 ```
 
-**JavaScript Framework:** Custom `logService` with privacy-first sanitization
-
-**JavaScript Pattern - CRITICAL:**
-- NEVER use `console.log()` in frontend code
-- ALWAYS use `window.logService.*` methods
-- Automatic PII/PHI redaction (HPO terms, emails, variants, tokens)
-
+**Frontend Framework:** Custom `window.logService` with PII redaction
 ```javascript
-// NEVER do this:
-console.log('User data:', userData);
-
-// ALWAYS do this:
-window.logService.info('User logged in', { username: user.value?.username });
+// NEVER use console.log() - use logService instead
+window.logService.info('User logged in successfully', { username: 'testuser' });
 window.logService.error('API error', { error: err.message });
-window.logService.debug('Fetching data', { endpoint });
+window.logService.warn('Token refresh failed, redirecting to login');
+window.logService.debug('Access token refreshed');
 ```
 
-**Log Sanitizer** (`frontend/src/utils/logSanitizer.js`):
-- Redacts HPO terms: `HP:0001234` -> `[HPO_TERM]`
-- Redacts variants: `NM_000458.4:c.544G>A` -> `[VARIANT]`
-- Redacts emails: `user@example.com` -> `[EMAIL]`
-- Redacts JWT tokens: `Bearer eyJ...` -> `Bearer [TOKEN]`
-- Redacts DNA sequences (8+ nucleotides)
+**PII Redaction Patterns (frontend):**
+- HPO terms: `HP:\d{7}` -> `[HPO_TERM]`
+- Variants: `NM_\d+\.\d+:c\.\d+[ATCG]>[ATCG]` -> `[VARIANT]`
+- MONDO: `MONDO:\d+` -> `[DISEASE]`
+- Email: `[\w.+-]+@[\w.-]+\.\w+` -> `[EMAIL]`
+- JWT: `Bearer\s+[\w.-]+` -> `Bearer [TOKEN]`
+- Subject IDs: `HNF1B-\d{3}` -> `[SUBJECT_ID]`
+- DNA sequences: `[ATCG]{8,}` -> `[DNA_SEQUENCE]`
 
 ## Comments
 
 **When to Comment:**
-- Complex algorithms or business logic
-- Non-obvious workarounds with issue references
-- API endpoint documentation (FastAPI docstrings)
-- Test purpose and coverage descriptions
+- Complex business logic requiring domain knowledge
+- Non-obvious workarounds with issue/PR references
+- SQL queries and JSONPath expressions
+- Regex patterns
 
-**Python Docstrings:**
-- Google-style docstrings enforced by ruff
-- Required for public functions and classes
-- Include Args, Returns, Raises sections
-
+**Docstring Style (Backend - Google):**
 ```python
-def validate_hgvs_notation(notation: str) -> bool:
-    """Validate HGVS notation format.
+def create_audit_entry(action: str, data: dict) -> AuditEntry:
+    """Create an audit trail entry.
 
     Args:
-        notation: HGVS string (e.g., "NM_000458.4:c.544G>A")
+        action: The action performed (create, update, delete)
+        data: The data being audited
 
     Returns:
-        True if valid HGVS format, False otherwise.
-
-    Raises:
-        ValueError: If notation is empty or None.
+        AuditEntry object with timestamp
     """
 ```
 
-**JavaScript JSDoc:**
-- Used for function documentation
-- Include param types, return types, examples
-
+**JSDoc Style (Frontend):**
 ```javascript
 /**
- * Sanitize log message and context
- * @param {string} message - Log message
- * @param {Object} context - Additional context data
- * @returns {Object} Sanitized message and context
+ * Get Material Design Icon for a sex value.
+ *
+ * @param {string|null|undefined} sex - Sex value from phenopacket
+ * @returns {string} MDI icon name
+ *
+ * @example
+ * getSexIcon('MALE') // Returns: 'mdi-gender-male'
  */
-export function sanitizeLogData(message, context = {}) {
-```
-
-**Test Docstrings:**
-- Describe what aspect is being tested
-- Reference related issues when applicable
-
-```python
-"""Comprehensive unit tests for VEP annotation system.
-
-Tests the VariantValidator class including:
-- Format detection (VCF vs HGVS)
-- VEP API annotation
-- Rate limiting (configurable from settings)
-
-Related: Issue #117, #100
-"""
+export function getSexIcon(sex) {
+  return SEX_ICONS[sex] ?? 'mdi-help-circle';
+}
 ```
 
 ## Function Design
 
-**Size Guidelines:**
-- Functions should do one thing well
-- Target <50 lines per function
-- Extract helpers for complex logic
-- Modules should stay under 500 lines
+**Size:** Keep modules under 500 lines; extract helpers when exceeding
 
-**Parameters:**
-- Python: Use type hints for all parameters
-- JavaScript: Use JSDoc for parameter documentation
-- Default values for optional parameters
-- Use FastAPI Query/Path for API parameters with validation
-
+**Parameters (Backend):**
 ```python
-async def list_phenopackets(
-    page_number: int = Query(1, alias="page[number]", ge=1),
-    page_size: int = Query(100, alias="page[size]", ge=1, le=1000),
-    filter_sex: Optional[str] = Query(None, alias="filter[sex]"),
-    db: AsyncSession = Depends(get_db),
-):
+# Use FastAPI Query with aliases for JSON:API compliance
+page_number: int = Query(1, alias="page[number]", ge=1, description="Page number")
+filter_sex: Optional[str] = Query(None, alias="filter[sex]")
+```
+
+**Parameters (Frontend):**
+```javascript
+// Props with defaults and validators
+defineProps({
+  serverSide: {
+    type: Boolean,
+    default: true,
+  },
+  density: {
+    type: String,
+    default: 'compact',
+    validator: (value) => ['default', 'comfortable', 'compact'].includes(value),
+  },
+});
 ```
 
 **Return Values:**
-- Python: Always specify return type hints
-- Use Pydantic models for API responses
-- Return early for error conditions
-- Avoid returning `None` when a default makes sense
+- Backend: Use Pydantic response models for type safety
+- Frontend: Return values directly or use computed refs
 
 ## Module Design
 
-**Exports:**
-- Python: Use `__all__` for public API
-- JavaScript: Named exports preferred over default exports
-- API functions exported from `frontend/src/api/index.js`
+**Exports (Backend):**
+```python
+# Router files export router instance
+router = APIRouter(tags=["phenopackets-crud"])
 
-**Barrel Files:**
-- Python: `__init__.py` files export public interfaces
-- JavaScript: `index.js` files aggregate module exports
+# Models export classes directly
+from app.phenopackets.models import Phenopacket, PhenopacketCreate
+```
 
-**Module Organization:**
-- One responsibility per module
-- Separate routers from business logic
-- Keep models/schemas in dedicated files
-- Utils/helpers in `utils/` directories
+**Exports (Frontend):**
+```javascript
+// Named exports preferred
+export function getSexIcon(sex) { ... }
+export function getSexChipColor(sex) { ... }
+export function formatSex(sex) { ... }
+
+// Default export for backward compatibility
+export default { sanitizeLogData, containsSensitiveData, REDACTION_PATTERNS };
+```
+
+**Barrel Files:** Not heavily used; prefer direct imports
 
 ## Vue Component Conventions
 
-**Block Order:**
+**Block Order (enforced by ESLint):**
 1. `<template>`
-2. `<script>`
-3. `<style>`
+2. `<script setup>`
+3. `<style scoped>`
 
-**Script Setup Pattern:**
-```vue
-<script setup>
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+**Props:**
+- Always define type and default
+- Use `defineProps()` in `<script setup>`
 
-// Props
-const props = defineProps({
-  survivalData: { type: Object, default: null },
-  width: { type: Number, default: 1200 },
-});
+**Component Naming:**
+- Multi-word names preferred (ESLint rule disabled but follow anyway)
+- Use `App` prefix for common components: `AppDataTable`, `AppPagination`
 
-// State
-const loading = ref(false);
-const data = ref(null);
+## UI Color Conventions
 
-// Computed
-const hasData = computed(() => !!data.value);
+**Reference:** `docs/COLOR_STYLE_GUIDE.md`
 
-// Methods
-function handleClick() {
-  // ...
-}
+**Semantic Colors (Vuetify lighten-3 variants):**
+- Subject IDs: `teal-lighten-3`
+- Male: `blue-lighten-3`, Female: `pink-lighten-3`
+- Has data: `green-lighten-3` (features), `blue-lighten-3` (variants), `orange-lighten-3` (publications)
+- Empty/Unknown: `grey-lighten-2`
 
-// Lifecycle
-onMounted(() => {
-  // ...
-});
-</script>
+**Use centralized utilities:**
+```javascript
+import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 ```
 
-**Component Props:**
-- Always define prop types
-- Provide default values where appropriate
-- Document complex props with JSDoc
+## Data Table Conventions
 
-## API Design Patterns
+**Server-side pagination required:**
+```vue
+<AppDataTable
+  :server-side="true"
+  :items="phenopackets"
+  :items-length="totalCount"
+  @update:options="onOptionsChange"
+>
+```
 
-**JSON:API v1.1 Compliance:**
-- Pagination: `page[number]`, `page[size]`, `page[after]`, `page[before]`
-- Filtering: `filter[field_name]`
-- Sorting: `sort=-created_at,subject_id`
-- Response format: `{ data, meta, links }`
-
-**Endpoint Naming:**
-- REST conventions: `/phenopackets/`, `/phenopackets/{id}`
-- Aggregations: `/aggregate/*`
-- Actions: verb-based like `/search`, `/annotate`
-
-**Server-Side Requirements:**
-- NEVER use client-side pagination or sorting for data tables
-- ALWAYS send sort parameters to backend
-- Use `buildSortParameter()` from `@/utils/pagination`
+**Sort parameter format:**
+- JSON:API compliant: `sort=-created_at,subject_id`
+- Prefix `-` for descending order
 
 ---
 

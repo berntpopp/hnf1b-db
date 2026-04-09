@@ -481,9 +481,7 @@ class TestBatchRecoding:
             assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_partial_failure(
-        self, validator
-    ):
+    async def test_recode_variants_batch_partial_failure(self, validator):
         """Test batch recoding with some variants failing."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -520,9 +518,7 @@ class TestBatchRecoding:
             assert results["invalid_variant"] is None
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_rate_limit_handling(
-        self, validator
-    ):
+    async def test_recode_variants_batch_rate_limit_handling(self, validator):
         """Test batch recoding handles rate limiting."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -562,6 +558,85 @@ class TestBatchRecoding:
             assert results["rs56116432"] is not None
             # Should have slept for rate limit
             mock_sleep.assert_called()
+
+
+class TestRecoderUnexpectedError:
+    """Test VEP recoder batch with unexpected HTTP error codes."""
+
+    @pytest.mark.asyncio
+    async def test_recode_batch_unexpected_error_returns_none(self, validator):
+        """Test that an unexpected VEP recoder status code returns None for all variants."""
+        with (
+            patch("httpx.AsyncClient") as mock_client,
+            patch("app.phenopackets.validation.variant_validator.cache") as mock_cache,
+        ):
+            mock_cache.get_json = AsyncMock(return_value=None)
+            mock_cache.set_json = AsyncMock(return_value=True)
+
+            # Return a 503 (unexpected, non-429) error
+            mock_response = Mock()
+            mock_response.status_code = 503
+            mock_response.headers = {}
+
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post.return_value = mock_response
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = AsyncMock()
+            mock_client.return_value = mock_client_instance
+
+            results = await validator.recode_variants_batch(["rs56116432"])
+
+            assert results["rs56116432"] is None
+
+
+class TestParseVepResponse:
+    """Test _parse_vep_response with edge cases."""
+
+    def test_parse_response_no_primary_transcript(self):
+        """Test parsing VEP response when no transcript consequences exist."""
+        from app.variants.service import _parse_vep_response
+
+        results = [
+            {
+                "seq_region_name": "17",
+                "start": 36459258,
+                "allele_string": "A/G",
+                "most_severe_consequence": "intergenic_variant",
+                # No transcript_consequences key at all
+            }
+        ]
+        parsed = _parse_vep_response(results, ["17-36459258-A-G"])
+
+        assert "17-36459258-A-G" in parsed
+        annotation = parsed["17-36459258-A-G"]
+        assert annotation["most_severe_consequence"] == "intergenic_variant"
+        # All primary-dependent fields should be None
+        assert annotation["impact"] is None
+        assert annotation["gene_symbol"] is None
+        assert annotation["polyphen_prediction"] is None
+        assert annotation["sift_prediction"] is None
+        assert annotation["cadd_score"] is None
+        assert annotation["hgvsc"] is None
+        assert annotation["hgvsp"] is None
+
+    def test_parse_response_empty_transcript_list(self):
+        """Test parsing VEP response with empty transcript_consequences list."""
+        from app.variants.service import _parse_vep_response
+
+        results = [
+            {
+                "seq_region_name": "17",
+                "start": 36459258,
+                "allele_string": "A/G",
+                "most_severe_consequence": "intergenic_variant",
+                "transcript_consequences": [],
+            }
+        ]
+        parsed = _parse_vep_response(results, ["17-36459258-A-G"])
+
+        annotation = parsed["17-36459258-A-G"]
+        assert annotation["polyphen_prediction"] is None
+        assert annotation["gene_id"] is None
 
 
 class TestCacheIntegration:

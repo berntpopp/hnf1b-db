@@ -6,309 +6,277 @@
 
 ```
 hnf1b-db/
-├── backend/                    # FastAPI Python backend
-│   ├── app/                    # Application code
-│   │   ├── api/                # Admin and auth endpoints
-│   │   ├── auth/               # Authentication module
-│   │   ├── core/               # Config, cache, settings
-│   │   ├── middleware/         # Request middleware
-│   │   ├── models/             # Shared SQLAlchemy models
-│   │   ├── ontology/           # HPO ontology routers
-│   │   ├── phenopackets/       # Core phenopacket domain
+├── backend/                    # FastAPI REST API (Python 3.10+)
+│   ├── app/                    # Main application code
+│   │   ├── api/                # Auth and admin endpoints
+│   │   ├── auth/               # JWT authentication module
+│   │   ├── core/               # Config, cache, patterns
+│   │   ├── middleware/         # Rate limiting
+│   │   ├── models/             # Shared Pydantic models
+│   │   ├── ontology/           # HPO term routers
+│   │   ├── phenopackets/       # Core phenopackets domain
 │   │   │   ├── routers/        # CRUD, search, aggregations
-│   │   │   │   └── aggregations/  # Domain-split agg endpoints
-│   │   │   └── validation/     # Phenopacket validators
-│   │   ├── publications/       # Publication endpoints
-│   │   ├── reference/          # Gene/transcript reference data
-│   │   ├── repositories/       # Data access layer
-│   │   ├── schemas/            # Shared Pydantic schemas
-│   │   ├── search/             # Global search service
-│   │   ├── seo/                # SEO metadata endpoints
+│   │   │   │   └── aggregations/  # Statistical endpoints
+│   │   │   └── validation/     # Schema validators
+│   │   ├── publications/       # Publication endpoints/services
+│   │   ├── reference/          # Reference genome endpoints
+│   │   ├── repositories/       # Data access patterns
+│   │   ├── schemas/            # Additional Pydantic schemas
+│   │   ├── search/             # Global search functionality
+│   │   ├── seo/                # Sitemap generation
 │   │   ├── services/           # Business logic services
-│   │   ├── utils/              # Utilities (audit, pagination)
+│   │   ├── utils/              # Shared utilities
 │   │   └── variants/           # Variant annotation service
 │   ├── alembic/                # Database migrations
 │   │   └── versions/           # Migration files
-│   ├── migration/              # Data import scripts
-│   │   ├── data_sources/       # Google Sheets connectors
-│   │   ├── phenopackets/       # Phenopacket builders
-│   │   └── vrs/                # VRS variant helpers
-│   ├── scripts/                # Utility scripts
-│   └── tests/                  # Pytest test suite
-├── frontend/                   # Vue.js frontend
+│   ├── migration/              # Data import from Google Sheets
+│   │   ├── data_sources/       # Google Sheets client
+│   │   ├── database/           # Storage utilities
+│   │   ├── phenopackets/       # Phenopacket builders/mappers
+│   │   └── vrs/                # VRS variant builders
+│   ├── scripts/                # CLI utility scripts
+│   └── tests/                  # Pytest test files
+├── frontend/                   # Vue.js 3 application
 │   ├── src/
-│   │   ├── api/                # Centralized API client
-│   │   ├── assets/             # Static assets, JS mixins
-│   │   ├── components/         # Vue components
+│   │   ├── api/                # Axios API client
+│   │   ├── assets/             # Static assets, mixins
+│   │   ├── components/         # Reusable Vue components
+│   │   │   ├── analyses/       # Visualization charts
 │   │   │   ├── common/         # Shared UI components
-│   │   │   ├── phenopacket/    # Phenopacket detail cards
 │   │   │   ├── gene/           # Gene visualization
-│   │   │   ├── analyses/       # Charts and analysis components
-│   │   │   └── timeline/       # Timeline components
-│   │   ├── composables/        # Vue composition functions
+│   │   │   ├── phenopacket/    # Phenopacket detail cards
+│   │   │   └── timeline/       # Timeline visualization
+│   │   ├── composables/        # Vue 3 composition utilities
 │   │   ├── config/             # App configuration
-│   │   ├── plugins/            # Vuetify plugins
+│   │   ├── plugins/            # Vuetify plugin setup
 │   │   ├── router/             # Vue Router config
-│   │   ├── schemas/            # JSON schemas
-│   │   ├── services/           # Frontend services
-│   │   ├── stores/             # Pinia stores
-│   │   ├── utils/              # Utility functions
-│   │   └── views/              # Page components
-│   ├── public/                 # Static public assets
-│   │   └── config/             # Runtime config
-│   ├── tests/                  # Test suites
+│   │   ├── schemas/            # Form validation schemas
+│   │   ├── services/           # Frontend services (logging)
+│   │   ├── stores/             # Pinia state stores
+│   │   ├── utils/              # Helper functions
+│   │   └── views/              # Page-level components
+│   ├── tests/                  # Test files
 │   │   ├── unit/               # Unit tests
 │   │   └── e2e/                # End-to-end tests
-│   └── nginx/                  # Nginx config for production
-├── docs/                       # Documentation
+│   ├── public/                 # Static public assets
+│   └── nginx/                  # Nginx config for Docker
+├── docs/                       # Project documentation
 │   ├── api/                    # API documentation
-│   ├── database/               # DB schema docs
-│   ├── deployment/             # Deployment guides
-│   ├── frontend/               # Frontend docs
-│   └── adr/                    # Architecture Decision Records
-├── docker/                     # Docker compose files
-├── .github/                    # GitHub Actions CI/CD
-│   └── workflows/              # Workflow definitions
-└── .planning/                  # GSD planning documents
-    └── codebase/               # Codebase analysis docs
+│   ├── adr/                    # Architecture Decision Records
+│   ├── database/               # Database schema docs
+│   ├── frontend/               # Frontend-specific docs
+│   └── issues/                 # Issue implementation plans
+├── docker/                     # Docker configuration
+├── .planning/                  # GSD planning documents
+│   └── codebase/               # Codebase analysis docs
+├── plan/                       # Project planning files
+├── .github/                    # GitHub Actions workflows
+├── Makefile                    # Root-level build commands
+├── CLAUDE.md                   # Claude Code instructions
+└── docker-compose.*.yml        # Docker orchestration
 ```
 
 ## Directory Purposes
 
 **`backend/app/`:**
-- Purpose: Main FastAPI application code
-- Contains: Routers, models, services, utilities
-- Key files: `main.py`, `database.py`, `hpo_proxy.py`
+- Purpose: Core backend application code
+- Contains: FastAPI application, routers, models, services
+- Key files: `main.py` (entry point), `database.py` (session management), `schemas.py` (shared Pydantic models)
 
 **`backend/app/phenopackets/`:**
-- Purpose: Core phenopacket domain logic
-- Contains: Models, validators, routers (CRUD, search, aggregations)
-- Key files: `models.py`, `clinical_endpoints.py`, `query_builders.py`
+- Purpose: Primary domain - phenopacket data management
+- Contains: Models, routers, validators, query builders
+- Key files: `models.py` (SQLAlchemy + Pydantic), `routers/__init__.py` (router composition)
 
 **`backend/app/phenopackets/routers/`:**
-- Purpose: API endpoints split by concern
-- Contains: CRUD, search, comparisons, aggregations sub-routers
-- Key files: `crud.py`, `search.py`, `comparisons.py`
-
-**`backend/app/phenopackets/routers/aggregations/`:**
-- Purpose: Statistical aggregation endpoints by domain
-- Contains: Features, diseases, demographics, variants, survival, publications
-- Key files: `survival.py`, `features.py`, `all_variants.py`, `sql_fragments.py`
+- Purpose: API endpoints organized by functionality
+- Contains: CRUD operations, search, aggregations, comparisons
+- Key files: `crud.py` (list/get/create/update/delete), `search.py` (full-text search), `aggregations/__init__.py` (stats endpoints)
 
 **`backend/app/core/`:**
-- Purpose: Application configuration and caching
-- Contains: Settings, cache management, materialized view cache
-- Key files: `config.py`, `cache.py`, `mv_cache.py`
+- Purpose: Infrastructure and configuration
+- Contains: Settings, caching, retry patterns
+- Key files: `config.py` (unified settings), `cache.py` (Redis wrapper), `mv_cache.py` (materialized view cache)
 
 **`backend/app/auth/`:**
 - Purpose: Authentication and authorization
 - Contains: JWT tokens, password hashing, permission decorators
-- Key files: `dependencies.py`, `tokens.py`, `permissions.py`
-
-**`backend/app/search/`:**
-- Purpose: Global search across entity types
-- Contains: Search service, repositories, schemas
-- Key files: `services.py`, `repositories.py`, `routers.py`
-
-**`backend/app/reference/`:**
-- Purpose: Gene and transcript reference data
-- Contains: HNF1B gene data, protein domains, GRCh38 reference
-- Key files: `service.py`, `router.py`, `models.py`
-
-**`backend/app/variants/`:**
-- Purpose: Variant annotation via Ensembl VEP
-- Contains: VEP service, CNV handling
-- Key files: `service.py`
-
-**`backend/alembic/versions/`:**
-- Purpose: Database migration scripts
-- Contains: Schema changes, index additions, materialized views
-- Key files: `001_initial_phenopackets_v2_schema.py`, migration files by feature
+- Key files: `tokens.py` (JWT creation/verification), `dependencies.py` (FastAPI Depends), `permissions.py` (role checks)
 
 **`backend/migration/`:**
-- Purpose: Data import from Google Sheets
-- Contains: Sheet readers, phenopacket builders, VRS helpers
-- Key files: `direct_sheets_to_phenopackets.py`
+- Purpose: Data import from external sources (Google Sheets)
+- Contains: ETL pipeline for phenopacket creation
+- Key files: `direct_sheets_to_phenopackets.py` (main migration script), `phenopackets/builder_simple.py` (phenopacket builder)
+
+**`backend/alembic/`:**
+- Purpose: Database schema migrations
+- Contains: Alembic configuration and migration files
+- Key files: `env.py` (migration environment), `versions/*.py` (individual migrations)
 
 **`frontend/src/api/`:**
-- Purpose: Centralized axios API client
-- Contains: Request/response interceptors, all API functions
-- Key files: `index.js`, `auth.js`
+- Purpose: Backend API integration
+- Contains: Axios client with interceptors, all API functions
+- Key files: `index.js` (API client and all endpoints), `auth.js` (auth-specific calls)
+
+**`frontend/src/components/`:**
+- Purpose: Reusable Vue components
+- Contains: UI building blocks organized by feature
+- Key files: `common/AppDataTable.vue` (data table), `HPOAutocomplete.vue` (term search), `analyses/*.vue` (charts)
 
 **`frontend/src/views/`:**
 - Purpose: Page-level routed components
-- Contains: All top-level pages
-- Key files: `Phenopackets.vue`, `PagePhenopacket.vue`, `Variants.vue`, `Home.vue`, `AggregationsDashboard.vue`
-
-**`frontend/src/components/`:**
-- Purpose: Reusable UI components organized by domain
-- Contains: Domain-specific and common components
-- Key files: Organized in subdirectories
-
-**`frontend/src/components/common/`:**
-- Purpose: Shared data display components
-- Contains: Tables, pagination, search filters
-- Key files: `AppDataTable.vue`, `AppPagination.vue`, `AppSearchFilters.vue`
-
-**`frontend/src/components/phenopacket/`:**
-- Purpose: Phenopacket detail view cards
-- Contains: Cards for each phenopacket section
-- Key files: `SubjectCard.vue`, `PhenotypicFeaturesCard.vue`, `InterpretationsCard.vue`, `DiseasesCard.vue`
-
-**`frontend/src/components/gene/`:**
-- Purpose: Gene and protein visualizations
-- Contains: Interactive D3/NGL visualizations
-- Key files: `HNF1BGeneVisualization.vue`, `HNF1BProteinVisualization.vue`, `ProteinStructure3D.vue`
-
-**`frontend/src/components/analyses/`:**
-- Purpose: Statistical analysis and chart components
-- Contains: D3-based charts, survival analysis
-- Key files: `KaplanMeierChart.vue`, `DonutChart.vue`, `StackedBarChart.vue`, `BoxPlotChart.vue`
+- Contains: Full pages mounted by Vue Router
+- Key files: `Phenopackets.vue` (list view), `PagePhenopacket.vue` (detail view), `AggregationsDashboard.vue` (stats)
 
 **`frontend/src/composables/`:**
-- Purpose: Reusable Vue composition functions
-- Contains: SEO, URL state, HPO autocomplete, visualization hooks
-- Key files: `useSeoMeta.js`, `useTableUrlState.js`, `useHPOAutocomplete.js`
+- Purpose: Reusable stateful logic (Composition API)
+- Contains: Hooks for common patterns
+- Key files: `useVEPAnnotation.js` (variant annotation), `useTableUrlState.js` (URL state sync), `useHPOAutocomplete.js` (HPO search)
 
 **`frontend/src/stores/`:**
-- Purpose: Pinia global state stores
-- Contains: Auth, logging, variant state
-- Key files: `authStore.js`, `logStore.js`, `variantStore.js`
+- Purpose: Global state management (Pinia)
+- Contains: Reactive stores for shared state
+- Key files: `authStore.js` (authentication state), `logStore.js` (log entries), `variantStore.js` (variant data)
 
 **`frontend/src/utils/`:**
-- Purpose: Utility functions
-- Contains: Pagination, colors, age parsing, variant formatting
-- Key files: `pagination.js`, `colors.js`, `ageParser.js`, `variants.js`
+- Purpose: Pure utility functions
+- Contains: Helpers for data transformation, formatting
+- Key files: `pagination.js` (JSON:API helpers), `logSanitizer.js` (PII redaction), `auth.js` (token management)
 
-**`frontend/src/services/`:**
-- Purpose: Frontend service layer
-- Contains: Logging, health checks
-- Key files: `logService.js`, `healthService.js`
+**`docs/`:**
+- Purpose: Project documentation
+- Contains: API docs, ADRs, implementation plans
+- Key files: `adr/001-json-api-pagination.md`, `database/reference-schema.md`, `COLOR_STYLE_GUIDE.md`
 
 ## Key File Locations
 
 **Entry Points:**
-- `backend/app/main.py`: FastAPI app creation and router registration
-- `frontend/src/main.js`: Vue app bootstrap
-- `frontend/index.html`: HTML entry point
+- `backend/app/main.py`: FastAPI application entry point
+- `frontend/src/main.js`: Vue application entry point
+- `Makefile`: Root-level make targets for development
 
 **Configuration:**
-- `backend/.env`: Backend secrets (DATABASE_URL, JWT_SECRET)
-- `backend/config.yaml`: Backend behavior config (timeouts, limits)
+- `backend/app/core/config.py`: Unified settings (Pydantic + YAML)
+- `backend/config.yaml`: Behavior configuration (timeouts, limits, URLs)
+- `backend/.env`: Secrets (DATABASE_URL, JWT_SECRET)
 - `frontend/.env`: Frontend config (VITE_API_URL)
-- `backend/app/core/config.py`: Unified settings with Pydantic
+- `frontend/vite.config.js`: Vite build configuration
 
 **Core Logic:**
-- `backend/app/phenopackets/models.py`: Phenopacket SQLAlchemy model
-- `backend/app/phenopackets/routers/crud.py`: Main CRUD operations
-- `backend/app/database.py`: Database connection and session management
-- `frontend/src/api/index.js`: All API call functions
+- `backend/app/phenopackets/models.py`: Phenopacket SQLAlchemy + Pydantic models
+- `backend/app/database.py`: Async database session management
+- `backend/app/phenopackets/routers/crud.py`: CRUD operations with pagination
+- `frontend/src/api/index.js`: All API endpoint functions
 
 **Testing:**
 - `backend/tests/`: Pytest test files
-- `backend/tests/conftest.py`: Test fixtures
+- `backend/pytest.ini`: Pytest configuration
 - `frontend/tests/unit/`: Vitest unit tests
-- `frontend/tests/e2e/`: E2E test files
+- `frontend/vitest.config.js`: Vitest configuration
 
-**Build/Deploy:**
-- `Makefile`: Root make commands
-- `backend/Makefile`: Backend-specific commands
-- `frontend/Makefile`: Frontend-specific commands
-- `docker/docker-compose.yml`: Docker orchestration
+**Database:**
+- `backend/alembic/versions/`: Migration files
+- `backend/migration/phenopackets_schema.sql`: Raw SQL schema reference
 
 ## Naming Conventions
 
 **Files:**
-- Python: `snake_case.py` (e.g., `clinical_endpoints.py`, `query_builders.py`)
-- Vue components: `PascalCase.vue` (e.g., `AppDataTable.vue`, `SubjectCard.vue`)
-- JavaScript utilities: `camelCase.js` (e.g., `pagination.js`, `ageParser.js`)
-- Tests: `test_*.py` (backend), `*.test.js` or `*.spec.js` (frontend)
+- Python: `snake_case.py` (e.g., `phenopacket_validator.py`)
+- Vue components: `PascalCase.vue` (e.g., `AppDataTable.vue`)
+- JavaScript utilities: `camelCase.js` (e.g., `logSanitizer.js`)
+- Tests: `test_<module>.py` (backend), `<Component>.test.js` (frontend)
 
 **Directories:**
-- Python: `snake_case` (e.g., `phenopackets`, `data_sources`)
-- Frontend: `camelCase` (e.g., `composables`, `stores`)
-- Domain groupings: singular noun (e.g., `phenopacket/`, `gene/`, `timeline/`)
+- Python packages: `snake_case` (e.g., `phenopackets`, `data_sources`)
+- Vue feature folders: `kebab-case` or `camelCase` (e.g., `common`, `analyses`)
 
-**Vue Components:**
-- Page views: Single word or description (e.g., `Home.vue`, `PagePhenopacket.vue`)
-- Reusable components: `App` prefix for app-wide (e.g., `AppBar.vue`, `AppDataTable.vue`)
-- Domain components: Domain + Purpose (e.g., `SubjectCard.vue`, `KaplanMeierChart.vue`)
+**API Endpoints:**
+- Path: `/api/v2/<resource>/` (e.g., `/api/v2/phenopackets/`)
+- Aggregations: `/api/v2/phenopackets/aggregate/<metric>` (e.g., `/aggregate/sex-distribution`)
+- Actions: Verb in URL for non-CRUD (e.g., `/search`, `/annotate`)
 
-**Python Modules:**
-- Routers: `*_endpoints.py` or just function name (e.g., `clinical_endpoints.py`, `crud.py`)
-- Services: `*_service.py` or `service.py` in domain folder
-- Models: `models.py` in domain folder
+**Database:**
+- Tables: `snake_case` plural (e.g., `phenopackets`, `publication_metadata`)
+- Columns: `snake_case` (e.g., `phenopacket_id`, `created_at`)
+- Indexes: `idx_<table>_<column>` (e.g., `idx_phenopackets_cursor_pagination`)
+- Materialized views: `mv_<purpose>` (e.g., `mv_feature_aggregation`)
 
 ## Where to Add New Code
 
 **New API Endpoint:**
-- Backend route: Add to existing router in `backend/app/phenopackets/routers/` or create new router
-- Register in `backend/app/main.py` if new router file
-- Add frontend function in `frontend/src/api/index.js`
+1. For phenopacket-related: Add to appropriate router in `backend/app/phenopackets/routers/`
+2. For new domain: Create new module in `backend/app/<domain>/` with `__init__.py`, `router.py`, `models.py`
+3. Register router in `backend/app/main.py` with `app.include_router()`
+4. Add API function in `frontend/src/api/index.js`
 
-**New Page/View:**
-- Create `frontend/src/views/NewPage.vue`
-- Add route in `frontend/src/router/index.js`
-- Use lazy loading: `component: () => import('../views/NewPage.vue')`
+**New Vue Page:**
+1. Create component in `frontend/src/views/<PageName>.vue`
+2. Add route in `frontend/src/router/index.js` with lazy import
+3. Add navigation item in `frontend/src/config/navigationItems.js` if needed
 
-**New Reusable Component:**
-- Common UI: `frontend/src/components/common/`
-- Domain-specific: `frontend/src/components/{domain}/`
-- Analysis/chart: `frontend/src/components/analyses/`
-
-**New Composable:**
-- Location: `frontend/src/composables/use{Feature}.js`
-- Pattern: Export function returning reactive state and methods
-
-**New Database Table:**
-- Create Alembic migration: `cd backend && uv run alembic revision -m "description"`
-- Add SQLAlchemy model in appropriate `models.py`
-- Run migration: `make db-upgrade`
-
-**New Aggregation Endpoint:**
-- Add file in `backend/app/phenopackets/routers/aggregations/`
-- Register in `backend/app/phenopackets/routers/aggregations/__init__.py`
+**New Vue Component:**
+1. Feature-specific: `frontend/src/components/<feature>/<ComponentName>.vue`
+2. Shared/common: `frontend/src/components/common/<ComponentName>.vue`
+3. Analysis/chart: `frontend/src/components/analyses/<ChartName>.vue`
 
 **New Utility Function:**
-- Backend: `backend/app/utils/` or domain-specific utils
-- Frontend: `frontend/src/utils/`
+- Backend: `backend/app/utils/<module>.py` or domain-specific utils
+- Frontend: `frontend/src/utils/<module>.js`
+
+**New Composable:**
+- Location: `frontend/src/composables/use<FeatureName>.js`
+- Pattern: Export function returning reactive state and methods
+
+**New Pinia Store:**
+- Location: `frontend/src/stores/<domain>Store.js`
+- Pattern: `defineStore` with state, getters, actions
+
+**New Database Table:**
+1. Create Alembic migration: `cd backend && alembic revision -m "Add <table> table"`
+2. Add SQLAlchemy model in appropriate module
+3. Run migration: `make db-upgrade`
 
 **New Test:**
-- Backend: `backend/tests/test_{feature}.py`
-- Frontend unit: `frontend/tests/unit/{domain}/`
-- Frontend component: `frontend/tests/unit/components/`
+- Backend: `backend/tests/test_<module>.py`
+- Frontend unit: `frontend/tests/unit/<path>/<Component>.test.js`
+- Frontend E2E: `frontend/tests/e2e/<feature>.spec.js`
 
 ## Special Directories
 
 **`backend/.venv/`:**
 - Purpose: Python virtual environment (uv managed)
-- Generated: Yes
-- Committed: No
+- Generated: Yes (by `uv sync`)
+- Committed: No (in .gitignore)
 
 **`frontend/node_modules/`:**
-- Purpose: Node.js dependencies
-- Generated: Yes
-- Committed: No
+- Purpose: npm dependencies
+- Generated: Yes (by `npm install`)
+- Committed: No (in .gitignore)
 
 **`backend/alembic/versions/`:**
-- Purpose: Database migration scripts
-- Generated: Partially (templates generated, then edited)
-- Committed: Yes
-
-**`.planning/`:**
-- Purpose: GSD planning and codebase analysis documents
-- Generated: By GSD commands
-- Committed: Optional (project preference)
+- Purpose: Database migration history
+- Generated: Yes (by `alembic revision`)
+- Committed: Yes (tracks schema evolution)
 
 **`backend/.ontology_cache/`:**
 - Purpose: Cached HPO ontology data
-- Generated: Yes (on first HPO lookup)
-- Committed: No
+- Generated: Yes (runtime)
+- Committed: No (in .gitignore)
 
-**`backend/.mypy_cache/`, `backend/.pytest_cache/`, `backend/.ruff_cache/`:**
-- Purpose: Tool caches
-- Generated: Yes
-- Committed: No
+**`frontend/dist/`:**
+- Purpose: Production build output
+- Generated: Yes (by `npm run build`)
+- Committed: No (in .gitignore)
+
+**`.planning/codebase/`:**
+- Purpose: GSD codebase analysis documents
+- Generated: Yes (by Claude Code)
+- Committed: Yes (documentation)
+
+**`docs/adr/`:**
+- Purpose: Architecture Decision Records
+- Generated: No (manual documentation)
+- Committed: Yes (architectural history)
 
 ---
 

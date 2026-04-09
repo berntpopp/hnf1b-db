@@ -197,9 +197,7 @@ async def main(
             # Batch process variants
             total_batches = (len(to_fetch_list) + batch_size - 1) // batch_size
 
-            for batch_num, i in enumerate(
-                range(0, len(to_fetch_list), batch_size), 1
-            ):
+            for batch_num, i in enumerate(range(0, len(to_fetch_list), batch_size), 1):
                 batch = to_fetch_list[i : i + batch_size]
                 print(
                     f"[Batch {batch_num}/{total_batches}] "

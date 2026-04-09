@@ -131,7 +131,9 @@ async def get_system_status(
     stats_result = await db.execute(stats_query)
     stats = stats_result.fetchone()
     if stats is None:
-        raise HTTPException(status_code=500, detail="Failed to fetch database statistics")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch database statistics"
+        )
 
     # Publication sync status
     pub_query = text("""
@@ -151,7 +153,9 @@ async def get_system_status(
     pub_result = await db.execute(pub_query)
     pub_stats = pub_result.fetchone()
     if pub_stats is None:
-        raise HTTPException(status_code=500, detail="Failed to fetch publication statistics")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch publication statistics"
+        )
 
     # Get last publication sync time
     last_pub_sync_query = text("""
@@ -254,10 +258,14 @@ async def get_system_status(
             name="chr17q12 Genes",
             # Use synced count as total when genes are present (dynamic from Ensembl)
             # Before first sync, estimate ~175 genes in chr17q12 region
-            total=ref_status.chr17q12_gene_count if ref_status.chr17q12_gene_count > 0 else 175,
+            total=ref_status.chr17q12_gene_count
+            if ref_status.chr17q12_gene_count > 0
+            else 175,
             synced=ref_status.chr17q12_gene_count,
             pending=0,  # All Ensembl genes synced in single operation
-            last_sync=ref_status.last_updated.isoformat() if ref_status.last_updated else None,
+            last_sync=ref_status.last_updated.isoformat()
+            if ref_status.last_updated
+            else None,
         ),
     ]
 
@@ -323,7 +331,9 @@ async def _run_publication_sync(task_id: str) -> None:
                     logger.warning(f"Failed to sync PMID {pmid}: {e}")
 
                 task["progress"] = (
-                    (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+                    (task["processed"] / task["total"] * 100)
+                    if task["total"] > 0
+                    else 100
                 )
 
                 # Rate limiting
@@ -395,7 +405,9 @@ async def start_publication_sync(
             """)
             await db.execute(delete_query)
             await db.commit()
-            logger.info(f"Force refresh: deleted existing metadata for {pending_count} publications")
+            logger.info(
+                f"Force refresh: deleted existing metadata for {pending_count} publications"
+            )
     else:
         # Check for pending items only
         query = text("""
@@ -579,7 +591,9 @@ async def _run_variant_sync(task_id: str) -> None:
                     logger.warning(f"Failed to sync variant batch: {e}")
 
                 task["progress"] = (
-                    (task["processed"] / task["total"] * 100) if task["total"] > 0 else 100
+                    (task["processed"] / task["total"] * 100)
+                    if task["total"] > 0
+                    else 100
                 )
 
                 # Rate limiting between batches - longer delay to avoid 503 errors
@@ -645,7 +659,9 @@ async def start_variant_sync(
             """)
             await db.execute(delete_query)
             await db.commit()
-            logger.info(f"Force refresh: deleted existing annotations for {pending_count} variants")
+            logger.info(
+                f"Force refresh: deleted existing annotations for {pending_count} variants"
+            )
     else:
         # Check for pending items (using shared SQL fragment)
         query = text(get_unique_variants_query("COUNT(*)"))
@@ -1065,7 +1081,8 @@ async def get_genes_sync_status(
     # If no task_id, get the most recent gene sync task
     if task_id is None:
         gene_tasks = {
-            k: v for k, v in _sync_tasks.items()
+            k: v
+            for k, v in _sync_tasks.items()
             if k.startswith("genes_sync_") or k.startswith("ref_init_")
         }
         if not gene_tasks:
@@ -1134,7 +1151,9 @@ async def get_reference_status(
         "protein_domains": {
             "count": ref_status.domain_count,
         },
-        "last_updated": ref_status.last_updated.isoformat() if ref_status.last_updated else None,
+        "last_updated": ref_status.last_updated.isoformat()
+        if ref_status.last_updated
+        else None,
         "initialized": ref_status.has_grch38 and ref_status.has_hnf1b,
         "chr17q12_synced": ref_status.chr17q12_gene_count >= 60,
     }

@@ -715,9 +715,7 @@ async def get_reference_data_status(db: AsyncSession) -> ReferenceDataStatus:
     status.chr17q12_gene_count = chr17q12_result.scalar() or 0
 
     # Get last update time
-    last_update_result = await db.execute(
-        select(func.max(Gene.updated_at))
-    )
+    last_update_result = await db.execute(select(func.max(Gene.updated_at)))
     status.last_updated = last_update_result.scalar()
 
     return status

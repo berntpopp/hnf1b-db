@@ -27,12 +27,8 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Update indexes to composite keys including label."""
     # Drop old single-column unique indexes
-    op.execute(
-        "DROP INDEX IF EXISTS ix_mv_feature_aggregation_hpo_id"
-    )
-    op.execute(
-        "DROP INDEX IF EXISTS ix_mv_disease_aggregation_disease_id"
-    )
+    op.execute("DROP INDEX IF EXISTS ix_mv_feature_aggregation_hpo_id")
+    op.execute("DROP INDEX IF EXISTS ix_mv_disease_aggregation_disease_id")
 
     # Create new composite unique indexes (id + label)
     # This handles cases where same HPO ID has different labels
@@ -54,12 +50,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Restore original single-column unique indexes."""
     # Drop composite indexes
-    op.execute(
-        "DROP INDEX IF EXISTS ix_mv_feature_aggregation_hpo_id_label"
-    )
-    op.execute(
-        "DROP INDEX IF EXISTS ix_mv_disease_aggregation_disease_id_label"
-    )
+    op.execute("DROP INDEX IF EXISTS ix_mv_feature_aggregation_hpo_id_label")
+    op.execute("DROP INDEX IF EXISTS ix_mv_disease_aggregation_disease_id_label")
 
     # Restore single-column indexes
     # Note: This may fail if there are duplicate IDs with different labels

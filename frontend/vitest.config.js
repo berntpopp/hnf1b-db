@@ -22,14 +22,12 @@ export default defineConfig({
     // vmThreads uses isolated contexts but runs in main process (no worker communication issues)
     pool: process.env.CI ? 'threads' : 'vmThreads',
 
-    // Increase pool startup timeout for WSL2 (default is 10000ms)
-    poolOptions: {
-      vmThreads: {
-        memoryLimit: '512MB',
-      },
-      threads: {
-        singleThread: false,
-      },
+    // Pool configuration (top-level in Vitest 4, previously under poolOptions)
+    vmThreads: {
+      memoryLimit: '512MB',
+    },
+    threads: {
+      singleThread: false,
     },
 
     // Timeout configuration
