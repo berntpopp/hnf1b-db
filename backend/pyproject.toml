@@ -1,6 +1,6 @@
 [project]
 name = "hnf1b-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease"
 requires-python = ">=3.10"
 dependencies = [
