@@ -60,7 +60,7 @@ async def test_get_current_user_no_token(async_client: AsyncClient):
     """Test accessing protected endpoint without token."""
     response = await async_client.get("/api/v2/auth/me")
 
-    assert response.status_code == 403  # No token provided
+    assert response.status_code == 401  # No token provided (HTTPBearer returns 401)
 
 
 @pytest.mark.asyncio
