@@ -106,10 +106,10 @@ async def sitemap_static() -> Response:
     urls = []
     for page in static_pages:
         urls.append(f"""  <url>
-    <loc>{BASE_URL}{page['loc']}</loc>
+    <loc>{BASE_URL}{page["loc"]}</loc>
     <lastmod>{today}</lastmod>
-    <changefreq>{page['changefreq']}</changefreq>
-    <priority>{page['priority']}</priority>
+    <changefreq>{page["changefreq"]}</changefreq>
+    <priority>{page["priority"]}</priority>
   </url>""")
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>

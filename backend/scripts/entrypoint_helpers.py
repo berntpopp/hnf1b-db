@@ -51,9 +51,7 @@ async def count_unique_pmids() -> int:
 async def count_variant_annotations() -> int:
     """Count cached variant annotations."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            text("SELECT COUNT(*) FROM variant_annotations")
-        )
+        result = await session.execute(text("SELECT COUNT(*) FROM variant_annotations"))
         return result.scalar() or 0
 
 

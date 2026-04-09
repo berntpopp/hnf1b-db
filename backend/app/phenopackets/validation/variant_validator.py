@@ -926,7 +926,9 @@ class VariantValidator:
                             return results
 
                     else:
-                        logger.error(f"Unexpected VEP recoder error: {response.status_code}")
+                        logger.error(
+                            f"Unexpected VEP recoder error: {response.status_code}"
+                        )
                         for v in uncached_variants:
                             results[v] = None
                         return results

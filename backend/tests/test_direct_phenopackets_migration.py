@@ -329,13 +329,15 @@ class TestHPOMapperLabelNormalization:
         mapper = HPOMapper(normalize_labels=True)
 
         # Create test DataFrame with phenotype mappings
-        phenotypes_df = pd.DataFrame([
-            {
-                "phenotype_category": "chronic kidney disease",
-                "phenotype_id": "HP:0012622",
-                "phenotype_name": "chronic kidney disease, not specified",
-            },
-        ])
+        phenotypes_df = pd.DataFrame(
+            [
+                {
+                    "phenotype_category": "chronic kidney disease",
+                    "phenotype_id": "HP:0012622",
+                    "phenotype_name": "chronic kidney disease, not specified",
+                },
+            ]
+        )
 
         mapper.build_from_dataframe(phenotypes_df)
 
@@ -351,13 +353,15 @@ class TestHPOMapperLabelNormalization:
         mapper = HPOMapper(normalize_labels=False)
 
         source_label = "my custom label"
-        phenotypes_df = pd.DataFrame([
-            {
-                "phenotype_category": "test_category",
-                "phenotype_id": "HP:0012622",
-                "phenotype_name": source_label,
-            },
-        ])
+        phenotypes_df = pd.DataFrame(
+            [
+                {
+                    "phenotype_category": "test_category",
+                    "phenotype_id": "HP:0012622",
+                    "phenotype_name": source_label,
+                },
+            ]
+        )
 
         mapper.build_from_dataframe(phenotypes_df)
 
@@ -388,7 +392,10 @@ class TestHPOMapperLabelNormalization:
         mapper = HPOMapper()
 
         # Check some key mappings have proper canonical labels
-        assert mapper.hpo_mappings["mody"]["label"] == "Maturity-onset diabetes of the young"
+        assert (
+            mapper.hpo_mappings["mody"]["label"]
+            == "Maturity-onset diabetes of the young"
+        )
         assert mapper.hpo_mappings["hypomagnesemia"]["label"] == "Hypomagnesemia"
         assert mapper.hpo_mappings["renalcysts"]["label"] == "Renal cyst"
 

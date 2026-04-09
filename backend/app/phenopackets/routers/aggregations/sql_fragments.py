@@ -262,9 +262,9 @@ COALESCE(
 # Used by: variant_query_builder.py for type filtering
 
 # Valid structural types that can be filtered
-VALID_STRUCTURAL_TYPES = frozenset({
-    "SNV", "deletion", "duplication", "insertion", "indel", "inversion", "CNV"
-})
+VALID_STRUCTURAL_TYPES = frozenset(
+    {"SNV", "deletion", "duplication", "insertion", "indel", "inversion", "CNV"}
+)
 
 
 def get_structural_type_filter(variant_type: str) -> str:
@@ -346,6 +346,7 @@ def get_phenopacket_variant_link_cte() -> str:
 # Categories: CNV (>=50kb), Truncating (HIGH impact), Non-truncating (MODERATE)
 # Used by: survival.py for Kaplan-Meier analysis
 # Requires: LEFT JOIN to variant_annotations (aliased as 'va') in query
+
 
 # fmt: off
 def get_variant_type_classification_sql(vep_impact_alias: str = "va.impact") -> str:
@@ -687,9 +688,9 @@ def get_protein_domain_classification_sql(vd_path: str = "vd") -> str:
     tad = HNF1B_PROTEIN_DOMAINS["TAD"]
 
     return f"""CASE
-    WHEN {pos_sql} BETWEEN {pou_s['start']} AND {pou_s['end']} THEN 'POU-S'
-    WHEN {pos_sql} BETWEEN {pou_h['start']} AND {pou_h['end']} THEN 'POU-H'
-    WHEN {pos_sql} BETWEEN {tad['start']} AND {tad['end']} THEN 'TAD'
+    WHEN {pos_sql} BETWEEN {pou_s["start"]} AND {pou_s["end"]} THEN 'POU-S'
+    WHEN {pos_sql} BETWEEN {pou_h["start"]} AND {pou_h["end"]} THEN 'POU-H'
+    WHEN {pos_sql} BETWEEN {tad["start"]} AND {tad["end"]} THEN 'TAD'
     ELSE 'Other'
 END"""
 

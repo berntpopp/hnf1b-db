@@ -264,9 +264,7 @@ async def get_variant_annotations_batch(
             batch_results = await _fetch_from_vep(batch)
 
             # Store successful results
-            to_store = [
-                batch_results[vid] for vid in batch if vid in batch_results
-            ]
+            to_store = [batch_results[vid] for vid in batch if vid in batch_results]
             if to_store:
                 await _store_annotations_batch(to_store, db, fetched_by)
 
@@ -285,9 +283,7 @@ async def get_variant_annotations_batch(
             # Retry the batch
             try:
                 batch_results = await _fetch_from_vep(batch)
-                to_store = [
-                    batch_results[vid] for vid in batch if vid in batch_results
-                ]
+                to_store = [batch_results[vid] for vid in batch if vid in batch_results]
                 if to_store:
                     await _store_annotations_batch(to_store, db, fetched_by)
                 for vid in batch:
@@ -302,9 +298,7 @@ async def get_variant_annotations_batch(
     return results
 
 
-async def _get_cached_annotation(
-    variant_id: str, db: AsyncSession
-) -> Optional[dict]:
+async def _get_cached_annotation(variant_id: str, db: AsyncSession) -> Optional[dict]:
     """Check database cache for variant annotation."""
     query = text("""
         SELECT
@@ -685,7 +679,9 @@ def _parse_vep_response(
             "cadd_score": primary.get("cadd_phred") if primary else None,
             "gnomad_af": gnomad_af,
             "gnomad_af_nfe": gnomad_af_nfe,
-            "polyphen_prediction": primary.get("polyphen_prediction") if primary else None,  # noqa: E501
+            "polyphen_prediction": primary.get("polyphen_prediction")
+            if primary
+            else None,  # noqa: E501
             "polyphen_score": primary.get("polyphen_score") if primary else None,
             "sift_prediction": primary.get("sift_prediction") if primary else None,
             "sift_score": primary.get("sift_score") if primary else None,
@@ -724,7 +720,7 @@ def _extract_primary_transcript(result: Dict[str, Any]) -> Optional[Dict[str, An
 
 
 def _extract_gnomad_frequencies(
-    result: Dict[str, Any]
+    result: Dict[str, Any],
 ) -> tuple[Optional[float], Optional[float]]:
     """Extract gnomAD frequencies from colocated_variants."""
     gnomad_af = None

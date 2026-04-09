@@ -481,9 +481,7 @@ class TestBatchRecoding:
             assert results["rs56116432"]["vcf_string"] == "17-36459258-A-G"
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_partial_failure(
-        self, validator
-    ):
+    async def test_recode_variants_batch_partial_failure(self, validator):
         """Test batch recoding with some variants failing."""
         with (
             patch("httpx.AsyncClient") as mock_client,
@@ -520,9 +518,7 @@ class TestBatchRecoding:
             assert results["invalid_variant"] is None
 
     @pytest.mark.asyncio
-    async def test_recode_variants_batch_rate_limit_handling(
-        self, validator
-    ):
+    async def test_recode_variants_batch_rate_limit_handling(self, validator):
         """Test batch recoding handles rate limiting."""
         with (
             patch("httpx.AsyncClient") as mock_client,
