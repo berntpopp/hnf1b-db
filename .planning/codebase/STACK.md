@@ -58,7 +58,7 @@
 **Authentication:**
 - `pyjwt>=2.10.1` - JWT token handling
 - `passlib[bcrypt]>=1.7.4` - Password hashing
-- `bcrypt>=3.2.0,<6.0.0` - BCrypt algorithm (pinned for passlib compatibility)
+- `bcrypt>=3.2.0,<5.0.0` - BCrypt algorithm (pinned for passlib compatibility)
 
 **GA4GH Standards:**
 - `phenopackets>=2.0.0` - GA4GH Phenopackets v2 schema

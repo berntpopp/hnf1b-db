@@ -16,17 +16,17 @@ external_apis:
     timeout_seconds: 30
     max_retries: 3
     retry_backoff_factor: 2.0
-    batch_size: 50
     cache_enabled: true
     cache_size_limit: 1000
     cache_ttl_seconds: 86400
 ```
+Note: `batch_size` defaults to 50 in the Settings model but is not set in config.yaml.
 
 **Implementation:**
 - Client: `backend/app/variants/service.py`
 - HTTP: `httpx` async client
 - Rate limit: 15 req/sec (configurable)
-- Storage: Permanent database caching in `variant_annotation_cache` table
+- Storage: Permanent database caching in `variant_annotations` table
 
 **Endpoints Used:**
 - `POST /vep/human/hgvs` - HGVS notation annotation
@@ -139,7 +139,7 @@ database:
 **Key Tables:**
 - `phenopackets` - Main data with JSONB storage
 - `publication_metadata` - Cached PubMed data
-- `variant_annotation_cache` - Cached VEP annotations
+- `variant_annotations` - Cached VEP annotations
 - `reference_genomes`, `genes`, `transcripts`, `exons`, `protein_domains` - Reference data
 - `users` - Authentication
 - `audit_log` - Change tracking

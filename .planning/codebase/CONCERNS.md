@@ -5,7 +5,7 @@
 ## Tech Debt
 
 **Passlib/bcrypt Compatibility Pinning:**
-- Issue: `passlib` library is unmaintained and incompatible with `bcrypt>=5.0`. Pinned to `bcrypt>=3.2.0,<6.0.0`
+- Issue: `passlib` library is unmaintained and incompatible with `bcrypt>=5.0`. Pinned to `bcrypt>=3.2.0,<5.0.0`
 - Files: `backend/pyproject.toml:12`
 - Impact: Cannot upgrade bcrypt to latest versions; potential security updates blocked
 - Fix approach: Migrate to `argon2-cffi` or direct `bcrypt` usage without passlib wrapper
