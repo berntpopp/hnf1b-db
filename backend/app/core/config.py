@@ -275,15 +275,13 @@ class Settings(BaseSettings):
     PUBMED_API_KEY: Optional[str] = None
 
     # Admin credentials (for initial setup)
-    # SECURITY NOTE: These are default credentials for initial database setup only.
-    # The default password MUST be changed immediately after first login in production.
-    # Override these values in .env for production deployments:
-    #   ADMIN_USERNAME=your_admin_user
-    #   ADMIN_EMAIL=admin@yourdomain.com
-    #   ADMIN_PASSWORD=<strong-unique-password>
+    # SECURITY: ADMIN_PASSWORD is REQUIRED and has no default. The previous
+    # default was removed in Wave 1 of the 2026-04-10 refactor roadmap to
+    # prevent credential leakage via git history. The application exits at
+    # startup if ADMIN_PASSWORD is unset or empty.
     ADMIN_USERNAME: str = "admin"
     ADMIN_EMAIL: str = "admin@hnf1b-db.local"
-    ADMIN_PASSWORD: str = "ChangeMe!Admin2025"
+    ADMIN_PASSWORD: str = Field(default="")
 
     # CORS (can be in .env for flexibility)
     CORS_ORIGINS: str = (
@@ -316,6 +314,27 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET is required. Set JWT_SECRET in .env file. "
                 "Generate with: openssl rand -hex 32"
+            )
+        return v
+
+    @field_validator("ADMIN_PASSWORD")
+    @classmethod
+    def validate_admin_password(cls, v: str) -> str:
+        """Fail fast if ADMIN_PASSWORD is missing.
+
+        Mirrors the JWT_SECRET validation pattern. ADMIN_PASSWORD must be
+        set via the .env file for initial admin-user creation. The previous
+        hardcoded default was removed to prevent credential leakage.
+        """
+        if not v or v.strip() == "":
+            logger.critical(
+                "ADMIN_PASSWORD is empty or not set! "
+                "Set ADMIN_PASSWORD in .env file for initial admin user "
+                "creation. This credential is required and has no default."
+            )
+            raise ValueError(
+                "ADMIN_PASSWORD is required. Set ADMIN_PASSWORD in .env file "
+                "to a strong unique password (min 12 characters recommended)."
             )
         return v
 
