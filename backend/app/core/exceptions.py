@@ -2,11 +2,20 @@
 
 All error responses follow:
     {
-        "detail": str,                 # human-readable message
-        "error_code": str,             # machine-readable code
-        "request_id": str | None,      # for log correlation (set by
-                                       # request_id middleware in Wave 6)
+        "detail": <error payload>,     # see below
+        "error_code": str,              # machine-readable code
+        "request_id": str | None,       # for log correlation (set by
+                                        # request_id middleware in Wave 6)
     }
+
+``detail`` is always present, but may be a plain string *or* a
+JSON-serializable structured value (dict, list, number, bool, null)
+depending on the originating exception. The http_exception_handler
+preserves the original ``HTTPException.detail`` structure so that
+endpoints raising e.g.
+``HTTPException(status_code=409, detail={"error": ..., "current_revision": N})``
+round-trip their structured payload to the client unchanged.
+Non-JSON-native detail values are coerced to str as a defensive fallback.
 """
 
 import logging

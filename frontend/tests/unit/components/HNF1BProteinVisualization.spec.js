@@ -9,7 +9,7 @@
  * - Protein length validation
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import * as vuetifyComponents from 'vuetify/components';
@@ -351,13 +351,24 @@ describe('HNF1BProteinVisualization.vue (characterization)', () => {
     });
   }
 
+  // Save and restore any pre-existing window.logService so this spec
+  // cannot pollute other specs that share the same worker. Vitest runs
+  // multiple spec files per worker by default, and later specs may
+  // assert on `.mock` calls — overwriting with plain no-op functions
+  // would break those assertions silently.
+  let previousLogService;
   beforeEach(() => {
+    previousLogService = globalThis.window.logService;
     globalThis.window.logService = {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
     };
+  });
+
+  afterEach(() => {
+    globalThis.window.logService = previousLogService;
   });
 
   it('mounts without throwing', () => {

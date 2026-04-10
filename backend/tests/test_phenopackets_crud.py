@@ -74,23 +74,34 @@ class TestPhenopacketWriteRequiresAuth:
         assert response.status_code in (401, 403, 422)
 
     def test_update_requires_auth(self, client):
-        """PUT without a bearer token must be rejected (not 2xx)."""
+        """PUT with an invalid bearer token must fail specifically as auth.
+
+        Using a real but invalid token (rather than no Authorization header)
+        forces the auth dependency to evaluate and reject. Without this, a
+        404 from "row does not exist" could mask an accidentally-removed
+        auth dependency, so 404/422 are NOT accepted here.
+        """
         response = client.put(
             "/api/v2/phenopackets/INT-TEST-001",
+            headers={"Authorization": "Bearer definitely-invalid-token"},
             json={
                 "phenopacket": SAMPLE_PAYLOAD["phenopacket"],
                 "change_reason": "integration test",
             },
         )
-        # 404 is acceptable because the row does not exist; the important
-        # invariant is that an unauthenticated caller never gets a 2xx.
-        assert response.status_code in (401, 403, 404, 422)
+        assert response.status_code in (401, 403)
 
     def test_delete_requires_auth(self, client):
-        """DELETE without a bearer token must be rejected (not 2xx)."""
+        """DELETE with an invalid bearer token must fail specifically as auth.
+
+        Same rationale as ``test_update_requires_auth``: we use an invalid
+        token instead of an absent header so that the auth layer is what's
+        being exercised, not the "row does not exist" path.
+        """
         response = client.request(
             "DELETE",
             "/api/v2/phenopackets/INT-TEST-001",
+            headers={"Authorization": "Bearer definitely-invalid-token"},
             json={"change_reason": "integration test"},
         )
-        assert response.status_code in (401, 403, 404, 422)
+        assert response.status_code in (401, 403)

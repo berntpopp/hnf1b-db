@@ -68,6 +68,24 @@ apiClient.interceptors.response.use(
             item && typeof item === 'object' && 'msg' in item ? item.msg : String(item)
           )
           .join('; ');
+      } else if (responseData.detail && typeof responseData.detail === 'object') {
+        // Structured dict details preserved by the backend handler (e.g.,
+        // {error: "conflict", current_revision: 5} from the update-conflict
+        // endpoint). Prefer a human-readable message field if present; fall
+        // back to JSON serialization so diagnostics aren't lost as
+        // "[object Object]".
+        const d = responseData.detail;
+        if (typeof d.message === 'string') {
+          normalizedDetail = d.message;
+        } else if (typeof d.error === 'string') {
+          normalizedDetail = d.error;
+        } else {
+          try {
+            normalizedDetail = JSON.stringify(d);
+          } catch {
+            normalizedDetail = String(d);
+          }
+        }
       } else if (responseData.detail != null) {
         normalizedDetail = String(responseData.detail);
       }

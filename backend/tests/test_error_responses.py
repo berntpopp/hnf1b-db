@@ -1,7 +1,12 @@
 """Tests for the standardized error response format.
 
-Every error response must have the shape:
-    {"detail": str, "error_code": str, "request_id": str | None}
+Every error response must include:
+    {"detail": <error payload>, "error_code": str, "request_id": str | None}
+
+``detail`` is always present, but may be a string or a structured JSON
+value (for example a dict or list) depending on the originating
+exception. ``http_exception_handler`` preserves structured
+``HTTPException.detail`` payloads unchanged.
 """
 
 import pytest
