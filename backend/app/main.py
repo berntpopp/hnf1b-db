@@ -9,6 +9,7 @@ from app import hpo_proxy, variant_validator_endpoint
 from app.api import admin_endpoints, auth_endpoints
 from app.core.cache import close_cache, init_cache
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.core.mv_cache import init_mv_cache
 from app.database import async_session_maker, engine
 from app.ontology import routers as ontology_router
@@ -54,6 +55,9 @@ app = FastAPI(
     docs_url="/api/v2/docs",
     redoc_url="/api/v2/redoc",
 )
+
+# Register standardized exception handlers (Wave 2 T11)
+register_exception_handlers(app)
 
 # Configure CORS with environment-based settings
 app.add_middleware(
