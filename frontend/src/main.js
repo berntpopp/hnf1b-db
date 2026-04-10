@@ -14,6 +14,7 @@ import './style.css';
 import { logService } from '@/services/logService';
 import { useLogStore } from '@/stores/logStore';
 import { useAuthStore } from '@/stores/authStore';
+import { configureErrorHandler } from './main-error-handler';
 
 const pinia = createPinia();
 const vuetify = createVuetify();
@@ -23,6 +24,10 @@ const vuetify = createVuetify();
 const head = createHead();
 
 const app = createApp(App);
+
+configureErrorHandler(app, (msg, meta) => {
+  window.logService?.error(msg, meta);
+});
 
 app.use(pinia); // Pinia must be registered before router
 
