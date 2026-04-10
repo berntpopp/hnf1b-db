@@ -1,0 +1,42 @@
+{
+  "id": "PHENO-TEST-001",
+  "subject": {
+    "id": "SUB-001",
+    "sex": "FEMALE",
+    "timeAtLastEncounter": { "age": { "iso8601duration": "P35Y" } }
+  },
+  "phenotypicFeatures": [
+    { "type": { "id": "HP:0000107", "label": "Renal cyst" } },
+    { "type": { "id": "HP:0000822", "label": "Hypertension" } }
+  ],
+  "interpretations": [
+    {
+      "id": "INTERP-001",
+      "progressStatus": "SOLVED",
+      "diagnosis": {
+        "disease": { "id": "MONDO:0011122", "label": "HNF1B-related disease" },
+        "genomicInterpretations": [
+          {
+            "subjectOrBiosampleId": "SUB-001",
+            "interpretationStatus": "CAUSATIVE",
+            "variantInterpretation": {
+              "variationDescriptor": {
+                "id": "VAR-001",
+                "label": "NM_000458.4:c.544+1G>A",
+                "geneContext": { "valueId": "HGNC:11630", "symbol": "HNF1B" },
+                "expressions": [{ "syntax": "hgvs.c", "value": "NM_000458.4:c.544+1G>A" }]
+              },
+              "acmgPathogenicityClassification": "PATHOGENIC"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "diseases": [{ "term": { "id": "MONDO:0011122", "label": "HNF1B-related disease" } }],
+  "metaData": {
+    "created": "2026-01-01T00:00:00Z",
+    "createdBy": "test",
+    "phenopacketSchemaVersion": "2.0"
+  }
+}

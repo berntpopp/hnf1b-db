@@ -1,0 +1,11 @@
+{
+  "pmid": "32345678",
+  "doi": "10.1234/sample",
+  "title": "Sample HNF1B publication",
+  "authors": ["Doe J", "Smith A", "Jones B"],
+  "year": 2024,
+  "journal": "Journal of Genetics",
+  "abstract": "This is a sample abstract.",
+  "variant_count": 3,
+  "phenopacket_count": 2
+}

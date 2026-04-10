@@ -1,0 +1,16 @@
+{
+  "id": "VAR-001",
+  "hgvs_c": "NM_000458.4:c.544+1G>A",
+  "hgvs_p": null,
+  "hgvs_g": "NC_000017.11:g.37736926C>T",
+  "vcf": "17-37736926-C-T",
+  "spdi": "NC_000017.11:37736925:C:T",
+  "gene_symbol": "HNF1B",
+  "consequence": "splice_donor_variant",
+  "impact": "HIGH",
+  "cadd_score": 27.5,
+  "gnomad_af": 0.0,
+  "acmg_classification": "PATHOGENIC",
+  "publications": [{ "pmid": "32345678", "title": "Sample paper" }],
+  "phenopacket_count": 5
+}
