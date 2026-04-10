@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import Integer, and_, func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_curator
@@ -345,7 +346,7 @@ async def create_phenopacket(
     try:
         await db.commit()
         await db.refresh(new_phenopacket)
-    except Exception as e:
+    except SQLAlchemyError as e:
         await db.rollback()
         # Check for integrity errors (duplicate keys, foreign key violations, etc.)
         error_str = str(e).lower()
@@ -456,7 +457,7 @@ async def update_phenopacket(
 
         await db.commit()
         await db.refresh(existing)
-    except Exception as e:
+    except SQLAlchemyError as e:
         await db.rollback()
         logger.error(f"Failed to update phenopacket {phenopacket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -529,7 +530,7 @@ async def delete_phenopacket(
         )
 
         await db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         await db.rollback()
         logger.error(f"Failed to delete phenopacket {phenopacket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -814,9 +815,9 @@ async def get_by_publication(
     except HTTPException:
         # Re-raise HTTP exceptions (404, 400)
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching phenopackets for PMID {pmid}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{phenopacket_id}/timeline", response_model=Dict[str, Any])
