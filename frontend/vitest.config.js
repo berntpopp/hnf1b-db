@@ -17,6 +17,18 @@ export default defineConfig({
     // happy-dom for Vue component testing (faster than jsdom)
     environment: 'happy-dom',
 
+    // Force Vite to transform Vuetify through its pipeline so CSS
+    // imports from vuetify/lib/**/*.css don't hit the native Node
+    // ESM loader (which errors with `Unknown file extension ".css"`
+    // in the threads pool on CI). Without this, specs that mount
+    // Vuetify components fail to load on CI even though they pass
+    // locally in vmThreads mode.
+    server: {
+      deps: {
+        inline: ['vuetify'],
+      },
+    },
+
     // Use vmThreads pool for WSL2 compatibility
     // Both 'threads' and 'forks' have known timeout issues in WSL2 environment
     // vmThreads uses isolated contexts but runs in main process (no worker communication issues)

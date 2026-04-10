@@ -1,0 +1,12 @@
+{
+  "total_count": 864,
+  "by_sex": [
+    { "sex": "FEMALE", "count": 412, "percentage": 47.7 },
+    { "sex": "MALE", "count": 398, "percentage": 46.1 },
+    { "sex": "UNKNOWN", "count": 54, "percentage": 6.2 }
+  ],
+  "by_age_group": [
+    { "age_group": "0-10", "count": 189, "percentage": 21.9 },
+    { "age_group": "11-20", "count": 145, "percentage": 16.8 }
+  ]
+}

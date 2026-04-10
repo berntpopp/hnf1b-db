@@ -9,7 +9,12 @@
  * - Protein length validation
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { mount } from '@vue/test-utils';
+import { createVuetify } from 'vuetify';
+import * as vuetifyComponents from 'vuetify/components';
+import * as vuetifyDirectives from 'vuetify/directives';
+import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 
 // Domain data from HNF1BProteinVisualization.vue (verified from UniProt P35680)
 // Source: https://www.uniprot.org/uniprotkb/P35680/entry
@@ -314,5 +319,75 @@ describe('HNF1BProteinVisualization - Domain Validation', () => {
       const tadDomain = HNF1B_DOMAINS.find((d) => d.shortName === 'TAD');
       expect(tadDomain.end).toBe(PROTEIN_LENGTH);
     });
+  });
+});
+
+// --- Characterization tests added in Wave 2 ---
+// These cover component mount behavior for the Wave 5 decomposition
+// safety net. Separate from the domain-data tests above; they test
+// different things.
+describe('HNF1BProteinVisualization.vue (characterization)', () => {
+  const sampleVariants = [
+    {
+      variant_id: 'V1',
+      protein: 'NP_000449.3:p.Arg100Cys',
+      acmg_classification: 'PATHOGENIC',
+    },
+    {
+      variant_id: 'V2',
+      protein: 'NP_000449.3:p.Leu200Pro',
+      acmg_classification: 'LIKELY_PATHOGENIC',
+    },
+  ];
+
+  function mountComponent(props = {}) {
+    const vuetify = createVuetify({
+      components: vuetifyComponents,
+      directives: vuetifyDirectives,
+    });
+    return mount(HNF1BProteinVisualization, {
+      props: { variants: sampleVariants, ...props },
+      global: { plugins: [vuetify] },
+    });
+  }
+
+  // Install vi.fn()-based logService stubs. Copilot's review concern
+  // was about cross-spec pollution from *plain* no-op functions: another
+  // spec asserting on `.mock` would fail silently. Using vi.fn() fully
+  // satisfies that contract, so we deliberately do NOT restore in
+  // afterEach — the component's mounted() hook calls fetchProteinDomains
+  // asynchronously, and restoring window.logService to undefined before
+  // that promise settles produces `Cannot read properties of undefined
+  // (reading 'warn')` crashes in a flaky, worker-order-dependent way.
+  beforeEach(() => {
+    globalThis.window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('mounts without throwing', () => {
+    const wrapper = mountComponent();
+    expect(wrapper.exists()).toBe(true);
+  });
+
+  it('renders an SVG element', () => {
+    const wrapper = mountComponent();
+    expect(wrapper.find('svg').exists()).toBe(true);
+  });
+
+  it('renders markers for each variant', () => {
+    const wrapper = mountComponent();
+    const markers = wrapper.findAll(
+      '[data-testid="variant-marker"], .variant-marker, circle.variant, circle.lollipop-circle'
+    );
+    expect(markers.length).toBeGreaterThanOrEqual(sampleVariants.length);
+  });
+
+  it('renders with empty variants array', () => {
+    const wrapper = mountComponent({ variants: [] });
+    expect(wrapper.find('svg').exists()).toBe(true);
   });
 });

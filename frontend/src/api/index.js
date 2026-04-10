@@ -51,6 +51,62 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Normalize standardized backend error shape (Wave 2 T11):
+    //   { detail, error_code, request_id }
+    // Backwards-compatible fallback for legacy FastAPI errors which only
+    // had { detail } (string or array). Attaches `error.normalized` so
+    // downstream callers can read a uniform shape.
+    const responseData = error.response?.data;
+    let normalizedDetail = error.message;
+    if (responseData) {
+      if (typeof responseData.detail === 'string') {
+        normalizedDetail = responseData.detail;
+      } else if (Array.isArray(responseData.detail)) {
+        // Legacy FastAPI validation error shape (list of {loc, msg, type})
+        normalizedDetail = responseData.detail
+          .map((item) =>
+            item && typeof item === 'object' && 'msg' in item ? item.msg : String(item)
+          )
+          .join('; ');
+      } else if (responseData.detail && typeof responseData.detail === 'object') {
+        // Structured dict details preserved by the backend handler (e.g.,
+        // {error: "conflict", current_revision: 5} from the update-conflict
+        // endpoint). Prefer a human-readable message field if present; fall
+        // back to JSON serialization so diagnostics aren't lost as
+        // "[object Object]".
+        const d = responseData.detail;
+        if (typeof d.message === 'string') {
+          normalizedDetail = d.message;
+        } else if (typeof d.error === 'string') {
+          normalizedDetail = d.error;
+        } else {
+          try {
+            normalizedDetail = JSON.stringify(d);
+          } catch {
+            normalizedDetail = String(d);
+          }
+        }
+      } else if (responseData.detail != null) {
+        normalizedDetail = String(responseData.detail);
+      }
+    }
+    error.normalized = {
+      detail: normalizedDetail,
+      errorCode: responseData?.error_code ?? null,
+      requestId: responseData?.request_id ?? null,
+    };
+
+    // Log normalized error (logService redacts sensitive fields automatically)
+    if (window.logService && error.response) {
+      window.logService.error('API request failed', {
+        status: error.response.status,
+        url: originalRequest?.url,
+        detail: error.normalized.detail,
+        errorCode: error.normalized.errorCode,
+        requestId: error.normalized.requestId,
+      });
+    }
+
     // If 401 and not already retrying, attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Skip refresh for auth endpoints to prevent infinite loops
