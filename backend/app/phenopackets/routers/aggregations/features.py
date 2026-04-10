@@ -11,6 +11,7 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    calculate_percentages,
     check_materialized_view_exists,
     get_db,
     logger,
@@ -48,14 +49,15 @@ async def aggregate_by_feature(
         )
         rows = result.mappings().all()
         total = sum(int(row["present_count"]) for row in rows)
+        rows_with_pct = calculate_percentages(
+            list(rows), total=total, count_key="present_count"
+        )
 
         return [
             AggregationResult(
                 label=row["label"] or row["hpo_id"],
                 count=int(row["present_count"]),
-                percentage=(int(row["present_count"]) / total * 100)
-                if total > 0
-                else 0,
+                percentage=row["percentage"],
                 details={
                     "hpo_id": row["hpo_id"],
                     "present_count": int(row["present_count"]),
@@ -63,7 +65,7 @@ async def aggregate_by_feature(
                     "not_reported_count": int(row["not_reported_count"]),
                 },
             )
-            for row in rows
+            for row in rows_with_pct
         ]
 
     # Fallback: Live JSONB query (O(n) scan)
@@ -101,12 +103,15 @@ async def aggregate_by_feature(
 
     # Calculate total for percentage (sum of all present counts)
     total = sum(int(row["present_count"]) for row in rows)
+    rows_with_pct = calculate_percentages(
+        list(rows), total=total, count_key="present_count"
+    )
 
     return [
         AggregationResult(
             label=row["label"] or row["hpo_id"],
             count=int(row["present_count"]),
-            percentage=(int(row["present_count"]) / total * 100) if total > 0 else 0,
+            percentage=row["percentage"],
             details={
                 "hpo_id": row["hpo_id"],
                 "present_count": int(row["present_count"]),
@@ -116,5 +121,5 @@ async def aggregate_by_feature(
                 - int(row["absent_count"]),
             },
         )
-        for row in rows
+        for row in rows_with_pct
     ]
