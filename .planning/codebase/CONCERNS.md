@@ -72,7 +72,7 @@
 ## Security Considerations
 
 **Default Admin Credentials in Repository:**
-- Risk: Default password `ChangeMe!Admin2025` documented in `.env.example` and CLAUDE.md
+- Risk: Default password was previously hardcoded and documented in `.env.example` and CLAUDE.md. **RESOLVED 2026-04-10**: ADMIN_PASSWORD is now required at startup via Settings validator (mirrors JWT_SECRET pattern).
 - Files: `backend/.env.example:15`, `CLAUDE.md:528`
 - Current mitigation: Warning to change password after first login
 - Recommendations: Remove default password from docs; generate random password on first setup

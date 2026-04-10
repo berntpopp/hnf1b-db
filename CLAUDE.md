@@ -525,7 +525,7 @@ make db-create-admin
 ```bash
 ADMIN_USERNAME=admin
 ADMIN_EMAIL=admin@hnf1b-db.local
-ADMIN_PASSWORD=ChangeMe!Admin2025
+ADMIN_PASSWORD=<required; generate with: openssl rand -base64 32>
 ```
 
 ⚠️ **Change admin password immediately after first login!**

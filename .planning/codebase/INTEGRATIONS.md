@@ -206,7 +206,7 @@ security:
 JWT_SECRET=<32-byte-hex-string>  # REQUIRED - app exits if empty
 ADMIN_USERNAME=admin
 ADMIN_EMAIL=admin@hnf1b-db.local
-ADMIN_PASSWORD=ChangeMe!Admin2025
+ADMIN_PASSWORD=<required; no default>
 ```
 
 **Endpoints:**
