@@ -205,6 +205,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { usePageSeo, useFaqStructuredData } from '@/composables/useSeoMeta';
+import { sanitize } from '@/utils/sanitize';
 
 // Reactive state
 const content = ref(null);
@@ -250,10 +251,11 @@ const loadContent = async () => {
 // Render markdown-like syntax (bold, italic, links)
 const renderMarkdown = (text) => {
   if (!text) return '';
-  return text
+  const rendered = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>');
+  return sanitize(rendered);
 };
 
 // Lifecycle
