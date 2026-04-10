@@ -6,7 +6,7 @@ Supports variant type, pathogenicity, and disease subtype comparisons.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1008,8 +1008,9 @@ async def get_survival_data(
     endpoint_config = _get_endpoint_config()
     if endpoint not in endpoint_config:
         valid_options = ", ".join(endpoint_config.keys())
-        raise ValueError(
-            f"Unknown endpoint: {endpoint}. Valid options: {valid_options}"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown endpoint: {endpoint}. Valid options: {valid_options}",
         )
 
     config = endpoint_config[endpoint]
@@ -1020,6 +1021,6 @@ async def get_survival_data(
     try:
         handler = SurvivalHandlerFactory.get_handler(comparison)
     except ValueError as e:
-        raise ValueError(str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return await handler.handle(db, endpoint_label, endpoint_hpo_terms)
