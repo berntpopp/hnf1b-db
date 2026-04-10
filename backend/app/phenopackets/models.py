@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Computed, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -429,10 +429,7 @@ class PhenopacketResponse(BaseModel):
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
 
-    class Config:
-        """Pydantic config for ORM mode."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PhenopacketSearchQuery(BaseModel):
@@ -469,10 +466,7 @@ class PhenopacketAuditResponse(BaseModel):
     old_value: Optional[Dict[str, Any]] = None
     new_value: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic config for ORM mode."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AggregationResult(BaseModel):
