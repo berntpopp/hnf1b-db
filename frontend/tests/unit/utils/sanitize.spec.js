@@ -52,4 +52,45 @@ describe('sanitize', () => {
     expect(sanitize(undefined)).toBe('');
     expect(sanitize('')).toBe('');
   });
+
+  it('strips uncommon on* event handler attributes (not just the enumerated ones)', () => {
+    // These are handlers that were NOT in the old FORBID_ATTR list.
+    // The uponSanitizeAttribute hook should drop them too.
+    const dirty =
+      '<a href="https://example.com" onanimationstart="x" onpointerenter="y" onwheel="z">link</a>';
+    const clean = sanitize(dirty);
+    expect(clean).not.toContain('onanimationstart');
+    expect(clean).not.toContain('onpointerenter');
+    expect(clean).not.toContain('onwheel');
+    expect(clean).toContain('href="https://example.com"');
+  });
+
+  it('strips on* handlers regardless of attribute-name casing', () => {
+    const dirty = '<span OnClick="alert(1)" ONMOUSEOVER="alert(2)">x</span>';
+    const clean = sanitize(dirty);
+    expect(clean.toLowerCase()).not.toContain('onclick');
+    expect(clean.toLowerCase()).not.toContain('onmouseover');
+  });
+
+  it('forces rel="noopener noreferrer" on target="_blank" anchors', () => {
+    const dirty = '<a href="https://example.com" target="_blank">link</a>';
+    const clean = sanitize(dirty);
+    expect(clean).toContain('target="_blank"');
+    expect(clean).toContain('rel="noopener noreferrer"');
+  });
+
+  it('does not add rel to anchors without target="_blank"', () => {
+    const dirty = '<a href="https://example.com">internal</a>';
+    const clean = sanitize(dirty);
+    expect(clean).toContain('href="https://example.com"');
+    expect(clean).not.toContain('rel=');
+  });
+
+  it('overrides insecure rel values when target="_blank"', () => {
+    // Even if the author supplied a weak rel, force the safe value.
+    const dirty = '<a href="https://x.test" target="_blank" rel="opener">x</a>';
+    const clean = sanitize(dirty);
+    expect(clean).toContain('rel="noopener noreferrer"');
+    expect(clean).not.toContain('rel="opener"');
+  });
 });
