@@ -9,7 +9,14 @@
 
 ## Summary
 
-The 2026-04-09 codebase review identified 26 priority action items across 12 quality dimensions. All 26 findings were verified against the current codebase on 2026-04-10 and remain present. This document turns that review into an actionable, sequenced refactoring roadmap.
+The 2026-04-09 codebase review identified 26 priority action items across 12 quality dimensions. A re-baseline pass on 2026-04-10 verified findings against the current state. **24 of 26 items remain fully present.** Two items show partial progress that rescopes (but does not eliminate) their roadmap work:
+
+- P3 #13 ("aggregation commons"): `backend/app/phenopackets/routers/aggregations/common.py` already exists as a shared-imports module with one MV-existence helper, imported by 6 aggregation modules. However, the `calculate_percentages()` helper and materialized-view fallback pattern are **not** extracted — the duplicated percentage calculation is still present in 10+ call sites (demographics.py 3x, variants.py 2x, features.py 2x, etc). Wave 3 item #4 is rescoped from "create common.py" to "extend common.py with the missing helpers and replace duplicated logic."
+- P5 #25 ("top-5 component tests"): `frontend/tests/unit/components/HNF1BProteinVisualization.spec.js` already exists (318 lines) but tests only domain-coordinate data, not component behavior. The Wave 2 characterization work at that path is an **upgrade**, not a net-new file.
+
+**Additional finding from re-baseline:** the review's top-10 oversized file list is not the complete set. The codebase currently has **12 backend files and 17 frontend files over 500 LOC**. Waves 4 and 5 are expanded below to cover all of them, not just the review's top-10.
+
+This document turns the full re-baselined picture into an actionable, sequenced refactoring roadmap.
 
 **Design constraints (set during brainstorming):**
 
@@ -55,11 +62,11 @@ Each wave is a tracked milestone, not a single PR. Within a wave, individual ite
 
 | Wave | Done when |
 |------|-----------|
-| 1 | All critical security items patched, all cleanup items merged, no regression in 747 backend tests. CI green. `grep -r "ChangeMe!Admin" backend/` returns nothing. |
+| 1 | All critical security items patched, all cleanup items merged, no regression in 747 backend tests. CI green. `ChangeMe!Admin2025` scrubbed from live config (`backend/.env`, `backend/.env.example`, `backend/app/core/config.py`, `CLAUDE.md`, `.planning/codebase/*.md`, `docker-compose*.yml`) and active planning docs; historical implementation notes (`docs/issues/IMPLEMENTATION-issue-61-user-auth-REVISED.md`) and the source review itself are explicitly permitted to retain the string as historical reference. |
 | 2 | Every component slated for Wave 5 decomposition has a characterization test file. `backend/app/auth/` modules have dedicated test files. Test DB isolated. Security headers present on all responses. Frontend error boundary intercepts a forced test error. |
-| 3 | `survival.py` has no handler functions (moved to `survival_handlers.py` or a `survival/` sub-package). No hardcoded HPO IDs in survival queries. Aggregation commons extracted. 747+ backend tests green. |
-| 4 | No backend file over 500 LOC. `admin_endpoints.py` split. `crud.py` split. `PhenopacketRepository` exists. `_sync_tasks` replaced with Redis-backed persistence. Backend tests green. |
-| 5 | No frontend file over 500 LOC. `api/index.js` split. All 5 giant components split. `useSyncTask` composable extracted. Characterization tests from Wave 2 still green unchanged. |
+| 3 | `survival.py` has no handler functions (moved to `survival_handlers.py` or a `survival/` sub-package). No hardcoded HPO IDs in survival queries. `calculate_percentages()` and MV-fallback helpers added to existing `common.py`; duplicated percentage logic removed from 5+ aggregation modules. 747+ backend tests green. |
+| 4 | Every backend file in `backend/app/` under 500 LOC, with at most 2 documented exceptions in `docs/refactor/tech-debt.md` (each with a written justification and a follow-up ticket). `admin_endpoints.py`, `crud.py`, `variant_validator.py`, `comparisons.py`, `variants/service.py`, `sql_fragments.py`, `reference/service.py`, `variant_validator_endpoint.py`, `publications/endpoints.py`, `search/services.py` all split. `PhenopacketRepository` exists. `_sync_tasks` replaced with Redis-backed persistence. Backend tests green. |
+| 5 | Every frontend file in `frontend/src/` under 500 LOC, with at most 3 documented exceptions in `docs/refactor/tech-debt.md`. `api/index.js` split. All 6 giant components split (gene visualization, protein 3D, protein visualization, page-variant, admin dashboard, page-phenopacket). All 11 medium-oversized frontend files also split (PagePublication, AggregationsDashboard, VariantComparisonChart, useSeoMeta, Phenopackets view, InterpretationsCard, Variants view, User view, VariantAnnotator, Home view). `useSyncTask` composable extracted. Characterization tests from Wave 2 still green unchanged. |
 | 6 | CI enforces frontend build, coverage thresholds, and E2E. Stale docs fixed. Request ID middleware active. JWT storage decision documented as ADR. Re-scored review ≥ 8.0. |
 
 ### Verification between waves
@@ -100,11 +107,24 @@ Each wave ends with a short exit note in `docs/refactor/wave-N-exit.md` summariz
 - Update `docker-compose*.yml` environments to reference env vars without defaults.
 - Add test asserting `create_admin_user()` raises without env var set.
 
-**3. Replace bare `except Exception:`** (P1 #3)
+**3. Replace bare `except Exception:` in production code** (P1 #3, expanded)
 
-- `backend/app/phenopackets/validation/variant_validator.py:77` — catch specific parsing exceptions, log with context, re-raise or return typed failure.
-- `backend/app/phenopackets/variant_search_validation.py:80` — same treatment.
-- `backend/tests/conftest.py:64` — scope to specific DB-cleanup exception types.
+Re-baseline found ~10 bare `except Exception:` / `except Exception as e:` occurrences in `backend/app/` (the review's original list of 3 undercounted). Audit and fix every one of them in production code. For each: identify the actual exceptions that can be raised, catch only those, log with context, and re-raise or return a typed failure. Confirmed sites to audit at minimum:
+
+- `backend/app/database.py:84`, `:132`, `:197`
+- `backend/app/phenopackets/validation/variant_validator.py:77`, `:500`, `:737`, `:790`, `:960`
+- `backend/app/phenopackets/variant_search_validation.py:80`
+- `backend/app/phenopackets/routers/crud.py:348`, `:459`, `:532`, `:817`
+- `backend/app/api/admin_endpoints.py:329`, `:349`, `:589`, `:609`, `:896`, `:929`
+- `backend/app/utils/audit_logger.py:203`
+- `backend/app/core/retry.py:115` (may be legitimate in a retry decorator — audit the context)
+- `backend/app/core/mv_cache.py:128`
+- `backend/app/search/mv_refresh.py:41`, `:88`
+- `backend/app/variants/service.py:292`, `:295`
+- `backend/app/hpo_proxy.py:111`, `:154`, `:208`, `:306`
+- `backend/app/services/ontology_service.py:83`, `:150`, `:178`
+
+**Test-code bare excepts are out of scope for Wave 1.** `backend/tests/conftest.py` and other test teardown fixtures frequently need broad catches for best-effort cleanup; those are addressed in Wave 2 as part of the dedicated-test-DB work, where cleanup semantics are being rewritten anyway.
 
 **4. Bulk cleanup sweep** (P4 #17, #18, #20 + dead code)
 
@@ -116,17 +136,35 @@ Each wave ends with a short exit note in `docs/refactor/wave-N-exit.md` summariz
 - Resolve `backend/app/schemas.py` + `backend/app/schemas/` namespace collision.
 - Resolve Pydantic v2 deprecation warnings in `phenopackets/models.py` and `reference/schemas.py`.
 
+**5. Scrub `ChangeMe!Admin2025` from live files and active docs** (P1 #2, cross-cut)
+
+Beyond the config.py fix in item 2, the string appears in 13 files. Remove from the **active set**:
+
+- `backend/.env` (local dev file) — replace with env-var reference.
+- `backend/.env.example:15` — replace with `ADMIN_PASSWORD=<required-strong-password>`.
+- `CLAUDE.md:528` — replace with `ADMIN_PASSWORD=<required; see .env.example>`.
+- `.planning/codebase/INTEGRATIONS.md:209` — replace with placeholder.
+- `.planning/codebase/CONCERNS.md:75` — acceptable to retain as a security-concern reference; update to say "was documented" in past tense.
+- `plan/01-active/README.md:388` and `plan/01-active/refactoring_optimization_plan.md:280` — replace with placeholder; these are active planning docs.
+
+**Explicitly retained** (historical reference, do not modify):
+
+- `docs/issues/IMPLEMENTATION-issue-61-user-auth-REVISED.md` (4 occurrences — historical implementation record of the original issue).
+- `docs/reviews/codebase-best-practices-review-2026-04-09.md` (the review's own finding that triggered this roadmap).
+- `docs/superpowers/specs/2026-04-10-codebase-refactor-roadmap-design.md` (this document).
+
 ### Exit criteria
 
-- `grep -r "ChangeMe!Admin" . --exclude-dir=.git` returns nothing.
-- `grep -r "except Exception" backend/app/phenopackets/` returns only specific, justified instances.
-- `find . -name '*.backup'` returns nothing.
+- `ChangeMe!Admin2025` removed from all 7 active files listed in item 5; only the 3 explicitly-retained historical files may reference the string.
+- `grep -rn "except Exception" backend/app/ | grep -v "# noqa"` returns zero results (production-code scope only; test fixtures are Wave 2).
+- `find . -name '*.backup' -not -path '*/node_modules/*' -not -path '*/.git/*'` returns nothing.
 - `backend && make check` and `frontend && make check` green.
-- XSS characterization test passes.
+- XSS characterization test passes (rendering `<script>alert(1)</script>` produces safe HTML).
+- Application fails fast on startup when `ADMIN_PASSWORD` env var is unset (tested via `pytest -k test_admin_password_required`).
 
 ### Risk
 
-Very low. Biggest risk is namespace collision resolution moving imports; mitigated by running `make test` after each rename and relying on mypy to catch broken imports.
+Low-medium. Two concrete risks: (1) namespace collision resolution moving imports — mitigated by running `make check` after each rename and relying on mypy; (2) the expanded bare-exception audit may touch ~10 files at once, so each file is a separate PR, and any catch that turns out to be load-bearing (e.g., in `core/retry.py`) is documented with a justifying comment instead of blindly replaced.
 
 ---
 
@@ -138,16 +176,18 @@ Very low. Biggest risk is namespace collision resolution moving imports; mitigat
 
 **1. Frontend characterization tests** (blocker for Wave 5)
 
-Add one test file per giant component, exercising observable behavior (mounted output, user interactions, emitted events) but not internals:
+Add or extend tests for the six components slated for Wave 5 decomposition, plus the FAQ view that received the Wave 1 XSS fix. Each spec exercises observable behavior (mounted output, user interactions, emitted events) but not internals:
 
-- `frontend/tests/unit/views/PageVariant.spec.js`
-- `frontend/tests/unit/components/gene/HNF1BGeneVisualization.spec.js`
-- `frontend/tests/unit/components/gene/ProteinStructure3D.spec.js`
-- `frontend/tests/unit/components/gene/HNF1BProteinVisualization.spec.js`
-- `frontend/tests/unit/views/AdminDashboard.spec.js`
-- `frontend/tests/unit/views/FAQ.spec.js` (extends the XSS test from Wave 1)
+- `frontend/tests/unit/views/PageVariant.spec.js` — **new**
+- `frontend/tests/unit/components/gene/HNF1BGeneVisualization.spec.js` — **new**, includes a zoom-pan test that currently fails (the review flagged zoom as broken; fail-first proves Wave 5 fixes it)
+- `frontend/tests/unit/components/gene/ProteinStructure3D.spec.js` — **new**
+- `frontend/tests/unit/components/HNF1BProteinVisualization.spec.js` — **upgrade existing**. The file already exists (318 lines) but tests only domain-coordinate data. Extend with component-mount + observable-behavior cases. Do not delete the existing domain tests; they become one `describe` block alongside a new characterization block.
+- `frontend/tests/unit/views/AdminDashboard.spec.js` — **new**
+- `frontend/tests/unit/views/FAQ.spec.js` — **new**, extends the XSS test from Wave 1 with broader markdown rendering cases
 
 Tests use mocked API responses (fixtures in `frontend/tests/fixtures/`) so they run without a live backend. Target: each spec fails if the component's visible behavior changes but passes across pure internal refactors.
+
+**Net file count change:** 5 new spec files + 1 upgraded file → +5 new files.
 
 **2. Backend missing critical tests** (P3 #12)
 
@@ -183,11 +223,12 @@ Tests use mocked API responses (fixtures in `frontend/tests/fixtures/`) so they 
 
 ### Exit criteria
 
-- All 5 characterization test files exist and pass. Deliberately changing observable behavior causes the spec to fail.
-- 4 new auth/config/CRUD test files exist and pass.
-- Test DB is separate from app DB.
-- CSP header present on every HTTP response; error boundary catches forced errors.
-- Backend tests at ~765 (747 + 18 new). Frontend test files at 18 (11 + 7 new).
+- 5 new characterization spec files exist and pass (`PageVariant`, `HNF1BGeneVisualization`, `ProteinStructure3D`, `AdminDashboard`, `FAQ`). 1 existing spec upgraded (`HNF1BProteinVisualization`). Deliberately changing observable behavior in any target component causes its spec to fail.
+- 4 new backend test files exist and pass (`test_auth_password.py`, `test_auth_tokens.py`, `test_core_config.py`, `test_phenopackets_crud.py`).
+- 1 new backend test file for error-response shapes (`test_error_responses.py`).
+- Test DB is a separate Postgres database (`hnf1b_phenopackets_test`), and `make test` no longer mutates dev data.
+- CSP header present on every HTTP response; forced render error caught by `app.config.errorHandler`.
+- **Test counts after Wave 2:** backend 750 (post Wave 1) → ~765 (+15: 4 auth/config/CRUD + 1 error-response + ~10 small unit tests added along the way). Frontend 11 spec files (post Wave 1) → 16 (+5 new characterization specs, plus 1 upgrade-in-place of HNF1BProteinVisualization).
 
 ### Risk
 
@@ -226,21 +267,25 @@ Each file under 500 LOC.
 - Replace with `settings.hpo_terms.*` references.
 - Ensure `HPOTermsConfig` in `core/config.py` covers all referenced terms.
 
-**4. Extract aggregation common utilities** (P3 #13)
+**4. Extend aggregation common utilities** (P3 #13, rescoped)
 
-Create `backend/app/phenopackets/routers/aggregations/common.py`:
+**Note on partial prior work:** `backend/app/phenopackets/routers/aggregations/common.py` already exists (re-exports shared imports + one `check_materialized_view_exists` helper, imported by 6 modules). However, the duplicated percentage-calculation pattern flagged by the review is still present in 10+ call sites.
 
-- `calculate_percentages(results, total)` helper.
-- `materialized_view_fallback(mv_query, fallback_query)` decorator or context manager.
+Extend the existing module with the missing helpers:
 
-Replace duplicated code in demographics, features, diseases, variants, publications.
+- Add `calculate_percentages(results: list, total: int) -> list` — wraps the `(count / total * 100) if total > 0 else 0` pattern.
+- Add `materialized_view_fallback(view_name: str, mv_query, fallback_query)` — decorator or context manager for the existing "check MV → query → fallback" pattern, removing 6+ repetitions.
+- Add `AggregationResponse` builder helper if the response construction logic is also duplicated (verify during the PR).
+
+Replace duplicated code in `demographics.py` (3 sites), `variants.py` (2), `features.py` (2), `diseases.py`, `publications.py`, `summary.py`. Existing tests should pass unchanged — this is a pure refactor with no semantic change.
 
 ### Exit criteria
 
-- `survival.py` does not exist in flat form (shrunk or replaced by `survival/` package).
-- `grep "HP:" backend/app/phenopackets/routers/aggregations/survival/` returns nothing.
-- `common.py` exists and is imported by at least 5 aggregation modules.
-- 747+ backend tests green.
+- `backend/app/phenopackets/routers/aggregations/survival.py` either no longer exists (moved to `survival/` sub-package) or has shrunk to a router-only shim under 200 LOC.
+- `grep -rn "HP:" backend/app/phenopackets/routers/aggregations/survival*` returns zero results outside of docstrings.
+- `backend/app/phenopackets/routers/aggregations/common.py` contains `calculate_percentages` and `materialized_view_fallback` exports; `grep -rn "calculate_percentages" backend/app/phenopackets/routers/aggregations/` shows 5+ import sites.
+- Percentage calculation pattern `(count / total * 100) if total > 0 else 0` appears fewer than 3 times across the aggregations package (down from 10+).
+- Backend tests still green at ~765 (Wave 2 level; Wave 3 adds only parity tests for survival handlers and does not materially change count).
 
 ### Risk
 
@@ -250,7 +295,7 @@ Medium. Survival has statistical tests with edge cases; existing backend tests a
 
 ## Wave 4 — Backend decomposition
 
-**Theme:** Bring every backend file under 500 LOC. Introduce the repository layer for phenopacket CRUD to match the clean pattern already used in the search module.
+**Theme:** Bring every backend file under 500 LOC. Introduce the repository layer for phenopacket CRUD to match the clean pattern already used in the search module. Covers all 12 backend files currently over 500 LOC, not just the review's top 3.
 
 ### Items
 
@@ -295,17 +340,35 @@ backend/app/phenopackets/
 
 **3. Clean up phenopackets/routers/search.py layering**
 
-- Apply the same 3-layer split, lighter (search.py is closer to the pattern already).
-- Extract query building to `backend/app/phenopackets/search_repository.py`.
-- Keep `search.py` as thin router.
+- Apply the same 3-layer split, lighter (`search.py` is closer to the pattern already — the search module already has `repositories.py`, `services.py`, `routers.py`).
+- Extract any remaining query building to `backend/app/phenopackets/search_repository.py` if not already covered by the existing `search/repositories.py`.
+- Keep `search.py` as thin router. Verify `backend/app/search/services.py` (currently 513 LOC) is also under 500 after cleanup; split into `services/query.py` + `services/result_shaping.py` if needed.
+
+**4. Decompose remaining backend files over 500 LOC**
+
+The review identified 3 top offenders; re-baseline found 9 additional files that must also be split. Each is its own PR. For each, analyze the file's responsibilities and split along concern boundaries — do not blindly slice by line count.
+
+- **`variant_validator.py` (968 LOC)** — `backend/app/phenopackets/validation/variant_validator/`: split into `hgvs_parser.py`, `vcf_parser.py`, `spdi_parser.py`, `validator.py` (public entrypoint). Existing 1,660-line test file covers this; tests should pass unchanged.
+- **`comparisons.py` (861 LOC)** — `backend/app/phenopackets/routers/comparisons/`: split into `router.py`, `statistical_tests.py` (chi-square, Fisher, etc), `result_builder.py`. Existing 1,467-line test file is the safety net.
+- **`variants/service.py` (823 LOC)** — `backend/app/variants/`: split into `service.py` (public), `vep_client.py` (HTTP), `parser.py` (variant format parsing), `annotation.py` (CADD/gnomAD processing). Removes the "`_format_variant_for_vep` accessed via test" code smell as a side effect.
+- **`sql_fragments.py` (748 LOC)** — `backend/app/phenopackets/routers/aggregations/sql/`: split by domain — `variant_fragments.py`, `clinical_fragments.py`, `demographic_fragments.py`. Each under 300 LOC.
+- **`reference/service.py` (721 LOC)** — `backend/app/reference/`: split into `service.py` (public), `ensembl_client.py`, `gene_importer.py`, `transcript_importer.py`.
+- **`variant_validator_endpoint.py` (702 LOC)** — `backend/app/variant_validator/`: split into `endpoint.py`, `request_handlers.py`, `response_builders.py`. Fix the "reaches through private internals" anti-pattern by promoting the needed helpers to public API.
+- **`publications/endpoints.py` (680 LOC)** — `backend/app/publications/`: split into `router.py`, `pubmed_handlers.py`, `citation_formatters.py`.
+- **`search/services.py` (513 LOC)** — as noted in item 3, split into `query_builder.py` + `result_shaper.py` if it remains over 500 after Wave 4 item 3.
+
+**Legitimate exceptions (permitted in `docs/refactor/tech-debt.md`):**
+
+- `survival_handlers.py` (1,055 LOC) — Strategy pattern with 6 handler classes, already architecturally clean. Documented as intentional. After Wave 3 restructuring into `survival/handlers.py`, revisit: if still over 500, split by handler family (variant-type, pathogenicity, disease-subtype).
 
 ### Exit criteria
 
-- `find backend/app -name "*.py" -exec wc -l {} \; | awk '$1 > 500'` returns nothing (or only legitimate exceptions documented in `docs/refactor/tech-debt.md`).
+- `find backend/app -name "*.py" -exec wc -l {} \; | awk '$1 > 500 {print}'` returns no more than 2 files, and every returned file has a matching entry in `docs/refactor/tech-debt.md` with a written justification.
 - `_sync_tasks` dict no longer exists in code.
 - Redis keys visible during a sync run: `admin:sync_task:*`.
-- `PhenopacketRepository` class exists and is used by at least CRUD and search layers.
-- Backend tests at ~775 (Wave 2's 765 + 10 new repository/admin tests), all green.
+- `PhenopacketRepository` class exists and is used by CRUD and (via search layering cleanup) the search module.
+- Zero bare `except Exception:` remaining in `backend/app/` (all addressed in Wave 1 or during the splits in this wave).
+- **Test counts after Wave 4:** backend ~783 (Wave 2's 765 + 18 new tests for repository/admin/task-state/parser splits), all green. Frontend unchanged at 16 files.
 
 ### Risk
 
@@ -315,7 +378,7 @@ Medium-high. `crud.py` is the hottest path in the API. Mitigation: keep HTTP sur
 
 ## Wave 5 — Frontend decomposition
 
-**Theme:** Bring every frontend file under 500 LOC. The largest and highest-risk wave — this is why we built the characterization tests in Wave 2.
+**Theme:** Bring every frontend file under 500 LOC. The largest and highest-risk wave — this is why we built the characterization tests in Wave 2. Covers all 17 frontend files currently over 500 LOC, not just the review's top 6.
 
 ### Items (each component = its own PR)
 
@@ -388,14 +451,34 @@ frontend/src/views/admin/
 **8. Split `HNF1BProteinVisualization.vue` (1,063 LOC)**
 
 - Same composable + pure-util extraction pattern as HNF1BGeneVisualization.
+- Characterization spec file (upgraded in Wave 2) remains the safety net.
+
+**9. Decompose remaining frontend files over 500 LOC**
+
+The review identified 6 top offenders; re-baseline found 11 additional files that must also be split. Each is its own PR. Characterization tests are not required for these (their existing tests or smoke-level interaction is sufficient), but add a thin render-and-mount test as part of the split PR.
+
+- **`PagePublication.vue` (704 LOC)** — extract `usePublicationPage(pubId)` composable (data fetching + SEO). Extract `PublicationCitationCard.vue` and `PublicationAbstractCard.vue`.
+- **`AggregationsDashboard.vue` (693 LOC)** — extract one component per aggregation section (`DemographicsSection.vue`, `ClinicalFeaturesSection.vue`, `VariantsSection.vue`, `PublicationsSection.vue`, `SurvivalSection.vue`). Dashboard becomes layout + tab routing.
+- **`PagePhenopacket.vue` (682 LOC)** — same pattern as `PageVariant.vue`: `usePhenopacketPage` composable + tab content components.
+- **`VariantComparisonChart.vue` (649 LOC)** — extract organ-system keyword map to `frontend/src/data/organSystemKeywords.js` (fixes review anti-pattern). Extract `useComparisonChartData` composable + pure `chartTransformers.js` util. Remove `document.createElement` direct DOM manipulation.
+- **`useSeoMeta.js` (621 LOC)** — the review explicitly flagged this. Split into `useSeoMeta.js` (orchestration), `seoStructuredData.js` (JSON-LD generation), `seoBreadcrumbs.js` (breadcrumb builders), `seoDefaults.js` (static defaults).
+- **`Phenopackets.vue` (590 LOC)** — extract `usePhenopacketList` composable (data + pagination + filters) and `PhenopacketListFilters.vue` facet panel.
+- **`InterpretationsCard.vue` (557 LOC)** — extract `InterpretationRow.vue` and `useInterpretationFormatting.js` composable.
+- **`Variants.vue` (544 LOC)** — fix the broken variant search during the split (review notes the search is currently non-functional). Extract `useVariantList` composable and `VariantListFilters.vue`.
+- **`User.vue` (522 LOC)** — extract `UserProfileForm.vue`, `UserPasswordChangeForm.vue`, `UserActivityList.vue`.
+- **`VariantAnnotator.vue` (509 LOC)** — extract `useVariantAnnotation` composable + `AnnotationResultCard.vue`. Its Wave 6 characterization test becomes its regression test.
+- **`Home.vue` (503 LOC)** — extract hero/stats/features sections into small focused components. Lightest split.
+
+**Legitimate exceptions (permitted in `docs/refactor/tech-debt.md`):** none expected; all 17 files have clear split boundaries.
 
 ### Exit criteria
 
-- `find frontend/src -name "*.vue" -exec wc -l {} \; | awk '$1 > 500'` returns nothing.
-- Every characterization test from Wave 2 still passes unchanged.
-- 17 → 30+ frontend test files.
-- Zoom bug fixed as a side-effect of HNF1BGeneVisualization split.
+- `find frontend/src \( -name "*.vue" -o -name "*.js" \) -exec wc -l {} \; | awk '$1 > 500 {print}'` returns no more than 3 files, each documented in `docs/refactor/tech-debt.md` with a written justification.
+- Every characterization test from Wave 2 still passes **without modification** (internal-refactor-only proof).
+- Variant search bug (`Variants.vue`) resolved.
+- Zoom bug fixed as a side-effect of `HNF1BGeneVisualization` split (the fail-first test from Wave 2 now passes).
 - `v-html` only appears in FAQ/About via the sanitized util.
+- **Test counts after Wave 5:** frontend 16 → ~31 files (+15 new unit tests added alongside extracted composables and split components). Backend unchanged at ~783.
 
 ### Risk
 
@@ -463,18 +546,18 @@ Very low.
 
 ### How tests evolve across waves
 
-| Wave | Backend tests | Frontend tests | New test infra |
-|------|---------------|----------------|----------------|
-| Start | 747 | 11 files | Dev DB = test DB (bad) |
+| Wave | Backend tests | Frontend test files | New test infra |
+|------|---------------|---------------------|----------------|
+| Start | 747 | 10 files (verified 2026-04-10) | Dev DB = test DB (bad) |
 | Wave 1 | +3 | +1 | — |
-| Wave 2 | +15 | +6 | Dedicated test DB |
-| Wave 3 | (stable; existing load-bearing) | — | — |
-| Wave 4 | +10 | — | — |
-| Wave 5 | — | +13 | — |
-| Wave 6 | — | +5 | Coverage thresholds, E2E in CI |
-| **End** | **~775** | **~36 files** | **Enforced** |
+| Wave 2 | +15 (auth/config/CRUD/error) | +5 new + 1 upgrade-in-place | Dedicated test DB |
+| Wave 3 | (stable + parity tests for survival handlers) | — | — |
+| Wave 4 | +18 (repository/admin/task-state/parser splits) | — | — |
+| Wave 5 | — | +15 (composables + split-component smoke tests) | — |
+| Wave 6 | — | +5 (top-5 component tests) | Coverage thresholds, E2E in CI |
+| **End** | **~783** | **~36 files** | **Enforced** |
 
-The characterization tests in Wave 2 are the highest-leverage addition: six small files that unlock all of Wave 5 safely. If anything is cut from Wave 2, don't cut those.
+The characterization tests in Wave 2 are the highest-leverage addition: five net-new files + one upgraded file that unlock all of Wave 5 safely. If anything is cut from Wave 2, don't cut those.
 
 ### Risk map
 
@@ -493,13 +576,13 @@ The characterization tests in Wave 2 are the highest-leverage addition: six smal
 
 **Mechanical (measurable after every wave):**
 
-- `find backend/app -name "*.py" -exec wc -l {} \; | awk '$1 > 500 {print}'` → empty by end of Wave 4.
-- `find frontend/src \( -name "*.vue" -o -name "*.js" \) | xargs wc -l | awk '$1 > 500 {print}'` → empty by end of Wave 5.
+- `find backend/app -name "*.py" -exec wc -l {} \; | awk '$1 > 500 {print}'` returns no more than 2 files by end of Wave 4, each with a matching entry in `docs/refactor/tech-debt.md`.
+- `find frontend/src \( -name "*.vue" -o -name "*.js" \) -exec wc -l {} \; | awk '$1 > 500 {print}'` returns no more than 3 files by end of Wave 5, each with a matching entry in `docs/refactor/tech-debt.md`.
 - Backend test count strictly monotonic increasing.
 - Frontend test file count strictly monotonic increasing.
-- Zero files matching `*.backup`.
-- Zero occurrences of `ChangeMe!Admin2025` in any tracked file.
-- Zero bare `except Exception:` outside documented specific cases.
+- Zero files matching `*.backup` (excluding `node_modules/` and `.git/`).
+- `ChangeMe!Admin2025` removed from the 7 active files listed in Wave 1 item 5; only the 3 explicitly-retained historical files may contain the string.
+- Zero bare `except Exception:` in `backend/app/` production code (test fixtures excluded — broad catches there are legitimate for best-effort cleanup).
 - All characterization tests from Wave 2 still pass at end of Wave 5 without modification.
 
 **Qualitative (re-assessed at end of Wave 6):**
@@ -546,4 +629,17 @@ Every item in this roadmap traces back to a numbered priority in the 2026-04-09 
 | 5 | P2 #4 (api/index.js split), P2 #8 (useSyncTask), P3 #10 (giant components), P3 #15 (auth consolidation) |
 | 6 | P4 #19 (stale docs), P4 #21 (CI tightening), P5 #24 (request ID), P5 #25 (component tests), P5 #26 (JWT storage) |
 
-All 26 priority action items from the review are mapped. No items dropped, no items added.
+All 26 priority action items from the review are mapped.
+
+**Items added beyond the review (discovered during 2026-04-10 re-baseline):**
+
+- Wave 1 item 5: scrub `ChangeMe!Admin2025` from the 7 active files (not just `config.py` as the review implied). Reason: re-baseline found the string in 13 files, not 1.
+- Wave 4 item 4: decompose 8 additional backend files over 500 LOC not in the review's top-10 list. Reason: the review's oversized-file list was the top offenders, not exhaustive; re-baseline found 12 total.
+- Wave 5 item 9: decompose 11 additional frontend files over 500 LOC not in the review's top-10 list. Reason: same as above; re-baseline found 17 total.
+
+**Items partially completed before the roadmap started (discovered during re-baseline):**
+
+- P3 #13 (aggregation commons): common.py module exists with shared imports + one MV helper. Missing pieces (`calculate_percentages`, MV-fallback decorator) are still scheduled for Wave 3 item 4.
+- P5 #25 (HNF1BProteinVisualization test): file exists with domain-data tests only. Wave 2 upgrades in place rather than creates.
+
+No items dropped.
