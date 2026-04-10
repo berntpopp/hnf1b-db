@@ -30,6 +30,38 @@ make backend
 make frontend
 ```
 
+## Git Worktree Convention
+
+**Location:** Always create worktrees as **sibling directories** to this repo, never inside it:
+
+```bash
+# Correct — sibling layout
+git worktree add ~/development/hnf1b-db.worktrees/<branch-name> -b <branch-name>
+
+# Wrong — nested inside repo (breaks ripgrep, VS Code file watcher, Docker build context)
+git worktree add .worktrees/<branch-name> -b <branch-name>
+```
+
+**Why sibling, not nested** (research 2026-04-10):
+
+1. **`ripgrep`** — in-repo worktrees cause duplicate search results; `.gitignore` doesn't help because `rg` treats a nested worktree as a separate repo (BurntSushi/ripgrep#2492, won't fix).
+2. **VS Code file watcher** — ignores `.gitignore`, requires explicit `files.watcherExclude`. A nested worktree doubles the watch load on this polyglot Python+Node monorepo.
+3. **Claude Code** — anthropics/claude-code#28242 explicitly warns that worktrees under the project directory "can cause issues with tooling that scans the project directory (IDEs, build tools, file watchers)".
+4. **Docker build context** — a nested `worktrees/` ships to the daemon unless `.dockerignore`'d.
+5. **Git's own docs** — the only layout example in `man git-worktree` is `../hotfix` (sibling).
+
+**Branch-name to directory-name mapping:** Replace slashes with dashes — `chore/wave-3-finish-in-flight` → `chore-wave-3-finish-in-flight`.
+
+**Per-worktree setup** (unavoidable — worktrees start with no untracked files):
+
+```bash
+cd ~/development/hnf1b-db.worktrees/<branch-name>
+cd backend && uv sync --group test && cd ..
+cd frontend && npm install && cd ..
+```
+
+**Cleanup:** `git worktree list` to see active worktrees, `git worktree remove <path>` to drop one, `git worktree prune` to clean stale refs.
+
 ## Essential Commands
 
 ### Development
