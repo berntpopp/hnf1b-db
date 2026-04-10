@@ -73,11 +73,13 @@ def validate_hgvs_notation(query: str) -> bool:
     Note:
         For production, consider using the `hgvs` library for comprehensive validation:
             from hgvs.parser import Parser
+            from hgvs.exceptions import HGVSParseError, HGVSInvalidVariantError
             parser = Parser()
             try:
                 parser.parse(query)
                 return True
-            except Exception:
+            except (HGVSParseError, HGVSInvalidVariantError, ValueError) as exc:
+                logger.debug("HGVS parse failed for %r: %s", query, exc)
                 return False
     """
     # Check each HGVS type pattern
