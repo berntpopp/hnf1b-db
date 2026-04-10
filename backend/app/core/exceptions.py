@@ -21,11 +21,18 @@ logger = logging.getLogger(__name__)
 
 def _build_error_response(
     status_code: int,
-    detail: str,
+    detail: Any,
     error_code: str,
     request: Request,
 ) -> JSONResponse:
-    """Build a standardized error response body."""
+    """Build a standardized error response body.
+
+    `detail` may be a string (the common case) or a JSON-serializable
+    dict/list. Structured details from endpoints like
+    ``HTTPException(status_code=409, detail={"error": ..., "current_revision": N})``
+    round-trip to the client unchanged so that existing clients and tests
+    keyed on the structured shape continue to work.
+    """
     request_id = getattr(request.state, "request_id", None)
     body: Dict[str, Any] = {
         "detail": detail,
@@ -36,12 +43,22 @@ def _build_error_response(
 
 
 async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Convert HTTPException into the standardized shape."""
+    """Convert HTTPException into the standardized shape.
+
+    Preserves the original ``exc.detail`` structure: strings stay strings,
+    dicts stay dicts, lists stay lists. Only unknown non-serializable
+    detail values are coerced to ``str``.
+    """
     assert isinstance(exc, HTTPException)
     error_code = f"http_{exc.status_code}"
+    detail: Any = exc.detail
+    # Coerce non-JSON-native types (Pydantic models, arbitrary objects)
+    # so that JSONResponse encoding never fails.
+    if not isinstance(detail, (str, dict, list, int, float, bool, type(None))):
+        detail = str(detail)
     return _build_error_response(
         status_code=exc.status_code,
-        detail=str(exc.detail),
+        detail=detail,
         error_code=error_code,
         request=request,
     )
