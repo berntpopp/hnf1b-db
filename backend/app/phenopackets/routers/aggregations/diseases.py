@@ -14,6 +14,7 @@ from .common import (
     check_materialized_view_exists,
     get_db,
     logger,
+    settings,
     text,
 )
 
@@ -100,7 +101,7 @@ async def aggregate_kidney_stages(
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
         jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
     WHERE
-        feature->'type'->>'id' = 'HP:0012622'
+        feature->'type'->>'id' = :ckd_hpo
         AND modifier->>'label' LIKE '%Stage%'
     GROUP BY
         modifier->>'label'
@@ -108,7 +109,10 @@ async def aggregate_kidney_stages(
         stage
     """
 
-    result = await db.execute(text(query))
+    result = await db.execute(
+        text(query),
+        {"ckd_hpo": settings.hpo_terms.chronic_kidney_disease},
+    )
     rows = result.fetchall()
 
     total = sum(int(row._mapping["count"]) for row in rows)

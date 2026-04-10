@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.phenopackets.survival_analysis import (
     apply_bonferroni_correction,
     calculate_kaplan_meier,
@@ -226,7 +227,8 @@ class SurvivalHandler(ABC):
         """Get metadata for current_age endpoint."""
         return {
             "event_definition": (
-                "Kidney failure: CKD Stage 4 (HP:0012626) or Stage 5/ESRD (HP:0003774)"
+                f"Kidney failure: CKD Stage 4 ({settings.hpo_terms.ckd_stage_4}) "
+                f"or Stage 5/ESRD ({settings.hpo_terms.ckd_stage_5})"
             ),
             "time_axis": "Age at last clinical encounter (timeAtLastEncounter)",
             "censoring": (
