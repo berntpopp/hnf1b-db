@@ -85,7 +85,4 @@ class TestSurvivalEndpointSmoke:
         body = response.json()
         assert "detail" in body
         # The detail should name the valid options — useful for client debugging.
-        assert (
-            "Valid options" in body["detail"]
-            or "valid" in body["detail"].lower()
-        )
+        assert "Valid options" in body["detail"] or "valid" in body["detail"].lower()

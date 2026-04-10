@@ -30,9 +30,7 @@ SAMPLE_PAYLOAD = {
     "phenopacket": {
         "id": "INT-TEST-001",
         "subject": {"id": "SUB-INT-001", "sex": "MALE"},
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0000107", "label": "Renal cyst"}}
-        ],
+        "phenotypicFeatures": [{"type": {"id": "HP:0000107", "label": "Renal cyst"}}],
         "metaData": {
             "created": "2026-04-10T00:00:00Z",
             "createdBy": "integration-test",
