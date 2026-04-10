@@ -860,12 +860,18 @@ class TestVariantRecoding:
 
     @pytest.mark.asyncio
     async def test_recode_variant_unexpected_exception(self):
-        """Test recoding with unexpected exception."""
+        """Test recoding gracefully handles parser/value errors from responses.
+
+        Simulates a malformed response that trips value/key/type errors
+        during parsing. The narrowed except clause in recode_variant_with_vep
+        must swallow these and return None (logged at error level).
+        """
         validator = VariantValidator()
 
         with patch("httpx.AsyncClient") as mock_client:
-            # Mock unexpected exception
-            mock_get = AsyncMock(side_effect=RuntimeError("Unexpected error"))
+            # Mock a ValueError raised while the response is being processed
+            # (e.g., unexpected payload shape causing .get()/index access to fail)
+            mock_get = AsyncMock(side_effect=ValueError("Unexpected payload shape"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
             # Test recoding
@@ -1075,12 +1081,19 @@ class TestPhenopacketValidation:
 
     @pytest.mark.asyncio
     async def test_validate_variant_with_vep_unexpected_exception(self):
-        """Test validate_variant_with_vep falls back to regex validation on exception."""
+        """Test validate_variant_with_vep falls back to regex validation on exception.
+
+        Simulates an httpx transport-level error during the VEP call. The
+        narrowed except clause must catch it and fall back to regex-based
+        local validation.
+        """
         validator = VariantValidator()
 
         with patch("httpx.AsyncClient") as mock_client:
-            # Mock unexpected exception during VEP call
-            mock_get = AsyncMock(side_effect=RuntimeError("Unexpected error"))
+            # Mock an httpx RequestError during the VEP call (realistic transport failure)
+            mock_get = AsyncMock(
+                side_effect=httpx.RequestError("Transport failure")
+            )
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
             # Test with valid HGVS notation (should pass fallback validation)
