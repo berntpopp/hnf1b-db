@@ -197,11 +197,91 @@ EOF
 ## Task 2: Add survival endpoint regression smoke test
 
 **Files:**
+- Modify: `backend/app/phenopackets/routers/aggregations/survival.py` (convert bare `ValueError` to `HTTPException(400)` — two sites)
 - Create: `backend/tests/test_survival_endpoint.py`
 
 The existing survival tests (`test_survival_analysis.py` for pure functions, `test_survival_protein_domain.py` for handler registration + unit tests) do not exercise the `/survival-data` endpoint itself. Before deleting ~900 LOC of dead code in Task 3, we add a thin smoke test that goes through the live dispatcher for every comparison type × endpoint combination. On an empty test DB the `groups` list will be empty, but the response shape is fully exercised and any import/wiring break will fail loudly.
 
-- [ ] **Step 1: Write the smoke test**
+**Coupled route fix:** The live dispatcher at `survival.py:1011` and `survival.py:1023` currently raises bare `ValueError` on unknown `comparison` or `endpoint` parameters. Because `backend/app/core/exceptions.py:93-107` registers a `generic_exception_handler` that maps any uncaught exception to a 500 with detail `"Internal server error"`, a bad query parameter currently returns **500**, not 400. A smoke test that asserts `>= 400` would lock that broken contract in forever. Task 2 therefore does two things: (a) convert the two `raise ValueError` sites to `raise HTTPException(status_code=400, detail=...)` so the API honours the real contract, and (b) add the smoke test with a **strict** `== 400` assertion on negative cases. The two changes land as separate commits so the route fix and the test coverage are each atomic.
+
+**Fixture name:** The canonical async HTTP fixture is `async_client` (see `backend/tests/conftest.py:251`). The name `client` is **already taken** by a local synchronous `TestClient` fixture inside `backend/tests/test_phenopackets_crud.py:14-22` (with a docstring explaining the deliberate avoidance of collision). This test file must use `async_client`.
+
+- [ ] **Step 1: Convert the bare `ValueError` raises to `HTTPException(400)`**
+
+Read the current endpoint function:
+
+```bash
+sed -n '971,1026p' backend/app/phenopackets/routers/aggregations/survival.py
+```
+
+It has two sites that raise `ValueError`:
+
+```python
+# Site 1: unknown endpoint value
+if endpoint not in endpoint_config:
+    valid_options = ", ".join(endpoint_config.keys())
+    raise ValueError(
+        f"Unknown endpoint: {endpoint}. Valid options: {valid_options}"
+    )
+
+# Site 2: factory dispatch failure
+try:
+    handler = SurvivalHandlerFactory.get_handler(comparison)
+except ValueError as e:
+    raise ValueError(str(e)) from e
+```
+
+Replace them with `HTTPException(status_code=400, ...)`:
+
+```python
+# Site 1:
+if endpoint not in endpoint_config:
+    valid_options = ", ".join(endpoint_config.keys())
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unknown endpoint: {endpoint}. Valid options: {valid_options}",
+    )
+
+# Site 2:
+try:
+    handler = SurvivalHandlerFactory.get_handler(comparison)
+except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e)) from e
+```
+
+Add `HTTPException` to the existing `from fastapi import ...` at the top of the file. It's already imported in many routers so the import pattern is familiar.
+
+- [ ] **Step 2: Run the full backend check to confirm the route fix doesn't break anything**
+
+```bash
+cd backend && make check
+```
+
+Expected: still 794 passed. If anything fails, check whether another test was asserting the old `ValueError` / 500 behavior (unlikely — we searched and the endpoint has no integration tests — but worth confirming).
+
+- [ ] **Step 3: Commit the route fix**
+
+```bash
+git add backend/app/phenopackets/routers/aggregations/survival.py
+git commit -m "$(cat <<'EOF'
+fix(backend): return 400 for bad /survival-data parameters
+
+Converts the two bare `raise ValueError` sites in survival.py's
+get_survival_data endpoint into HTTPException(status_code=400, ...).
+Previously, unknown `endpoint` or `comparison` query parameters hit
+the global generic_exception_handler and were normalised to a 500
+with detail "Internal server error" — the client couldn't tell a
+client-side typo from a real backend fault.
+
+Prerequisite for Wave 3 Task 2 endpoint smoke tests, which assert
+the 400 contract explicitly.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+- [ ] **Step 4: Write the smoke test**
 
 Create `backend/tests/test_survival_endpoint.py`:
 
@@ -217,6 +297,11 @@ _handle_* functions.
 
 This test does NOT assert numeric survival curves — for that, see the
 pure-function tests in test_survival_analysis.py.
+
+Uses the async_client fixture from conftest.py (not `client`, which
+is a local synchronous TestClient fixture inside
+test_phenopackets_crud.py with a deliberate collision-avoidance
+docstring).
 """
 
 from __future__ import annotations
@@ -235,10 +320,13 @@ class TestSurvivalEndpointSmoke:
     @pytest.mark.parametrize("comparison", COMPARISONS)
     @pytest.mark.parametrize("endpoint", ENDPOINTS)
     async def test_returns_well_formed_response(
-        self, client: AsyncClient, comparison: str, endpoint: str
+        self,
+        async_client: AsyncClient,
+        comparison: str,
+        endpoint: str,
     ) -> None:
         """Every (comparison, endpoint) pair returns a 200 with the expected shape."""
-        response = await client.get(
+        response = await async_client.get(
             "/api/v2/phenopackets/aggregate/survival-data",
             params={"comparison": comparison, "endpoint": endpoint},
         )
@@ -257,51 +345,64 @@ class TestSurvivalEndpointSmoke:
         assert "group_definitions" in body["metadata"]
         assert "inclusion_criteria" in body["metadata"]
 
-    async def test_invalid_comparison_returns_error(self, client: AsyncClient) -> None:
-        """Unknown comparison types surface a 4xx/5xx, not a 200 with garbage."""
-        response = await client.get(
+    async def test_invalid_comparison_returns_400(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Unknown comparison types return 400 (client error), not 500."""
+        response = await async_client.get(
             "/api/v2/phenopackets/aggregate/survival-data",
             params={"comparison": "not_a_real_type", "endpoint": "ckd_stage_3_plus"},
         )
-        assert response.status_code >= 400
+        assert response.status_code == 400, response.text
+        body = response.json()
+        # Error shape is the standard {detail, error_code, request_id} from
+        # the exception handlers added in Wave 2.
+        assert "detail" in body
 
-    async def test_invalid_endpoint_returns_error(self, client: AsyncClient) -> None:
-        """Unknown endpoint values surface a 4xx/5xx, not a 200 with garbage."""
-        response = await client.get(
+    async def test_invalid_endpoint_returns_400(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Unknown endpoint values return 400 (client error), not 500."""
+        response = await async_client.get(
             "/api/v2/phenopackets/aggregate/survival-data",
             params={"comparison": "variant_type", "endpoint": "not_a_real_endpoint"},
         )
-        assert response.status_code >= 400
+        assert response.status_code == 400, response.text
+        body = response.json()
+        assert "detail" in body
+        # The detail should name the valid options — useful for client debugging.
+        assert "Valid options" in body["detail"] or "valid" in body["detail"].lower()
 ```
 
-- [ ] **Step 2: Verify the correct endpoint path**
+- [ ] **Step 5: Verify the correct endpoint path**
 
 ```bash
 cd backend && grep -rn "survival-data\|/aggregate/survival" app --include="*.py" | head -5
 ```
 
-The test assumes the path is `/api/v2/phenopackets/aggregate/survival-data`. If the aggregations router is mounted under a different prefix, update the `client.get(...)` URL in the test. If the prefix includes `/aggregations/` (plural), use that.
+The test assumes the path is `/api/v2/phenopackets/aggregate/survival-data`. If the aggregations router is mounted under a different prefix, update the `async_client.get(...)` URL in the test. If the prefix includes `/aggregations/` (plural), use that.
 
-- [ ] **Step 3: Verify the `client` fixture exists**
+- [ ] **Step 6: Verify the `async_client` fixture is the right name**
 
 ```bash
-cd backend && grep -n "def client\|async def client\|@pytest.fixture" tests/conftest.py | head -10
+cd backend && grep -n "def async_client\|def client" tests/conftest.py
 ```
 
-Most of the backend integration tests (e.g., `test_phenopackets_crud.py` from Wave 2) use an async HTTP client fixture. Use the same fixture name the existing tests use. If it's named differently (e.g., `async_client`, `api_client`), rename in the new test file. If no async fixture exists, copy the pattern from `test_phenopackets_crud.py`.
+Expected: one match for `async def async_client(db_session):` around line 251. The name `client` in `conftest.py` should **not** appear — the only `client` fixture in the project is the local synchronous one in `test_phenopackets_crud.py:14`. If something else is now using the name `client` in conftest (unlikely but possible if someone moved fixtures since 2026-04-10), adjust accordingly.
 
-- [ ] **Step 4: Run the new test**
+- [ ] **Step 7: Run the new test**
 
 ```bash
 cd backend && uv run pytest tests/test_survival_endpoint.py -v
 ```
 
-Expected: all 16 parametrized cases + 2 error cases pass (18 total). If any case fails:
-- A 500 error may indicate an unhandled `ValueError` from the dispatcher. The dispatcher at `survival.py:1021` wraps `get_handler` errors in `ValueError`. If FastAPI returns 500 on `ValueError`, the smoke test should tolerate that (the "4xx/5xx" assertion handles both). But if the factory raises something else entirely, investigate.
-- A 404 probably means the endpoint path is wrong — go back to Step 2.
-- A parameter validation error may mean the comparison/endpoint strings don't match the dispatcher's expected values — double-check against `_get_endpoint_config()` keys in `survival.py:30`.
+Expected: all 16 parametrized happy-path cases + 2 error cases pass (18 total). If any case fails:
+- A 500 on the negative cases means Step 1's route fix didn't land — go back and fix.
+- A 404 probably means the endpoint path is wrong — go back to Step 5.
+- A parameter validation error may mean the comparison/endpoint strings don't match the dispatcher's expected values — double-check against `_get_endpoint_config()` keys in `survival.py:30` and the `SurvivalHandlerFactory`'s supported types.
+- A fixture-not-found error means `async_client` moved — go back to Step 6.
 
-- [ ] **Step 5: Run the full backend check to confirm no regression**
+- [ ] **Step 8: Run the full backend check to confirm no regression**
 
 ```bash
 cd backend && make check
@@ -309,7 +410,7 @@ cd backend && make check
 
 Expected: 794 + ~18 = ~812 passing, 0 failures.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit the smoke tests**
 
 ```bash
 git add backend/tests/test_survival_endpoint.py
@@ -317,14 +418,22 @@ git commit -m "$(cat <<'EOF'
 test(backend): add /survival-data endpoint smoke tests
 
 Wave 3 Task 2: exercises the live SurvivalHandlerFactory dispatch
-path for every supported (comparison, endpoint) pair, plus error
-cases for unknown comparison/endpoint values. On an empty test DB
-the groups list is empty, but the response shape, imports, factory
-wiring, and SQL generation are all covered.
+path for every supported (comparison, endpoint) pair, plus strict
+negative cases asserting 400 (not >= 400) for unknown
+comparison/endpoint values. On an empty test DB the groups list is
+empty, but the response shape, imports, factory wiring, and SQL
+generation are all covered.
+
+Uses the async_client fixture from conftest.py. The name `client`
+is already taken by a local synchronous TestClient fixture inside
+test_phenopackets_crud.py:14 with a collision-avoidance docstring —
+do not rename either.
 
 This is the regression safety net for the Task 3 deletion of the
 dead legacy _handle_* functions — if the dispatcher or any handler
-wiring breaks, these tests fail before the deletion ships.
+wiring breaks, these tests fail before the deletion ships. The
+negative-case 400 assertions depend on the ValueError→HTTPException
+conversion landed in the preceding commit.
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
@@ -1019,7 +1128,8 @@ Create `docs/refactor/wave-3-exit.md`:
 ## What landed
 
 - **Task 1** (`<commit>`): Survival migration map documenting the dead-code finding — the 6 legacy `_handle_*` functions had zero callers and were orphaned dead code sharing a file with the live `SurvivalHandlerFactory` dispatcher. Parity tests were unnecessary because the legacy path was already dead.
-- **Task 2** (`<commit>`): `tests/test_survival_endpoint.py` — endpoint smoke tests for every (comparison, endpoint) pair plus error cases. <N> parametrized tests. Runs through the live dispatcher and guards the handler classes.
+- **Task 2 route fix** (`<commit>`): Converted two bare `raise ValueError(...)` sites in `survival.py`'s `get_survival_data` endpoint to `HTTPException(status_code=400, ...)`. Unknown `comparison` / `endpoint` parameters previously hit the global `generic_exception_handler` and returned 500 "Internal server error"; they now return a proper 400 with a useful detail.
+- **Task 2 smoke tests** (`<commit>`): `tests/test_survival_endpoint.py` — endpoint smoke tests for every (comparison, endpoint) pair plus strict `== 400` negative cases. <N> parametrized tests. Uses `async_client` fixture from `conftest.py` (not `client`, which is the local synchronous `TestClient` inside `test_phenopackets_crud.py`). Runs through the live dispatcher and guards the handler classes.
 - **Task 3** (`<commit>`): Deleted 6 `_handle_*` functions + 3 orphaned module-private helpers from `survival.py`. File shrank from 1,025 LOC to <N> LOC.
 - **Task 4** (`<commit>`): Restructured into `survival/` sub-package (`router.py`, `handlers.py` or `handlers/<family>.py`). Every file under 500 LOC. `__init__.py` re-exports maintain backwards compatibility for existing `from ...aggregations.survival import ...` callers.
 - **Task 5** (`<commit>`): Swept the remaining hardcoded HPO literals from `survival/handlers.py` docstring metadata and `diseases.py` raw SQL, replacing with `settings.hpo_terms.*` references.
@@ -1066,10 +1176,11 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
   - Old Task 3 (parity tests) — legacy code is already dead, parity between dead and live code is meaningless.
   - Old Task 8 (`materialized_view_fallback` context manager) — the existing `check_materialized_view_exists` one-liner is already the abstraction.
 - **Added to amended plan:**
-  - New Task 2 (endpoint smoke tests) — replaces parity testing as the deletion safety net. Exercises the live dispatcher for every (comparison, endpoint) pair.
+  - New Task 2 (endpoint smoke tests + coupled route fix) — replaces parity testing as the deletion safety net. Exercises the live dispatcher for every (comparison, endpoint) pair. Also converts two bare `raise ValueError` sites to `HTTPException(400)` so the negative tests can assert a real API contract instead of locking in the accidental 500 behaviour.
 - **Placeholder scan:** Only `<fill in>` in the exit note template and the migration map dead-code grep output slot.
 - **Type/name consistency:** Real class names verified against `survival_handlers.py` — `VariantTypeHandler`, `PathogenicityHandler`, `DiseaseSubtypeHandler`, `ProteinDomainHandler`, `SurvivalHandler` (ABC), `SurvivalHandlerFactory`. No `*CurrentAgeHandler` or `*StandardHandler` classes exist.
+- **Fixture name verification (2026-04-10):** The async HTTP fixture is `async_client` (`backend/tests/conftest.py:251`). The name `client` is already taken by a local synchronous `TestClient` fixture inside `backend/tests/test_phenopackets_crud.py:14` with a docstring explaining deliberate collision avoidance. Task 2 uses `async_client` and Step 6 verifies this before writing the test.
+- **Route fix + test ordering (2026-04-10):** Task 2's negative-case assertions (`response.status_code == 400`) depend on the `ValueError → HTTPException(400)` conversion. The route fix lands in Step 1-3 (its own commit), then the smoke test in Step 4-9 (separate commit). Reversing the order would produce a red test.
 - **Known risks:**
   - Task 4 Step 7: `handlers.py` may need splitting if post-move it's still >500 LOC. Explicitly addressed with a fallback sub-module structure.
-  - Task 2: the existing `client` async fixture name may differ from the one in `test_phenopackets_crud.py` — Step 3 calls this out.
   - Task 5 Step 2: the docstring literal decision (leave vs. interpolate) depends on whether `settings.hpo_terms.ckd_stage_4` exists — Step 2 asks to check before committing to an approach.
