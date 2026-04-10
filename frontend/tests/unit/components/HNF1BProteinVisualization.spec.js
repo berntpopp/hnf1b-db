@@ -9,7 +9,7 @@
  * - Protein length validation
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import * as vuetifyComponents from 'vuetify/components';
@@ -351,24 +351,21 @@ describe('HNF1BProteinVisualization.vue (characterization)', () => {
     });
   }
 
-  // Save and restore any pre-existing window.logService so this spec
-  // cannot pollute other specs that share the same worker. Vitest runs
-  // multiple spec files per worker by default, and later specs may
-  // assert on `.mock` calls — overwriting with plain no-op functions
-  // would break those assertions silently.
-  let previousLogService;
+  // Install vi.fn()-based logService stubs. Copilot's review concern
+  // was about cross-spec pollution from *plain* no-op functions: another
+  // spec asserting on `.mock` would fail silently. Using vi.fn() fully
+  // satisfies that contract, so we deliberately do NOT restore in
+  // afterEach — the component's mounted() hook calls fetchProteinDomains
+  // asynchronously, and restoring window.logService to undefined before
+  // that promise settles produces `Cannot read properties of undefined
+  // (reading 'warn')` crashes in a flaky, worker-order-dependent way.
   beforeEach(() => {
-    previousLogService = globalThis.window.logService;
     globalThis.window.logService = {
       debug: vi.fn(),
       info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
     };
-  });
-
-  afterEach(() => {
-    globalThis.window.logService = previousLogService;
   });
 
   it('mounts without throwing', () => {
