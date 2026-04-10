@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -69,6 +69,19 @@ db-init:  ## Initialize database (run migrations + create admin user)
 	uv run python scripts/create_admin_user.py
 	@echo ""
 	@echo "✅ Database initialized successfully!"
+
+db-test-init:  ## Create and migrate the dedicated test database (hnf1b_phenopackets_test)
+	@echo "🗄️  Creating test database hnf1b_phenopackets_test (if missing)..."
+	@docker exec hnf1b_db psql -U hnf1b_user -d postgres \
+		-tc "SELECT 1 FROM pg_database WHERE datname='hnf1b_phenopackets_test'" | grep -q 1 || \
+		docker exec hnf1b_db psql -U hnf1b_user -d postgres \
+		-c "CREATE DATABASE hnf1b_phenopackets_test OWNER hnf1b_user;"
+	@echo "🗄️  Applying migrations to test database..."
+	DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets_test \
+		JWT_SECRET=test-secret-key-for-local-pytest \
+		ADMIN_PASSWORD=TestAdminPass!2026 \
+		uv run alembic upgrade head
+	@echo "✅ Test database ready."
 
 db-create-admin:  ## Create or update admin user
 	uv run python scripts/create_admin_user.py

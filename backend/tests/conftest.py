@@ -1,13 +1,37 @@
-"""Pytest configuration and shared fixtures."""
+"""Pytest configuration and shared fixtures.
 
-import asyncio
+Test isolation is provided by a dedicated test database configured in the
+root-level ``backend/conftest.py`` (which runs before any ``app.*`` imports).
+This module assumes ``DATABASE_URL`` already points at a database whose name
+contains ``test``; an assertion below enforces that invariant.
+
+Per-test isolation strategy:
+
+- The app-level ``async_session_maker`` is reused so that tests which spawn
+  their own sessions (e.g. race-condition tests) share the same engine as the
+  tests which use the ``db_session`` fixture. This means the whole suite sees
+  one test database with one connection pool.
+- Between tests we ``TRUNCATE`` the small set of mutable tables that test
+  fixtures and endpoints write to. Static lookup tables populated by Alembic
+  migrations are intentionally left alone so the schema stays valid.
+- ``dispose_engine`` runs at session teardown to shut down asyncpg cleanly.
+"""
+
 import warnings
+from urllib.parse import urlparse
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import delete, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
+# IMPORTANT: import app.database as a module (not ``from app.database import ...``)
+# so that we can rebind its engine / session_maker attributes below. Anything
+# that later does ``from app.database import engine`` will then pick up the
+# test engine instead of the production-pool engine created at module load.
+import app.database as app_database  # noqa: E402
 from app.auth.password import get_password_hash
 from app.core.config import settings
 from app.main import app
@@ -22,73 +46,155 @@ warnings.filterwarnings(
 )
 
 
+# ---------------------------------------------------------------------------
+# Safety guard
+# ---------------------------------------------------------------------------
+#
+# ``backend/conftest.py`` has already rewritten ``DATABASE_URL`` to a test
+# database, but if someone adds a new import path or runs pytest from an
+# unexpected location we want to fail loudly rather than silently mutate the
+# developer's working database.
+_TEST_DB_NAME = urlparse(settings.DATABASE_URL).path.lstrip("/").lower()
+assert "test" in _TEST_DB_NAME, (
+    "Refusing to run tests against a non-test database. "
+    f"Resolved DATABASE_URL points at {_TEST_DB_NAME!r}. "
+    "See backend/conftest.py and `make db-test-init`."
+)
+
+
+# ---------------------------------------------------------------------------
+# Replace the production engine/session_maker with a NullPool-backed test engine
+# ---------------------------------------------------------------------------
+#
+# ``pytest-asyncio`` creates a fresh event loop for each test. A pooled async
+# engine holds asyncpg connections bound to the *first* loop they were created
+# on, which triggers ``RuntimeError: Event loop is closed`` when subsequent
+# tests try to reuse those connections. Using ``NullPool`` forces every
+# checkout to open a new connection on the current loop, which makes the test
+# suite safe to run regardless of per-test loop scoping.
+#
+# We dispose of the production engine first (it was created at
+# ``app.database`` import time with ``settings.database.pool_size`` etc.) and
+# then rebind the module attributes so that every downstream ``from
+# app.database import engine`` sees the test engine.
+_production_engine = app_database.engine
+try:
+    import asyncio
+
+    asyncio.get_event_loop().run_until_complete(_production_engine.dispose())
+except Exception:
+    # If there's no running loop or dispose fails, fall through — the pool
+    # will be garbage collected eventually and we've already replaced the
+    # module-level reference below.
+    pass
+
+test_engine = create_async_engine(
+    settings.DATABASE_URL,
+    poolclass=NullPool,
+    echo=False,
+    connect_args={
+        "server_settings": {
+            "jit": "off",
+        },
+    },
+)
+
+test_session_maker = async_sessionmaker(
+    test_engine,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+app_database.engine = test_engine
+app_database.async_session_maker = test_session_maker
+
+# Expose convenient local aliases for the rest of this module.
+engine = test_engine
+async_session_maker = test_session_maker
+
+
+# Tables that tests (directly or via endpoints) mutate. Order matters because
+# of foreign keys: children before parents. Anything not in this list is left
+# untouched so that lookup tables populated by Alembic migrations survive.
+_MUTABLE_TABLES: tuple[str, ...] = (
+    "phenopacket_audit",
+    "phenopackets",
+    "variant_annotations",
+    "publication_metadata",
+    "users",
+)
+
+
+async def _truncate_mutable_tables() -> None:
+    """Wipe test-mutable tables in a single transaction.
+
+    Runs before every test so that each test starts from a clean, deterministic
+    state. Uses ``TRUNCATE ... RESTART IDENTITY CASCADE`` so that serial/bigint
+    primary keys are reset and any FK-dependent rows are removed in lock-step.
+    """
+    async with engine.begin() as conn:
+        joined = ", ".join(_MUTABLE_TABLES)
+        await conn.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_database_between_tests():
+    """Wipe mutable tables before each test for guaranteed isolation.
+
+    Declared ``autouse=True`` so every test gets a clean database without
+    having to remember to request the fixture. No yield body is needed — the
+    cleanup runs before the test and the next invocation handles the next
+    test's pre-state.
+    """
+    await _truncate_mutable_tables()
+    yield
+
+
 @pytest_asyncio.fixture
 async def db_session():
     """Provide a database session for testing.
 
-    Creates a fresh session for each test and handles cleanup.
-
-    Best practices for async cleanup:
-    - Explicitly close session before engine disposal
-    - Use dispose(close=True) to ensure all connections are closed
-    - Shield cleanup operations from cancellation
+    Uses the app-level ``async_session_maker`` so tests share the same engine
+    and pool as code under test. Each test gets a fresh session that is rolled
+    back and closed at the end.
     """
-    # Create test engine (using same database as development for now)
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        echo=False,
-        pool_pre_ping=True,
-        # Set pool_recycle to avoid stale connections
-        pool_recycle=3600,
-    )
-
-    # Create session factory
-    async_session_factory = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
-    # Create session
-    session = async_session_factory()
-
+    session = async_session_maker()
     try:
         yield session
     finally:
-        # Ensure proper cleanup even if test fails
         try:
-            # Rollback any uncommitted changes
             await session.rollback()
         except Exception:
-            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
-            pass  # Ignore errors during rollback
-
-        # Close session explicitly
+            # Ignore rollback errors during teardown to avoid masking the
+            # original test failure.
+            pass
         await session.close()
 
-        # Dispose of engine - close all connections
-        # Use asyncio.shield to protect cleanup from cancellation
-        await asyncio.shield(engine.dispose(close=True))
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _dispose_engine_at_session_end():
+    """Dispose of the shared async engine at the end of the test session.
+
+    Without this, asyncpg occasionally logs ``Event loop is closed`` when the
+    connection pool is GC'd after pytest tears down its last event loop.
+    """
+    yield
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
 
 
-# Authentication test fixtures
+# ---------------------------------------------------------------------------
+# Authentication fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest_asyncio.fixture
 async def test_user(db_session):
-    """Create test user for authentication tests."""
-    # Pre-cleanup: Remove any leftover test users from failed previous runs
-    try:
-        await db_session.execute(delete(User).where(User.email == "test@example.com"))
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
-
-    # Ensure fresh session state
-    await db_session.rollback()
-
+    """Create a test user for authentication tests."""
+    # Fresh test DB + autouse truncation means we do not need pre-cleanup here.
     user = User(
         username="testuser",
         email="test@example.com",
@@ -103,7 +209,8 @@ async def test_user(db_session):
 
     yield user
 
-    # Cleanup
+    # Best-effort cleanup — the autouse truncate will catch anything we miss
+    # before the next test runs.
     try:
         await db_session.execute(delete(User).where(User.id == user.id))
         await db_session.commit()
@@ -111,25 +218,12 @@ async def test_user(db_session):
         try:
             await db_session.rollback()
         except Exception:
-            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 
 @pytest_asyncio.fixture
 async def admin_user(db_session):
-    """Create admin user for permission tests."""
-    # Pre-cleanup: Remove any leftover admin users from failed previous runs
-    try:
-        await db_session.execute(
-            delete(User).where(User.email == "testadmin@example.com")
-        )
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
-
-    # Ensure fresh session state
-    await db_session.rollback()
-
+    """Create an admin user for permission tests."""
     user = User(
         username="testadmin",
         email="testadmin@example.com",
@@ -144,7 +238,6 @@ async def admin_user(db_session):
 
     yield user
 
-    # Cleanup
     try:
         await db_session.execute(delete(User).where(User.id == user.id))
         await db_session.commit()
@@ -152,7 +245,6 @@ async def admin_user(db_session):
         try:
             await db_session.rollback()
         except Exception:
-            # Ignore errors during rollback in cleanup to avoid cascading failures in test teardown.
             pass
 
 
@@ -161,7 +253,6 @@ async def async_client(db_session):
     """Async HTTP client for API testing."""
     from app.database import get_db
 
-    # Override get_db to use test session
     async def override_get_db():
         yield db_session
 
@@ -204,26 +295,15 @@ async def admin_headers(admin_user, async_client):
 
 @pytest_asyncio.fixture
 async def cleanup_test_phenopackets(db_session):
-    """Cleanup test phenopackets before and after tests."""
-    from app.phenopackets.models import Phenopacket, PhenopacketAudit
+    """Legacy cleanup hook retained for backwards compatibility.
 
-    # Pre-cleanup: Remove leftover test data from failed previous runs
-    await db_session.execute(
-        delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
-    )
-    await db_session.execute(
-        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
-    )
-    await db_session.commit()
-
-    # Yield control to test
+    The autouse ``_isolate_database_between_tests`` fixture already truncates
+    ``phenopackets`` and ``phenopacket_audit`` before every test, but existing
+    tests request this fixture by name. Keep it as a no-op yield so those tests
+    continue to work without modification.
+    """
     yield
 
-    # Post-cleanup: Clean up after test
-    await db_session.execute(
-        delete(PhenopacketAudit).where(PhenopacketAudit.phenopacket_id.like("test-%"))
-    )
-    await db_session.execute(
-        delete(Phenopacket).where(Phenopacket.phenopacket_id.like("test-%"))
-    )
-    await db_session.commit()
+
+# Silence ``pytest`` unused-import warning for the session fixture above.
+_ = pytest
