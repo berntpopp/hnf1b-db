@@ -200,9 +200,11 @@ def configure_audit_logger(log_file_path: Optional[str] = None) -> None:
         audit_logger.addHandler(file_handler)
 
         audit_logger.info("AUDIT_LOGGER_CONFIGURED", extra={"log_file": log_file_path})
-    except Exception as e:
-        # If file logging fails, log to console
-        audit_logger.error(
+    except (OSError, ValueError, TypeError) as e:
+        # Best-effort: if file logging setup fails (missing permissions,
+        # invalid path, etc.), fall back to console logging at warning level
+        # so misconfigurations are visible without crashing the app.
+        audit_logger.warning(
             f"Failed to configure audit logger file handler: {e}",
             extra={"error": str(e)},
         )

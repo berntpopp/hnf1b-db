@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -289,10 +290,10 @@ async def get_variant_annotations_batch(
                 for vid in batch:
                     if vid in batch_results:
                         results[vid] = batch_results[vid]
-            except Exception as e:
+            except (VEPError, httpx.HTTPError, SQLAlchemyError) as e:
                 logger.error(f"Batch failed after rate limit retry: {e}")
 
-        except Exception as e:
+        except (VEPError, httpx.HTTPError, SQLAlchemyError) as e:
             logger.error(f"Batch annotation failed: {e}")
 
     return results

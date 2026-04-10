@@ -80,7 +80,12 @@ class HPOAPIClient(OntologyAPIClient):
                     source=OntologySource.HPO_API,
                     fetched_at=datetime.now(),
                 )
-        except Exception as e:
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as e:
             print(f"Error fetching HPO term {term_id}: {e}")
 
         return None
@@ -147,7 +152,12 @@ class OLSAPIClient(OntologyAPIClient):
                     fetched_at=datetime.now(),
                     is_obsolete=data.get("is_obsolete", False),
                 )
-        except Exception as e:
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as e:
             print(f"Error fetching term {term_id} from OLS: {e}")
 
         return None
@@ -175,7 +185,12 @@ class MonarchAPIClient(OntologyAPIClient):
                     source=OntologySource.MONARCH_API,
                     fetched_at=datetime.now(),
                 )
-        except Exception as e:
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as e:
             print(f"Error fetching term {term_id} from Monarch: {e}")
 
         return None
@@ -267,7 +282,7 @@ class FileCache:
                 data["fetched_at"] = datetime.fromisoformat(data["fetched_at"])
 
             return OntologyTerm(**data)
-        except Exception as e:
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             print(f"Error reading cache for {term_id}: {e}")
             return None
 
@@ -284,7 +299,7 @@ class FileCache:
 
             with open(cache_path, "w") as f:
                 json.dump(data, f, indent=2)
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             print(f"Error writing cache for {term_id}: {e}")
 
 

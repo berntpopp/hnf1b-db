@@ -18,6 +18,7 @@ import logging
 from typing import Dict, Set
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -125,8 +126,8 @@ class MaterializedViewCache:
             has_data = result.fetchone() is not None
             logger.debug(f"View {view_name}: exists={has_data}")
             return has_data
-        except Exception as e:
-            logger.debug(f"View {view_name} not available: {e}")
+        except SQLAlchemyError as e:
+            logger.warning(f"View {view_name} not available: {e}")
             return False
 
     def reset(self) -> None:

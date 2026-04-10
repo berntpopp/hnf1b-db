@@ -112,7 +112,11 @@ async def retry_async(
         try:
             return await func(*args, **kwargs)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            # Retry decorator: must catch all exceptions to handle arbitrary
+            # caller failures. Narrowing here would prevent the decorator from
+            # functioning as a generic retry wrapper. Retryability is checked
+            # below via config.retryable_exceptions / non_retryable_exceptions.
             last_exception = e
 
             # Check if retryable
