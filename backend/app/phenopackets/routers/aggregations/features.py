@@ -50,7 +50,7 @@ async def aggregate_by_feature(
         rows = result.mappings().all()
         total = sum(int(row["present_count"]) for row in rows)
         rows_with_pct = calculate_percentages(
-            list(rows), total=total, count_key="present_count"
+            rows, total=total, count_key="present_count"
         )
 
         return [
@@ -104,7 +104,7 @@ async def aggregate_by_feature(
     # Calculate total for percentage (sum of all present counts)
     total = sum(int(row["present_count"]) for row in rows)
     rows_with_pct = calculate_percentages(
-        list(rows), total=total, count_key="present_count"
+        rows, total=total, count_key="present_count"
     )
 
     return [

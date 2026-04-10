@@ -5,6 +5,7 @@ sub-modules to reduce code duplication and ensure consistency.
 """
 
 import logging
+from collections.abc import Mapping
 from typing import Any, Dict, List, Sequence
 
 from fastapi import APIRouter, Depends, Query
@@ -73,37 +74,53 @@ def calculate_percentages(
 ) -> List[Dict[str, Any]]:
     """Add a ``percentage`` field to each row based on ``(count / total) * 100``.
 
-    Accepts either plain dict rows or SQLAlchemy row objects with a
-    ``._mapping`` attribute. Any other row shape raises ``TypeError`` so the
-    caller notices — we do NOT fall back to silently hoovering attributes
-    via ``dir()``.
+    Accepts three row shapes produced by the aggregation endpoints:
+
+    1. **Plain dicts** — ``{"count": 10, "label": "x"}``.
+    2. **SQLAlchemy RowMapping** — returned by ``result.mappings().all()``.
+       These are ``collections.abc.Mapping`` subclasses that support
+       ``row[key]`` access but are **not** ``dict`` subclasses and do **not**
+       expose ``._mapping``.
+    3. **SQLAlchemy Row** — returned by ``result.fetchall()``. These expose
+       a ``._mapping`` attribute that points to the underlying RowMapping.
+
+    Anything else raises ``TypeError`` so the caller notices — we do NOT
+    fall back to silently hoovering attributes via ``dir()``.
 
     Returns a **new** list of new dicts — the input rows are never mutated.
 
     Args:
-        rows: Sequence of query result rows (dict or SQLAlchemy Row).
-        total: Denominator for percentage calculation. If 0, percentage is 0.
+        rows: Sequence of query result rows (dict, RowMapping, or Row).
+        total: Denominator for percentage calculation. If 0, percentage is 0.0.
         count_key: Field name holding the count (default ``"count"``).
 
     Returns:
-        List of new dicts with every original field plus ``percentage``.
+        List of new dicts with every original field plus ``percentage`` as a float.
 
     Raises:
-        TypeError: If any row is neither a dict nor exposes ``._mapping``.
+        TypeError: If any row is not a Mapping and does not expose
+            ``._mapping``.
     """
     result: List[Dict[str, Any]] = []
     for row in rows:
-        if hasattr(row, "_mapping"):
-            data = dict(row._mapping)
-        elif isinstance(row, dict):
+        # Mapping check catches dict AND SQLAlchemy RowMapping (which is a
+        # collections.abc.Mapping subclass but NOT a dict subclass and does
+        # NOT expose _mapping).
+        if isinstance(row, Mapping):
             data = dict(row)
+        # Fallback for SQLAlchemy Row objects from result.fetchall(), which
+        # are not Mapping subclasses but expose the underlying RowMapping
+        # via a ._mapping attribute.
+        elif hasattr(row, "_mapping"):
+            data = dict(row._mapping)
         else:
             raise TypeError(
-                f"calculate_percentages expects dict or SQLAlchemy Row, "
-                f"got {type(row).__name__}"
+                f"calculate_percentages expects a Mapping (dict or "
+                f"SQLAlchemy RowMapping) or an object with ._mapping "
+                f"(SQLAlchemy Row); got {type(row).__name__}"
             )
 
         count_value = int(data.get(count_key, 0))
-        data["percentage"] = (count_value / total * 100) if total > 0 else 0
+        data["percentage"] = (count_value / total * 100) if total > 0 else 0.0
         result.append(data)
     return result

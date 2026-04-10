@@ -195,11 +195,15 @@ class DiseaseSubtypeHandler(SurvivalHandler):
         endpoint_hpo_terms: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Override to add HPO term parameters for disease classification."""
-        # Add disease classification parameters
+        # Disease classification parameters consumed by the CASE expression
+        # inside _build_disease_classification_sql. Only the three keys below
+        # are referenced by the generated SQL. `any_kidney_hpo_terms` used to
+        # be passed here as well, but it was never bound by any query in this
+        # handler — a carry-over from the deleted legacy _handle_*
+        # functions. Dropped in Wave 3 to match the actual SQL (Copilot #2).
         params = {
             "cakut_hpo_terms": settings.hpo_terms.cakut,
             "genital_hpo": settings.hpo_terms.genital,
-            "any_kidney_hpo_terms": settings.hpo_terms.any_kidney,
             "mody_hpo": settings.hpo_terms.mody,
         }
 

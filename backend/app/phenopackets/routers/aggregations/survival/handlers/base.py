@@ -1,5 +1,6 @@
 """Abstract base class and shared helpers for survival analysis handlers."""
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -55,13 +56,34 @@ class SurvivalHandler(ABC):
         """Return the field name containing group classification."""
         return f"{self.comparison_type}_group"
 
-    @staticmethod
-    def _sql_list(terms: List[str]) -> str:
-        """Convert a Python list of HPO terms to a SQL IN-clause literal.
+    # Strict HPO ID pattern used by _sql_list to validate every term before
+    # embedding it in SQL. HPO IDs have the form ``HP:`` followed by exactly
+    # 7 digits; anything else is rejected to close the theoretical SQL
+    # injection surface opened by string interpolation.
+    _HPO_ID_PATTERN = re.compile(r"^HP:\d{7}$")
+
+    @classmethod
+    def _sql_list(cls, terms: List[str]) -> str:
+        r"""Convert a Python list of HPO terms to a SQL IN-clause literal.
 
         Shared helper used by every concrete subclass when embedding a
         dynamic list of terms into an otherwise parameterised SQL query.
+
+        Every term is validated against :attr:`_HPO_ID_PATTERN` before
+        being interpolated — this closes the theoretical SQL-injection
+        surface that string-literal interpolation would otherwise open,
+        and makes the helper fail loudly if a caller ever passes something
+        that is not a canonical HPO identifier.
+
+        Raises:
+            ValueError: If any term does not match ``HP:\d{7}``.
         """
+        for t in terms:
+            if not cls._HPO_ID_PATTERN.match(t):
+                raise ValueError(
+                    f"_sql_list expects canonical HPO IDs (HP:\\d{{7}}); "
+                    f"got {t!r}"
+                )
         quoted = ", ".join(f"'{t}'" for t in terms)
         return f"({quoted})"
 

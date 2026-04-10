@@ -1,18 +1,58 @@
-"""Tests for the helpers in aggregations/common.py (Wave 3 additions)."""
+"""Tests for the helpers in aggregations/common.py (Wave 3 additions).
+
+This suite exercises all three row shapes the aggregation endpoints
+produce, because a regression where ``calculate_percentages`` only
+accepted two of them caused a live runtime ``TypeError`` on every
+endpoint that uses ``result.mappings().all()``:
+
+1. Plain ``dict`` rows.
+2. SQLAlchemy ``RowMapping`` objects — a ``collections.abc.Mapping``
+   subclass that is **not** a ``dict`` subclass and does **not** expose
+   a ``._mapping`` attribute. Modelled below by ``_FakeRowMapping``,
+   which inherits from ``collections.abc.Mapping`` directly.
+3. SQLAlchemy ``Row`` objects — exposes a ``._mapping`` attribute
+   pointing at the underlying RowMapping. Modelled by
+   ``_FakeRow``.
+"""
+
+from collections.abc import Mapping
 
 import pytest
 
 from app.phenopackets.routers.aggregations.common import calculate_percentages
 
 
-class _FakeMappingRow:
-    """Mimic a SQLAlchemy Row that exposes ._mapping and __getitem__."""
+class _FakeRowMapping(Mapping):
+    """Mimic a SQLAlchemy ``RowMapping`` from ``result.mappings().all()``.
+
+    A RowMapping is a ``collections.abc.Mapping`` subclass that supports
+    dict-style access but is **not** a ``dict`` subclass and does **not**
+    expose a ``._mapping`` attribute (it IS the mapping).
+    """
 
     def __init__(self, **fields):
-        self._mapping = fields
+        self._fields = dict(fields)
 
     def __getitem__(self, key):
-        return self._mapping[key]
+        return self._fields[key]
+
+    def __iter__(self):
+        return iter(self._fields)
+
+    def __len__(self):
+        return len(self._fields)
+
+
+class _FakeRow:
+    """Mimic a SQLAlchemy ``Row`` from ``result.fetchall()``.
+
+    A Row is a sequence-like object that exposes its column data via a
+    ``._mapping`` attribute of type RowMapping. It is NOT a Mapping
+    subclass — it is tuple-like on the outside.
+    """
+
+    def __init__(self, **fields):
+        self._mapping = _FakeRowMapping(**fields)
 
 
 class TestCalculatePercentages:
@@ -24,24 +64,40 @@ class TestCalculatePercentages:
         result = calculate_percentages(rows, total=100)
         assert [r["percentage"] for r in result] == [50.0, 30.0, 20.0]
 
-    def test_basic_percentages_with_mapping_rows(self):
-        """SQLAlchemy-style rows exposing ``_mapping`` are supported."""
-        rows = [_FakeMappingRow(count=75), _FakeMappingRow(count=25)]
+    def test_basic_percentages_with_rowmapping(self):
+        """SQLAlchemy RowMapping (``result.mappings().all()``) is supported.
+
+        This is the shape that broke the initial Wave 3 draft: a Mapping
+        subclass that is not a dict and has no ._mapping attribute.
+        """
+        rows = [_FakeRowMapping(count=75), _FakeRowMapping(count=25)]
         result = calculate_percentages(rows, total=100)
         assert [r["percentage"] for r in result] == [75.0, 25.0]
 
-    def test_mixed_input_shapes(self):
-        """Dicts and mapping rows can be interleaved in the same call."""
-        rows = [{"count": 40}, _FakeMappingRow(count=60)]
+    def test_basic_percentages_with_row(self):
+        """SQLAlchemy Row (``result.fetchall()``) via its ._mapping attribute."""
+        rows = [_FakeRow(count=60), _FakeRow(count=40)]
         result = calculate_percentages(rows, total=100)
-        assert [r["percentage"] for r in result] == [40.0, 60.0]
+        assert [r["percentage"] for r in result] == [60.0, 40.0]
+
+    def test_mixed_input_shapes(self):
+        """Dicts, RowMapping, and Row can be interleaved in the same call."""
+        rows = [
+            {"count": 10},
+            _FakeRowMapping(count=20),
+            _FakeRow(count=70),
+        ]
+        result = calculate_percentages(rows, total=100)
+        assert [r["percentage"] for r in result] == [10.0, 20.0, 70.0]
 
     def test_total_zero_returns_zero_percentages(self):
-        """Total of zero must return 0 percentages (no ZeroDivisionError)."""
+        """Total of zero must return 0.0 percentages (no ZeroDivisionError)."""
         rows = [{"count": 10}, {"count": 5}]
         result = calculate_percentages(rows, total=0)
         for row in result:
-            assert row["percentage"] == 0
+            # 0.0 (not int 0) so the percentage field stays a float in all cases
+            assert row["percentage"] == 0.0
+            assert isinstance(row["percentage"], float)
 
     def test_preserves_other_fields(self):
         """Non-count fields are preserved from dict rows."""
@@ -55,11 +111,18 @@ class TestCalculatePercentages:
         assert result[1]["label"] == "beta"
         assert result[1]["group"] == "b"
 
-    def test_preserves_other_fields_from_mapping_row(self):
-        """Non-count fields are preserved from SQLAlchemy mapping rows."""
-        rows = [_FakeMappingRow(count=10, label="alpha")]
+    def test_preserves_other_fields_from_rowmapping(self):
+        """Non-count fields are preserved from SQLAlchemy RowMapping rows."""
+        rows = [_FakeRowMapping(count=10, label="alpha")]
         result = calculate_percentages(rows, total=10)
         assert result[0]["label"] == "alpha"
+        assert result[0]["percentage"] == 100.0
+
+    def test_preserves_other_fields_from_row(self):
+        """Non-count fields are preserved from SQLAlchemy Row (via ._mapping)."""
+        rows = [_FakeRow(count=10, label="beta")]
+        result = calculate_percentages(rows, total=10)
+        assert result[0]["label"] == "beta"
         assert result[0]["percentage"] == 100.0
 
     def test_does_not_mutate_dict_input(self):

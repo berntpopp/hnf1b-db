@@ -41,7 +41,7 @@ async def aggregate_sex_distribution(
         )
         rows = result.mappings().all()
         total = sum(int(row["count"]) for row in rows)
-        rows_with_pct = calculate_percentages(list(rows), total=total)
+        rows_with_pct = calculate_percentages(rows, total=total)
 
         return [
             AggregationResult(
@@ -72,7 +72,7 @@ async def aggregate_sex_distribution(
     rows = result.mappings().all()
 
     total = sum(int(row["count"]) for row in rows)
-    rows_with_pct = calculate_percentages(list(rows), total=total)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
