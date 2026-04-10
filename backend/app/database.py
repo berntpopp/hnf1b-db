@@ -7,6 +7,7 @@ Pool settings and timeouts are loaded from config.yaml.
 import logging
 from typing import AsyncGenerator
 
+import sqlalchemy.exc
 from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -81,7 +82,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
             # No auto-commit - endpoints must commit explicitly
-        except Exception:
+        except sqlalchemy.exc.SQLAlchemyError:
             await session.rollback()
             raise
         finally:
@@ -97,22 +98,7 @@ async def init_db() -> None:
 
     try:
         async with engine.begin():
-            # DEAD CODE: models module does not exist
-            # Import all models to ensure they're registered with Base.metadata
-            # This import is currently unused as we don't have an app/models.py module
-            # TODO: Remove this code block or create app/models.py if needed
-            # try:
-            #     from app import models  # noqa: F401
-            #
-            #     logger.info("Models imported successfully")
-            # except ImportError:
-            #     logger.warning(
-            #         "Models not found - this is expected during initial setup"
-            #     )
-            logger.info(
-                "Database initialization - skipping models import "
-                "(no models module exists)"
-            )
+            pass  # Models are registered via explicit imports in routers
 
             # Create all tables (in production, use Alembic migrations instead)
             # await conn.run_sync(Base.metadata.create_all)
@@ -122,14 +108,14 @@ async def init_db() -> None:
             f"Connected to database: {settings.DATABASE_URL.split('@')[1]}"
         )  # Log without credentials
 
-    except ConnectionRefusedError:
+    except (ConnectionRefusedError, OSError):
         logger.error("Failed to connect to PostgreSQL database!")
         logger.error("Make sure to start the database services first:")
         logger.error("  1. Run: make hybrid-up")
         logger.error("  2. Wait for containers to be healthy")
         logger.error("  3. Then run: make server")
         raise
-    except Exception as e:
+    except sqlalchemy.exc.SQLAlchemyError as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
 
@@ -194,7 +180,7 @@ async def refresh_materialized_views(
 
         logger.info(f"Successfully refreshed {len(views)} materialized views")
 
-    except Exception as e:
+    except sqlalchemy.exc.SQLAlchemyError as e:
         logger.warning(f"Failed to refresh materialized views: {e}")
         logger.debug(
             "This may occur if views don't exist yet. "
