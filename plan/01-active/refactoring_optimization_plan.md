@@ -277,7 +277,8 @@ import os
 def validate_admin_password(password: str) -> None:
     """Reject default password in production."""
     env = os.getenv("ENVIRONMENT", "development")
-    if env == "production" and password == "ChangeMe!Admin2025":
+    # Wave 1 of the 2026-04-10 refactor roadmap removed the real default; see backend/app/core/config.py validator.
+    if env == "production" and password == "CHANGE_ME_PLACEHOLDER":
         raise ValueError(
             "Default admin password not allowed in production. "
             "Set ADMIN_PASSWORD in .env to a unique value."

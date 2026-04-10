@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ async def refresh_global_search_index(
         await db.commit()
         _last_refresh_time = datetime.now(timezone.utc)
         logger.info("Refreshed global_search_index materialized view")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to refresh global_search_index: {e}")
         # Don't raise - refresh failure shouldn't break the main operation
         await db.rollback()
@@ -85,7 +86,7 @@ async def schedule_refresh_if_stale(
                 age_delta = timedelta(seconds=row.age_seconds)
                 _last_refresh_time = datetime.now(timezone.utc) - age_delta
                 return False
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not check MV age: {e}")
 
     # Refresh needed

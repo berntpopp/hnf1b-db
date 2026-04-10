@@ -57,6 +57,7 @@ jobs:
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
+        ADMIN_PASSWORD: test-admin-password-ci-2026
       run: |
         cd backend
         uv run alembic upgrade head
@@ -78,6 +79,7 @@ jobs:
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
+        ADMIN_PASSWORD: test-admin-password-ci-2026
       run: |
         cd backend
         uv run pytest -m "not benchmark" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing

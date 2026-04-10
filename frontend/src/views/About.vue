@@ -208,6 +208,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { sanitize } from '@/utils/sanitize';
 
 // Reactive state
 const content = ref(null);
@@ -250,13 +251,17 @@ const loadContent = async () => {
 // Render markdown-like syntax (bold only)
 const renderMarkdown = (text) => {
   if (!text) return '';
-  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const rendered = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  return sanitize(rendered);
 };
 
 // Format citation with current year
 const formatCitation = (template) => {
   if (!template) return '';
-  return template.replace('{year}', currentYear.value).replace(/\*(.+?)\*/g, '<em>$1</em>');
+  const rendered = template
+    .replace('{year}', currentYear.value)
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return sanitize(rendered);
 };
 
 // Format BibTeX with current date and year

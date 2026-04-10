@@ -12,9 +12,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
@@ -27,13 +29,13 @@ from app.phenopackets.routers.aggregations.sql_fragments import (
     get_unique_variants_query,
     get_variant_sync_status_query,
 )
-from app.publications.service import get_publication_metadata
+from app.publications.service import PubMedError, get_publication_metadata
 from app.reference.service import (
     get_reference_data_status,
     initialize_reference_data,
     sync_chr17q12_genes,
 )
-from app.variants.service import get_variant_annotations_batch
+from app.variants.service import VEPError, get_variant_annotations_batch
 
 logger = logging.getLogger(__name__)
 
@@ -326,7 +328,7 @@ async def _run_publication_sync(task_id: str) -> None:
                 try:
                     await get_publication_metadata(pmid, db, fetched_by="admin_sync")
                     task["processed"] += 1
-                except Exception as e:
+                except (PubMedError, SQLAlchemyError, asyncio.TimeoutError) as e:
                     task["errors"] += 1
                     logger.warning(f"Failed to sync PMID {pmid}: {e}")
 
@@ -346,7 +348,10 @@ async def _run_publication_sync(task_id: str) -> None:
             f"Publication sync completed: {task['processed']} synced, {task['errors']} errors"
         )
 
-    except Exception as e:
+    except (SQLAlchemyError, Exception) as e:  # noqa: BLE001
+        # Best-effort background-task status writeback; an unexpected exception
+        # must never leave the task stuck in "running" state. Full file
+        # decomposition is scheduled for Wave 4.
         task["status"] = "failed"
         task["error"] = str(e)
         logger.error(f"Publication sync failed: {e}")
@@ -586,7 +591,7 @@ async def _run_variant_sync(task_id: str) -> None:
                             task["processed"] += 1
                         else:
                             task["errors"] += 1
-                except Exception as e:
+                except (VEPError, SQLAlchemyError, asyncio.TimeoutError) as e:
                     task["errors"] += len(batch)
                     logger.warning(f"Failed to sync variant batch: {e}")
 
@@ -606,7 +611,7 @@ async def _run_variant_sync(task_id: str) -> None:
             f"Variant sync completed: {task['processed']} synced, {task['errors']} errors"
         )
 
-    except Exception as e:
+    except (SQLAlchemyError, VEPError) as e:
         task["status"] = "failed"
         task["error"] = str(e)
         logger.error(f"Variant sync failed: {e}")
@@ -893,7 +898,7 @@ async def _run_reference_init(task_id: str) -> None:
         task["completed_at"] = datetime.now(timezone.utc).isoformat()
         logger.info(f"Reference data init completed: {result.imported} items created")
 
-    except Exception as e:
+    except (httpx.HTTPError, SQLAlchemyError) as e:
         task["status"] = "failed"
         task["error"] = str(e)
         logger.error(f"Reference data init failed: {e}")
@@ -926,7 +931,7 @@ async def _run_genes_sync(task_id: str) -> None:
             f"{result.updated} updated, {result.errors} errors"
         )
 
-    except Exception as e:
+    except (httpx.HTTPError, SQLAlchemyError) as e:
         task["status"] = "failed"
         task["error"] = str(e)
         logger.error(f"Gene sync failed: {e}")

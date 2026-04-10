@@ -5,6 +5,7 @@ Configuration is loaded from config.yaml via app.core.config.
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -74,7 +75,17 @@ class VariantValidator:
                 else:
                     return False, None, ["VEP service temporarily unavailable"]
 
-        except Exception:
+        except (
+            httpx.HTTPError,
+            httpx.TimeoutException,
+            httpx.RequestError,
+            json.JSONDecodeError,
+            ValueError,
+        ) as e:
+            logger.debug(
+                "VEP validation request failed, falling back to local validation: %s",
+                e,
+            )
             return self._fallback_validation(hgvs_notation), None, []
 
     def validate_variant_formats(self, variant_descriptor: Dict[str, Any]) -> List[str]:
@@ -497,7 +508,14 @@ class VariantValidator:
                     )
                     return None
 
-            except Exception as e:
+            except (
+                ValueError,
+                KeyError,
+                AttributeError,
+                IndexError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as e:
                 logger.error(f"Unexpected VEP annotation error: {e}", exc_info=True)
                 return None
 
@@ -734,7 +752,14 @@ class VariantValidator:
                     logger.error(f"VEP recoder API network error after retries: {e}")
                     return None
 
-            except Exception as e:
+            except (
+                ValueError,
+                KeyError,
+                AttributeError,
+                IndexError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as e:
                 logger.error(f"Unexpected VEP recoder error: {e}", exc_info=True)
                 return None
 
@@ -787,7 +812,15 @@ class VariantValidator:
             try:
                 result = await self.recode_variant_with_vep(vcf_v)
                 results[vcf_v] = result
-            except Exception as e:
+            except (
+                ValueError,
+                KeyError,
+                AttributeError,
+                IndexError,
+                TypeError,
+                httpx.HTTPError,
+                httpx.RequestError,
+            ) as e:
                 logger.warning(f"Failed to recode VCF variant {vcf_v}: {e}")
                 results[vcf_v] = None
 
@@ -957,7 +990,14 @@ class VariantValidator:
                         results[v] = None
                     return results
 
-            except Exception as e:
+            except (
+                ValueError,
+                KeyError,
+                AttributeError,
+                IndexError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as e:
                 logger.error(f"Unexpected VEP recoder batch error: {e}", exc_info=True)
                 for v in uncached_variants:
                     results[v] = None

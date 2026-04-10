@@ -23,6 +23,7 @@ from typing import Optional, cast
 
 import httpx
 from sqlalchemy import and_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.reference.models import (
@@ -469,7 +470,7 @@ async def initialize_reference_data(db: AsyncSession) -> SyncResult:
         await db.commit()
         logger.info(f"Reference data initialized: {result.imported} items created")
 
-    except Exception as e:
+    except (SQLAlchemyError, httpx.HTTPError, ValueError, KeyError) as e:
         await db.rollback()
         result.errors += 1
         result.error_messages = [str(e)]
@@ -645,7 +646,7 @@ async def sync_chr17q12_genes(
         if result.error_messages is not None:
             result.error_messages.append(f"HTTP error: {e}")
         logger.error(f"Failed to fetch from Ensembl: {e}")
-    except Exception as e:
+    except (SQLAlchemyError, ValueError, KeyError) as e:
         await db.rollback()
         result.errors += 1
         if result.error_messages is not None:

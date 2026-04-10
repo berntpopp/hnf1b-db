@@ -22,6 +22,7 @@ from fastapi import (
 )
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
@@ -217,8 +218,11 @@ async def get_publication_metadata_endpoint(
             detail=f"PubMed API error: {e}",
         )
 
-    except Exception as e:
-        # Unexpected error
+    except Exception as e:  # noqa: BLE001
+        # Catch-all for truly unexpected errors in this HTTP endpoint.
+        # Narrowing further would let unknown exceptions leak as raw 500s
+        # with tracebacks in the response body. Known PubMed failure modes
+        # are already handled by the specific except clauses above.
         logger.exception(f"Unexpected error fetching {pmid}: {e}", extra={"pmid": pmid})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -604,7 +608,13 @@ async def _sync_publications_background(db: AsyncSession) -> None:
             fetched += 1
             if fetched % 10 == 0:
                 logger.info(f"Synced {fetched}/{len(to_fetch)} publications")
-        except Exception as e:
+        except (
+            PubMedAPIError,
+            PubMedTimeoutError,
+            PubMedRateLimitError,
+            PubMedNotFoundError,
+            SQLAlchemyError,
+        ) as e:
             errors += 1
             logger.warning(f"Failed to fetch {pmid}: {e}")
 

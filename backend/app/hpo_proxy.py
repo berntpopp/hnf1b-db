@@ -5,6 +5,7 @@ Uses Redis for distributed caching (with in-memory fallback).
 Configuration is loaded from config.yaml via app.core.config.
 """
 
+import json
 import logging
 from typing import List, Optional
 
@@ -108,7 +109,7 @@ async def search_hpo_terms(
             status_code=e.response.status_code,
             detail=f"HPO API error: {e.response.text}",
         ) from e
-    except Exception as e:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError) as e:
         logger.error(f"Error proxying HPO search: {e}")
         raise HTTPException(status_code=500, detail="Error searching HPO terms") from e
 
@@ -151,7 +152,7 @@ async def get_hpo_term(term_id: str):
             status_code=e.response.status_code,
             detail=f"HPO API error: {e.response.text}",
         ) from e
-    except Exception as e:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError) as e:
         logger.error(f"Error fetching HPO term {term_id}: {e}")
         raise HTTPException(status_code=500, detail="Error fetching HPO term") from e
 
@@ -205,7 +206,7 @@ async def autocomplete_hpo_terms(
                 return results
             return []
 
-    except Exception as e:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError) as e:
         logger.error(f"Error in HPO autocomplete: {e}")
         # Return empty list on error to not break frontend autocomplete
         return []
@@ -303,7 +304,7 @@ async def validate_hpo_terms(
                     "valid": False,
                     "error": "Term not found in local ontology or APIs",
                 }
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError, OSError) as e:
             results[term_id] = {"valid": False, "error": str(e)}
 
     return results

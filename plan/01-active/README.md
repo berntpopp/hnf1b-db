@@ -385,7 +385,7 @@ The `db-init` command automatically creates an admin user with credentials from 
 # Default credentials (change in backend/.env before running):
 ADMIN_USERNAME=admin
 ADMIN_EMAIL=admin@hnf1b-db.local
-ADMIN_PASSWORD=ChangeMe!Admin2025
+ADMIN_PASSWORD=<required; set via .env, no default>
 
 # Or create/update admin user separately:
 make db-create-admin

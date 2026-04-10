@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReferenceGenomeSchema(BaseModel):
@@ -25,10 +25,7 @@ class ReferenceGenomeSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExonSchema(BaseModel):
@@ -44,10 +41,7 @@ class ExonSchema(BaseModel):
     source: str = Field(..., description="Data source")
     extra_data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProteinDomainSchema(BaseModel):
@@ -68,10 +62,7 @@ class ProteinDomainSchema(BaseModel):
     source_url: Optional[str] = Field(None, description="URL to domain annotation")
     extra_data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TranscriptSchema(BaseModel):
@@ -92,10 +83,7 @@ class TranscriptSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TranscriptDetailSchema(TranscriptSchema):
@@ -125,10 +113,7 @@ class GeneSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeneDetailSchema(GeneSchema):
