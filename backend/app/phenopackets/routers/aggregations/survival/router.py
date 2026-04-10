@@ -1,10 +1,10 @@
 """Survival analysis endpoint for phenopackets.
 
 Thin FastAPI router that dispatches to the SurvivalHandlerFactory in
-survival_handlers.py. All concrete Kaplan-Meier, log-rank, and SQL
-logic lives in the handler classes — this file is intentionally kept
-small so the routing and endpoint configuration concerns stay in one
-place.
+the sibling ``handlers`` module. All concrete Kaplan-Meier, log-rank,
+and SQL logic lives in the handler classes — this file is
+intentionally kept small so the routing and endpoint configuration
+concerns stay in one place.
 """
 
 from typing import Any, Dict, List, Optional
@@ -83,7 +83,7 @@ async def get_survival_data(
     Returns:
         Survival curves with Kaplan-Meier estimates, 95% CIs, and log-rank tests
     """
-    from .survival_handlers import SurvivalHandlerFactory
+    from .handlers import SurvivalHandlerFactory
 
     endpoint_config = _get_endpoint_config()
     if endpoint not in endpoint_config:

@@ -25,7 +25,7 @@ from app.phenopackets.routers.aggregations.sql_fragments import (
     get_missense_filter_sql,
     get_protein_domain_classification_sql,
 )
-from app.phenopackets.routers.aggregations.survival_handlers import (
+from app.phenopackets.routers.aggregations.survival import (
     ProteinDomainHandler,
     SurvivalHandlerFactory,
 )
