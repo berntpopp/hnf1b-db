@@ -46,6 +46,7 @@ def _valid_payload(phenopacket_id: str, subject_id: str = "s", sex: str = "MALE"
 async def test_delete_with_matching_revision_succeeds(
     async_client: AsyncClient, admin_headers: dict
 ):
+    """DELETE with a revision that matches the row's current revision → 200."""
     create_payload = _valid_payload("delete-revision-ok")
     create_resp = await async_client.post(
         "/api/v2/phenopackets/", json=create_payload, headers=admin_headers
@@ -65,6 +66,7 @@ async def test_delete_with_matching_revision_succeeds(
 async def test_delete_with_stale_revision_returns_409(
     async_client: AsyncClient, admin_headers: dict
 ):
+    """DELETE with a stale revision after a concurrent UPDATE → 409 Conflict."""
     create_payload = _valid_payload("delete-revision-stale")
     create_resp = await async_client.post(
         "/api/v2/phenopackets/", json=create_payload, headers=admin_headers

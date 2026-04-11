@@ -11,6 +11,7 @@ from app.core.config import Settings
 
 
 def test_dev_auth_allowed_in_development():
+    """enable_dev_auth=True is the one permitted combo when env=development."""
     s = Settings(
         JWT_SECRET="x" * 32,
         ADMIN_PASSWORD="A" * 20,
@@ -22,6 +23,7 @@ def test_dev_auth_allowed_in_development():
 
 
 def test_dev_auth_refused_in_staging():
+    """Staging is not development — Layer 1 must reject the combination."""
     with pytest.raises(ValidationError, match="ENABLE_DEV_AUTH"):
         Settings(
             JWT_SECRET="x" * 32,
@@ -32,6 +34,7 @@ def test_dev_auth_refused_in_staging():
 
 
 def test_dev_auth_refused_in_production():
+    """Production must reject dev-auth regardless of any other config."""
     with pytest.raises(ValidationError, match="ENABLE_DEV_AUTH"):
         Settings(
             JWT_SECRET="x" * 32,
@@ -42,8 +45,11 @@ def test_dev_auth_refused_in_production():
 
 
 def test_default_environment_is_production():
-    """Unset env defaults to production — an unset env must never default
-    to development (that would defeat the whole purpose of Layer 1)."""
+    """Unset env defaults to production.
+
+    An unset env must never default to development (that would defeat
+    the whole purpose of Layer 1).
+    """
     s = Settings(JWT_SECRET="x" * 32, ADMIN_PASSWORD="A" * 20)
     assert s.environment == "production"
     assert s.enable_dev_auth is False
