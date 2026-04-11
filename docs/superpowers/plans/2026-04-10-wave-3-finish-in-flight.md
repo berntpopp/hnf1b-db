@@ -1,383 +1,526 @@
-# Wave 3: Finish In-Flight Refactors — Implementation Plan
+# Wave 3: Finish In-Flight Refactors — Implementation Plan (Amended 2026-04-10)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete the half-finished survival.py refactor (delete the 6 legacy `_handle_*` functions alongside the new survival_handlers.py), reorganize into a `survival/` sub-package, replace hardcoded HPO IDs with settings references, and extend `aggregations/common.py` with the missing shared helpers.
+> **Amendment note (2026-04-10):** The original Wave 3 plan assumed the survival refactor was mid-flight: 6 handler classes (`VariantTypeCurrentAgeHandler`, `VariantTypeStandardHandler`, …), an active dispatcher still calling the legacy `_handle_*` functions, and a parity-gated deletion. None of that is accurate. The dispatcher at `survival.py:1006-1025` already uses `SurvivalHandlerFactory.get_handler(comparison).handle(db, endpoint_label, endpoint_hpo_terms)`. A `grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" backend` confirms the legacy functions have **zero callers** — they are orphaned dead code sharing a file with the live dispatcher. Age-mode split is internal to `SurvivalHandler.handle()` (branches on `endpoint_hpo_terms is None`), not a per-class distinction. Actual handler classes (survival_handlers.py): `VariantTypeHandler`, `PathogenicityHandler`, `DiseaseSubtypeHandler`, `ProteinDomainHandler` (net-new, no legacy equivalent), plus `SurvivalHandlerFactory`. This amendment drops the parity test task (comparing dead code to live code is meaningless), simplifies deletion to a straight prune, adds a thin endpoint regression smoke test (no endpoint-level test currently exists), and drops the original Task 8 (`materialized_view_fallback` context manager) as marginal-value churn — the existing `check_materialized_view_exists` one-liner helper is already the abstraction.
 
-**Architecture:** No new external dependencies. All changes are internal reorganization with a strict "prove parity before deleting" safety rule. The existing `survival_handlers.py` handler classes are the canonical path; legacy functions in `survival.py` are the duplication to eliminate.
+**Goal:** Delete the ~840 LOC of dead legacy handler code in `survival.py` (and its orphaned helpers), restructure survival into a `survival/` sub-package, sweep remaining hardcoded HPO literals, and extract the real `calculate_percentages` duplication from the 12 aggregation sites into `aggregations/common.py`.
+
+**Architecture:** No new external dependencies. All changes are internal reorganization and deletion. Safety story is "zero callers + new endpoint smoke test" instead of parity testing, because the legacy code is already decoupled from the runtime.
 
 **Tech Stack:** Python 3.10+, FastAPI, SQLAlchemy async, pytest.
 
 **Parent spec:** `docs/superpowers/specs/2026-04-10-codebase-refactor-roadmap-design.md` (Wave 3 section)
 
-**Prerequisite:** Waves 1 and 2 complete. In particular, Wave 2's dedicated test database and CRUD integration tests are required safety nets for this wave.
+**Prerequisite:** Waves 1 and 2 complete. Wave 2's dedicated test database and CRUD integration tests are the safety substrate.
+
+**Branch:** `chore/wave-3-finish-in-flight` (worktree at `~/development/hnf1b-db.worktrees/chore-wave-3-finish-in-flight/` per the project's sibling-worktree convention).
 
 ---
 
 ## Context
 
-Read Wave 1's "Context engineers need" section for conventions. This wave is all backend — no frontend changes. Branch: `chore/wave-3-finish-in-flight`.
+Read Wave 1's "Context engineers need" section for conventions. This wave is all backend — no frontend changes.
 
 **Key files:**
-- Target of deletion: `backend/app/phenopackets/routers/aggregations/survival.py` (lines 126-968, the 6 `_handle_*` functions)
-- Canonical replacement: `backend/app/phenopackets/routers/aggregations/survival_handlers.py`
-- Restructuring target: `backend/app/phenopackets/routers/aggregations/survival/` (new sub-package)
-- Extension target: `backend/app/phenopackets/routers/aggregations/common.py`
-- Aggregation modules with duplication: `demographics.py`, `variants.py`, `features.py`, `diseases.py`, `publications.py`, `summary.py`
+- Target of deletion: the 6 `_handle_*` functions in `backend/app/phenopackets/routers/aggregations/survival.py` (defined at lines 126, 230, 375, 467, 621, 748) and the 3 module-private helpers that only serve them (`_calculate_survival_curves`, `_calculate_statistical_tests`, `_build_response` at lines 56–123). Verify orphan status by grep before deleting the helpers.
+- Canonical live path: `survival.py:1006-1025` → `SurvivalHandlerFactory.get_handler(...).handle(...)` in `survival_handlers.py` (1055 LOC, 4 handler classes + factory + abstract base).
+- Restructuring target: `backend/app/phenopackets/routers/aggregations/survival/` (new sub-package).
+- Extension target: `backend/app/phenopackets/routers/aggregations/common.py` (currently 63 LOC — `check_materialized_view_exists` helper + re-exports).
+- Aggregation modules with `(count / total * 100) if total > 0` duplication (12 verified sites as of 2026-04-10): `demographics.py` (3), `diseases.py` (3), `variants.py` (2), `features.py` (2), `publications.py` (1), plus any in `summary.py`.
 
-**Parity-before-deletion rule:** Before removing any legacy `_handle_*` function, a parity test must prove the new handler-class path produces byte-identical output for the same inputs. This is non-negotiable — statistical correctness is load-bearing in the clinical use case.
+**Dead-code confirmation grep (run this first in Task 1):**
+```bash
+cd backend && grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" app tests --include="*.py"
+```
+Expected: matches only inside `survival.py` itself (the function definitions). Zero matches in dispatchers, tests, or any other module. If a match appears outside `survival.py`, STOP and investigate — the dead-code assumption is wrong.
 
 ---
 
-## Task 1: Map old → new survival handler function equivalents
+## Task 1: Document the dead-code finding (migration map)
 
 **Files:**
-- Create: `docs/refactor/survival-migration-map.md` (documentation of the mapping)
+- Create: `docs/refactor/survival-migration-map.md`
 
-No code changes in this task. The engineer's job is to read the 6 legacy functions and the new handler classes, confirm the mapping, and document it.
+No code changes. The engineer confirms the dead-code finding, documents the 1:1 mapping between legacy functions and the canonical handler methods, and records why parity testing is unnecessary.
 
-- [ ] **Step 1: Read the 6 legacy functions**
-
-```bash
-cd backend && for ln in 126 230 375 467 621 748; do
-  echo "=== Line $ln ===";
-  sed -n "${ln},$((ln+20))p" app/phenopackets/routers/aggregations/survival.py;
-done
-```
-
-Identify each function's signature and purpose. The 6 functions should be:
-
-1. `_handle_variant_type_current_age` (line 126)
-2. `_handle_variant_type_standard` (line 230)
-3. `_handle_pathogenicity_current_age` (line 375)
-4. `_handle_pathogenicity_standard` (line 467)
-5. `_handle_disease_subtype_current_age` (line 621)
-6. `_handle_disease_subtype_standard` (line 748)
-
-- [ ] **Step 2: Read the new handler classes**
+- [ ] **Step 1: Run the dead-code grep**
 
 ```bash
-cat backend/app/phenopackets/routers/aggregations/survival_handlers.py | head -80
-grep -n "^class \|def handle\|def process" backend/app/phenopackets/routers/aggregations/survival_handlers.py
+cd backend && grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" app tests --include="*.py"
 ```
 
-Identify the handler classes. Expected structure: a base `SurvivalHandler` class (or similar) with concrete subclasses for each comparison type and age-mode combination.
+Expected: 6 matches, all inside `survival.py` (the function definitions themselves). If any match appears outside `survival.py`, STOP.
 
-- [ ] **Step 3: Write the migration map**
+- [ ] **Step 2: Confirm the helper trio is also orphaned**
+
+```bash
+cd backend && grep -rn "_calculate_survival_curves\|_calculate_statistical_tests\|_build_response" app tests --include="*.py"
+```
+
+Expected: matches only inside `survival.py`, and only on the calling side from within the 6 dead `_handle_*` functions. (Note: `survival_handlers.py` has its own `_calculate_survival_curves` and `_calculate_statistical_tests` **as instance methods of `SurvivalHandler`** — these are different scope and do not count.) If the helpers are called from the live dispatcher or any other file, keep them in Task 3 and only delete the 6 handler functions.
+
+- [ ] **Step 3: Read the live dispatcher**
+
+```bash
+sed -n '970,1026p' backend/app/phenopackets/routers/aggregations/survival.py
+```
+
+Confirm it already uses `SurvivalHandlerFactory.get_handler(comparison).handle(db, endpoint_label, endpoint_hpo_terms)` and never references the `_handle_*` functions.
+
+- [ ] **Step 4: Read the handler class headers**
+
+```bash
+grep -n "^class " backend/app/phenopackets/routers/aggregations/survival_handlers.py
+```
+
+Expected classes: `SurvivalHandler(ABC)`, `VariantTypeHandler`, `PathogenicityHandler`, `DiseaseSubtypeHandler`, `ProteinDomainHandler`, `SurvivalHandlerFactory`.
+
+- [ ] **Step 5: Write the migration map**
 
 Create `docs/refactor/survival-migration-map.md`:
 
 ```markdown
 # Survival Handler Migration Map
 
-**Wave 3 reference document.** Maps the 6 legacy functions in
-`survival.py` to the canonical handler classes in
-`survival_handlers.py`. Used to drive the Task 3 parity tests and
-Task 4 deletion safety.
+**Wave 3 reference document (2026-04-10).** Documents the relationship
+between the 6 legacy `_handle_*` functions in `survival.py` and the
+canonical `SurvivalHandler` subclasses in `survival_handlers.py`, and
+records the zero-caller confirmation that makes Task 3's deletion safe.
 
-| Legacy function | survival.py line | Canonical handler class | survival_handlers.py |
-|-----------------|:----------------:|-------------------------|:--------------------:|
-| _handle_variant_type_current_age | 126 | VariantTypeCurrentAgeHandler | <line> |
-| _handle_variant_type_standard | 230 | VariantTypeStandardHandler | <line> |
-| _handle_pathogenicity_current_age | 375 | PathogenicityCurrentAgeHandler | <line> |
-| _handle_pathogenicity_standard | 467 | PathogenicityStandardHandler | <line> |
-| _handle_disease_subtype_current_age | 621 | DiseaseSubtypeCurrentAgeHandler | <line> |
-| _handle_disease_subtype_standard | 748 | DiseaseSubtypeStandardHandler | <line> |
+## Dead-code confirmation
 
-## Verification
+Grep output from `grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" backend/app backend/tests`:
 
-For each row, verify by reading both implementations that:
-1. They compute the same Kaplan-Meier curves.
-2. They run the same statistical tests.
-3. They return responses with the same shape.
-
-Any divergence is documented below with the decision (legacy is
-authoritative / new handler is authoritative / both differ and we
-need to reconcile).
-
-### Divergences found during Wave 3 planning
-
-<fill in during Task 1 execution — none expected but document any>
+```
+<paste the actual grep output here>
 ```
 
-Fill in the actual class names and line numbers from Step 2.
+All matches are function definitions inside `survival.py`. Zero callers
+in the live dispatcher, endpoints, tests, or any other module. The
+legacy functions are orphaned dead code.
 
-- [ ] **Step 4: Commit the map**
+## Why no parity tests
+
+The original plan proposed byte-identical parity tests as a
+deletion gate. That approach assumed the dispatcher was still calling
+the legacy functions and that the new handler classes were an
+untested parallel path. Both assumptions are wrong: the dispatcher has
+already been migrated (see `survival.py:1006-1025`), the handler
+classes are the only path the endpoint uses in production, and the
+legacy functions are unreachable from any caller. Parity testing
+would compare dead code to live code — the result is either "identical"
+(wasted effort) or "different" (reveals the dead code drifted, which is
+informative but doesn't block deletion because the dead code is
+unreachable anyway).
+
+The deletion safety story is instead:
+
+1. **Zero callers** (this document, Task 1).
+2. **Endpoint smoke test** added in Task 2 — exercises every comparison
+   type through the live dispatcher, gives a regression signal for the
+   handler classes themselves, and runs before and after Task 3's
+   deletion.
+3. **Full `make check`** before and after deletion.
+
+## Handler mapping
+
+The legacy functions split by comparison type × age-mode (6 functions).
+The new handler classes split only by comparison type (4 classes,
+including `ProteinDomainHandler` which has no legacy counterpart). Age
+mode is an internal branch inside `SurvivalHandler.handle()`:
+
+```python
+async def handle(self, db, endpoint_label, endpoint_hpo_terms=None):
+    if endpoint_hpo_terms is None:
+        return await self._handle_current_age(db, endpoint_label)
+    return await self._handle_standard(db, endpoint_label, endpoint_hpo_terms)
+```
+
+| Legacy function | survival.py line | Canonical handler | survival_handlers.py line |
+|-----------------|:----------------:|-------------------|:------------------------:|
+| `_handle_variant_type_current_age`   | 126 | `VariantTypeHandler._handle_current_age`   | via 273 |
+| `_handle_variant_type_standard`      | 230 | `VariantTypeHandler._handle_standard`      | via 273 |
+| `_handle_pathogenicity_current_age`  | 375 | `PathogenicityHandler._handle_current_age` | via 415 |
+| `_handle_pathogenicity_standard`     | 467 | `PathogenicityHandler._handle_standard`    | via 415 |
+| `_handle_disease_subtype_current_age`| 621 | `DiseaseSubtypeHandler._handle_current_age`| via 560 |
+| `_handle_disease_subtype_standard`   | 748 | `DiseaseSubtypeHandler._handle_standard`   | via 560 |
+
+`ProteinDomainHandler` (survival_handlers.py:826) is a net-new
+comparison type that was added *after* the legacy functions. It has no
+legacy equivalent. Nothing to migrate for it; just carry it through the
+Task 4 sub-package restructure.
+
+## Orphaned helper functions
+
+These module-private helpers in `survival.py` are only called from the
+dead `_handle_*` functions and should be deleted in Task 3 alongside
+the handlers:
+
+| Helper | survival.py lines | Used by |
+|--------|:-----------------:|---------|
+| `_calculate_survival_curves` | 56–68 | Dead handlers only (verify in Task 1 Step 2) |
+| `_calculate_statistical_tests` | 71–96 | Dead handlers only (verify in Task 1 Step 2) |
+| `_build_response` | 99–123 | Dead handlers only (verify in Task 1 Step 2) |
+
+Note that `SurvivalHandler` in `survival_handlers.py` has its own
+`_calculate_survival_curves` and `_calculate_statistical_tests` as
+instance methods — these are in a different scope and are not
+affected.
+
+`_get_endpoint_config` (survival.py:30–53) is KEPT — it is called by
+the live dispatcher at `survival.py:1008`.
+```
+
+- [ ] **Step 6: Commit the map**
 
 ```bash
 git add docs/refactor/survival-migration-map.md
-git commit -m "docs(refactor): map survival.py legacy functions to handler classes
+git commit -m "$(cat <<'EOF'
+docs(refactor): map survival legacy functions to handler classes
 
-Task 1 of Wave 3: documents the 1:1 mapping between the 6 legacy
-_handle_* functions in survival.py and their handler class
-equivalents in survival_handlers.py. Drives the Task 3 parity tests.
+Task 1 of Wave 3: records the zero-caller confirmation for the 6
+legacy _handle_* functions in survival.py and the 3 orphaned
+module-private helpers (_calculate_survival_curves,
+_calculate_statistical_tests, _build_response). Documents why
+parity testing is unnecessary — the dispatcher is already on the
+SurvivalHandlerFactory path, and the legacy functions are
+unreachable from any live caller.
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
 
-## Task 2: Find all callers of the legacy functions
-
-**Files:** none modified; this is pure investigation.
-
-- [ ] **Step 1: Grep for calls**
-
-```bash
-cd backend && grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" app --include="*.py"
-```
-
-Expected: the callers are inside `survival.py` itself (the legacy dispatcher function) and possibly in the endpoint function. The handler classes should already be used in the canonical path.
-
-- [ ] **Step 2: Identify the dispatcher logic**
-
-Find where `survival.py`'s endpoint function chooses between legacy functions. It's likely a series of `if` statements on comparison type + age mode. Note the exact structure.
-
-- [ ] **Step 3: Decision: parallel path or replace-in-place?**
-
-Two options:
-- **Option A: Replace in place.** Edit the dispatcher to call handler classes instead of legacy functions. Delete legacy functions in the same commit.
-- **Option B: Parallel path.** Introduce a feature flag / parameter to call the new handler path, prove parity in tests, then delete legacy and flag in a second commit.
-
-**Choose Option A** if Task 3's parity tests pass reliably (low risk). **Choose Option B** if the legacy functions have subtle behavioral differences.
-
-Document the decision in the wave-3-exit.md (write later).
-
----
-
-## Task 3: Write parity tests comparing old and new handler output
+## Task 2: Add survival endpoint regression smoke test
 
 **Files:**
-- Create: `backend/tests/test_survival_parity.py`
+- Modify: `backend/app/phenopackets/routers/aggregations/survival.py` (convert bare `ValueError` to `HTTPException(400)` — two sites)
+- Create: `backend/tests/test_survival_endpoint.py`
 
-This is the safety net. Each of the 6 legacy functions gets a parametrized test that invokes both the legacy function and the new handler class with identical inputs, then asserts the outputs match.
+The existing survival tests (`test_survival_analysis.py` for pure functions, `test_survival_protein_domain.py` for handler registration + unit tests) do not exercise the `/survival-data` endpoint itself. Before deleting ~900 LOC of dead code in Task 3, we add a thin smoke test that goes through the live dispatcher for every comparison type × endpoint combination. On an empty test DB the `groups` list will be empty, but the response shape is fully exercised and any import/wiring break will fail loudly.
 
-- [ ] **Step 1: Write the parity test skeleton**
+**Coupled route fix:** The live dispatcher at `survival.py:1011` and `survival.py:1023` currently raises bare `ValueError` on unknown `comparison` or `endpoint` parameters. Because `backend/app/core/exceptions.py:93-107` registers a `generic_exception_handler` that maps any uncaught exception to a 500 with detail `"Internal server error"`, a bad query parameter currently returns **500**, not 400. A smoke test that asserts `>= 400` would lock that broken contract in forever. Task 2 therefore does two things: (a) convert the two `raise ValueError` sites to `raise HTTPException(status_code=400, detail=...)` so the API honours the real contract, and (b) add the smoke test with a **strict** `== 400` assertion on negative cases. The two changes land as separate commits so the route fix and the test coverage are each atomic.
 
-Create `backend/tests/test_survival_parity.py`:
+**Fixture name:** The canonical async HTTP fixture is `async_client` (see `backend/tests/conftest.py:251`). The name `client` is **already taken** by a local synchronous `TestClient` fixture inside `backend/tests/test_phenopackets_crud.py:14-22` (with a docstring explaining the deliberate avoidance of collision). This test file must use `async_client`.
+
+- [ ] **Step 1: Convert the bare `ValueError` raises to `HTTPException(400)`**
+
+Read the current endpoint function:
+
+```bash
+sed -n '971,1026p' backend/app/phenopackets/routers/aggregations/survival.py
+```
+
+It has two sites that raise `ValueError`:
 
 ```python
-"""Parity tests comparing legacy survival.py handler functions to the
-canonical survival_handlers.py handler classes.
+# Site 1: unknown endpoint value
+if endpoint not in endpoint_config:
+    valid_options = ", ".join(endpoint_config.keys())
+    raise ValueError(
+        f"Unknown endpoint: {endpoint}. Valid options: {valid_options}"
+    )
 
-This is the safety net for Wave 3's deletion of the legacy functions.
-Each test invokes both paths with identical input and asserts the
-output is equivalent (either byte-identical JSON or numerically close
-to within floating-point tolerance).
+# Site 2: factory dispatch failure
+try:
+    handler = SurvivalHandlerFactory.get_handler(comparison)
+except ValueError as e:
+    raise ValueError(str(e)) from e
+```
 
-If any parity test fails, the legacy path must NOT be deleted until
-the discrepancy is investigated and resolved.
+Replace them with `HTTPException(status_code=400, ...)`:
+
+```python
+# Site 1:
+if endpoint not in endpoint_config:
+    valid_options = ", ".join(endpoint_config.keys())
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unknown endpoint: {endpoint}. Valid options: {valid_options}",
+    )
+
+# Site 2:
+try:
+    handler = SurvivalHandlerFactory.get_handler(comparison)
+except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e)) from e
+```
+
+Add `HTTPException` to the existing `from fastapi import ...` at the top of the file. It's already imported in many routers so the import pattern is familiar.
+
+- [ ] **Step 2: Run the full backend check to confirm the route fix doesn't break anything**
+
+```bash
+cd backend && make check
+```
+
+Expected: still 794 passed. If anything fails, check whether another test was asserting the old `ValueError` / 500 behavior (unlikely — we searched and the endpoint has no integration tests — but worth confirming).
+
+- [ ] **Step 3: Commit the route fix**
+
+```bash
+git add backend/app/phenopackets/routers/aggregations/survival.py
+git commit -m "$(cat <<'EOF'
+fix(backend): return 400 for bad /survival-data parameters
+
+Converts the two bare `raise ValueError` sites in survival.py's
+get_survival_data endpoint into HTTPException(status_code=400, ...).
+Previously, unknown `endpoint` or `comparison` query parameters hit
+the global generic_exception_handler and were normalised to a 500
+with detail "Internal server error" — the client couldn't tell a
+client-side typo from a real backend fault.
+
+Prerequisite for Wave 3 Task 2 endpoint smoke tests, which assert
+the 400 contract explicitly.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+- [ ] **Step 4: Write the smoke test**
+
+Create `backend/tests/test_survival_endpoint.py`:
+
+```python
+"""Smoke tests for the /survival-data endpoint.
+
+Exercises the live SurvivalHandlerFactory dispatch path for every
+supported comparison × endpoint combination. On an empty test
+database, the `groups` list will be empty, but the response shape,
+imports, factory wiring, and SQL generation are all exercised. This
+is the regression safety net for Wave 3's deletion of the legacy
+_handle_* functions.
+
+This test does NOT assert numeric survival curves — for that, see the
+pure-function tests in test_survival_analysis.py.
+
+Uses the async_client fixture from conftest.py (not `client`, which
+is a local synchronous TestClient fixture inside
+test_phenopackets_crud.py with a deliberate collision-avoidance
+docstring).
 """
 
-import math
-from typing import Any, Dict
+from __future__ import annotations
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from httpx import AsyncClient
 
-# Legacy function imports
-from app.phenopackets.routers.aggregations import survival as legacy_survival
-
-# New handler class imports
-from app.phenopackets.routers.aggregations.survival_handlers import (
-    VariantTypeCurrentAgeHandler,
-    VariantTypeStandardHandler,
-    PathogenicityCurrentAgeHandler,
-    PathogenicityStandardHandler,
-    DiseaseSubtypeCurrentAgeHandler,
-    DiseaseSubtypeStandardHandler,
-)
-
-
-def _assert_response_equal(legacy: Dict[str, Any], new: Dict[str, Any]) -> None:
-    """Assert two survival responses are equivalent.
-
-    Handles floating-point drift in statistical outputs via math.isclose.
-    """
-    assert set(legacy.keys()) == set(new.keys()), (
-        f"Key mismatch: legacy={set(legacy.keys())}, new={set(new.keys())}"
-    )
-    for key in legacy:
-        lv, nv = legacy[key], new[key]
-        if isinstance(lv, float) and isinstance(nv, float):
-            assert math.isclose(lv, nv, rel_tol=1e-9, abs_tol=1e-12), (
-                f"Float mismatch at {key}: legacy={lv}, new={nv}"
-            )
-        elif isinstance(lv, list) and isinstance(nv, list):
-            assert len(lv) == len(nv), f"List length mismatch at {key}"
-            # Deep comparison with float tolerance would go here for
-            # nested structures; for now use direct equality and adjust
-            # if tests fail.
-            assert lv == nv, f"List content mismatch at {key}"
-        else:
-            assert lv == nv, f"Mismatch at {key}: legacy={lv}, new={nv}"
+COMPARISONS = ["variant_type", "pathogenicity", "disease_subtype", "protein_domain"]
+ENDPOINTS = ["ckd_stage_3_plus", "stage_5_ckd", "any_ckd", "current_age"]
 
 
 @pytest.mark.asyncio
-class TestVariantTypeParity:
-    async def test_current_age_mode(self, db_session: AsyncSession):
-        """Both paths produce equivalent output for variant_type + current_age."""
-        # Call legacy path
-        legacy_result = await legacy_survival._handle_variant_type_current_age(
-            db_session
+class TestSurvivalEndpointSmoke:
+    """Exercise every (comparison, endpoint) pair through the live dispatcher."""
+
+    @pytest.mark.parametrize("comparison", COMPARISONS)
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_returns_well_formed_response(
+        self,
+        async_client: AsyncClient,
+        comparison: str,
+        endpoint: str,
+    ) -> None:
+        """Every (comparison, endpoint) pair returns a 200 with the expected shape."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/aggregate/survival-data",
+            params={"comparison": comparison, "endpoint": endpoint},
         )
-        # Call new handler
-        handler = VariantTypeCurrentAgeHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
+        assert response.status_code == 200, response.text
 
-    async def test_standard_mode(self, db_session: AsyncSession):
-        legacy_result = await legacy_survival._handle_variant_type_standard(db_session)
-        handler = VariantTypeStandardHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
+        body = response.json()
+        assert body["comparison_type"] == comparison
+        assert "endpoint" in body
+        assert "groups" in body
+        assert isinstance(body["groups"], list)
+        assert "statistical_tests" in body
+        assert isinstance(body["statistical_tests"], list)
+        assert "metadata" in body
+        assert isinstance(body["metadata"], dict)
+        # Metadata always carries the group definitions and criteria
+        assert "group_definitions" in body["metadata"]
+        assert "inclusion_criteria" in body["metadata"]
 
-
-@pytest.mark.asyncio
-class TestPathogenicityParity:
-    async def test_current_age_mode(self, db_session: AsyncSession):
-        legacy_result = await legacy_survival._handle_pathogenicity_current_age(
-            db_session
+    async def test_invalid_comparison_returns_400(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Unknown comparison types return 400 (client error), not 500."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/aggregate/survival-data",
+            params={"comparison": "not_a_real_type", "endpoint": "ckd_stage_3_plus"},
         )
-        handler = PathogenicityCurrentAgeHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
+        assert response.status_code == 400, response.text
+        body = response.json()
+        # Error shape is the standard {detail, error_code, request_id} from
+        # the exception handlers added in Wave 2.
+        assert "detail" in body
 
-    async def test_standard_mode(self, db_session: AsyncSession):
-        legacy_result = await legacy_survival._handle_pathogenicity_standard(
-            db_session
+    async def test_invalid_endpoint_returns_400(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Unknown endpoint values return 400 (client error), not 500."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/aggregate/survival-data",
+            params={"comparison": "variant_type", "endpoint": "not_a_real_endpoint"},
         )
-        handler = PathogenicityStandardHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
-
-
-@pytest.mark.asyncio
-class TestDiseaseSubtypeParity:
-    async def test_current_age_mode(self, db_session: AsyncSession):
-        legacy_result = await legacy_survival._handle_disease_subtype_current_age(
-            db_session
-        )
-        handler = DiseaseSubtypeCurrentAgeHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
-
-    async def test_standard_mode(self, db_session: AsyncSession):
-        legacy_result = await legacy_survival._handle_disease_subtype_standard(
-            db_session
-        )
-        handler = DiseaseSubtypeStandardHandler(db_session)
-        new_result = await handler.handle()
-        _assert_response_equal(legacy_result, new_result)
+        assert response.status_code == 400, response.text
+        body = response.json()
+        assert "detail" in body
+        # The detail should name the valid options — useful for client debugging.
+        assert "Valid options" in body["detail"] or "valid" in body["detail"].lower()
 ```
 
-- [ ] **Step 2: Adjust imports to match actual class names**
-
-Run the test file (expect import errors):
+- [ ] **Step 5: Verify the correct endpoint path**
 
 ```bash
-cd backend && uv run pytest tests/test_survival_parity.py --collect-only
+cd backend && grep -rn "survival-data\|/aggregate/survival" app --include="*.py" | head -5
 ```
 
-Expected: import errors reveal the actual handler class names. Update the imports accordingly. If the classes take different constructor arguments, adjust the instantiations.
+The test assumes the path is `/api/v2/phenopackets/aggregate/survival-data`. If the aggregations router is mounted under a different prefix, update the `async_client.get(...)` URL in the test. If the prefix includes `/aggregations/` (plural), use that.
 
-- [ ] **Step 3: Run the parity tests**
+- [ ] **Step 6: Verify the `async_client` fixture is the right name**
 
 ```bash
-cd backend && uv run pytest tests/test_survival_parity.py -v
+cd backend && grep -n "def async_client\|def client" tests/conftest.py
 ```
 
-Expected: all 6 tests pass. If any fail, stop and investigate before continuing. Document findings in the wave exit note.
+Expected: one match for `async def async_client(db_session):` around line 251. The name `client` in `conftest.py` should **not** appear — the only `client` fixture in the project is the local synchronous one in `test_phenopackets_crud.py:14`. If something else is now using the name `client` in conftest (unlikely but possible if someone moved fixtures since 2026-04-10), adjust accordingly.
 
-- [ ] **Step 4: Commit the parity tests**
+- [ ] **Step 7: Run the new test**
 
 ```bash
-git add backend/tests/test_survival_parity.py
-git commit -m "test(backend): add parity tests for survival handler migration
+cd backend && uv run pytest tests/test_survival_endpoint.py -v
+```
 
-Wave 3 safety net: compares each of the 6 legacy _handle_* functions
-in survival.py against their canonical handler class equivalents.
-Uses math.isclose for floating-point tolerance. If any test fails,
-the legacy functions must NOT be deleted in Task 4 until the
-discrepancy is resolved.
+Expected: all 16 parametrized happy-path cases + 2 error cases pass (18 total). If any case fails:
+- A 500 on the negative cases means Step 1's route fix didn't land — go back and fix.
+- A 404 probably means the endpoint path is wrong — go back to Step 5.
+- A parameter validation error may mean the comparison/endpoint strings don't match the dispatcher's expected values — double-check against `_get_endpoint_config()` keys in `survival.py:30` and the `SurvivalHandlerFactory`'s supported types.
+- A fixture-not-found error means `async_client` moved — go back to Step 6.
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+- [ ] **Step 8: Run the full backend check to confirm no regression**
+
+```bash
+cd backend && make check
+```
+
+Expected: 794 + ~18 = ~812 passing, 0 failures.
+
+- [ ] **Step 9: Commit the smoke tests**
+
+```bash
+git add backend/tests/test_survival_endpoint.py
+git commit -m "$(cat <<'EOF'
+test(backend): add /survival-data endpoint smoke tests
+
+Wave 3 Task 2: exercises the live SurvivalHandlerFactory dispatch
+path for every supported (comparison, endpoint) pair, plus strict
+negative cases asserting 400 (not >= 400) for unknown
+comparison/endpoint values. On an empty test DB the groups list is
+empty, but the response shape, imports, factory wiring, and SQL
+generation are all covered.
+
+Uses the async_client fixture from conftest.py. The name `client`
+is already taken by a local synchronous TestClient fixture inside
+test_phenopackets_crud.py:14 with a collision-avoidance docstring —
+do not rename either.
+
+This is the regression safety net for the Task 3 deletion of the
+dead legacy _handle_* functions — if the dispatcher or any handler
+wiring breaks, these tests fail before the deletion ships. The
+negative-case 400 assertions depend on the ValueError→HTTPException
+conversion landed in the preceding commit.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
 
-## Task 4: Switch the dispatcher to handler classes and delete legacy functions
+## Task 3: Delete the dead legacy functions
 
 **Files:**
-- Modify: `backend/app/phenopackets/routers/aggregations/survival.py` (edit dispatcher, delete lines 126-968)
+- Modify: `backend/app/phenopackets/routers/aggregations/survival.py` (delete the 6 `_handle_*` functions and the 3 orphaned helpers if Task 1 Step 2 confirmed they are dead)
 
-Only proceed with this task if Task 3's parity tests are all green.
+Only proceed if Task 1 Step 1 and Step 2 were green (zero external callers).
 
-- [ ] **Step 1: Edit the dispatcher to call handler classes**
+- [ ] **Step 1: Verify once more before touching the file**
 
-Find the endpoint function in `survival.py` that currently dispatches to `_handle_*` functions. Replace each dispatch with the handler class instantiation and call.
-
-Example transformation (actual code will look different; the pattern is the important part):
-
-```python
-# Before:
-if comparison == "variant_type" and age_mode == "current_age":
-    return await _handle_variant_type_current_age(db)
-
-# After:
-if comparison == "variant_type" and age_mode == "current_age":
-    handler = VariantTypeCurrentAgeHandler(db)
-    return await handler.handle()
+```bash
+cd backend && grep -rn "_handle_variant_type\|_handle_pathogenicity\|_handle_disease_subtype" app tests --include="*.py"
 ```
 
-Do this for all 6 branches.
+Expected: only the 6 `async def _handle_*` definitions in `survival.py`. If anything else shows up, STOP and reconcile.
 
-- [ ] **Step 2: Run the full test suite**
+- [ ] **Step 2: Delete the 6 `_handle_*` functions**
+
+Use the Read tool to find the exact bounds of each function (name lookup, not line numbers — line numbers shift as you edit). The 6 functions live in this order in `survival.py`:
+
+```
+async def _handle_variant_type_current_age(db, endpoint_label):
+async def _handle_variant_type_standard(db, endpoint_label):
+async def _handle_pathogenicity_current_age(db, endpoint_label):
+async def _handle_pathogenicity_standard(db, endpoint_label):
+async def _handle_disease_subtype_current_age(db, endpoint_label):
+async def _handle_disease_subtype_standard(db, endpoint_label):
+```
+
+Each function ends immediately before the next `async def`, or (for the last one) before the `@router.get("/survival-data", ...)` decorator at approximately line 971. Delete all 6 function bodies.
+
+- [ ] **Step 3: Delete the orphaned helpers (if Task 1 confirmed them dead)**
+
+Only if Task 1 Step 2 confirmed they are orphaned, delete these three helpers from `survival.py`:
+
+- `_calculate_survival_curves` (lines 56–68)
+- `_calculate_statistical_tests` (lines 71–96)
+- `_build_response` (lines 99–123)
+
+The imports `apply_bonferroni_correction`, `calculate_log_rank_test`, `parse_iso8601_age`, `calculate_kaplan_meier`, `get_phenopacket_variant_link_cte`, `get_variant_type_classification_sql`, `CURRENT_AGE_PATH`, `INTERP_STATUS_PATH` may also become unused after the deletion — run ruff or mypy to find any that `survival.py` no longer needs, then delete them.
+
+**Keep** `_get_endpoint_config` (lines 30–53). It is called by the live dispatcher at line 1008.
+
+- [ ] **Step 4: Run the full backend check**
 
 ```bash
 cd backend && make check
 ```
 
-Expected: all green. If any survival-related test fails, inspect: the dispatcher change should be transparent to callers.
+Expected: still all green, including the new Task 2 smoke tests. If anything fails, the dead-code assumption was wrong somewhere — revert the deletion (`git restore backend/app/phenopackets/routers/aggregations/survival.py`), investigate which file still references the deleted symbol, and either (a) also migrate that caller off the legacy path or (b) restore the specific function.
 
-- [ ] **Step 3: Delete the 6 legacy functions**
-
-Delete lines 126-968 of `survival.py` containing the 6 `_handle_*` function definitions. The file should shrink to ~150 LOC (just the router endpoints).
-
-- [ ] **Step 4: Run full test suite again**
+- [ ] **Step 5: Verify the file shrank and contains only router + dispatcher**
 
 ```bash
-cd backend && make check
+wc -l backend/app/phenopackets/routers/aggregations/survival.py
 ```
 
-Expected: still all green. The parity tests from Task 3 will now fail because the legacy functions no longer exist — update the parity test file to skip itself or delete it:
+Expected: ~120–160 LOC (was 1025). The file should now contain only: imports, `_get_endpoint_config`, and the `get_survival_data` router endpoint.
 
-Add at the top of `backend/tests/test_survival_parity.py`:
-
-```python
-pytest.skip(
-    "Legacy _handle_* functions deleted in Wave 3 Task 4. "
-    "Parity proven during planning; this file kept for historical reference.",
-    allow_module_level=True,
-)
-```
-
-- [ ] **Step 5: Commit both changes together**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/phenopackets/routers/aggregations/survival.py backend/tests/test_survival_parity.py
+git add backend/app/phenopackets/routers/aggregations/survival.py
 git commit -m "$(cat <<'EOF'
-refactor(backend): delete legacy survival handler functions
+refactor(backend): delete dead legacy survival handler functions
 
-Switches the survival endpoint dispatcher to call handler classes
-from survival_handlers.py directly, then deletes the 6 legacy
-_handle_* functions (lines 126-968, ~840 LOC removed) now that
-parity was proven in the preceding test commit.
+Removes the 6 _handle_* functions and 3 orphaned module-private
+helpers (_calculate_survival_curves, _calculate_statistical_tests,
+_build_response) from survival.py. These were unreachable from any
+live caller — the dispatcher at survival.py:1006 has been on the
+SurvivalHandlerFactory path for some time, and the legacy functions
+were orphaned dead code sharing a file with it.
 
-test_survival_parity.py is kept as a module-level skip so the
-history of how parity was established remains in the repo.
+survival.py shrinks from 1,025 LOC to ~140 LOC. The file now contains
+only the router endpoint and its _get_endpoint_config helper.
 
-survival.py shrinks from 1,025 LOC to ~150 LOC.
+See docs/refactor/survival-migration-map.md for the dead-code audit
+and why no parity test was needed. The Wave 3 Task 2 endpoint smoke
+tests added in the previous commit exercise the live dispatcher path
+and guard against regressions in the handler classes themselves.
 
 Closes P2 #6 from the 2026-04-09 review.
 
@@ -388,187 +531,176 @@ EOF
 
 ---
 
-## Task 5: Restructure survival into a `survival/` sub-package
+## Task 4: Restructure survival into a `survival/` sub-package
 
 **Files:**
 - Create: `backend/app/phenopackets/routers/aggregations/survival/__init__.py`
 - Create: `backend/app/phenopackets/routers/aggregations/survival/router.py`
-- Create: `backend/app/phenopackets/routers/aggregations/survival/handlers.py`
-- Create: `backend/app/phenopackets/routers/aggregations/survival/statistics.py`
-- Create: `backend/app/phenopackets/routers/aggregations/survival/queries.py`
-- Delete: `backend/app/phenopackets/routers/aggregations/survival.py` (now a thin shim)
-- Delete: `backend/app/phenopackets/routers/aggregations/survival_handlers.py` (merged into survival/handlers.py)
+- Create: `backend/app/phenopackets/routers/aggregations/survival/handlers.py` (or a `handlers/` sub-package if it exceeds 500 LOC after the move)
+- Delete: `backend/app/phenopackets/routers/aggregations/survival.py` (moved to `survival/router.py`)
+- Delete: `backend/app/phenopackets/routers/aggregations/survival_handlers.py` (moved to `survival/handlers.py`)
+
+Post-Task-3, `survival.py` is ~140 LOC and `survival_handlers.py` is 1055 LOC. The sub-package layout depends on whether `handlers.py` can live as a single file (≤500 LOC target per CLAUDE.md's 500-line rule) or needs splitting.
 
 - [ ] **Step 1: Create the sub-package directory**
 
 ```bash
-mkdir -p backend/app/phenopackets/routers/aggregations/survival
-touch backend/app/phenopackets/routers/aggregations/survival/__init__.py
+cd backend && mkdir -p app/phenopackets/routers/aggregations/survival
+touch app/phenopackets/routers/aggregations/survival/__init__.py
 ```
 
-- [ ] **Step 2: Move endpoint code to router.py**
+- [ ] **Step 2: Move router code to `survival/router.py`**
 
-Open the shrunken `survival.py` and copy its contents (the router + endpoint functions) into `survival/router.py`. Adjust imports to reference the new sub-package structure:
+```bash
+cd backend && git mv app/phenopackets/routers/aggregations/survival.py app/phenopackets/routers/aggregations/survival/router.py
+```
+
+Then open `router.py` and update the import:
 
 ```python
-# survival/router.py
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+# Before (at the bottom of the endpoint function):
+from .survival_handlers import SurvivalHandlerFactory
 
-from app.database import get_db
-from .handlers import (
-    VariantTypeCurrentAgeHandler,
-    VariantTypeStandardHandler,
-    # ... etc
+# After:
+from .handlers import SurvivalHandlerFactory
+```
+
+Note the `.` is now a single level — `router.py` is inside `survival/`, and `handlers.py` is a sibling. No changes to `sql_fragments` import — that's still in the parent `aggregations/` package, so `from ..sql_fragments import ...`.
+
+- [ ] **Step 3: Move handler code to `survival/handlers.py`**
+
+```bash
+cd backend && git mv app/phenopackets/routers/aggregations/survival_handlers.py app/phenopackets/routers/aggregations/survival/handlers.py
+```
+
+Then open `handlers.py` and fix imports. The old file imported `from .sql_fragments import ...` (same package); the new location is one level deeper, so:
+
+```python
+# Before:
+from .sql_fragments import (
+    CURRENT_AGE_PATH,
+    HNF1B_PROTEIN_DOMAINS,
+    ...
 )
 
-router = APIRouter(prefix="/survival", tags=["aggregations-survival"])
-
-@router.get("/")
-async def get_survival_data(
-    comparison: str,
-    age_mode: str,
-    db: AsyncSession = Depends(get_db),
-):
-    # dispatcher logic here
+# After:
+from ..sql_fragments import (
+    CURRENT_AGE_PATH,
+    HNF1B_PROTEIN_DOMAINS,
     ...
+)
 ```
 
-- [ ] **Step 3: Move handler classes to handlers.py**
+Same for any other parent-package imports (e.g., `from app.core.config import settings` is fine unchanged because it's absolute; only the relative `.sql_fragments` needs updating).
 
-Move the entire contents of `survival_handlers.py` into `survival/handlers.py`. If it's over 500 LOC (it's currently 1,055), split by handler family:
-
-- `handlers/variant_type.py` — `VariantTypeCurrentAgeHandler`, `VariantTypeStandardHandler`
-- `handlers/pathogenicity.py` — `PathogenicityCurrentAgeHandler`, `PathogenicityStandardHandler`
-- `handlers/disease_subtype.py` — `DiseaseSubtypeCurrentAgeHandler`, `DiseaseSubtypeStandardHandler`
-- `handlers/base.py` — shared base class
-
-Adjust imports in `handlers/__init__.py` to re-export everything:
+- [ ] **Step 4: Wire the sub-package's `__init__.py` for backwards-compat re-exports**
 
 ```python
-from .base import SurvivalHandler
-from .variant_type import VariantTypeCurrentAgeHandler, VariantTypeStandardHandler
-from .pathogenicity import PathogenicityCurrentAgeHandler, PathogenicityStandardHandler
-from .disease_subtype import DiseaseSubtypeCurrentAgeHandler, DiseaseSubtypeStandardHandler
-
-__all__ = [
-    "SurvivalHandler",
-    "VariantTypeCurrentAgeHandler",
-    "VariantTypeStandardHandler",
-    "PathogenicityCurrentAgeHandler",
-    "PathogenicityStandardHandler",
-    "DiseaseSubtypeCurrentAgeHandler",
-    "DiseaseSubtypeStandardHandler",
-]
-```
-
-**If the handlers are already under 500 LOC after the Wave 3 Task 4 deletion**, keep them in a single `handlers.py`. Decide based on the actual line count after Task 4.
-
-- [ ] **Step 4: Extract statistics helpers to statistics.py**
-
-Identify Kaplan-Meier, log-rank, and other statistical functions inside the handlers or the old `survival.py`. Move them to `survival/statistics.py`:
-
-```python
-# survival/statistics.py
-"""Kaplan-Meier, log-rank, and other statistical helpers for survival analysis."""
-from typing import List, Tuple
-
-def kaplan_meier_curve(durations: List[float], events: List[int]) -> List[Tuple[float, float]]:
-    ...
-
-def logrank_test(group_a: dict, group_b: dict) -> dict:
-    ...
-```
-
-- [ ] **Step 5: Extract SQL fragments to queries.py**
-
-If handlers build SQL fragments inline, extract them to `survival/queries.py` as functions that return `TextClause` or `Select` objects. This is the separation of data-access from handler logic.
-
-- [ ] **Step 6: Wire up the sub-package's __init__.py**
-
-```python
-# survival/__init__.py
+# backend/app/phenopackets/routers/aggregations/survival/__init__.py
 """Survival analysis sub-package.
 
-Public API:
-    router: FastAPI router for survival endpoints
-    handlers: Kaplan-Meier + statistical handlers
+Public API re-exports mirror the old flat-file module paths so that
+any remaining `from app.phenopackets.routers.aggregations.survival
+import ...` callers keep working.
 """
 from .router import router
 from .handlers import (
+    DiseaseSubtypeHandler,
+    PathogenicityHandler,
+    ProteinDomainHandler,
     SurvivalHandler,
-    VariantTypeCurrentAgeHandler,
-    VariantTypeStandardHandler,
-    PathogenicityCurrentAgeHandler,
-    PathogenicityStandardHandler,
-    DiseaseSubtypeCurrentAgeHandler,
-    DiseaseSubtypeStandardHandler,
+    SurvivalHandlerFactory,
+    VariantTypeHandler,
 )
 
 __all__ = [
     "router",
     "SurvivalHandler",
-    "VariantTypeCurrentAgeHandler",
-    "VariantTypeStandardHandler",
-    "PathogenicityCurrentAgeHandler",
-    "PathogenicityStandardHandler",
-    "DiseaseSubtypeCurrentAgeHandler",
-    "DiseaseSubtypeStandardHandler",
+    "SurvivalHandlerFactory",
+    "VariantTypeHandler",
+    "PathogenicityHandler",
+    "DiseaseSubtypeHandler",
+    "ProteinDomainHandler",
 ]
 ```
 
-- [ ] **Step 7: Delete the old flat files**
+- [ ] **Step 5: Fix any parent imports that referenced the old flat paths**
 
 ```bash
-rm backend/app/phenopackets/routers/aggregations/survival.py
-rm backend/app/phenopackets/routers/aggregations/survival_handlers.py
+cd backend && grep -rn "from app.phenopackets.routers.aggregations.survival_handlers\|from .survival_handlers\|import survival_handlers" app tests --include="*.py"
 ```
 
-- [ ] **Step 8: Fix all imports that used the old flat paths**
+Every match needs updating to the new path (either `from .survival import SurvivalHandlerFactory` via re-export, or the direct `.survival.handlers` path). The existing test `tests/test_survival_protein_domain.py:28` imports from `survival_handlers` — update it.
 
 ```bash
-cd backend && grep -rn "from app.phenopackets.routers.aggregations.survival import\|from app.phenopackets.routers.aggregations import survival\|from app.phenopackets.routers.aggregations.survival_handlers" app tests
+cd backend && grep -rn "from app.phenopackets.routers.aggregations import survival\|from .survival import\|import aggregations.survival" app tests --include="*.py"
 ```
 
-Every match needs updating. Because of the `__init__.py` re-exports above, in most cases the existing import path will continue to work — the package now behaves like the flat file did. But `from .survival import _handle_*` is gone forever (those functions were deleted in Task 4), so any old reference that survived needs updating.
+These imports hit the package, not the flat file, and should continue to work via the `__init__.py` re-exports. Verify by running tests.
 
-Also update `aggregations/__init__.py` if it imports survival bits.
+Also check `aggregations/__init__.py` or any central router that wires `survival.router` into the app:
 
-- [ ] **Step 9: Run the full test suite**
+```bash
+cd backend && grep -rn "survival" app/phenopackets/routers/aggregations/__init__.py app/phenopackets/routers/__init__.py app/main.py 2>/dev/null
+```
+
+Update if any file imports `from .survival import router` or similar — the `__init__.py` re-export makes this work unchanged, but confirm.
+
+- [ ] **Step 6: Run the full backend check**
 
 ```bash
 cd backend && make check
 ```
 
-Expected: all green. Fix any remaining import errors.
+Expected: still all green. Any import error here means Step 5's sweep missed a caller — fix and re-run.
 
-- [ ] **Step 10: Verify every file in the new sub-package is under 500 LOC**
+- [ ] **Step 7: Check `handlers.py` line count and decide whether to split**
+
+```bash
+wc -l backend/app/phenopackets/routers/aggregations/survival/handlers.py
+```
+
+- **If ≤ 500 LOC:** Keep it as a single file. Task 4 is done.
+- **If > 500 LOC:** Split by handler family. Create `survival/handlers/` as a sub-package with `base.py` (`SurvivalHandler` ABC + `SurvivalHandlerFactory`), `variant_type.py` (`VariantTypeHandler`), `pathogenicity.py` (`PathogenicityHandler`), `disease_subtype.py` (`DiseaseSubtypeHandler`), `protein_domain.py` (`ProteinDomainHandler`). Re-export everything from `survival/handlers/__init__.py` so the `survival/__init__.py` re-exports still work.
+
+Current state (pre-Task-3) is 1055 LOC; after deleting the docstring-level HPO literal at line 239 (Task 5) and any other Task-3 cleanup, expect ~1050 LOC — the split will likely be needed.
+
+- [ ] **Step 8: If split was needed, run `make check` again and update `survival/__init__.py` re-exports**
+
+```bash
+cd backend && make check
+```
+
+- [ ] **Step 9: Verify every file in the sub-package is under 500 LOC**
 
 ```bash
 find backend/app/phenopackets/routers/aggregations/survival -name "*.py" -exec wc -l {} \;
 ```
 
-Expected: all files under 500 LOC. If `handlers.py` is still over 500, split it per Step 3's sub-module structure.
+Expected: all files under 500 LOC.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add backend/app/phenopackets/routers/aggregations/survival/ backend/app/phenopackets/routers/aggregations/survival.py backend/app/phenopackets/routers/aggregations/survival_handlers.py backend/app/phenopackets/routers/aggregations/__init__.py
+git add backend/app/phenopackets/routers/aggregations/survival/ backend/app/phenopackets/routers/aggregations/__init__.py backend/tests/test_survival_protein_domain.py
 git commit -m "$(cat <<'EOF'
 refactor(backend): restructure survival into a sub-package
 
-Moves the survival analysis code from two flat files (survival.py +
-survival_handlers.py) into a proper sub-package:
+Moves the survival analysis code from two flat files (survival.py
+and survival_handlers.py) into a proper sub-package:
 
   survival/
-    __init__.py       (public re-exports, backwards-compat)
-    router.py         (FastAPI endpoints)
-    handlers.py       (Strategy pattern handler classes)
-    statistics.py     (Kaplan-Meier, log-rank helpers)
-    queries.py        (SQL fragment builders)
+    __init__.py       (public re-exports — backwards compat)
+    router.py         (FastAPI endpoint and _get_endpoint_config)
+    handlers.py       (SurvivalHandler + 4 concrete handlers +
+                       SurvivalHandlerFactory; split into
+                       handlers/<family>.py if >500 LOC)
 
-Every file is under 500 LOC. Existing imports continue to work via
-the __init__.py re-exports.
+Every file is under 500 LOC. Callers using
+`from app.phenopackets.routers.aggregations import survival`
+continue to work via the __init__.py re-exports. The one internal
+import in tests/test_survival_protein_domain.py was updated to the
+new path.
 
 Closes P5 #23 from the 2026-04-09 review.
 
@@ -579,92 +711,96 @@ EOF
 
 ---
 
-## Task 6: Replace hardcoded HPO IDs with settings.hpo_terms references
+## Task 5: Sweep remaining hardcoded HPO literals
 
 **Files:**
-- Modify: `backend/app/phenopackets/routers/aggregations/survival/queries.py` (or wherever the HPO IDs live after Task 5)
-- Possibly modify: `backend/app/core/config.py` (add HPO term constants if missing)
+- Modify: `backend/app/phenopackets/routers/aggregations/survival/handlers.py` (or the split handler family files if Task 4 Step 7 split them)
+- Modify: `backend/app/phenopackets/routers/aggregations/diseases.py`
 
-- [ ] **Step 1: Find all hardcoded HPO IDs in survival code**
+After Task 3 deletes the ~840 LOC of dead code, the vast majority of hardcoded `HP:NNNNNNN` literals in `survival.py` are gone (they lived inside the deleted functions). This task is a surgical sweep for the few remaining literals.
 
-```bash
-cd backend && grep -rn "HP:[0-9]\{7\}" app/phenopackets/routers/aggregations/survival/ 2>/dev/null
-```
-
-Expected: 6+ matches for HPO term IDs like `HP:0000107`, `HP:0003774`, etc.
-
-- [ ] **Step 2: Check the HPOTermsConfig in core/config.py**
+- [ ] **Step 1: Find all remaining literals**
 
 ```bash
-cd backend && grep -n "hpo_terms\|HPOTermsConfig" app/core/config.py | head -20
+cd backend && grep -rn "HP:[0-9]\{7\}" app/phenopackets/routers/aggregations/ 2>/dev/null
 ```
 
-Look at what HPO term constants are already defined. If all 6 IDs are already in the config, Step 3 is straightforward. If some are missing, add them.
+Expected (as of 2026-04-10 baseline, accounting for the Task 3 deletion):
+- `survival/handlers.py:239` — one literal inside a metadata docstring string (`"Kidney failure: CKD Stage 4 (HP:0012626) or Stage 5/ESRD (HP:0003774)"`). This is a human-readable description, **not** SQL logic — it's shown to the user in the `event_definition` metadata field.
+- `diseases.py:103` — one literal `'HP:0012622'` in raw SQL.
+- Any others that surface — investigate each.
 
-- [ ] **Step 3: Replace each hardcoded ID with a settings reference**
+- [ ] **Step 2: Decide on the docstring literal**
 
-For each hardcoded HPO ID, find the correct settings path (e.g., `settings.hpo_terms.renal_cyst` or `settings.yaml_config.hpo_terms.kidney_failure`). Replace the string literal:
+The `event_definition` metadata string is user-facing. Three options:
 
-```python
-# Before:
-if row["hpo_id"] == "HP:0000107":
-    ...
+1. **Leave it alone** — it's documentation, not logic. Pros: simple, no code change. Cons: a Wave 3 exit check might flag it.
+2. **Interpolate from settings** — `f"Kidney failure: CKD Stage 4 ({settings.hpo_terms.ckd_stage_4}) or Stage 5/ESRD ({settings.hpo_terms.stage_5_ckd})"`. Pros: single source of truth. Cons: slightly more complex.
+3. **Move the human-readable string to config.yaml** — overkill.
 
-# After:
-if row["hpo_id"] == settings.hpo_terms.renal_cyst:
-    ...
+**Choose option 2** if `settings.hpo_terms.ckd_stage_4` and `settings.hpo_terms.stage_5_ckd` already exist. Otherwise fall back to option 1 and document the exception in the wave exit note.
+
+```bash
+grep -n "ckd_stage_4\|stage_5_ckd" backend/app/core/config.py backend/config.yaml 2>/dev/null
 ```
 
-Add `from app.core.config import settings` at the top of the file if not already there.
+- [ ] **Step 3: Fix `diseases.py:103`**
 
-- [ ] **Step 4: Add any missing HPO constants to config.py**
-
-If `settings.hpo_terms.X` doesn't exist for some ID, add it. Look at how `HPOTermsConfig` is structured (probably a YAML-loaded section). Add to `backend/config.yaml`:
-
-```yaml
-hpo_terms:
-  renal_cyst: "HP:0000107"
-  kidney_failure: "HP:0003774"
-  # etc.
+```bash
+cd backend && sed -n '95,110p' app/phenopackets/routers/aggregations/diseases.py
 ```
 
-And update the config.py model class if needed.
+Read the surrounding context. The literal `'HP:0012622'` appears to be a kidney-related term. Find its constant name in `settings.hpo_terms.*`:
 
-- [ ] **Step 5: Run tests**
+```bash
+grep -n "HP:0012622" backend/config.yaml 2>/dev/null
+grep -n "HP:0012622" backend/app/core/config.py 2>/dev/null
+```
+
+If it's in the config, replace the literal with `settings.hpo_terms.<name>`. If it's missing from the config, add it to `config.yaml` and the `HPOTermsConfig` model in `config.py`, then reference it.
+
+- [ ] **Step 4: Run the backend check**
 
 ```bash
 cd backend && make check
 ```
 
-Expected: all green. Survival endpoint tests in particular should pass unchanged since the behavior is identical — only the source of the HPO IDs changed.
+Expected: still all green. Aggregation endpoints should return identical output — only the source of the HPO IDs changed.
 
-- [ ] **Step 6: Verify the grep finds zero literals**
+- [ ] **Step 5: Verify the sweep**
 
 ```bash
-cd backend && grep -rn "HP:[0-9]\{7\}" app/phenopackets/routers/aggregations/survival/ 2>/dev/null
+cd backend && grep -rn "HP:[0-9]\{7\}" app/phenopackets/routers/aggregations/ 2>/dev/null
 ```
 
-Expected: zero matches (or matches only inside docstrings/comments documenting the change).
+Expected: zero matches, OR matches only inside clearly-labeled docstrings/comments (Step 2 option 1).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/phenopackets/routers/aggregations/survival/ backend/app/core/config.py backend/config.yaml
-git commit -m "refactor(backend): replace hardcoded HPO IDs with settings references
+git add backend/app/phenopackets/routers/aggregations/ backend/app/core/config.py backend/config.yaml
+git commit -m "$(cat <<'EOF'
+refactor(backend): sweep remaining hardcoded HPO IDs
 
-Moves 6 hardcoded HP:NNNNNNN literals from the survival sub-package
-into settings.hpo_terms.* references. Missing constants added to
-config.yaml and HPOTermsConfig. Ensures all clinical-term references
-are in one place for easier review and maintenance.
+Replaces the last HP:NNNNNNN literals in the aggregations sub-tree
+with settings.hpo_terms.* references. Most literals lived inside
+the dead code deleted in Task 3 and went away with it; this task
+handles the survivors:
+
+- survival/handlers.py event_definition metadata string
+  (interpolated from settings)
+- diseases.py raw SQL literal
 
 Closes P3 #16 from the 2026-04-09 review.
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
 
-## Task 7: Extend aggregations/common.py with the missing helpers
+## Task 6: Extract `calculate_percentages` helper to `aggregations/common.py`
 
 **Files:**
 - Modify: `backend/app/phenopackets/routers/aggregations/common.py`
@@ -674,29 +810,56 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 - Modify: `backend/app/phenopackets/routers/aggregations/features.py`
 - Modify: `backend/app/phenopackets/routers/aggregations/diseases.py`
 - Modify: `backend/app/phenopackets/routers/aggregations/publications.py`
-- Modify: `backend/app/phenopackets/routers/aggregations/summary.py`
 
-- [ ] **Step 1: Write tests for the new helpers**
+This is the real DRY win. As of 2026-04-10, `grep -n "/ total \* 100.*if total > 0"` finds 12 call sites across 5 files:
+
+| File | Sites |
+|------|:-----:|
+| `demographics.py` | 3 (lines 48, 78, 115) |
+| `diseases.py` | 3 (lines 48, 82, 120) |
+| `variants.py` | 2 (lines 89, 173) |
+| `features.py` | 2 (lines 56, 109) |
+| `publications.py` | 1 (line 57) |
+
+Each site mixes two input shapes: plain dict rows (`row["count"]`) and SQLAlchemy row-mapping rows (`row._mapping["count"]`). The helper must handle both.
+
+- [ ] **Step 1: Write the tests first**
 
 Create `backend/tests/test_aggregations_common.py`:
 
 ```python
-"""Tests for the new helpers added to aggregations/common.py in Wave 3."""
+"""Tests for the helpers in aggregations/common.py (Wave 3 additions)."""
 
 import pytest
 
-from app.phenopackets.routers.aggregations.common import (
-    calculate_percentages,
-)
+from app.phenopackets.routers.aggregations.common import calculate_percentages
+
+
+class _FakeMappingRow:
+    """Mimic a SQLAlchemy Row that exposes ._mapping and __getitem__."""
+
+    def __init__(self, **fields):
+        self._mapping = fields
+
+    def __getitem__(self, key):
+        return self._mapping[key]
 
 
 class TestCalculatePercentages:
-    def test_basic_percentages(self):
+    def test_basic_percentages_with_dict_rows(self):
         rows = [{"count": 50}, {"count": 30}, {"count": 20}]
         result = calculate_percentages(rows, total=100)
-        assert result[0]["percentage"] == 50.0
-        assert result[1]["percentage"] == 30.0
-        assert result[2]["percentage"] == 20.0
+        assert [r["percentage"] for r in result] == [50.0, 30.0, 20.0]
+
+    def test_basic_percentages_with_mapping_rows(self):
+        rows = [_FakeMappingRow(count=75), _FakeMappingRow(count=25)]
+        result = calculate_percentages(rows, total=100)
+        assert [r["percentage"] for r in result] == [75.0, 25.0]
+
+    def test_mixed_input_shapes(self):
+        rows = [{"count": 40}, _FakeMappingRow(count=60)]
+        result = calculate_percentages(rows, total=100)
+        assert [r["percentage"] for r in result] == [40.0, 60.0]
 
     def test_total_zero_returns_zero_percentages(self):
         rows = [{"count": 10}, {"count": 5}]
@@ -705,35 +868,43 @@ class TestCalculatePercentages:
             assert row["percentage"] == 0
 
     def test_preserves_other_fields(self):
-        rows = [{"count": 10, "label": "alpha"}, {"count": 90, "label": "beta"}]
+        rows = [
+            {"count": 10, "label": "alpha", "group": "a"},
+            {"count": 90, "label": "beta", "group": "b"},
+        ]
         result = calculate_percentages(rows, total=100)
         assert result[0]["label"] == "alpha"
+        assert result[0]["group"] == "a"
         assert result[1]["label"] == "beta"
+        assert result[1]["group"] == "b"
 
-    def test_does_not_mutate_input(self):
+    def test_preserves_other_fields_from_mapping_row(self):
+        rows = [_FakeMappingRow(count=10, label="alpha")]
+        result = calculate_percentages(rows, total=10)
+        assert result[0]["label"] == "alpha"
+        assert result[0]["percentage"] == 100.0
+
+    def test_does_not_mutate_dict_input(self):
         rows = [{"count": 10}]
-        original = rows[0].copy()
         calculate_percentages(rows, total=100)
-        assert rows[0] == original or "percentage" in rows[0]
-        # Accept either: pure function (no mutation) or in-place. Document in docstring.
+        assert "percentage" not in rows[0]
 
     def test_empty_input(self):
-        result = calculate_percentages([], total=100)
-        assert result == []
+        assert calculate_percentages([], total=100) == []
 
-    def test_count_using_row_mapping(self):
-        """Some call sites use row._mapping['count']; the helper must handle both."""
-        class FakeRow:
-            def __init__(self, count, label):
-                self._mapping = {"count": count, "label": label}
-                self.count = count
-                self.label = label
-            def __getitem__(self, key):
-                return self._mapping[key]
+    def test_custom_count_key(self):
+        rows = [{"present_count": 40, "label": "a"}]
+        result = calculate_percentages(rows, total=100, count_key="present_count")
+        assert result[0]["percentage"] == 40.0
+        assert result[0]["present_count"] == 40
 
-        rows = [FakeRow(75, "x"), FakeRow(25, "y")]
-        result = calculate_percentages(rows, total=100)
-        assert result[0]["percentage"] == 75.0 or result[0].percentage == 75.0
+    def test_rejects_unknown_row_shape(self):
+        """Non-dict, non-mapping rows should raise, not silently hoover attrs."""
+        class Opaque:
+            count = 10
+
+        with pytest.raises((TypeError, AttributeError)):
+            calculate_percentages([Opaque()], total=100)
 ```
 
 - [ ] **Step 2: Run to confirm fail**
@@ -742,39 +913,48 @@ class TestCalculatePercentages:
 cd backend && uv run pytest tests/test_aggregations_common.py -v
 ```
 
-Expected: FAIL (`calculate_percentages` does not exist in common.py).
+Expected: FAIL on import — `calculate_percentages` does not exist in `common.py`.
 
-- [ ] **Step 3: Add `calculate_percentages` to common.py**
+- [ ] **Step 3: Add `calculate_percentages` to `common.py`**
 
-Open `backend/app/phenopackets/routers/aggregations/common.py`. Add at the bottom:
+Open `backend/app/phenopackets/routers/aggregations/common.py`. Add after the existing `check_materialized_view_exists` function:
 
 ```python
 def calculate_percentages(
-    rows: List[Any], total: int, count_key: str = "count"
+    rows: List[Any],
+    total: int,
+    count_key: str = "count",
 ) -> List[Dict[str, Any]]:
-    """Add a 'percentage' field to each row based on its count / total.
+    """Add a 'percentage' field to each row based on (count / total) * 100.
 
-    Accepts either dict rows or SQLAlchemy row objects that support both
-    __getitem__ and ._mapping access. Returns a new list of dicts; does
-    not mutate input rows.
+    Accepts either plain dict rows or SQLAlchemy row objects with a
+    ``._mapping`` attribute. Any other row shape raises TypeError so the
+    caller notices, instead of silently hoovering attributes via ``dir()``.
+
+    Returns a new list of new dicts — the input rows are not mutated.
 
     Args:
-        rows: Sequence of rows from a query result.
-        total: Denominator for percentage calculation.
+        rows: Sequence of query result rows (dict or SQLAlchemy Row).
+        total: Denominator for percentage calculation. If 0, percentage is 0.
         count_key: Field name holding the count (default "count").
 
     Returns:
-        List of new dicts, each with all original fields plus "percentage".
+        List of new dicts with every original field plus ``percentage``.
+
+    Raises:
+        TypeError: If any row is neither a dict nor exposes ``._mapping``.
     """
     result: List[Dict[str, Any]] = []
     for row in rows:
-        # Extract fields from either dict, SQLAlchemy mapping, or attribute access
         if hasattr(row, "_mapping"):
             data = dict(row._mapping)
         elif isinstance(row, dict):
             data = dict(row)
         else:
-            data = {k: getattr(row, k) for k in dir(row) if not k.startswith("_")}
+            raise TypeError(
+                f"calculate_percentages expects dict or SQLAlchemy Row, "
+                f"got {type(row).__name__}"
+            )
 
         count_value = int(data.get(count_key, 0))
         data["percentage"] = (count_value / total * 100) if total > 0 else 0
@@ -782,72 +962,97 @@ def calculate_percentages(
     return result
 ```
 
-Add `calculate_percentages` to the `__all__` list at the top of the file.
+Add `"calculate_percentages"` to `common.py`'s `__all__` list.
 
-- [ ] **Step 4: Run the test**
+- [ ] **Step 4: Run the tests**
 
 ```bash
 cd backend && uv run pytest tests/test_aggregations_common.py -v
 ```
 
-Expected: all pass. If any fail, adjust the helper implementation to match — the tests are the spec.
+Expected: all 10 pass. If a test fails, adjust the helper to match — the tests are the spec.
 
-- [ ] **Step 5: Replace duplicated code in demographics.py**
+- [ ] **Step 5: Replace duplicated code in `demographics.py`, `diseases.py`, `variants.py`, `features.py`, `publications.py`**
 
-Open `backend/app/phenopackets/routers/aggregations/demographics.py`. Find the 3 sites (per the Wave 3 spec re-baseline) where percentages are calculated inline like:
+For each file, find every occurrence of the inline calculation:
 
 ```python
-percentage=(int(row["count"]) / total * 100) if total > 0 else 0
+percentage=(int(row["count"]) / total * 100) if total > 0 else 0,
+# or
+percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+# or the features.py variant using "present_count"
 ```
 
-Replace the duplicated computation with a single call to `calculate_percentages`:
+The call sites usually look like this:
+
+```python
+return AggregationResult(
+    items=[
+        dict(
+            row._mapping,
+            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+        )
+        for row in rows
+    ],
+    total=total,
+)
+```
+
+Replace with:
 
 ```python
 from .common import calculate_percentages
 
-# ... inside the handler:
-rows_with_pct = calculate_percentages(raw_rows, total=total)
-# Then build the response from rows_with_pct instead of re-calculating
+# ... inside the endpoint:
+rows_with_percentages = calculate_percentages(rows, total=total)
+return AggregationResult(
+    items=rows_with_percentages,
+    total=total,
+)
 ```
 
-- [ ] **Step 6: Replace duplicated code in variants.py, features.py, diseases.py, publications.py, summary.py**
+For `features.py` (which uses `count_key="present_count"`):
 
-Apply the same transformation to each file. Each file has 1-3 sites.
+```python
+rows_with_percentages = calculate_percentages(rows, total=total, count_key="present_count")
+```
 
-- [ ] **Step 7: Run the full test suite**
+Handle each site individually — some sites may have additional fields being computed in the same comprehension that can't be replaced wholesale. In those cases, call `calculate_percentages` first and then layer the extra fields on top.
+
+- [ ] **Step 6: Run the full backend check**
 
 ```bash
 cd backend && make check
 ```
 
-Expected: all green. Aggregation endpoint tests should return identical output before and after.
+Expected: all green. Aggregation endpoint tests should return identical output — the JSON response shape is unchanged, only the source of the `percentage` field moved.
 
-- [ ] **Step 8: Verify duplication reduced**
+- [ ] **Step 7: Verify duplication is reduced**
 
 ```bash
-cd backend && grep -rn "/ total \* 100) if total > 0" app/phenopackets/routers/aggregations/ | wc -l
+cd backend && grep -rn "/ total \* 100.*if total > 0" app/phenopackets/routers/aggregations/ 2>/dev/null | wc -l
 ```
 
-Expected: 3 or fewer matches (down from 10+).
+Expected: 2 or fewer. (Down from 12. A couple may remain if a call site was complex enough to justify keeping inline — document any survivors in the wave exit note.)
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/app/phenopackets/routers/aggregations/common.py backend/app/phenopackets/routers/aggregations/{demographics,variants,features,diseases,publications,summary}.py backend/tests/test_aggregations_common.py
+git add backend/app/phenopackets/routers/aggregations/common.py backend/app/phenopackets/routers/aggregations/demographics.py backend/app/phenopackets/routers/aggregations/diseases.py backend/app/phenopackets/routers/aggregations/variants.py backend/app/phenopackets/routers/aggregations/features.py backend/app/phenopackets/routers/aggregations/publications.py backend/tests/test_aggregations_common.py
 git commit -m "$(cat <<'EOF'
 refactor(backend): extract percentage calculation to aggregations/common
 
-Adds calculate_percentages() helper to common.py and replaces 10+
-duplicated (count / total * 100) if total > 0 else 0 sites across
-demographics, variants, features, diseases, publications, and
-summary aggregation modules. Handles dict rows, SQLAlchemy
-_mapping rows, and attribute-style rows transparently.
+Adds calculate_percentages() to common.py and replaces ~12 inline
+(int(row[count_key]) / total * 100) if total > 0 else 0 sites across
+demographics, diseases, variants, features, and publications. The
+helper accepts plain dict rows and SQLAlchemy Row._mapping rows and
+raises TypeError on anything else (no silent attribute hoovering).
 
-Companion test file exercises the helper with all three input shapes
-and edge cases (empty input, total=0, label preservation).
+Companion test file covers both row shapes, mixed input, custom
+count_key (for features.py's present_count), empty input, total=0,
+field preservation, and the fail-loud rejection of unknown shapes.
 
-Closes P3 #13 from the 2026-04-09 review (rescoped as "extend"
-rather than "create" because common.py already existed).
+Closes P3 #13 from the 2026-04-09 review.
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
@@ -856,134 +1061,17 @@ EOF
 
 ---
 
-## Task 8: Add materialized_view_fallback helper to common.py
+## Task 7: Wave 3 exit verification
 
-**Files:**
-- Modify: `backend/app/phenopackets/routers/aggregations/common.py`
-- Modify: affected aggregation modules that use MV fallback
-
-- [ ] **Step 1: Find the duplicated MV fallback pattern**
-
-```bash
-cd backend && grep -rn "check_materialized_view_exists\|mv_cache.is_available" app/phenopackets/routers/aggregations/ | head -20
-```
-
-Note the repeated pattern: each aggregation checks the MV cache, queries the MV if available, falls back to the live query otherwise.
-
-- [ ] **Step 2: Add the helper to common.py**
-
-Append to `backend/app/phenopackets/routers/aggregations/common.py`:
-
-```python
-from contextlib import asynccontextmanager
-from typing import Callable, Coroutine
-
-@asynccontextmanager
-async def materialized_view_fallback(
-    view_name: str,
-    mv_query: Callable[[], Coroutine],
-    fallback_query: Callable[[], Coroutine],
-):
-    """Context manager selecting MV or fallback query based on cache.
-
-    Usage:
-        async with materialized_view_fallback(
-            view_name="mv_demographics",
-            mv_query=lambda: db.execute(select_from_mv),
-            fallback_query=lambda: db.execute(live_query),
-        ) as result:
-            rows = result.fetchall()
-    """
-    if mv_cache.is_available(view_name):
-        logger.debug("Using materialized view: %s", view_name)
-        result = await mv_query()
-    else:
-        logger.debug("MV %s unavailable, using fallback query", view_name)
-        result = await fallback_query()
-    try:
-        yield result
-    finally:
-        pass  # no cleanup needed for query results
-```
-
-- [ ] **Step 3: Write a test**
-
-Append to `backend/tests/test_aggregations_common.py`:
-
-```python
-from unittest.mock import AsyncMock, patch
-from app.phenopackets.routers.aggregations.common import materialized_view_fallback
-
-
-@pytest.mark.asyncio
-class TestMaterializedViewFallback:
-    async def test_uses_mv_when_available(self):
-        mv_query = AsyncMock(return_value="mv_result")
-        fallback = AsyncMock(return_value="fallback_result")
-        with patch("app.phenopackets.routers.aggregations.common.mv_cache") as mock_cache:
-            mock_cache.is_available.return_value = True
-            async with materialized_view_fallback("mv_x", mv_query, fallback) as result:
-                assert result == "mv_result"
-        mv_query.assert_called_once()
-        fallback.assert_not_called()
-
-    async def test_uses_fallback_when_mv_unavailable(self):
-        mv_query = AsyncMock(return_value="mv_result")
-        fallback = AsyncMock(return_value="fallback_result")
-        with patch("app.phenopackets.routers.aggregations.common.mv_cache") as mock_cache:
-            mock_cache.is_available.return_value = False
-            async with materialized_view_fallback("mv_x", mv_query, fallback) as result:
-                assert result == "fallback_result"
-        mv_query.assert_not_called()
-        fallback.assert_called_once()
-```
-
-- [ ] **Step 4: Run tests**
-
-```bash
-cd backend && uv run pytest tests/test_aggregations_common.py -v
-```
-
-Expected: all pass.
-
-- [ ] **Step 5: Refactor at least 2 aggregation modules to use the new context manager**
-
-Pick 2 modules (e.g., `demographics.py` and `variants.py`). Replace their inline MV-check/fallback logic with the new context manager.
-
-Keep other modules unchanged if the refactor risks subtle bugs — the primary value of this task is having the helper available, not blanket refactoring.
-
-- [ ] **Step 6: Run full test suite**
+- [ ] **Step 1: Run full backend check one last time**
 
 ```bash
 cd backend && make check
 ```
 
-- [ ] **Step 7: Commit**
+Expected: ~814+ tests passing (baseline 794 + ~18 new smoke tests + ~10 new common helper tests), 0 failures.
 
-```bash
-git add backend/app/phenopackets/routers/aggregations/common.py backend/tests/test_aggregations_common.py backend/app/phenopackets/routers/aggregations/demographics.py backend/app/phenopackets/routers/aggregations/variants.py
-git commit -m "refactor(backend): add materialized_view_fallback context manager
-
-Adds an async context manager helper to common.py for the repeated
-'check MV cache, use MV or fallback query' pattern. Refactors
-demographics.py and variants.py to use it. Other aggregation
-modules keep their current structure and can migrate in a later
-pass if desired.
-
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
-```
-
----
-
-## Task 9: Wave 3 exit verification
-
-- [ ] **Step 1: Run full backend check**
-
-```bash
-cd backend && make check
-```
-
-- [ ] **Step 2: Verify survival.py is gone or a shim**
+- [ ] **Step 2: Verify the flat survival files are gone**
 
 ```bash
 ls backend/app/phenopackets/routers/aggregations/survival.py 2>&1
@@ -991,33 +1079,41 @@ ls backend/app/phenopackets/routers/aggregations/survival_handlers.py 2>&1
 ls -la backend/app/phenopackets/routers/aggregations/survival/
 ```
 
-Expected: the two flat files do not exist; the sub-package does.
+Expected: first two `ls` commands report "No such file"; the third lists the sub-package contents.
 
-- [ ] **Step 3: Verify no hardcoded HPO IDs in survival code**
-
-```bash
-grep -rn "HP:[0-9]\{7\}" backend/app/phenopackets/routers/aggregations/survival/ 2>/dev/null
-```
-
-Expected: zero matches (or matches only inside docstrings).
-
-- [ ] **Step 4: Verify common.py has both new helpers**
+- [ ] **Step 3: Verify no hardcoded HPO IDs in the aggregation tree**
 
 ```bash
-grep -n "def calculate_percentages\|def materialized_view_fallback" backend/app/phenopackets/routers/aggregations/common.py
+grep -rn "HP:[0-9]\{7\}" backend/app/phenopackets/routers/aggregations/ 2>/dev/null
 ```
 
-Expected: 2 matches.
+Expected: zero matches (or, if Task 5 Step 2 chose option 1, matches only inside clearly-labeled docstrings — document the exceptions in the exit note).
 
-- [ ] **Step 5: Verify duplication reduced**
+- [ ] **Step 4: Verify `common.py` has the new helper**
 
 ```bash
-grep -rn "/ total \* 100) if total > 0" backend/app/phenopackets/routers/aggregations/ | wc -l
+grep -n "def calculate_percentages" backend/app/phenopackets/routers/aggregations/common.py
 ```
 
-Expected: 3 or fewer (was 10+).
+Expected: 1 match.
 
-- [ ] **Step 6: Write wave exit note**
+- [ ] **Step 5: Verify duplication is reduced**
+
+```bash
+grep -rn "/ total \* 100.*if total > 0" backend/app/phenopackets/routers/aggregations/ | wc -l
+```
+
+Expected: ≤ 2 (down from 12).
+
+- [ ] **Step 6: Verify every file in the survival sub-package is under 500 LOC**
+
+```bash
+find backend/app/phenopackets/routers/aggregations/survival -name "*.py" -exec wc -l {} \;
+```
+
+Expected: every file ≤ 500 LOC.
+
+- [ ] **Step 7: Write the exit note**
 
 Create `docs/refactor/wave-3-exit.md`:
 
@@ -1025,40 +1121,42 @@ Create `docs/refactor/wave-3-exit.md`:
 # Wave 3 Exit Note
 
 **Date:** <YYYY-MM-DD>
-**Starting test counts:** backend ~765 (post Wave 2), frontend 16 files.
-**Ending test counts:** backend ~765 (parity tests were module-skipped after deletion).
+**Branch:** `chore/wave-3-finish-in-flight` (worktree at `~/development/hnf1b-db.worktrees/chore-wave-3-finish-in-flight/`)
+**Starting test counts:** backend 794 passed + 1 skipped + 3 xfailed (post Wave 2 merge).
+**Ending test counts:** backend <N> passed (+smoke tests, +common helper tests).
 
 ## What landed
 
-- Task 1: Survival migration map documented.
-- Task 2: Caller analysis.
-- Task 3: Parity tests for 6 handler functions (all passed before deletion).
-- Task 4: Legacy _handle_* functions deleted; survival.py shrank from 1,025 to ~150 LOC.
-- Task 5: survival/ sub-package created with router/handlers/statistics/queries modules. Every file < 500 LOC.
-- Task 6: 6+ hardcoded HPO IDs replaced with settings.hpo_terms.* references.
-- Task 7: calculate_percentages() helper added; duplication removed from 6 aggregation modules.
-- Task 8: materialized_view_fallback context manager added; 2 modules migrated.
+- **Task 1** (`<commit>`): Survival migration map documenting the dead-code finding — the 6 legacy `_handle_*` functions had zero callers and were orphaned dead code sharing a file with the live `SurvivalHandlerFactory` dispatcher. Parity tests were unnecessary because the legacy path was already dead.
+- **Task 2 route fix** (`<commit>`): Converted two bare `raise ValueError(...)` sites in `survival.py`'s `get_survival_data` endpoint to `HTTPException(status_code=400, ...)`. Unknown `comparison` / `endpoint` parameters previously hit the global `generic_exception_handler` and returned 500 "Internal server error"; they now return a proper 400 with a useful detail.
+- **Task 2 smoke tests** (`<commit>`): `tests/test_survival_endpoint.py` — endpoint smoke tests for every (comparison, endpoint) pair plus strict `== 400` negative cases. <N> parametrized tests. Uses `async_client` fixture from `conftest.py` (not `client`, which is the local synchronous `TestClient` inside `test_phenopackets_crud.py`). Runs through the live dispatcher and guards the handler classes.
+- **Task 3** (`<commit>`): Deleted 6 `_handle_*` functions + 3 orphaned module-private helpers from `survival.py`. File shrank from 1,025 LOC to <N> LOC.
+- **Task 4** (`<commit>`): Restructured into `survival/` sub-package (`router.py`, `handlers.py` or `handlers/<family>.py`). Every file under 500 LOC. `__init__.py` re-exports maintain backwards compatibility for existing `from ...aggregations.survival import ...` callers.
+- **Task 5** (`<commit>`): Swept the remaining hardcoded HPO literals from `survival/handlers.py` docstring metadata and `diseases.py` raw SQL, replacing with `settings.hpo_terms.*` references.
+- **Task 6** (`<commit>`): `calculate_percentages()` helper extracted to `common.py`. Replaced <N> of 12 inline sites across 5 aggregation modules. Companion test file with <N> tests.
 
 ## What was deferred
 
-<fill in>
+- The original plan's Task 8 (`materialized_view_fallback` context manager) was dropped during the 2026-04-10 amendment as marginal-value churn — the existing `check_materialized_view_exists` one-liner is already the abstraction and wrapping it in a context manager adds ceremony without clear benefit.
+- <anything else>
 
-## What surprised us
+## Surprises
 
-<fill in>
+- <fill in during execution>
 
 ## Entry conditions for Wave 4
 
-- survival/ sub-package is the single canonical location for survival logic.
-- Aggregation modules have a clean shared helpers module.
-- No hardcoded HPO IDs remain in the survival path.
-- All backend tests green.
-- Ready for Wave 4 backend decomposition (admin_endpoints, crud, etc).
+- [x] `survival/` sub-package is the single canonical location for survival logic. The 1,025 LOC flat-file `survival.py` and the 1,055 LOC flat-file `survival_handlers.py` are gone.
+- [x] Aggregation modules share the `calculate_percentages` helper in `common.py`. Inline duplication reduced from 12 sites to ≤ 2.
+- [x] No hardcoded HPO IDs remain in the aggregations sub-tree (or only labeled exceptions in docstrings).
+- [x] All backend tests green (<N> passing).
+- [x] Endpoint smoke tests guard the survival handler classes.
+- [x] Ready for Wave 4 backend decomposition (`admin_endpoints.py`, `crud.py`, etc).
 
-Wave 4 can begin.
+**Wave 4 can begin.**
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit the exit note**
 
 ```bash
 git add docs/refactor/wave-3-exit.md
@@ -1067,14 +1165,22 @@ git commit -m "docs: add Wave 3 exit note
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```
 
-**Wave 3 is done when all 9 tasks are checked off and the exit note is committed.**
+**Wave 3 is done when all 7 tasks are checked off and the exit note is committed.** After that, use `superpowers:finishing-a-development-branch` to decide merge strategy (PR vs. direct merge).
 
 ---
 
-## Self-Review Notes
+## Self-Review Notes (Amended)
 
-- **Spec coverage:** Deleting legacy handlers (Task 4), restructuring into sub-package (Task 5), replacing hardcoded HPO IDs (Task 6), extending common.py with calculate_percentages and materialized_view_fallback (Tasks 7-8). Every Wave 3 item from the spec is covered.
-- **Parity-before-deletion rule:** Enforced explicitly in Task 3, checked in Task 4 Step 1.
-- **Placeholder scan:** Only `<fill in>` in the exit note template.
-- **Type/name consistency:** `calculate_percentages`, `materialized_view_fallback`, handler class names all used consistently across Tasks 3-8.
-- **Known risks:** Task 5's handler split may reveal that a single `handlers.py` file is still too large. Plan step explicitly addresses this with a sub-module structure fallback.
+- **Spec coverage:** Deleting legacy handlers (Task 3), restructuring into sub-package (Task 4), replacing hardcoded HPO IDs (Task 5), extending `common.py` with `calculate_percentages` (Task 6). Every non-dropped Wave 3 item from the spec is covered.
+- **Dropped from original plan:**
+  - Old Task 3 (parity tests) — legacy code is already dead, parity between dead and live code is meaningless.
+  - Old Task 8 (`materialized_view_fallback` context manager) — the existing `check_materialized_view_exists` one-liner is already the abstraction.
+- **Added to amended plan:**
+  - New Task 2 (endpoint smoke tests + coupled route fix) — replaces parity testing as the deletion safety net. Exercises the live dispatcher for every (comparison, endpoint) pair. Also converts two bare `raise ValueError` sites to `HTTPException(400)` so the negative tests can assert a real API contract instead of locking in the accidental 500 behaviour.
+- **Placeholder scan:** Only `<fill in>` in the exit note template and the migration map dead-code grep output slot.
+- **Type/name consistency:** Real class names verified against `survival_handlers.py` — `VariantTypeHandler`, `PathogenicityHandler`, `DiseaseSubtypeHandler`, `ProteinDomainHandler`, `SurvivalHandler` (ABC), `SurvivalHandlerFactory`. No `*CurrentAgeHandler` or `*StandardHandler` classes exist.
+- **Fixture name verification (2026-04-10):** The async HTTP fixture is `async_client` (`backend/tests/conftest.py:251`). The name `client` is already taken by a local synchronous `TestClient` fixture inside `backend/tests/test_phenopackets_crud.py:14` with a docstring explaining deliberate collision avoidance. Task 2 uses `async_client` and Step 6 verifies this before writing the test.
+- **Route fix + test ordering (2026-04-10):** Task 2's negative-case assertions (`response.status_code == 400`) depend on the `ValueError → HTTPException(400)` conversion. The route fix lands in Step 1-3 (its own commit), then the smoke test in Step 4-9 (separate commit). Reversing the order would produce a red test.
+- **Known risks:**
+  - Task 4 Step 7: `handlers.py` may need splitting if post-move it's still >500 LOC. Explicitly addressed with a fallback sub-module structure.
+  - Task 5 Step 2: the docstring literal decision (leave vs. interpolate) depends on whether `settings.hpo_terms.ckd_stage_4` exists — Step 2 asks to check before committing to an approach.

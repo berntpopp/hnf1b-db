@@ -1091,9 +1091,7 @@ class TestPhenopacketValidation:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock an httpx RequestError during the VEP call (realistic transport failure)
-            mock_get = AsyncMock(
-                side_effect=httpx.RequestError("Transport failure")
-            )
+            mock_get = AsyncMock(side_effect=httpx.RequestError("Transport failure"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
             # Test with valid HGVS notation (should pass fallback validation)

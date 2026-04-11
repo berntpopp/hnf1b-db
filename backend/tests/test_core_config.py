@@ -85,3 +85,41 @@ class TestHpoTermsConfig:
         assert isinstance(s.hpo_terms.cakut, list)
         assert "HP:0000003" in s.hpo_terms.cakut
         assert s.hpo_terms.mody == "HP:0004904"
+
+    def test_scalar_aliases_match_list_forms(self, monkeypatch):
+        """Scalar HPO aliases must stay in sync with their list-shaped siblings.
+
+        Wave 3 added scalar aliases (``ckd_stage_4``, ``ckd_stage_5``,
+        ``chronic_kidney_disease``) alongside existing list-shaped
+        constants (``kidney_failure``, ``stage_5_ckd``, ``ckd_stages``).
+        This drift-prevention test asserts the scalars still match the
+        list elements they alias, so a future edit that updates one form
+        but not the other fails fast instead of introducing silent config
+        divergence.
+        """
+        for k, v in BASE_ENV.items():
+            monkeypatch.setenv(k, v)
+        monkeypatch.setenv("JWT_SECRET", "0" * 64)
+        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        s = Settings(_env_file=None)
+
+        # stage_5_ckd is a single-element list holding the ESRD HPO ID
+        assert s.hpo_terms.stage_5_ckd == [s.hpo_terms.ckd_stage_5]
+        # kidney_failure is [Stage 4, Stage 5/ESRD]
+        assert s.hpo_terms.kidney_failure == [
+            s.hpo_terms.ckd_stage_4,
+            s.hpo_terms.ckd_stage_5,
+        ]
+        # chronic_kidney_disease (unspecified) is the first CKD term in ckd_stages
+        assert s.hpo_terms.ckd_stages[0] == s.hpo_terms.chronic_kidney_disease
+        # ckd_stage_4 and ckd_stage_5 both appear in ckd_stages
+        assert s.hpo_terms.ckd_stage_4 in s.hpo_terms.ckd_stages
+        assert s.hpo_terms.ckd_stage_5 in s.hpo_terms.ckd_stages
+        # All three scalars are canonical HPO IDs
+        for term in (
+            s.hpo_terms.chronic_kidney_disease,
+            s.hpo_terms.ckd_stage_4,
+            s.hpo_terms.ckd_stage_5,
+        ):
+            assert term.startswith("HP:")
+            assert len(term) == 10  # "HP:" + 7 digits

@@ -11,9 +11,11 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    calculate_percentages,
     check_materialized_view_exists,
     get_db,
     logger,
+    settings,
     text,
 )
 
@@ -40,15 +42,16 @@ async def aggregate_by_disease(
         )
         rows = result.mappings().all()
         total = sum(int(row["count"]) for row in rows)
+        rows_with_pct = calculate_percentages(rows, total=total)
 
         return [
             AggregationResult(
                 label=row["label"] or row["disease_id"],
                 count=int(row["count"]),
-                percentage=(int(row["count"]) / total * 100) if total > 0 else 0,
+                percentage=row["percentage"],
                 details={"disease_id": row["disease_id"]},
             )
-            for row in rows
+            for row in rows_with_pct
         ]
 
     # Fallback: Live JSONB query (O(n) scan)
@@ -74,15 +77,16 @@ async def aggregate_by_disease(
     rows = result.mappings().all()
 
     total = sum(int(row["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
             label=row["label"] or row["disease_id"],
             count=int(row["count"]),
-            percentage=(int(row["count"]) / total * 100) if total > 0 else 0,
+            percentage=row["percentage"],
             details={"disease_id": row["disease_id"]},
         )
-        for row in rows
+        for row in rows_with_pct
     ]
 
 
@@ -100,7 +104,7 @@ async def aggregate_kidney_stages(
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
         jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
     WHERE
-        feature->'type'->>'id' = 'HP:0012622'
+        feature->'type'->>'id' = :ckd_hpo
         AND modifier->>'label' LIKE '%Stage%'
     GROUP BY
         modifier->>'label'
@@ -108,16 +112,20 @@ async def aggregate_kidney_stages(
         stage
     """
 
-    result = await db.execute(text(query))
+    result = await db.execute(
+        text(query),
+        {"ckd_hpo": settings.hpo_terms.chronic_kidney_disease},
+    )
     rows = result.fetchall()
 
     total = sum(int(row._mapping["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
-            label=row.stage,
-            count=int(row._mapping["count"]),
-            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            label=row["stage"],
+            count=int(row["count"]),
+            percentage=row["percentage"],
         )
-        for row in rows
+        for row in rows_with_pct
     ]

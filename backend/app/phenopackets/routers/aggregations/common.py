@@ -5,7 +5,8 @@ sub-modules to reduce code duplication and ensure consistency.
 """
 
 import logging
-from typing import Any, Dict, List
+from collections.abc import Mapping
+from typing import Any, Dict, List, Sequence
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, text
@@ -43,6 +44,9 @@ __all__ = [
     "Any",
     "Dict",
     "List",
+    # Shared helpers
+    "check_materialized_view_exists",
+    "calculate_percentages",
 ]
 
 
@@ -61,3 +65,77 @@ async def check_materialized_view_exists(db: AsyncSession, view_name: str) -> bo
         True if view exists and has data, False otherwise
     """
     return mv_cache.is_available(view_name)
+
+
+def calculate_percentages(
+    rows: Sequence[Any],
+    total: int,
+    count_key: str = "count",
+) -> List[Dict[str, Any]]:
+    """Add a ``percentage`` field to each row based on ``(count / total) * 100``.
+
+    Accepts three row shapes produced by the aggregation endpoints:
+
+    1. **Plain dicts** — ``{"count": 10, "label": "x"}``.
+    2. **SQLAlchemy RowMapping** — returned by ``result.mappings().all()``.
+       These are ``collections.abc.Mapping`` subclasses that support
+       ``row[key]`` access but are **not** ``dict`` subclasses and do **not**
+       expose ``._mapping``.
+    3. **SQLAlchemy Row** — returned by ``result.fetchall()``. These expose
+       a ``._mapping`` attribute that points to the underlying RowMapping.
+
+    Anything else raises ``TypeError`` so the caller notices — we do NOT
+    fall back to silently hoovering attributes via ``dir()``.
+
+    **Fail-loud on missing ``count_key``**: if a row does not contain
+    ``count_key``, the helper raises ``KeyError`` rather than defaulting
+    to ``0`` and silently producing wrong percentages. A call-site typo
+    (e.g. ``count_key="counnt"``) should surface immediately, not ship
+    zeroed data to the API.
+
+    Returns a **new** list of new dicts — the input rows are never mutated.
+
+    Args:
+        rows: Sequence of query result rows (dict, RowMapping, or Row).
+        total: Denominator for percentage calculation. If 0, percentage is 0.0.
+        count_key: Field name holding the count (default ``"count"``).
+
+    Returns:
+        List of new dicts with every original field plus ``percentage`` as a float.
+
+    Raises:
+        TypeError: If any row is not a Mapping and does not expose
+            ``._mapping``.
+        KeyError: If any row is missing ``count_key`` (fail-loud — prevents
+            silently emitting 0% percentages on a call-site typo).
+    """
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        # Mapping check catches dict AND SQLAlchemy RowMapping (which is a
+        # collections.abc.Mapping subclass but NOT a dict subclass and does
+        # NOT expose _mapping).
+        if isinstance(row, Mapping):
+            data = dict(row)
+        # Fallback for SQLAlchemy Row objects from result.fetchall(), which
+        # are not Mapping subclasses but expose the underlying RowMapping
+        # via a ._mapping attribute.
+        elif hasattr(row, "_mapping"):
+            data = dict(row._mapping)
+        else:
+            raise TypeError(
+                f"calculate_percentages expects a Mapping (dict or "
+                f"SQLAlchemy RowMapping) or an object with ._mapping "
+                f"(SQLAlchemy Row); got {type(row).__name__}"
+            )
+
+        # Fail-loud: raise KeyError if count_key is missing rather than
+        # silently defaulting to 0 and producing wrong percentages.
+        if count_key not in data:
+            raise KeyError(
+                f"calculate_percentages: row is missing count_key "
+                f"{count_key!r}; available keys: {sorted(data.keys())}"
+            )
+        count_value = int(data[count_key])
+        data["percentage"] = (count_value / total * 100) if total > 0 else 0.0
+        result.append(data)
+    return result

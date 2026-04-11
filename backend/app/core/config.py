@@ -202,6 +202,13 @@ class HPOTermsConfig(BaseModel):
     # Stage 5 CKD only (ESRD)
     stage_5_ckd: List[str] = ["HP:0003774"]
 
+    # Scalar aliases for individual CKD stages — used where the call site
+    # wants a single HPO ID string rather than a list (e.g. raw-SQL
+    # literal filters or human-readable metadata descriptions).
+    chronic_kidney_disease: str = "HP:0012622"  # CKD unspecified
+    ckd_stage_4: str = "HP:0012626"  # Stage 4 CKD
+    ckd_stage_5: str = "HP:0003774"  # Stage 5 CKD / ESRD
+
 
 class SecurityConfig(BaseModel):
     """Security settings (non-secret values)."""

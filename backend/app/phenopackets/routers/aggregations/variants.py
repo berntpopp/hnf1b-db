@@ -11,6 +11,7 @@ from .common import (
     AsyncSession,
     Depends,
     Query,
+    calculate_percentages,
     get_db,
     text,
 )
@@ -81,14 +82,15 @@ async def aggregate_variant_pathogenicity(
     rows = result.fetchall()
 
     total = sum(int(row._mapping["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
-            label=row.classification,
-            count=int(row._mapping["count"]),
-            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            label=row["classification"],
+            count=int(row["count"]),
+            percentage=row["percentage"],
         )
-        for row in rows
+        for row in rows_with_pct
     ]
 
 
@@ -165,12 +167,13 @@ async def aggregate_variant_types(
     rows = result.fetchall()
 
     total = sum(int(row._mapping["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
-            label=row.variant_type,
-            count=int(row._mapping["count"]),
-            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
+            label=row["variant_type"],
+            count=int(row["count"]),
+            percentage=row["percentage"],
         )
-        for row in rows
+        for row in rows_with_pct
     ]

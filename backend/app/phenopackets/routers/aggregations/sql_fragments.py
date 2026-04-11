@@ -568,7 +568,7 @@ LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
 # Protein Domain Constants (HNF1B) - Survival Analysis
 # =============================================================================
 # Purpose: Classify missense variants by protein functional domain location
-# Used by: survival_handlers.py for protein domain Kaplan-Meier analysis
+# Used by: survival/handlers/protein_domain.py for protein domain Kaplan-Meier analysis
 # Reference: UniProt P35680, doi:10.3390/ijms251910609
 #
 # Note: Only applicable to missense variants with valid HGVS.p notation.

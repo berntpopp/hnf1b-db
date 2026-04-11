@@ -11,6 +11,7 @@ from .common import (
     APIRouter,
     AsyncSession,
     Depends,
+    calculate_percentages,
     check_materialized_view_exists,
     get_db,
     logger,
@@ -40,14 +41,15 @@ async def aggregate_sex_distribution(
         )
         rows = result.mappings().all()
         total = sum(int(row["count"]) for row in rows)
+        rows_with_pct = calculate_percentages(rows, total=total)
 
         return [
             AggregationResult(
                 label=row["sex"],
                 count=int(row["count"]),
-                percentage=(int(row["count"]) / total * 100) if total > 0 else 0,
+                percentage=row["percentage"],
             )
-            for row in rows
+            for row in rows_with_pct
         ]
 
     # Fallback: Live query (simple, but still benefits from index)
@@ -70,14 +72,15 @@ async def aggregate_sex_distribution(
     rows = result.mappings().all()
 
     total = sum(int(row["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
             label=row["sex"],
             count=int(row["count"]),
-            percentage=(int(row["count"]) / total * 100) if total > 0 else 0,
+            percentage=row["percentage"],
         )
-        for row in rows
+        for row in rows_with_pct
     ]
 
 
@@ -107,13 +110,14 @@ async def aggregate_age_of_onset(
     rows = result.fetchall()
 
     total = sum(int(row._mapping["count"]) for row in rows)
+    rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
-            label=row.onset_label,
-            count=int(row._mapping["count"]),
-            percentage=(int(row._mapping["count"]) / total * 100) if total > 0 else 0,
-            details={"hpo_id": row.onset_id},
+            label=row["onset_label"],
+            count=int(row["count"]),
+            percentage=row["percentage"],
+            details={"hpo_id": row["onset_id"]},
         )
-        for row in rows
+        for row in rows_with_pct
     ]
