@@ -203,7 +203,7 @@ async def _seed_publication_row(
         },
         subject_id=f"SUB-{phenopacket_id}",
         subject_sex="UNKNOWN_SEX",
-        created_by="pub-test",
+        created_by_id=None,
     )
     db_session.add(row)
 
@@ -345,7 +345,7 @@ class TestPublicationsListEndpoint:
             },
             subject_id="S1",
             subject_sex="UNKNOWN_SEX",
-            created_by="test",
+            created_by_id=None,
         )
         db_session.add(row)
         await db_session.commit()

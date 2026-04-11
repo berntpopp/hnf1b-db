@@ -86,6 +86,27 @@ app.include_router(reference_router.router, prefix="/api/v2")
 app.include_router(search_router, prefix="/api/v2")
 app.include_router(seo_router, prefix="/api/v2/seo")
 
+# --- Wave 5a dev-mode quick-login — Layer 2 conditional mount ------------
+#
+# Only import and register ``app.api.dev_endpoints`` when BOTH flags are
+# set. The dev_endpoints module has its own hard assert that backstops this
+# check, and Layer 1 (``Settings`` validator) already refuses to boot the
+# app with ``enable_dev_auth=True`` outside development, so reaching this
+# branch in production is cryptographically* unlikely (*not really, but
+# close enough — three independent guards all have to be bypassed).
+if settings.enable_dev_auth and settings.environment == "development":
+    import logging as _dev_logging
+
+    from app.api import dev_endpoints  # noqa: E402
+
+    app.include_router(dev_endpoints.router)
+
+    _dev_logger = _dev_logging.getLogger(__name__)
+    _dev_logger.warning("=" * 60)
+    _dev_logger.warning("DEV AUTH ROUTER MOUNTED — DO NOT RUN IN PRODUCTION")
+    _dev_logger.warning("POST /api/v2/dev/login-as/{username} is live")
+    _dev_logger.warning("=" * 60)
+
 
 # Root endpoint
 @app.get("/")

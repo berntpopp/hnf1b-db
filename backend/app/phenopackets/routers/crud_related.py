@@ -61,7 +61,11 @@ async def get_phenopacket_audit_history(
             id=str(audit.id),
             phenopacket_id=audit.phenopacket_id,
             action=audit.action,
-            changed_by=audit.changed_by,
+            changed_by=(
+                audit.changed_by_user.username
+                if audit.changed_by_user is not None
+                else None
+            ),
             changed_at=audit.changed_at,
             change_reason=audit.change_reason,
             change_summary=audit.change_summary,

@@ -92,16 +92,15 @@ class TestPhenopacketServiceCreate:
         service = make_service()
         payload = PhenopacketCreate(
             phenopacket=_build_phenopacket(),
-            created_by="service-test",
         )
 
-        result = await service.create(payload, actor="service-test")
+        result = await service.create(payload, actor_id=None)
 
         assert isinstance(result, Phenopacket)
         assert result.phenopacket_id == "SERVICE-TEST-001"
         assert result.subject_id == "SUB-SERVICE-001"
         assert result.subject_sex == "MALE"
-        assert result.created_by == "service-test"
+        assert result.created_by_id is None
 
     @pytest.mark.asyncio
     async def test_create_unknown_sex_defaults_to_unknown(self, make_service):
@@ -114,10 +113,9 @@ class TestPhenopacketServiceCreate:
         payload_data["subject"].pop("sex", None)
         payload = PhenopacketCreate(
             phenopacket=payload_data,
-            created_by="service-test",
         )
 
-        result = await service.create(payload, actor="service-test")
+        result = await service.create(payload, actor_id=None)
 
         assert result.subject_sex == "UNKNOWN_SEX"
 
@@ -132,15 +130,14 @@ class TestPhenopacketServiceCreate:
         service = make_service()
         payload = PhenopacketCreate(
             phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-DUP"),
-            created_by="service-test",
         )
 
         # First insert succeeds
-        await service.create(payload, actor="service-test")
+        await service.create(payload, actor_id=None)
 
         # Second insert with the same id fails with a structured conflict
         with pytest.raises(ServiceConflict) as excinfo:
-            await service.create(payload, actor="service-test")
+            await service.create(payload, actor_id=None)
 
         assert excinfo.value.code == "duplicate_id"
         assert "SERVICE-TEST-DUP" in str(excinfo.value.detail)
@@ -158,11 +155,10 @@ class TestPhenopacketServiceCreate:
         bad.pop("metaData", None)
         payload = PhenopacketCreate(
             phenopacket=bad,
-            created_by="service-test",
         )
 
         with pytest.raises(ServiceValidationError) as excinfo:
-            await service.create(payload, actor="service-test")
+            await service.create(payload, actor_id=None)
 
         assert excinfo.value.errors  # the validator attaches its error dict
 
@@ -191,7 +187,7 @@ class TestPhenopacketServiceUpdate:
         )
 
         with pytest.raises(ServiceNotFound):
-            await service.update("DOES-NOT-EXIST", payload, actor="service-test")
+            await service.update("DOES-NOT-EXIST", payload, actor_id=None)
 
     @pytest.mark.asyncio
     async def test_update_wrong_revision_raises_conflict(self, make_service):
@@ -200,9 +196,8 @@ class TestPhenopacketServiceUpdate:
         created = await service.create(
             PhenopacketCreate(
                 phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-REV"),
-                created_by="service-test",
             ),
-            actor="service-test",
+            actor_id=None,
         )
         # ``revision`` starts at 1 for a new row. Supply a stale value.
         stale_revision = created.revision - 1 if created.revision > 0 else 99
@@ -214,7 +209,7 @@ class TestPhenopacketServiceUpdate:
         )
 
         with pytest.raises(ServiceConflict) as excinfo:
-            await service.update("SERVICE-TEST-REV", payload, actor="service-test")
+            await service.update("SERVICE-TEST-REV", payload, actor_id=None)
 
         assert excinfo.value.code == "revision_mismatch"
         assert excinfo.value.detail["current_revision"] == created.revision
@@ -227,9 +222,8 @@ class TestPhenopacketServiceUpdate:
         created = await service.create(
             PhenopacketCreate(
                 phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-INC"),
-                created_by="service-test",
             ),
-            actor="service-test",
+            actor_id=None,
         )
         start_revision = created.revision
 
@@ -245,9 +239,7 @@ class TestPhenopacketServiceUpdate:
             change_reason="service test update",
         )
 
-        updated = await service2.update(
-            "SERVICE-TEST-INC", payload, actor="service-test"
-        )
+        updated = await service2.update("SERVICE-TEST-INC", payload, actor_id=None)
 
         assert updated.revision == start_revision + 1
         assert updated.subject_id == "SUB-SERVICE-INC-2"
@@ -259,9 +251,8 @@ class TestPhenopacketServiceUpdate:
         await service.create(
             PhenopacketCreate(
                 phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-BAD-UP"),
-                created_by="service-test",
             ),
-            actor="service-test",
+            actor_id=None,
         )
 
         service2 = make_service()
@@ -272,7 +263,7 @@ class TestPhenopacketServiceUpdate:
             await service2.update(
                 "SERVICE-TEST-BAD-UP",
                 PhenopacketUpdate(phenopacket=bad, change_reason="service test"),
-                actor="service-test",
+                actor_id=None,
             )
 
 
@@ -292,7 +283,7 @@ class TestPhenopacketServiceSoftDelete:
             await service.soft_delete(
                 "DOES-NOT-EXIST",
                 change_reason="service test",
-                actor="service-test",
+                actor_id=None,
             )
 
     @pytest.mark.asyncio
@@ -302,20 +293,19 @@ class TestPhenopacketServiceSoftDelete:
         await service.create(
             PhenopacketCreate(
                 phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-DEL"),
-                created_by="service-test",
             ),
-            actor="service-test",
+            actor_id=None,
         )
 
         service2 = make_service()
         result = await service2.soft_delete(
             "SERVICE-TEST-DEL",
             change_reason="service test delete",
-            actor="service-test",
+            actor_id=None,
         )
 
         assert "SERVICE-TEST-DEL" in result["message"]
-        assert result["deleted_by"] == "service-test"
+        assert result["deleted_by"] is None
         assert result["deleted_at"] is not None
 
     @pytest.mark.asyncio
@@ -329,16 +319,15 @@ class TestPhenopacketServiceSoftDelete:
         await service.create(
             PhenopacketCreate(
                 phenopacket=_build_phenopacket(phenopacket_id="SERVICE-TEST-HIDDEN"),
-                created_by="service-test",
             ),
-            actor="service-test",
+            actor_id=None,
         )
 
         service2 = make_service()
         await service2.soft_delete(
             "SERVICE-TEST-HIDDEN",
             change_reason="service test",
-            actor="service-test",
+            actor_id=None,
         )
 
         service3 = make_service()

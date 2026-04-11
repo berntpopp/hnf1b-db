@@ -79,6 +79,12 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
     objects from Phenopacket database models. It ensures consistent response structure
     across all endpoints.
 
+    Resolves the ``created_by`` / ``updated_by`` username strings from
+    the eager-loaded audit-actor relationships (``created_by_user`` /
+    ``updated_by_user``). The repository is responsible for attaching
+    the ``selectinload`` options; reading the attribute here would
+    otherwise trip ``lazy='raise'``.
+
     Args:
         pp: Phenopacket database model instance
 
@@ -89,6 +95,8 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
         phenopacket = await db.get(Phenopacket, phenopacket_id)
         return build_phenopacket_response(phenopacket)
     """
+    created_by = pp.created_by_user.username if pp.created_by_user else None
+    updated_by = pp.updated_by_user.username if pp.updated_by_user else None
     return PhenopacketResponse(
         id=str(pp.id),
         phenopacket_id=pp.phenopacket_id,
@@ -98,8 +106,8 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
         created_at=pp.created_at,
         updated_at=pp.updated_at,
         schema_version=pp.schema_version,
-        created_by=pp.created_by,
-        updated_by=pp.updated_by,
+        created_by=created_by,
+        updated_by=updated_by,
     )
 
 

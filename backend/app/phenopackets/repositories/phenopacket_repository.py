@@ -15,14 +15,32 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Sequence, Tuple
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.phenopackets.models import Phenopacket, PhenopacketAudit
 from app.phenopackets.query_builders import (
     add_has_variants_filter,
     add_sex_filter,
 )
+
+
+def _with_actor_eager_loads(stmt: Select) -> Select:
+    """Attach ``selectinload`` options for the three audit-actor FKs.
+
+    Used on every read path that may eventually render the phenopacket
+    through ``build_phenopacket_response``. Eager loading means the
+    render layer can read the relationship attribute synchronously
+    (without tripping the MissingGreenlet guard in async contexts) and
+    also avoids the classic N+1 on list responses.
+    """
+    return stmt.options(
+        selectinload(Phenopacket.created_by_user),
+        selectinload(Phenopacket.updated_by_user),
+        selectinload(Phenopacket.deleted_by_user),
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -47,27 +65,33 @@ class PhenopacketRepository:
     ) -> Optional[Phenopacket]:
         """Fetch a phenopacket by its public id.
 
-        Soft-deleted rows are filtered out by default. Set
-        ``include_deleted=True`` to read history-only records — used
-        by the audit-history endpoint, which still needs to render
-        old entries for deleted phenopackets.
+        Soft-deleted rows are filtered out by the global ``do_orm_execute``
+        event listener in ``app.database``. Set ``include_deleted=True`` to
+        read history-only records via the ``include_deleted`` execution option
+        escape hatch — used by the audit-history endpoint, which still needs
+        to render old entries for deleted phenopackets.
         """
-        conditions = [Phenopacket.phenopacket_id == phenopacket_id]
-        if not include_deleted:
-            conditions.append(Phenopacket.deleted_at.is_(None))
-
-        stmt = select(Phenopacket).where(and_(*conditions))
+        stmt = _with_actor_eager_loads(
+            select(Phenopacket).where(
+                Phenopacket.phenopacket_id == phenopacket_id
+            )
+        )
+        if include_deleted:
+            stmt = stmt.execution_options(include_deleted=True)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_batch(self, phenopacket_ids: Sequence[str]) -> List[Phenopacket]:
-        """Fetch many phenopackets by id in a single round-trip."""
+        """Fetch many phenopackets by id in a single round-trip.
+
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``.
+        """
         if not phenopacket_ids:
             return []
-        stmt = select(Phenopacket).where(
-            and_(
+        stmt = _with_actor_eager_loads(
+            select(Phenopacket).where(
                 Phenopacket.phenopacket_id.in_(phenopacket_ids),
-                Phenopacket.deleted_at.is_(None),
             )
         )
         result = await self._session.execute(stmt)
@@ -83,12 +107,13 @@ class PhenopacketRepository:
     ) -> Select:
         """Return the base ``SELECT Phenopacket`` statement for list views.
 
-        The standard soft-delete and filter predicates are applied. The
-        router is responsible for chaining ``.order_by`` and ``.offset
-        / .limit`` because those depend on user-supplied sort parameters
-        that involve helper-built expressions.
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``. The router
+        is responsible for chaining ``.order_by`` and ``.offset / .limit``
+        because those depend on user-supplied sort parameters that involve
+        helper-built expressions.
         """
-        query = select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
+        query = _with_actor_eager_loads(select(Phenopacket))
         query = add_sex_filter(query, filter_sex)
         query = add_has_variants_filter(query, filter_has_variants)
         return query
@@ -99,12 +124,12 @@ class PhenopacketRepository:
         filter_sex: Optional[str],
         filter_has_variants: Optional[bool],
     ) -> int:
-        """Return the total count of phenopackets matching the filters."""
-        count_query = (
-            select(func.count())
-            .select_from(Phenopacket)
-            .where(Phenopacket.deleted_at.is_(None))
-        )
+        """Return the total count of phenopackets matching the filters.
+
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``.
+        """
+        count_query = select(func.count()).select_from(Phenopacket)
         count_query = add_sex_filter(count_query, filter_sex)
         count_query = add_has_variants_filter(count_query, filter_has_variants)
         result = await self._session.execute(count_query)
@@ -142,11 +167,16 @@ class PhenopacketRepository:
     # ------------------------------------------------------------- audit log
 
     async def list_audit_history(self, phenopacket_id: str) -> List[PhenopacketAudit]:
-        """Return audit entries for a phenopacket, newest first."""
+        """Return audit entries for a phenopacket, newest first.
+
+        Eager-loads ``changed_by_user`` so the router can render the
+        actor username without lazy-loading in an async context.
+        """
         stmt = (
             select(PhenopacketAudit)
             .where(PhenopacketAudit.phenopacket_id == phenopacket_id)
             .order_by(PhenopacketAudit.changed_at.desc())
+            .options(selectinload(PhenopacketAudit.changed_by_user))
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

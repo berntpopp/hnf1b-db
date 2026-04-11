@@ -96,15 +96,32 @@
             </v-form>
           </v-card-text>
         </v-card>
+
+        <!-- Wave 5a Layer 4: DevQuickLogin is only mounted in DEV mode.
+             The shallowRef is null in production (DCE strips the dynamic
+             import entirely), so v-if="DevQuickLogin" ensures the
+             <component> is never rendered in prod even if SSR hydration
+             were somehow involved. -->
+        <component :is="DevQuickLogin" v-if="DevQuickLogin" />
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, shallowRef, defineAsyncComponent } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
+
+// Wave 5a Layer 4: DCE-friendly conditional import.
+// Rollup drops the entire chunk + URL string from prod bundles
+// because `import.meta.env.DEV` is statically replaced by `false`
+// at build time, pruning the whole `if` body (including the
+// dynamic import and the component reference).
+const DevQuickLogin = shallowRef(null);
+if (import.meta.env.DEV) {
+  DevQuickLogin.value = defineAsyncComponent(() => import('@/components/auth/DevQuickLogin.vue'));
+}
 
 const authStore = useAuthStore();
 const router = useRouter();

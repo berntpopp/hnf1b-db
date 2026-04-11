@@ -47,7 +47,7 @@
                 {{ section.title }}
               </v-card-title>
               <v-card-text class="text-body-1 pa-6">
-                <p class="mb-4" v-html="renderMarkdown(section.content.intro)" />
+                <p class="mb-4" v-html="sanitize(renderMarkdown(section.content.intro))" />
                 <v-list density="compact" class="mb-4">
                   <v-list-item
                     v-for="condition in section.content.conditions"
@@ -76,7 +76,7 @@
                   v-for="(para, idx) in section.content.paragraphs"
                   :key="idx"
                   :class="{ 'mb-4': idx < section.content.paragraphs.length - 1 }"
-                  v-html="renderMarkdown(para)"
+                  v-html="sanitize(renderMarkdown(para))"
                 />
               </v-card-text>
             </v-card>
@@ -128,7 +128,7 @@
                   </p>
                   <p
                     class="text-body-2 font-italic mb-0"
-                    v-html="formatCitation(section.content.formats.apa.template)"
+                    v-html="sanitize(formatCitation(section.content.formats.apa.template))"
                   />
                 </v-sheet>
                 <v-sheet color="grey-lighten-4" rounded class="pa-4">

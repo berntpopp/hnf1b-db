@@ -21,7 +21,7 @@ async def create_audit_entry(
     action: str,
     old_value: Optional[Dict[str, Any]],
     new_value: Optional[Dict[str, Any]],
-    changed_by: str,
+    changed_by_id: Optional[int],
     change_reason: str,
 ) -> PhenopacketAudit:
     """Create audit trail entry for phenopacket change.
@@ -32,7 +32,10 @@ async def create_audit_entry(
         action: Action type (CREATE, UPDATE, DELETE)
         old_value: Previous phenopacket state (None for CREATE)
         new_value: New phenopacket state (None for DELETE)
-        changed_by: Username who made the change
+        changed_by_id: ``users.id`` of the actor who made the change.
+            Nullable so system/background jobs can still write audit
+            rows; the FK is ``ON DELETE SET NULL`` on the ``users``
+            side so old audits survive user deletion.
         change_reason: Human-readable reason for the change
 
     Returns:
@@ -57,10 +60,10 @@ async def create_audit_entry(
     # Create audit entry using raw SQL for consistency
     query = text("""
         INSERT INTO phenopacket_audit
-        (id, phenopacket_id, action, old_value, new_value, changed_by,
+        (id, phenopacket_id, action, old_value, new_value, changed_by_id,
          change_reason, change_patch, change_summary, changed_at)
         VALUES (gen_random_uuid(), :phenopacket_id, :action, :old_value,
-                :new_value, :changed_by, :change_reason, :change_patch,
+                :new_value, :changed_by_id, :change_reason, :change_patch,
                 :change_summary, :changed_at)
         RETURNING id
     """)
@@ -72,7 +75,7 @@ async def create_audit_entry(
             "action": action,
             "old_value": json.dumps(old_value) if old_value else None,
             "new_value": json.dumps(new_value) if new_value else None,
-            "changed_by": changed_by,
+            "changed_by_id": changed_by_id,
             "change_reason": change_reason,
             "change_patch": json.dumps(change_patch) if change_patch else None,
             "change_summary": change_summary,
@@ -98,7 +101,7 @@ async def create_audit_entry(
         action=audit_row.action,
         old_value=audit_row.old_value,
         new_value=audit_row.new_value,
-        changed_by=audit_row.changed_by,
+        changed_by_id=audit_row.changed_by_id,
         changed_at=audit_row.changed_at,
         change_reason=audit_row.change_reason,
         change_patch=audit_row.change_patch,

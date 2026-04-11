@@ -67,7 +67,7 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         phenopacket=pp1_sanitized,
         subject_id=pp1_sanitized["subject"]["id"],
         subject_sex=pp1_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-        created_by="test_user",
+        created_by_id=None,
         created_at=datetime.now() - timedelta(days=10),
     )
     db_session.add(pp1)
@@ -109,7 +109,7 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         phenopacket=pp2_sanitized,
         subject_id=pp2_sanitized["subject"]["id"],
         subject_sex=pp2_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-        created_by="test_user",
+        created_by_id=None,
         created_at=datetime.now() - timedelta(days=5),
     )
     db_session.add(pp2)
@@ -134,7 +134,7 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         phenopacket=pp3_sanitized,
         subject_id=pp3_sanitized["subject"]["id"],
         subject_sex=pp3_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-        created_by="test_user",
+        created_by_id=None,
         created_at=datetime.now() - timedelta(days=1),
     )
     db_session.add(pp3)

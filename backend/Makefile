@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test dev-seed-users
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -85,6 +85,9 @@ db-test-init:  ## Create and migrate the dedicated test database (hnf1b_phenopac
 
 db-create-admin:  ## Create or update admin user
 	uv run python scripts/create_admin_user.py
+
+dev-seed-users:  ## Seed dev-mode fixture users (dev-admin/dev-curator/dev-viewer)
+	@ENVIRONMENT=development uv run python scripts/seed_dev_users.py
 
 # Phenopackets Migration Commands (Primary method for data import)
 phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format

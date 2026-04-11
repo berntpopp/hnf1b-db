@@ -55,6 +55,13 @@ class User(Base):
         Boolean, default=True, nullable=False, index=True
     )
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_fixture_user: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=False,
+        comment="True only for seeded dev-mode fixture users; must be FALSE in prod",
+    )
 
     # Security Fields
     last_login: Mapped[datetime | None] = mapped_column(

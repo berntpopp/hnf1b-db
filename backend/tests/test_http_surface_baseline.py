@@ -19,7 +19,7 @@ Verify after every decomposition step::
     uv run pytest tests/test_http_surface_baseline.py -k verify -v
 
 Capture mode writes one JSON file per endpoint into
-``tests/fixtures/wave4_http_baselines/``. Verify mode re-hits every endpoint
+``tests/fixtures/http_baselines/``. Verify mode re-hits every endpoint
 for which a baseline file exists and asserts byte-identical normalised
 shape + status code.
 
@@ -52,7 +52,7 @@ from typing import Any
 
 import pytest
 
-BASELINE_DIR = Path(__file__).parent / "fixtures" / "wave4_http_baselines"
+BASELINE_DIR = Path(__file__).parent / "fixtures" / "http_baselines"
 
 # Each tuple describes one HTTP interaction:
 #   (baseline_name, auth_required, method, path, query_params, body)
@@ -148,6 +148,9 @@ _VOLATILE_KEYS = {
     "time",
     "id",
     "phenopacket_id",
+    # Wave 5a: dev-auth tokens must never land in a checked-in baseline.
+    "access_token",
+    "refresh_token",
 }
 
 
@@ -264,4 +267,110 @@ async def test_verify_baseline(async_client, _auth_headers_map, spec):
     assert capture["shape"] == baseline["shape"], f"{name}: response shape changed"
     assert capture["normalized_body"] == baseline["normalized_body"], (
         f"{name}: normalised response body changed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Wave 5a dev-auth baseline
+# ---------------------------------------------------------------------------
+#
+# The dev-only ``/api/v2/dev/login-as/{username}`` endpoint has to go through
+# the ``dev_auth_client`` fixture (which flips ``enable_dev_auth`` and mounts
+# the router) AND requires a seeded fixture user in the DB. The other
+# Wave 4 baselines all share a single parametrised test that uses
+# ``async_client`` + ``admin_headers`` — grafting a dev endpoint onto that
+# parametrisation would force every other endpoint to pay the dev-mode
+# setup cost on every run. So the dev baseline gets its own tiny pair of
+# capture / verify tests that mirrors the existing mechanism exactly.
+
+_DEV_BASELINE_NAME = "dev_login_as_admin"
+
+
+async def _seed_dev_fixture_admin(db_session):
+    """Create a fixture admin user for the dev baseline to log in as."""
+    from app.auth.password import get_password_hash
+    from app.models.user import User
+
+    user = User(
+        username="dev-admin",
+        email="dev-admin@example.com",
+        hashed_password=get_password_hash("IrrelevantPass123!"),
+        role="admin",
+        is_active=True,
+        is_verified=True,
+        is_fixture_user=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.mark.asyncio
+async def test_capture_dev_login_as_baseline(dev_auth_client, db_session):
+    """Capture the dev-login-as response shape. Opt-in via the same
+    ``WAVE4_CAPTURE_BASELINE=1`` env knob as the Wave 4 endpoints so that
+    running the full suite never accidentally rewrites the fixture.
+    """
+    if os.environ.get("WAVE4_CAPTURE_BASELINE") != "1":
+        pytest.skip("Baseline capture only runs when WAVE4_CAPTURE_BASELINE=1")
+
+    await _seed_dev_fixture_admin(db_session)
+
+    response = await dev_auth_client.post("/api/v2/dev/login-as/dev-admin")
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+    with (BASELINE_DIR / f"{_DEV_BASELINE_NAME}.json").open("w") as f:
+        json.dump(capture, f, indent=2, sort_keys=True)
+
+
+@pytest.mark.asyncio
+async def test_verify_dev_login_as_baseline(dev_auth_client, db_session):
+    """Verify the dev-login-as response still matches the captured shape.
+
+    Skipped when the baseline file is absent so CI environments that
+    have not captured the fixture (e.g. production-shaped smoke runs)
+    still pass. When the fixture file exists, the test seeds a fixture
+    admin on demand and re-runs the same capture path through
+    ``_normalize`` / ``_shape`` to assert byte-identical shape.
+    """
+    baseline_path = BASELINE_DIR / f"{_DEV_BASELINE_NAME}.json"
+    if not baseline_path.exists():
+        pytest.skip(f"No baseline captured for {_DEV_BASELINE_NAME}")
+
+    with baseline_path.open() as f:
+        baseline = json.load(f)
+
+    await _seed_dev_fixture_admin(db_session)
+    response = await dev_auth_client.post("/api/v2/dev/login-as/dev-admin")
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    assert capture["status_code"] == baseline["status_code"], (
+        f"{_DEV_BASELINE_NAME}: status code changed "
+        f"{baseline['status_code']} → {capture['status_code']}"
+    )
+    assert capture["shape"] == baseline["shape"], (
+        f"{_DEV_BASELINE_NAME}: response shape changed"
+    )
+    assert capture["normalized_body"] == baseline["normalized_body"], (
+        f"{_DEV_BASELINE_NAME}: normalised response body changed"
     )

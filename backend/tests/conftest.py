@@ -266,6 +266,70 @@ async def async_client(db_session):
 
 
 @pytest_asyncio.fixture
+async def dev_auth_client(db_session):
+    """Async HTTP client with the Wave 5a dev-auth router mounted.
+
+    The dev router is only registered by ``app/main.py`` when
+    ``settings.enable_dev_auth`` and ``settings.environment == "development"``
+    are both true at app-import time. The test suite sets those flags to
+    production defaults via ``backend/conftest.py``, so by the time this
+    fixture runs the router has NOT been included on the shared ``app``.
+
+    We temporarily flip the two ``settings`` attributes, import
+    ``app.api.dev_endpoints`` inside the fixture (so the module-level
+    import guard sees the flipped values on its first evaluation),
+    include the router if it isn't already mounted, and restore the
+    flags + route list on teardown. The module stays cached in
+    ``sys.modules`` after the first run, so subsequent test invocations
+    just re-use the same router object.
+
+    **Route-list hygiene:** the shared FastAPI ``app`` is mutated to
+    include the dev router for the duration of the fixture. We snapshot
+    ``app.router.routes`` on entry and restore it in ``finally`` so
+    subsequent non-dev tests cannot accidentally see the dev endpoint.
+    This keeps the fixture hermetic even under test-order changes.
+    """
+    from app.core.config import settings as app_settings
+    from app.database import get_db
+
+    original_env = app_settings.environment
+    original_flag = app_settings.enable_dev_auth
+    # Snapshot the route list *before* mutating the shared app, so teardown
+    # can restore the exact pre-fixture state regardless of which branch
+    # below runs.
+    original_routes = list(app.router.routes)
+    app_settings.environment = "development"
+    app_settings.enable_dev_auth = True
+
+    try:
+        # Import AFTER flipping so the module-level import guard passes.
+        from app.api import dev_endpoints
+
+        if not any(
+            getattr(r, "path", "").startswith("/api/v2/dev")
+            for r in app.router.routes
+        ):
+            app.include_router(dev_endpoints.router)
+
+        async def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://testclient"
+        ) as client:
+            yield client
+    finally:
+        # Always restore, even if the fixture body raised before the yield.
+        app.dependency_overrides.clear()
+        app.router.routes[:] = original_routes
+        app_settings.environment = original_env
+        app_settings.enable_dev_auth = original_flag
+
+
+@pytest_asyncio.fixture
 async def auth_headers(test_user, async_client):
     """Get auth headers for authenticated requests."""
     response = await async_client.post(

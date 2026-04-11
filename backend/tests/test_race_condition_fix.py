@@ -59,7 +59,7 @@ class TestSequentialDuplicates:
             phenopacket=sanitized1,
             subject_id=sanitized1["subject"]["id"],
             subject_sex=sanitized1["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket1)
@@ -84,7 +84,7 @@ class TestSequentialDuplicates:
             phenopacket=sanitized2,
             subject_id=sanitized2["subject"]["id"],
             subject_sex=sanitized2["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket2)
@@ -173,7 +173,7 @@ class TestConcurrentDuplicates:
                     phenopacket=sanitized,
                     subject_id=sanitized["subject"]["id"],
                     subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-                    created_by=f"test_user_{session_index}",
+                    created_by_id=None,
                 )
 
                 session.add(phenopacket)
@@ -238,7 +238,7 @@ class TestConcurrentDuplicates:
                         phenopacket=sanitized,
                         subject_id=sanitized["subject"]["id"],
                         subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-                        created_by=f"test_user_{task_id}",
+                        created_by_id=None,
                     )
 
                     session.add(phenopacket)
@@ -313,7 +313,7 @@ class TestErrorHandling:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket1)
@@ -325,7 +325,7 @@ class TestErrorHandling:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket2)
@@ -376,7 +376,7 @@ class TestErrorHandling:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket1)
@@ -388,7 +388,7 @@ class TestErrorHandling:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket2)
