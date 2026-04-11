@@ -277,22 +277,32 @@ async def dev_auth_client(db_session):
 
     We temporarily flip the two ``settings`` attributes, import
     ``app.api.dev_endpoints`` inside the fixture (so the module-level
-    assert sees the flipped values on its first evaluation), include the
-    router if it isn't already mounted, and restore the flags on
-    teardown. The module stays cached in ``sys.modules`` after the first
-    run, so subsequent test invocations just re-use the same router
-    object.
+    import guard sees the flipped values on its first evaluation),
+    include the router if it isn't already mounted, and restore the
+    flags + route list on teardown. The module stays cached in
+    ``sys.modules`` after the first run, so subsequent test invocations
+    just re-use the same router object.
+
+    **Route-list hygiene:** the shared FastAPI ``app`` is mutated to
+    include the dev router for the duration of the fixture. We snapshot
+    ``app.router.routes`` on entry and restore it in ``finally`` so
+    subsequent non-dev tests cannot accidentally see the dev endpoint.
+    This keeps the fixture hermetic even under test-order changes.
     """
     from app.core.config import settings as app_settings
     from app.database import get_db
 
     original_env = app_settings.environment
     original_flag = app_settings.enable_dev_auth
+    # Snapshot the route list *before* mutating the shared app, so teardown
+    # can restore the exact pre-fixture state regardless of which branch
+    # below runs.
+    original_routes = list(app.router.routes)
     app_settings.environment = "development"
     app_settings.enable_dev_auth = True
 
     try:
-        # Import AFTER flipping so the module-level assert passes.
+        # Import AFTER flipping so the module-level import guard passes.
         from app.api import dev_endpoints
 
         if not any(
@@ -311,9 +321,10 @@ async def dev_auth_client(db_session):
             transport=transport, base_url="http://testclient"
         ) as client:
             yield client
-
-        app.dependency_overrides.clear()
     finally:
+        # Always restore, even if the fixture body raised before the yield.
+        app.dependency_overrides.clear()
+        app.router.routes[:] = original_routes
         app_settings.environment = original_env
         app_settings.enable_dev_auth = original_flag
 

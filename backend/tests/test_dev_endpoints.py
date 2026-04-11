@@ -11,17 +11,28 @@ The tests cover the three guard clauses of the endpoint:
 2. ``is_fixture_user=True``  -> 200 with access + refresh tokens.
 3. ``is_fixture_user=True`` but ``is_active=False`` -> 403.
 
-Loopback enforcement is covered implicitly: httpx's ASGI transport sets
-``request.client.host`` to ``"testclient"``, which is inside the
-allow-list, so the happy-path test reaching 200 proves the guard did not
-fire. Direct coverage of the 403 branch would require spoofing
-``client.host``; that is deferred to Task 10's integration test where a
-fake scope is easier to construct.
+Loopback enforcement is covered two ways:
+- The happy-path test (fixture user → 200) implicitly proves ``testclient``
+  passes the guard.
+- ``test_require_loopback_rejects_non_loopback_host`` directly calls
+  ``_require_loopback`` with a fabricated ``Request`` whose ``client.host``
+  is a non-loopback address to exercise the 403 branch.
+
+Layer 2 (the module-level import guard) is covered by
+``test_dev_endpoints_refuses_import_outside_dev_mode`` which spawns a
+subprocess with production-like env vars and asserts that importing the
+module raises ``RuntimeError`` (explicit ``if``/``raise`` instead of
+``assert``, so ``python -O`` cannot strip it).
 """
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from types import SimpleNamespace
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import delete
 
 from app.auth.password import get_password_hash
@@ -118,3 +129,85 @@ async def test_dev_login_unknown_user_is_not_found(dev_auth_client):
     response = await dev_auth_client.post("/api/v2/dev/login-as/does-not-exist")
     assert response.status_code == 404, response.text
     assert response.json()["detail"] == "not a fixture user"
+
+
+def test_require_loopback_rejects_non_loopback_host(dev_auth_client):
+    """Directly exercise the _require_loopback guard's 403 branch.
+
+    The normal test fixture uses httpx's ASGI transport which sets
+    ``client.host = "testclient"`` — always loopback. To cover the
+    non-loopback refusal path we construct a fake Request with a public
+    IP and call the dependency function directly. dev_auth_client is
+    injected only to ensure the dev_endpoints module is imported.
+    """
+    from app.api.dev_endpoints import _LOOPBACK_HOSTS, _require_loopback
+
+    public_request = SimpleNamespace(
+        client=SimpleNamespace(host="203.0.113.42"),
+    )
+    assert "203.0.113.42" not in _LOOPBACK_HOSTS
+
+    with pytest.raises(HTTPException) as excinfo:
+        _require_loopback(public_request)  # type: ignore[arg-type]
+
+    assert excinfo.value.status_code == 403
+    assert "loopback" in excinfo.value.detail.lower()
+
+
+def test_require_loopback_allows_missing_client(dev_auth_client):
+    """A Request with client=None is refused (defensive default).
+
+    ``request.client`` can be ``None`` when FastAPI is invoked outside a
+    real transport. The guard treats this as non-loopback and refuses.
+    """
+    from app.api.dev_endpoints import _require_loopback
+
+    no_client_request = SimpleNamespace(client=None)
+
+    with pytest.raises(HTTPException) as excinfo:
+        _require_loopback(no_client_request)  # type: ignore[arg-type]
+
+    assert excinfo.value.status_code == 403
+
+
+def test_dev_endpoints_refuses_import_outside_dev_mode():
+    """Layer 2 import guard must refuse non-dev environments.
+
+    This is a regression test against any future refactor that replaces
+    the explicit ``if`` / ``raise RuntimeError`` with ``assert`` — the
+    latter is stripped by ``python -O`` and silently disables Layer 2.
+
+    Runs in a subprocess with production-like env vars so the guard
+    fires on module import. We run the subprocess with ``-O`` to prove
+    the guard survives compile-time optimization.
+    """
+    script = (
+        "import sys\n"
+        "try:\n"
+        "    from app.api import dev_endpoints  # noqa: F401\n"
+        "except RuntimeError as exc:\n"
+        "    print('GUARD_FIRED:', exc, file=sys.stderr)\n"
+        "    sys.exit(0)\n"
+        "print('GUARD_MISSING', file=sys.stderr)\n"
+        "sys.exit(1)\n"
+    )
+    env = {
+        "ENVIRONMENT": "production",
+        "ENABLE_DEV_AUTH": "false",
+        "JWT_SECRET": "x" * 32,
+        "ADMIN_PASSWORD": "A" * 20,
+        "PATH": "/usr/bin:/bin",
+    }
+    # Use ``-O`` to verify the guard is NOT an ``assert`` (which would be
+    # stripped at compile time and let the import silently succeed).
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"Layer 2 guard did NOT fire under python -O. "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "GUARD_FIRED" in result.stderr

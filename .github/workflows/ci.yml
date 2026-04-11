@@ -143,8 +143,13 @@ jobs:
 
     - name: Verify ENABLE_DEV_AUTH not truthy in prod compose (Wave 5a Layer 5)
       run: |
-        if grep -Eq "^\s*ENABLE_DEV_AUTH\s*[:=]\s*(true|True|TRUE|1|yes|YES)" docker/docker-compose.npm.yml; then
+        # Catch every YAML-truthy spelling: mapping form, list form,
+        # bare or quoted (single or double), and all common YAML 1.1 truthy
+        # spellings (true/True/TRUE/yes/Yes/YES/on/On/ON/1). If any matches,
+        # the prod compose has dev-auth turned on — refuse the build.
+        if grep -Eq "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH[[:space:]]*[:=][[:space:]]*['\"]?(true|True|TRUE|yes|Yes|YES|on|On|ON|1)['\"]?[[:space:]]*$" docker/docker-compose.npm.yml; then
           echo "::error::ENABLE_DEV_AUTH must not be truthy in docker/docker-compose.npm.yml"
+          grep -nE "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH" docker/docker-compose.npm.yml || true
           exit 1
         fi
         echo "ENABLE_DEV_AUTH is not truthy in docker/docker-compose.npm.yml — Layer 5 green"

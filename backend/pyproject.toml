@@ -139,6 +139,15 @@ convention = "google"
 quote-style = "double"
 indent-style = "space"
 
+[tool.coverage.run]
+# Trace lines that execute inside asyncio tasks. pytest-cov uses
+# ``sys.settrace`` by default, which does not follow execution into event-loop
+# workers reliably — async FastAPI route handlers tested via httpx's
+# ASGITransport end up looking "uncovered" even when the tests clearly pass.
+# Adding ``greenlet`` (used by SQLAlchemy's async bridge) and ``thread``
+# ensures every execution path the test suite exercises gets counted.
+concurrency = ["thread", "greenlet"]
+
 [tool.coverage.report]
 # Lines that should not count against coverage — they represent code that
 # cannot be executed directly (abstract method placeholders, type-checking

@@ -13,10 +13,10 @@ Five layers of defense protect this endpoint from reaching production:
 1. **Config refusal** (``app/core/config.py``): ``Settings`` refuses to
    instantiate when ``ENABLE_DEV_AUTH=true`` and ``ENVIRONMENT`` is not
    ``development``. An unset environment is treated as production.
-2. **Module-level assert** (this file): the module body contains an
-   ``assert settings.enable_dev_auth and settings.environment ==
-   "development"`` which crashes on any accidental import outside dev
-   mode. Do NOT remove it.
+2. **Module-level import guard** (this file): the module body contains an
+   ``if not (...): raise RuntimeError(...)`` block which crashes on any
+   accidental import outside dev mode. Explicit ``if``/``raise`` instead
+   of ``assert`` so ``python -O`` cannot strip it. Do NOT remove it.
 3. **Conditional router mount** (``app/main.py``): ``main.py`` only
    imports this module and calls ``include_router`` when the same two
    flags are set, so in production the module is never imported at all.
@@ -50,18 +50,24 @@ from app.schemas.auth import Token
 
 logger = logging.getLogger(__name__)
 
-# --- Layer 2: hard runtime assert ------------------------------------------
+# --- Layer 2: hard runtime guard -------------------------------------------
 #
 # Belt-and-braces for the import gate in ``main.py``. If any code path ever
 # imports this module with the wrong flags, CRASH — do not silently register
-# a production-facing dev router. Removing this assert defeats Layer 2 of the
+# a production-facing dev router. Removing this guard defeats Layer 2 of the
 # dev-mode defense; please don't.
-assert settings.enable_dev_auth and settings.environment == "development", (
-    "app.api.dev_endpoints imported outside of dev mode — refusing to load. "
-    "This module must only be imported when ENABLE_DEV_AUTH=true and "
-    "ENVIRONMENT=development. If you are seeing this during a production "
-    "boot, investigate app/main.py's conditional mount immediately."
-)
+#
+# This is an explicit ``if`` + ``raise`` (not ``assert``) on purpose:
+# ``python -O`` strips ``assert`` statements at compile time, which would
+# silently disable Layer 2 in any deployment that runs the interpreter with
+# optimizations enabled. A plain ``raise`` cannot be compiled out.
+if not (settings.enable_dev_auth and settings.environment == "development"):
+    raise RuntimeError(
+        "app.api.dev_endpoints imported outside of dev mode — refusing to load. "
+        "This module must only be imported when ENABLE_DEV_AUTH=true and "
+        "ENVIRONMENT=development. If you are seeing this during a production "
+        "boot, investigate app/main.py's conditional mount immediately."
+    )
 
 router = APIRouter(
     prefix="/api/v2/dev",
