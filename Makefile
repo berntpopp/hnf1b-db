@@ -6,7 +6,8 @@
         docker-shell-api docker-shell-db docker-import-full docker-import-test \
         publications-sync publications-sync-dry publications-sync-test docker-publications-sync \
         variants-sync variants-sync-dry variants-sync-test docker-variants-sync \
-        reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync
+        reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync \
+        dev-seed-users
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -169,6 +170,9 @@ db-init:  ## Initialize database (run migrations + create admin user)
 
 db-create-admin:  ## Create or update admin user
 	cd backend && make db-create-admin
+
+dev-seed-users:  ## Seed dev-mode fixture users (dev-admin/dev-curator/dev-viewer)
+	@$(MAKE) -C backend dev-seed-users
 
 # Phenopackets Migration Commands (Primary method for data import)
 phenopackets-migrate:  ## Migrate data directly from Google Sheets to Phenopackets format
