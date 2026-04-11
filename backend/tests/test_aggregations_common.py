@@ -150,3 +150,28 @@ class TestCalculatePercentages:
 
         with pytest.raises((TypeError, AttributeError)):
             calculate_percentages([Opaque()], total=100)
+
+    def test_missing_count_key_raises_keyerror(self):
+        """Fail-loud: a row missing ``count_key`` raises KeyError.
+
+        This guards against silent data corruption when a call-site has
+        a typo (e.g. ``count_key="counnt"``). Previously the helper used
+        ``.get(count_key, 0)`` which defaulted to 0 and emitted
+        all-zero percentages to the API. Now the typo surfaces
+        immediately at the first row.
+        """
+        rows = [{"present_count": 10, "label": "a"}]
+        with pytest.raises(KeyError, match="missing count_key 'count'"):
+            calculate_percentages(rows, total=100)
+
+    def test_missing_custom_count_key_raises_keyerror(self):
+        """The fail-loud guard applies to any ``count_key``, not just ``count``."""
+        rows = [{"count": 10, "label": "a"}]
+        with pytest.raises(KeyError, match="missing count_key 'present_count'"):
+            calculate_percentages(rows, total=100, count_key="present_count")
+
+    def test_missing_count_key_on_rowmapping_raises(self):
+        """The same fail-loud guard applies to SQLAlchemy RowMapping rows."""
+        rows = [_FakeRowMapping(label="no_count_here")]
+        with pytest.raises(KeyError, match="missing count_key"):
+            calculate_percentages(rows, total=100)

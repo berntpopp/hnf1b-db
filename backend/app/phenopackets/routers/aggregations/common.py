@@ -87,6 +87,12 @@ def calculate_percentages(
     Anything else raises ``TypeError`` so the caller notices — we do NOT
     fall back to silently hoovering attributes via ``dir()``.
 
+    **Fail-loud on missing ``count_key``**: if a row does not contain
+    ``count_key``, the helper raises ``KeyError`` rather than defaulting
+    to ``0`` and silently producing wrong percentages. A call-site typo
+    (e.g. ``count_key="counnt"``) should surface immediately, not ship
+    zeroed data to the API.
+
     Returns a **new** list of new dicts — the input rows are never mutated.
 
     Args:
@@ -100,6 +106,8 @@ def calculate_percentages(
     Raises:
         TypeError: If any row is not a Mapping and does not expose
             ``._mapping``.
+        KeyError: If any row is missing ``count_key`` (fail-loud — prevents
+            silently emitting 0% percentages on a call-site typo).
     """
     result: List[Dict[str, Any]] = []
     for row in rows:
@@ -120,7 +128,14 @@ def calculate_percentages(
                 f"(SQLAlchemy Row); got {type(row).__name__}"
             )
 
-        count_value = int(data.get(count_key, 0))
+        # Fail-loud: raise KeyError if count_key is missing rather than
+        # silently defaulting to 0 and producing wrong percentages.
+        if count_key not in data:
+            raise KeyError(
+                f"calculate_percentages: row is missing count_key "
+                f"{count_key!r}; available keys: {sorted(data.keys())}"
+            )
+        count_value = int(data[count_key])
         data["percentage"] = (count_value / total * 100) if total > 0 else 0.0
         result.append(data)
     return result
