@@ -282,11 +282,14 @@ async def delete_phenopacket(
             delete_request.change_reason,
             actor_id=current_user.id,
             actor_username=current_user.username,
+            expected_revision=delete_request.revision,
         )
     except ServiceNotFound as exc:
         raise HTTPException(
             status_code=404,
             detail="Phenopacket not found or already deleted",
         ) from exc
+    except ServiceConflict as exc:
+        raise HTTPException(status_code=409, detail=exc.detail) from exc
     except ServiceDatabaseError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -267,6 +267,7 @@ class PhenopacketService:
         *,
         actor_id: Optional[int],
         actor_username: Optional[str] = None,
+        expected_revision: Optional[int] = None,
     ) -> Dict[str, Optional[str]]:
         """Soft-delete a phenopacket and create an audit entry.
 
@@ -275,12 +276,33 @@ class PhenopacketService:
         under the ``deleted_by`` key for display purposes — the
         persisted FK is ``actor_id``. Raises ``ServiceNotFound`` if
         the row is missing or already soft-deleted; raises
-        ``ServiceDatabaseError`` on commit failure.
+        ``ServiceConflict`` (code="revision_mismatch") if
+        ``expected_revision`` is provided and does not match the
+        current row revision; raises ``ServiceDatabaseError`` on
+        commit failure.
+
+        ``expected_revision`` is optional for backwards compatibility —
+        callers that omit it get the original blind-delete behaviour.
         """
         phenopacket = await self._repo.get_by_id(phenopacket_id)
         if phenopacket is None:
             raise ServiceNotFound(
                 f"Phenopacket {phenopacket_id} not found or already deleted"
+            )
+
+        if expected_revision is not None and phenopacket.revision != expected_revision:
+            raise ServiceConflict(
+                {
+                    "error": "Conflict detected",
+                    "message": (
+                        f"Phenopacket was modified by another user. "
+                        f"Expected revision {expected_revision}, "
+                        f"but current revision is {phenopacket.revision}"
+                    ),
+                    "current_revision": phenopacket.revision,
+                    "expected_revision": expected_revision,
+                },
+                code="revision_mismatch",
             )
 
         old_phenopacket = phenopacket.phenopacket.copy()
