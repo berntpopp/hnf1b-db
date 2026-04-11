@@ -1,17 +1,59 @@
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.0
-    hooks:
-      # Run the linter (backend only)
-      - id: ruff
-        args: [ --fix ]
-        files: ^backend/
-      # Run the formatter (backend only)
-      - id: ruff-format
-        files: ^backend/
+# .pre-commit-config.yaml — enforces `make check` hygiene on every commit.
+#
+# Wave 5b Task 1 closes Wave 5a exit note follow-up #10: the silent
+# ruff-drift incident where Tasks 5 and 8 added new test files without
+# running full `make check` and accumulated 6 pydocstyle findings
+# (D103 x5 + D209 x1) that were only cleaned up post-hoc in commit
+# e69899d. A parallel class of silent drift — `ruff format --check`
+# and `prettier --check tests/` — surfaced nine more files on entry
+# to this task (see the preceding
+# `style(backend,frontend): apply ruff format + prettier drift cleanup`
+# commit). This config closes both holes.
+#
+# History: an earlier revision of this file (bb264b5, 2025-10) used the
+# upstream ruff-pre-commit / mirrors-mypy repos with `types-all` as an
+# additional_dependency, but `types-all` has been unmaintained and no
+# longer installs (yanked types-pkg-resources dependency), so the old
+# config has been broken-at-install for months — which is exactly why
+# the Wave 5a drift was able to accumulate. Wave 5b Task 1 replaces it
+# with `language: system` hooks that reuse the project's already-pinned
+# `uv`-managed tools (same versions `make check` and CI run), so hook
+# versions drift lock-step with the project's pyproject.toml /
+# package.json instead of with an external mirror rev.
+#
+# Install locally:
+#   cd ~/development/hnf1b-db.worktrees/chore-wave-5b-user-management
+#   uv pip install pre-commit   # or: pipx install pre-commit
+#   pre-commit install
+#
+# Note on husky coexistence: the frontend already owns a husky hook via
+# `core.hooksPath = frontend/.husky/_`. pre-commit's `install` command
+# REFUSES to run when `core.hooksPath` is set ("Cowardly refusing to
+# install hooks with `core.hooksPath` set" — see pre_commit's
+# `git.has_core_hookpaths_set()` guard). So local installation requires
+# one of:
+#
+#   (a) `git config --unset-all core.hooksPath && pre-commit install`
+#       — this disables husky's lint-staged flow until you re-run
+#       `npm install` (or manually restore hooksPath).
+#   (b) Rely on the CI gate (`.github/workflows/ci.yml` pre-commit job)
+#       as the sole enforcement mechanism and run
+#       `pre-commit run --all-files --config .pre-commit-config.yaml`
+#       manually before pushing.
+#
+# The CI job runs `pre-commit run --all-files` on every push, so no
+# commit lands un-gated regardless of local setup. Option (b) is the
+# path of least resistance if you don't want to disable husky.
+#
+# Glob intent: the Wave 5a drift (commits 5, 8 adding test files)
+# landed in backend/tests/ AND would have applied to frontend/tests/
+# under the same failure mode. The `files:` regexes below MUST match
+# test-file edits, not just src/app edits, otherwise the hook silently
+# lets the same class of drift recur.
 
+repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: check-yaml
       - id: check-json
@@ -19,32 +61,94 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=1000']
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
       - id: check-case-conflict
       - id: detect-private-key
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        args: [--no-strict-optional, --ignore-missing-imports]
-        files: ^backend/(app|migration)/
+      # Note: `trailing-whitespace` and `end-of-file-fixer` from the
+      # pre-existing config were intentionally dropped in Wave 5b Task 1.
+      # Rationale: ruff format and prettier already cover trailing
+      # whitespace and EoF newlines for .py / .js / .vue / .json / .css /
+      # .scss / .md files under backend/ and frontend/(src|tests)/. The
+      # uncovered gap (top-level *.md, docs/**, .github/**, root-level
+      # *.yml / *.yaml) is tolerable because those files are edited
+      # rarely and drift is obvious in PR diffs.
+      # Re-evaluate if the gap leaks drift the way Wave 5a follow-up #10
+      # leaked D103/D209 findings.
 
   - repo: local
     hooks:
-      - id: pytest-check
-        name: pytest-check
-        entry: bash -c 'cd backend && uv run pytest tests/ -v'
+      - id: backend-ruff-check
+        name: backend ruff check
+        entry: bash -c 'cd backend && uv run ruff check .'
         language: system
+        # Intentionally wide: backend/tests/, backend/scripts/,
+        # backend/migration/, backend/alembic/ all carry .py files that
+        # ruff must still lint. The ruff command itself scopes via its
+        # configured ignore list.
+        files: ^backend/.*\.py$
         pass_filenames: false
-        always_run: true
-        stages: [pre-push]
+
+      - id: backend-ruff-format
+        name: backend ruff format (check)
+        entry: bash -c 'cd backend && uv run ruff format --check .'
+        language: system
+        # Wave 5b Task 1 root cause: `make check` only runs
+        # `ruff check .` and never `ruff format --check .`, so
+        # whitespace drift was invisible until this hook surfaced
+        # 8 files on entry-state.
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+      - id: backend-mypy
+        name: backend mypy
+        entry: bash -c 'cd backend && uv run mypy app/ migration/'
+        language: system
+        # Must match the backend Makefile `typecheck` target and the
+        # existing CI `Run type checking (mypy)` step — both scope to
+        # `app/ migration/`. If mypy ever gains a test-friendly config
+        # this regex should widen to backend/tests/ too.
+        files: ^backend/(app|migration)/.*\.py$
+        pass_filenames: false
+
+      - id: frontend-eslint
+        name: frontend eslint (check)
+        entry: bash -c 'cd frontend && npm run lint:check'
+        language: system
+        # Use `lint:check` (no --fix) because a pre-commit hook that
+        # rewrites files mid-commit leaves the staged tree inconsistent
+        # with the working tree. husky's lint-staged handles the
+        # --fix-on-staged flow separately.
+        #
+        # Wave 5b finding #2: the previous draft scoped this to
+        # ^frontend/src/... which meant an edit only touching
+        # frontend/tests/unit/foo.spec.js never triggered the hook.
+        # Widen to both src/ and tests/ so the drift class closes.
+        files: ^frontend/(src|tests)/.*\.(js|jsx|vue)$
+        pass_filenames: false
+
+      - id: frontend-prettier
+        name: frontend prettier (check)
+        entry: bash -c 'cd frontend && npx prettier --check "{src,tests}/**/*.{js,vue,json,css,scss,md}"'
+        language: system
+        # Calls prettier directly instead of `npm run format:check`
+        # because frontend/package.json's `format:check` script is
+        # src/-only, and widening it here would require staging
+        # package.json alongside package-lock.json (husky enforces
+        # lock-step) for a zero-dependency change — not worth the
+        # noise in a pre-commit-config-only commit. The direct
+        # invocation covers both src/ and tests/, closing the gap
+        # that let KaplanMeierChart.spec.js drift silently (see the
+        # preceding style cleanup commit).
+        files: ^frontend/(src|tests)/.*\.(js|jsx|vue|css|scss|json|md)$
+        pass_filenames: false
+
+      # Local grep guards preserved from the previous config —
+      # referenced in CLAUDE.md's CI/CD section and still guard against
+      # real regressions (non-deterministic hashing; bad migration
+      # imports) that the other linters don't catch.
 
       - id: check-test-imports
-        name: check-test-imports
-        entry: bash -c 'grep -r "from migration.modules" backend/tests/ backend/app/ && exit 1 || exit 0'
+        name: check-test-imports (no migration.modules references)
+        entry: bash -c 'if grep -r "from migration.modules" backend/tests/ backend/app/ 2>/dev/null; then echo "Found forbidden migration.modules import"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
@@ -52,8 +156,19 @@ repos:
 
       - id: detect-non-deterministic-hash
         name: detect-non-deterministic-hash
-        entry: bash -c 'grep -r "abs(hash(" --include="*.py" backend/ && echo "Found non-deterministic hash() usage!" && exit 1 || exit 0'
+        entry: bash -c 'if grep -r "abs(hash(" --include="*.py" backend/ 2>/dev/null; then echo "Found non-deterministic abs(hash(...)) usage!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
         verbose: true
+
+      # Pytest gate runs at pre-push time only (the pre-commit gate is
+      # already the ruff/mypy/eslint/prettier bundle above — running the
+      # ~3-minute backend suite on every commit would be user-hostile).
+      - id: pytest-pre-push
+        name: pytest-pre-push (backend full suite)
+        entry: bash -c 'cd backend && uv run pytest -m "not benchmark" -q --no-header'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
