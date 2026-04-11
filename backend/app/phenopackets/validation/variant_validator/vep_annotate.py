@@ -61,12 +61,14 @@ class VEPAnnotator:
         caller uses the suggestions list to build a useful 400 response.
         """
         try:
-            vep_url = f"https://rest.ensembl.org/vep/human/hgvs/{hgvs_notation}"
+            vep_base_url = _vv_pkg.settings.external_apis.vep.base_url
+            vep_timeout = _vv_pkg.settings.external_apis.vep.timeout_seconds
+            vep_url = f"{vep_base_url}/vep/human/hgvs/{hgvs_notation}"
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     vep_url,
                     headers={"Content-Type": "application/json"},
-                    timeout=10.0,
+                    timeout=vep_timeout,
                 )
                 if response.status_code == 200:
                     vep_data = response.json()

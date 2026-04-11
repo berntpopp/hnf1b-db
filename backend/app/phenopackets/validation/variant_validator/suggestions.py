@@ -49,14 +49,19 @@ def get_notation_suggestions(invalid_notation: str) -> List[str]:
 
     if re.match(r"^\d+[-:]\d+[-:][ATCG]+[-:][ATCG]+$", invalid_notation):
         parts = re.split(r"[-:]", invalid_notation)
+        # parts = [chromosome, position, ref, alt]
         if len(parts) >= 4:
+            chrom, position, ref, alt = parts[0], parts[1], parts[2], parts[3]
             suggestions.append(
-                f"For VCF format, use: chr17-{parts[0]}-{parts[2]}-{parts[3]}"
+                f"For VCF format, use: chr{chrom}-{position}-{ref}-{alt}"
             )
-            suggestions.append(
-                f"For HGVS genomic, use: NC_000017.11:g."
-                f"{parts[0]}{parts[2]}>{parts[3]}"
-            )
+            # Genomic HGVS currently only suggests the chr17 RefSeq accession
+            # because HNF1B variants always map to chr17; a chromosome→NC
+            # lookup would be needed to generalise.
+            if chrom == "17":
+                suggestions.append(
+                    f"For HGVS genomic, use: NC_000017.11:g.{position}{ref}>{alt}"
+                )
 
     notation_lower = invalid_notation.lower()
     if re.search(r"\b(del|dup|deletion|duplication)\b", notation_lower):
