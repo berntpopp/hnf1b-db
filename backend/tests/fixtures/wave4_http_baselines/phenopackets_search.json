@@ -1,0 +1,44 @@
+{
+  "normalized_body": {
+    "data": [],
+    "links": {
+      "first": "/api/v2/phenopackets/search?page%5Bsize%5D=3&q=renal",
+      "next": null,
+      "prev": null,
+      "self": "/api/v2/phenopackets/search?page%5Bsize%5D=3&q=renal"
+    },
+    "meta": {
+      "page": {
+        "endCursor": null,
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "pageSize": 3,
+        "startCursor": null,
+        "total": "<normalized>"
+      }
+    }
+  },
+  "shape": {
+    "data": [
+      "list",
+      "empty"
+    ],
+    "links": {
+      "first": "str",
+      "next": null,
+      "prev": null,
+      "self": "str"
+    },
+    "meta": {
+      "page": {
+        "endCursor": null,
+        "hasNextPage": "bool",
+        "hasPreviousPage": "bool",
+        "pageSize": "int",
+        "startCursor": null,
+        "total": null
+      }
+    }
+  },
+  "status_code": 200
+}

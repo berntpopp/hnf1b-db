@@ -1,0 +1,42 @@
+{
+  "normalized_body": {
+    "data": [],
+    "links": {
+      "first": "/api/v2/phenopackets/?page%5Bnumber%5D=1&page%5Bsize%5D=3",
+      "last": "/api/v2/phenopackets/?page%5Bnumber%5D=1&page%5Bsize%5D=3",
+      "next": null,
+      "prev": null,
+      "self": "/api/v2/phenopackets/?page%5Bnumber%5D=1&page%5Bsize%5D=3"
+    },
+    "meta": {
+      "page": {
+        "currentPage": 1,
+        "pageSize": 3,
+        "totalPages": 0,
+        "totalRecords": 0
+      }
+    }
+  },
+  "shape": {
+    "data": [
+      "list",
+      "empty"
+    ],
+    "links": {
+      "first": "str",
+      "last": "str",
+      "next": null,
+      "prev": null,
+      "self": "str"
+    },
+    "meta": {
+      "page": {
+        "currentPage": "int",
+        "pageSize": "int",
+        "totalPages": "int",
+        "totalRecords": "int"
+      }
+    }
+  },
+  "status_code": 200
+}

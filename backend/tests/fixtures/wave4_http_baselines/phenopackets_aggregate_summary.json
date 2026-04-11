@@ -1,0 +1,23 @@
+{
+  "normalized_body": {
+    "distinct_hpo_terms": 0,
+    "distinct_publications": 0,
+    "distinct_variants": 0,
+    "female": 0,
+    "male": 0,
+    "total_phenopackets": 0,
+    "unknown_sex": 0,
+    "with_variants": 0
+  },
+  "shape": {
+    "distinct_hpo_terms": "int",
+    "distinct_publications": "int",
+    "distinct_variants": "int",
+    "female": "int",
+    "male": "int",
+    "total_phenopackets": "int",
+    "unknown_sex": "int",
+    "with_variants": "int"
+  },
+  "status_code": 200
+}

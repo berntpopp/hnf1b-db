@@ -198,9 +198,7 @@ class TestByDiseaseMvPath:
 
             app.dependency_overrides[get_db] = _override_get_db
             try:
-                response = mv_client.get(
-                    "/api/v2/phenopackets/aggregate/by-disease"
-                )
+                response = mv_client.get("/api/v2/phenopackets/aggregate/by-disease")
             finally:
                 app.dependency_overrides.clear()
 
@@ -266,9 +264,7 @@ class TestByFeatureMvPath:
 
             app.dependency_overrides[get_db] = _override_get_db
             try:
-                response = mv_client.get(
-                    "/api/v2/phenopackets/aggregate/by-feature"
-                )
+                response = mv_client.get("/api/v2/phenopackets/aggregate/by-feature")
             finally:
                 app.dependency_overrides.clear()
 

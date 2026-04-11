@@ -81,8 +81,7 @@ class SurvivalHandler(ABC):
         for t in terms:
             if not cls._HPO_ID_PATTERN.match(t):
                 raise ValueError(
-                    f"_sql_list expects canonical HPO IDs (HP:\\d{{7}}); "
-                    f"got {t!r}"
+                    f"_sql_list expects canonical HPO IDs (HP:\\d{{7}}); got {t!r}"
                 )
         quoted = ", ".join(f"'{t}'" for t in terms)
         return f"({quoted})"
