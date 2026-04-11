@@ -2,6 +2,61 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+---
+
+## Amendment note (2026-04-11)
+
+This plan was authored 2026-04-10 — before Wave 3 (PR #231) merged and before the platform-readiness review landed. Prior to executing any task, the following drift was checked against the live tree at commit `514c6e8` and the plan was left structurally intact, with the corrections below noted as the authoritative reading. Everything the plan proposes remains actionable; only numbers and a couple of path claims needed updating.
+
+### File-size corrections (verified 2026-04-11 via `wc -l`)
+
+| File | Plan (2026-04-10) | Actual (2026-04-11) | Delta |
+|------|:-----------------:|:-------------------:|:------|
+| `backend/app/api/admin_endpoints.py` | 1,159 | **1,164** | +5 |
+| `backend/app/phenopackets/validation/variant_validator.py` | 968 | **1,008** | +40 |
+| `backend/app/phenopackets/routers/crud.py` | 1,002 | **1,003** | +1 |
+| `backend/app/phenopackets/routers/comparisons.py` | 861 | 861 | 0 |
+| `backend/app/variants/service.py` | 823 | 824 | +1 |
+| `backend/app/phenopackets/routers/aggregations/sql_fragments.py` | 748 | 748 | 0 |
+| `backend/app/reference/service.py` | 721 | 722 | +1 |
+| `backend/app/variant_validator_endpoint.py` | 702 | 702 | 0 |
+| `backend/app/publications/endpoints.py` | 680 | 690 | +10 |
+| `backend/app/search/services.py` | 513 | 513 | 0 |
+
+The Wave 4 scope is unchanged — every file on the table is still over 500 LOC and still needs decomposition. The `variant_validator.py` +40 LOC drift is the largest and is attributed to Wave 3's HPO-constant sweep plus Codecov-gap tests (commits `ea53a7e`, `34ee16c`).
+
+### Survival row: Wave 3 handled this — line 29 is already satisfied
+
+Plan line 29 says:
+
+> `survival_handlers.py | 1,055 | already handled in Wave 3 (moved to survival/handlers.py); verify under 500`
+
+Reality (verified in `docs/refactor/wave-3-exit.md` and in the tree):
+
+- The flat file `backend/app/phenopackets/routers/aggregations/survival_handlers.py` still exists — but it is a **56-LOC backwards-compat shim** emitting a one-time `DeprecationWarning`, re-exporting from the real location (Wave 3 commit `e48d06a`).
+- The canonical location is `backend/app/phenopackets/routers/aggregations/survival/handlers/` — six files: `base.py` (284), `variant_type.py` (149), `pathogenicity.py` (153), `disease_subtype.py` (282), `protein_domain.py` (208), `factory.py` (47), plus `__init__.py` (27). Every file is well under 500 LOC (max 284).
+
+**Verdict:** line 29's exit criterion ("verify under 500 LOC") is already satisfied. Do not re-split. The shim stays for one more wave per the receiving-code-review feedback on PR #231. Wave 4 does not touch the `survival/` sub-package.
+
+### Test-count baseline correction
+
+Plan Task 7 Step 6 expects ~783 backend tests ("Wave 2's 765 + ~18 new in Wave 4"). Reality: the current baseline is **879 passed + 1 skipped + 3 xfailed = 883 reported** (887 collected including 4 deselected) at commit `514c6e8`, after Wave 3 added +57 tests (survival smoke tests, aggregations common helper tests, Codecov gap tests). Wave 4's exit check should target **≥ 879 passing** plus whatever new Wave 4 tests add.
+
+### Platform-readiness review (2026-04-11) is out of Wave 4 scope
+
+The new `docs/reviews/2026-04-11-platform-readiness-review.md` covers identity lifecycle, ORCID, public attribution, review states, collaboration, comments, session hardening. These are **all P0 platform-work items**, not decomposition. They do not change Wave 4's scope — Wave 4 remains "bring backend files under 500 LOC + introduce `PhenopacketRepository` + Redis-backed admin sync state". The platform review informs Wave 5+ and is noted here only to record that Wave 4 was not re-scoped.
+
+### Execution entry criteria (measured 2026-04-11 at `514c6e8`)
+
+- [x] Worktree created at `~/development/hnf1b-db.worktrees/chore-wave-4-backend-decomposition` (sibling to repo, per CLAUDE.md convention).
+- [x] Backend `make check` green: **879 passed, 1 skipped, 3 xfailed**, 17 pre-existing deprecation warnings.
+- [x] Frontend `make check` green: tests/lint/format all pass, **23 pre-existing lint warnings** (XSS `v-html` on FAQ, `vue/html-closing-bracket-newline` cosmetic warnings, `vue/one-component-per-file` on the test harness — all baseline, not new).
+- [x] Safety-net test files still present: `test_variant_validator_enhanced.py` (1,671 lines — plan said 1,660), `test_comparisons.py` (1,467 lines — matches).
+
+Proceed with Task 1.
+
+---
+
 **Goal:** Bring every backend file in `backend/app/` under 500 LOC. Introduce the `PhenopacketRepository` layer to match the clean pattern already used in the search module. Replace the in-memory `_sync_tasks` dict with Redis-backed task state.
 
 **Architecture:** Router → Service → Repository layering, applied incrementally per oversized file. Each file split is its own PR with HTTP-surface-identical before/after tests.
