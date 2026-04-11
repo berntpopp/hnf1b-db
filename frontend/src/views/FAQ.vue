@@ -53,7 +53,7 @@
                     <p
                       v-if="block.type === 'paragraph'"
                       class="mb-3"
-                      v-html="renderMarkdown(block.text)"
+                      v-html="sanitize(renderMarkdown(block.text))"
                     />
 
                     <!-- Unordered List -->
@@ -61,7 +61,7 @@
                       <li
                         v-for="(item, itemIdx) in block.items"
                         :key="itemIdx"
-                        v-html="renderMarkdown(item)"
+                        v-html="sanitize(renderMarkdown(item))"
                       />
                     </ul>
 
@@ -70,7 +70,7 @@
                       <li
                         v-for="(item, itemIdx) in block.items"
                         :key="itemIdx"
-                        v-html="renderMarkdown(item.text)"
+                        v-html="sanitize(renderMarkdown(item.text))"
                       />
                     </ol>
 
@@ -136,7 +136,7 @@
                           <v-icon color="green">mdi-check</v-icon>
                         </template>
                         <v-list-item-title>
-                          <span v-html="renderMarkdown(item.text)" />
+                          <span v-html="sanitize(renderMarkdown(item.text))" />
                         </v-list-item-title>
                       </v-list-item>
                     </v-list>
@@ -174,7 +174,10 @@
                       rounded
                       class="pa-4"
                     >
-                      <p class="text-body-2 font-italic mb-0" v-html="renderMarkdown(block.text)" />
+                      <p
+                        class="text-body-2 font-italic mb-0"
+                        v-html="sanitize(renderMarkdown(block.text))"
+                      />
                     </v-sheet>
                   </template>
                 </v-expansion-panel-text>
