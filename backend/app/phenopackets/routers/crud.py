@@ -207,7 +207,7 @@ async def create_phenopacket(
     service = PhenopacketService(PhenopacketRepository(db))
     try:
         new_phenopacket = await service.create(
-            phenopacket_data, actor=current_user.username
+            phenopacket_data, actor_id=current_user.id
         )
     except ServiceValidationError as exc:
         raise HTTPException(
@@ -243,7 +243,7 @@ async def update_phenopacket(
     service = PhenopacketService(PhenopacketRepository(db))
     try:
         updated = await service.update(
-            phenopacket_id, phenopacket_data, actor=current_user.username
+            phenopacket_id, phenopacket_data, actor_id=current_user.id
         )
     except ServiceNotFound as exc:
         raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
@@ -280,7 +280,8 @@ async def delete_phenopacket(
         return await service.soft_delete(
             phenopacket_id,
             delete_request.change_reason,
-            actor=current_user.username,
+            actor_id=current_user.id,
+            actor_username=current_user.username,
         )
     except ServiceNotFound as exc:
         raise HTTPException(

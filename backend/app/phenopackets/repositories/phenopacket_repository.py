@@ -17,12 +17,30 @@ from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.phenopackets.models import Phenopacket, PhenopacketAudit
 from app.phenopackets.query_builders import (
     add_has_variants_filter,
     add_sex_filter,
 )
+
+
+def _with_actor_eager_loads(stmt: Select) -> Select:
+    """Attach ``selectinload`` options for the three audit-actor FKs.
+
+    Used on every read path that may eventually render the phenopacket
+    through ``build_phenopacket_response``. Eager loading means the
+    render layer can read the relationship attribute synchronously
+    (without tripping the MissingGreenlet guard in async contexts) and
+    also avoids the classic N+1 on list responses.
+    """
+    return stmt.options(
+        selectinload(Phenopacket.created_by_user),
+        selectinload(Phenopacket.updated_by_user),
+        selectinload(Phenopacket.deleted_by_user),
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +74,7 @@ class PhenopacketRepository:
         if not include_deleted:
             conditions.append(Phenopacket.deleted_at.is_(None))
 
-        stmt = select(Phenopacket).where(and_(*conditions))
+        stmt = _with_actor_eager_loads(select(Phenopacket).where(and_(*conditions)))
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -64,10 +82,12 @@ class PhenopacketRepository:
         """Fetch many phenopackets by id in a single round-trip."""
         if not phenopacket_ids:
             return []
-        stmt = select(Phenopacket).where(
-            and_(
-                Phenopacket.phenopacket_id.in_(phenopacket_ids),
-                Phenopacket.deleted_at.is_(None),
+        stmt = _with_actor_eager_loads(
+            select(Phenopacket).where(
+                and_(
+                    Phenopacket.phenopacket_id.in_(phenopacket_ids),
+                    Phenopacket.deleted_at.is_(None),
+                )
             )
         )
         result = await self._session.execute(stmt)
@@ -88,7 +108,9 @@ class PhenopacketRepository:
         / .limit`` because those depend on user-supplied sort parameters
         that involve helper-built expressions.
         """
-        query = select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
+        query = _with_actor_eager_loads(
+            select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
+        )
         query = add_sex_filter(query, filter_sex)
         query = add_has_variants_filter(query, filter_has_variants)
         return query
@@ -142,11 +164,16 @@ class PhenopacketRepository:
     # ------------------------------------------------------------- audit log
 
     async def list_audit_history(self, phenopacket_id: str) -> List[PhenopacketAudit]:
-        """Return audit entries for a phenopacket, newest first."""
+        """Return audit entries for a phenopacket, newest first.
+
+        Eager-loads ``changed_by_user`` so the router can render the
+        actor username without lazy-loading in an async context.
+        """
         stmt = (
             select(PhenopacketAudit)
             .where(PhenopacketAudit.phenopacket_id == phenopacket_id)
             .order_by(PhenopacketAudit.changed_at.desc())
+            .options(selectinload(PhenopacketAudit.changed_by_user))
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

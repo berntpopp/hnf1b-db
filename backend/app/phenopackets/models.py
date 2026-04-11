@@ -4,14 +4,26 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Computed, DateTime, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Computed,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 # SQLAlchemy Models
@@ -86,8 +98,21 @@ class Phenopacket(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by: Mapped[Optional[str]] = mapped_column(String(100))
-    updated_by: Mapped[Optional[str]] = mapped_column(String(100))
+    # Audit actor FKs (Wave 5a): reference users.id instead of storing a
+    # free-form username. Nullable so we don't lose history when a user
+    # is deleted (ON DELETE SET NULL). Username is rendered through the
+    # ``*_by_user`` relationships below for API responses.
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    updated_by_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     schema_version: Mapped[str] = mapped_column(String(20), default="2.0.0")
 
     # Soft delete fields
@@ -96,10 +121,30 @@ class Phenopacket(Base):
         nullable=True,
         comment="Timestamp when record was soft-deleted (NULL if active)",
     )
-    deleted_by: Mapped[Optional[str]] = mapped_column(
-        String(100),
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        comment="Username who performed the soft delete",
+        comment="User id who performed the soft delete",
+    )
+
+    # Relationships to resolve username from FK. ``viewonly=True`` so
+    # ORM flushes don't try to back-populate the User side — we only
+    # read these relationships when rendering responses. The
+    # repository's ``_with_actor_eager_loads`` helper applies
+    # ``selectinload`` on every read path that is eventually rendered
+    # through ``build_phenopacket_response``; after ``session.refresh``
+    # on a freshly-committed phenopacket, callers that need the
+    # username must re-fetch via ``get_by_id`` to re-apply the eager
+    # loads (the service layer does this).
+    created_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[created_by_id], viewonly=True
+    )
+    updated_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[updated_by_id], viewonly=True
+    )
+    deleted_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[deleted_by_id], viewonly=True
     )
 
 
@@ -183,13 +228,24 @@ class PhenopacketAudit(Base):
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     old_value: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     new_value: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
-    changed_by: Mapped[Optional[str]] = mapped_column(String(100))
+    changed_by_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User id of the actor who performed the change",
+    )
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     change_reason: Mapped[Optional[str]] = mapped_column(Text)
     change_patch: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     change_summary: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Relationship for resolving the actor's username on read. viewonly
+    # because audit rows are immutable once written.
+    changed_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[changed_by_id], viewonly=True
+    )
 
 
 # Pydantic Schemas for API
@@ -378,21 +434,25 @@ class PhenopacketSchema(BaseModel):
 
 # API Request/Response Models
 class PhenopacketCreate(BaseModel):
-    """Request model for creating a phenopacket."""
+    """Request model for creating a phenopacket.
+
+    Note: ``created_by`` is no longer accepted in the request body —
+    the authenticated actor's user id is always used (Wave 5a FK-ify).
+    Any ``created_by`` field in the incoming JSON is silently ignored.
+    """
 
     phenopacket: Dict[str, Any]
-    created_by: Optional[str] = None
 
 
 class PhenopacketUpdate(BaseModel):
     """Request model for updating a phenopacket.
 
     Includes optional optimistic locking support via revision field and
-    audit trail support via change_reason field.
+    audit trail support via change_reason field. ``updated_by`` is no
+    longer accepted — the authenticated actor is always used.
     """
 
     phenopacket: Dict[str, Any]
-    updated_by: Optional[str] = None
     revision: Optional[int] = Field(
         None,
         description=(

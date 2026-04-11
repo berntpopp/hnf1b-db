@@ -122,9 +122,13 @@ class PhenopacketService:
         self,
         payload: PhenopacketCreate,
         *,
-        actor: str,
+        actor_id: Optional[int],
     ) -> Phenopacket:
         """Create a new phenopacket.
+
+        The ``actor_id`` is the authenticated user's ``users.id``.
+        Nullable so batch import scripts can pass ``None`` for
+        unattributed system inserts.
 
         Raises:
         ------
@@ -145,7 +149,7 @@ class PhenopacketService:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by=payload.created_by or actor,
+            created_by_id=actor_id,
         )
         self._repo.add(phenopacket)
 
@@ -167,14 +171,17 @@ class PhenopacketService:
             await self._repo.rollback()
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
 
-        return phenopacket
+        # Re-fetch via the repository so the actor FK relationships are
+        # eager-loaded for the response renderer.
+        reloaded = await self._repo.get_by_id(sanitized["id"])
+        return reloaded if reloaded is not None else phenopacket
 
     async def update(
         self,
         phenopacket_id: str,
         payload: PhenopacketUpdate,
         *,
-        actor: str,
+        actor_id: Optional[int],
     ) -> Phenopacket:
         """Update an existing phenopacket with optimistic locking + audit.
 
@@ -217,7 +224,7 @@ class PhenopacketService:
         existing.phenopacket = sanitized
         existing.subject_id = sanitized["subject"]["id"]
         existing.subject_sex = sanitized["subject"].get("sex", "UNKNOWN_SEX")
-        existing.updated_by = payload.updated_by or actor
+        existing.updated_by_id = actor_id
         existing.revision += 1
 
         try:
@@ -227,7 +234,7 @@ class PhenopacketService:
                 action="UPDATE",
                 old_value=old_phenopacket,
                 new_value=sanitized,
-                changed_by=existing.updated_by,
+                changed_by_id=actor_id,
                 change_reason=payload.change_reason,
             )
             await self._repo.commit_and_refresh(existing)
@@ -236,21 +243,28 @@ class PhenopacketService:
             logger.error("Failed to update phenopacket %s: %s", phenopacket_id, exc)
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
 
-        return existing
+        # Re-fetch so the actor FK relationships are eager-loaded for
+        # the response renderer (refresh by itself does not re-apply
+        # ``selectinload`` options attached at the query level).
+        reloaded = await self._repo.get_by_id(phenopacket_id)
+        return reloaded if reloaded is not None else existing
 
     async def soft_delete(
         self,
         phenopacket_id: str,
         change_reason: str,
         *,
-        actor: str,
+        actor_id: Optional[int],
+        actor_username: Optional[str] = None,
     ) -> Dict[str, Optional[str]]:
         """Soft-delete a phenopacket and create an audit entry.
 
         Returns a dict with the deletion metadata the router renders
-        directly. Raises ``ServiceNotFound`` if the row is missing or
-        already soft-deleted; raises ``ServiceDatabaseError`` on commit
-        failure.
+        directly. ``actor_username`` is echoed back in the response
+        under the ``deleted_by`` key for display purposes — the
+        persisted FK is ``actor_id``. Raises ``ServiceNotFound`` if
+        the row is missing or already soft-deleted; raises
+        ``ServiceDatabaseError`` on commit failure.
         """
         phenopacket = await self._repo.get_by_id(phenopacket_id)
         if phenopacket is None:
@@ -260,7 +274,7 @@ class PhenopacketService:
 
         old_phenopacket = phenopacket.phenopacket.copy()
         phenopacket.deleted_at = datetime.now(timezone.utc)
-        phenopacket.deleted_by = actor
+        phenopacket.deleted_by_id = actor_id
 
         try:
             await create_audit_entry(
@@ -269,7 +283,7 @@ class PhenopacketService:
                 action="DELETE",
                 old_value=old_phenopacket,
                 new_value=None,
-                changed_by=actor,
+                changed_by_id=actor_id,
                 change_reason=change_reason,
             )
             await self._repo.session.commit()
@@ -281,5 +295,5 @@ class PhenopacketService:
         return {
             "message": f"Phenopacket {phenopacket_id} deleted successfully",
             "deleted_at": phenopacket.deleted_at.isoformat(),
-            "deleted_by": phenopacket.deleted_by,
+            "deleted_by": actor_username,
         }

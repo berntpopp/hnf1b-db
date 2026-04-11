@@ -261,7 +261,7 @@ def _make_phenopacket_row(
         phenopacket=phenopacket,
         subject_id=subject_id,
         subject_sex="MALE",
-        created_by="router-test",
+        created_by_id=None,
     )
     if deleted:
         row.deleted_at = datetime.now(timezone.utc)

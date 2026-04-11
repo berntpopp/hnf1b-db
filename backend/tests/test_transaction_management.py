@@ -97,7 +97,7 @@ class TestTransactionRollback:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(new_phenopacket)
@@ -141,7 +141,7 @@ class TestTransactionRollback:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(new_phenopacket)
@@ -186,7 +186,7 @@ class TestTransactionRollback:
             phenopacket=sanitized1,
             subject_id=sanitized1["subject"]["id"],
             subject_sex=sanitized1["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket1)
@@ -209,7 +209,7 @@ class TestTransactionRollback:
             phenopacket=sanitized2,
             subject_id=sanitized2["subject"]["id"],
             subject_sex=sanitized2["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(phenopacket2)
@@ -260,7 +260,7 @@ class TestTransactionRollback:
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
-            created_by="test_user",
+            created_by_id=None,
         )
 
         db_session.add(new_phenopacket)

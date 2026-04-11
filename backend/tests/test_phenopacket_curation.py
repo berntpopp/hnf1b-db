@@ -8,7 +8,7 @@ from app.phenopackets.models import Phenopacket, PhenopacketAudit
 
 @pytest.mark.asyncio
 async def test_update_phenopacket_success(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+    async_client, db_session, admin_user, admin_headers, cleanup_test_phenopackets
 ):
     """Test successful phenopacket update with optimistic locking."""
     # Create test phenopacket
@@ -38,8 +38,8 @@ async def test_update_phenopacket_success(
         },
         subject_id="patient-001",
         subject_sex="MALE",
-        created_by="test",
-        updated_by="test",
+        created_by_id=None,
+        updated_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -70,7 +70,6 @@ async def test_update_phenopacket_success(
                 ],
             },
         },
-        "updated_by": "admin",
         "revision": 1,  # Current revision
         "change_reason": "Changed sex and added phenotype",
     }
@@ -98,7 +97,7 @@ async def test_update_phenopacket_success(
     audit = audit_result.scalar_one()
 
     assert audit.action == "UPDATE"
-    assert audit.changed_by == "admin"
+    assert audit.changed_by_id == admin_user.id
     assert audit.change_reason == "Changed sex and added phenotype"
     assert audit.change_patch is not None
     assert "changed sex to FEMALE" in audit.change_summary
@@ -143,7 +142,7 @@ async def test_update_phenopacket_conflict(
         },
         subject_id="patient-002",
         subject_sex="MALE",
-        created_by="test",
+        created_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -235,7 +234,7 @@ async def test_update_phenopacket_not_found(async_client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_delete_phenopacket_soft_delete(
-    async_client, db_session, admin_headers, cleanup_test_phenopackets
+    async_client, db_session, admin_user, admin_headers, cleanup_test_phenopackets
 ):
     """Test soft delete with audit trail."""
     # Create test phenopacket
@@ -264,7 +263,7 @@ async def test_delete_phenopacket_soft_delete(
         },
         subject_id="patient-003",
         subject_sex="FEMALE",
-        created_by="test",
+        created_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -281,13 +280,13 @@ async def test_delete_phenopacket_soft_delete(
     assert response.status_code == 200
     data = response.json()
     assert "deleted successfully" in data["message"]
-    assert data["deleted_by"] == "testadmin"
+    assert data["deleted_by"] == admin_user.username
     assert "deleted_at" in data
 
     # Verify soft delete in database
     await db_session.refresh(test_phenopacket)
     assert test_phenopacket.deleted_at is not None
-    assert test_phenopacket.deleted_by == "testadmin"
+    assert test_phenopacket.deleted_by_id == admin_user.id
 
     # Verify audit entry created
     audit_result = await db_session.execute(
@@ -298,7 +297,7 @@ async def test_delete_phenopacket_soft_delete(
     audit = audit_result.scalar_one()
 
     assert audit.action == "DELETE"
-    assert audit.changed_by == "testadmin"
+    assert audit.changed_by_id == admin_user.id
     assert audit.change_reason == "Test deletion"
     assert audit.change_summary == "Soft deleted phenopacket"
 
@@ -347,7 +346,7 @@ async def test_delete_phenopacket_missing_reason(
         },
         subject_id="patient-004",
         subject_sex="MALE",
-        created_by="test",
+        created_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -404,9 +403,9 @@ async def test_delete_already_deleted(
         },
         subject_id="patient-005",
         subject_sex="MALE",
-        created_by="test",
+        created_by_id=None,
         deleted_at=datetime.now(timezone.utc),
-        deleted_by="previous_user",
+        deleted_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -462,9 +461,9 @@ async def test_update_soft_deleted_phenopacket(
         },
         subject_id="patient-006",
         subject_sex="MALE",
-        created_by="test",
+        created_by_id=None,
         deleted_at=datetime.now(timezone.utc),
-        deleted_by="curator",
+        deleted_by_id=None,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -543,8 +542,8 @@ async def test_get_audit_history(
         },
         subject_id="patient-audit-001",
         subject_sex="UNKNOWN_SEX",
-        created_by=admin_user.username,
-        updated_by=admin_user.username,
+        created_by_id=admin_user.id,
+        updated_by_id=admin_user.id,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()

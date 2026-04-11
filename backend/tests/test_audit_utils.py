@@ -375,7 +375,7 @@ class TestCreateAuditEntry:
             action="CREATE",
             old_value=None,
             new_value=sample_phenopacket_minimal,
-            changed_by="curator@example.com",
+            changed_by_id=None,
             change_reason="Initial import from Google Sheets",
         )
 
@@ -384,7 +384,7 @@ class TestCreateAuditEntry:
         assert audit.action == "CREATE"
         assert audit.old_value is None
         assert audit.new_value is not None
-        assert audit.changed_by == "curator@example.com"
+        assert audit.changed_by_id is None
         assert audit.change_reason == "Initial import from Google Sheets"
         assert audit.change_patch is None  # CREATE has no patch
         assert audit.change_summary is not None
@@ -408,7 +408,7 @@ class TestCreateAuditEntry:
             action="UPDATE",
             old_value=old,
             new_value=new,
-            changed_by="curator@example.com",
+            changed_by_id=None,
             change_reason="Corrected patient sex",
         )
 
@@ -432,7 +432,7 @@ class TestCreateAuditEntry:
             action="DELETE",
             old_value=sample_phenopacket_minimal,
             new_value=None,
-            changed_by="admin@example.com",
+            changed_by_id=None,
             change_reason="Patient withdrew consent",
         )
 
@@ -455,7 +455,7 @@ class TestCreateAuditEntry:
                 action="INVALID_ACTION",
                 old_value=None,
                 new_value=sample_phenopacket_minimal,
-                changed_by="curator@example.com",
+                changed_by_id=None,
                 change_reason="Test",
             )
 
@@ -470,7 +470,7 @@ class TestCreateAuditEntry:
             action="CREATE",
             old_value=None,
             new_value=sample_phenopacket_minimal,
-            changed_by="test@example.com",
+            changed_by_id=None,
             change_reason="Unit test",
         )
 
@@ -485,5 +485,5 @@ class TestCreateAuditEntry:
 
         assert row is not None
         assert row.action == "CREATE"
-        assert row.changed_by == "test@example.com"
+        assert row.changed_by_id is None
         assert row.change_reason == "Unit test"
