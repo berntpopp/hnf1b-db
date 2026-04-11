@@ -167,10 +167,9 @@ async def _store_annotations_batch(
     """)
 
     for ann in annotations:
-        # DB column is timestamp without tz — strip tzinfo before bind.
+        # DB column is TIMESTAMPTZ (migration a7f1c2d9e5b3) — tz-aware
+        # UTC datetimes round-trip cleanly through asyncpg.
         fetched_at = ann.get("fetched_at", datetime.now(timezone.utc))
-        if fetched_at.tzinfo is not None:
-            fetched_at = fetched_at.replace(tzinfo=None)
 
         await db.execute(
             query,

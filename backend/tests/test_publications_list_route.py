@@ -144,8 +144,8 @@ async def _seed_publication_row(
     to phenopackets — publications with no referencing phenopacket
     are never returned).
     """
-    # Insert the publication metadata cache row. ``fetched_at`` is a
-    # timestamp-without-tz column, so strip tzinfo before binding.
+    # ``fetched_at`` is TIMESTAMPTZ (migration a7f1c2d9e5b3), so the
+    # tz-aware UTC datetime round-trips without any ``.replace`` hack.
     await db_session.execute(
         text("""
             INSERT INTO publication_metadata (
@@ -171,7 +171,7 @@ async def _seed_publication_row(
             "journal": journal,
             "year": year,
             "doi": doi,
-            "fetched_at": datetime.now(timezone.utc).replace(tzinfo=None),
+            "fetched_at": datetime.now(timezone.utc),
         },
     )
 
