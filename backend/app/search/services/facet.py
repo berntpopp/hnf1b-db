@@ -124,6 +124,24 @@ class FacetService:
             for r in variants_result.fetchall()
         ]
 
+        # Apply the full filter set to the LATERAL-based facets so the
+        # genes/pathogenicity/phenotypes counts reflect the current search
+        # (matching the docstring contract). The sex facet above already
+        # excludes only the ``subject_sex`` predicate.
+        #
+        # ``where_clause`` references unqualified columns like
+        # ``deleted_at``, ``search_vector``, ``phenopacket`` — these resolve
+        # to the ``p`` alias below because it's the only table in scope.
+        # If the ``sex`` filter was set, it also appeared in ``conditions``
+        # through ``params["sex"]`` and the predicate ``subject_sex = :sex``
+        # (built in the sex facet block), so we rebuild a lateral-safe
+        # clause that includes it here.
+        lateral_conditions = list(conditions)
+        if sex:
+            lateral_conditions.append("p.subject_sex = :sex")
+            params.setdefault("sex", sex)
+        lateral_where = " AND ".join(lateral_conditions)
+
         # SQL path fragments for the JSONB queries below.
         acmg_path = (
             "gi.value->'variantInterpretation'->>'acmgPathogenicityClassification'"
@@ -140,13 +158,13 @@ class FacetService:
                 COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
-            WHERE p.deleted_at IS NULL
+            WHERE {lateral_where}
             AND {acmg_path} IS NOT NULL
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 20
         """)
-        pathogenicity_result = await self.db.execute(pathogenicity_sql, {})
+        pathogenicity_result = await self.db.execute(pathogenicity_sql, params)
         pathogenicity_facets = [
             {"value": r.value, "label": r.value, "count": r.count}
             for r in pathogenicity_result.fetchall()
@@ -164,20 +182,20 @@ class FacetService:
                 COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
-            WHERE p.deleted_at IS NULL
+            WHERE {lateral_where}
             AND {gene_symbol_path} IS NOT NULL
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 20
         """)
-        genes_result = await self.db.execute(genes_sql, {})
+        genes_result = await self.db.execute(genes_sql, params)
         genes_facets = [
             {"value": r.value, "label": r.value, "count": r.count}
             for r in genes_result.fetchall()
         ]
 
         # Top phenotypes facet.
-        phenotypes_sql = text("""
+        phenotypes_sql = text(f"""
             SELECT
                 pf.value->'type'->>'id' AS hpo_id,
                 pf.value->'type'->>'label' AS label,
@@ -185,13 +203,13 @@ class FacetService:
             FROM phenopackets p
             CROSS JOIN LATERAL jsonb_array_elements(
                 COALESCE(p.phenopacket->'phenotypicFeatures', '[]'::jsonb)) AS pf
-            WHERE p.deleted_at IS NULL
+            WHERE {lateral_where}
             AND pf.value->'type'->>'id' IS NOT NULL
             GROUP BY hpo_id, label
             ORDER BY count DESC
             LIMIT 20
         """)
-        phenotypes_result = await self.db.execute(phenotypes_sql, {})
+        phenotypes_result = await self.db.execute(phenotypes_sql, params)
         phenotypes_facets = [
             {"value": r.hpo_id, "label": r.label or r.hpo_id, "count": r.count}
             for r in phenotypes_result.fetchall()

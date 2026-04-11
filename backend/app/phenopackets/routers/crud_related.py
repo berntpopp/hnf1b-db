@@ -91,7 +91,8 @@ async def get_phenopackets_by_variant(
     SELECT id, phenopacket_id, version, phenopacket,
            created_at, updated_at, schema_version
     FROM phenopackets p
-    WHERE EXISTS (
+    WHERE p.deleted_at IS NULL
+      AND EXISTS (
         SELECT 1
         FROM jsonb_array_elements(p.phenopacket->'interpretations') as interp,
              jsonb_array_elements(

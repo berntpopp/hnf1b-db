@@ -19,7 +19,7 @@ def calculate_fisher_exact_test(
     group1_absent: int,
     group2_present: int,
     group2_absent: int,
-) -> tuple[float, float]:
+) -> tuple[float, float | None]:
     """Calculate Fisher's exact test for a 2x2 contingency table.
 
     Always uses Fisher's exact test to match the R reference
@@ -32,9 +32,9 @@ def calculate_fisher_exact_test(
          [yes.nT, no.nT]]
 
     Returns ``(p_value, odds_ratio)``. The odds ratio is returned as
-    ``None`` when the computed value is non-finite — the rest of the
-    pipeline treats that as "undefined" and avoids leaking inf/nan into
-    the JSON response.
+    ``None`` when the computed value is non-finite or the total count
+    is zero — the rest of the pipeline treats that as "undefined" and
+    avoids leaking inf/nan into the JSON response.
     """
     contingency_table = [
         [group1_present, group1_absent],
@@ -43,17 +43,17 @@ def calculate_fisher_exact_test(
 
     total = group1_present + group1_absent + group2_present + group2_absent
     if total == 0:
-        # Undefined odds ratio surfaced as ``None`` for JSON safety.
-        return (1.0, None)  # type: ignore[return-value]
+        return (1.0, None)
 
     # Fisher's exact test — matches
     # ``fisher.test(rbind(c(yes.T, no.T), c(yes.nT, no.nT)))`` in R.
-    odds_ratio, p_value = stats.fisher_exact(contingency_table)
+    odds_ratio_raw, p_value = stats.fisher_exact(contingency_table)
 
-    if not math.isfinite(odds_ratio):
+    odds_ratio: float | None
+    if not math.isfinite(odds_ratio_raw):
         odds_ratio = None
     else:
-        odds_ratio = float(odds_ratio)
+        odds_ratio = float(odds_ratio_raw)
 
     return (float(p_value), odds_ratio)
 
