@@ -8,9 +8,9 @@ import logging
 from typing import AsyncGenerator
 
 import sqlalchemy.exc
-from sqlalchemy import MetaData, text
+from sqlalchemy import MetaData, event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session, with_loader_criteria
 
 from app.core.config import settings
 
@@ -128,6 +128,49 @@ async def close_db() -> None:
     logger.info("Closing database connections...")
     await engine.dispose()
     logger.info("Database connections closed")
+
+
+def _register_soft_delete_filter() -> None:
+    """Attach a global soft-delete filter to the Phenopacket entity.
+
+    Every SELECT touching Phenopacket gets an implicit
+    ``deleted_at IS NULL`` predicate unless the statement carries
+    ``execution_options(include_deleted=True)``. This mirrors the
+    SQLAlchemy docs "Soft-Delete" recipe (do_orm_execute listener
+    + with_loader_criteria) and is scoped to the Phenopacket entity
+    only — other models are unaffected.
+
+    The listener is registered on the ``Session`` class (the synchronous
+    session underlying every ``AsyncSession``). This works for both the
+    production ``async_session_maker`` and the test ``test_session_maker``
+    that ``tests/conftest.py`` substitutes at runtime, because both share
+    the same ``Session`` sync-session class.
+
+    Reference:
+        https://docs.sqlalchemy.org/en/20/orm/session_events.html#do-orm-execute
+    """
+    # Import inside the function to avoid a circular import: database.py is
+    # imported early in the app bootstrap before app.phenopackets.models has
+    # been loaded. The deferred import here ensures that model registration has
+    # already happened by the time the listener fires.
+    from app.phenopackets.models import Phenopacket  # noqa: PLC0415
+
+    @event.listens_for(Session, "do_orm_execute")
+    def _soft_delete_filter(execute_state: object) -> None:
+        if not execute_state.is_select:  # type: ignore[attr-defined]
+            return
+        if execute_state.execution_options.get("include_deleted", False):  # type: ignore[attr-defined]
+            return
+        execute_state.statement = execute_state.statement.options(  # type: ignore[attr-defined]
+            with_loader_criteria(
+                Phenopacket,
+                lambda cls: cls.deleted_at.is_(None),
+                include_aliases=True,
+            )
+        )
+
+
+_register_soft_delete_filter()
 
 
 async def refresh_materialized_views(

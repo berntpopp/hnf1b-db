@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Sequence, Tuple
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -65,29 +65,33 @@ class PhenopacketRepository:
     ) -> Optional[Phenopacket]:
         """Fetch a phenopacket by its public id.
 
-        Soft-deleted rows are filtered out by default. Set
-        ``include_deleted=True`` to read history-only records — used
-        by the audit-history endpoint, which still needs to render
-        old entries for deleted phenopackets.
+        Soft-deleted rows are filtered out by the global ``do_orm_execute``
+        event listener in ``app.database``. Set ``include_deleted=True`` to
+        read history-only records via the ``include_deleted`` execution option
+        escape hatch — used by the audit-history endpoint, which still needs
+        to render old entries for deleted phenopackets.
         """
-        conditions = [Phenopacket.phenopacket_id == phenopacket_id]
-        if not include_deleted:
-            conditions.append(Phenopacket.deleted_at.is_(None))
-
-        stmt = _with_actor_eager_loads(select(Phenopacket).where(and_(*conditions)))
+        stmt = _with_actor_eager_loads(
+            select(Phenopacket).where(
+                Phenopacket.phenopacket_id == phenopacket_id
+            )
+        )
+        if include_deleted:
+            stmt = stmt.execution_options(include_deleted=True)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_batch(self, phenopacket_ids: Sequence[str]) -> List[Phenopacket]:
-        """Fetch many phenopackets by id in a single round-trip."""
+        """Fetch many phenopackets by id in a single round-trip.
+
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``.
+        """
         if not phenopacket_ids:
             return []
         stmt = _with_actor_eager_loads(
             select(Phenopacket).where(
-                and_(
-                    Phenopacket.phenopacket_id.in_(phenopacket_ids),
-                    Phenopacket.deleted_at.is_(None),
-                )
+                Phenopacket.phenopacket_id.in_(phenopacket_ids),
             )
         )
         result = await self._session.execute(stmt)
@@ -103,14 +107,13 @@ class PhenopacketRepository:
     ) -> Select:
         """Return the base ``SELECT Phenopacket`` statement for list views.
 
-        The standard soft-delete and filter predicates are applied. The
-        router is responsible for chaining ``.order_by`` and ``.offset
-        / .limit`` because those depend on user-supplied sort parameters
-        that involve helper-built expressions.
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``. The router
+        is responsible for chaining ``.order_by`` and ``.offset / .limit``
+        because those depend on user-supplied sort parameters that involve
+        helper-built expressions.
         """
-        query = _with_actor_eager_loads(
-            select(Phenopacket).where(Phenopacket.deleted_at.is_(None))
-        )
+        query = _with_actor_eager_loads(select(Phenopacket))
         query = add_sex_filter(query, filter_sex)
         query = add_has_variants_filter(query, filter_has_variants)
         return query
@@ -121,12 +124,12 @@ class PhenopacketRepository:
         filter_sex: Optional[str],
         filter_has_variants: Optional[bool],
     ) -> int:
-        """Return the total count of phenopackets matching the filters."""
-        count_query = (
-            select(func.count())
-            .select_from(Phenopacket)
-            .where(Phenopacket.deleted_at.is_(None))
-        )
+        """Return the total count of phenopackets matching the filters.
+
+        Soft-deleted rows are excluded automatically by the global
+        ``do_orm_execute`` event listener in ``app.database``.
+        """
+        count_query = select(func.count()).select_from(Phenopacket)
         count_query = add_sex_filter(count_query, filter_sex)
         count_query = add_has_variants_filter(count_query, filter_has_variants)
         result = await self._session.execute(count_query)
