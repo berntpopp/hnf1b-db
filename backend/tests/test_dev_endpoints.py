@@ -180,6 +180,14 @@ def test_dev_endpoints_refuses_import_outside_dev_mode():
     Runs in a subprocess with production-like env vars so the guard
     fires on module import. We run the subprocess with ``-O`` to prove
     the guard survives compile-time optimization.
+
+    Note on env setup: ``app.api.dev_endpoints`` imports
+    ``app.auth.tokens`` → ``app.auth.dependencies`` → ``app.database``,
+    and ``app.database`` calls ``create_async_engine(DATABASE_URL)`` at
+    module import time. We therefore pass a *syntactically valid but
+    non-connecting* ``DATABASE_URL`` so the preceding imports succeed
+    long enough for the Layer 2 guard to actually fire. The test is
+    about the guard, not about the database.
     """
     script = (
         "import sys\n"
@@ -196,6 +204,10 @@ def test_dev_endpoints_refuses_import_outside_dev_mode():
         "ENABLE_DEV_AUTH": "false",
         "JWT_SECRET": "x" * 32,
         "ADMIN_PASSWORD": "A" * 20,
+        # Syntactically valid URL so SQLAlchemy's parser accepts it at
+        # import time; no network connection is made because we never
+        # execute a query before the guard fires.
+        "DATABASE_URL": "postgresql+asyncpg://x:x@localhost:5432/x",
         "PATH": "/usr/bin:/bin",
     }
     # Use ``-O`` to verify the guard is NOT an ``assert`` (which would be
