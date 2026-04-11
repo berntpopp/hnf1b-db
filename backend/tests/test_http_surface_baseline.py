@@ -261,9 +261,7 @@ async def test_verify_baseline(async_client, _auth_headers_map, spec):
         f"{name}: status code changed "
         f"{baseline['status_code']} → {capture['status_code']}"
     )
-    assert capture["shape"] == baseline["shape"], (
-        f"{name}: response shape changed"
-    )
+    assert capture["shape"] == baseline["shape"], f"{name}: response shape changed"
     assert capture["normalized_body"] == baseline["normalized_body"], (
         f"{name}: normalised response body changed"
     )

@@ -44,9 +44,7 @@ class FacetService:
         params: dict[str, Any] = {}
 
         if query:
-            conditions.append(
-                "search_vector @@ plainto_tsquery('english', :query)"
-            )
+            conditions.append("search_vector @@ plainto_tsquery('english', :query)")
             params["query"] = query
 
         if hpo_id:

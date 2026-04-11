@@ -19,10 +19,10 @@ from typing import Any, Dict, List, Optional
 _HGVS_C_PATTERNS = [
     # Substitution: c.544+1G>A (allows +/- offset)
     r"^(NM_\d+\.\d+:)?c\.([+\-*]?\d+[+\-]?\d*)([ATCG]>[ATCG])$",
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?del([ATCG]+)?$",      # Deletion
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?dup([ATCG]+)?$",      # Duplication
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?ins([ATCG]+)$",       # Insertion
-    r"^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$",     # Intronic
+    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?del([ATCG]+)?$",  # Deletion
+    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?dup([ATCG]+)?$",  # Duplication
+    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?ins([ATCG]+)$",  # Insertion
+    r"^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$",  # Intronic
 ]
 
 
@@ -63,9 +63,7 @@ def validate_hgvs_g(value: str) -> bool:
 
 # ----------------------------------------------------------------------- VCF
 
-_VCF_PATTERN = (
-    r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ATCG]+-([ATCG]+|<[A-Z]+>)$"
-)
+_VCF_PATTERN = r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ATCG]+-([ATCG]+|<[A-Z]+>)$"
 
 
 def validate_vcf(value: str) -> bool:
@@ -76,9 +74,7 @@ def validate_vcf(value: str) -> bool:
     return bool(re.match(_VCF_PATTERN, value, re.IGNORECASE))
 
 
-_VCF_FORMAT_PATTERN = re.compile(
-    r"^(chr)?[\dXYM]+-\d+-[ACGT]+-[ACGT]+$", re.IGNORECASE
-)
+_VCF_FORMAT_PATTERN = re.compile(r"^(chr)?[\dXYM]+-\d+-[ACGT]+-[ACGT]+$", re.IGNORECASE)
 
 
 def is_vcf_format(variant: str) -> bool:
@@ -92,9 +88,7 @@ def vcf_to_vep_format(vcf_variant: str) -> Optional[str]:
     Input:  ``17-36459258-A-G`` or ``chr17-36459258-A-G``
     Output: ``17 36459258 . A G . . .``
     """
-    vcf_variant = (
-        vcf_variant.replace("chr", "").replace("Chr", "").replace("CHR", "")
-    )
+    vcf_variant = vcf_variant.replace("chr", "").replace("Chr", "").replace("CHR", "")
     parts = vcf_variant.split("-")
     if len(parts) != 4:
         return None
@@ -160,8 +154,7 @@ def validate_vrs_allele(vrs_allele: Dict[str, Any]) -> List[str]:
         "ReferenceLengthExpression",
     ]:
         errors.append(
-            "VRS state must be LiteralSequenceExpression or "
-            "ReferenceLengthExpression"
+            "VRS state must be LiteralSequenceExpression or ReferenceLengthExpression"
         )
 
     return errors

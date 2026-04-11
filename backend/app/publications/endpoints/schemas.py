@@ -61,12 +61,8 @@ class PublicationListItem(BaseModel):
     journal: Optional[str] = Field(None, description="Journal name")
     year: Optional[int] = Field(None, description="Publication year")
     doi: Optional[str] = Field(None, description="DOI identifier")
-    phenopacket_count: int = Field(
-        ..., description="Number of associated phenopackets"
-    )
-    first_added: Optional[str] = Field(
-        None, description="When first added to database"
-    )
+    phenopacket_count: int = Field(..., description="Number of associated phenopackets")
+    first_added: Optional[str] = Field(None, description="When first added to database")
 
     model_config = ConfigDict(
         json_schema_extra={

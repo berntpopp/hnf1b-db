@@ -115,9 +115,7 @@ async def list_phenopackets(
             Phenopacket.id.desc(),
         )
     else:
-        query = query.order_by(
-            Phenopacket.created_at.desc(), Phenopacket.id.desc()
-        )
+        query = query.order_by(Phenopacket.created_at.desc(), Phenopacket.id.desc())
 
     total_count = await repo.count_filtered(
         filter_sex=filter_sex,

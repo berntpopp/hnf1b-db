@@ -78,8 +78,7 @@ def get_notation_suggestions(invalid_notation: str) -> List[str]:
 
     if not suggestions:
         suggestions.append(
-            "Valid formats: NM_000458.4:c.123A>G, chr17:g.36459258A>G, "
-            "17:start-end:DEL"
+            "Valid formats: NM_000458.4:c.123A>G, chr17:g.36459258A>G, 17:start-end:DEL"
         )
 
     return suggestions

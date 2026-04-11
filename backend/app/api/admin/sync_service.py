@@ -58,9 +58,7 @@ async def run_publication_sync(task_id: str, store: SyncTaskStore) -> None:
 
             for pmid in pmids_to_sync:
                 try:
-                    await get_publication_metadata(
-                        pmid, db, fetched_by="admin_sync"
-                    )
+                    await get_publication_metadata(pmid, db, fetched_by="admin_sync")
                     await store.increment_processed(task_id)
                 except (PubMedError, SQLAlchemyError, asyncio.TimeoutError) as exc:
                     await store.increment_errors(task_id, count=1)

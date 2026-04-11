@@ -96,9 +96,7 @@ class SyncTaskState:
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-friendly dict (enums → their string values)."""
         data = asdict(self)
-        data["kind"] = (
-            self.kind.value if isinstance(self.kind, TaskKind) else self.kind
-        )
+        data["kind"] = self.kind.value if isinstance(self.kind, TaskKind) else self.kind
         data["status"] = (
             self.status.value if isinstance(self.status, TaskStatus) else self.status
         )

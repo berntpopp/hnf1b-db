@@ -178,10 +178,7 @@ class PhenopacketService:
         if existing is None:
             raise ServiceNotFound(f"Phenopacket {phenopacket_id} not found")
 
-        if (
-            payload.revision is not None
-            and existing.revision != payload.revision
-        ):
+        if payload.revision is not None and existing.revision != payload.revision:
             raise ServiceConflict(
                 {
                     "error": "Conflict detected",

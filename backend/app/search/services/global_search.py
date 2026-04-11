@@ -63,9 +63,7 @@ class GlobalSearchService:
             summary=summary,
         )
 
-    async def autocomplete(
-        self, query: str, limit: int = 10
-    ) -> AutocompleteResponse:
+    async def autocomplete(self, query: str, limit: int = 10) -> AutocompleteResponse:
         """Get autocomplete suggestions.
 
         Returns an empty response when ``query`` is shorter than two
@@ -75,9 +73,7 @@ class GlobalSearchService:
             return AutocompleteResponse(results=[])
 
         results = await self.repo.autocomplete(query, limit)
-        return AutocompleteResponse(
-            results=[SearchResultItem(**r) for r in results]
-        )
+        return AutocompleteResponse(results=[SearchResultItem(**r) for r in results])
 
     async def refresh_index(self, concurrently: bool = True) -> None:
         """Refresh the materialized view.

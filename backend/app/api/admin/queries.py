@@ -156,9 +156,7 @@ async def fetch_vep_sync_stats(db: AsyncSession) -> tuple[int, int]:
     result = await db.execute(query)
     row = result.fetchone()
     if row is None:
-        raise HTTPException(
-            status_code=500, detail="Failed to fetch VEP statistics"
-        )
+        raise HTTPException(status_code=500, detail="Failed to fetch VEP statistics")
     return (row.total or 0, row.synced or 0)
 
 

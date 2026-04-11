@@ -256,9 +256,7 @@ async def list_publications(
                 "year": row.year,
                 "doi": row.doi,
                 "phenopacket_count": row.phenopacket_count,
-                "first_added": row.first_added.isoformat()
-                if row.first_added
-                else None,
+                "first_added": row.first_added.isoformat() if row.first_added else None,
             }
         )
 

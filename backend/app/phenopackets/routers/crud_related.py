@@ -115,12 +115,8 @@ async def get_phenopackets_by_variant(
             "phenopacket_id": row["phenopacket_id"],
             "version": row["version"],
             "phenopacket": row["phenopacket"],
-            "created_at": row["created_at"].isoformat()
-            if row["created_at"]
-            else None,
-            "updated_at": row["updated_at"].isoformat()
-            if row["updated_at"]
-            else None,
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
             "schema_version": row["schema_version"],
         }
         for row in rows
@@ -244,6 +240,4 @@ async def get_by_publication(
         raise
     except SQLAlchemyError as exc:
         logger.error("Error fetching phenopackets for PMID %s: %s", pmid, exc)
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

@@ -79,9 +79,7 @@ async def _sync_publications_background() -> None:
                 await get_publication_metadata(pmid, db, fetched_by="sync")
                 fetched += 1
                 if fetched % 10 == 0:
-                    logger.info(
-                        "Synced %s/%s publications", fetched, len(to_fetch)
-                    )
+                    logger.info("Synced %s/%s publications", fetched, len(to_fetch))
             except (
                 PubMedAPIError,
                 PubMedTimeoutError,

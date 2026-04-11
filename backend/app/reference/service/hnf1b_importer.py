@@ -68,9 +68,7 @@ async def get_or_create_grch38_genome(
     return genome, True
 
 
-async def get_genome_by_name(
-    db: AsyncSession, name: str
-) -> ReferenceGenome | None:
+async def get_genome_by_name(db: AsyncSession, name: str) -> ReferenceGenome | None:
     """Get a genome by name (e.g., ``"GRCh38"``)."""
     stmt = select(ReferenceGenome).where(ReferenceGenome.name == name)
     result = await db.execute(stmt)
@@ -81,9 +79,7 @@ async def get_gene_by_symbol(
     db: AsyncSession, symbol: str, genome_id: uuid.UUID
 ) -> Gene | None:
     """Get a gene by symbol + genome id."""
-    stmt = select(Gene).where(
-        and_(Gene.symbol == symbol, Gene.genome_id == genome_id)
-    )
+    stmt = select(Gene).where(and_(Gene.symbol == symbol, Gene.genome_id == genome_id))
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 

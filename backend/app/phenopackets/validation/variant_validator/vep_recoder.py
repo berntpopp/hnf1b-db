@@ -44,16 +44,12 @@ VARIANT_RECODER_BATCH_SIZE = 200
 class VEPRecoder:
     """Async client for Ensembl VEP Variant Recoder."""
 
-    def __init__(
-        self, rate_limiter: RateLimiter, annotator: VEPAnnotator
-    ) -> None:
+    def __init__(self, rate_limiter: RateLimiter, annotator: VEPAnnotator) -> None:
         """Wire the recoder to the shared rate limiter and VEP annotator."""
         self._rate_limiter = rate_limiter
         self._annotator = annotator
         self._max_retries = _vv_pkg.settings.external_apis.vep.max_retries
-        self._backoff_factor = (
-            _vv_pkg.settings.external_apis.vep.retry_backoff_factor
-        )
+        self._backoff_factor = _vv_pkg.settings.external_apis.vep.retry_backoff_factor
         self._cache_ttl = _vv_pkg.settings.external_apis.vep.cache_ttl_seconds
 
     async def recode(self, variant: str) -> Optional[Dict[str, Any]]:
@@ -113,9 +109,7 @@ class VEPRecoder:
                             return None
                         recoded = result[0] if result else None
                         if not recoded:
-                            logger.error(
-                                "Empty VEP recoder response for: %s", variant
-                            )
+                            logger.error("Empty VEP recoder response for: %s", variant)
                             return None
                         if _vv_pkg.settings.external_apis.vep.cache_enabled:
                             await _vv_pkg.cache.set_json(
@@ -131,9 +125,7 @@ class VEPRecoder:
                         continue
 
                     if response.status_code == 400:
-                        logger.error(
-                            "Invalid variant format for recoding: %s", variant
-                        )
+                        logger.error("Invalid variant format for recoding: %s", variant)
                         return None
 
                     if response.status_code in (500, 502, 503, 504):
@@ -179,9 +171,7 @@ class VEPRecoder:
                     )
                     await asyncio.sleep(backoff_time)
                     continue
-                logger.error(
-                    "VEP recoder API network error after retries: %s", exc
-                )
+                logger.error("VEP recoder API network error after retries: %s", exc)
                 return None
 
             except (
@@ -192,9 +182,7 @@ class VEPRecoder:
                 TypeError,
                 json.JSONDecodeError,
             ) as exc:
-                logger.error(
-                    "Unexpected VEP recoder error: %s", exc, exc_info=True
-                )
+                logger.error("Unexpected VEP recoder error: %s", exc, exc_info=True)
                 return None
 
         return None
@@ -323,9 +311,7 @@ class VEPRecoder:
                         continue
 
                     if response.status_code == 400:
-                        logger.error(
-                            "Invalid variants in batch: %s", uncached_variants
-                        )
+                        logger.error("Invalid variants in batch: %s", uncached_variants)
                         for v in uncached_variants:
                             results[v] = None
                         return results
@@ -358,9 +344,7 @@ class VEPRecoder:
             except httpx.TimeoutException:
                 if attempt < self._max_retries - 1:
                     backoff_time = self._backoff_factor**attempt
-                    logger.warning(
-                        "VEP recoder timeout, retrying in %ss", backoff_time
-                    )
+                    logger.warning("VEP recoder timeout, retrying in %ss", backoff_time)
                     await asyncio.sleep(backoff_time)
                     continue
                 logger.error("VEP recoder batch timeout after retries")
@@ -371,9 +355,7 @@ class VEPRecoder:
             except httpx.NetworkError as exc:
                 if attempt < self._max_retries - 1:
                     backoff_time = self._backoff_factor**attempt
-                    logger.warning(
-                        "VEP recoder network error: %s, retrying", exc
-                    )
+                    logger.warning("VEP recoder network error: %s, retrying", exc)
                     await asyncio.sleep(backoff_time)
                     continue
                 logger.error("VEP recoder batch network error: %s", exc)

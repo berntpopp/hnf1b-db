@@ -93,16 +93,12 @@ class TestGetAndGetLatest:
         assert await store.get("does-not-exist") is None
 
     @pytest.mark.asyncio
-    async def test_get_latest_returns_none_for_missing_kind(
-        self, store: SyncTaskStore
-    ):
+    async def test_get_latest_returns_none_for_missing_kind(self, store: SyncTaskStore):
         """``get_latest`` with no tasks of a kind returns None."""
         assert await store.get_latest(TaskKind.VARIANT) is None
 
     @pytest.mark.asyncio
-    async def test_latest_pointer_updates_on_new_create(
-        self, store: SyncTaskStore
-    ):
+    async def test_latest_pointer_updates_on_new_create(self, store: SyncTaskStore):
         """A second create of the same kind makes it the new latest; the
         older task is still retrievable by its id.
         """
@@ -126,9 +122,7 @@ class TestProgressUpdates:
     """Cover progress mutation (``mark_running``, ``update_counts``, increments)."""
 
     @pytest.mark.asyncio
-    async def test_mark_running_sets_status_and_timestamp(
-        self, store: SyncTaskStore
-    ):
+    async def test_mark_running_sets_status_and_timestamp(self, store: SyncTaskStore):
         """``mark_running`` flips status and stamps ``started_at``."""
         state = await store.create(TaskKind.PUBLICATION, total=10)
         await store.mark_running(state.task_id)
@@ -146,9 +140,7 @@ class TestProgressUpdates:
         assert updated.progress == pytest.approx(25.0)
 
     @pytest.mark.asyncio
-    async def test_update_counts_total_zero_is_100_percent(
-        self, store: SyncTaskStore
-    ):
+    async def test_update_counts_total_zero_is_100_percent(self, store: SyncTaskStore):
         """Total of zero (empty queue) must surface as 100% "nothing to do"."""
         state = await store.create(TaskKind.PUBLICATION, total=0)
         await store.update_counts(state.task_id, processed=0)
@@ -156,17 +148,13 @@ class TestProgressUpdates:
         assert updated.progress == 100.0
 
     @pytest.mark.asyncio
-    async def test_update_counts_is_noop_on_missing_task(
-        self, store: SyncTaskStore
-    ):
+    async def test_update_counts_is_noop_on_missing_task(self, store: SyncTaskStore):
         """Updating a missing task logs a warning and returns None."""
         result = await store.update_counts("missing", processed=1)
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_increment_processed_advances_progress(
-        self, store: SyncTaskStore
-    ):
+    async def test_increment_processed_advances_progress(self, store: SyncTaskStore):
         """Each ``increment_processed`` bumps the counter and progress."""
         state = await store.create(TaskKind.PUBLICATION, total=2)
         await store.increment_processed(state.task_id)
@@ -251,9 +239,7 @@ class TestCacheKeys:
     """
 
     @pytest.mark.asyncio
-    async def test_key_layout_matches_documented_format(
-        self, store: SyncTaskStore
-    ):
+    async def test_key_layout_matches_documented_format(self, store: SyncTaskStore):
         """State is stored under ``admin:sync_task:{task_id}`` and the
         latest pointer under ``admin:sync_task:latest:{kind}``.
         """
@@ -261,9 +247,7 @@ class TestCacheKeys:
         raw = await store._cache.get_json(f"{KEY_PREFIX}{state.task_id}")
         assert raw is not None
         assert raw["task_id"] == state.task_id
-        latest = await store._cache.get(
-            f"{LATEST_PREFIX}{TaskKind.PUBLICATION.value}"
-        )
+        latest = await store._cache.get(f"{LATEST_PREFIX}{TaskKind.PUBLICATION.value}")
         assert latest == state.task_id
 
 

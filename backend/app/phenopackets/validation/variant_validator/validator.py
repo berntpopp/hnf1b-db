@@ -154,9 +154,7 @@ class VariantValidator:
         """Validate variant using Ensembl VEP API (delegates to annotator)."""
         return await self._annotator.validate_with_vep(hgvs_notation)
 
-    def validate_variant_formats(
-        self, variant_descriptor: Dict[str, Any]
-    ) -> List[str]:
+    def validate_variant_formats(self, variant_descriptor: Dict[str, Any]) -> List[str]:
         """Validate variant formats in a variation descriptor.
 
         Returns a list of human-readable error strings (empty if valid).
@@ -189,9 +187,7 @@ class VariantValidator:
 
         if "vrsAllele" in variant_descriptor:
             errors.extend(
-                format_validators.validate_vrs_allele(
-                    variant_descriptor["vrsAllele"]
-                )
+                format_validators.validate_vrs_allele(variant_descriptor["vrsAllele"])
             )
 
         if "structuralType" in variant_descriptor:
@@ -235,9 +231,7 @@ class VariantValidator:
         """Annotate variant with VEP (delegates to :class:`VEPAnnotator`)."""
         return await self._annotator.annotate(variant, include_annotations)
 
-    async def recode_variant_with_vep(
-        self, variant: str
-    ) -> Optional[Dict[str, Any]]:
+    async def recode_variant_with_vep(self, variant: str) -> Optional[Dict[str, Any]]:
         """Recode variant via VEP Variant Recoder (delegates to VEPRecoder)."""
         return await self._recoder.recode(variant)
 

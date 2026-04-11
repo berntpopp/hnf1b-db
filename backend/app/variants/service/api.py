@@ -92,9 +92,7 @@ async def get_variant_annotations_batch(
         return {}
 
     cached = await _get_cached_annotations_batch(validated_ids, db)
-    results: Dict[str, Optional[dict]] = {
-        vid: cached.get(vid) for vid in validated_ids
-    }
+    results: Dict[str, Optional[dict]] = {vid: cached.get(vid) for vid in validated_ids}
 
     missing = [vid for vid in validated_ids if vid not in cached]
 
@@ -125,9 +123,7 @@ async def get_variant_annotations_batch(
             await asyncio.sleep(60)
             try:
                 batch_results = await _fetch_from_vep(batch)
-                to_store = [
-                    batch_results[vid] for vid in batch if vid in batch_results
-                ]
+                to_store = [batch_results[vid] for vid in batch if vid in batch_results]
                 if to_store:
                     await _store_annotations_batch(to_store, db, fetched_by)
                 for vid in batch:

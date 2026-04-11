@@ -46,9 +46,7 @@ class VEPAnnotator:
         """Wire the annotator to a shared rate limiter + config-driven knobs."""
         self._rate_limiter = rate_limiter
         self._max_retries = _vv_pkg.settings.external_apis.vep.max_retries
-        self._backoff_factor = (
-            _vv_pkg.settings.external_apis.vep.retry_backoff_factor
-        )
+        self._backoff_factor = _vv_pkg.settings.external_apis.vep.retry_backoff_factor
         self._cache_ttl = _vv_pkg.settings.external_apis.vep.cache_ttl_seconds
 
     async def validate_with_vep(
@@ -161,9 +159,7 @@ class VEPAnnotator:
 
                     if response.status_code == 200:
                         result = response.json()
-                        annotation = (
-                            result[0] if isinstance(result, list) else result
-                        )
+                        annotation = result[0] if isinstance(result, list) else result
                         if _vv_pkg.settings.external_apis.vep.cache_enabled:
                             await _vv_pkg.cache.set_json(
                                 cache_key, annotation, ttl=self._cache_ttl
@@ -200,9 +196,7 @@ class VEPAnnotator:
                         )
                         return None
 
-                    logger.error(
-                        "Unexpected VEP API error %s", response.status_code
-                    )
+                    logger.error("Unexpected VEP API error %s", response.status_code)
                     return None
 
             except httpx.TimeoutException:
@@ -246,9 +240,7 @@ class VEPAnnotator:
                 TypeError,
                 json.JSONDecodeError,
             ) as exc:
-                logger.error(
-                    "Unexpected VEP annotation error: %s", exc, exc_info=True
-                )
+                logger.error("Unexpected VEP annotation error: %s", exc, exc_info=True)
                 return None
 
         return None

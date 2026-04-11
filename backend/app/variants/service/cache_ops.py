@@ -18,9 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
-async def _get_cached_annotation(
-    variant_id: str, db: AsyncSession
-) -> Optional[dict]:
+async def _get_cached_annotation(variant_id: str, db: AsyncSession) -> Optional[dict]:
     """Check the database cache for a single variant annotation."""
     query = text("""
         SELECT

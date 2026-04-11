@@ -68,9 +68,7 @@ router = APIRouter(tags=["publications"])
             "description": "Rate limit exceeded",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Rate limit exceeded, retry after 60 seconds"
-                    }
+                    "example": {"detail": "Rate limit exceeded, retry after 60 seconds"}
                 }
             },
         },
@@ -105,9 +103,7 @@ async def get_publication_metadata_endpoint(
 
     except PubMedNotFoundError as exc:
         logger.warning("PMID not found: %s", pmid, extra={"pmid": pmid})
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
     except PubMedRateLimitError as exc:
         logger.error("Rate limit exceeded for %s", pmid, extra={"pmid": pmid})

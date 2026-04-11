@@ -50,9 +50,7 @@ def validate_variant_id(variant_id: str, allow_cnv: bool = True) -> str:
     # Pattern 5: Internal CNV format - var:GENE:CHROM:START-END:TYPE.
     # Checked first because it contains colons that would otherwise be
     # normalised out by the region branch below.
-    internal_cnv_pattern = (
-        r"^var:[A-Za-z0-9]+:[0-9XYM]+:\d+-\d+:(DEL|DUP|INS|INV|CNV)$"
-    )
+    internal_cnv_pattern = r"^var:[A-Za-z0-9]+:[0-9XYM]+:\d+-\d+:(DEL|DUP|INS|INV|CNV)$"
     if allow_cnv and re.match(internal_cnv_pattern, variant_id, re.IGNORECASE):
         return variant_id  # Keep as-is (case-sensitive gene names)
 

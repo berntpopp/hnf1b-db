@@ -103,9 +103,7 @@ async def aggregate_by_feature(
 
     # Calculate total for percentage (sum of all present counts)
     total = sum(int(row["present_count"]) for row in rows)
-    rows_with_pct = calculate_percentages(
-        rows, total=total, count_key="present_count"
-    )
+    rows_with_pct = calculate_percentages(rows, total=total, count_key="present_count")
 
     return [
         AggregationResult(

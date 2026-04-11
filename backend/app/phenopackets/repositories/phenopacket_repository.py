@@ -60,9 +60,7 @@ class PhenopacketRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_batch(
-        self, phenopacket_ids: Sequence[str]
-    ) -> List[Phenopacket]:
+    async def get_batch(self, phenopacket_ids: Sequence[str]) -> List[Phenopacket]:
         """Fetch many phenopackets by id in a single round-trip."""
         if not phenopacket_ids:
             return []
@@ -143,9 +141,7 @@ class PhenopacketRepository:
 
     # ------------------------------------------------------------- audit log
 
-    async def list_audit_history(
-        self, phenopacket_id: str
-    ) -> List[PhenopacketAudit]:
+    async def list_audit_history(self, phenopacket_id: str) -> List[PhenopacketAudit]:
         """Return audit entries for a phenopacket, newest first."""
         stmt = (
             select(PhenopacketAudit)
