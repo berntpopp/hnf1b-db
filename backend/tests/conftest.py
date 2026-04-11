@@ -266,6 +266,59 @@ async def async_client(db_session):
 
 
 @pytest_asyncio.fixture
+async def dev_auth_client(db_session):
+    """Async HTTP client with the Wave 5a dev-auth router mounted.
+
+    The dev router is only registered by ``app/main.py`` when
+    ``settings.enable_dev_auth`` and ``settings.environment == "development"``
+    are both true at app-import time. The test suite sets those flags to
+    production defaults via ``backend/conftest.py``, so by the time this
+    fixture runs the router has NOT been included on the shared ``app``.
+
+    We temporarily flip the two ``settings`` attributes, import
+    ``app.api.dev_endpoints`` inside the fixture (so the module-level
+    assert sees the flipped values on its first evaluation), include the
+    router if it isn't already mounted, and restore the flags on
+    teardown. The module stays cached in ``sys.modules`` after the first
+    run, so subsequent test invocations just re-use the same router
+    object.
+    """
+    from app.core.config import settings as app_settings
+    from app.database import get_db
+
+    original_env = app_settings.environment
+    original_flag = app_settings.enable_dev_auth
+    app_settings.environment = "development"
+    app_settings.enable_dev_auth = True
+
+    try:
+        # Import AFTER flipping so the module-level assert passes.
+        from app.api import dev_endpoints
+
+        if not any(
+            getattr(r, "path", "").startswith("/api/v2/dev")
+            for r in app.router.routes
+        ):
+            app.include_router(dev_endpoints.router)
+
+        async def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://testclient"
+        ) as client:
+            yield client
+
+        app.dependency_overrides.clear()
+    finally:
+        app_settings.environment = original_env
+        app_settings.enable_dev_auth = original_flag
+
+
+@pytest_asyncio.fixture
 async def auth_headers(test_user, async_client):
     """Get auth headers for authenticated requests."""
     response = await async_client.post(
