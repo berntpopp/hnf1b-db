@@ -168,6 +168,33 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Wave 5a Layer 4 — the DEV gate is critical. Vite replaces
+  // import.meta.env.DEV with literal `false` during production build
+  // and Rollup DCE eliminates the entire function body, including
+  // the URL string literal /api/v2/dev/login-as/. Never read
+  // import.meta.env.DEV into a variable first — keep the literal
+  // inside the guard so the static replacement is structural.
+  async function devLoginAs(username) {
+    if (!import.meta.env.DEV) return;
+
+    isLoading.value = true;
+    try {
+      const { data } = await apiClient.post(`/dev/login-as/${username}`);
+      accessToken.value = data.access_token;
+      refreshToken.value = data.refresh_token;
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      await fetchCurrentUser();
+      window.logService.info('dev quick-login', { username });
+      return true;
+    } catch (err) {
+      window.logService.error('dev quick-login failed', { username, error: err.message });
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   // Initialize: Load user if token exists
   async function initialize() {
     if (accessToken.value) {
@@ -203,5 +230,6 @@ export const useAuthStore = defineStore('auth', () => {
     refreshAccessToken,
     changePassword,
     initialize,
+    devLoginAs,
   };
 });
