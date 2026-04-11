@@ -1,0 +1,54 @@
+{
+  "normalized_body": {
+    "database": {
+      "phenopackets": 0,
+      "publications_cached": "<normalized>",
+      "users": 1
+    },
+    "status": "healthy",
+    "sync_status": [
+      {
+        "last_sync": "<normalized>",
+        "name": "Publication Metadata",
+        "pending": 0,
+        "synced": 0,
+        "total": "<normalized>"
+      },
+      {
+        "last_sync": "<normalized>",
+        "name": "VEP Annotations",
+        "pending": 0,
+        "synced": 0,
+        "total": "<normalized>"
+      },
+      {
+        "last_sync": "<normalized>",
+        "name": "chr17q12 Genes",
+        "pending": 0,
+        "synced": 0,
+        "total": "<normalized>"
+      }
+    ],
+    "timestamp": "<normalized>"
+  },
+  "shape": {
+    "database": {
+      "phenopackets": "int",
+      "publications_cached": "int",
+      "users": "int"
+    },
+    "status": "str",
+    "sync_status": [
+      "list",
+      {
+        "last_sync": null,
+        "name": "str",
+        "pending": "int",
+        "synced": "int",
+        "total": "int"
+      }
+    ],
+    "timestamp": "str"
+  },
+  "status_code": 200
+}

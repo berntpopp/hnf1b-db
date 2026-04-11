@@ -1,0 +1,32 @@
+{
+  "normalized_body": {
+    "group1_count": 0,
+    "group1_name": "Truncating",
+    "group2_count": 0,
+    "group2_name": "Non-truncating",
+    "metadata": {
+      "comparison_type": "truncating_vs_non_truncating",
+      "min_prevalence": 0.05,
+      "significant_count": 0,
+      "total_phenotypes_compared": 0
+    },
+    "phenotypes": []
+  },
+  "shape": {
+    "group1_count": "int",
+    "group1_name": "str",
+    "group2_count": "int",
+    "group2_name": "str",
+    "metadata": {
+      "comparison_type": "str",
+      "min_prevalence": "float",
+      "significant_count": "int",
+      "total_phenotypes_compared": "int"
+    },
+    "phenotypes": [
+      "list",
+      "empty"
+    ]
+  },
+  "status_code": 200
+}

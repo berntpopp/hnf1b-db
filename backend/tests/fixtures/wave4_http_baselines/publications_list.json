@@ -1,0 +1,42 @@
+{
+  "normalized_body": {
+    "data": [],
+    "links": {
+      "first": "/api/v2/publications/?page%5Bnumber%5D=1&page%5Bsize%5D=3&sort=-phenopacket_count",
+      "last": "/api/v2/publications/?page%5Bnumber%5D=1&page%5Bsize%5D=3&sort=-phenopacket_count",
+      "next": null,
+      "prev": null,
+      "self": "/api/v2/publications/?page%5Bnumber%5D=1&page%5Bsize%5D=3&sort=-phenopacket_count"
+    },
+    "meta": {
+      "page": {
+        "currentPage": 1,
+        "pageSize": 3,
+        "totalPages": 0,
+        "totalRecords": 0
+      }
+    }
+  },
+  "shape": {
+    "data": [
+      "list",
+      "empty"
+    ],
+    "links": {
+      "first": "str",
+      "last": "str",
+      "next": null,
+      "prev": null,
+      "self": "str"
+    },
+    "meta": {
+      "page": {
+        "currentPage": "int",
+        "pageSize": "int",
+        "totalPages": "int",
+        "totalRecords": "int"
+      }
+    }
+  },
+  "status_code": 200
+}
