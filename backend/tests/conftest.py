@@ -306,8 +306,7 @@ async def dev_auth_client(db_session):
         from app.api import dev_endpoints
 
         if not any(
-            getattr(r, "path", "").startswith("/api/v2/dev")
-            for r in app.router.routes
+            getattr(r, "path", "").startswith("/api/v2/dev") for r in app.router.routes
         ):
             app.include_router(dev_endpoints.router)
 

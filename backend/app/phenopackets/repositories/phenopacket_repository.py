@@ -72,9 +72,7 @@ class PhenopacketRepository:
         to render old entries for deleted phenopackets.
         """
         stmt = _with_actor_eager_loads(
-            select(Phenopacket).where(
-                Phenopacket.phenopacket_id == phenopacket_id
-            )
+            select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
         )
         if include_deleted:
             stmt = stmt.execution_options(include_deleted=True)

@@ -10,6 +10,7 @@ Usage:
     # or
     ENVIRONMENT=development uv run python backend/scripts/seed_dev_users.py
 """
+
 from __future__ import annotations
 
 import asyncio

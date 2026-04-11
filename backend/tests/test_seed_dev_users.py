@@ -5,6 +5,7 @@ command, three fixture users ready to log in via the dev quick-login
 endpoint. It must refuse to run in staging or production even if
 someone sources a .env file with the wrong ENVIRONMENT.
 """
+
 from __future__ import annotations
 
 import os
@@ -40,4 +41,6 @@ def test_seed_script_refuses_production_env():
         f"stdout: {result.stdout!r}, stderr: {result.stderr!r}"
     )
     combined = (result.stdout + result.stderr).lower()
-    assert "refuses" in combined or "development" in combined or "production" in combined
+    assert (
+        "refuses" in combined or "development" in combined or "production" in combined
+    )

@@ -7,6 +7,7 @@ stale view could delete a record that a co-curator had just updated.
 The behavior mirrors UPDATE: if the client's revision doesn't match
 the current row revision, return 409 Conflict.
 """
+
 from __future__ import annotations
 
 import pytest

@@ -7,6 +7,7 @@ event listener now adds this filter transparently; an escape hatch
 via execution_options(include_deleted=True) lets the audit/history
 endpoints still see deleted rows.
 """
+
 from __future__ import annotations
 
 import pytest
