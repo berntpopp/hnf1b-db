@@ -127,7 +127,7 @@ async def start_genes_sync(
         )
 
     store = get_sync_task_store()
-    state = await store.create(TaskKind.REFERENCE, total=70)
+    state = await store.create(TaskKind.GENES, total=70)
 
     background_tasks.add_task(run_genes_sync, state.task_id, store)
 
@@ -161,7 +161,7 @@ async def get_genes_sync_status(
     store = get_sync_task_store()
 
     if task_id is None:
-        latest = await store.get_latest(TaskKind.REFERENCE)
+        latest = await store.get_latest(TaskKind.GENES)
         if latest is None:
             ref_status = await get_reference_data_status(db)
             return SyncProgressResponse(

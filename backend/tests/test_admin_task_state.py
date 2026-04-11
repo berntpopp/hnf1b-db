@@ -117,6 +117,29 @@ class TestGetAndGetLatest:
         assert (await store.get_latest(TaskKind.PUBLICATION)).task_id == pub.task_id
         assert (await store.get_latest(TaskKind.VARIANT)).task_id == var.task_id
 
+    @pytest.mark.asyncio
+    async def test_reference_and_genes_latest_pointers_are_isolated(
+        self, store: SyncTaskStore
+    ):
+        """``REFERENCE`` (ref_init) and ``GENES`` (chr17q12 sync) must not clobber.
+
+        Regression test for the Copilot #2026-04-11 review comment on
+        ``sync_reference_routes.py`` — before the fix, both routes used
+        ``TaskKind.REFERENCE`` and ``/sync/genes/status`` could end up
+        pointing at a ``ref_init`` task when ``task_id`` was omitted.
+        """
+        ref = await store.create(TaskKind.REFERENCE, total=15)
+        genes = await store.create(TaskKind.GENES, total=70)
+
+        latest_ref = await store.get_latest(TaskKind.REFERENCE)
+        latest_genes = await store.get_latest(TaskKind.GENES)
+        assert latest_ref is not None and latest_ref.task_id == ref.task_id
+        assert latest_genes is not None and latest_genes.task_id == genes.task_id
+
+        # Task ids carry the legacy prefixes so log scraping still works.
+        assert ref.task_id.startswith("ref_init_")
+        assert genes.task_id.startswith("genes_sync_")
+
 
 class TestProgressUpdates:
     """Cover progress mutation (``mark_running``, ``update_counts``, increments)."""

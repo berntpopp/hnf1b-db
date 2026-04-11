@@ -27,9 +27,14 @@ Task kinds
 
 ``TaskKind.PUBLICATION`` maps to the legacy ``pub_sync_*`` id prefix.
 ``TaskKind.VARIANT``     maps to the legacy ``var_sync_*`` id prefix.
-``TaskKind.REFERENCE``   covers both ``ref_init_*`` and ``genes_sync_*`` —
-  these were grouped together in the old code via
-  ``if k.startswith("genes_sync_") or k.startswith("ref_init_")``.
+``TaskKind.REFERENCE``   is the ``ref_init_*`` task (GRCh38 + HNF1B bootstrap).
+``TaskKind.GENES``       is the ``genes_sync_*`` task (chr17q12 gene sync).
+
+Wave 4 originally collapsed REFERENCE + GENES into a single kind, which
+caused the "latest pointer" to clobber one with the other — flagged by
+the second Copilot review pass. They now live in separate buckets so
+``/admin/sync/genes/status`` and ``/admin/sync/reference/init`` cannot
+shadow each other through the ``latest`` pointer.
 """
 
 from __future__ import annotations
@@ -70,7 +75,8 @@ class TaskKind(str, Enum):
 
     PUBLICATION = "pub_sync"
     VARIANT = "var_sync"
-    REFERENCE = "ref_sync"
+    REFERENCE = "ref_init"
+    GENES = "genes_sync"
 
 
 @dataclass
