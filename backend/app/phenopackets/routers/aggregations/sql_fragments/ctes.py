@@ -156,6 +156,22 @@ WHERE va.variant_id IS NULL
 """
 
 
+def get_pending_variants_count_query() -> str:
+    """Generate a COUNT query for variants not yet in ``variant_annotations``.
+
+    Used by the admin variant sync endpoint to report the correct
+    ``items_to_process`` for the non-force path — counting pending
+    variants, not all unique variants.
+    """
+    return f"""
+WITH {UNIQUE_VARIANTS_CTE}
+SELECT COUNT(*)
+FROM unique_variants uv
+LEFT JOIN variant_annotations va ON va.variant_id = uv.variant_id
+WHERE va.variant_id IS NULL
+"""
+
+
 def get_variant_sync_status_query() -> str:
     """Generate a query returning ``(total, synced)`` counts for sync status."""
     return f"""

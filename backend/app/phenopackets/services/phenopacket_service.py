@@ -27,7 +27,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.phenopackets.models import (
     Phenopacket,
@@ -136,16 +136,20 @@ class PhenopacketService:
 
         try:
             await self._repo.commit_and_refresh(phenopacket)
-        except SQLAlchemyError as exc:
+        except IntegrityError as exc:
             await self._repo.rollback()
-            error_str = str(exc).lower()
-            if (
-                "duplicate" in error_str or "unique" in error_str
-            ) and "phenopacket_id" in error_str:
+            # Postgres SQLSTATE 23505 = unique_violation (PEP 249 compliant).
+            # Prefer the structured sqlstate over substring matching because
+            # error text varies across locales and driver versions.
+            sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+            if sqlstate == "23505":
                 raise ServiceConflict(
                     f"Phenopacket with ID '{sanitized['id']}' already exists",
                     code="duplicate_id",
                 ) from exc
+            raise ServiceDatabaseError(f"Database error: {exc}") from exc
+        except SQLAlchemyError as exc:
+            await self._repo.rollback()
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
 
         return phenopacket

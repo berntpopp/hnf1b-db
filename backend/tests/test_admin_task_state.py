@@ -21,8 +21,22 @@ from app.api.admin.task_state import (
     TaskKind,
     TaskStatus,
     get_sync_task_store,
+    reset_sync_task_store,
 )
 from app.core.cache import CacheService
+
+
+@pytest.fixture(autouse=True)
+def _reset_store_singleton() -> None:
+    """Clear the module-level ``_store_singleton`` between every test.
+
+    Otherwise one test's ``get_sync_task_store()`` call would poison the
+    next test's state by returning a store wired to an already-populated
+    in-memory fallback cache.
+    """
+    reset_sync_task_store()
+    yield
+    reset_sync_task_store()
 
 
 @pytest_asyncio.fixture

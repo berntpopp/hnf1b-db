@@ -127,6 +127,18 @@ class SyncTaskStore:
     Takes an optional ``CacheService`` so tests can inject a dedicated
     instance; production code uses the default ``app.core.cache.cache``
     global (via :func:`get_sync_task_store`).
+
+    Concurrency contract
+    --------------------
+
+    The update methods (``increment_processed`` / ``increment_errors`` /
+    ``update_counts``) are **read-modify-write** against the cache and
+    are **not atomic**. This is safe by design because every admin sync
+    task spawns exactly one writer coroutine for a given ``task_id``
+    (see ``sync_service.run_*``), so counter updates never race. If a
+    future refactor parallelises a single task across workers, replace
+    these helpers with a Redis ``HINCRBY``-style atomic path before
+    letting the parallel writers loose.
     """
 
     def __init__(self, cache_service: Optional[CacheService] = None) -> None:
@@ -287,3 +299,15 @@ def get_sync_task_store() -> SyncTaskStore:
     if _store_singleton is None:
         _store_singleton = SyncTaskStore()
     return _store_singleton
+
+
+def reset_sync_task_store() -> None:
+    """Clear the module-level singleton (test-only helper).
+
+    Used by an autouse pytest fixture to stop one test's store state
+    leaking into the next when tests hit the production code path via
+    ``get_sync_task_store()`` rather than instantiating their own
+    ``SyncTaskStore`` directly.
+    """
+    global _store_singleton
+    _store_singleton = None

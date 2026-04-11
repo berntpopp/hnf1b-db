@@ -26,6 +26,7 @@ from app.database import get_db
 from app.models.user import User
 from app.phenopackets.routers.aggregations.sql_fragments import (
     UNIQUE_VARIANTS_CTE,
+    get_pending_variants_count_query,
     get_unique_variants_query,
     get_variant_sync_status_query,
 )
@@ -87,7 +88,12 @@ async def start_variant_sync(
                 pending_count,
             )
     else:
-        query = text(get_unique_variants_query("COUNT(*)"))
+        # Count variants that actually need syncing (pending, not total),
+        # matching the set that ``run_variant_sync`` will iterate via
+        # ``get_pending_variants_query()``. Using the total "unique
+        # variants" count here would report the wrong ``items_to_process``
+        # and skew the progress bar in the admin UI.
+        query = text(get_pending_variants_count_query())
         result = await db.execute(query)
         pending_count = int(result.scalar() or 0)
 

@@ -34,6 +34,7 @@ from .ctes import (
     UNIQUE_VARIANTS_CTE,
     VCF_VARIANT_PATTERNS,
     VCF_VARIANTS_CTE,
+    get_pending_variants_count_query,
     get_pending_variants_query,
     get_phenopacket_variant_link_cte,
     get_unique_variants_query,
@@ -83,6 +84,7 @@ __all__ = [
     "UNIQUE_VARIANTS_CTE",
     "get_unique_variants_query",
     "get_pending_variants_query",
+    "get_pending_variants_count_query",
     "get_variant_sync_status_query",
     # Protein domain
     "HNF1B_PROTEIN_DOMAINS",

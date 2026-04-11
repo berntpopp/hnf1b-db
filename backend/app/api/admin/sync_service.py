@@ -77,7 +77,7 @@ async def run_publication_sync(task_id: str, store: SyncTaskStore) -> None:
             final.errors if final else "?",
         )
 
-    except (SQLAlchemyError, Exception) as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         # Best-effort: never leave a task stuck in "running" state. The
         # broad Exception is explicitly allowed — this is an end-of-task
         # failure handler, not a silent swallow.
