@@ -125,3 +125,34 @@ jobs:
       run: |
         cd frontend
         npm run format:check
+
+    - name: Build production bundle (Wave 5a Layer 5 pre-requisite)
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Verify no dev-auth strings in production bundle (Wave 5a Layer 5)
+      run: |
+        cd frontend
+        if grep -rqE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' 2>/dev/null; then
+          echo "::error::dev-auth strings leaked into production bundle — check Task 11 DCE gating"
+          grep -rnE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' || true
+          exit 1
+        fi
+        echo "dev-auth strings are NOT in the production bundle — Layer 5 green"
+
+    - name: Verify ENABLE_DEV_AUTH not truthy in prod compose (Wave 5a Layer 5)
+      run: |
+        if grep -Eq "^\s*ENABLE_DEV_AUTH\s*[:=]\s*(true|True|TRUE|1|yes|YES)" docker/docker-compose.npm.yml; then
+          echo "::error::ENABLE_DEV_AUTH must not be truthy in docker/docker-compose.npm.yml"
+          exit 1
+        fi
+        echo "ENABLE_DEV_AUTH is not truthy in docker/docker-compose.npm.yml — Layer 5 green"
+
+    - name: Verify ENVIRONMENT=production in prod compose (Wave 5a Layer 5)
+      run: |
+        if ! grep -Eq "^\s*(-\s*)?ENVIRONMENT\s*[:=]\s*production" docker/docker-compose.npm.yml; then
+          echo "::error::docker/docker-compose.npm.yml must set ENVIRONMENT=production explicitly"
+          exit 1
+        fi
+        echo "ENVIRONMENT=production is pinned in docker/docker-compose.npm.yml — Layer 5 green"

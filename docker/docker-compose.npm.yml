@@ -104,6 +104,7 @@ services:
 
     # Production environment
     environment:
+      ENVIRONMENT: production
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@hnf1b_db:5432/${POSTGRES_DB:-hnf1b_phenopackets}
       REDIS_URL: redis://hnf1b_cache:6379/0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
