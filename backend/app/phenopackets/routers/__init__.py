@@ -1,15 +1,15 @@
 """Phenopackets API routers.
 
-Split from monolithic endpoints.py for better maintainability and organization.
-Each router focuses on a specific domain of functionality.
+Split from monolithic endpoints.py for better maintainability and
+organization. Each router focuses on a specific domain of functionality.
 
 Routers:
-- crud: Basic CRUD operations (list, get, create, update, delete)
-- aggregations: Statistical aggregations and summaries
-- comparisons: Statistical comparisons between variant type groups
-- search: Search and filtering operations
-- variants: Variant-related queries
-- features: Phenotypic features, diseases, and measurements
+- crud          : Basic CRUD operations (list, get, create, update, delete)
+- crud_related  : Related lookups (/audit, /by-variant, /by-publication)
+- crud_timeline : Phenotype timeline view
+- aggregations  : Statistical aggregations and summaries
+- comparisons   : Statistical comparisons between variant type groups
+- search        : Search and filtering operations
 """
 
 from fastapi import APIRouter
@@ -17,22 +17,23 @@ from fastapi import APIRouter
 from .aggregations import router as aggregations_router
 from .comparisons import router as comparisons_router
 from .crud import router as crud_router
-
-# Import will be added as routers are created
+from .crud_related import router as crud_related_router
+from .crud_timeline import router as crud_timeline_router
 from .search import router as search_router
-
-# from .variants import router as variants_router
-# from .features import router as features_router
 
 # Combine all routers under /api/v2/phenopackets prefix
 router = APIRouter(prefix="/phenopackets")
 
-# Include routers
-router.include_router(search_router)  # Include search_router first
+# Include routers. Search is included first to keep its /search path
+# registered before crud_router's catch-all /{phenopacket_id} route.
+# crud_related and crud_timeline also need to be registered before
+# crud_router's /{phenopacket_id} so their more specific /{id}/audit
+# and /{id}/timeline paths are reached first.
+router.include_router(search_router)
+router.include_router(crud_related_router)
+router.include_router(crud_timeline_router)
 router.include_router(crud_router)
 router.include_router(aggregations_router)
 router.include_router(comparisons_router)
-# router.include_router(variants_router)
-# router.include_router(features_router)
 
 __all__ = ["router"]
