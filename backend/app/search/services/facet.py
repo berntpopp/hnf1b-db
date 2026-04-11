@@ -39,20 +39,35 @@ class FacetService:
 
         Returns facets for: ``sex``, ``hasVariants``, ``pathogenicity``,
         ``genes``, ``phenotypes``.
+
+        All five facets apply the active query/hpo/gene/pmid filters.
+        The sex filter is additionally applied to ``hasVariants``,
+        ``pathogenicity``, ``genes`` and ``phenotypes``, but is
+        **deliberately** not applied to the ``sex`` facet itself —
+        users need to see counts for the sexes they can switch to,
+        not just the one they're currently filtered on.
         """
-        conditions = ["deleted_at IS NULL"]
+        # ------------------------------------------------------------------
+        # Build the canonical filter condition list + bind params once.
+        # Downstream blocks derive two WHERE clauses from this single
+        # source: one with the sex predicate (for sex-sensitive facets)
+        # and one without (for the sex facet itself).
+        # ------------------------------------------------------------------
+        base_conditions = ["deleted_at IS NULL"]
         params: dict[str, Any] = {}
 
         if query:
-            conditions.append("search_vector @@ plainto_tsquery('english', :query)")
+            base_conditions.append(
+                "search_vector @@ plainto_tsquery('english', :query)"
+            )
             params["query"] = query
 
         if hpo_id:
-            conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+            base_conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
 
         if gene:
-            conditions.append("phenopacket->'interpretations' @> :gene_filter")
+            base_conditions.append("phenopacket->'interpretations' @> :gene_filter")
             params["gene_filter"] = json.dumps(
                 [
                     {
@@ -73,34 +88,45 @@ class FacetService:
 
         if pmid:
             pmid_val = pmid if pmid.startswith("PMID:") else f"PMID:{pmid}"
-            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
-            conditions.append(pmid_cond)
+            base_conditions.append(
+                "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+            )
             params["pmid_filter"] = json.dumps([{"id": pmid_val}])
 
-        where_clause = " AND ".join(conditions)
-
-        # Sex facets (exclude sex filter for this facet).
-        sex_conditions = [c for c in conditions if "subject_sex" not in c]
+        # ``filtered_where`` includes the sex predicate (when sex is set)
+        # and is used by hasVariants/pathogenicity/genes/phenotypes.
+        # ``sex_facet_where`` excludes the sex predicate and is used ONLY
+        # by the sex facet so it still shows counts for all sexes.
+        filtered_conditions = list(base_conditions)
         if sex:
-            sex_conditions.append("subject_sex = :sex")
+            filtered_conditions.append("subject_sex = :sex")
             params["sex"] = sex
-        sex_where = " AND ".join(sex_conditions) if sex_conditions else "TRUE"
+        filtered_where = " AND ".join(filtered_conditions)
+        sex_facet_where = " AND ".join(base_conditions)
+
+        # For LATERAL-joined queries the table is aliased as ``p`` so we
+        # need a qualified version of the sex predicate.
+        filtered_where_p = filtered_where.replace(
+            "subject_sex = :sex", "p.subject_sex = :sex"
+        )
+
+        # Params to use for queries that don't reference :sex (sex facet).
+        params_no_sex = {k: v for k, v in params.items() if k != "sex"}
 
         sex_sql = text(f"""
             SELECT subject_sex AS value, COUNT(*) AS count
             FROM phenopackets
-            WHERE {sex_where.replace("subject_sex = :sex", "TRUE")}
+            WHERE {sex_facet_where}
             GROUP BY subject_sex
             ORDER BY count DESC
         """)
-        sex_params = {k: v for k, v in params.items() if k != "sex"}
-        sex_result = await self.db.execute(sex_sql, sex_params)
+        sex_result = await self.db.execute(sex_sql, params_no_sex)
         sex_facets = [
             {"value": r.value, "label": r.value or "Unknown", "count": r.count}
             for r in sex_result.fetchall()
         ]
 
-        # Has variants facet.
+        # Has variants facet — now correctly applies the sex filter.
         interp_path = "phenopacket->'interpretations'"
         variants_sql = text(f"""
             SELECT
@@ -112,7 +138,7 @@ class FacetService:
                 END AS value,
                 COUNT(*) AS count
             FROM phenopackets
-            WHERE {where_clause}
+            WHERE {filtered_where}
             GROUP BY value
             ORDER BY value DESC
         """)
@@ -121,24 +147,6 @@ class FacetService:
             {"value": r.value, "label": "Yes" if r.value else "No", "count": r.count}
             for r in variants_result.fetchall()
         ]
-
-        # Apply the full filter set to the LATERAL-based facets so the
-        # genes/pathogenicity/phenotypes counts reflect the current search
-        # (matching the docstring contract). The sex facet above already
-        # excludes only the ``subject_sex`` predicate.
-        #
-        # ``where_clause`` references unqualified columns like
-        # ``deleted_at``, ``search_vector``, ``phenopacket`` — these resolve
-        # to the ``p`` alias below because it's the only table in scope.
-        # If the ``sex`` filter was set, it also appeared in ``conditions``
-        # through ``params["sex"]`` and the predicate ``subject_sex = :sex``
-        # (built in the sex facet block), so we rebuild a lateral-safe
-        # clause that includes it here.
-        lateral_conditions = list(conditions)
-        if sex:
-            lateral_conditions.append("p.subject_sex = :sex")
-            params.setdefault("sex", sex)
-        lateral_where = " AND ".join(lateral_conditions)
 
         # SQL path fragments for the JSONB queries below.
         acmg_path = (
@@ -156,7 +164,7 @@ class FacetService:
                 COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
-            WHERE {lateral_where}
+            WHERE {filtered_where_p}
             AND {acmg_path} IS NOT NULL
             GROUP BY 1
             ORDER BY count DESC
@@ -180,7 +188,7 @@ class FacetService:
                 COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
-            WHERE {lateral_where}
+            WHERE {filtered_where_p}
             AND {gene_symbol_path} IS NOT NULL
             GROUP BY 1
             ORDER BY count DESC
@@ -201,7 +209,7 @@ class FacetService:
             FROM phenopackets p
             CROSS JOIN LATERAL jsonb_array_elements(
                 COALESCE(p.phenopacket->'phenotypicFeatures', '[]'::jsonb)) AS pf
-            WHERE {lateral_where}
+            WHERE {filtered_where_p}
             AND pf.value->'type'->>'id' IS NOT NULL
             GROUP BY hpo_id, label
             ORDER BY count DESC
