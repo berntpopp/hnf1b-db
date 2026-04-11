@@ -320,7 +320,11 @@ class TestPhenopacketServiceSoftDelete:
 
     @pytest.mark.asyncio
     async def test_soft_delete_then_read_returns_none(self, make_service):
-        """After soft delete the repo's ``get_by_id`` must no longer return the row."""
+        """After soft delete ``service.get`` must no longer return the row.
+
+        Also verifies the ``include_deleted=True`` read path still
+        returns the soft-deleted row — used by audit/timeline views.
+        """
         service = make_service()
         await service.create(
             PhenopacketCreate(
@@ -338,9 +342,8 @@ class TestPhenopacketServiceSoftDelete:
         )
 
         service3 = make_service()
-        assert await service3._repo.get_by_id("SERVICE-TEST-HIDDEN") is None
+        assert await service3.get("SERVICE-TEST-HIDDEN") is None
         # Still reachable when requesting with include_deleted
         assert (
-            await service3._repo.get_by_id("SERVICE-TEST-HIDDEN", include_deleted=True)
-            is not None
+            await service3.get("SERVICE-TEST-HIDDEN", include_deleted=True) is not None
         )

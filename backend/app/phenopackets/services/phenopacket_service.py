@@ -103,6 +103,21 @@ class PhenopacketService:
         self._validator = PhenopacketValidator()
         self._sanitizer = PhenopacketSanitizer()
 
+    async def get(
+        self, phenopacket_id: str, *, include_deleted: bool = False
+    ) -> Optional[Phenopacket]:
+        """Fetch a phenopacket by id through the service layer.
+
+        Thin pass-through to :meth:`PhenopacketRepository.get_by_id`
+        that gives callers a service-level read API so they don't have
+        to reach into the repository directly. ``include_deleted=True``
+        also returns soft-deleted rows — used by the audit/timeline
+        views that still want to render history for deleted items.
+        """
+        return await self._repo.get_by_id(
+            phenopacket_id, include_deleted=include_deleted
+        )
+
     async def create(
         self,
         payload: PhenopacketCreate,
