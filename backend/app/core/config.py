@@ -20,10 +20,10 @@ Usage:
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -298,6 +298,11 @@ class Settings(BaseSettings):
     # Debug mode
     DEBUG: bool = False
 
+    # === Environment and dev-mode gating (Wave 5a Layer 1) ===
+
+    environment: Literal["development", "staging", "production"] = "production"
+    enable_dev_auth: bool = False
+
     # === YAML CONFIG (lazy-loaded) ===
     _yaml_config: Optional[YamlConfig] = None
 
@@ -356,6 +361,25 @@ class Settings(BaseSettings):
     def get_cors_origins_list(self) -> List[str]:
         """Convert CORS_ORIGINS string to list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+
+    @model_validator(mode="after")
+    def _refuse_dev_auth_in_prod(self) -> "Settings":
+        """Fail fast if ENABLE_DEV_AUTH is True outside development.
+
+        Wave 5a Layer 1 of the dev-mode 5-layer defense (review §5.3).
+        An unset ENVIRONMENT must never be interpreted as dev — the
+        default is production. This mirrors the JWT_SECRET / ADMIN_PASSWORD
+        validators in that refusing to start is the right response to a
+        dangerous misconfiguration.
+        """
+        if self.enable_dev_auth and self.environment != "development":
+            raise ValueError(
+                "REFUSING TO START: ENABLE_DEV_AUTH=true is only permitted "
+                f"when ENVIRONMENT=development (got {self.environment!r}). "
+                "This is the first of five dev-mode defense layers — see "
+                "docs/reviews/2026-04-11-platform-readiness-review.md §5.3."
+            )
+        return self
 
     @property
     def yaml(self) -> YamlConfig:
