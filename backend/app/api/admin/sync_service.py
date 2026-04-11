@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-import httpx
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -127,7 +126,10 @@ async def run_variant_sync(task_id: str, store: SyncTaskStore) -> None:
             final.errors if final else "?",
         )
 
-    except (SQLAlchemyError, VEPError) as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Best-effort: never leave a task stuck in "running" state.
+        # The broad Exception is explicitly allowed — this is an
+        # end-of-task failure handler, not a silent swallow.
         await store.fail(task_id, str(exc))
         logger.error("Variant sync failed: %s", exc)
 
@@ -149,7 +151,8 @@ async def run_reference_init(task_id: str, store: SyncTaskStore) -> None:
         await store.complete(task_id)
         logger.info("Reference data init completed: %s items created", result.imported)
 
-    except (httpx.HTTPError, SQLAlchemyError) as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Best-effort: never leave a task stuck in "running" state.
         await store.fail(task_id, str(exc))
         logger.error("Reference data init failed: %s", exc)
 
@@ -176,6 +179,7 @@ async def run_genes_sync(task_id: str, store: SyncTaskStore) -> None:
             result.errors,
         )
 
-    except (httpx.HTTPError, SQLAlchemyError) as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Best-effort: never leave a task stuck in "running" state.
         await store.fail(task_id, str(exc))
         logger.error("Gene sync failed: %s", exc)
