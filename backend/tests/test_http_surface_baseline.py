@@ -19,7 +19,7 @@ Verify after every decomposition step::
     uv run pytest tests/test_http_surface_baseline.py -k verify -v
 
 Capture mode writes one JSON file per endpoint into
-``tests/fixtures/wave4_http_baselines/``. Verify mode re-hits every endpoint
+``tests/fixtures/http_baselines/``. Verify mode re-hits every endpoint
 for which a baseline file exists and asserts byte-identical normalised
 shape + status code.
 
@@ -52,7 +52,7 @@ from typing import Any
 
 import pytest
 
-BASELINE_DIR = Path(__file__).parent / "fixtures" / "wave4_http_baselines"
+BASELINE_DIR = Path(__file__).parent / "fixtures" / "http_baselines"
 
 # Each tuple describes one HTTP interaction:
 #   (baseline_name, auth_required, method, path, query_params, body)
