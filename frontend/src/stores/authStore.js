@@ -171,7 +171,8 @@ export const useAuthStore = defineStore('auth', () => {
   // Wave 5a Layer 4 — the DEV gate is critical. Vite replaces
   // import.meta.env.DEV with literal `false` during production build
   // and Rollup DCE eliminates the entire function body, including
-  // the URL string literal /api/v2/dev/login-as/. Never read
+  // the URL string literal `/dev/login-as/` (which apiClient resolves
+  // to /api/v2/dev/login-as/ at request time). Never read
   // import.meta.env.DEV into a variable first — keep the literal
   // inside the guard so the static replacement is structural.
   async function devLoginAs(username) {
