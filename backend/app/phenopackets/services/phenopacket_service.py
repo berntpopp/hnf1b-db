@@ -153,7 +153,18 @@ class PhenopacketService:
         )
         self._repo.add(phenopacket)
 
+        # Emit CREATE audit row BEFORE the commit so it lands in the same
+        # transaction as the phenopacket row.  If either fails, both roll back.
         try:
+            await create_audit_entry(
+                db=self._repo.session,
+                phenopacket_id=phenopacket.phenopacket_id,
+                action="CREATE",
+                old_value=None,
+                new_value=sanitized,
+                changed_by_id=actor_id,
+                change_reason="Initial creation",
+            )
             await self._repo.commit_and_refresh(phenopacket)
         except IntegrityError as exc:
             await self._repo.rollback()
