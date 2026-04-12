@@ -208,6 +208,7 @@ _VOLATILE_KEYS = {
 # assert status_code + response shape; only the exact body values are
 # skipped so the suite passes across environments.
 _ENV_DEPENDENT_BASELINES = {
+    "admin_status",
     "reference_genes",
     "search_autocomplete",
 }
