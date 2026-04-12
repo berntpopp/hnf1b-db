@@ -409,6 +409,70 @@ async def curator_headers(curator_user, async_client):
 
 
 @pytest_asyncio.fixture
+async def viewer_user(db_session):
+    """Create a viewer user for BFLA authorization tests.
+
+    Wave 5b Task 8: dedicated viewer fixture so that ``viewer_headers``
+    is self-contained and does not collide with the generic ``test_user``
+    fixture (which also happens to be a viewer but is used in many
+    unrelated tests).
+    """
+    user = User(
+        username="testviewer",
+        email="testviewer@example.com",
+        hashed_password=get_password_hash("ViewerPass123!"),
+        role="viewer",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
+async def viewer_headers(viewer_user, async_client):
+    """Get auth headers for viewer requests.
+
+    Wave 5b Task 8: used by the BFLA authorization matrix to assert that
+    viewer tokens receive 403 on every admin-gated route.
+    """
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": viewer_user.username,
+            "password": "ViewerPass123!",
+        },
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def admin_user_id(async_client, admin_headers) -> int:
+    """Return the id of the admin user behind ``admin_headers``.
+
+    Wave 5b Task 8: used by the BFLA authorization matrix to resolve
+    ``{admin_user_id}`` in URL templates for routes like
+    ``GET /api/v2/auth/users/{id}`` or ``PATCH .../unlock``.
+    """
+    resp = await async_client.get("/api/v2/auth/me", headers=admin_headers)
+    assert resp.status_code == 200
+    return resp.json()["id"]
+
+
+@pytest_asyncio.fixture
 async def cleanup_test_phenopackets(db_session):
     """Legacy cleanup hook retained for backwards compatibility.
 

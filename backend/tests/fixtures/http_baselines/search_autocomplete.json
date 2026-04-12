@@ -1,11 +1,27 @@
 {
   "normalized_body": {
-    "results": []
+    "results": [
+      {
+        "extra_info": "HNF1 homeobox B [Source:HGNC Symbol;Acc:HGNC:11630]",
+        "id": "<normalized>",
+        "label": "HNF1B",
+        "score": 0.4285714328289032,
+        "subtype": "Symbol",
+        "type": "Gene"
+      }
+    ]
   },
   "shape": {
     "results": [
       "list",
-      "empty"
+      {
+        "extra_info": "str",
+        "id": "str",
+        "label": "str",
+        "score": "float",
+        "subtype": "str",
+        "type": "str"
+      }
     ]
   },
   "status_code": 200
