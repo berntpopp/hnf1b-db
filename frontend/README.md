@@ -13,7 +13,7 @@ Vue 3 application for the HNF1B clinical genetics database. Part of the HNF1B Da
 
 ## Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v20 or higher)
 - npm or yarn
 - Backend API running (see root README.md)
 
@@ -69,9 +69,12 @@ src/
 ## Technology Stack
 
 - **Vue 3** - Progressive JavaScript framework with Composition API
-- **Vite 6** - Next generation frontend tooling
+- **Vite 7** - Next generation frontend tooling
+- **Vitest 4** - Unit/component test runner (with @vue/test-utils)
+- **Playwright** - End-to-end test runner (`tests/e2e/`)
 - **Vuetify 3** - Material Design component framework
 - **Vue Router 4** - Official router for Vue.js
+- **Pinia** - State management (stores in `src/stores/`)
 - **Axios** - HTTP client for API requests with JWT authentication
 - **D3.js** - Data visualization library
 
@@ -100,11 +103,12 @@ VITE_API_URL=http://localhost:8000/api/v2
 The application uses the **GA4GH Phenopackets v2** API format:
 
 - **Base URL**: `http://localhost:8000/api/v2`
-- **Authentication**: JWT tokens (stored in `localStorage`)
-- **Pagination**: Offset-based (`skip` and `limit` parameters)
-- **Data Format**: Direct JSON responses (no JSON:API wrapper)
+- **Authentication**: JWT tokens (stored in `localStorage`; see [ADR 0001](../docs/adr/0001-jwt-storage.md))
+- **Pagination**: JSON:API v1.1 — `page[number]`/`page[size]` (offset) or `page[after]` (cursor); `sort=-created_at` style sort keys
+- **Data Format**: JSON:API v1.1 responses (data/meta/links envelope)
 
 **Key Endpoints:**
+
 - `GET /phenopackets/` - List phenopackets with filters
 - `GET /phenopackets/{id}` - Get single phenopacket
 - `POST /phenopackets/search` - Advanced search
