@@ -92,6 +92,9 @@ def _ensure_test_database_url() -> None:
     os.environ.setdefault("JWT_SECRET", "test-secret-key-for-local-pytest")
     # Avoid the production admin-password validator tripping during tests.
     os.environ.setdefault("ADMIN_PASSWORD", "TestAdminPass!2026")
+    # Set environment to "development" so dev-only features (e.g. raw invite
+    # tokens in responses) are available during tests.
+    os.environ.setdefault("ENVIRONMENT", "development")
 
 
 _ensure_test_database_url()

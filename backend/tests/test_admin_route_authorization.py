@@ -60,6 +60,12 @@ ADMIN_ROUTES: list[tuple[str, str, str, Optional[dict]]] = [
         "/api/v2/auth/users/{admin_user_id}/unlock",
         None,
     ),
+    (
+        "create_invite",
+        "POST",
+        "/api/v2/auth/users/invite",
+        {"email": "bfla-probe-invite@example.com", "role": "viewer"},
+    ),
     # admin sub-router — status_routes.py
     ("admin_status", "GET", "/api/v2/admin/status", None),
     ("admin_statistics", "GET", "/api/v2/admin/statistics", None),

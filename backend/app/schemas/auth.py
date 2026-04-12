@@ -7,6 +7,48 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.auth.password import validate_password_strength
 
 
+class InviteRequest(BaseModel):
+    """Admin invite request."""
+
+    email: EmailStr
+    role: str = Field("viewer", pattern="^(admin|curator|viewer)$")
+
+
+class InviteResponse(BaseModel):
+    """Invite creation response."""
+
+    email: str
+    role: str
+    expires_at: datetime
+    token: str | None = None  # Dev-only: raw token for testing
+
+
+class InviteAcceptRequest(BaseModel):
+    """Invite accept request — user sets their own credentials."""
+
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8)
+    full_name: str | None = Field(None, max_length=255)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate username format (same rules as UserCreate)."""
+        v = v.lower()
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username can only contain letters, numbers, - and _")
+        if v in ["admin", "root", "system", "administrator"]:
+            raise ValueError(f"Username '{v}' is reserved")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password strength."""
+        validate_password_strength(v)
+        return v
+
+
 class Token(BaseModel):
     """JWT token response."""
 
