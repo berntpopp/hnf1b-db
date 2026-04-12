@@ -118,6 +118,7 @@ async_session_maker = test_session_maker
 # of foreign keys: children before parents. Anything not in this list is left
 # untouched so that lookup tables populated by Alembic migrations survive.
 _MUTABLE_TABLES: tuple[str, ...] = (
+    "credential_tokens",
     "phenopacket_audit",
     "phenopackets",
     "variant_annotations",
