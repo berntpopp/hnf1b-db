@@ -87,3 +87,16 @@ security:
   password_min_length: 8
   max_login_attempts: 5
   account_lockout_minutes: 15
+
+# Email delivery — "console" logs token URLs to stdout (dev default);
+# "smtp" sends real emails (requires SMTP_* env vars in .env).
+email:
+  backend: "console"
+  from_address: "noreply@hnf1b-db.org"
+  from_name: "HNF1B Database"
+  tls_mode: "starttls"
+  validate_certs: true
+  timeout_seconds: 30
+  use_credentials: true
+  max_retries: 3
+  retry_backoff_factor: 2.0
