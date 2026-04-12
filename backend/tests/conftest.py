@@ -249,6 +249,39 @@ async def admin_user(db_session):
 
 
 @pytest_asyncio.fixture
+async def curator_user(db_session):
+    """Create a curator user for permission tests.
+
+    Wave 5b Task 6: introduced to let admin-only endpoints verify the
+    non-admin 403 path (e.g. ``PATCH /auth/users/{id}/unlock``). Task 8
+    extends this helper set with ``viewer_user``/``viewer_headers`` for
+    the full BFLA guard migration.
+    """
+    user = User(
+        username="testcurator",
+        email="testcurator@example.com",
+        hashed_password=get_password_hash("CuratorPass123!"),
+        role="curator",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
 async def async_client(db_session):
     """Async HTTP client for API testing."""
     from app.database import get_db
@@ -350,6 +383,25 @@ async def admin_headers(admin_user, async_client):
         json={
             "username": admin_user.username,
             "password": "AdminPass123!",
+        },
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def curator_headers(curator_user, async_client):
+    """Get auth headers for curator requests.
+
+    Wave 5b Task 6: used to assert that admin-only endpoints reject a
+    non-admin caller with 403. Same shape as ``admin_headers`` — log in
+    via ``/api/v2/auth/login`` and return a bearer header dict.
+    """
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": curator_user.username,
+            "password": "CuratorPass123!",
         },
     )
     token = response.json()["access_token"]

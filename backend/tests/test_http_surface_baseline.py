@@ -374,3 +374,112 @@ async def test_verify_dev_login_as_baseline(dev_auth_client, db_session):
     assert capture["normalized_body"] == baseline["normalized_body"], (
         f"{_DEV_BASELINE_NAME}: normalised response body changed"
     )
+
+
+# ---------------------------------------------------------------------------
+# Wave 5b auth/users/{id}/unlock baseline
+# ---------------------------------------------------------------------------
+#
+# Wave 5b Task 6 introduces PATCH /api/v2/auth/users/{user_id}/unlock.
+# The endpoint needs a seeded target user (with failed_login_attempts and
+# locked_until populated) before the capture, so it cannot use the generic
+# AFFECTED_ENDPOINTS parametrize loop — templated URLs don't compose with
+# the 6-tuple `(name, auth, method, path, params, body)` shape. Instead,
+# this baseline follows the same structure as
+# ``test_capture_dev_login_as_baseline``.
+
+_UNLOCK_BASELINE_NAME = "auth_users_unlock"
+
+
+async def _seed_locked_target_user(db_session) -> int:
+    """Insert a locked curator and return its id for the unlock baseline."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth.password import get_password_hash
+    from app.models.user import User
+
+    locked = User(
+        username="wave5b-baseline-locked",
+        email="wave5b-baseline-locked@hnf1b-db.local",
+        hashed_password=get_password_hash("IrrelevantPass123!"),
+        full_name="Baseline Locked Curator",
+        role="curator",
+        is_active=True,
+        is_verified=True,
+        is_fixture_user=False,
+        failed_login_attempts=5,
+        locked_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    db_session.add(locked)
+    await db_session.commit()
+    await db_session.refresh(locked)
+    return locked.id
+
+
+@pytest.mark.asyncio
+async def test_capture_auth_users_unlock_baseline(
+    async_client, admin_headers, db_session
+):
+    """Capture the unlock-response shape. Opt-in via WAVE4_CAPTURE_BASELINE=1."""
+    if os.environ.get("WAVE4_CAPTURE_BASELINE") != "1":
+        pytest.skip("Baseline capture only runs when WAVE4_CAPTURE_BASELINE=1")
+
+    user_id = await _seed_locked_target_user(db_session)
+
+    response = await async_client.patch(
+        f"/api/v2/auth/users/{user_id}/unlock", headers=admin_headers
+    )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+    with (BASELINE_DIR / f"{_UNLOCK_BASELINE_NAME}.json").open("w") as f:
+        json.dump(capture, f, indent=2, sort_keys=True)
+
+
+@pytest.mark.asyncio
+async def test_verify_auth_users_unlock_baseline(
+    async_client, admin_headers, db_session
+):
+    """Verify the unlock response against the captured baseline."""
+    baseline_path = BASELINE_DIR / f"{_UNLOCK_BASELINE_NAME}.json"
+    if not baseline_path.exists():
+        pytest.skip(f"No baseline captured for {_UNLOCK_BASELINE_NAME}")
+
+    with baseline_path.open() as f:
+        baseline = json.load(f)
+
+    user_id = await _seed_locked_target_user(db_session)
+
+    response = await async_client.patch(
+        f"/api/v2/auth/users/{user_id}/unlock", headers=admin_headers
+    )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    assert capture["status_code"] == baseline["status_code"], (
+        f"{_UNLOCK_BASELINE_NAME}: status code changed "
+        f"{baseline['status_code']} → {capture['status_code']}"
+    )
+    assert capture["shape"] == baseline["shape"], (
+        f"{_UNLOCK_BASELINE_NAME}: response shape changed"
+    )
+    assert capture["normalized_body"] == baseline["normalized_body"], (
+        f"{_UNLOCK_BASELINE_NAME}: normalised response body changed"
+    )

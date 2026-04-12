@@ -469,3 +469,53 @@ async def delete_user(
     )
 
     await repo.delete(user)
+
+
+@router.patch("/users/{user_id}/unlock", response_model=UserResponse)
+async def unlock_user(
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Unlock a user account (admin only).
+
+    Wave 5b Task 6: clears ``failed_login_attempts`` and ``locked_until``
+    so a user who tripped the 5-failed-attempts / 15-minute lockout can
+    log in again without waiting for the window to expire.
+
+    **Returns:**
+    - 200: User unlocked successfully
+    - 403: Not admin
+    - 404: User not found
+    """
+    repo = UserRepository(db)
+    user = await repo.get_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found",
+        )
+
+    unlocked = await repo.unlock(user)
+
+    await log_user_action(
+        db=db,
+        user_id=user_id,
+        action="USER_UNLOCKED",
+        details=(f"Admin '{current_user.username}' unlocked user '{user.username}'"),
+    )
+
+    return UserResponse(
+        id=unlocked.id,
+        username=unlocked.username,
+        email=unlocked.email,
+        full_name=unlocked.full_name,
+        role=unlocked.role,
+        permissions=unlocked.get_permissions(),
+        is_active=unlocked.is_active,
+        is_verified=unlocked.is_verified,
+        last_login=unlocked.last_login,
+        created_at=unlocked.created_at,
+        updated_at=unlocked.updated_at,
+    )

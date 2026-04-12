@@ -180,3 +180,23 @@ class UserRepository:
         """
         user.refresh_token = refresh_token
         await self.db.commit()
+
+    async def unlock(self, user: User) -> User:
+        """Clear failed login attempts and lockout for a user.
+
+        Wave 5b Task 6: called by the admin PATCH /auth/users/{id}/unlock
+        endpoint to rescue a user who tripped the lockout (5 failed
+        attempts → 15-minute lock per settings.MAX_LOGIN_ATTEMPTS /
+        ACCOUNT_LOCKOUT_MINUTES).
+
+        Args:
+            user: User instance to unlock
+
+        Returns:
+            The refreshed user instance with counters cleared.
+        """
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
