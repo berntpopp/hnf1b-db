@@ -4,6 +4,7 @@ from app.auth.dependencies import get_current_user, require_admin, require_curat
 from app.auth.password import (
     get_password_hash,
     validate_password_strength,
+    verify_and_update_password_hash,
     verify_password,
 )
 from app.auth.permissions import Role, get_role_permissions
@@ -17,6 +18,7 @@ __all__ = [
     # Password
     "get_password_hash",
     "validate_password_strength",
+    "verify_and_update_password_hash",
     "verify_password",
     # Permissions
     "Role",

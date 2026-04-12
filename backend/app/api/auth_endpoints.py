@@ -8,6 +8,7 @@ from app.auth import (
     create_refresh_token,
     get_current_user,
     require_admin,
+    verify_and_update_password_hash,
     verify_password,
     verify_token,
 )
@@ -52,7 +53,8 @@ async def login(
     Returns JWT access token and refresh token.
 
     **Security:**
-    - Password verified with bcrypt
+    - Password verified with Argon2id (or legacy bcrypt via fallback)
+    - Legacy bcrypt hashes transparently upgrade to Argon2id on login
     - Account lockout after 5 failed attempts (15 min)
     - Tokens signed with JWT_SECRET
 
@@ -66,8 +68,16 @@ async def login(
     # Get user
     user = await repo.get_by_username(credentials.username)
 
-    # Verify password
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    # Wave 5b Task 11: verify + transparent legacy-hash upgrade.
+    # verify_and_update_password_hash returns (valid, new_hash) where
+    # new_hash is not None only when verification succeeded AND the
+    # stored hash was legacy bcrypt that needs upgrading to Argon2id.
+    valid, new_hash = (
+        verify_and_update_password_hash(credentials.password, user.hashed_password)
+        if user
+        else (False, None)
+    )
+    if not user or not valid:
         # Record failed attempt if user exists
         if user:
             await repo.record_failed_login(user)
@@ -75,6 +85,12 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
+
+    # Transparent rehash: if the stored hash was legacy bcrypt, write
+    # the new Argon2id hash back. No forced logout, no user-visible change.
+    if new_hash is not None:
+        user.hashed_password = new_hash
+        await db.flush()
 
     # Check if account is active
     if not user.is_active:
