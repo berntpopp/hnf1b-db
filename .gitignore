@@ -186,6 +186,11 @@ frontend/dist-ssr/
 frontend/.vite/
 frontend/.vitepress/cache/
 
+# Frontend test artifacts (vitest v8 coverage + Playwright reports)
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+
 # Frontend environment files
 frontend/.env
 frontend/.env.local

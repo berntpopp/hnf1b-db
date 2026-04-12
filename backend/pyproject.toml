@@ -148,6 +148,15 @@ indent-style = "space"
 concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
+# Wave 6 Task 1: fail CI if overall coverage regresses below the gate.
+# Today's baseline is ~70% (measured 2026-04-12 in CI parity run). The
+# threshold is deliberately set at the current floor so any regression
+# breaks the build; ratchet this upward in follow-on waves as component
+# test coverage grows.
+fail_under = 70
+show_missing = true
+skip_covered = false
+
 # Lines that should not count against coverage — they represent code that
 # cannot be executed directly (abstract method placeholders, type-checking
 # guards, debug-only branches) or is already covered by explicit pragmas.

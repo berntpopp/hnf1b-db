@@ -162,6 +162,132 @@ jobs:
         fi
         echo "ENVIRONMENT=production is pinned in docker/docker-compose.npm.yml — Layer 5 green"
 
+  e2e-tests:
+    name: E2E tests (Playwright)
+    needs: frontend
+    runs-on: ubuntu-latest
+
+    # Wave 6 Task 1: spin up Postgres + Redis + backend + frontend and run
+    # the Playwright suite in tests/e2e/. The existing specs assume the
+    # frontend is served on :5173 (Vite dev server) and the backend on
+    # :8000. Playwright's webServer block in playwright.config.js starts
+    # Vite; we start the backend via uvicorn as a background step.
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hnf1b_user
+          POSTGRES_PASSWORD: hnf1b_pass
+          POSTGRES_DB: hnf1b_phenopackets_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hnf1b_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        uv sync --group dev --group test
+
+    - name: Run backend migrations
+      env:
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+        JWT_SECRET: ${{ secrets.JWT_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
+        ADMIN_PASSWORD: ci_test_admin_password_2026
+      run: |
+        cd backend
+        uv run alembic upgrade head
+
+    - name: Start backend
+      env:
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+        JWT_SECRET: ${{ secrets.JWT_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
+        ADMIN_PASSWORD: ci_test_admin_password_2026
+        REDIS_URL: redis://localhost:6379/0
+      run: |
+        cd backend
+        nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+        # Wait until /health (or root) responds
+        for i in $(seq 1 30); do
+          if curl -fsS http://localhost:8000/health >/dev/null 2>&1 || \
+             curl -fsS http://localhost:8000/ >/dev/null 2>&1; then
+            echo "backend is up"
+            break
+          fi
+          echo "waiting for backend... ($i)"
+          sleep 2
+        done
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Install Playwright browsers
+      run: |
+        cd frontend
+        npx playwright install --with-deps chromium
+
+    - name: Run E2E tests
+      env:
+        VITE_API_URL: http://localhost:8000/api/v2
+        CI: "true"
+      run: |
+        cd frontend
+        npx playwright test
+      continue-on-error: true
+
+    - name: Upload backend log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-log
+        path: /tmp/backend.log
+        if-no-files-found: ignore
+
+    - name: Upload Playwright report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: frontend/playwright-report/
+        if-no-files-found: ignore
+        retention-days: 7
+
   pre-commit:
     name: pre-commit hygiene gate
     runs-on: ubuntu-latest

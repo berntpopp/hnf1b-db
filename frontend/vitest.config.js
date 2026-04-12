@@ -58,6 +58,17 @@ export default defineConfig({
         '**/*.config.js',
         '**/*.spec.js',
       ],
+      // Wave 6 Task 1: floor is 30% because Wave 5 added characterization
+      // coverage (stores, composables, a handful of views + components)
+      // but not comprehensive unit coverage across every Vue SFC. The
+      // threshold ratchets up in follow-on work as Task 4 (top-5 component
+      // tests) and beyond land.
+      thresholds: {
+        lines: 30,
+        functions: 30,
+        branches: 30,
+        statements: 30,
+      },
     },
 
     // Test file patterns
