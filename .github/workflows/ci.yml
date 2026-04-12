@@ -226,7 +226,7 @@ jobs:
     - name: Run backend migrations
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
-        JWT_SECRET: ${{ secrets.JWT_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
       run: |
         cd backend
@@ -235,7 +235,7 @@ jobs:
     - name: Start backend
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
-        JWT_SECRET: ${{ secrets.JWT_SECRET || '0000000000000000000000000000000000000000000000000000000000000000' }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
         REDIS_URL: redis://localhost:6379/0
       run: |
@@ -269,7 +269,6 @@ jobs:
       run: |
         cd frontend
         npx playwright test
-      continue-on-error: true
 
     - name: Upload backend log on failure
       if: failure()

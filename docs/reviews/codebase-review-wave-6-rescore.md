@@ -69,7 +69,7 @@ After Wave 5c, three backend files are above the 500-LOC rule but not listed in 
 
 ### Remaining bare `except Exception`
 
-Two instances in `backend/app/auth/password.py` — both in password verification (`verify_password`, `verify_and_update`). They swallow pwdlib exceptions and return a failure value, which is the correct security posture (never leak why verification failed). **Recommendation:** keep, but add a `# noqa: BLE001` with an inline comment explaining the security rationale so the CI pattern-check stays green while the decision is documented.
+Two instances in `backend/app/auth/password.py` — both in password verification (`verify_password`, `verify_and_update`). They swallow pwdlib exceptions and return a failure value, which is the correct security posture (never leak why verification failed). **Annotated** with `# noqa: BLE001` + inline rationale comments describing the security intent so the linter pattern-check is explicit about the exception.
 
 ### Frontend `localStorage` JWT
 

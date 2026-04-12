@@ -41,7 +41,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     try:
         return _password_hash.verify(plain_password, hashed_password)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # Intentional bare-except: any pwdlib/hasher failure (malformed
+        # hash string, unknown algorithm, corrupt stored value) must be
+        # treated as a verification FAILURE and return False without
+        # leaking *why* verification failed. Leaking the distinction
+        # gives attackers a side channel — e.g. "your hash format is
+        # wrong" vs "your password is wrong" reveals the presence of a
+        # legacy / corrupted account.
         return False
 
 
@@ -65,7 +72,10 @@ def verify_and_update_password_hash(
     """
     try:
         return _password_hash.verify_and_update(plain_password, hashed_password)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # Same rationale as verify_password(): any hasher exception
+        # (bad hash string, unknown algorithm) must return a uniform
+        # failure tuple without leaking which branch failed.
         return False, None
 
 

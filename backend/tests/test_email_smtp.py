@@ -64,7 +64,9 @@ async def test_smtp_sender_calls_aiosmtplib_with_expected_args(smtp_settings):
     assert kwargs["timeout"] == 5
 
 
-async def test_smtp_sender_skips_auth_when_use_credentials_false(smtp_settings, monkeypatch):
+async def test_smtp_sender_skips_auth_when_use_credentials_false(
+    smtp_settings, monkeypatch
+):
     """use_credentials=False passes None for username/password (for e.g. Mailpit)."""
     monkeypatch.setattr(settings.email, "use_credentials", False)
     with patch("app.auth.email.aiosmtplib.send", new=AsyncMock()) as mock_send:
@@ -110,6 +112,60 @@ async def test_smtp_sender_raises_after_max_retries(smtp_settings, monkeypatch):
     ):
         sender = SMTPEmailSender()
         await sender.send("a@b.com", "s", "<p>b</p>")
+
+
+async def test_smtp_sender_does_not_retry_authentication_error(
+    smtp_settings, monkeypatch
+):
+    """SMTPAuthenticationError is re-raised immediately without retry.
+
+    Retrying AUTH failures against a real provider can trip rate
+    limiters or lock the account; the sender must bail on the first
+    failure even if max_retries is high.
+    """
+    monkeypatch.setattr(settings.email, "max_retries", 5)
+    attempts = {"n": 0}
+
+    async def always_auth_fail(*args, **kwargs):
+        attempts["n"] += 1
+        raise aiosmtplib.SMTPAuthenticationError(535, "bad creds")
+
+    with (
+        patch("app.auth.email.aiosmtplib.send", side_effect=always_auth_fail),
+        patch("app.auth.email.asyncio.sleep", new=AsyncMock()) as mock_sleep,
+        pytest.raises(aiosmtplib.SMTPAuthenticationError),
+    ):
+        sender = SMTPEmailSender()
+        await sender.send("a@b.com", "s", "<p>b</p>")
+
+    assert attempts["n"] == 1
+    mock_sleep.assert_not_called()
+
+
+async def test_smtp_sender_does_not_retry_recipient_refused(smtp_settings, monkeypatch):
+    """SMTPRecipientRefused is re-raised immediately without retry.
+
+    A rejected recipient is a permanent error — retrying will just
+    rack up bounces and hurt sender reputation with providers like
+    SendGrid / SES.
+    """
+    monkeypatch.setattr(settings.email, "max_retries", 3)
+    attempts = {"n": 0}
+
+    async def always_reject(*args, **kwargs):
+        attempts["n"] += 1
+        raise aiosmtplib.SMTPRecipientRefused(550, "no such user", "a@b.com")
+
+    with (
+        patch("app.auth.email.aiosmtplib.send", side_effect=always_reject),
+        patch("app.auth.email.asyncio.sleep", new=AsyncMock()) as mock_sleep,
+        pytest.raises(aiosmtplib.SMTPRecipientRefused),
+    ):
+        sender = SMTPEmailSender()
+        await sender.send("a@b.com", "s", "<p>b</p>")
+
+    assert attempts["n"] == 1
+    mock_sleep.assert_not_called()
 
 
 def test_factory_raises_on_unknown_backend(monkeypatch):

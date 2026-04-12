@@ -51,6 +51,20 @@ class ConsoleEmailSender:
         logger.debug("EMAIL body:\n%s", body_html)
 
 
+# Permanent SMTP failures that MUST NOT be retried. Retrying these
+# risks provider-side rate-limiting or temporary account lockouts
+# (e.g. Gmail will soft-block the sender after repeated AUTH failures
+# from the same IP, SendGrid counts recipient-refused as a bounce).
+# The generic ``SMTPException`` covers transient errors (connect /
+# timeout / throttling) and is the only family retried below.
+_PERMANENT_SMTP_ERRORS: tuple[type[BaseException], ...] = (
+    aiosmtplib.SMTPAuthenticationError,
+    aiosmtplib.SMTPRecipientRefused,
+    aiosmtplib.SMTPRecipientsRefused,
+    aiosmtplib.SMTPSenderRefused,
+)
+
+
 class SMTPEmailSender:
     """Send emails over SMTP using aiosmtplib.
 
@@ -63,12 +77,14 @@ class SMTPEmailSender:
     - ``settings.email.timeout_seconds``
     - ``settings.email.use_credentials`` (skip AUTH for e.g. Mailpit)
     - ``settings.email.max_retries`` + ``retry_backoff_factor`` for
-      transient SMTP errors (``aiosmtplib.SMTPException``). Retries
-      wait ``backoff_factor ** attempt`` seconds between attempts.
+      transient SMTP errors. Auth / recipient-refused / sender-refused
+      failures are re-raised immediately without retry to avoid
+      provider-side rate-limiting or account lockouts. Retries wait
+      ``backoff_factor ** attempt`` seconds between attempts.
     """
 
     async def send(self, to: str, subject: str, body_html: str) -> None:
-        """Send one HTML email, retrying transient SMTP failures."""
+        """Send one HTML email, retrying only on transient SMTP failures."""
         email_cfg = settings.email
 
         message = EmailMessage()
@@ -109,6 +125,16 @@ class SMTPEmailSender:
                     settings.SMTP_PORT,
                 )
                 return
+            except _PERMANENT_SMTP_ERRORS as exc:
+                # Never retry — raising immediately protects us from
+                # provider lockouts on misconfigured credentials or
+                # bad recipient lists.
+                logger.error(
+                    "SMTP send failed permanently (no retry): %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                raise
             except aiosmtplib.SMTPException as exc:
                 last_exc = exc
                 if attempt >= email_cfg.max_retries:
@@ -128,8 +154,9 @@ class SMTPEmailSender:
             email_cfg.max_retries + 1,
             last_exc,
         )
-        # Loop only exits here via break, which only runs when last_exc
-        # was set by the except branch; mypy/pylint can't see that.
+        # Loop only reaches here via break, which only runs when
+        # last_exc was set by the transient-except branch; mypy /
+        # pylint can't see that.
         assert last_exc is not None  # noqa: S101
         raise last_exc
 
