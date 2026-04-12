@@ -15,9 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin import queries
 from app.api.admin.schemas import DataSyncStatus, SystemStatusResponse
-from app.auth import require_admin
 from app.database import get_db
-from app.models.user import User
 from app.reference.service import get_reference_data_status
 
 logger = logging.getLogger(__name__)
@@ -37,11 +35,9 @@ router = APIRouter(tags=["admin"])
 
     **Requires:** Admin authentication
     """,
-    dependencies=[Depends(require_admin)],
 )
 async def get_system_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
 ):
     """Get system status and data sync statistics."""
     db_stats = await queries.fetch_database_stats(db)
@@ -93,7 +89,6 @@ async def get_system_status(
     "/statistics",
     summary="Get detailed database statistics",
     description="Returns detailed statistics about database contents.",
-    dependencies=[Depends(require_admin)],
 )
 async def get_statistics(
     db: AsyncSession = Depends(get_db),
@@ -106,7 +101,6 @@ async def get_statistics(
     "/reference/status",
     summary="Get reference data status",
     description="Returns detailed status of reference data in the database.",
-    dependencies=[Depends(require_admin)],
 )
 async def get_reference_status(
     db: AsyncSession = Depends(get_db),

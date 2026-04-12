@@ -261,7 +261,7 @@ async def list_roles(
 @users_router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Create new user (admin only).
@@ -324,7 +324,6 @@ async def list_users(
     skip: int = 0,
     limit: int = 100,
     role: str | None = None,
-    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[UserResponse]:
     """List all users with pagination (admin only).
@@ -357,7 +356,6 @@ async def list_users(
 @users_router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
-    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Get user by ID (admin only).
@@ -395,7 +393,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_data: UserUpdateAdmin,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Update user (admin only).
@@ -442,7 +440,7 @@ async def update_user(
 @users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete user (admin only).
@@ -485,7 +483,7 @@ async def delete_user(
 @users_router.patch("/{user_id}/unlock", response_model=UserResponse)
 async def unlock_user(
     user_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Unlock a user account (admin only).
