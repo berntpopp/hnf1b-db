@@ -897,6 +897,115 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
+## Email / SMTP Implementation (Inherited from Wave 5c)
+
+Wave 5c shipped the full email config plumbing but only the ConsoleEmailSender implementation. Wave 6 adds real SMTP delivery with minimal friction.
+
+### What's already in place (Wave 5c)
+
+- `EmailSender` protocol at `backend/app/auth/email.py` — Wave 6 adds a class implementing this protocol
+- `get_email_sender()` DI factory reads `settings.email.backend` — Wave 6 adds the "smtp" branch
+- All 4 SMTP env vars in `.env.example`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- `config.yaml` email section with `backend`, `from_address`, `from_name`, `tls_mode`, `validate_certs`, `timeout_seconds`, `use_credentials`, `max_retries`, `retry_backoff_factor`
+- Startup validator fails fast if `backend: "smtp"` + `SMTP_HOST` empty
+
+### What Wave 6 adds
+
+**SMTPEmailSender** (new class in `backend/app/auth/email.py`):
+
+```python
+class SMTPEmailSender:
+    """Real SMTP email delivery using aiosmtplib."""
+
+    async def send(self, to: str, subject: str, body_html: str) -> None:
+        # Use aiosmtplib.send() with settings.SMTP_HOST/PORT/USERNAME/PASSWORD
+        # Respect settings.email.tls_mode (starttls|ssl|none)
+        # Respect settings.email.timeout_seconds, max_retries, retry_backoff_factor
+        ...
+```
+
+**Update `get_email_sender()`** — the "smtp" branch currently raises NotImplementedError; Wave 6 returns SMTPEmailSender().
+
+**New dependency:** `aiosmtplib` in `backend/pyproject.toml`.
+
+### Mailpit for local email testing
+
+Add to `docker-compose.dev.yml` (following sysndd project pattern):
+
+```yaml
+mailpit:
+  image: axllent/mailpit:v1.29.6
+  container_name: hnf1b_mailpit
+  ports:
+    - "127.0.0.1:8025:8025"  # Web UI
+    - "127.0.0.1:1025:1025"  # SMTP
+  environment:
+    MP_SMTP_AUTH_ACCEPT_ANY: 1
+    MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    MP_MAX_MESSAGES: 500
+```
+
+Then developers can set in `.env`:
+```
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+```
+
+And in `config.yaml`:
+```
+email:
+  backend: "smtp"
+  use_credentials: false  # Mailpit accepts any creds, skip auth
+```
+
+And view captured emails at http://localhost:8025.
+
+### Provider quick reference
+
+| Provider    | SMTP_HOST                           | SMTP_PORT | SMTP_USERNAME      | tls_mode  |
+| ----------- | ----------------------------------- | --------- | ------------------ | --------- |
+| SendGrid    | smtp.sendgrid.net                   | 587       | apikey (literal)   | starttls  |
+| Mailgun     | smtp.mailgun.org                    | 587       | postmaster@domain  | starttls  |
+| AWS SES     | email-smtp.<region>.amazonaws.com   | 587       | IAM SMTP user      | starttls  |
+| Gmail       | smtp.gmail.com                      | 587       | your email         | starttls  |
+| Local relay | localhost                           | 25        | (empty)            | none      |
+
+### Outbound mail rate limiting (optional)
+
+Add to `EmailConfig` if needed:
+```python
+class EmailRateLimitConfig(BaseModel):
+    max_per_minute: int = 30
+    max_per_hour: int = 500
+
+class EmailConfig(BaseModel):
+    # ... existing fields ...
+    rate_limit: EmailRateLimitConfig = EmailRateLimitConfig()
+```
+
+Protects against accidental floods (e.g., bug in a loop sending thousands of reset emails).
+
+### HTML email templates
+
+Wave 5c uses inline HTML in endpoint code. Wave 6 should extract to templates:
+- Option A: Jinja2 with `backend/app/auth/email_templates/` directory
+- Option B: Simple string template constants in a dedicated module
+
+Recommended: Jinja2 — adds `jinja2` dep (already used by many FastAPI projects), supports partials and proper escaping.
+
+### HTTP baseline fixtures (Wave 5c follow-up)
+
+Wave 5c deferred 5 baseline fixtures for the new endpoints. Add them in Wave 6:
+- `auth_invite.json` — POST /api/v2/auth/users/invite
+- `auth_invite_accept.json` — POST /api/v2/auth/invite/accept/{token}
+- `auth_password_reset_request.json` — POST /api/v2/auth/password-reset/request
+- `auth_password_reset_confirm.json` — POST /api/v2/auth/password-reset/confirm/{token}
+- `auth_verify_email.json` — POST /api/v2/auth/verify-email/{token}
+
+Each requires custom token setup in the baseline harness (tokens must exist before capture).
+
+---
+
 ## Self-Review Notes
 
 - **Spec coverage:** CI tightening (Task 1), request ID middleware (Task 2), stale docs (Task 3), top-5 component tests (Task 4), JWT storage ADR (Task 5), re-score (Task 6). Every Wave 6 item from the spec is addressed.
