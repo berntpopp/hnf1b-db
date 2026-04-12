@@ -25,7 +25,10 @@ from app.schemas.auth import (
     InviteAcceptRequest,
     InviteRequest,
     InviteResponse,
+    MessageResponse,
     PasswordChange,
+    PasswordResetConfirm,
+    PasswordResetRequest,
     RefreshTokenRequest,
     RoleResponse,
     Token,
@@ -720,6 +723,100 @@ async def accept_invite(
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter("reset-request", 3, 3600))],
+)
+async def request_password_reset(
+    reset_data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Request a password reset email.
+
+    Always returns 202 regardless of whether the email exists —
+    constant-time anti-enumeration per OWASP Forgot Password Cheat Sheet.
+    """
+    repo = UserRepository(db)
+    user = await repo.get_by_email(reset_data.email)
+
+    raw_token = None
+    if user:
+        token_svc = CredentialTokenService(db)
+        await token_svc.invalidate_by_email_and_purpose(
+            email=reset_data.email, purpose="reset"
+        )
+        raw_token, _ = await token_svc.create_token(
+            purpose="reset",
+            email=reset_data.email,
+            user_id=user.id,
+        )
+
+        sender = get_email_sender()
+        reset_url = f"{settings.CORS_ORIGINS.split(',')[0]}/reset-password/{raw_token}"
+        await sender.send(
+            to=reset_data.email,
+            subject=f"Password Reset - {settings.email.from_name}",
+            body_html=f"<p>Reset your password: {reset_url}</p>",
+        )
+
+    response = MessageResponse(
+        message="If an account exists with that email, a reset link has been sent."
+    )
+    if settings.environment != "production" and raw_token:
+        response.token = raw_token
+
+    return response
+
+
+@router.post(
+    "/password-reset/confirm/{token}",
+    response_model=MessageResponse,
+    dependencies=[Depends(RateLimiter("reset-confirm", 5, 3600))],
+)
+async def confirm_password_reset(
+    token: str,
+    reset_data: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Confirm a password reset with a valid token."""
+    token_svc = CredentialTokenService(db)
+    db_token = await token_svc.verify_and_consume(token, purpose="reset")
+
+    if db_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used reset token.",
+        )
+
+    repo = UserRepository(db)
+    user = await repo.get_by_id(db_token.user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User associated with this token no longer exists.",
+        )
+
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    await db.commit()
+
+    # Invalidate all remaining reset tokens for this email
+    await token_svc.invalidate_by_email_and_purpose(
+        email=db_token.email, purpose="reset"
+    )
+
+    await log_user_action(
+        db=db,
+        user_id=user.id,
+        action="PASSWORD_RESET",
+        details=f"User '{user.username}' reset password via token",
+    )
+
+    return MessageResponse(message="Password reset successful.")
 
 
 # Wave 5b Task 9: mount the admin user-management sub-router

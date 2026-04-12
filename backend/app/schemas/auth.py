@@ -166,6 +166,32 @@ class PasswordChange(BaseModel):
         return v
 
 
+class PasswordResetRequest(BaseModel):
+    """Password reset request — email only."""
+
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    """Password reset confirmation — new password."""
+
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Validate password strength."""
+        validate_password_strength(v)
+        return v
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+
+    message: str
+    token: str | None = None  # Dev-only: raw token for testing
+
+
 class UserResponse(BaseModel):
     """User response (passwords never included)."""
 
