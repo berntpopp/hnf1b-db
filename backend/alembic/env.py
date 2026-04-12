@@ -32,7 +32,10 @@ try:
     # Import Base from database module
     from app.database import Base
 
-    # User model (1).
+    # Core models (2).
+    from app.models.credential_token import (
+        CredentialToken as CredentialToken,
+    )
     from app.models.user import (
         User as User,
     )

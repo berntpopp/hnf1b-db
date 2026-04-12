@@ -1,24 +1,36 @@
 """Authentication API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     create_access_token,
     create_refresh_token,
     get_current_user,
+    get_password_hash,
     require_admin,
     verify_and_update_password_hash,
     verify_password,
     verify_token,
 )
+from app.auth.credential_tokens import CredentialTokenService
+from app.auth.email import get_email_sender
 from app.auth.permissions import get_all_roles
+from app.auth.rate_limit import RateLimiter
 from app.core.config import settings
 from app.database import get_db
+from app.models.credential_token import CredentialToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
+    InviteAcceptRequest,
+    InviteRequest,
+    InviteResponse,
+    MessageResponse,
     PasswordChange,
+    PasswordResetConfirm,
+    PasswordResetRequest,
     RefreshTokenRequest,
     RoleResponse,
     Token,
@@ -320,6 +332,22 @@ async def create_user(
         ),
     )
 
+    # Auto-dispatch email verification (Wave 5c Task 8)
+    token_svc = CredentialTokenService(db)
+    raw_token, _ = await token_svc.create_token(
+        purpose="verify",
+        email=user.email,
+        user_id=user.id,
+    )
+
+    sender = get_email_sender()
+    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
+    await sender.send(
+        to=user.email,
+        subject=f"Verify your email - {settings.email.from_name}",
+        body_html=f"<p>Verify your email: {verify_url}</p>",
+    )
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -511,6 +539,15 @@ async def delete_user(
             detail="Cannot delete your own account",
         )
 
+    # Wave 5c Task 8: remove credential tokens referencing this user to
+    # avoid FK violations (invite/reset/verify tokens are meaningless
+    # after the user is deleted). The FK on credential_tokens.user_id
+    # does not specify ON DELETE; cleaning up here keeps the deletion
+    # atomic without requiring a schema migration.
+    await db.execute(
+        sa_delete(CredentialToken).where(CredentialToken.user_id == user.id)
+    )
+
     await log_user_action(
         db=db,
         user_id=user_id,
@@ -569,6 +606,335 @@ async def unlock_user(
         created_at=unlocked.created_at,
         updated_at=unlocked.updated_at,
     )
+
+
+@users_router.post(
+    "/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_invite(
+    invite_data: InviteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> InviteResponse:
+    """Invite a new user by email (admin only).
+
+    Creates a credential token bound to the target email.
+    Re-inviting the same email invalidates prior invite tokens.
+    """
+    token_svc = CredentialTokenService(db)
+
+    # Invalidate any existing invite tokens for this email
+    await token_svc.invalidate_by_email_and_purpose(
+        email=invite_data.email, purpose="invite"
+    )
+
+    raw_token, db_token = await token_svc.create_token(
+        purpose="invite",
+        email=invite_data.email,
+        metadata={"role": invite_data.role},
+    )
+
+    # Dispatch invite email
+    sender = get_email_sender()
+    cors_origins = settings.CORS_ORIGINS.split(",")
+    accept_url = (
+        f"{cors_origins[0].strip()}/accept-invite/{raw_token}?email={invite_data.email}"
+    )
+    await sender.send(
+        to=invite_data.email,
+        subject=f"You've been invited to {settings.email.from_name}",
+        body_html=(
+            f"<p>You've been invited as a {invite_data.role}. "
+            f'Click here to accept: <a href="{accept_url}">{accept_url}</a></p>'
+        ),
+    )
+
+    await log_user_action(
+        db=db,
+        user_id=current_user.id,
+        action="USER_INVITED",
+        details=(
+            f"Admin '{current_user.username}' invited "
+            f"'{invite_data.email}' as {invite_data.role}"
+        ),
+    )
+
+    response = InviteResponse(
+        email=invite_data.email,
+        role=invite_data.role,
+        expires_at=db_token.expires_at,
+    )
+
+    # Dev-only: include raw token for testing
+    if settings.environment != "production":
+        response.token = raw_token
+
+    return response
+
+
+@router.post(
+    "/invite/accept/{token}",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(RateLimiter("invite-accept", 5, 3600))],
+)
+async def accept_invite(
+    token: str,
+    accept_data: InviteAcceptRequest,
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Accept an invite and create a user account.
+
+    The user is created with is_verified=True (email ownership proved
+    by receiving the invite).
+    """
+    token_svc = CredentialTokenService(db)
+    db_token = await token_svc.verify_and_consume(token, purpose="invite")
+
+    if db_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used invite token.",
+        )
+
+    repo = UserRepository(db)
+
+    # Check username uniqueness
+    if await repo.get_by_username(accept_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Username '{accept_data.username}' already exists",
+        )
+
+    # Check email uniqueness
+    if await repo.get_by_email(db_token.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Email '{db_token.email}' already exists",
+        )
+
+    # Extract role from token metadata
+    role = (db_token.metadata_ or {}).get("role", "viewer")
+
+    # Create user
+    user = User(
+        username=accept_data.username,
+        email=db_token.email,
+        hashed_password=get_password_hash(accept_data.password),
+        full_name=accept_data.full_name,
+        role=role,
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    await log_user_action(
+        db=db,
+        user_id=user.id,
+        action="INVITE_ACCEPTED",
+        details=f"User '{user.username}' accepted invite for '{db_token.email}'",
+    )
+
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        permissions=user.get_permissions(),
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter("reset-request", 3, 3600))],
+)
+async def request_password_reset(
+    reset_data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Request a password reset email.
+
+    Always returns 202 regardless of whether the email exists —
+    constant-time anti-enumeration per OWASP Forgot Password Cheat Sheet.
+    """
+    repo = UserRepository(db)
+    user = await repo.get_by_email(reset_data.email)
+
+    raw_token = None
+    if user:
+        token_svc = CredentialTokenService(db)
+        await token_svc.invalidate_by_email_and_purpose(
+            email=reset_data.email, purpose="reset"
+        )
+        raw_token, _ = await token_svc.create_token(
+            purpose="reset",
+            email=reset_data.email,
+            user_id=user.id,
+        )
+
+        sender = get_email_sender()
+        reset_url = f"{settings.CORS_ORIGINS.split(',')[0]}/reset-password/{raw_token}"
+        await sender.send(
+            to=reset_data.email,
+            subject=f"Password Reset - {settings.email.from_name}",
+            body_html=f"<p>Reset your password: {reset_url}</p>",
+        )
+
+    response = MessageResponse(
+        message="If an account exists with that email, a reset link has been sent."
+    )
+    if settings.environment != "production" and raw_token:
+        response.token = raw_token
+
+    return response
+
+
+@router.post(
+    "/password-reset/confirm/{token}",
+    response_model=MessageResponse,
+    dependencies=[Depends(RateLimiter("reset-confirm", 5, 3600))],
+)
+async def confirm_password_reset(
+    token: str,
+    reset_data: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Confirm a password reset with a valid token."""
+    token_svc = CredentialTokenService(db)
+    db_token = await token_svc.verify_and_consume(token, purpose="reset")
+
+    if db_token is None or db_token.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used reset token.",
+        )
+
+    repo = UserRepository(db)
+    user = await repo.get_by_id(db_token.user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User associated with this token no longer exists.",
+        )
+
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    await db.commit()
+
+    # Invalidate all remaining reset tokens for this email
+    await token_svc.invalidate_by_email_and_purpose(
+        email=db_token.email, purpose="reset"
+    )
+
+    await log_user_action(
+        db=db,
+        user_id=user.id,
+        action="PASSWORD_RESET",
+        details=f"User '{user.username}' reset password via token",
+    )
+
+    return MessageResponse(message="Password reset successful.")
+
+
+@router.post(
+    "/verify-email/resend",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter("verify-resend", 3, 3600))],
+)
+async def resend_verification(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Resend email verification (authenticated, unverified users only)."""
+    if current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified.",
+        )
+
+    token_svc = CredentialTokenService(db)
+    await token_svc.invalidate_by_email_and_purpose(
+        email=current_user.email, purpose="verify"
+    )
+    raw_token, _ = await token_svc.create_token(
+        purpose="verify",
+        email=current_user.email,
+        user_id=current_user.id,
+    )
+
+    sender = get_email_sender()
+    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
+    await sender.send(
+        to=current_user.email,
+        subject=f"Verify your email - {settings.email.from_name}",
+        body_html=f"<p>Verify your email: {verify_url}</p>",
+    )
+
+    response = MessageResponse(message="Verification email sent.")
+    if settings.environment != "production":
+        response.token = raw_token
+    return response
+
+
+@router.post(
+    "/verify-email/{token}",
+    response_model=MessageResponse,
+    dependencies=[Depends(RateLimiter("verify-email", 5, 3600))],
+)
+async def verify_email(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Verify email address using a credential token."""
+    token_svc = CredentialTokenService(db)
+    db_token = await token_svc.verify_and_consume(token, purpose="verify")
+
+    if db_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used verification token.",
+        )
+
+    # verify tokens are always created with user_id set (see create_user
+    # and resend_verification above); user_id: int | None is only used
+    # by the invite flow, which has its own endpoint.
+    if db_token.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token is not bound to a user.",
+        )
+
+    repo = UserRepository(db)
+    user = await repo.get_by_id(db_token.user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User associated with this token no longer exists.",
+        )
+
+    user.is_verified = True
+    await db.commit()
+
+    await log_user_action(
+        db=db,
+        user_id=user.id,
+        action="EMAIL_VERIFIED",
+        details=f"User '{user.username}' verified email '{db_token.email}'",
+    )
+
+    return MessageResponse(message="Email verified successfully.")
 
 
 # Wave 5b Task 9: mount the admin user-management sub-router

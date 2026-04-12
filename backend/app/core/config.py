@@ -221,6 +221,20 @@ class SecurityConfig(BaseModel):
     account_lockout_minutes: int = 15
 
 
+class EmailConfig(BaseModel):
+    """Email delivery configuration (non-secret behavioral settings)."""
+
+    backend: Literal["console", "smtp"] = "console"
+    from_address: str = "noreply@hnf1b-db.org"
+    from_name: str = "HNF1B Database"
+    tls_mode: Literal["starttls", "ssl", "none"] = "starttls"
+    validate_certs: bool = True
+    timeout_seconds: int = 30
+    use_credentials: bool = True
+    max_retries: int = 3
+    retry_backoff_factor: float = 2.0
+
+
 class YamlConfig(BaseModel):
     """Complete YAML configuration structure."""
 
@@ -232,6 +246,7 @@ class YamlConfig(BaseModel):
     materialized_views: MaterializedViewsConfig = MaterializedViewsConfig()
     hpo_terms: HPOTermsConfig = HPOTermsConfig()
     security: SecurityConfig = SecurityConfig()
+    email: EmailConfig = EmailConfig()
 
 
 def load_yaml_config() -> YamlConfig:
@@ -280,6 +295,12 @@ class Settings(BaseSettings):
     JWT_SECRET: str = Field(default="")
     REDIS_URL: str = "redis://localhost:6379/0"
     PUBMED_API_KEY: Optional[str] = None
+
+    # SMTP credentials (for email delivery)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
 
     # Admin credentials (for initial setup)
     # SECURITY: ADMIN_PASSWORD is REQUIRED and has no default. The previous
@@ -381,6 +402,33 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_smtp_config(self) -> "Settings":
+        """Fail fast if email backend is smtp but SMTP_HOST is missing."""
+        email_cfg = self.yaml.email
+        if email_cfg.backend == "smtp":
+            if not self.SMTP_HOST or self.SMTP_HOST.strip() == "":
+                raise ValueError(
+                    "REFUSING TO START: email.backend is 'smtp' but SMTP_HOST "
+                    "is empty. Set SMTP_HOST in .env or switch to "
+                    "email.backend: 'console' in config.yaml."
+                )
+            if email_cfg.use_credentials:
+                if not self.SMTP_USERNAME or not self.SMTP_PASSWORD:
+                    raise ValueError(
+                        "REFUSING TO START: email.backend is 'smtp' with "
+                        "use_credentials: true, but SMTP_USERNAME or "
+                        "SMTP_PASSWORD is empty. Set them in .env or set "
+                        "email.use_credentials: false in config.yaml."
+                    )
+        if email_cfg.tls_mode == "none":
+            logger.critical(
+                "EMAIL TLS IS DISABLED (email.tls_mode: 'none'). "
+                "Emails will be sent unencrypted. This is only safe "
+                "for trusted internal relays."
+            )
+        return self
+
     @property
     def yaml(self) -> YamlConfig:
         """Lazy-load YAML configuration."""
@@ -429,6 +477,11 @@ class Settings(BaseSettings):
     def security(self) -> SecurityConfig:
         """Access security configuration."""
         return self.yaml.security
+
+    @property
+    def email(self) -> EmailConfig:
+        """Access email configuration."""
+        return self.yaml.email
 
     # === Legacy compatibility properties ===
     # These provide backward compatibility with code using old config names

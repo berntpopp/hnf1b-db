@@ -106,6 +106,30 @@ const routes = [
     meta: { title: 'Login' },
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { title: 'Forgot Password' },
+  },
+  {
+    path: '/reset-password/:token',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { title: 'Reset Password' },
+  },
+  {
+    path: '/accept-invite/:token',
+    name: 'AcceptInvite',
+    component: () => import('@/views/AcceptInvite.vue'),
+    meta: { title: 'Accept Invite' },
+  },
+  {
+    path: '/verify-email/:token',
+    name: 'VerifyEmail',
+    component: () => import('@/views/VerifyEmail.vue'),
+    meta: { title: 'Verify Email' },
+  },
+  {
     path: '/user',
     name: 'User',
     component: () => import(/* webpackChunkName: "user" */ '../views/User.vue'),

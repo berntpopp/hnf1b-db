@@ -173,9 +173,7 @@ const handleLogin = async () => {
  * Handles forgot password action.
  */
 const handleForgotPassword = () => {
-  // TODO: Implement forgot password flow
-  window.logService.info('Forgot password clicked');
-  alert('Password reset functionality will be implemented in a future update.');
+  router.push('/forgot-password');
 };
 
 // Check if user should be remembered on mount

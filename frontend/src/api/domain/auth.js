@@ -65,3 +65,67 @@ export const deleteUser = (id) => apiClient.delete(`/auth/users/${id}`);
  * @returns {Promise} Axios promise with unlocked user
  */
 export const unlockUser = (id) => apiClient.patch(`/auth/users/${id}/unlock`);
+
+/**
+ * Request a password reset email.
+ * @param {string} email
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function requestPasswordReset(email) {
+  return apiClient.post('/auth/password-reset/request', { email });
+}
+
+/**
+ * Confirm a password reset with token and new password.
+ * @param {string} token
+ * @param {string} newPassword
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function confirmPasswordReset(token, newPassword) {
+  return apiClient.post(`/auth/password-reset/confirm/${token}`, {
+    new_password: newPassword,
+  });
+}
+
+/**
+ * Accept an invite and create user account.
+ * @param {string} token
+ * @param {string} username
+ * @param {string} password
+ * @param {string} fullName
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function acceptInvite(token, username, password, fullName) {
+  return apiClient.post(`/auth/invite/accept/${token}`, {
+    username,
+    password,
+    full_name: fullName,
+  });
+}
+
+/**
+ * Verify email with token.
+ * @param {string} token
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function verifyEmail(token) {
+  return apiClient.post(`/auth/verify-email/${token}`);
+}
+
+/**
+ * Resend email verification (authenticated).
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function resendVerification() {
+  return apiClient.post('/auth/verify-email/resend');
+}
+
+/**
+ * Send an invite to a new user (admin only).
+ * @param {string} email
+ * @param {string} role
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function sendInvite(email, role) {
+  return apiClient.post('/auth/users/invite', { email, role });
+}

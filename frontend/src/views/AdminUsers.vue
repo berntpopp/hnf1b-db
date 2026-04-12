@@ -14,6 +14,10 @@
             </p>
           </div>
           <v-spacer />
+          <v-btn color="secondary" variant="tonal" class="mr-2" @click="showInvite = true">
+            <v-icon start>mdi-email-fast</v-icon>
+            Invite User
+          </v-btn>
           <v-btn color="primary" variant="flat" @click="showCreate = true">
             <v-icon start>mdi-account-plus</v-icon>
             Create User
@@ -58,6 +62,7 @@
     </v-row>
 
     <UserCreateDialog v-model="showCreate" @created="onCreated" />
+    <UserInviteDialog v-model="showInvite" @invited="fetchUsers" />
     <UserEditDialog v-model="showEdit" :user="editTarget" @updated="onUpdated" />
 
     <v-dialog v-model="showDeleteConfirm" max-width="400">
@@ -85,6 +90,7 @@ import { ref, onMounted } from 'vue';
 import { listUsers, deleteUser, unlockUser } from '@/api';
 import UserListTable from '@/components/admin/UserListTable.vue';
 import UserCreateDialog from '@/components/admin/UserCreateDialog.vue';
+import UserInviteDialog from '@/components/admin/UserInviteDialog.vue';
 import UserEditDialog from '@/components/admin/UserEditDialog.vue';
 
 const users = ref([]);
@@ -93,6 +99,7 @@ const error = ref(null);
 const success = ref(null);
 
 const showCreate = ref(false);
+const showInvite = ref(false);
 const showEdit = ref(false);
 const editTarget = ref(null);
 const showDeleteConfirm = ref(false);
