@@ -813,7 +813,7 @@ async def confirm_password_reset(
     token_svc = CredentialTokenService(db)
     db_token = await token_svc.verify_and_consume(token, purpose="reset")
 
-    if db_token is None:
+    if db_token is None or db_token.user_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid, expired, or already-used reset token.",
