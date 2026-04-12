@@ -12,6 +12,7 @@ from app.core.cache import close_cache, init_cache
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.mv_cache import init_mv_cache
+from app.core.request_id import RequestIdMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.database import async_session_maker, engine
 from app.ontology import routers as ontology_router
@@ -63,6 +64,15 @@ register_exception_handlers(app)
 
 # Security headers middleware (runs on every response, before CORS)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Request ID middleware (Wave 6 T2): generate or accept X-Request-ID per
+# request so exception handlers and downstream logging can correlate to a
+# single frontend request. Registered AFTER SecurityHeadersMiddleware in
+# add order so that it runs FIRST on the request path — Starlette runs
+# middleware in reverse registration order (LIFO). The request_id is
+# attached to request.state before any other middleware or handler sees
+# the request.
+app.add_middleware(RequestIdMiddleware)
 
 # Configure CORS with environment-based settings
 app.add_middleware(
