@@ -17,14 +17,30 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import your models' metadata here for 'autogenerate' support
-# Import Base from database module and all Phenopackets v2 models
+# Import your models' metadata here for 'autogenerate' support.
+#
+# Wave 5b Task 2 (Wave 5a exit follow-up #1): import EVERY SQLAlchemy ORM
+# model class so ``Base.metadata`` is complete. Missing imports cause
+# ``alembic revision --autogenerate`` to emit spurious ``op.drop_table(...)``
+# operations for unimported tables. Both Wave 5a schema migrations had to
+# be hand-written because autogenerate was unusable before this fix.
+#
+# If you add a new ORM model anywhere under ``app/``, add it here too.
+# ``tests/test_alembic_env_autogenerate.py::test_env_py_imports_all_orm_models``
+# statically enforces this at test time.
 try:
     # Import Base from database module
     from app.database import Base
 
-    # Import all Phenopackets v2 models to ensure metadata is complete
-    # Using redundant aliases to signal intentional re-exports (models register with Base.metadata)
+    # User model (1).
+    from app.models.user import (
+        User as User,
+    )
+
+    # Phenopackets package (5 models).
+    # Redundant ``as`` aliases signal intentional re-exports so ruff/pyflakes
+    # does not flag the imports as unused — the import side-effect (model
+    # registration with ``Base.metadata``) is what actually matters here.
     from app.phenopackets.models import (
         Cohort as Cohort,
     )
@@ -41,12 +57,71 @@ try:
         Resource as Resource,
     )
 
+    # Reference package (5 models: genome → genes → transcripts → exons,
+    # plus protein_domains).
+    from app.reference.models import (
+        Exon as Exon,
+    )
+    from app.reference.models import (
+        Gene as Gene,
+    )
+    from app.reference.models import (
+        ProteinDomain as ProteinDomain,
+    )
+    from app.reference.models import (
+        ReferenceGenome as ReferenceGenome,
+    )
+    from app.reference.models import (
+        Transcript as Transcript,
+    )
+
     target_metadata = Base.metadata
 except ImportError:
     # During initial setup, models might not exist yet
     from app.database import Base
 
     target_metadata = Base.metadata
+
+
+def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
+    """Filter non-ORM-managed tables out of autogenerate diffs.
+
+    Wave 5b Task 2: the following tables exist in the live database but
+    are intentionally NOT exposed as SQLAlchemy ORM models:
+
+    * ``publication_metadata`` — managed by raw SQL migration
+      ``8d988c04336a_add_publication_metadata_table`` and populated via
+      the ``publications-sync`` job.
+    * ``variant_annotations`` — managed by raw SQL migration
+      ``7b2a3c4d5e6f_add_variant_annotations_table`` and populated via
+      the VEP annotation pipeline.
+    * ``hpo_terms_lookup`` — populated by HPO ingestion jobs
+      (``0bd1567a483c_add_phenotype_metadata_to_hpo_lookup`` and
+      ``93b3e6984a6c_fix_hpo_lookup_table_repopulation``).
+    * ``allelic_state_values``, ``evidence_code_values``,
+      ``interpretation_status_values``, ``progress_status_values``,
+      ``sex_values`` — phenopackets controlled-vocabulary tables from
+      ``88b3a0c19a89_add_phenopacket_controlled_vocabularies``.
+    * ``alembic_version`` — alembic's own bookkeeping table.
+
+    Without this filter, ``alembic revision --autogenerate`` emits
+    ``op.drop_table(...)`` for every one of them because they are not
+    represented in ``Base.metadata``.
+    """
+    if type_ == "table" and name in {
+        "alembic_version",
+        "allelic_state_values",
+        "evidence_code_values",
+        "hpo_terms_lookup",
+        "interpretation_status_values",
+        "progress_status_values",
+        "publication_metadata",
+        "sex_values",
+        "variant_annotations",
+    }:
+        return False
+    return True
+
 
 # Get database URL from environment variable
 database_url = os.getenv(
@@ -74,6 +149,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
@@ -89,6 +165,7 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        include_object=include_object,
         compare_type=True,
         compare_server_default=True,
     )
