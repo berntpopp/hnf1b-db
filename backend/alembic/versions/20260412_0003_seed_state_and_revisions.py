@@ -7,8 +7,9 @@ Create Date: 2026-04-12
 Part of Wave 7 D.1. See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.3.
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "20260412_0003"
 down_revision = "20260412_0002"

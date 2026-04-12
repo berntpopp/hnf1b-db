@@ -57,6 +57,9 @@ try:
         PhenopacketAudit as PhenopacketAudit,
     )
     from app.phenopackets.models import (
+        PhenopacketRevision as PhenopacketRevision,
+    )
+    from app.phenopackets.models import (
         Resource as Resource,
     )
 
