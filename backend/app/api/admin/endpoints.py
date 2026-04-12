@@ -15,14 +15,21 @@ this in automatically.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.admin.status_routes import router as _status_router
 from app.api.admin.sync_publications_routes import router as _pub_router
 from app.api.admin.sync_reference_routes import router as _ref_router
 from app.api.admin.sync_variants_routes import router as _var_router
+from app.auth import require_admin
 
-router = APIRouter(prefix="/api/v2/admin", tags=["admin"])
+# Wave 5b Task 9: router-level BFLA guard — every /api/v2/admin/* route
+# requires admin role before per-endpoint guards are even evaluated.
+router = APIRouter(
+    prefix="/api/v2/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_admin)],
+)
 
 # Sub-routers are included without extra prefixes so the final path
 # shape matches the old flat file exactly:

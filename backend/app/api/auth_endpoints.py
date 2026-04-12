@@ -31,6 +31,16 @@ from app.utils.audit_logger import log_user_action
 
 router = APIRouter(prefix="/api/v2/auth", tags=["authentication"])
 
+# Wave 5b Task 9: admin user-management routes live on a sub-router
+# with router-level require_admin dependency.  The BFLA matrix in
+# test_admin_route_authorization.py asserts every /auth/users/* route
+# denies non-admins regardless of per-endpoint guards.
+users_router = APIRouter(
+    prefix="/users",
+    dependencies=[Depends(require_admin)],
+    tags=["user-management"],
+)
+
 
 @router.post("/login", response_model=Token)
 async def login(
@@ -248,7 +258,7 @@ async def list_roles(
 # Admin-only endpoints below this line
 
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@users_router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
     current_user: User = Depends(require_admin),
@@ -309,7 +319,7 @@ async def create_user(
     )
 
 
-@router.get("/users", response_model=list[UserResponse])
+@users_router.get("", response_model=list[UserResponse])
 async def list_users(
     skip: int = 0,
     limit: int = 100,
@@ -344,7 +354,7 @@ async def list_users(
     ]
 
 
-@router.get("/users/{user_id}", response_model=UserResponse)
+@users_router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
     current_user: User = Depends(require_admin),
@@ -381,7 +391,7 @@ async def get_user(
     )
 
 
-@router.put("/users/{user_id}", response_model=UserResponse)
+@users_router.put("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
     user_data: UserUpdateAdmin,
@@ -429,7 +439,7 @@ async def update_user(
     )
 
 
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
     current_user: User = Depends(require_admin),
@@ -472,7 +482,7 @@ async def delete_user(
     await repo.delete(user)
 
 
-@router.patch("/users/{user_id}/unlock", response_model=UserResponse)
+@users_router.patch("/{user_id}/unlock", response_model=UserResponse)
 async def unlock_user(
     user_id: int,
     current_user: User = Depends(require_admin),
@@ -520,3 +530,7 @@ async def unlock_user(
         created_at=unlocked.created_at,
         updated_at=unlocked.updated_at,
     )
+
+
+# Wave 5b Task 9: mount the admin user-management sub-router
+router.include_router(users_router)
