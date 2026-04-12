@@ -1,11 +1,27 @@
 {
   "normalized_body": {
-    "results": []
+    "results": [
+      {
+        "extra_info": "<normalized>",
+        "id": "<normalized>",
+        "label": "HNF1B",
+        "score": 0.4285714328289032,
+        "subtype": "Symbol",
+        "type": "Gene"
+      }
+    ]
   },
   "shape": {
     "results": [
       "list",
-      "empty"
+      {
+        "extra_info": "volatile",
+        "id": "volatile",
+        "label": "str",
+        "score": "float",
+        "subtype": "str",
+        "type": "str"
+      }
     ]
   },
   "status_code": 200

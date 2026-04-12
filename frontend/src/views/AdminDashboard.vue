@@ -412,6 +412,13 @@
         </v-col>
       </v-row>
 
+      <!-- Admin Cards -->
+      <v-row class="mt-4">
+        <v-col cols="12" sm="6" md="4">
+          <AdminUsersCard />
+        </v-col>
+      </v-row>
+
       <!-- Quick Actions -->
       <v-row class="mt-4">
         <v-col cols="12">
@@ -553,8 +560,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import * as API from '@/api';
+import { useSyncTask } from '@/composables/useSyncTask';
+import AdminUsersCard from '@/components/admin/AdminUsersCard.vue';
 
 // State
 const loading = ref(true);
@@ -563,23 +572,8 @@ const successMessage = ref(null);
 const systemStatus = ref(null);
 const statistics = ref(null);
 
-// Publication sync state
-const pubSyncTask = ref(null);
-const pubSyncInProgress = ref(false);
-let pubPollInterval = null;
-
-// Variant sync state
-const varSyncTask = ref(null);
-const varSyncInProgress = ref(false);
-let varPollInterval = null;
-
-// Reference init state
+// Reference init state (single-shot, no polling — not migrated to useSyncTask)
 const refInitInProgress = ref(false);
-
-// Genes sync state
-const genesSyncTask = ref(null);
-const genesSyncInProgress = ref(false);
-let genesPollInterval = null;
 
 // Computed
 const syncStatus = computed(() => systemStatus.value?.sync_status || []);
@@ -666,135 +660,58 @@ const refreshStatus = async () => {
   }, 3000);
 };
 
-// Publication sync methods
-const startPublicationSync = async (force = false) => {
-  try {
-    pubSyncInProgress.value = true;
-    const response = await API.startPublicationSync(force);
-    pubSyncTask.value = {
-      task_id: response.data.task_id,
-      status: response.data.status,
-      progress: 0,
-      processed: 0,
-      total: response.data.items_to_process,
-      errors: 0,
-    };
+// Publication sync (useSyncTask owns polling + cleanup)
+const {
+  task: pubSyncTask,
+  inProgress: pubSyncInProgress,
+  start: startPublicationSync,
+} = useSyncTask({
+  startFn: (force) => API.startPublicationSync(force),
+  statusFn: (taskId) => API.getPublicationSyncStatus(taskId),
+  onComplete: (data) => {
+    successMessage.value = `Publication sync completed: ${data.processed} publications`;
+    fetchStatus();
+  },
+  onError: (detail) => {
+    error.value = detail;
+  },
+});
 
-    if (response.data.status === 'completed') {
-      successMessage.value = response.data.message;
-      pubSyncInProgress.value = false;
-      pubSyncTask.value = null;
-      await fetchStatus();
-    } else {
-      startPubPolling();
-    }
-  } catch (err) {
-    window.logService.error('Failed to start publication sync', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to start publication sync';
-    pubSyncInProgress.value = false;
-  }
-};
+// Variant sync (useSyncTask owns polling + cleanup)
+const {
+  task: varSyncTask,
+  inProgress: varSyncInProgress,
+  start: startVariantSync,
+} = useSyncTask({
+  startFn: (force) => API.startVariantSync(force),
+  statusFn: (taskId) => API.getVariantSyncStatus(taskId),
+  onComplete: (data) => {
+    successMessage.value = `VEP annotation completed: ${data.processed} variants`;
+    fetchStatus();
+  },
+  onError: (detail) => {
+    error.value = detail;
+  },
+});
 
-const pollPubSyncStatus = async () => {
-  try {
-    const response = await API.getPublicationSyncStatus(pubSyncTask.value?.task_id);
-    pubSyncTask.value = response.data;
+// Genes sync (useSyncTask owns polling + cleanup)
+const {
+  task: genesSyncTask,
+  inProgress: genesSyncInProgress,
+  start: startGenesSync,
+} = useSyncTask({
+  startFn: (force) => API.startGenesSync(force),
+  statusFn: (taskId) => API.getGenesSyncStatus(taskId),
+  onComplete: (data) => {
+    successMessage.value = `chr17q12 genes sync completed: ${data.processed} genes`;
+    fetchStatus();
+  },
+  onError: (detail) => {
+    error.value = detail;
+  },
+});
 
-    if (response.data.status === 'completed' || response.data.status === 'failed') {
-      stopPubPolling();
-      pubSyncInProgress.value = false;
-      if (response.data.status === 'completed') {
-        successMessage.value = `Publication sync completed: ${response.data.processed} publications`;
-        await fetchStatus();
-      } else {
-        error.value = 'Publication sync task failed';
-      }
-      setTimeout(() => {
-        pubSyncTask.value = null;
-      }, 5000);
-    }
-  } catch (err) {
-    window.logService.error('Failed to poll publication sync status', { error: err.message });
-  }
-};
-
-const startPubPolling = () => {
-  if (pubPollInterval) return;
-  pubPollInterval = setInterval(pollPubSyncStatus, 2000);
-};
-
-const stopPubPolling = () => {
-  if (pubPollInterval) {
-    clearInterval(pubPollInterval);
-    pubPollInterval = null;
-  }
-};
-
-// Variant sync methods
-const startVariantSync = async (force = false) => {
-  try {
-    varSyncInProgress.value = true;
-    const response = await API.startVariantSync(force);
-    varSyncTask.value = {
-      task_id: response.data.task_id,
-      status: response.data.status,
-      progress: 0,
-      processed: 0,
-      total: response.data.items_to_process,
-      errors: 0,
-    };
-
-    if (response.data.status === 'completed') {
-      successMessage.value = response.data.message;
-      varSyncInProgress.value = false;
-      varSyncTask.value = null;
-      await fetchStatus();
-    } else {
-      startVarPolling();
-    }
-  } catch (err) {
-    window.logService.error('Failed to start variant sync', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to start variant sync';
-    varSyncInProgress.value = false;
-  }
-};
-
-const pollVarSyncStatus = async () => {
-  try {
-    const response = await API.getVariantSyncStatus(varSyncTask.value?.task_id);
-    varSyncTask.value = response.data;
-
-    if (response.data.status === 'completed' || response.data.status === 'failed') {
-      stopVarPolling();
-      varSyncInProgress.value = false;
-      if (response.data.status === 'completed') {
-        successMessage.value = `VEP annotation completed: ${response.data.processed} variants`;
-        await fetchStatus();
-      } else {
-        error.value = 'VEP annotation task failed';
-      }
-      setTimeout(() => {
-        varSyncTask.value = null;
-      }, 5000);
-    }
-  } catch (err) {
-    window.logService.error('Failed to poll variant sync status', { error: err.message });
-  }
-};
-
-const startVarPolling = () => {
-  if (varPollInterval) return;
-  varPollInterval = setInterval(pollVarSyncStatus, 2000);
-};
-
-const stopVarPolling = () => {
-  if (varPollInterval) {
-    clearInterval(varPollInterval);
-    varPollInterval = null;
-  }
-};
-
-// Reference init methods
+// Reference init methods (single-shot, no polling — not migrated to useSyncTask)
 const startReferenceInit = async () => {
   try {
     refInitInProgress.value = true;
@@ -820,81 +737,11 @@ const startReferenceInit = async () => {
   }
 };
 
-// Genes sync methods
-const startGenesSync = async (force = false) => {
-  try {
-    genesSyncInProgress.value = true;
-    const response = await API.startGenesSync(force);
-    genesSyncTask.value = {
-      task_id: response.data.task_id,
-      status: response.data.status,
-      progress: 0,
-      processed: 0,
-      total: response.data.items_to_process,
-      errors: 0,
-    };
-
-    if (response.data.status === 'completed') {
-      successMessage.value = response.data.message;
-      genesSyncInProgress.value = false;
-      genesSyncTask.value = null;
-      await fetchStatus();
-    } else {
-      startGenesPolling();
-    }
-  } catch (err) {
-    window.logService.error('Failed to start genes sync', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to start genes sync';
-    genesSyncInProgress.value = false;
-  }
-};
-
-const pollGenesSyncStatus = async () => {
-  try {
-    const response = await API.getGenesSyncStatus(genesSyncTask.value?.task_id);
-    genesSyncTask.value = response.data;
-
-    if (response.data.status === 'completed' || response.data.status === 'failed') {
-      stopGenesPolling();
-      genesSyncInProgress.value = false;
-      if (response.data.status === 'completed') {
-        successMessage.value = `chr17q12 genes sync completed: ${response.data.processed} genes`;
-        await fetchStatus();
-      } else {
-        error.value = 'chr17q12 genes sync task failed';
-      }
-      setTimeout(() => {
-        genesSyncTask.value = null;
-      }, 5000);
-    }
-  } catch (err) {
-    window.logService.error('Failed to poll genes sync status', { error: err.message });
-  }
-};
-
-const startGenesPolling = () => {
-  if (genesPollInterval) return;
-  genesPollInterval = setInterval(pollGenesSyncStatus, 2000);
-};
-
-const stopGenesPolling = () => {
-  if (genesPollInterval) {
-    clearInterval(genesPollInterval);
-    genesPollInterval = null;
-  }
-};
-
 // Lifecycle
 onMounted(async () => {
   window.logService.info('Admin dashboard mounted');
   await fetchStatus();
   loading.value = false;
-});
-
-onUnmounted(() => {
-  stopPubPolling();
-  stopVarPolling();
-  stopGenesPolling();
 });
 </script>
 

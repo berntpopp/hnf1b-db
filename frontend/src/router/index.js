@@ -118,6 +118,12 @@ const routes = [
       import(/* webpackChunkName: "admin-dashboard" */ '../views/AdminDashboard.vue'),
     meta: { title: 'Admin Dashboard', requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: '/admin/users',
+    name: 'admin-users',
+    component: () => import(/* webpackChunkName: "admin-users" */ '../views/AdminUsers.vue'),
+    meta: { title: 'User Management', requiresAuth: true, requiresAdmin: true },
+  },
   // Catch-all 404 route - must be last
   {
     path: '/:pathMatch(.*)*',

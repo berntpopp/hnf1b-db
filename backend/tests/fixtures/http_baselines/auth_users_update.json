@@ -1,0 +1,36 @@
+{
+  "normalized_body": {
+    "created_at": "<normalized>",
+    "email": "wave5b-baseline-update@example.com",
+    "full_name": "baseline updated",
+    "id": "<normalized>",
+    "is_active": true,
+    "is_verified": true,
+    "last_login": "<normalized>",
+    "permissions": [
+      "phenopackets:read",
+      "phenopackets:write",
+      "variants:read"
+    ],
+    "role": "curator",
+    "updated_at": "<normalized>",
+    "username": "wave5b-baseline-update"
+  },
+  "shape": {
+    "created_at": "volatile",
+    "email": "str",
+    "full_name": "str",
+    "id": "volatile",
+    "is_active": "bool",
+    "is_verified": "bool",
+    "last_login": "volatile",
+    "permissions": [
+      "list",
+      "str"
+    ],
+    "role": "str",
+    "updated_at": "volatile",
+    "username": "str"
+  },
+  "status_code": 200
+}

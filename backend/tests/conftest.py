@@ -249,6 +249,39 @@ async def admin_user(db_session):
 
 
 @pytest_asyncio.fixture
+async def curator_user(db_session):
+    """Create a curator user for permission tests.
+
+    Wave 5b Task 6: introduced to let admin-only endpoints verify the
+    non-admin 403 path (e.g. ``PATCH /auth/users/{id}/unlock``). Task 8
+    extends this helper set with ``viewer_user``/``viewer_headers`` for
+    the full BFLA guard migration.
+    """
+    user = User(
+        username="testcurator",
+        email="testcurator@example.com",
+        hashed_password=get_password_hash("CuratorPass123!"),
+        role="curator",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
 async def async_client(db_session):
     """Async HTTP client for API testing."""
     from app.database import get_db
@@ -306,8 +339,7 @@ async def dev_auth_client(db_session):
         from app.api import dev_endpoints
 
         if not any(
-            getattr(r, "path", "").startswith("/api/v2/dev")
-            for r in app.router.routes
+            getattr(r, "path", "").startswith("/api/v2/dev") for r in app.router.routes
         ):
             app.include_router(dev_endpoints.router)
 
@@ -355,6 +387,89 @@ async def admin_headers(admin_user, async_client):
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def curator_headers(curator_user, async_client):
+    """Get auth headers for curator requests.
+
+    Wave 5b Task 6: used to assert that admin-only endpoints reject a
+    non-admin caller with 403. Same shape as ``admin_headers`` — log in
+    via ``/api/v2/auth/login`` and return a bearer header dict.
+    """
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": curator_user.username,
+            "password": "CuratorPass123!",
+        },
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def viewer_user(db_session):
+    """Create a viewer user for BFLA authorization tests.
+
+    Wave 5b Task 8: dedicated viewer fixture so that ``viewer_headers``
+    is self-contained and does not collide with the generic ``test_user``
+    fixture (which also happens to be a viewer but is used in many
+    unrelated tests).
+    """
+    user = User(
+        username="testviewer",
+        email="testviewer@example.com",
+        hashed_password=get_password_hash("ViewerPass123!"),
+        role="viewer",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
+async def viewer_headers(viewer_user, async_client):
+    """Get auth headers for viewer requests.
+
+    Wave 5b Task 8: used by the BFLA authorization matrix to assert that
+    viewer tokens receive 403 on every admin-gated route.
+    """
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": viewer_user.username,
+            "password": "ViewerPass123!",
+        },
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def admin_user_id(async_client, admin_headers) -> int:
+    """Return the id of the admin user behind ``admin_headers``.
+
+    Wave 5b Task 8: used by the BFLA authorization matrix to resolve
+    ``{admin_user_id}`` in URL templates for routes like
+    ``GET /api/v2/auth/users/{id}`` or ``PATCH .../unlock``.
+    """
+    resp = await async_client.get("/api/v2/auth/me", headers=admin_headers)
+    assert resp.status_code == 200
+    return resp.json()["id"]
 
 
 @pytest_asyncio.fixture

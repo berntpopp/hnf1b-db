@@ -8,7 +8,8 @@ from app.schemas.auth import (
     UserCreate,
     UserLogin,
     UserResponse,
-    UserUpdate,
+    UserUpdateAdmin,
+    UserUpdatePublic,
 )
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "UserCreate",
     "UserLogin",
     "UserResponse",
-    "UserUpdate",
+    "UserUpdateAdmin",
+    "UserUpdatePublic",
 ]

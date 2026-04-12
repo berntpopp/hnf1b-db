@@ -228,3 +228,6 @@ backups/
 # Test results (Playwright, Vitest)
 test-results/
 **/test-results/
+
+# Codex CLI tool state (regenerates per-session)
+.codex

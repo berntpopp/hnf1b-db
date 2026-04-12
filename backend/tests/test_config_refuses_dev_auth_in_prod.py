@@ -2,6 +2,7 @@
 outside ENVIRONMENT=development. Mirrors the JWT_SECRET / ADMIN_PASSWORD
 fail-fast validators already in config.py.
 """
+
 from __future__ import annotations
 
 import pytest

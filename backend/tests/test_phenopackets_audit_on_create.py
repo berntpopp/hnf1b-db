@@ -4,6 +4,7 @@ Before this fix, only UPDATE and DELETE wrote audit rows; CREATE
 silently skipped it, so the audit history endpoint never had an
 'initial import' row for any phenopacket created through the API.
 """
+
 from __future__ import annotations
 
 import pytest

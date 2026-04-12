@@ -178,6 +178,13 @@ class PhenopacketService:
                     code="duplicate_id",
                 ) from exc
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
+        except ValueError as exc:
+            # Wave 5b Task 4: audit.create_audit_entry raises ValueError
+            # when its post-INSERT SELECT returns None. Map to
+            # ServiceDatabaseError so the router returns 500 cleanly
+            # instead of leaking AssertionError through the test client.
+            await self._repo.rollback()
+            raise ServiceDatabaseError(f"Audit entry error: {exc}") from exc
         except SQLAlchemyError as exc:
             await self._repo.rollback()
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
@@ -249,6 +256,16 @@ class PhenopacketService:
                 change_reason=payload.change_reason,
             )
             await self._repo.commit_and_refresh(existing)
+        except ValueError as exc:
+            # Wave 5b Task 4: audit.create_audit_entry raises ValueError
+            # when its post-INSERT SELECT returns None. Map to
+            # ServiceDatabaseError so the router returns 500 cleanly
+            # instead of leaking AssertionError through the test client.
+            await self._repo.rollback()
+            logger.error(
+                "Audit entry error updating phenopacket %s: %s", phenopacket_id, exc
+            )
+            raise ServiceDatabaseError(f"Audit entry error: {exc}") from exc
         except SQLAlchemyError as exc:
             await self._repo.rollback()
             logger.error("Failed to update phenopacket %s: %s", phenopacket_id, exc)
@@ -320,6 +337,16 @@ class PhenopacketService:
                 change_reason=change_reason,
             )
             await self._repo.session.commit()
+        except ValueError as exc:
+            # Wave 5b Task 4: audit.create_audit_entry raises ValueError
+            # when its post-INSERT SELECT returns None. Map to
+            # ServiceDatabaseError so the router returns 500 cleanly
+            # instead of leaking AssertionError through the test client.
+            await self._repo.rollback()
+            logger.error(
+                "Audit entry error deleting phenopacket %s: %s", phenopacket_id, exc
+            )
+            raise ServiceDatabaseError(f"Audit entry error: {exc}") from exc
         except SQLAlchemyError as exc:
             await self._repo.rollback()
             logger.error("Failed to delete phenopacket %s: %s", phenopacket_id, exc)

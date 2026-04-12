@@ -1,13 +1,84 @@
 {
-  "normalized_body": {
-    "detail": "No default genome assembly configured",
-    "error_code": "http_500",
-    "request_id": "<normalized>"
-  },
-  "shape": {
-    "detail": "str",
-    "error_code": "str",
-    "request_id": null
-  },
-  "status_code": 500
+  "normalized_body": [
+    {
+      "chromosome": "17",
+      "created_at": "<normalized>",
+      "end": 37056874,
+      "ensembl_id": "ENSG00000275700",
+      "extra_data": "<normalized>",
+      "hgnc_id": "<normalized>",
+      "id": "<normalized>",
+      "name": "apoptosis antagonizing transcription factor [Source:HGNC Symbol;Acc:HGNC:19235]",
+      "ncbi_gene_id": "<normalized>",
+      "omim_id": "<normalized>",
+      "source": "Ensembl REST API",
+      "source_url": "<normalized>",
+      "source_version": "GRCh38",
+      "start": 36948925,
+      "strand": "+",
+      "symbol": "AATF",
+      "updated_at": "<normalized>"
+    },
+    {
+      "chromosome": "17",
+      "created_at": "<normalized>",
+      "end": 37406836,
+      "ensembl_id": "ENSG00000278540",
+      "extra_data": "<normalized>",
+      "hgnc_id": "<normalized>",
+      "id": "<normalized>",
+      "name": "acetyl-CoA carboxylase alpha [Source:HGNC Symbol;Acc:HGNC:84]",
+      "ncbi_gene_id": "<normalized>",
+      "omim_id": "<normalized>",
+      "source": "Ensembl REST API",
+      "source_url": "<normalized>",
+      "source_version": "GRCh38",
+      "start": 37084992,
+      "strand": "-",
+      "symbol": "ACACA",
+      "updated_at": "<normalized>"
+    },
+    {
+      "chromosome": "17",
+      "created_at": "<normalized>",
+      "end": 38512385,
+      "ensembl_id": "ENSG00000275832",
+      "extra_data": "<normalized>",
+      "hgnc_id": "<normalized>",
+      "id": "<normalized>",
+      "name": "Rho GTPase activating protein 23 [Source:HGNC Symbol;Acc:HGNC:29293]",
+      "ncbi_gene_id": "<normalized>",
+      "omim_id": "<normalized>",
+      "source": "Ensembl REST API",
+      "source_url": "<normalized>",
+      "source_version": "GRCh38",
+      "start": 38419280,
+      "strand": "+",
+      "symbol": "ARHGAP23",
+      "updated_at": "<normalized>"
+    }
+  ],
+  "shape": [
+    "list",
+    {
+      "chromosome": "str",
+      "created_at": "volatile",
+      "end": "int",
+      "ensembl_id": "str",
+      "extra_data": "volatile",
+      "hgnc_id": "volatile",
+      "id": "volatile",
+      "name": "str",
+      "ncbi_gene_id": "volatile",
+      "omim_id": "volatile",
+      "source": "str",
+      "source_url": "volatile",
+      "source_version": "str",
+      "start": "int",
+      "strand": "str",
+      "symbol": "str",
+      "updated_at": "volatile"
+    }
+  ],
+  "status_code": 200
 }

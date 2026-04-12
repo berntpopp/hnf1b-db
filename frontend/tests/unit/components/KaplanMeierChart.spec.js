@@ -124,11 +124,51 @@ const createSampleSurvivalData = () => ({
       n: 50,
       events: 35, // Sum of events in survival_data
       survival_data: [
-        { time: 0, survival_probability: 1.0, ci_lower: 1.0, ci_upper: 1.0, at_risk: 50, events: 0, censored: 0 },
-        { time: 5, survival_probability: 0.9, ci_lower: 0.82, ci_upper: 0.98, at_risk: 45, events: 5, censored: 0 },
-        { time: 10, survival_probability: 0.75, ci_lower: 0.65, ci_upper: 0.85, at_risk: 38, events: 7, censored: 0 },
-        { time: 15, survival_probability: 0.5, ci_lower: 0.38, ci_upper: 0.62, at_risk: 25, events: 13, censored: 0 },
-        { time: 20, survival_probability: 0.3, ci_lower: 0.18, ci_upper: 0.42, at_risk: 15, events: 10, censored: 0 },
+        {
+          time: 0,
+          survival_probability: 1.0,
+          ci_lower: 1.0,
+          ci_upper: 1.0,
+          at_risk: 50,
+          events: 0,
+          censored: 0,
+        },
+        {
+          time: 5,
+          survival_probability: 0.9,
+          ci_lower: 0.82,
+          ci_upper: 0.98,
+          at_risk: 45,
+          events: 5,
+          censored: 0,
+        },
+        {
+          time: 10,
+          survival_probability: 0.75,
+          ci_lower: 0.65,
+          ci_upper: 0.85,
+          at_risk: 38,
+          events: 7,
+          censored: 0,
+        },
+        {
+          time: 15,
+          survival_probability: 0.5,
+          ci_lower: 0.38,
+          ci_upper: 0.62,
+          at_risk: 25,
+          events: 13,
+          censored: 0,
+        },
+        {
+          time: 20,
+          survival_probability: 0.3,
+          ci_lower: 0.18,
+          ci_upper: 0.42,
+          at_risk: 15,
+          events: 10,
+          censored: 0,
+        },
       ],
     },
     {
@@ -136,10 +176,42 @@ const createSampleSurvivalData = () => ({
       n: 30,
       events: 22, // Sum of events in survival_data
       survival_data: [
-        { time: 0, survival_probability: 1.0, ci_lower: 1.0, ci_upper: 1.0, at_risk: 30, events: 0, censored: 0 },
-        { time: 3, survival_probability: 0.8, ci_lower: 0.68, ci_upper: 0.92, at_risk: 24, events: 6, censored: 0 },
-        { time: 8, survival_probability: 0.5, ci_lower: 0.35, ci_upper: 0.65, at_risk: 15, events: 9, censored: 0 },
-        { time: 12, survival_probability: 0.25, ci_lower: 0.12, ci_upper: 0.38, at_risk: 8, events: 7, censored: 0 },
+        {
+          time: 0,
+          survival_probability: 1.0,
+          ci_lower: 1.0,
+          ci_upper: 1.0,
+          at_risk: 30,
+          events: 0,
+          censored: 0,
+        },
+        {
+          time: 3,
+          survival_probability: 0.8,
+          ci_lower: 0.68,
+          ci_upper: 0.92,
+          at_risk: 24,
+          events: 6,
+          censored: 0,
+        },
+        {
+          time: 8,
+          survival_probability: 0.5,
+          ci_lower: 0.35,
+          ci_upper: 0.65,
+          at_risk: 15,
+          events: 9,
+          censored: 0,
+        },
+        {
+          time: 12,
+          survival_probability: 0.25,
+          ci_lower: 0.12,
+          ci_upper: 0.38,
+          at_risk: 8,
+          events: 7,
+          censored: 0,
+        },
       ],
     },
   ],
@@ -438,7 +510,9 @@ describe('KaplanMeierChart', () => {
       expectedFromR.times.forEach((time, idx) => {
         const point = group.survival_data.find((d) => d.time === time);
         expect(point).toBeDefined();
-        expect(Math.abs(point.survival_probability - expectedFromR.survival[idx])).toBeLessThan(0.01);
+        expect(Math.abs(point.survival_probability - expectedFromR.survival[idx])).toBeLessThan(
+          0.01
+        );
       });
     });
 
@@ -709,7 +783,8 @@ describe('KaplanMeierChart', () => {
         const prev = testData[i - 1];
         const curr = testData[i];
 
-        const expectedSurvival = prev.survival_probability * (curr.at_risk - curr.events) / curr.at_risk;
+        const expectedSurvival =
+          (prev.survival_probability * (curr.at_risk - curr.events)) / curr.at_risk;
         expect(Math.abs(curr.survival_probability - expectedSurvival)).toBeLessThan(0.01);
       }
     });

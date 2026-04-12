@@ -16,7 +16,7 @@ from app.api.admin._common import progress_response_from_state
 from app.api.admin.schemas import SyncProgressResponse, SyncTaskResponse
 from app.api.admin.sync_service import run_genes_sync, run_reference_init
 from app.api.admin.task_state import TaskKind, get_sync_task_store
-from app.auth import require_admin
+from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.reference.service import get_reference_data_status
@@ -44,12 +44,11 @@ router = APIRouter(tags=["admin"])
 
     **Requires:** Admin authentication
     """,
-    dependencies=[Depends(require_admin)],
 )
 async def start_reference_init(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
     """Start reference data initialization task."""
     ref_status = await get_reference_data_status(db)
@@ -103,13 +102,12 @@ async def start_reference_init(
 
     **Requires:** Admin authentication
     """,
-    dependencies=[Depends(require_admin)],
 )
 async def start_genes_sync(
     background_tasks: BackgroundTasks,
     force: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
     """Start chr17q12 gene sync task."""
     ref_status = await get_reference_data_status(db)
@@ -151,7 +149,6 @@ async def start_genes_sync(
     response_model=SyncProgressResponse,
     summary="Get gene sync progress",
     description="Returns the current status of the gene sync task.",
-    dependencies=[Depends(require_admin)],
 )
 async def get_genes_sync_status(
     task_id: Optional[str] = None,

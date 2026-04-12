@@ -8,6 +8,7 @@ from app.auth import (
     create_refresh_token,
     get_current_user,
     require_admin,
+    verify_and_update_password_hash,
     verify_password,
     verify_token,
 )
@@ -24,11 +25,22 @@ from app.schemas.auth import (
     UserCreate,
     UserLogin,
     UserResponse,
-    UserUpdate,
+    UserUpdateAdmin,
+    UserUpdatePublic,
 )
 from app.utils.audit_logger import log_user_action
 
 router = APIRouter(prefix="/api/v2/auth", tags=["authentication"])
+
+# Wave 5b Task 9: admin user-management routes live on a sub-router
+# with router-level require_admin dependency.  The BFLA matrix in
+# test_admin_route_authorization.py asserts every /auth/users/* route
+# denies non-admins regardless of per-endpoint guards.
+users_router = APIRouter(
+    prefix="/users",
+    dependencies=[Depends(require_admin)],
+    tags=["user-management"],
+)
 
 
 @router.post("/login", response_model=Token)
@@ -41,7 +53,8 @@ async def login(
     Returns JWT access token and refresh token.
 
     **Security:**
-    - Password verified with bcrypt
+    - Password verified with Argon2id (or legacy bcrypt via fallback)
+    - Legacy bcrypt hashes transparently upgrade to Argon2id on login
     - Account lockout after 5 failed attempts (15 min)
     - Tokens signed with JWT_SECRET
 
@@ -55,8 +68,16 @@ async def login(
     # Get user
     user = await repo.get_by_username(credentials.username)
 
-    # Verify password
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    # Wave 5b Task 11: verify + transparent legacy-hash upgrade.
+    # verify_and_update_password_hash returns (valid, new_hash) where
+    # new_hash is not None only when verification succeeded AND the
+    # stored hash was legacy bcrypt that needs upgrading to Argon2id.
+    valid, new_hash = (
+        verify_and_update_password_hash(credentials.password, user.hashed_password)
+        if user
+        else (False, None)
+    )
+    if not user or not valid:
         # Record failed attempt if user exists
         if user:
             await repo.record_failed_login(user)
@@ -64,6 +85,12 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
+
+    # Transparent rehash: if the stored hash was legacy bcrypt, write
+    # the new Argon2id hash back. No forced logout, no user-visible change.
+    if new_hash is not None:
+        user.hashed_password = new_hash
+        await db.flush()
 
     # Check if account is active
     if not user.is_active:
@@ -219,7 +246,7 @@ async def change_password(
 
     # Update password
     repo = UserRepository(db)
-    user_update = UserUpdate(password=password_data.new_password)  # type: ignore[call-arg]
+    user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]  # mypy+pydantic: Field(None) defaults not recognized
     await repo.update(current_user, user_update)
 
     await log_user_action(
@@ -247,10 +274,10 @@ async def list_roles(
 # Admin-only endpoints below this line
 
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@users_router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Create new user (admin only).
@@ -308,12 +335,11 @@ async def create_user(
     )
 
 
-@router.get("/users", response_model=list[UserResponse])
+@users_router.get("", response_model=list[UserResponse])
 async def list_users(
     skip: int = 0,
     limit: int = 100,
     role: str | None = None,
-    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[UserResponse]:
     """List all users with pagination (admin only).
@@ -343,10 +369,9 @@ async def list_users(
     ]
 
 
-@router.get("/users/{user_id}", response_model=UserResponse)
+@users_router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
-    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Get user by ID (admin only).
@@ -380,11 +405,11 @@ async def get_user(
     )
 
 
-@router.put("/users/{user_id}", response_model=UserResponse)
+@users_router.put("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
-    user_data: UserUpdate,
-    current_user: User = Depends(require_admin),
+    user_data: UserUpdateAdmin,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Update user (admin only).
@@ -401,6 +426,20 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found",
+        )
+
+    # Wave 5b: block ALL mutations on the _system_migration_ placeholder.
+    # This user is the ON DELETE SET NULL fallback for audit-actor FKs —
+    # changing its role, deactivating it, or editing its email could
+    # break the FK constraint or make audit rows unresolvable.
+    if user.username == "_system_migration_":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot modify the _system_migration_ placeholder user — "
+                "it is the audit-actor FK fallback from the Wave 5a data "
+                "migration and must remain unchanged."
+            ),
         )
 
     # Update user
@@ -428,10 +467,10 @@ async def update_user(
     )
 
 
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete user (admin only).
@@ -454,6 +493,17 @@ async def delete_user(
             detail=f"User with ID {user_id} not found",
         )
 
+    # Wave 5b Task 14: protect the _system_migration_ placeholder user
+    if user.username == "_system_migration_":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot delete the _system_migration_ placeholder user — "
+                "it is the ON DELETE SET NULL fallback for audit-actor FKs "
+                "from the Wave 5a data migration."
+            ),
+        )
+
     # Prevent self-deletion
     if user.id == current_user.id:
         raise HTTPException(
@@ -469,3 +519,57 @@ async def delete_user(
     )
 
     await repo.delete(user)
+
+
+@users_router.patch("/{user_id}/unlock", response_model=UserResponse)
+async def unlock_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Unlock a user account (admin only).
+
+    Wave 5b Task 6: clears ``failed_login_attempts`` and ``locked_until``
+    so a user who tripped the 5-failed-attempts / 15-minute lockout can
+    log in again without waiting for the window to expire.
+
+    **Returns:**
+    - 200: User unlocked successfully
+    - 403: Not admin
+    - 404: User not found
+    """
+    repo = UserRepository(db)
+    user = await repo.get_by_id(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found",
+        )
+
+    unlocked = await repo.unlock(user)
+
+    await log_user_action(
+        db=db,
+        user_id=user_id,
+        action="USER_UNLOCKED",
+        details=(f"Admin '{current_user.username}' unlocked user '{user.username}'"),
+    )
+
+    return UserResponse(
+        id=unlocked.id,
+        username=unlocked.username,
+        email=unlocked.email,
+        full_name=unlocked.full_name,
+        role=unlocked.role,
+        permissions=unlocked.get_permissions(),
+        is_active=unlocked.is_active,
+        is_verified=unlocked.is_verified,
+        last_login=unlocked.last_login,
+        created_at=unlocked.created_at,
+        updated_at=unlocked.updated_at,
+    )
+
+
+# Wave 5b Task 9: mount the admin user-management sub-router
+router.include_router(users_router)

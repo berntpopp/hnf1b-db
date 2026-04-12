@@ -21,7 +21,7 @@ from app.api.admin._common import (
 from app.api.admin.schemas import SyncProgressResponse, SyncTaskResponse
 from app.api.admin.sync_service import run_variant_sync
 from app.api.admin.task_state import TaskKind, get_sync_task_store
-from app.auth import require_admin
+from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.routers.aggregations.sql_fragments import (
@@ -55,13 +55,12 @@ router = APIRouter(tags=["admin"])
 
     **Requires:** Admin authentication
     """,
-    dependencies=[Depends(require_admin)],
 )
 async def start_variant_sync(
     background_tasks: BackgroundTasks,
     force: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
     """Start variant annotation sync task."""
     if force:
@@ -134,7 +133,6 @@ async def start_variant_sync(
     response_model=SyncProgressResponse,
     summary="Get variant sync progress",
     description="Returns the current status of the variant annotation sync task.",
-    dependencies=[Depends(require_admin)],
 )
 async def get_variant_sync_status(
     task_id: Optional[str] = None,

@@ -1,0 +1,36 @@
+{
+  "normalized_body": {
+    "created_at": "<normalized>",
+    "email": "baseline-create@example.com",
+    "full_name": "Baseline Create Probe",
+    "id": "<normalized>",
+    "is_active": true,
+    "is_verified": false,
+    "last_login": "<normalized>",
+    "permissions": [
+      "phenopackets:read",
+      "variants:read",
+      "publications:read"
+    ],
+    "role": "viewer",
+    "updated_at": "<normalized>",
+    "username": "baseline-create-probe"
+  },
+  "shape": {
+    "created_at": "volatile",
+    "email": "str",
+    "full_name": "str",
+    "id": "volatile",
+    "is_active": "bool",
+    "is_verified": "bool",
+    "last_login": "volatile",
+    "permissions": [
+      "list",
+      "str"
+    ],
+    "role": "str",
+    "updated_at": "volatile",
+    "username": "str"
+  },
+  "status_code": 201
+}

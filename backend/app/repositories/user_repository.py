@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.password import get_password_hash
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserUpdate
+from app.schemas.auth import UserCreate, UserUpdateAdmin, UserUpdatePublic
 
 
 class UserRepository:
@@ -82,12 +82,19 @@ class UserRepository:
         await self.db.refresh(user)
         return user
 
-    async def update(self, user: User, user_data: UserUpdate) -> User:
+    async def update(
+        self, user: User, user_data: UserUpdateAdmin | UserUpdatePublic
+    ) -> User:
         """Update user fields.
+
+        Accepts either UserUpdateAdmin or UserUpdatePublic. Wave 5b Task 7:
+        the repo reads role/is_active via getattr so a UserUpdatePublic
+        instance simply doesn't update those fields (BOPLA-safe by
+        construction — the attributes don't exist on the schema).
 
         Args:
             user: User instance to update
-            user_data: Update data
+            user_data: Update data (admin or public schema)
 
         Returns:
             Updated user instance
@@ -102,11 +109,14 @@ class UserRepository:
         if user_data.full_name is not None:
             user.full_name = user_data.full_name
 
-        if user_data.role is not None:
-            user.role = user_data.role
+        # Admin-only fields — read via getattr so UserUpdatePublic is safe
+        role = getattr(user_data, "role", None)
+        if role is not None:
+            user.role = role
 
-        if user_data.is_active is not None:
-            user.is_active = user_data.is_active
+        is_active = getattr(user_data, "is_active", None)
+        if is_active is not None:
+            user.is_active = is_active
 
         user.updated_at = datetime.now(timezone.utc)
 
@@ -180,3 +190,23 @@ class UserRepository:
         """
         user.refresh_token = refresh_token
         await self.db.commit()
+
+    async def unlock(self, user: User) -> User:
+        """Clear failed login attempts and lockout for a user.
+
+        Wave 5b Task 6: called by the admin PATCH /auth/users/{id}/unlock
+        endpoint to rescue a user who tripped the lockout (5 failed
+        attempts → 15-minute lock per settings.MAX_LOGIN_ATTEMPTS /
+        ACCOUNT_LOCKOUT_MINUTES).
+
+        Args:
+            user: User instance to unlock
+
+        Returns:
+            The refreshed user instance with counters cleared.
+        """
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user

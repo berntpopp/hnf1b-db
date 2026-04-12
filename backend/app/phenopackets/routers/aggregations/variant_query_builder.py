@@ -372,7 +372,8 @@ class VariantQueryBuilder:
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
             WHERE
-                vi_lateral.vi IS NOT NULL
+                p.deleted_at IS NULL
+                AND vi_lateral.vi IS NOT NULL
                 AND vd_lateral.vd IS NOT NULL
         ),
         all_variants_agg AS (
@@ -438,7 +439,8 @@ class VariantQueryBuilder:
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
             WHERE
-                vi_lateral.vi IS NOT NULL
+                p.deleted_at IS NULL
+                AND vi_lateral.vi IS NOT NULL
                 AND vd_lateral.vd IS NOT NULL
                 {where_sql}
         ),
