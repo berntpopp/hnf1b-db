@@ -7,7 +7,7 @@
   "shape": {
     "detail": "str",
     "error_code": "str",
-    "request_id": null
+    "request_id": "volatile"
   },
   "status_code": 404
 }

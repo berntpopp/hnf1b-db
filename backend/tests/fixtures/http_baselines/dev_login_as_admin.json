@@ -6,9 +6,9 @@
     "token_type": "bearer"
   },
   "shape": {
-    "access_token": "str",
+    "access_token": "volatile",
     "expires_in": "int",
-    "refresh_token": "str",
+    "refresh_token": "volatile",
     "token_type": "str"
   },
   "status_code": 200

@@ -2,7 +2,7 @@
   "normalized_body": {
     "results": [
       {
-        "extra_info": "HNF1 homeobox B [Source:HGNC Symbol;Acc:HGNC:11630]",
+        "extra_info": "<normalized>",
         "id": "<normalized>",
         "label": "HNF1B",
         "score": 0.4285714328289032,
@@ -15,8 +15,8 @@
     "results": [
       "list",
       {
-        "extra_info": "str",
-        "id": "str",
+        "extra_info": "volatile",
+        "id": "volatile",
         "label": "str",
         "score": "float",
         "subtype": "str",

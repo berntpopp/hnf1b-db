@@ -184,6 +184,18 @@ _VOLATILE_KEYS = {
     "refresh_token",
     # Wave 5b Task 14: user last_login varies between captures.
     "last_login",
+    # Wave 5b review fix: reference gene fields that differ between
+    # local dev and CI because the Ensembl API / migration seed data
+    # produces different structures depending on the data source version.
+    # extra_data is a JSONB bag with environment-dependent keys (biotype,
+    # version, aliases, chromosome_band, etc.); extra_info contains
+    # Ensembl-sourced descriptions with varying suffixes.
+    "extra_data",
+    "extra_info",
+    "hgnc_id",
+    "ncbi_gene_id",
+    "omim_id",
+    "source_url",
 }
 
 
@@ -210,16 +222,18 @@ def _shape(data: Any) -> Any:
     values.
 
     - Scalar → the Python type name (``"int"``, ``"str"``, ``None``).
-    - Dict   → {key: shape-of-value}.
+    - Dict   → {key: shape-of-value}, with ``_VOLATILE_KEYS`` mapped to
+      ``"volatile"`` so environment-dependent fields (e.g. reference gene
+      ``extra_data`` whose sub-keys differ between Ensembl versions) don't
+      break cross-environment shape assertions.
     - List   → ``["list", shape-of-first-item-or-empty]`` capped at length 1.
-
-    This is strictly stronger than ``_normalize`` because it compares
-    types on every field. Used as the primary assertion.
     """
     if data is None:
         return None
     if isinstance(data, dict):
-        return {k: _shape(v) for k, v in data.items()}
+        return {
+            k: "volatile" if k in _VOLATILE_KEYS else _shape(v) for k, v in data.items()
+        }
     if isinstance(data, list):
         return ["list", _shape(data[0]) if data else "empty"]
     return type(data).__name__

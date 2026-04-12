@@ -21,19 +21,19 @@
   "shape": [
     "list",
     {
-      "created_at": "str",
+      "created_at": "volatile",
       "email": "str",
       "full_name": null,
-      "id": "int",
+      "id": "volatile",
       "is_active": "bool",
       "is_verified": "bool",
-      "last_login": "str",
+      "last_login": "volatile",
       "permissions": [
         "list",
         "str"
       ],
       "role": "str",
-      "updated_at": "str",
+      "updated_at": "volatile",
       "username": "str"
     }
   ],

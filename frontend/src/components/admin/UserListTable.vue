@@ -47,7 +47,7 @@
         :items="filteredUsers"
         :search="search"
         density="compact"
-        items-per-page="25"
+        :items-per-page="25"
       >
         <template #item.is_active="{ item }">
           <v-icon :color="item.is_active ? 'success' : 'grey'" size="small">

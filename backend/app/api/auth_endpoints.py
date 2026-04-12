@@ -246,7 +246,7 @@ async def change_password(
 
     # Update password
     repo = UserRepository(db)
-    user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]
+    user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]  # mypy+pydantic: Field(None) defaults not recognized
     await repo.update(current_user, user_update)
 
     await log_user_action(

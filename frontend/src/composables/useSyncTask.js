@@ -102,6 +102,7 @@ export function useSyncTask({
 
   function stop() {
     _stopPolling();
+    inProgress.value = false;
   }
 
   onUnmounted(() => {

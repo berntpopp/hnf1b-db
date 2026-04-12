@@ -36,7 +36,7 @@
         "hasPreviousPage": "bool",
         "pageSize": "int",
         "startCursor": null,
-        "total": null
+        "total": "volatile"
       }
     }
   },

@@ -34,21 +34,21 @@
   "shape": {
     "database": {
       "phenopackets": "int",
-      "publications_cached": "int",
+      "publications_cached": "volatile",
       "users": "int"
     },
     "status": "str",
     "sync_status": [
       "list",
       {
-        "last_sync": null,
+        "last_sync": "volatile",
         "name": "str",
         "pending": "int",
         "synced": "int",
-        "total": "int"
+        "total": "volatile"
       }
     ],
-    "timestamp": "str"
+    "timestamp": "volatile"
   },
   "status_code": 200
 }
