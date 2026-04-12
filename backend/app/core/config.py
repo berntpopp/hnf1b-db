@@ -421,12 +421,14 @@ class Settings(BaseSettings):
                         "SMTP_PASSWORD is empty. Set them in .env or set "
                         "email.use_credentials: false in config.yaml."
                     )
-        if email_cfg.tls_mode == "none":
-            logger.critical(
-                "EMAIL TLS IS DISABLED (email.tls_mode: 'none'). "
-                "Emails will be sent unencrypted. This is only safe "
-                "for trusted internal relays."
-            )
+            # Gate TLS warning behind smtp backend — it is irrelevant (and
+            # noisy) when backend is console (Copilot PR #235 review).
+            if email_cfg.tls_mode == "none":
+                logger.critical(
+                    "EMAIL TLS IS DISABLED (email.tls_mode: 'none'). "
+                    "Emails will be sent unencrypted. This is only safe "
+                    "for trusted internal relays."
+                )
         return self
 
     @property

@@ -1,5 +1,8 @@
 """Authentication API endpoints."""
 
+import logging
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +44,40 @@ from app.schemas.auth import (
     UserUpdatePublic,
 )
 from app.utils.audit_logger import log_user_action
+
+logger = logging.getLogger(__name__)
+
+
+def _frontend_base_url() -> str:
+    """Return the first CORS origin, stripped, for email link construction.
+
+    Centralizes the helper so every identity-lifecycle email uses the
+    same base URL resolution (CORS_ORIGINS can contain spaces after
+    commas in env vars — split + strip is not automatic).
+    """
+    origins = settings.get_cors_origins_list()
+    return origins[0] if origins else ""
+
+
+async def _safe_send_email(
+    *, to: str, subject: str, body_html: str, context: str
+) -> None:
+    """Dispatch email via configured sender, swallowing + logging errors.
+
+    Email dispatch must never leak user-existence (anti-enumeration in
+    password reset flow) nor block an already-committed DB write (admin
+    create-user, invite). Callers always commit the token row BEFORE
+    calling this helper — a failed email never rolls back state.
+    """
+    try:
+        sender = get_email_sender()
+        await sender.send(to=to, subject=subject, body_html=body_html)
+    except Exception as exc:  # noqa: BLE001 — intentional catch-all
+        logger.error(
+            "Email dispatch failed",
+            extra={"context": context, "to": to, "error": str(exc)},
+        )
+
 
 router = APIRouter(prefix="/api/v2/auth", tags=["authentication"])
 
@@ -332,7 +369,9 @@ async def create_user(
         ),
     )
 
-    # Auto-dispatch email verification (Wave 5c Task 8)
+    # Auto-dispatch email verification (Wave 5c Task 8).
+    # Token is committed before email dispatch; email errors are logged
+    # but do not fail the create-user response (Copilot PR #235 review).
     token_svc = CredentialTokenService(db)
     raw_token, _ = await token_svc.create_token(
         purpose="verify",
@@ -340,12 +379,12 @@ async def create_user(
         user_id=user.id,
     )
 
-    sender = get_email_sender()
-    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
-    await sender.send(
+    verify_url = f"{_frontend_base_url()}/verify-email/{raw_token}"
+    await _safe_send_email(
         to=user.email,
         subject=f"Verify your email - {settings.email.from_name}",
         body_html=f"<p>Verify your email: {verify_url}</p>",
+        context="create_user.verify_email",
     )
 
     return UserResponse(
@@ -634,19 +673,20 @@ async def create_invite(
         metadata={"role": invite_data.role},
     )
 
-    # Dispatch invite email
-    sender = get_email_sender()
-    cors_origins = settings.CORS_ORIGINS.split(",")
+    # URL-encode email query param — addresses with '+' or reserved
+    # characters would otherwise produce broken links (Copilot PR #235).
     accept_url = (
-        f"{cors_origins[0].strip()}/accept-invite/{raw_token}?email={invite_data.email}"
+        f"{_frontend_base_url()}/accept-invite/{raw_token}"
+        f"?{urlencode({'email': invite_data.email})}"
     )
-    await sender.send(
+    await _safe_send_email(
         to=invite_data.email,
         subject=f"You've been invited to {settings.email.from_name}",
         body_html=(
             f"<p>You've been invited as a {invite_data.role}. "
             f'Click here to accept: <a href="{accept_url}">{accept_url}</a></p>'
         ),
+        context="invite.dispatch",
     )
 
     await log_user_action(
@@ -782,12 +822,14 @@ async def request_password_reset(
             user_id=user.id,
         )
 
-        sender = get_email_sender()
-        reset_url = f"{settings.CORS_ORIGINS.split(',')[0]}/reset-password/{raw_token}"
-        await sender.send(
+        # Email errors MUST NOT leak user existence (OWASP anti-enum).
+        # Swallow + log via _safe_send_email (Copilot PR #235 review).
+        reset_url = f"{_frontend_base_url()}/reset-password/{raw_token}"
+        await _safe_send_email(
             to=reset_data.email,
             subject=f"Password Reset - {settings.email.from_name}",
             body_html=f"<p>Reset your password: {reset_url}</p>",
+            context="password_reset.request",
         )
 
     response = MessageResponse(
@@ -873,12 +915,12 @@ async def resend_verification(
         user_id=current_user.id,
     )
 
-    sender = get_email_sender()
-    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
-    await sender.send(
+    verify_url = f"{_frontend_base_url()}/verify-email/{raw_token}"
+    await _safe_send_email(
         to=current_user.email,
         subject=f"Verify your email - {settings.email.from_name}",
         body_html=f"<p>Verify your email: {verify_url}</p>",
+        context="verify_email.resend",
     )
 
     response = MessageResponse(message="Verification email sent.")
