@@ -1,6 +1,7 @@
 """Authentication API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -19,6 +20,7 @@ from app.auth.permissions import get_all_roles
 from app.auth.rate_limit import RateLimiter
 from app.core.config import settings
 from app.database import get_db
+from app.models.credential_token import CredentialToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
@@ -330,6 +332,22 @@ async def create_user(
         ),
     )
 
+    # Auto-dispatch email verification (Wave 5c Task 8)
+    token_svc = CredentialTokenService(db)
+    raw_token, _ = await token_svc.create_token(
+        purpose="verify",
+        email=user.email,
+        user_id=user.id,
+    )
+
+    sender = get_email_sender()
+    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
+    await sender.send(
+        to=user.email,
+        subject=f"Verify your email - {settings.email.from_name}",
+        body_html=f"<p>Verify your email: {verify_url}</p>",
+    )
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -520,6 +538,15 @@ async def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account",
         )
+
+    # Wave 5c Task 8: remove credential tokens referencing this user to
+    # avoid FK violations (invite/reset/verify tokens are meaningless
+    # after the user is deleted). The FK on credential_tokens.user_id
+    # does not specify ON DELETE; cleaning up here keeps the deletion
+    # atomic without requiring a schema migration.
+    await db.execute(
+        sa_delete(CredentialToken).where(CredentialToken.user_id == user.id)
+    )
 
     await log_user_action(
         db=db,
@@ -817,6 +844,97 @@ async def confirm_password_reset(
     )
 
     return MessageResponse(message="Password reset successful.")
+
+
+@router.post(
+    "/verify-email/resend",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter("verify-resend", 3, 3600))],
+)
+async def resend_verification(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Resend email verification (authenticated, unverified users only)."""
+    if current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified.",
+        )
+
+    token_svc = CredentialTokenService(db)
+    await token_svc.invalidate_by_email_and_purpose(
+        email=current_user.email, purpose="verify"
+    )
+    raw_token, _ = await token_svc.create_token(
+        purpose="verify",
+        email=current_user.email,
+        user_id=current_user.id,
+    )
+
+    sender = get_email_sender()
+    verify_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email/{raw_token}"
+    await sender.send(
+        to=current_user.email,
+        subject=f"Verify your email - {settings.email.from_name}",
+        body_html=f"<p>Verify your email: {verify_url}</p>",
+    )
+
+    response = MessageResponse(message="Verification email sent.")
+    if settings.environment != "production":
+        response.token = raw_token
+    return response
+
+
+@router.post(
+    "/verify-email/{token}",
+    response_model=MessageResponse,
+    dependencies=[Depends(RateLimiter("verify-email", 5, 3600))],
+)
+async def verify_email(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Verify email address using a credential token."""
+    token_svc = CredentialTokenService(db)
+    db_token = await token_svc.verify_and_consume(token, purpose="verify")
+
+    if db_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or already-used verification token.",
+        )
+
+    # verify tokens are always created with user_id set (see create_user
+    # and resend_verification above); user_id: int | None is only used
+    # by the invite flow, which has its own endpoint.
+    if db_token.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token is not bound to a user.",
+        )
+
+    repo = UserRepository(db)
+    user = await repo.get_by_id(db_token.user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User associated with this token no longer exists.",
+        )
+
+    user.is_verified = True
+    await db.commit()
+
+    await log_user_action(
+        db=db,
+        user_id=user.id,
+        action="EMAIL_VERIFIED",
+        details=f"User '{user.username}' verified email '{db_token.email}'",
+    )
+
+    return MessageResponse(message="Email verified successfully.")
 
 
 # Wave 5b Task 9: mount the admin user-management sub-router
