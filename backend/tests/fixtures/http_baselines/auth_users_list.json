@@ -1,0 +1,41 @@
+{
+  "normalized_body": [
+    {
+      "created_at": "<normalized>",
+      "email": "testadmin@example.com",
+      "full_name": null,
+      "id": "<normalized>",
+      "is_active": true,
+      "is_verified": true,
+      "last_login": "<normalized>",
+      "permissions": [
+        "users:read",
+        "users:write",
+        "users:delete"
+      ],
+      "role": "admin",
+      "updated_at": "<normalized>",
+      "username": "testadmin"
+    }
+  ],
+  "shape": [
+    "list",
+    {
+      "created_at": "str",
+      "email": "str",
+      "full_name": null,
+      "id": "int",
+      "is_active": "bool",
+      "is_verified": "bool",
+      "last_login": "str",
+      "permissions": [
+        "list",
+        "str"
+      ],
+      "role": "str",
+      "updated_at": "str",
+      "username": "str"
+    }
+  ],
+  "status_code": 200
+}

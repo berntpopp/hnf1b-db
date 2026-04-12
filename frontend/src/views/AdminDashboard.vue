@@ -412,6 +412,13 @@
         </v-col>
       </v-row>
 
+      <!-- Admin Cards -->
+      <v-row class="mt-4">
+        <v-col cols="12" sm="6" md="4">
+          <AdminUsersCard />
+        </v-col>
+      </v-row>
+
       <!-- Quick Actions -->
       <v-row class="mt-4">
         <v-col cols="12">
@@ -556,6 +563,7 @@
 import { ref, computed, onMounted } from 'vue';
 import * as API from '@/api';
 import { useSyncTask } from '@/composables/useSyncTask';
+import AdminUsersCard from '@/components/admin/AdminUsersCard.vue';
 
 // State
 const loading = ref(true);

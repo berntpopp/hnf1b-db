@@ -124,6 +124,37 @@ AFFECTED_ENDPOINTS: list[tuple[str, str | None, str, str, dict | None, dict | No
         {"q": "HNF", "limit": "5"},
         None,
     ),
+    # Wave 5b Task 14: admin user-management baselines
+    (
+        "auth_users_list",
+        "admin",
+        "GET",
+        "/api/v2/auth/users",
+        {"role": "admin"},
+        None,
+    ),
+    (
+        "auth_users_create",
+        "admin",
+        "POST",
+        "/api/v2/auth/users",
+        None,
+        {
+            "username": "baseline-create-probe",
+            "email": "baseline-create@example.com",
+            "password": "BaselinePass!2026",
+            "full_name": "Baseline Create Probe",
+            "role": "viewer",
+        },
+    ),
+    (
+        "auth_users_delete",
+        "admin",
+        "DELETE",
+        "/api/v2/auth/users/999999",
+        None,
+        None,
+    ),
 ]
 
 
@@ -151,6 +182,8 @@ _VOLATILE_KEYS = {
     # Wave 5a: dev-auth tokens must never land in a checked-in baseline.
     "access_token",
     "refresh_token",
+    # Wave 5b Task 14: user last_login varies between captures.
+    "last_login",
 }
 
 
@@ -482,4 +515,108 @@ async def test_verify_auth_users_unlock_baseline(
     )
     assert capture["normalized_body"] == baseline["normalized_body"], (
         f"{_UNLOCK_BASELINE_NAME}: normalised response body changed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Wave 5b Task 14: auth/users/{id} PUT (update) baseline
+# ---------------------------------------------------------------------------
+#
+# The update endpoint needs a seeded target user before the capture, so it
+# cannot use the generic AFFECTED_ENDPOINTS parametrise loop.
+
+_UPDATE_BASELINE_NAME = "auth_users_update"
+
+
+async def _seed_update_target_user(db_session) -> int:
+    """Insert a curator target and return its id for the update baseline."""
+    from app.auth.password import get_password_hash
+    from app.models.user import User
+
+    target = User(
+        username="wave5b-baseline-update",
+        email="wave5b-baseline-update@example.com",
+        hashed_password=get_password_hash("IrrelevantPass123!"),
+        full_name="Baseline Update Target",
+        role="curator",
+        is_active=True,
+        is_verified=True,
+        is_fixture_user=False,
+    )
+    db_session.add(target)
+    await db_session.commit()
+    await db_session.refresh(target)
+    return target.id
+
+
+@pytest.mark.asyncio
+async def test_capture_auth_users_update_baseline(
+    async_client, admin_headers, db_session
+):
+    """Capture the update-response shape. Opt-in via WAVE4_CAPTURE_BASELINE=1."""
+    if os.environ.get("WAVE4_CAPTURE_BASELINE") != "1":
+        pytest.skip("Baseline capture only runs when WAVE4_CAPTURE_BASELINE=1")
+
+    user_id = await _seed_update_target_user(db_session)
+
+    response = await async_client.put(
+        f"/api/v2/auth/users/{user_id}",
+        json={"full_name": "baseline updated"},
+        headers=admin_headers,
+    )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+    with (BASELINE_DIR / f"{_UPDATE_BASELINE_NAME}.json").open("w") as f:
+        json.dump(capture, f, indent=2, sort_keys=True)
+
+
+@pytest.mark.asyncio
+async def test_verify_auth_users_update_baseline(
+    async_client, admin_headers, db_session
+):
+    """Verify the update response against the captured baseline."""
+    baseline_path = BASELINE_DIR / f"{_UPDATE_BASELINE_NAME}.json"
+    if not baseline_path.exists():
+        pytest.skip(f"No baseline captured for {_UPDATE_BASELINE_NAME}")
+
+    with baseline_path.open() as f:
+        baseline = json.load(f)
+
+    user_id = await _seed_update_target_user(db_session)
+
+    response = await async_client.put(
+        f"/api/v2/auth/users/{user_id}",
+        json={"full_name": "baseline updated"},
+        headers=admin_headers,
+    )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+
+    capture = {
+        "status_code": response.status_code,
+        "normalized_body": _normalize(payload) if payload is not None else None,
+        "shape": _shape(payload) if payload is not None else None,
+    }
+
+    assert capture["status_code"] == baseline["status_code"], (
+        f"{_UPDATE_BASELINE_NAME}: status code changed "
+        f"{baseline['status_code']} → {capture['status_code']}"
+    )
+    assert capture["shape"] == baseline["shape"], (
+        f"{_UPDATE_BASELINE_NAME}: response shape changed"
+    )
+    assert capture["normalized_body"] == baseline["normalized_body"], (
+        f"{_UPDATE_BASELINE_NAME}: normalised response body changed"
     )

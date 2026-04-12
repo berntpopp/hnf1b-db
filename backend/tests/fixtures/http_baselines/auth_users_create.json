@@ -1,20 +1,20 @@
 {
   "normalized_body": {
     "created_at": "<normalized>",
-    "email": "wave5b-baseline-locked@hnf1b-db.local",
-    "full_name": "Baseline Locked Curator",
+    "email": "baseline-create@example.com",
+    "full_name": "Baseline Create Probe",
     "id": "<normalized>",
     "is_active": true,
-    "is_verified": true,
+    "is_verified": false,
     "last_login": "<normalized>",
     "permissions": [
       "phenopackets:read",
-      "phenopackets:write",
-      "variants:read"
+      "variants:read",
+      "publications:read"
     ],
-    "role": "curator",
+    "role": "viewer",
     "updated_at": "<normalized>",
-    "username": "wave5b-baseline-locked"
+    "username": "baseline-create-probe"
   },
   "shape": {
     "created_at": "str",
@@ -29,8 +29,8 @@
       "str"
     ],
     "role": "str",
-    "updated_at": "str",
+    "updated_at": null,
     "username": "str"
   },
-  "status_code": 200
+  "status_code": 201
 }

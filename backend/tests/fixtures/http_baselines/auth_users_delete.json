@@ -1,0 +1,13 @@
+{
+  "normalized_body": {
+    "detail": "User with ID 999999 not found",
+    "error_code": "http_404",
+    "request_id": "<normalized>"
+  },
+  "shape": {
+    "detail": "str",
+    "error_code": "str",
+    "request_id": null
+  },
+  "status_code": 404
+}

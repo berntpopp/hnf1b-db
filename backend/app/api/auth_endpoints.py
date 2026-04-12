@@ -428,6 +428,16 @@ async def update_user(
             detail=f"User with ID {user_id} not found",
         )
 
+    # Wave 5b Task 14: prevent deactivating the _system_migration_ placeholder
+    if user.username == "_system_migration_" and user_data.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot deactivate the _system_migration_ placeholder user — "
+                "it must remain queryable as the audit-actor FK fallback."
+            ),
+        )
+
     # Update user
     updated_user = await repo.update(user, user_data)
 
@@ -477,6 +487,17 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found",
+        )
+
+    # Wave 5b Task 14: protect the _system_migration_ placeholder user
+    if user.username == "_system_migration_":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot delete the _system_migration_ placeholder user — "
+                "it is the ON DELETE SET NULL fallback for audit-actor FKs "
+                "from the Wave 5a data migration."
+            ),
         )
 
     # Prevent self-deletion
