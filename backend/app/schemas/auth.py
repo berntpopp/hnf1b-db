@@ -59,14 +59,47 @@ class UserCreate(BaseModel):
         return v
 
 
-class UserUpdate(BaseModel):
-    """User update request (admin only)."""
+class UserUpdateAdmin(BaseModel):
+    """User update request — admin-only fields.
+
+    Wave 5b Task 7: renamed from UserUpdate to make BOPLA scope explicit.
+    This schema accepts role + is_active — NEVER use it on a user-facing
+    update path. Use UserUpdatePublic for /auth/me or similar public paths.
+    """
 
     email: EmailStr | None = None
     password: str | None = Field(None, min_length=8)
     full_name: str | None = Field(None, max_length=255)
     role: str | None = Field(None, pattern="^(admin|curator|viewer)$")
     is_active: bool | None = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str | None) -> str | None:
+        """Validate password strength if provided."""
+        if v is not None:
+            validate_password_strength(v)
+        return v
+
+
+class UserUpdatePublic(BaseModel):
+    """User update request — user-facing self-service fields only.
+
+    Wave 5b Task 7 (BOPLA): any public update endpoint (e.g., a future
+    /auth/me PATCH for profile self-editing) MUST accept UserUpdatePublic
+    and NEVER UserUpdateAdmin. Structurally excludes role, is_active,
+    is_superuser, is_verified, is_fixture_user, hashed_password,
+    refresh_token, failed_login_attempts, locked_until, permissions.
+
+    This schema is NOT YET USED by any endpoint in Wave 5b. It exists so
+    that Wave 5c (identity lifecycle) and any future profile-editing UI
+    can consume it without having to carve a subset out of UserUpdateAdmin
+    or (worse) reuse UserUpdateAdmin and hope nobody notices.
+    """
+
+    email: EmailStr | None = None
+    password: str | None = Field(None, min_length=8)
+    full_name: str | None = Field(None, max_length=255)
 
     @field_validator("password")
     @classmethod

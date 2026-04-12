@@ -24,7 +24,8 @@ from app.schemas.auth import (
     UserCreate,
     UserLogin,
     UserResponse,
-    UserUpdate,
+    UserUpdateAdmin,
+    UserUpdatePublic,
 )
 from app.utils.audit_logger import log_user_action
 
@@ -219,7 +220,7 @@ async def change_password(
 
     # Update password
     repo = UserRepository(db)
-    user_update = UserUpdate(password=password_data.new_password)  # type: ignore[call-arg]
+    user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]
     await repo.update(current_user, user_update)
 
     await log_user_action(
@@ -383,7 +384,7 @@ async def get_user(
 @router.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
-    user_data: UserUpdate,
+    user_data: UserUpdateAdmin,
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
