@@ -132,22 +132,24 @@ The following are documented in the Wave 6 plan update but NOT shipped in Wave 5
 
 ## 5. Backend endpoints
 
-### 5.1 Invite flow (admin-only, on `users_router`)
+### 5.1 Invite flow
 
-**`POST /api/v2/auth/invite`**
+**`POST /api/v2/auth/users/invite`** (admin-only, on `users_router` — inherits router-level `require_admin` guard, path prefix `/users`)
 
 - Body: `{ email: str, role: str = "viewer" }`
-- Creates `credential_token` with `purpose='invite'`, binds email at creation. Stores intended `role` in a new `metadata` JSONB column on the token row (e.g., `{"role": "curator"}`).
-- Dispatches via `EmailSender`.
+- Creates `credential_token` with `purpose='invite'`, binds email at creation. Stores intended `role` in the `metadata` JSONB column (e.g., `{"role": "curator"}`).
+- Dispatches invite email via `EmailSender`.
 - Returns `201` with `{ email, role, expires_at }`.
-- **Dev-only:** When `ENVIRONMENT != "production"`, response includes `{ token }` (raw token for frontend dev banner).
-- Rate limit: inherits router-level admin guard.
+- **Dev-only:** When `settings.environment != "production"`, response includes `{ token }` (raw token for frontend dev banner).
+- Rate limit: inherits router-level admin guard (no extra limiter needed).
+- **Re-invite:** Calling with an email that already has an active invite invalidates the old token and creates a new one. No separate "resend" endpoint.
 
-**`POST /api/v2/auth/invite/accept/{token}`**
+**`POST /api/v2/auth/invite/accept/{token}`** (anonymous, on main `router`)
 
-- Body: `{ password: str, full_name: str }`
+- Body: `{ username: str, password: str, full_name: str }`
 - Verifies token: hash lookup + unused + not expired + `purpose='invite'`.
-- Creates user: bound email + Argon2id hash + `is_verified=True` + role from invite.
+- Validates `username` uniqueness (409 on conflict, same logic as admin create).
+- Creates user: bound email + provided username + Argon2id hash + `is_verified=True` + role from token `metadata`.
 - Returns `201` with `UserResponse`.
 - Rate limit: `Depends(RateLimiter("invite-accept", 5, 3600))` — 5/h/IP.
 
@@ -159,7 +161,7 @@ The following are documented in the Wave 6 plan update but NOT shipped in Wave 5
 - **Always returns `202`** — constant-time, no email enumeration (OWASP Forgot Password Cheat Sheet).
 - If email exists: creates token with `purpose='reset'` + `user_id` set, dispatches via `EmailSender`.
 - If email doesn't exist: no-op, still 202.
-- **Dev-only:** When `ENVIRONMENT != "production"` and email exists, response includes `{ token }`.
+- **Dev-only:** When `settings.environment != "production"` and email exists, response includes `{ token }`.
 - Rate limit: `Depends(RateLimiter("reset-request", 3, 3600))` — 3/h/IP. Account-level limit uses email as composite key: `rate:reset-request:{email}`.
 
 **`POST /api/v2/auth/password-reset/confirm/{token}`**
@@ -169,18 +171,28 @@ The following are documented in the Wave 6 plan update but NOT shipped in Wave 5
 - Returns `200` with `{ message: "Password reset successful" }`.
 - Rate limit: `Depends(RateLimiter("reset-confirm", 5, 3600))` — 5/h/IP.
 
-### 5.3 Email verification (anonymous, on main `router`)
+### 5.3 Email verification (on main `router`)
 
-**`POST /api/v2/auth/verify-email/{token}`**
+**Trigger points — when verify tokens are issued:**
 
-- Verifies token with `purpose='verify'`.
+1. **On admin user creation** (`POST /api/v2/auth/users`): After creating the user, the endpoint creates a `credential_token` with `purpose='verify'` + `user_id` set and dispatches the verification email via `EmailSender`. The user can log in immediately but `is_verified` stays `false` until they click the link.
+2. **On invite-accept** (`POST /api/v2/auth/invite/accept/{token}`): The user is created with `is_verified=True` directly — no verify token needed. They proved email ownership by receiving and using the invite link.
+
+**`POST /api/v2/auth/verify-email/{token}`** (anonymous)
+
+- Verifies token: hash lookup + unused + not expired + `purpose='verify'`.
 - Sets `is_verified=True` on the user.
 - Returns `200` with `{ message: "Email verified" }`.
 - Rate limit: `Depends(RateLimiter("verify-email", 5, 3600))` — 5/h/IP.
 
-### 5.4 Resend invite
+**`POST /api/v2/auth/verify-email/resend`** (authenticated, `Depends(get_current_user)`)
 
-Not a new endpoint. Reuses `POST /api/v2/auth/invite` with the same email. Old unused tokens for that email + purpose are automatically invalidated when a new token is created.
+- Creates a new `purpose='verify'` token for the current user's email, invalidates any prior unused verify tokens.
+- Dispatches via `EmailSender`.
+- Returns `202`.
+- **Dev-only:** When `settings.environment != "production"`, response includes `{ token }`.
+- Rate limit: `Depends(RateLimiter("verify-resend", 3, 3600))` — 3/h/IP.
+- Only callable when `current_user.is_verified == False`; returns 400 if already verified.
 
 ### 5.5 Invite-only (negative test)
 
@@ -207,6 +219,7 @@ class RateLimiter:
 - Account-level variant: `rate:{key_prefix}:{email}` (for reset-request).
 - Returns `Retry-After` header on 429.
 - Does NOT modify the existing global rate limiter in `middleware/rate_limiter.py` — separate concern, separate module.
+- **Window semantics:** Redis `INCR` + `EXPIRE` implements fixed-window counting (TTL set on first increment only). The in-memory cache fallback resets TTL on every increment, producing sliding-window behavior. Tests exercise the count-and-reject logic path (Nth+1 request returns 429) but do not verify exact window expiry timing. For production correctness of window boundaries, Redis is required. This is acceptable for the project's scale (small research team, not public-facing registration).
 
 ---
 
@@ -229,7 +242,7 @@ All four are anonymous routes — `requiresAuth: false`. Navigation guards must 
 - Email input form + submit.
 - On submit: `POST /auth/password-reset/request`.
 - Always shows "If an account exists with that email, we've sent a reset link" (constant-time UX).
-- **Dev-only banner:** `v-if="!isProduction"` shows the token URL from response. Gated by `import.meta.env.VITE_ENVIRONMENT !== 'production'`. Tree-shaken from production build.
+- **Dev-only banner:** `v-if="isDev"` shows the token URL from response. Gated by `import.meta.env.DEV` (Vite built-in boolean, `true` in `vite dev`, `false` in `vite build`). Tree-shaken from production build.
 - Link back to `/login`.
 
 **`ResetPassword.vue`** (~90 LOC)
@@ -242,8 +255,8 @@ All four are anonymous routes — `requiresAuth: false`. Navigation guards must 
 **`AcceptInvite.vue`** (~100 LOC)
 - Reads `:token` from route params.
 - Shows bound email (passed as query param in invite URL, e.g., `/accept-invite/{token}?email=user@example.com` — display only, not trusted for creation).
-- Full name + password + confirm password form.
-- On submit: `POST /auth/invite/accept/{token}`.
+- Username + full name + password + confirm password form.
+- On submit: `POST /auth/invite/accept/{token}` with `{ username, password, full_name }`.
 - Success: redirect to `/login` with "Account created" toast.
 
 **`VerifyEmail.vue`** (~50 LOC)
@@ -256,7 +269,11 @@ All four are anonymous routes — `requiresAuth: false`. Navigation guards must 
 
 **`Login.vue`** — Replace `handleForgotPassword` TODO stub (line 175) with `router.push('/forgot-password')`.
 
-**`AdminUsers.vue`** + **`UserListTable.vue`** — Add "Resend Invite" row action button. Icon: `mdi-email-fast`, tooltip: "Resend Invite". Calls `POST /api/v2/auth/invite` with user's email. Only visible for users where `is_verified === false`.
+**`AdminUsers.vue`** — Add an "Invite User" button (alongside existing "Create User") that opens a simple dialog collecting `email` + `role`. Calls `POST /api/v2/auth/users/invite`. These are two completely separate admin flows:
+- **Create User** — existing dialog, admin sets all fields including password → user exists immediately, gets verify email.
+- **Invite User** — new dialog, admin enters email + role only → no user created yet, invite token sent, user self-registers on accept.
+
+No "Resend Invite" button on the user list table — pending invites are not users. The admin re-invites the same email from the invite dialog (system invalidates old tokens automatically).
 
 ### 7.4 API additions
 
@@ -264,13 +281,14 @@ Extend `frontend/src/api/domain/auth.js`:
 
 - `requestPasswordReset(email)` — POST `/auth/password-reset/request`
 - `confirmPasswordReset(token, newPassword)` — POST `/auth/password-reset/confirm/{token}`
-- `acceptInvite(token, password, fullName)` — POST `/auth/invite/accept/{token}`
+- `acceptInvite(token, username, password, fullName)` — POST `/auth/invite/accept/{token}`
 - `verifyEmail(token)` — POST `/auth/verify-email/{token}`
-- `sendInvite(email, role)` — POST `/auth/invite` (reused for resend)
+- `resendVerification()` — POST `/auth/verify-email/resend`
+- `sendInvite(email, role)` — POST `/auth/users/invite`
 
 ### 7.5 Dev-only token display
 
-Backend endpoints for reset-request and invite include the raw token in the response body **only when `ENVIRONMENT != "production"`**. The frontend reads this field and renders a dev-only `v-alert` banner with the clickable token URL. In production, the field is absent from the JSON response — not hidden by CSS, actually omitted from serialization.
+Backend endpoints for reset-request, invite, and verify-resend include the raw token in the response body **only when `settings.environment != "production"`** (backend Python config attribute). The frontend reads this field and renders a dev-only `v-alert` banner with the clickable token URL, gated by `import.meta.env.DEV` (Vite built-in boolean). In production, the field is absent from the JSON response — not hidden by CSS, actually omitted from serialization. The frontend gate is tree-shaken from production builds.
 
 ---
 
@@ -281,9 +299,9 @@ Backend endpoints for reset-request and invite include the raw token in the resp
 | Test file | What it covers | Est. |
 |-----------|----------------|:----:|
 | `test_credential_tokens.py` | Hash storage, single-use, expiry, purpose discrimination, invalidate-by-email | ~6 |
-| `test_auth_invite.py` | Admin creates invite, email binding (wrong email → rejected), accept creates user with Argon2id + `is_verified=True`, expired/used rejected, caplog verifies ConsoleEmailSender | ~7 |
+| `test_auth_invite.py` | Admin creates invite, email binding (wrong email → rejected), accept creates user with username + Argon2id + `is_verified=True`, username uniqueness 409, expired/used rejected, caplog verifies ConsoleEmailSender | ~8 |
 | `test_auth_password_reset.py` | Request always 202, confirm resets hash, old tokens invalidated, rate limit 3/h | ~6 |
-| `test_auth_email_verify.py` | Sets `is_verified=True`, single-use, expired rejected | ~3 |
+| `test_auth_email_verify.py` | Sets `is_verified=True`, single-use, expired rejected, resend creates new token + invalidates old, auto-dispatch on admin create, already-verified returns 400 | ~6 |
 | `test_auth_rate_limits_wave5c.py` | All anonymous endpoints rate-limited, 429 + Retry-After header | ~4 |
 | `test_register_endpoint_absent.py` | `POST /auth/register` → 404/405 | ~1 |
 | `test_email_sender.py` | ConsoleEmailSender formats correctly, satisfies EmailSender protocol | ~3 |
@@ -329,13 +347,13 @@ Backend endpoints for reset-request and invite include the raw token in the resp
 | 3 | infra | `EmailSender` protocol + `ConsoleEmailSender` + `get_email_sender` DI + `test_email_sender.py` | C2 prereq |
 | 4 | infra | `RateLimiter` dependency class + `test_auth_rate_limits_wave5c.py` | C3 |
 | 5 | infra | Credential token repository: create, verify-and-consume, invalidate + `test_credential_tokens.py` | C2 prereq |
-| 6 | feat | Invite endpoints + `test_auth_invite.py` + baseline | C2 |
-| 7 | feat | Password reset endpoints + `test_auth_password_reset.py` + baseline | C2 |
-| 8 | feat | Verify email endpoint + `test_auth_email_verify.py` + baseline | C2 |
+| 6 | feat | Invite endpoints (`POST /auth/users/invite` + `POST /auth/invite/accept/{token}`) + `test_auth_invite.py` + baseline | C2 |
+| 7 | feat | Password reset endpoints (request + confirm) + `test_auth_password_reset.py` + baseline | C2 |
+| 8 | feat | Verify email endpoints (consume + resend) + auto-dispatch on admin create + `test_auth_email_verify.py` + baseline | C2 |
 | 9 | test | `test_register_endpoint_absent.py` | C5 |
 | 10 | feat | Frontend: `ForgotPassword.vue` + `ResetPassword.vue` + routes + API + Login.vue wiring + specs | C4 |
 | 11 | feat | Frontend: `AcceptInvite.vue` + `VerifyEmail.vue` + routes + API + specs | C4 |
-| 12 | feat | Frontend: Resend Invite button on AdminUsers + UserListTable | C4 |
+| 12 | feat | Frontend: Invite User dialog on AdminUsers.vue (separate from existing Create User) | C4 |
 | 13 | docs | Wave 5c exit note + Wave 5 consolidated exit note + Wave 6 plan update | — |
 
 ---
@@ -343,16 +361,21 @@ Backend endpoints for reset-request and invite include the raw token in the resp
 ## 10. Exit criteria
 
 - [ ] `credential_tokens` table live; migration + downgrade tested
-- [ ] 5 endpoints live, tested, baselined
-- [ ] Rate limits bound on all anonymous token endpoints (invite-accept, reset-request, reset-confirm, verify-email)
+- [ ] 6 endpoints live, tested, baselined: `POST /auth/users/invite`, `POST /auth/invite/accept/{token}`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm/{token}`, `POST /auth/verify-email/{token}`, `POST /auth/verify-email/resend`
+- [ ] Rate limits bound on all anonymous/semi-public token endpoints (invite-accept, reset-request, reset-confirm, verify-email, verify-resend)
 - [ ] `POST /auth/register` returns 404/405 (invite-only, negative test)
+- [ ] Invite-accept collects `username` and validates uniqueness (409 on conflict)
+- [ ] Admin user creation (`POST /auth/users`) auto-dispatches verify email
+- [ ] Invite-accept sets `is_verified=True` directly (no verify token needed)
 - [ ] `ConsoleEmailSender` logs token URLs via structured logger
 - [ ] SMTP config vars in `.env.example` + `config.yaml` email section (`backend: "console"` default)
 - [ ] Startup validation: `backend: "smtp"` + empty `SMTP_HOST` → fail-fast
-- [ ] Frontend: 4 new views functional, dev-only token banner works in non-production
+- [ ] Dev-only token display: backend gated by `settings.environment != "production"`, frontend gated by `import.meta.env.DEV`
+- [ ] Frontend: 4 new views functional (`ForgotPassword`, `ResetPassword`, `AcceptInvite`, `VerifyEmail`)
 - [ ] `Login.vue` forgot-password TODO replaced with `router.push('/forgot-password')`
-- [ ] AdminUsers resend-invite button wired for unverified users
-- [ ] Backend `make check` green (~1120-1130 tests)
+- [ ] AdminUsers has separate "Invite User" dialog (email + role) alongside existing "Create User"
+- [ ] No resend-invite button on user list — admin re-invites from invite dialog
+- [ ] Backend `make check` green (~1125-1135 tests)
 - [ ] Frontend `make check` green (~304 tests)
 - [ ] 19 HTTP baselines verified
 - [ ] `docs/refactor/wave-5c-exit.md` written
@@ -371,17 +394,19 @@ SHA-256 comparison uses Python's `==` which is not constant-time. However, since
 
 ### R2 — Dev-only token leaking to production (MEDIUM)
 
-Raw token in response body when `ENVIRONMENT != "production"` could leak if environment is misconfigured.
+Raw token in response body when `settings.environment != "production"` could leak if environment is misconfigured.
 
-**Mitigation 1:** Backend checks `settings.ENVIRONMENT` (same trusted config source as dev-quick-login).
-**Mitigation 2:** Frontend uses `import.meta.env.VITE_ENVIRONMENT` for the `v-if` gate — tree-shaken from production build.
+**Mitigation 1:** Backend checks `settings.environment` (lowercase attribute, same trusted config source as dev-quick-login).
+**Mitigation 2:** Frontend uses `import.meta.env.DEV` (Vite built-in boolean) for the `v-if` gate — tree-shaken from production build.
 **Mitigation 3:** HTTP baseline tests run in test environment; production baselines would not include the token field.
 
-### R3 — Rate limiter Redis dependency in tests (LOW)
+### R3 — Rate limiter Redis vs in-memory parity (LOW)
 
-Rate limiter uses `cache.incr()` which falls back to in-memory in tests.
+Rate limiter uses `cache.incr()` which falls back to in-memory in tests. Redis implements fixed-window counting (TTL set once on first increment); in-memory fallback implements sliding-window (TTL resets on each increment). These produce different behavior near window boundaries.
 
-**Mitigation:** Test rate limiting by calling the endpoint N+1 times and asserting the last call returns 429. In-memory fallback preserves this behavior.
+**Mitigation 1:** Tests verify count-and-reject logic (Nth+1 request returns 429 with `Retry-After` header) — this works identically under both backends.
+**Mitigation 2:** Window boundary behavior is not tested — acknowledged explicitly in §6. Production correctness requires Redis.
+**Mitigation 3:** For the project's scale (small research team, <100 users), the practical difference between fixed and sliding windows is negligible.
 
 ---
 
@@ -412,9 +437,9 @@ frontend/src/views/ResetPassword.vue                   (NEW)
 frontend/src/views/AcceptInvite.vue                    (NEW)
 frontend/src/views/VerifyEmail.vue                     (NEW)
 frontend/src/views/Login.vue                           (wire forgot-password link)
-frontend/src/views/AdminUsers.vue                      (resend invite button)
-frontend/src/components/admin/UserListTable.vue        (resend invite action)
-frontend/src/api/domain/auth.js                        (5 new functions)
+frontend/src/views/AdminUsers.vue                      (add Invite User dialog alongside Create User)
+frontend/src/components/admin/UserInviteDialog.vue     (NEW — email + role invite form)
+frontend/src/api/domain/auth.js                        (6 new functions)
 frontend/src/router/index.js                           (4 new routes)
 frontend/tests/unit/views/ForgotPassword.spec.js       (NEW)
 frontend/tests/unit/views/ResetPassword.spec.js        (NEW)
