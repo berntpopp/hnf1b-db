@@ -6,9 +6,11 @@ and error cases. Does not test bcrypt internals (those are library tests).
 
 import pytest
 
+import app.auth.password as password_module
 from app.auth.password import (
     get_password_hash,
     validate_password_strength,
+    verify_and_update_password_hash,
     verify_password,
 )
 
@@ -94,3 +96,34 @@ class TestPasswordStrength:
         """Each missing requirement triggers a ValueError."""
         with pytest.raises(ValueError, match="Password validation failed"):
             validate_password_strength(password)
+
+
+class TestVerifySwallowsHasherExceptions:
+    """Security invariant: hasher exceptions must NOT propagate.
+
+    A malformed / corrupt / unknown-algorithm stored hash must cause
+    verify_password to return False (and verify_and_update_password_hash
+    to return (False, None)) without raising — otherwise an attacker
+    could use the exception as a side-channel to learn about stored
+    account state.
+    """
+
+    def test_verify_password_returns_false_when_hasher_raises(self, monkeypatch):
+        """verify_password catches pwdlib exceptions and returns False."""
+
+        class _Boom:
+            def verify(self, *_args, **_kwargs):
+                raise RuntimeError("malformed hash")
+
+        monkeypatch.setattr(password_module, "_password_hash", _Boom())
+        assert verify_password("anything", "$corrupt$") is False
+
+    def test_verify_and_update_returns_false_none_when_hasher_raises(self, monkeypatch):
+        """verify_and_update_password_hash returns (False, None) on hasher error."""
+
+        class _Boom:
+            def verify_and_update(self, *_args, **_kwargs):
+                raise RuntimeError("malformed hash")
+
+        monkeypatch.setattr(password_module, "_password_hash", _Boom())
+        assert verify_and_update_password_hash("anything", "$corrupt$") == (False, None)
