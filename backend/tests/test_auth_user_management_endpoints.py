@@ -111,19 +111,38 @@ async def test_delete_system_migration_user_forbidden(
 
 
 @pytest.mark.asyncio
-async def test_deactivate_system_migration_user_forbidden(
+async def test_update_system_migration_user_forbidden(
     async_client, admin_headers, db_session
 ):
-    """PUT with is_active=False on ``_system_migration_`` returns 400."""
+    """ANY mutation on ``_system_migration_`` returns 400 (not just deactivation)."""
     placeholder = await _seed_system_migration(db_session)
 
-    response = await async_client.put(
+    # Deactivation blocked
+    resp_deactivate = await async_client.put(
         f"/api/v2/auth/users/{placeholder.id}",
         json={"is_active": False},
         headers=admin_headers,
     )
-    assert response.status_code == 400
-    assert "_system_migration_" in response.json()["detail"]
+    assert resp_deactivate.status_code == 400
+    assert "_system_migration_" in resp_deactivate.json()["detail"]
+
+    # Role escalation blocked
+    resp_role = await async_client.put(
+        f"/api/v2/auth/users/{placeholder.id}",
+        json={"role": "admin"},
+        headers=admin_headers,
+    )
+    assert resp_role.status_code == 400
+    assert "_system_migration_" in resp_role.json()["detail"]
+
+    # Email change blocked
+    resp_email = await async_client.put(
+        f"/api/v2/auth/users/{placeholder.id}",
+        json={"email": "hacked@evil.com"},
+        headers=admin_headers,
+    )
+    assert resp_email.status_code == 400
+    assert "_system_migration_" in resp_email.json()["detail"]
 
 
 @pytest.mark.asyncio

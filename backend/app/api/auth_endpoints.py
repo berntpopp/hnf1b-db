@@ -428,13 +428,17 @@ async def update_user(
             detail=f"User with ID {user_id} not found",
         )
 
-    # Wave 5b Task 14: prevent deactivating the _system_migration_ placeholder
-    if user.username == "_system_migration_" and user_data.is_active is False:
+    # Wave 5b: block ALL mutations on the _system_migration_ placeholder.
+    # This user is the ON DELETE SET NULL fallback for audit-actor FKs —
+    # changing its role, deactivating it, or editing its email could
+    # break the FK constraint or make audit rows unresolvable.
+    if user.username == "_system_migration_":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Cannot deactivate the _system_migration_ placeholder user — "
-                "it must remain queryable as the audit-actor FK fallback."
+                "Cannot modify the _system_migration_ placeholder user — "
+                "it is the audit-actor FK fallback from the Wave 5a data "
+                "migration and must remain unchanged."
             ),
         )
 
