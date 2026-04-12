@@ -8,7 +8,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.116.1",
     "pandas>=2.3.2",
-    "pwdlib[argon2,bcrypt]>=0.2.1",  # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
+    "pwdlib[argon2,bcrypt]>=0.2.1", # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pyjwt>=2.10.1",
@@ -35,6 +35,7 @@ dependencies = [
     "redis>=5.0.0", # For distributed caching
     "ga4gh.vrs>=2.1.3", # GA4GH VRS for proper variant digests (moved from phenopackets group for #56)
     "scipy>=1.15.3",
+    "aiosmtplib>=5.1.0",
 ]
 
 
