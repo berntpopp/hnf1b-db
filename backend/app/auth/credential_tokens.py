@@ -9,7 +9,7 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.credential_token import CredentialToken
@@ -65,37 +65,38 @@ class CredentialTokenService:
     async def verify_and_consume(
         self, raw_token: str, *, purpose: str
     ) -> CredentialToken | None:
-        """Verify a token and mark it as consumed.
+        """Verify a token and mark it as consumed atomically.
+
+        Uses a single conditional UPDATE ... RETURNING to guarantee
+        single-use semantics under concurrent requests (no SELECT-then-
+        UPDATE race). Only succeeds when the row matches token+purpose
+        AND is_unused AND not_expired.
 
         Returns the consumed token row, or None if invalid/expired/used.
-        Uses hmac.compare_digest for defense in depth (spec R1).
         """
         token_hash = _hash_token(raw_token)
         now = datetime.now(timezone.utc)
 
         result = await self.db.execute(
-            select(CredentialToken).where(
+            update(CredentialToken)
+            .where(
                 CredentialToken.token_sha256 == token_hash,
                 CredentialToken.purpose == purpose,
+                CredentialToken.used_at.is_(None),
+                CredentialToken.expires_at > now,
             )
+            .values(used_at=now)
+            .returning(CredentialToken)
         )
         db_token = result.scalar_one_or_none()
+        await self.db.commit()
 
         if db_token is None:
             return None
 
+        # Constant-time hash comparison for defense in depth (spec R1).
         if not hmac.compare_digest(db_token.token_sha256, token_hash):
             return None
-
-        if db_token.used_at is not None:
-            return None
-
-        if db_token.expires_at <= now:
-            return None
-
-        db_token.used_at = now
-        await self.db.commit()
-        await self.db.refresh(db_token)
 
         return db_token
 
