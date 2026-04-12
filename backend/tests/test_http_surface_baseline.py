@@ -196,6 +196,9 @@ _VOLATILE_KEYS = {
     "ncbi_gene_id",
     "omim_id",
     "source_url",
+    # admin_status sync_status[].synced count varies by data source
+    # (173 genes from local Ensembl vs 1 from CI NCBI Gene seed).
+    "synced",
 }
 
 # Baselines whose response BODY is inherently environment-dependent.

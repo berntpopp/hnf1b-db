@@ -11,21 +11,21 @@
         "last_sync": "<normalized>",
         "name": "Publication Metadata",
         "pending": 0,
-        "synced": 0,
+        "synced": "<normalized>",
         "total": "<normalized>"
       },
       {
         "last_sync": "<normalized>",
         "name": "VEP Annotations",
         "pending": 0,
-        "synced": 0,
+        "synced": "<normalized>",
         "total": "<normalized>"
       },
       {
         "last_sync": "<normalized>",
         "name": "chr17q12 Genes",
         "pending": 0,
-        "synced": 173,
+        "synced": "<normalized>",
         "total": "<normalized>"
       }
     ],
@@ -44,7 +44,7 @@
         "last_sync": "volatile",
         "name": "str",
         "pending": "int",
-        "synced": "int",
+        "synced": "volatile",
         "total": "volatile"
       }
     ],
