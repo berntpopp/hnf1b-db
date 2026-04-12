@@ -8,8 +8,8 @@ is pure composition.
 
 The HTTP surface is byte-identical to the old flat
 ``app/api/admin_endpoints.py``: routes, response shapes, query params,
-and status codes are all preserved. The Wave 4 HTTP surface baseline
-in ``tests/fixtures/wave4_http_baselines/admin_status.json`` locks
+and status codes are all preserved. The HTTP surface baseline in
+``tests/fixtures/http_baselines/admin_status.json`` locks
 this in automatically.
 """
 
