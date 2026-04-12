@@ -11,8 +11,10 @@ Documentation related to data migration and database schema evolution.
 
 - **[PHENOPACKETS_MIGRATION_RECORD.md](migration/PHENOPACKETS_MIGRATION_RECORD.md)** - Complete record of the migration from MongoDB to PostgreSQL with GA4GH Phenopackets v2 implementation
 
-### 📁 [architecture/](architecture/)
-*Coming soon: System architecture, design decisions, and technical specifications*
+### 📁 [adr/](adr/)
+Architecture Decision Records — one file per significant design decision.
+
+- **[0001-jwt-storage.md](adr/0001-jwt-storage.md)** — JWT token storage (localStorage vs HttpOnly cookies)
 
 ### 📁 [api/](api/)
 API endpoint documentation and specifications.

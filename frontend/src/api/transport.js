@@ -94,10 +94,16 @@ apiClient.interceptors.response.use(
         normalizedDetail = String(responseData.detail);
       }
     }
+    // Prefer the request_id from the standardized error body (Wave 2),
+    // but fall back to the X-Request-ID response header (Wave 6 T2)
+    // when the body is missing one — e.g. non-JSON responses, upstream
+    // proxy errors, or handlers that bypass the standardized shape.
+    // Axios lower-cases response header names.
+    const headerRequestId = error.response?.headers?.['x-request-id'] ?? null;
     error.normalized = {
       detail: normalizedDetail,
       errorCode: responseData?.error_code ?? null,
-      requestId: responseData?.request_id ?? null,
+      requestId: responseData?.request_id ?? headerRequestId,
     };
 
     // Log normalized error (logService redacts sensitive fields automatically)
