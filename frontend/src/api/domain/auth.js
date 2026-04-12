@@ -65,3 +65,24 @@ export const deleteUser = (id) => apiClient.delete(`/auth/users/${id}`);
  * @returns {Promise} Axios promise with unlocked user
  */
 export const unlockUser = (id) => apiClient.patch(`/auth/users/${id}/unlock`);
+
+/**
+ * Request a password reset email.
+ * @param {string} email
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function requestPasswordReset(email) {
+  return apiClient.post('/auth/password-reset/request', { email });
+}
+
+/**
+ * Confirm a password reset with token and new password.
+ * @param {string} token
+ * @param {string} newPassword
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function confirmPasswordReset(token, newPassword) {
+  return apiClient.post(`/auth/password-reset/confirm/${token}`, {
+    new_password: newPassword,
+  });
+}

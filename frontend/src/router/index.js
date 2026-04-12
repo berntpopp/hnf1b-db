@@ -106,6 +106,18 @@ const routes = [
     meta: { title: 'Login' },
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { title: 'Forgot Password' },
+  },
+  {
+    path: '/reset-password/:token',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { title: 'Reset Password' },
+  },
+  {
     path: '/user',
     name: 'User',
     component: () => import(/* webpackChunkName: "user" */ '../views/User.vue'),
