@@ -92,7 +92,11 @@ async def create_audit_entry(
     audit_result = await db.execute(fetch_query, {"audit_id": audit_id})
     audit_row = audit_result.fetchone()
 
-    assert audit_row is not None, "Failed to create audit entry"
+    if audit_row is None:
+        raise ValueError(
+            f"audit entry fetch returned None after INSERT "
+            f"(phenopacket_id={phenopacket_id!r}, action={action!r})"
+        )
 
     # Map to PhenopacketAudit model
     return PhenopacketAudit(
