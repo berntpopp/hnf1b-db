@@ -146,20 +146,26 @@ class PhenopacketStorage:
                         RETURNING id, revision
                     """)
 
-                    row = (await session.execute(
-                        query,
-                        {
-                            "phenopacket_id": phenopacket["id"],
-                            "version": "2.0",
-                            "phenopacket": json.dumps(phenopacket_clean),
-                            "subject_id": subject_id,
-                            "subject_sex": subject_sex,
-                            "created_by_id": created_by_id,
-                            "reimport_id": reimport_id,
-                            "schema_version": "2.0.0",
-                            "revision": 1,  # All imports start at revision 1
-                        },
-                    )).fetchone()
+                    row = (
+                        await session.execute(
+                            query,
+                            {
+                                "phenopacket_id": phenopacket["id"],
+                                "version": "2.0",
+                                "phenopacket": json.dumps(phenopacket_clean),
+                                "subject_id": subject_id,
+                                "subject_sex": subject_sex,
+                                "created_by_id": created_by_id,
+                                "reimport_id": reimport_id,
+                                "schema_version": "2.0.0",
+                                "revision": 1,  # All imports start at revision 1
+                            },
+                        )
+                    ).fetchone()
+                    # RETURNING on an INSERT ... ON CONFLICT DO UPDATE always
+                    # yields exactly one row (either the inserted or the
+                    # updated one). Narrow for mypy.
+                    assert row is not None  # noqa: S101
                     record_id = row.id
                     record_revision = row.revision
 
@@ -176,8 +182,9 @@ class PhenopacketStorage:
                         ),
                         {"rid": record_id},
                     )
-                    new_rev = (await session.execute(
-                        text("""
+                    new_rev = (
+                        await session.execute(
+                            text("""
                             INSERT INTO phenopacket_revisions (
                               record_id, revision_number, state, content_jsonb,
                               change_patch, change_reason, actor_id,
@@ -190,14 +197,17 @@ class PhenopacketStorage:
                             )
                             RETURNING id
                         """),
-                        {
-                            "record_id": record_id,
-                            "revision_number": record_revision,
-                            "content": json.dumps(phenopacket_clean),
-                            "change_reason": "Bulk import (auto-published)",
-                            "actor_id": created_by_id,
-                        },
-                    )).fetchone()
+                            {
+                                "record_id": record_id,
+                                "revision_number": record_revision,
+                                "content": json.dumps(phenopacket_clean),
+                                "change_reason": "Bulk import (auto-published)",
+                                "actor_id": created_by_id,
+                            },
+                        )
+                    ).fetchone()
+                    # Same reasoning as above — RETURNING always yields one row.
+                    assert new_rev is not None  # noqa: S101
                     await session.execute(
                         text(
                             "UPDATE phenopackets "
