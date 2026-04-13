@@ -122,23 +122,31 @@ class PhenopacketStorage:
                         if k != "_migration_metadata"
                     }
 
-                    # Insert phenopacket with proper attribution and revision
+                    # Insert phenopacket with proper attribution, revision,
+                    # AND state='published'. Bulk-import records are curated
+                    # data intended for public visibility — pre-Wave-7 they
+                    # were implicitly public, so we preserve that by landing
+                    # them in 'published' state directly with a head revision
+                    # row (Wave 7 §3 invariants I1/I3).
                     query = text("""
                         INSERT INTO phenopackets
                         (id, phenopacket_id, version, phenopacket, subject_id, subject_sex,
-                         created_by_id, schema_version, revision)
+                         created_by_id, schema_version, revision, state)
                         VALUES (gen_random_uuid(), :phenopacket_id, :version, :phenopacket,
-                                :subject_id, :subject_sex, :created_by_id, :schema_version, :revision)
+                                :subject_id, :subject_sex, :created_by_id, :schema_version,
+                                :revision, 'published')
                         ON CONFLICT (phenopacket_id) DO UPDATE
                         SET phenopacket = EXCLUDED.phenopacket,
                             subject_id = EXCLUDED.subject_id,
                             subject_sex = EXCLUDED.subject_sex,
                             updated_by_id = :reimport_id,
                             revision = EXCLUDED.revision,
+                            state = 'published',
                             updated_at = CURRENT_TIMESTAMP
+                        RETURNING id, revision
                     """)
 
-                    await session.execute(
+                    row = (await session.execute(
                         query,
                         {
                             "phenopacket_id": phenopacket["id"],
@@ -151,6 +159,54 @@ class PhenopacketStorage:
                             "schema_version": "2.0.0",
                             "revision": 1,  # All imports start at revision 1
                         },
+                    )).fetchone()
+                    record_id = row.id
+                    record_revision = row.revision
+
+                    # Demote any previous head revision (re-import case), then
+                    # insert a fresh head-published revision and point
+                    # phenopackets.head_published_revision_id at it. The
+                    # partial unique index ``ux_head_published_per_record``
+                    # enforces at most one head per record (invariant I2).
+                    await session.execute(
+                        text(
+                            "UPDATE phenopacket_revisions "
+                            "SET is_head_published = FALSE "
+                            "WHERE record_id = :rid AND is_head_published = TRUE"
+                        ),
+                        {"rid": record_id},
+                    )
+                    new_rev = (await session.execute(
+                        text("""
+                            INSERT INTO phenopacket_revisions (
+                              record_id, revision_number, state, content_jsonb,
+                              change_patch, change_reason, actor_id,
+                              from_state, to_state, is_head_published, created_at
+                            )
+                            VALUES (
+                              :record_id, :revision_number, 'published', :content,
+                              NULL, :change_reason, :actor_id,
+                              NULL, 'published', TRUE, NOW()
+                            )
+                            RETURNING id
+                        """),
+                        {
+                            "record_id": record_id,
+                            "revision_number": record_revision,
+                            "content": json.dumps(phenopacket_clean),
+                            "change_reason": "Bulk import (auto-published)",
+                            "actor_id": created_by_id,
+                        },
+                    )).fetchone()
+                    await session.execute(
+                        text(
+                            "UPDATE phenopackets "
+                            "SET head_published_revision_id = :rev_id, "
+                            "    editing_revision_id = NULL, "
+                            "    draft_owner_id = NULL "
+                            "WHERE id = :record_id"
+                        ),
+                        {"rev_id": new_rev.id, "record_id": record_id},
                     )
 
                     # Create audit entry if requested
