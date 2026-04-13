@@ -107,12 +107,16 @@ async def test_put_on_published_creates_clone(
     # A new revision row with to_state='draft' exists
     await db_session.refresh(published_record)
     rows = (
-        await db_session.execute(
-            select(PhenopacketRevision)
-            .where(PhenopacketRevision.record_id == published_record.id)
-            .order_by(PhenopacketRevision.revision_number)
+        (
+            await db_session.execute(
+                select(PhenopacketRevision)
+                .where(PhenopacketRevision.record_id == published_record.id)
+                .order_by(PhenopacketRevision.revision_number)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2  # initial published + new draft row
     draft_row = rows[-1]
     assert draft_row.to_state == "draft"
@@ -292,6 +296,7 @@ async def test_non_curator_state_field_is_null(
 # ---------------------------------------------------------------------------
 # /batch endpoint visibility (Important #3 — draft-leak fix)
 # ---------------------------------------------------------------------------
+
 
 def _batch_url(ids: list[str]) -> str:
     return f"/api/v2/phenopackets/batch?phenopacket_ids={','.join(ids)}"

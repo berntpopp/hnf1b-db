@@ -260,7 +260,9 @@ class TestPhenopacketSearchRepository:
         Uses is_curator=True — see test_search_with_text_query docstring.
         """
         repo = PhenopacketSearchRepository(db_session)
-        results = await repo.search(filters={"sex": "FEMALE"}, limit=10, is_curator=True)
+        results = await repo.search(
+            filters={"sex": "FEMALE"}, limit=10, is_curator=True
+        )
 
         assert len(results) >= 1
         # All results should match the filter (verified via subject_sex column)

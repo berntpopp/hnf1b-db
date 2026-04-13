@@ -23,7 +23,7 @@ VIEWER = "viewer"
     [
         # --- happy paths ---
         ("draft", "in_review", CURATOR, True, True),
-        ("in_review", "draft", CURATOR, True, True),          # withdraw
+        ("in_review", "draft", CURATOR, True, True),  # withdraw
         ("in_review", "changes_requested", ADMIN, False, True),
         ("in_review", "approved", ADMIN, False, True),
         ("changes_requested", "in_review", CURATOR, True, True),  # resubmit
@@ -38,18 +38,28 @@ VIEWER = "viewer"
         ("draft", "in_review", ADMIN, False, True),
         ("in_review", "draft", ADMIN, False, True),
         ("changes_requested", "in_review", ADMIN, False, True),
-
         # --- role/ownership rejections ---
-        ("draft", "in_review", CURATOR, False, False),         # not owner
-        ("in_review", "approved", CURATOR, True, False),       # curator can't approve
-        ("in_review", "changes_requested", CURATOR, True, False),  # curator can't request_changes
-        ("approved", "published", CURATOR, False, False),      # curator can't publish
-        ("draft", "in_review", VIEWER, True, False),           # viewer blocked everywhere
-        ("in_review", "draft", CURATOR, False, False),         # withdraw requires ownership
-        ("changes_requested", "in_review", CURATOR, False, False),  # resubmit requires ownership
-        ("draft", "archived", CURATOR, True, False),           # archive requires admin
+        ("draft", "in_review", CURATOR, False, False),  # not owner
+        ("in_review", "approved", CURATOR, True, False),  # curator can't approve
+        (
+            "in_review",
+            "changes_requested",
+            CURATOR,
+            True,
+            False,
+        ),  # curator can't request_changes
+        ("approved", "published", CURATOR, False, False),  # curator can't publish
+        ("draft", "in_review", VIEWER, True, False),  # viewer blocked everywhere
+        ("in_review", "draft", CURATOR, False, False),  # withdraw requires ownership
+        (
+            "changes_requested",
+            "in_review",
+            CURATOR,
+            False,
+            False,
+        ),  # resubmit requires ownership
+        ("draft", "archived", CURATOR, True, False),  # archive requires admin
         ("in_review", "archived", CURATOR, True, False),
-
         # --- invalid transition pairs ---
         ("draft", "approved", ADMIN, False, False),
         ("draft", "published", ADMIN, False, False),

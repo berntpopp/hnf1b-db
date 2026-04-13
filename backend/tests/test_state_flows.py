@@ -52,12 +52,16 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
 
     # a new revision row was created with to_state='draft'
     rows = (
-        await db_session.execute(
-            select(PhenopacketRevision)
-            .where(PhenopacketRevision.record_id == published_record.id)
-            .order_by(PhenopacketRevision.revision_number)
+        (
+            await db_session.execute(
+                select(PhenopacketRevision)
+                .where(PhenopacketRevision.record_id == published_record.id)
+                .order_by(PhenopacketRevision.revision_number)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2
     assert rows[1].to_state == "draft"
     assert rows[1].is_head_published is False
@@ -130,12 +134,16 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
     )
 
     rows_before = (
-        await db_session.execute(
-            select(PhenopacketRevision).where(
-                PhenopacketRevision.record_id == draft_record.id
+        (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == draft_record.id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # In-place save — should NOT add another row
     await svc.edit_record(
@@ -147,12 +155,16 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
     )
 
     rows_after = (
-        await db_session.execute(
-            select(PhenopacketRevision).where(
-                PhenopacketRevision.record_id == draft_record.id
+        (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == draft_record.id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # No new row created; working copy updated
     assert len(rows_after) == len(rows_before)
@@ -241,7 +253,7 @@ async def test_in_place_save_null_owner_forbidden_for_non_admin(
         phenopacket={"id": "wave7-null-owner-1"},
         state="draft",
         revision=1,
-        draft_owner_id=None,   # ← the NULL-owner case
+        draft_owner_id=None,  # ← the NULL-owner case
         created_by_id=admin_user.id,
     )
     db_session.add(pp)
@@ -305,18 +317,22 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
     await db_session.refresh(draft_record)
     assert draft_record.state == "published"
     assert draft_record.head_published_revision_id is not None
-    assert draft_record.editing_revision_id is None   # cleared on publish
-    assert draft_record.draft_owner_id is None         # I5: cleared on publish
+    assert draft_record.editing_revision_id is None  # cleared on publish
+    assert draft_record.draft_owner_id is None  # I5: cleared on publish
 
     # Only one head-published row
     heads = (
-        await db_session.execute(
-            select(PhenopacketRevision).where(
-                PhenopacketRevision.record_id == draft_record.id,
-                PhenopacketRevision.is_head_published.is_(True),
+        (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == draft_record.id,
+                    PhenopacketRevision.is_head_published.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(heads) == 1
 
 
@@ -400,12 +416,16 @@ async def test_simple_transition_creates_revision_row(
         actor=curator_user,
     )
     rows = (
-        await db_session.execute(
-            select(PhenopacketRevision).where(
-                PhenopacketRevision.record_id == draft_record.id
+        (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == draft_record.id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].to_state == "in_review"
     assert rows[0].from_state == "draft"

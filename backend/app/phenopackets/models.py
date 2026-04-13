@@ -299,7 +299,9 @@ class PhenopacketRevision(Base):
     change_patch: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB)
     change_reason: Mapped[str] = mapped_column(Text, nullable=False)
     actor_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=False,
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
     )
     from_state: Mapped[Optional[str]] = mapped_column(Text)
     to_state: Mapped[str] = mapped_column(Text, nullable=False)
@@ -307,7 +309,9 @@ class PhenopacketRevision(Base):
         Boolean, nullable=False, default=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
     actor: Mapped["User"] = relationship("User", foreign_keys=[actor_id], viewonly=True)

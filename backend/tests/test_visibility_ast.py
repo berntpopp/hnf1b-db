@@ -67,6 +67,7 @@ NOQA_MARKER = "noqa: visibility"
 # File-level helpers (module opt-out + table-touching detection)
 # ---------------------------------------------------------------------------
 
+
 def _module_has_noqa_opt_out(path: Path) -> bool:
     """Return True if the module has a ``# noqa: visibility`` in its first 5 lines."""
     first_lines = path.read_text(encoding="utf-8").splitlines()[:5]
@@ -85,8 +86,8 @@ def _file_touches_phenopackets_table(path: Path) -> bool:
     """
     text = path.read_text(encoding="utf-8")
     sql_table_ref = re.compile(
-        r"\bFROM\s+phenopackets\b"           # FROM phenopackets [alias]
-        r"|^\s+phenopackets\s+p\s*[,\n]",    # cross-join with alias at line start
+        r"\bFROM\s+phenopackets\b"  # FROM phenopackets [alias]
+        r"|^\s+phenopackets\s+p\s*[,\n]",  # cross-join with alias at line start
         re.IGNORECASE | re.MULTILINE,
     )
     return bool(sql_table_ref.search(text))
@@ -111,8 +112,8 @@ def _extract_function_source(source_lines: list[str], node: FuncNode) -> str:
     Uses line numbers from the AST node (1-indexed).  We grab from the
     ``def``/``async def`` line through ``end_lineno`` inclusive.
     """
-    start = node.lineno - 1          # 0-indexed
-    end = (node.end_lineno or node.lineno)  # end_lineno is 1-indexed inclusive
+    start = node.lineno - 1  # 0-indexed
+    end = node.end_lineno or node.lineno  # end_lineno is 1-indexed inclusive
     return "\n".join(source_lines[start:end])
 
 
@@ -258,8 +259,7 @@ class TestFunctionLevelVisibilityEnforcement:
             "  D. Have a '# noqa: visibility: <reason>' comment above the def\n"
             "     or as the first comment in the function body\n"
             "  E. Be in a module with '# noqa: visibility' in its first 5 lines\n\n"
-            "Offending functions:\n"
-            + "\n".join(f"  - {o}" for o in all_offenders)
+            "Offending functions:\n" + "\n".join(f"  - {o}" for o in all_offenders)
         )
 
 

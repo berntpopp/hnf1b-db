@@ -218,9 +218,9 @@ async def list_revisions(
 
     # Count
     count_result = await db.execute(
-        select(func.count()).select_from(PhenopacketRevision).where(
-            PhenopacketRevision.record_id == pp.id
-        )
+        select(func.count())
+        .select_from(PhenopacketRevision)
+        .where(PhenopacketRevision.record_id == pp.id)
     )
     total = int(count_result.scalar() or 0)
 

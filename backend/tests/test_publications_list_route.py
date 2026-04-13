@@ -266,11 +266,17 @@ class TestPublicationsListEndpoint:
     ):
         """``filter[year]=2021`` excludes publications from other years."""
         await _seed_publication_row(
-            db_session, pmid="PMID:22221", title="2020 paper", year=2020,
+            db_session,
+            pmid="PMID:22221",
+            title="2020 paper",
+            year=2020,
             actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:22222", title="2021 paper", year=2021,
+            db_session,
+            pmid="PMID:22222",
+            title="2021 paper",
+            year=2021,
             actor_id=admin_user.id,
         )
 
@@ -287,11 +293,18 @@ class TestPublicationsListEndpoint:
     ):
         """``filter[has_doi]=true`` excludes rows with NULL/empty DOI."""
         await _seed_publication_row(
-            db_session, pmid="PMID:33331", title="with doi", year=2022, doi="10.1/x",
+            db_session,
+            pmid="PMID:33331",
+            title="with doi",
+            year=2022,
+            doi="10.1/x",
             actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:33332", title="no doi", year=2022,
+            db_session,
+            pmid="PMID:33332",
+            title="no doi",
+            year=2022,
             actor_id=admin_user.id,
         )
 
@@ -306,11 +319,17 @@ class TestPublicationsListEndpoint:
     async def test_search_query_filter(self, async_client, db_session, admin_user):
         """``q=kidney`` matches title substring via ILIKE."""
         await _seed_publication_row(
-            db_session, pmid="PMID:44441", title="Kidney disease review", year=2022,
+            db_session,
+            pmid="PMID:44441",
+            title="Kidney disease review",
+            year=2022,
             actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:44442", title="Liver disease review", year=2022,
+            db_session,
+            pmid="PMID:44442",
+            title="Liver disease review",
+            year=2022,
             actor_id=admin_user.id,
         )
 

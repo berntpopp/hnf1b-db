@@ -420,9 +420,7 @@ async def update_phenopacket(
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
     errors = validator.validate(sanitized)
     if errors:
-        raise HTTPException(
-            status_code=400, detail={"validation_errors": errors}
-        )
+        raise HTTPException(status_code=400, detail={"validation_errors": errors})
 
     svc = PhenopacketStateService(db)
     try:
@@ -431,7 +429,8 @@ async def update_phenopacket(
             new_content=sanitized,
             change_reason=phenopacket_data.change_reason,
             expected_revision=(
-                phenopacket_data.revision if phenopacket_data.revision is not None
+                phenopacket_data.revision
+                if phenopacket_data.revision is not None
                 else pp.revision
             ),
             actor=current_user,

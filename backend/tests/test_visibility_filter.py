@@ -126,9 +126,7 @@ async def test_curator_filter_include_archived(
 
 
 @pytest.mark.asyncio
-async def test_resolve_public_content_dereferences_head(
-    db_session, published_record
-):
+async def test_resolve_public_content_dereferences_head(db_session, published_record):
     """For a freshly published record with no active edit, resolve_public_content
     returns the same content as pp.phenopacket (fast-path I1 check).
     """

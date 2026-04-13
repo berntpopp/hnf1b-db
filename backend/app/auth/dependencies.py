@@ -21,6 +21,7 @@ def is_curator_or_admin(user: Optional[User]) -> bool:
     """
     return user is not None and user.is_curator
 
+
 # FastAPI security scheme (required — raises 403 when header missing)
 security = HTTPBearer()
 

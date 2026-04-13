@@ -158,8 +158,7 @@ def check_transition(
     if rule.requires_ownership_or_admin and role != "admin" and not is_owner:
         raise TransitionError(
             "forbidden_not_owner",
-            f"curator must be the draft owner (or admin) to transition"
-            f" to {to_state!r}",
+            f"curator must be the draft owner (or admin) to transition to {to_state!r}",
         )
 
     return rule

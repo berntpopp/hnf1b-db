@@ -98,13 +98,17 @@ async def test_I2_at_most_one_head_published_per_record(
     )
 
     heads = (
-        await db_session.execute(
-            select(PhenopacketRevision).where(
-                PhenopacketRevision.record_id == draft_record.id,
-                PhenopacketRevision.is_head_published.is_(True),
+        (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == draft_record.id,
+                    PhenopacketRevision.is_head_published.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(heads) == 1  # ← the invariant
 
 
@@ -255,12 +259,16 @@ async def test_I6_gaps_in_revision_numbers_after_inplace_saves(
     )
 
     rows = (
-        await db_session.execute(
-            select(PhenopacketRevision.revision_number)
-            .where(PhenopacketRevision.record_id == draft_record.id)
-            .order_by(PhenopacketRevision.revision_number)
+        (
+            await db_session.execute(
+                select(PhenopacketRevision.revision_number)
+                .where(PhenopacketRevision.record_id == draft_record.id)
+                .order_by(PhenopacketRevision.revision_number)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # Only the submit created a row; its revision_number = 4
     assert rows == [4]

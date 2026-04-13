@@ -104,9 +104,7 @@ async def test_search_includes_drafts_for_curator(
         db_session, curator_user, admin_user
     )
 
-    r = await async_client.get(
-        "/api/v2/phenopackets/search", headers=curator_headers
-    )
+    r = await async_client.get("/api/v2/phenopackets/search", headers=curator_headers)
     assert r.status_code == 200
 
     ids_in_response = {item.get("id") for item in r.json().get("data", [])}

@@ -65,11 +65,7 @@ class PhenopacketStateService:
         self, record_id: UUID, expected_revision: int
     ) -> Phenopacket:
         """Lock the phenopacket row FOR UPDATE and validate optimistic lock."""
-        stmt = (
-            select(Phenopacket)
-            .where(Phenopacket.id == record_id)
-            .with_for_update()
-        )
+        stmt = select(Phenopacket).where(Phenopacket.id == record_id).with_for_update()
         pp = (await self.db.execute(stmt)).scalar_one_or_none()
         if pp is None:
             raise KeyError(f"Phenopacket {record_id!r} not found")
@@ -83,9 +79,7 @@ class PhenopacketStateService:
         """True when actor's id matches draft_owner_id (and owner is set)."""
         return pp.draft_owner_id is not None and pp.draft_owner_id == actor.id
 
-    async def _latest_revision_row(
-        self, record_id: UUID
-    ) -> PhenopacketRevision | None:
+    async def _latest_revision_row(self, record_id: UUID) -> PhenopacketRevision | None:
         """Return the most-recent revision row for this record, or None."""
         result = await self.db.execute(
             select(PhenopacketRevision)
@@ -122,8 +116,7 @@ class PhenopacketStateService:
             return await self._inplace_save(pp, new_content, change_reason, actor)
 
         raise self.InvalidTransition(
-            f"cannot edit a record in state {pp.state!r}; "
-            "withdraw or resubmit first"
+            f"cannot edit a record in state {pp.state!r}; withdraw or resubmit first"
         )
 
     async def _clone_to_draft(
@@ -275,9 +268,7 @@ class PhenopacketStateService:
                 .limit(1)
             )
         ).scalar_one_or_none()
-        patch = (
-            compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
-        )
+        patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
 
         pp.revision += 1
         from_state = pp.state
@@ -358,8 +349,8 @@ class PhenopacketStateService:
         pp.state = "published"
         pp.phenopacket = approved.content_jsonb
         pp.head_published_revision_id = approved.id
-        pp.editing_revision_id = None   # cleared on publish (§6.2 step 10)
-        pp.draft_owner_id = None        # I5: cleared on publish
+        pp.editing_revision_id = None  # cleared on publish (§6.2 step 10)
+        pp.draft_owner_id = None  # I5: cleared on publish
 
         try:
             await self.db.commit()
