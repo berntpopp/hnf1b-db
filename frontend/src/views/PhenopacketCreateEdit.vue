@@ -178,14 +178,6 @@
       </v-card-text>
     </v-card>
   </v-container>
-
-  <!-- Wave 7/D.1: Save toast — context-sensitive message after PUT -->
-  <v-snackbar v-model="saveToast.show" :timeout="4000" color="success" location="bottom end">
-    {{ saveToast.message }}
-    <template #actions>
-      <v-btn variant="text" @click="saveToast.show = false">Dismiss</v-btn>
-    </template>
-  </v-snackbar>
 </template>
 
 <script>
@@ -236,8 +228,6 @@ export default {
       formSubmitted: false,
       revision: null, // For optimistic locking
       changeReason: '', // For audit trail
-      // Wave 7/D.1: toast after successful PUT (§9.2)
-      saveToast: { show: false, message: '' },
       // Saved record state for toast message selection
       savedRecordState: null,
       rules: {
@@ -360,16 +350,22 @@ export default {
             changeReasonLength: this.changeReason.length,
           });
 
-          // Wave 7/D.1 §9.2: show context-sensitive toast then navigate.
-          // published → clone-to-draft: prompt curator to submit for review.
-          // draft / changes_requested: simpler confirmation.
+          // Wave 7/D.1 §9.2: context-sensitive toast after PUT.
+          // Pass the message via router state so it survives navigation and is
+          // displayed on the detail page (this view unmounts on push, so a
+          // local snackbar would never be visible).
           const recordState = this.savedRecordState;
           const toastMsg =
             recordState === 'published'
               ? 'Draft saved — submit for review when ready.'
               : 'Draft updated.';
-          this.saveToast = { show: true, message: toastMsg };
-          window.logService.info('Save toast shown', { recordState, toastMsg });
+          window.logService.info('Navigating to detail with save toast', { recordState, toastMsg });
+          // Navigate to detail page using phenopacket_id (not database id)
+          this.$router.push({
+            path: `/phenopackets/${result.data.phenopacket_id}`,
+            state: { toast: toastMsg },
+          });
+          return;
         } else {
           // Create new phenopacket
           result = await createPhenopacket({

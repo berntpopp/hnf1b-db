@@ -287,6 +287,14 @@
         <v-btn variant="text" @click="transitionErrorSnackbar = false">Dismiss</v-btn>
       </template>
     </v-snackbar>
+
+    <!-- Wave 7/D.1: Save-success toast — message passed via router state from PhenopacketCreateEdit -->
+    <v-snackbar v-model="saveToast.show" :timeout="4000" color="success" location="bottom end">
+      {{ saveToast.message }}
+      <template #actions>
+        <v-btn variant="text" @click="saveToast.show = false">Dismiss</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -375,6 +383,8 @@ export default {
       // Transition error snackbar (replaces alert())
       transitionErrorSnackbar: false,
       transitionErrorMessage: '',
+      // Wave 7/D.1: save-success toast — message carried via router push state from edit view
+      saveToast: { show: false, message: '' },
     };
   },
   computed: {
@@ -463,6 +473,14 @@ export default {
   },
   mounted() {
     this.fetchPhenopacket();
+    // Wave 7/D.1: show save-success toast if the edit view passed a message
+    // via router push state (the edit view unmounts on navigation so it cannot
+    // display its own snackbar).
+    const toastMsg = window.history.state?.toast;
+    if (toastMsg) {
+      this.saveToast = { show: true, message: toastMsg };
+      window.logService.info('Save toast shown on detail view', { toastMsg });
+    }
   },
   methods: {
     // Sex utility methods (re-export for template use)
