@@ -189,11 +189,12 @@ async def list_phenopackets(
     result = await db.execute(paginated)
     rows: List[Phenopacket] = list(result.scalars().all())
 
-    # Build data items: resolve content per role, then wrap in
-    # PhenopacketResponse so callers see the Wave 7 D.1 fields
-    # (state / head_published_revision_id / editing_revision_id /
-    # draft_owner_id / draft_owner_username) on each row. Non-curators
-    # get those fields as null per spec §7.2.
+    # Build data items: resolve content per role, then augment with Wave 7
+    # D.1 state fields AT THE TOP LEVEL alongside the raw GA4GH content.
+    # We keep the existing JSON:API contract (raw phenopacket keys at top
+    # level) rather than wrapping content under `.phenopacket`, so existing
+    # consumers that expect `item["subject"]` / `item["interpretations"]`
+    # keep working. Non-curators get the state fields as null per §7.2.
     data: List[Dict[str, Any]] = []
     for pp in rows:
         content: Dict[str, Any]
@@ -207,13 +208,22 @@ async def list_phenopackets(
                 # but skip defensively
                 continue
             content = public_content
-        data.append(
-            build_phenopacket_response(
-                pp,
-                phenopacket_override=content,
-                include_state=is_curator,
-            ).model_dump(mode="json")
-        )
+        augmented = dict(content)
+        if is_curator:
+            augmented["state"] = pp.state
+            augmented["head_published_revision_id"] = pp.head_published_revision_id
+            augmented["editing_revision_id"] = pp.editing_revision_id
+            augmented["draft_owner_id"] = pp.draft_owner_id
+            augmented["draft_owner_username"] = (
+                pp.draft_owner.username if pp.draft_owner else None
+            )
+        else:
+            augmented["state"] = None
+            augmented["head_published_revision_id"] = None
+            augmented["editing_revision_id"] = None
+            augmented["draft_owner_id"] = None
+            augmented["draft_owner_username"] = None
+        data.append(augmented)
 
     filters: Dict[str, Any] = {}
     if filter_sex:
