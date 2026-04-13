@@ -445,3 +445,106 @@ class TestCrudRelatedEndpoints:
             "/api/v2/phenopackets/by-publication/not-a-pmid"
         )
         assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+class TestMergedAuditEndpoint:
+    """``GET /phenopackets/{id}/audit`` — merged audit+revision view.
+
+    Wave 7 D.1 follow-up: the endpoint now merges rows from both
+    ``phenopacket_audit`` (source='audit') and ``phenopacket_revisions``
+    (source='revision') into a single timeline sorted newest-first.
+    """
+
+    async def test_audit_endpoint_returns_both_sources(
+        self, async_client, db_session, admin_user, admin_headers
+    ):
+        """POST creates an audit row; subsequent PUT creates a revision row.
+        Both must appear under /audit with distinct source fields.
+        """
+        from app.phenopackets.models import PhenopacketAudit, PhenopacketRevision
+
+        # 1. Insert a phenopacket directly so we control the starting state.
+        pp = Phenopacket(
+            phenopacket_id="audit-merge-test-001",
+            phenopacket=_make_phenopacket_row(
+                "audit-merge-test-001", "SUB-MERGE-001"
+            ).phenopacket,
+            subject_id="SUB-MERGE-001",
+            subject_sex="UNKNOWN_SEX",
+            state="draft",
+            revision=1,
+            created_by_id=admin_user.id,
+        )
+        db_session.add(pp)
+        await db_session.flush()
+
+        # 2. Write a synthetic audit row (simulating a CREATE event).
+        audit_row = PhenopacketAudit(
+            phenopacket_id="audit-merge-test-001",
+            action="CREATE",
+            changed_by_id=admin_user.id,
+            change_reason="initial create",
+            new_value=pp.phenopacket,
+        )
+        db_session.add(audit_row)
+        await db_session.flush()
+
+        # 3. Write a synthetic revision row (simulating a Wave-7 transition).
+        rev = PhenopacketRevision(
+            record_id=pp.id,
+            revision_number=1,
+            state="in_review",
+            content_jsonb=pp.phenopacket,
+            change_reason="submitted for review",
+            actor_id=admin_user.id,
+            from_state="draft",
+            to_state="in_review",
+            is_head_published=False,
+        )
+        db_session.add(rev)
+        await db_session.commit()
+
+        # 4. Call the merged audit endpoint.
+        response = await async_client.get(
+            "/api/v2/phenopackets/audit-merge-test-001/audit",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        entries = response.json()
+
+        # Both sources must be present.
+        sources = {e["source"] for e in entries}
+        assert "audit" in sources, "audit-source entries missing from merged response"
+        assert "revision" in sources, (
+            "revision-source entries missing from merged response"
+        )
+
+        # Revision entry must carry state_transition metadata.
+        rev_entries = [e for e in entries if e["source"] == "revision"]
+        assert len(rev_entries) == 1
+        assert rev_entries[0]["state_transition"] == {
+            "from": "draft",
+            "to": "in_review",
+        }
+        assert rev_entries[0]["action"] == "in_review"
+
+        # Audit entry must not have state_transition.
+        audit_entries = [e for e in entries if e["source"] == "audit"]
+        assert len(audit_entries) == 1
+        assert audit_entries[0]["state_transition"] is None
+        assert audit_entries[0]["action"] == "CREATE"
+
+        # List must be sorted newest-first (monotonically non-increasing timestamps).
+        timestamps = [e["changed_at"] for e in entries]
+        assert timestamps == sorted(timestamps, reverse=True)
+
+    async def test_audit_endpoint_404_for_missing_phenopacket(
+        self, async_client, admin_headers
+    ):
+        """Unknown phenopacket_id → 404."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/does-not-exist/audit",
+            headers=admin_headers,
+        )
+        assert response.status_code == 404

@@ -597,7 +597,18 @@ class PhenopacketSearchQuery(BaseModel):
 
 
 class PhenopacketAuditResponse(BaseModel):
-    """Response model for phenopacket audit trail entries."""
+    """Response model for phenopacket audit trail entries.
+
+    Unified view over two underlying sources:
+    - ``source='audit'``    — rows from ``phenopacket_audit`` (CREATE + legacy
+      pre-Wave-7 UPDATE/DELETE entries).
+    - ``source='revision'`` — rows from ``phenopacket_revisions`` (Wave 7 D.1
+      state-machine transitions and inplace-save drafts).
+
+    Both sources share the common fields; revision-only fields (``state_transition``)
+    are ``None`` for audit-source entries and vice versa (``old_value``,
+    ``new_value``, ``change_summary``).
+    """
 
     id: str
     phenopacket_id: str
@@ -609,6 +620,9 @@ class PhenopacketAuditResponse(BaseModel):
     change_patch: Optional[Any] = None  # JSONB can store arrays or objects
     old_value: Optional[Dict[str, Any]] = None
     new_value: Optional[Dict[str, Any]] = None
+    # Wave 7 D.1: merged audit view
+    source: str = "audit"  # 'audit' | 'revision'
+    state_transition: Optional[Dict[str, Optional[str]]] = None  # {from, to}
 
     model_config = ConfigDict(from_attributes=True)
 
