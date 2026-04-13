@@ -221,3 +221,43 @@ export const getVariantsBatch = (phenopacketIds) =>
  */
 export const getPhenopacketsByVariant = (variantId) =>
   apiClient.get(`/phenopackets/by-variant/${encodeURIComponent(variantId)}`);
+
+// --- Wave 7 / D.1 state machine endpoints ---
+
+/**
+ * POST a state transition for a phenopacket (Wave 7/D.1 §7.1).
+ * Requires curator or admin role.
+ * @param {string} id - Phenopacket ID (public identifier)
+ * @param {string} toState - Target state
+ * @param {string} reason - Reason for the transition (required, min 1 char)
+ * @param {number} revision - Current revision for optimistic locking
+ * @returns {Promise} Axios promise with { phenopacket, revision }
+ */
+export const transitionPhenopacket = (id, toState, reason, revision) =>
+  apiClient.post(`/phenopackets/${id}/transitions`, {
+    to_state: toState,
+    reason,
+    revision,
+  });
+
+/**
+ * GET the revision list for a phenopacket (curator/admin only, Wave 7/D.1 §7.1).
+ * @param {string} id - Phenopacket ID
+ * @param {Object} opts - Pagination options
+ * @param {number} [opts.pageSize=50] - Page size
+ * @param {number} [opts.pageNumber=1] - Page number (1-indexed)
+ * @returns {Promise} Axios promise with { data: RevisionResponse[], meta: { total } }
+ */
+export const fetchRevisions = (id, { pageSize = 50, pageNumber = 1 } = {}) =>
+  apiClient.get(`/phenopackets/${id}/revisions`, {
+    params: { 'page[size]': pageSize, 'page[number]': pageNumber },
+  });
+
+/**
+ * GET a single revision with full content (curator/admin only, Wave 7/D.1 §7.1).
+ * @param {string} id - Phenopacket ID
+ * @param {number} revisionId - Revision row ID
+ * @returns {Promise} Axios promise with RevisionResponse including content_jsonb
+ */
+export const fetchRevisionDetail = (id, revisionId) =>
+  apiClient.get(`/phenopackets/${id}/revisions/${revisionId}`);
