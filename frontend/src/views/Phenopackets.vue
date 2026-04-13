@@ -424,10 +424,15 @@ export default {
       }
     },
 
-    transformPhenopacket(phenopacket) {
-      const subject = phenopacket.subject || {};
-      const features = phenopacket.phenotypicFeatures || [];
-      const interpretations = phenopacket.interpretations || [];
+    transformPhenopacket(row) {
+      // Wave 7 D.1: list response is PhenopacketResponse (wrapper) with
+      // content under `.phenopacket`. Fall back to the row itself for
+      // backwards-compat with any call site still passing raw content.
+      const content =
+        row.phenopacket && typeof row.phenopacket === 'object' ? row.phenopacket : row;
+      const subject = content.subject || {};
+      const features = content.phenotypicFeatures || [];
+      const interpretations = content.interpretations || [];
 
       const presentFeaturesCount = features.filter((f) => !f.excluded).length;
 
@@ -473,7 +478,8 @@ export default {
       }
 
       return {
-        phenopacket_id: phenopacket.id,
+        phenopacket_id: row.phenopacket_id || content.id,
+        state: row.state ?? null,
         subject_id: subject.id || 'N/A',
         sex: subject.sex || 'UNKNOWN_SEX',
         features_count: presentFeaturesCount,

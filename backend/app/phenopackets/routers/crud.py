@@ -189,7 +189,11 @@ async def list_phenopackets(
     result = await db.execute(paginated)
     rows: List[Phenopacket] = list(result.scalars().all())
 
-    # Build data items: resolve content per role
+    # Build data items: resolve content per role, then wrap in
+    # PhenopacketResponse so callers see the Wave 7 D.1 fields
+    # (state / head_published_revision_id / editing_revision_id /
+    # draft_owner_id / draft_owner_username) on each row. Non-curators
+    # get those fields as null per spec §7.2.
     data: List[Dict[str, Any]] = []
     for pp in rows:
         content: Dict[str, Any]
@@ -203,7 +207,13 @@ async def list_phenopackets(
                 # but skip defensively
                 continue
             content = public_content
-        data.append(content)
+        data.append(
+            build_phenopacket_response(
+                pp,
+                phenopacket_override=content,
+                include_state=is_curator,
+            ).model_dump(mode="json")
+        )
 
     filters: Dict[str, Any] = {}
     if filter_sex:
