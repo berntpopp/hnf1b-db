@@ -12,6 +12,15 @@ from app.auth.tokens import verify_token
 from app.database import get_db
 from app.models.user import User
 
+
+def is_curator_or_admin(user: Optional[User]) -> bool:
+    """Return True when user is authenticated and has curator or admin role.
+
+    Centralised here so that ``crud.py`` and ``transitions.py`` (and any
+    future callers) stay in sync when role names change.
+    """
+    return user is not None and user.is_curator
+
 # FastAPI security scheme (required — raises 403 when header missing)
 security = HTTPBearer()
 

@@ -25,7 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth.dependencies import get_current_user, require_curator
+from app.auth.dependencies import get_current_user, is_curator_or_admin, require_curator
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.models import (
@@ -211,7 +211,7 @@ async def list_revisions(
 
     Ordered by ``created_at DESC`` (newest first).
     """
-    if not current_user.is_curator:
+    if not is_curator_or_admin(current_user):
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
     pp = await _get_phenopacket_or_404(db, phenopacket_id)
@@ -271,7 +271,7 @@ async def get_revision(
 
     Curator and admin only — non-curator callers receive 404.
     """
-    if not current_user.is_curator:
+    if not is_curator_or_admin(current_user):
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
     pp = await _get_phenopacket_or_404(db, phenopacket_id)

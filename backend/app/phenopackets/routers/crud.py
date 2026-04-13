@@ -26,11 +26,11 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_optional_user, require_curator
+from app.auth import get_optional_user, is_curator_or_admin, require_curator
 from app.database import get_db
 from app.models.json_api import JsonApiResponse
 from app.models.user import User
@@ -41,7 +41,11 @@ from app.phenopackets.models import (
     PhenopacketResponse,
     PhenopacketUpdate,
 )
-from app.phenopackets.query_builders import build_phenopacket_response
+from app.phenopackets.query_builders import (
+    add_has_variants_filter,
+    add_sex_filter,
+    build_phenopacket_response,
+)
 from app.phenopackets.repositories import (
     PhenopacketRepository,
     curator_filter,
@@ -58,6 +62,7 @@ from app.phenopackets.services.phenopacket_service import (
     ServiceValidationError,
 )
 from app.phenopackets.services.state_service import PhenopacketStateService
+from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.pagination import build_offset_response
 
 router = APIRouter(tags=["phenopackets-crud"])
@@ -69,16 +74,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _is_curator_or_admin(user: Optional[User]) -> bool:
-    """Return True when user is authenticated and has curator or admin role."""
-    return user is not None and user.is_curator
-
-
-async def _base_list_query_with_actor_loads(db: AsyncSession) -> Any:
-    """Build a SELECT with all three actor eager-loads attached."""
-    from sqlalchemy import select as sa_select
-
-    return sa_select(Phenopacket).options(
+def _base_list_query() -> Any:
+    """Build a SELECT with all actor eager-loads attached."""
+    return select(Phenopacket).options(
         selectinload(Phenopacket.created_by_user),
         selectinload(Phenopacket.updated_by_user),
         selectinload(Phenopacket.deleted_by_user),
@@ -148,15 +146,10 @@ async def list_phenopackets(
     - Supported fields: ``created_at``, ``subject_id``, ``subject_sex``,
       ``features_count``, ``has_variant``
     """
-    is_curator = _is_curator_or_admin(current_user)
+    is_curator = is_curator_or_admin(current_user)
 
     # Build base query with eager-loads for actor relationships
-    base_stmt = select(Phenopacket).options(
-        selectinload(Phenopacket.created_by_user),
-        selectinload(Phenopacket.updated_by_user),
-        selectinload(Phenopacket.deleted_by_user),
-        selectinload(Phenopacket.draft_owner),
-    )
+    base_stmt = _base_list_query()
 
     # Apply visibility filter
     if is_curator:
@@ -164,9 +157,7 @@ async def list_phenopackets(
     else:
         query = public_filter(base_stmt)
 
-    # Apply sex and variant filters (re-using existing helpers via repo)
-    from app.phenopackets.query_builders import add_has_variants_filter, add_sex_filter
-
+    # Apply sex and variant filters
     query = add_sex_filter(query, filter_sex)
     query = add_has_variants_filter(query, filter_has_variants)
 
@@ -182,8 +173,6 @@ async def list_phenopackets(
         query = query.order_by(Phenopacket.created_at.desc(), Phenopacket.id.desc())
 
     # Count (same filters, no sort/pagination)
-    from sqlalchemy import func
-
     count_base = select(func.count()).select_from(Phenopacket)
     if is_curator:
         count_base = curator_filter(count_base)
@@ -239,10 +228,16 @@ async def get_phenopackets_batch(
         ..., description="Comma-separated list of phenopacket IDs"
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get multiple phenopackets by IDs in a single query.
 
     Prevents N+1 HTTP requests when fetching multiple phenopackets.
+
+    **Visibility (Wave 7 D.1):**
+    - Anonymous / viewer callers: only published records are returned; draft
+      IDs are silently omitted (same rule as GET list/detail).
+    - Curator / admin callers: all non-deleted records matching the IDs.
 
     Performance:
         - Single database query using WHERE...IN clause
@@ -252,15 +247,44 @@ async def get_phenopackets_batch(
     if not ids:
         return []
 
-    repo = PhenopacketRepository(db)
-    phenopackets = await repo.get_batch(ids)
-    return [
-        {
-            "phenopacket_id": pp.phenopacket_id,
-            "phenopacket": pp.phenopacket,
-        }
-        for pp in phenopackets
-    ]
+    is_curator = is_curator_or_admin(current_user)
+
+    # Build a filtered batch query so draft records are not leaked to
+    # anonymous callers (security: public_filter enforces I3).
+    stmt = (
+        select(Phenopacket)
+        .where(Phenopacket.phenopacket_id.in_(ids))
+        .options(
+            selectinload(Phenopacket.created_by_user),
+            selectinload(Phenopacket.updated_by_user),
+            selectinload(Phenopacket.deleted_by_user),
+            selectinload(Phenopacket.draft_owner),
+        )
+    )
+    if is_curator:
+        stmt = curator_filter(stmt)
+    else:
+        stmt = public_filter(stmt)
+
+    result = await db.execute(stmt)
+    phenopackets_list = list(result.scalars().all())
+
+    items = []
+    for pp in phenopackets_list:
+        if is_curator:
+            content: Dict[str, Any] = resolve_curator_content(pp)
+        else:
+            public_content = await resolve_public_content(db, pp)
+            if public_content is None:
+                continue
+            content = public_content
+        items.append(
+            {
+                "phenopacket_id": pp.phenopacket_id,
+                "phenopacket": content,
+            }
+        )
+    return items
 
 
 @router.get("/{phenopacket_id}", response_model=PhenopacketResponse)
@@ -277,7 +301,7 @@ async def get_phenopacket(
       ``state=None`` (state is not exposed to non-curators per spec §7.2).
       Returns 404 if the record is not published.
     """
-    is_curator = _is_curator_or_admin(current_user)
+    is_curator = is_curator_or_admin(current_user)
 
     # Eager-load actor relationships + draft_owner for response building
     stmt = (
@@ -391,8 +415,6 @@ async def update_phenopacket(
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
     # Validate & sanitise content (reuse existing validator/sanitizer)
-    from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
-
     sanitizer = PhenopacketSanitizer()
     validator = PhenopacketValidator()
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)

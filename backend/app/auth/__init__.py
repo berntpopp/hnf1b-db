@@ -3,6 +3,7 @@
 from app.auth.dependencies import (
     get_current_user,
     get_optional_user,
+    is_curator_or_admin,
     require_admin,
     require_curator,
 )
@@ -20,6 +21,7 @@ __all__ = [
     # Dependencies
     "get_current_user",
     "get_optional_user",
+    "is_curator_or_admin",
     "require_admin",
     "require_curator",
     # Email

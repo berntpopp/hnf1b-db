@@ -134,17 +134,11 @@ async def test_anonymous_get_returns_old_head_during_clone(
     """After clone-to-draft, anonymous GET returns OLD head content, not the
     curator's working copy (invariant I1 at the HTTP level).
     """
+    # The original head content is taken from the head_published_revision_id row;
+    # any subsequent PUT creates a draft clone but must NOT change that pointer.
     pid = published_record.phenopacket_id
     original_rev = published_record.revision
 
-    # The published_record fixture uses a minimal dict that won't pass the
-    # validator, so we use _VALID_PP_BASE as the "original public content".
-    # We first PUT it (this becomes the head-published content), then PUT
-    # again with a secret field to simulate the clone-in-progress state.
-    # Actually, clone-to-draft is triggered by ANY PUT on a published record.
-    # The original head content is what was in the revision row at publish time
-    # (published_record.phenopacket == {"id": "wave7-published-1", "a": 1}).
-    # We track the OLD content from the head_published_revision_id row.
     from sqlalchemy import select as sa_select
 
     from app.phenopackets.models import PhenopacketRevision as PR
@@ -220,8 +214,8 @@ async def test_curator_get_returns_working_copy_during_clone(
 
     # Curator sees working copy
     assert body["phenopacket"]["curator_field"] == "new_value"
-    # Curator sees state
-    assert body["state"] is not None
+    # Curator sees state — record remains 'published' while draft clone is active
+    assert body["state"] == "published"
 
 
 # ---------------------------------------------------------------------------
@@ -293,3 +287,50 @@ async def test_non_curator_state_field_is_null(
     body = resp.json()
 
     assert body.get("state") is None
+
+
+# ---------------------------------------------------------------------------
+# /batch endpoint visibility (Important #3 — draft-leak fix)
+# ---------------------------------------------------------------------------
+
+def _batch_url(ids: list[str]) -> str:
+    return f"/api/v2/phenopackets/batch?phenopacket_ids={','.join(ids)}"
+
+
+@pytest.mark.asyncio
+async def test_batch_hides_drafts_from_anonymous(
+    async_client,
+    draft_record,
+    published_record,
+):
+    """Anonymous callers receive only published records from /batch.
+
+    A draft phenopacket_id included in the request must be silently omitted
+    from the response — it must not be leaked to unauthenticated callers.
+    """
+    ids = [draft_record.phenopacket_id, published_record.phenopacket_id]
+    resp = await async_client.get(_batch_url(ids))
+    assert resp.status_code == 200
+    body = resp.json()
+
+    returned_ids = {item["phenopacket_id"] for item in body}
+    assert published_record.phenopacket_id in returned_ids
+    assert draft_record.phenopacket_id not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_batch_returns_all_for_curator(
+    async_client,
+    draft_record,
+    published_record,
+    curator_headers,
+):
+    """Curator callers receive both draft and published records from /batch."""
+    ids = [draft_record.phenopacket_id, published_record.phenopacket_id]
+    resp = await async_client.get(_batch_url(ids), headers=curator_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+
+    returned_ids = {item["phenopacket_id"] for item in body}
+    assert published_record.phenopacket_id in returned_ids
+    assert draft_record.phenopacket_id in returned_ids
