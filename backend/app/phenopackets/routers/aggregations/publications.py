@@ -30,6 +30,7 @@ async def aggregate_publication_types(
     Returns:
         List of aggregation results with publication type labels and counts
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
     SELECT
         ext_ref->>'reference' as pub_type,
@@ -38,7 +39,10 @@ async def aggregate_publication_types(
         phenopackets p,
         jsonb_array_elements(p.phenopacket->'metaData'->'externalReferences') as ext_ref
     WHERE
-        ext_ref->>'reference' IS NOT NULL
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND ext_ref->>'reference' IS NOT NULL
         AND ext_ref->>'reference' != ''
     GROUP BY
         ext_ref->>'reference'
@@ -83,6 +87,7 @@ async def get_publications_timeline(
             ...
         ]
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
     WITH publication_years AS (
         SELECT
@@ -104,7 +109,10 @@ async def get_publications_timeline(
             jsonb_array_elements(
                 p.phenopacket->'metaData'->'externalReferences'
             ) as ext_ref
-        WHERE ext_ref->>'id' LIKE 'PMID:%'
+        WHERE p.deleted_at IS NULL
+          AND p.state = 'published'
+          AND p.head_published_revision_id IS NOT NULL
+          AND ext_ref->>'id' LIKE 'PMID:%'
     ),
     year_counts AS (
         SELECT
