@@ -165,6 +165,8 @@ async def list_publications(
              jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
         WHERE ext_ref->>'id' LIKE 'PMID:%'
           AND deleted_at IS NULL
+          AND state = 'published'
+          AND head_published_revision_id IS NOT NULL
         GROUP BY ext_ref->>'id'
     )
     SELECT
@@ -225,6 +227,8 @@ async def list_publications(
              jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
         WHERE ext_ref->>'id' LIKE 'PMID:%'
           AND deleted_at IS NULL
+          AND state = 'published'
+          AND head_published_revision_id IS NOT NULL
         GROUP BY ext_ref->>'id'
     )
     SELECT COUNT(*) as total
