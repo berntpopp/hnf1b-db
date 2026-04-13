@@ -5,6 +5,7 @@ from typing import Dict, List
 from app.core.config import settings
 
 from ...sql_fragments import CURRENT_AGE_PATH
+from ...sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 from .base import SurvivalHandler
 
 
@@ -56,7 +57,7 @@ class PathogenicityHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi#>>'{{variantInterpretation,variationDescriptor,id}}' !~ ':(DEL|DUP)'
                 AND EXISTS (
@@ -86,7 +87,7 @@ class PathogenicityHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi#>>'{{variantInterpretation,variationDescriptor,id}}' !~ ':(DEL|DUP)'
         ),
@@ -123,7 +124,7 @@ class PathogenicityHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi#>>'{{variantInterpretation,variationDescriptor,id}}' !~ ':(DEL|DUP)'
         ),
@@ -137,6 +138,7 @@ class PathogenicityHandler(SurvivalHandler):
                         jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
                     WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
+                        AND {PUBLIC_FILTER_FRAGMENT}
                 )
         )
         SELECT pathogenicity_group, current_age

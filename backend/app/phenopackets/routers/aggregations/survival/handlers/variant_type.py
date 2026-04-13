@@ -10,6 +10,7 @@ from ...sql_fragments import (
     get_variant_type_classification_sql,
     get_vcf_id_extraction_sql,
 )
+from ...sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 from .base import SurvivalHandler
 
 
@@ -63,7 +64,7 @@ class VariantTypeHandler(SurvivalHandler):
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND EXISTS (
@@ -88,7 +89,7 @@ class VariantTypeHandler(SurvivalHandler):
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
@@ -120,7 +121,7 @@ class VariantTypeHandler(SurvivalHandler):
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
@@ -133,6 +134,7 @@ class VariantTypeHandler(SurvivalHandler):
                     jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    AND {PUBLIC_FILTER_FRAGMENT}
             )
         )
         SELECT variant_group, current_age

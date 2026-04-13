@@ -5,9 +5,12 @@ Wave 5a exit follow-up #2: two CTEs in variant_query_builder.py query
 leaking variant counts from soft-deleted rows through
 ``/api/v2/phenopackets/aggregate/all-variants``.
 
-This test creates a phenopacket with a variant, fetches the all-variants
-aggregation, soft-deletes the phenopacket, fetches again, and asserts
-the variant is gone.
+Updated in Wave 7 D.1 Phase 4: the all-variants endpoint now applies the
+full public filter (state='published' AND head_published_revision_id IS
+NOT NULL AND deleted_at IS NULL).  The test therefore publishes the
+phenopacket first (draft → in_review → approved → published) before
+checking the baseline, then soft-deletes it and asserts the variant
+disappears.
 """
 
 from __future__ import annotations
@@ -16,17 +19,23 @@ import pytest
 from httpx import AsyncClient
 
 
+def _transitions_url(phenopacket_id: str) -> str:
+    return f"/api/v2/phenopackets/{phenopacket_id}/transitions"
+
+
 @pytest.mark.asyncio
 async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     async_client: AsyncClient,
     admin_headers: dict,
 ):
-    """Soft-deleting a phenopacket removes it from /aggregate/all-variants."""
+    """Soft-deleting a published phenopacket removes it from /aggregate/all-variants."""
+    pid = "wave5b-softdel-variant-001"
+
     # Create a phenopacket with an interpretations.variationDescriptor block
     # that the variant_query_builder CTEs will pick up.
     create_payload = {
         "phenopacket": {
-            "id": "wave5b-softdel-variant-001",
+            "id": pid,
             "subject": {"id": "s", "sex": "MALE"},
             "phenotypicFeatures": [],
             "interpretations": [
@@ -87,8 +96,20 @@ async def test_soft_deleted_phenopacket_hidden_from_all_variants(
         "/api/v2/phenopackets/", json=create_payload, headers=admin_headers
     )
     assert create_resp.status_code == 200, create_resp.text
+    rev = create_resp.json()["revision"]
 
-    # Capture baseline: the new variant should appear under query lookup.
+    # Publish: draft → in_review → approved → published (admin bypasses
+    # ownership checks and can drive the full workflow).
+    for to_state in ("in_review", "approved", "published"):
+        resp = await async_client.post(
+            _transitions_url(pid),
+            json={"to_state": to_state, "reason": f"test: {to_state}", "revision": rev},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, f"transition to {to_state} failed: {resp.text}"
+        rev = resp.json()["phenopacket"]["revision"]
+
+    # Capture baseline: the published variant must appear in the aggregation.
     before = await async_client.get(
         "/api/v2/phenopackets/aggregate/all-variants",
         params={"query": "wave5b-softdel-var-001"},
@@ -97,13 +118,13 @@ async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     assert before.status_code == 200, before.text
     before_ids = {v.get("variant_id") for v in (before.json().get("data") or [])}
     assert "wave5b-softdel-var-001" in before_ids, (
-        "setup: variant should appear before soft-delete"
+        "setup: variant should appear in all-variants after publish"
     )
 
     # Soft delete the phenopacket.
     del_resp = await async_client.request(
         "DELETE",
-        "/api/v2/phenopackets/wave5b-softdel-variant-001",
+        f"/api/v2/phenopackets/{pid}",
         json={"change_reason": "wave5b soft-delete leak test"},
         headers=admin_headers,
     )
@@ -119,6 +140,7 @@ async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     after_ids = {v.get("variant_id") for v in (after.json().get("data") or [])}
     assert "wave5b-softdel-var-001" not in after_ids, (
         "Soft-deleted phenopacket's variant is still leaking through "
-        "/aggregate/all-variants - variant_query_builder CTEs need "
-        "AND p.deleted_at IS NULL"
+        "/aggregate/all-variants — variant_query_builder CTEs need "
+        "the full public filter (deleted_at IS NULL AND state='published' "
+        "AND head_published_revision_id IS NOT NULL)"
     )

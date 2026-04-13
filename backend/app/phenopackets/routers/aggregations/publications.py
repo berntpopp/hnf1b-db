@@ -170,6 +170,7 @@ async def get_publications_by_type(
             ...
         ]
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
     SELECT
         ext_ref->>'id' as pmid,
@@ -184,6 +185,8 @@ async def get_publications_by_type(
     LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
     WHERE ext_ref->>'id' LIKE 'PMID:%'
       AND p.deleted_at IS NULL
+      AND p.state = 'published'
+      AND p.head_published_revision_id IS NOT NULL
     GROUP BY ext_ref->>'id', ext_ref->>'reference', pm.year, pm.title
     ORDER BY pmid
     """
@@ -228,6 +231,7 @@ async def get_publications_timeline_data(
             ...
         ]
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
     WITH pub_data AS (
         SELECT
@@ -242,6 +246,8 @@ async def get_publications_timeline_data(
         LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
         WHERE ext_ref->>'id' LIKE 'PMID:%'
           AND p.deleted_at IS NULL
+          AND p.state = 'published'
+          AND p.head_published_revision_id IS NOT NULL
         GROUP BY ext_ref->>'id', ext_ref->>'reference', pm.year
     )
     SELECT

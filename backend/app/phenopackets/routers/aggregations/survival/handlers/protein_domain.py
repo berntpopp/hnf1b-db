@@ -11,6 +11,7 @@ from ...sql_fragments import (
     get_missense_filter_sql,
     get_protein_domain_classification_sql,
 )
+from ...sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 from .base import SurvivalHandler
 
 
@@ -81,7 +82,7 @@ class ProteinDomainHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
@@ -110,7 +111,7 @@ class ProteinDomainHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
@@ -146,7 +147,7 @@ class ProteinDomainHandler(SurvivalHandler):
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND gi->>'interpretationStatus' IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND {missense_filter}
@@ -161,6 +162,7 @@ class ProteinDomainHandler(SurvivalHandler):
                     jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    AND {PUBLIC_FILTER_FRAGMENT}
             )
         )
         SELECT domain_group, current_age
