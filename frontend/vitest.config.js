@@ -42,6 +42,10 @@ export default defineConfig({
       singleThread: false,
     },
 
+    // Global test setup — polyfills (ResizeObserver, visualViewport) and
+    // Vuetify default plugin registration. Must run in every test environment.
+    setupFiles: ['tests/setup.js'],
+
     // Timeout configuration
     testTimeout: 10000, // 10 seconds for individual tests
     hookTimeout: 10000, // 10 seconds for hooks (beforeEach, afterEach)

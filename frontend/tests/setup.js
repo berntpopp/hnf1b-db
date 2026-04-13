@@ -18,6 +18,22 @@ globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Polyfill visualViewport for Vuetify VOverlay (v-dialog, v-menu) positioning.
+// happy-dom doesn't expose window.visualViewport; without it Vuetify's
+// locationStrategies watcher throws "visualViewport is not defined" when any
+// overlay-based component mounts with modelValue=true.
+if (!globalThis.visualViewport) {
+  globalThis.visualViewport = {
+    width: 1024,
+    height: 768,
+    offsetTop: 0,
+    offsetLeft: 0,
+    scale: 1,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+}
+
 // Create Vuetify instance for tests
 // CRITICAL: Without this, Vuetify components will crash with
 // "Error: [Vuetify] Could not find defaults instance"
