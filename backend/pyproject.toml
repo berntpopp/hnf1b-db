@@ -52,11 +52,11 @@ test = [
     "pytest==9.0.2",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
     "pytest-cov==7.0.0",
-    "tqdm>=4.67.1",
+    "tqdm>=4.67.3",
     "types-tqdm>=4.66.0",  # Type stubs for tqdm
 ]
 migration = [
-    "tqdm>=4.66.0",  # Progress bars for migration
+    "tqdm>=4.67.3",  # Progress bars for migration
     "rich>=13.7.0",  # Rich console output
     "deepdiff>=6.7.0",  # For comparing data structures
 ]
