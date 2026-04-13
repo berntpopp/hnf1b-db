@@ -384,14 +384,16 @@ export default {
         // Navigate to detail page using phenopacket_id (not database id)
         this.$router.push(`/phenopackets/${result.data.phenopacket_id}`);
       } catch (err) {
-        // Handle concurrent edit conflicts (409 Conflict)
+        // Handle concurrent edit conflicts (409 Conflict).
+        // Wave 7 D.1 envelope: {code: "revision_mismatch", message: "..."}
         if (err.response?.status === 409) {
           const errorDetail = err.response?.data?.detail;
-          const currentRev = errorDetail?.current_revision;
-          const expectedRev = errorDetail?.expected_revision;
+          // New shape (Wave 7 D.1): {code, message}
+          const errorCode = errorDetail?.code;
+          const errorMessage = errorDetail?.message;
 
-          if (currentRev && expectedRev) {
-            this.error = `Concurrent edit detected: This phenopacket was modified by another user. Your revision ${expectedRev} conflicts with the current revision ${currentRev}. Click "Reload" to get the latest version.`;
+          if (errorCode === 'revision_mismatch' && errorMessage) {
+            this.error = `Concurrent edit detected: ${errorMessage}. Click "Reload" to get the latest version.`;
           } else {
             this.error =
               'This phenopacket was modified by another user. Click "Reload" to see the latest version and try again.';
@@ -400,8 +402,8 @@ export default {
           window.logService.warn('Concurrent edit detected', {
             phenopacketId: this.phenopacket.id,
             revision: this.revision,
-            currentRevision: currentRev,
-            expectedRevision: expectedRev,
+            errorCode,
+            errorMessage,
             status: err.response?.status,
           });
         } else {

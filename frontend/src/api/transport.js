@@ -74,10 +74,9 @@ apiClient.interceptors.response.use(
           .join('; ');
       } else if (responseData.detail && typeof responseData.detail === 'object') {
         // Structured dict details preserved by the backend handler (e.g.,
-        // {error: "conflict", current_revision: 5} from the update-conflict
-        // endpoint). Prefer a human-readable message field if present; fall
-        // back to JSON serialization so diagnostics aren't lost as
-        // "[object Object]".
+        // Wave 7 D.1 shape: {code: "revision_mismatch", message: "..."}).
+        // Prefer a human-readable message field if present; fall back to
+        // JSON serialization so diagnostics aren't lost as "[object Object]".
         const d = responseData.detail;
         if (typeof d.message === 'string') {
           normalizedDetail = d.message;
