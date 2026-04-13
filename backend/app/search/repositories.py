@@ -254,6 +254,7 @@ class PhenopacketSearchRepository:
         limit: int = 20,
         cursor_data: dict[str, Any] | None = None,
         is_backward: bool = False,
+        is_curator: bool = False,
     ) -> list[dict[str, Any]]:
         """Search phenopackets with filters and cursor pagination.
 
@@ -263,6 +264,7 @@ class PhenopacketSearchRepository:
             limit: Maximum results to return
             cursor_data: Cursor data for pagination (created_at, id)
             is_backward: True if paginating backwards
+            is_curator: When True apply curator filter; else public filter (I3+I7)
 
         Returns:
             List of phenopacket search results
@@ -271,7 +273,15 @@ class PhenopacketSearchRepository:
 
         filters = filters or {}
         params: dict[str, Any] = {"limit": limit + 1}  # +1 to detect more pages
-        conditions = ["deleted_at IS NULL"]
+        # Visibility filter: curators see draft+published; anonymous sees published only
+        if is_curator:
+            conditions = ["deleted_at IS NULL", "state != 'archived'"]
+        else:
+            conditions = [
+                "deleted_at IS NULL",
+                "state = 'published'",
+                "head_published_revision_id IS NOT NULL",
+            ]
         select_extra = ""
 
         # Full-text search using 'simple' config for scientific notation
@@ -370,12 +380,14 @@ class PhenopacketSearchRepository:
         self,
         query: str | None = None,
         filters: dict[str, Any] | None = None,
+        is_curator: bool = False,
     ) -> int:
         """Count matching phenopackets.
 
         Args:
             query: Optional full-text search query
             filters: Dict of filter conditions
+            is_curator: When True apply curator filter; else public filter (I3+I7)
 
         Returns:
             Total count of matching records
@@ -384,7 +396,15 @@ class PhenopacketSearchRepository:
 
         filters = filters or {}
         params: dict[str, Any] = {}
-        conditions = ["deleted_at IS NULL"]
+        # Visibility filter for count: same branching as search()
+        if is_curator:
+            conditions = ["deleted_at IS NULL", "state != 'archived'"]
+        else:
+            conditions = [
+                "deleted_at IS NULL",
+                "state = 'published'",
+                "head_published_revision_id IS NOT NULL",
+            ]
 
         if query:
             conditions.append(

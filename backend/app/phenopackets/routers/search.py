@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_optional_user, is_curator_or_admin
 from app.database import get_db
 from app.models.json_api import JsonApiCursorResponse
+from app.models.user import User
 from app.utils.pagination import (
     build_cursor_response,
     decode_cursor,
@@ -37,15 +39,26 @@ async def search_phenopackets(
         None, alias="page[before]", description="Cursor for previous page"
     ),
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
 ):
     """Advanced phenopacket search with full-text and structured filters.
 
     Uses cursor-based pagination for stable results during browsing.
     """
-    # Base query parts
+    # Base query parts — apply visibility filter based on caller role.
+    # Curators see draft + published rows; anonymous callers see only published.
     select_clause = "SELECT id, phenopacket_id, phenopacket, created_at"
     from_clause = "FROM phenopackets"
-    where_conditions = ["deleted_at IS NULL"]
+    if is_curator_or_admin(user):
+        # Curator: exclude only archived and (by default) deleted rows
+        where_conditions = ["deleted_at IS NULL", "state != 'archived'"]
+    else:
+        # Anonymous / viewer: public filter — published rows only (I3 + I7)
+        where_conditions = [
+            "deleted_at IS NULL",
+            "state = 'published'",
+            "head_published_revision_id IS NOT NULL",
+        ]
     params: Dict[str, Any] = {}
 
     # Full-text search
@@ -237,10 +250,18 @@ async def get_search_facets(
     gene: Optional[str] = Query(None, description="Filter by gene symbol"),
     pmid: Optional[str] = Query(None, description="Filter by publication PMID"),
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
 ):
     """Get facet counts for search filters based on current search criteria."""
-    # Base query conditions
-    where_conditions = ["deleted_at IS NULL"]
+    # Base query conditions — apply visibility filter based on caller role.
+    if is_curator_or_admin(user):
+        where_conditions = ["deleted_at IS NULL", "state != 'archived'"]
+    else:
+        where_conditions = [
+            "deleted_at IS NULL",
+            "state = 'published'",
+            "head_published_revision_id IS NOT NULL",
+        ]
     params: Dict[str, Any] = {}
 
     # Apply existing filters for facet counts

@@ -34,6 +34,7 @@ class FacetService:
         sex: str | None = None,
         gene: str | None = None,
         pmid: str | None = None,
+        is_curator: bool = False,
     ) -> dict[str, list[dict[str, Any]]]:
         """Compute facet counts based on current filters.
 
@@ -52,8 +53,16 @@ class FacetService:
         # Downstream blocks derive two WHERE clauses from this single
         # source: one with the sex predicate (for sex-sensitive facets)
         # and one without (for the sex facet itself).
+        # Visibility filter: curators see draft+published; anon sees published only.
         # ------------------------------------------------------------------
-        base_conditions = ["deleted_at IS NULL"]
+        if is_curator:
+            base_conditions = ["deleted_at IS NULL", "state != 'archived'"]
+        else:
+            base_conditions = [
+                "deleted_at IS NULL",
+                "state = 'published'",
+                "head_published_revision_id IS NOT NULL",
+            ]
         params: dict[str, Any] = {}
 
         if query:

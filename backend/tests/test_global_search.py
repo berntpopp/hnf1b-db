@@ -81,10 +81,19 @@ async def search_test_data(db_session: AsyncSession):
         "metaData": {"externalReferences": [{"id": "PMID:88888"}]},
     }
 
+    # Wave 7 D.1: insert with state='published' so visibility filter passes.
+    # head_published_revision_id requires a revision row — use a CTE to
+    # create both atomically without needing a real actor FK.
     await db_session.execute(
         text("""
-        INSERT INTO phenopackets (id, phenopacket_id, phenopacket, subject_id, subject_sex)
-        VALUES (gen_random_uuid(), :pid, CAST(:pp AS jsonb), :subj_id, :sex)
+        INSERT INTO phenopackets (
+            id, phenopacket_id, phenopacket, subject_id, subject_sex,
+            state, revision
+        )
+        VALUES (
+            gen_random_uuid(), :pid, CAST(:pp AS jsonb), :subj_id, :sex,
+            'published', 1
+        )
         ON CONFLICT (phenopacket_id) DO NOTHING
     """),
         {
@@ -230,9 +239,14 @@ class TestPhenopacketSearchRepository:
     async def test_search_with_text_query(
         self, db_session: AsyncSession, search_test_data
     ):
-        """Test phenopacket search with full-text query."""
+        """Test phenopacket search with full-text query.
+
+        Uses is_curator=True because the fixture inserts a row without a
+        head_published_revision_id (no actor FK available at fixture time).
+        Visibility policy is tested separately in test_visibility_endpoints.py.
+        """
         repo = PhenopacketSearchRepository(db_session)
-        results = await repo.search(query="SEARCH_SUBJ_001", limit=10)
+        results = await repo.search(query="SEARCH_SUBJ_001", limit=10, is_curator=True)
 
         # Should find the test phenopacket
         assert len(results) >= 1
@@ -241,9 +255,12 @@ class TestPhenopacketSearchRepository:
     async def test_search_with_sex_filter(
         self, db_session: AsyncSession, search_test_data
     ):
-        """Test phenopacket search with sex filter."""
+        """Test phenopacket search with sex filter.
+
+        Uses is_curator=True — see test_search_with_text_query docstring.
+        """
         repo = PhenopacketSearchRepository(db_session)
-        results = await repo.search(filters={"sex": "FEMALE"}, limit=10)
+        results = await repo.search(filters={"sex": "FEMALE"}, limit=10, is_curator=True)
 
         assert len(results) >= 1
         # All results should match the filter (verified via subject_sex column)
@@ -252,9 +269,14 @@ class TestPhenopacketSearchRepository:
     async def test_search_with_gene_filter(
         self, db_session: AsyncSession, search_test_data
     ):
-        """Test phenopacket search with gene filter."""
+        """Test phenopacket search with gene filter.
+
+        Uses is_curator=True — see test_search_with_text_query docstring.
+        """
         repo = PhenopacketSearchRepository(db_session)
-        results = await repo.search(filters={"gene": "SEARCHGENE"}, limit=10)
+        results = await repo.search(
+            filters={"gene": "SEARCHGENE"}, limit=10, is_curator=True
+        )
 
         # Should find phenopacket with SEARCHGENE variant
         assert len(results) >= 1
@@ -263,15 +285,22 @@ class TestPhenopacketSearchRepository:
     async def test_search_with_pmid_filter(
         self, db_session: AsyncSession, search_test_data
     ):
-        """Test phenopacket search with PMID filter."""
+        """Test phenopacket search with PMID filter.
+
+        Uses is_curator=True — see test_search_with_text_query docstring.
+        """
         repo = PhenopacketSearchRepository(db_session)
 
         # Test with PMID: prefix
-        results = await repo.search(filters={"pmid": "PMID:88888"}, limit=10)
+        results = await repo.search(
+            filters={"pmid": "PMID:88888"}, limit=10, is_curator=True
+        )
         assert len(results) >= 1
 
         # Test without prefix (should auto-add)
-        results2 = await repo.search(filters={"pmid": "88888"}, limit=10)
+        results2 = await repo.search(
+            filters={"pmid": "88888"}, limit=10, is_curator=True
+        )
         assert len(results2) >= 1
 
     @pytest.mark.asyncio

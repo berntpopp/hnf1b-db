@@ -90,12 +90,15 @@ async def get_phenopackets_by_variant(
     ``PhenopacketResponse`` Pydantic model here because several
     callers only need the embedded phenopacket JSON.
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = text(
         """
     SELECT id, phenopacket_id, version, phenopacket,
            created_at, updated_at, schema_version
     FROM phenopackets p
     WHERE p.deleted_at IS NULL
+      AND p.state = 'published'
+      AND p.head_published_revision_id IS NOT NULL
       AND EXISTS (
         SELECT 1
         FROM jsonb_array_elements(p.phenopacket->'interpretations') as interp,
@@ -171,6 +174,7 @@ async def get_by_publication(
     # SECURITY: Cap limit to prevent excessive data exposure
     limit = min(limit, 500)
 
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
         SELECT
             phenopacket_id,
@@ -178,6 +182,8 @@ async def get_by_publication(
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
         AND deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     """
 
     pmid_filter = json.dumps([{"id": pmid}])
@@ -202,6 +208,8 @@ async def get_by_publication(
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
         AND deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     """
 
     if sex:
