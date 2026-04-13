@@ -16,7 +16,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, MultipleResultsFound, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -182,9 +182,11 @@ class PhenopacketStateService:
         actor: User,
     ) -> Phenopacket:
         """§6.3 transaction: bump revision + overwrite working copy, no new row."""
-        # Ownership check
+        # Ownership check — §6.3: actor must be owner OR admin; no NULL carve-out.
+        # _is_owner() returns False when draft_owner_id is None, so NULL-owner
+        # drafts are correctly rejected for non-admin curators.
         not_admin = actor.role != "admin"
-        if not_admin and pp.draft_owner_id and not self._is_owner(pp, actor):
+        if not_admin and not self._is_owner(pp, actor):
             raise self.ForbiddenNotOwner(
                 f"actor {actor.id} is not the draft owner ({pp.draft_owner_id})"
             )
@@ -258,7 +260,21 @@ class PhenopacketStateService:
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """§6.4: bump revision, snapshot working copy into a new row, advance state."""
-        prev = await self._latest_revision_row(pp.id)
+        # Compute the patch against the *previous transition's* content, not the
+        # latest draft-in-progress row. After a clone + in-place save the latest
+        # row is the draft row, whose content equals pp.phenopacket, giving an
+        # empty patch. We want "content before this transition → content after."
+        prev = (
+            await self.db.execute(
+                select(PhenopacketRevision)
+                .where(
+                    PhenopacketRevision.record_id == pp.id,
+                    PhenopacketRevision.revision_number < pp.revision,
+                )
+                .order_by(PhenopacketRevision.revision_number.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         patch = (
             compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
         )
@@ -303,17 +319,23 @@ class PhenopacketStateService:
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """§6.2 head-swap: promote the approved revision to published + head."""
-        approved = (
-            await self.db.execute(
-                select(PhenopacketRevision).where(
-                    PhenopacketRevision.record_id == pp.id,
-                    PhenopacketRevision.state == "approved",
+        try:
+            approved = (
+                await self.db.execute(
+                    select(PhenopacketRevision).where(
+                        PhenopacketRevision.record_id == pp.id,
+                        PhenopacketRevision.state == "approved",
+                    )
                 )
-            )
-        ).scalar_one_or_none()
-        if approved is None:
+            ).scalar_one()
+        except NoResultFound:
             raise self.InvalidTransition(
                 "cannot publish: no revision row with state='approved' found"
+            )
+        except MultipleResultsFound:
+            raise self.InvalidTransition(
+                "cannot publish: multiple approved revisions found"
+                " — data integrity violation"
             )
 
         # Clear any previous head-published flag for this record

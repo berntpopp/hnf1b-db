@@ -6,74 +6,16 @@ Wave 7 D.1 Task 7. Tests cover:
 - §6.4 simple state transitions
 - §6.2 publish (head-swap)
 - Error conditions: EditInProgress, RevisionMismatch, InvalidTransition
+
+Fixtures ``draft_record`` and ``published_record`` are defined in conftest.py
+and shared with test_state_invariants.py (Nit #3).
 """
 
 import pytest
 from sqlalchemy import select
 
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import PhenopacketRevision
 from app.phenopackets.services.state_service import PhenopacketStateService
-
-
-# ---------------------------------------------------------------------------
-# Local fixtures — shared with test_state_invariants.py via conftest scope
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def draft_record(db_session, curator_user):
-    """A phenopacket in state='draft' owned by curator_user."""
-    pp = Phenopacket(
-        phenopacket_id="draft-flow-1",
-        phenopacket={"id": "draft-flow-1"},
-        state="draft",
-        revision=1,
-        draft_owner_id=curator_user.id,
-        created_by_id=curator_user.id,
-    )
-    db_session.add(pp)
-    await db_session.commit()
-    await db_session.refresh(pp)
-    return pp
-
-
-@pytest.fixture
-async def published_record(db_session, admin_user):
-    """A phenopacket in state='published' with a head revision row.
-
-    draft_owner_id is intentionally NULL — migrated historical records have
-    no active edit, so ownership semantics don't apply (I5a).
-    """
-    pp = Phenopacket(
-        phenopacket_id="pub-flow-1",
-        phenopacket={"id": "pub-flow-1", "a": 1},
-        state="published",
-        revision=1,
-        created_by_id=admin_user.id,
-        # draft_owner_id stays NULL — matches migration 3 behaviour
-    )
-    db_session.add(pp)
-    await db_session.flush()
-
-    rev = PhenopacketRevision(
-        record_id=pp.id,
-        revision_number=1,
-        state="published",
-        content_jsonb={"id": "pub-flow-1", "a": 1},
-        change_reason="init",
-        actor_id=admin_user.id,
-        from_state=None,
-        to_state="published",
-        is_head_published=True,
-    )
-    db_session.add(rev)
-    await db_session.flush()
-
-    pp.head_published_revision_id = rev.id
-    await db_session.commit()
-    await db_session.refresh(pp)
-    return pp
-
 
 # ---------------------------------------------------------------------------
 # §6.1 — clone-to-draft on a published record
@@ -86,7 +28,7 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
     svc = PhenopacketStateService(db_session)
     old_head_id = published_record.head_published_revision_id
 
-    new_content = {"id": "pub-flow-1", "a": 2}
+    new_content = {"id": "wave7-published-1", "a": 2}
     await svc.edit_record(
         published_record.id,
         new_content=new_content,
@@ -97,7 +39,7 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
     await db_session.refresh(published_record)
 
     # working copy updated
-    assert published_record.phenopacket == {"id": "pub-flow-1", "a": 2}
+    assert published_record.phenopacket == {"id": "wave7-published-1", "a": 2}
     # public head pointer UNCHANGED (I1)
     assert published_record.head_published_revision_id == old_head_id
     # edit pointer and owner set
@@ -130,7 +72,7 @@ async def test_clone_to_draft_blocks_second_edit(
     svc = PhenopacketStateService(db_session)
     await svc.edit_record(
         published_record.id,
-        new_content={"id": "pub-flow-1", "a": 2},
+        new_content={"id": "wave7-published-1", "a": 2},
         change_reason="first edit",
         expected_revision=1,
         actor=curator_user,
@@ -139,7 +81,7 @@ async def test_clone_to_draft_blocks_second_edit(
     with pytest.raises(svc.EditInProgress):
         await svc.edit_record(
             published_record.id,
-            new_content={"id": "pub-flow-1", "a": 3},
+            new_content={"id": "wave7-published-1", "a": 3},
             change_reason="second edit",
             expected_revision=2,
             actor=another_curator,
@@ -153,7 +95,7 @@ async def test_clone_revision_mismatch(db_session, published_record, curator_use
     with pytest.raises(svc.RevisionMismatch):
         await svc.edit_record(
             published_record.id,
-            new_content={"id": "pub-flow-1", "a": 99},
+            new_content={"id": "wave7-published-1", "a": 99},
             change_reason="stale edit",
             expected_revision=999,  # wrong
             actor=curator_user,
@@ -198,7 +140,7 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
     # In-place save — should NOT add another row
     await svc.edit_record(
         draft_record.id,
-        new_content={"id": "draft-flow-1", "x": "y"},
+        new_content={"id": "wave7-draft-1", "x": "y"},
         change_reason="tweak",
         expected_revision=3,
         actor=curator_user,
@@ -215,7 +157,7 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
     # No new row created; working copy updated
     assert len(rows_after) == len(rows_before)
     await db_session.refresh(draft_record)
-    assert draft_record.phenopacket == {"id": "draft-flow-1", "x": "y"}
+    assert draft_record.phenopacket == {"id": "wave7-draft-1", "x": "y"}
     assert draft_record.revision == 4  # bumped by save
 
 
@@ -243,7 +185,7 @@ async def test_in_place_save_updates_editing_row_content(
     await db_session.refresh(draft_record)
     editing_id = draft_record.editing_revision_id
 
-    new_content = {"id": "draft-flow-1", "updated": True}
+    new_content = {"id": "wave7-draft-1", "updated": True}
     await svc.edit_record(
         draft_record.id,
         new_content=new_content,
@@ -270,8 +212,50 @@ async def test_in_place_save_forbidden_non_owner(
     with pytest.raises(svc.ForbiddenNotOwner):
         await svc.edit_record(
             draft_record.id,
-            new_content={"id": "draft-flow-1", "x": 1},
+            new_content={"id": "wave7-draft-1", "x": 1},
             change_reason="sneaky",
+            expected_revision=1,
+            actor=another_curator,
+        )
+
+
+@pytest.mark.asyncio
+async def test_in_place_save_null_owner_forbidden_for_non_admin(
+    db_session, another_curator, admin_user
+):
+    """§6.3 / Important #1: NULL draft_owner_id is NOT a bypass for non-admin curators.
+
+    Before the fix, ``if not_admin and pp.draft_owner_id and not self._is_owner(pp, actor)``
+    would short-circuit on the falsy ``draft_owner_id=None`` and allow the save.
+    After the fix, ``_is_owner()`` returns False for None-owner records, so the
+    non-admin curator is correctly rejected with ForbiddenNotOwner.
+
+    This test FAILS against the pre-fix code and PASSES after the fix.
+    """
+    from app.phenopackets.models import Phenopacket
+
+    # Create a draft record with draft_owner_id=None (as might occur for
+    # records imported via migration without an explicit owner assignment).
+    pp = Phenopacket(
+        phenopacket_id="wave7-null-owner-1",
+        phenopacket={"id": "wave7-null-owner-1"},
+        state="draft",
+        revision=1,
+        draft_owner_id=None,   # ← the NULL-owner case
+        created_by_id=admin_user.id,
+    )
+    db_session.add(pp)
+    await db_session.commit()
+    await db_session.refresh(pp)
+
+    svc = PhenopacketStateService(db_session)
+
+    # Non-admin curator must be rejected even though draft_owner_id is NULL.
+    with pytest.raises(svc.ForbiddenNotOwner):
+        await svc.edit_record(
+            pp.id,
+            new_content={"id": "wave7-null-owner-1", "x": 1},
+            change_reason="should be blocked",
             expected_revision=1,
             actor=another_curator,
         )
@@ -377,7 +361,12 @@ async def test_transition_revision_mismatch(db_session, draft_record, curator_us
 
 @pytest.mark.asyncio
 async def test_transition_forbidden_role(db_session, draft_record, curator_user):
-    """§6.4: curator cannot approve — raises ForbiddenNotOwner (or InvalidTransition)."""
+    """§6.4: curator cannot approve — raises PermissionError (forbidden_role).
+
+    The guard-matrix maps curator→approve to the 'forbidden_role' code, which
+    the service translates to PermissionError (not ForbiddenNotOwner, which is
+    reserved for the 'forbidden_not_owner' code path).
+    """
     svc = PhenopacketStateService(db_session)
     # submit first to reach in_review
     await svc.transition(
@@ -387,7 +376,7 @@ async def test_transition_forbidden_role(db_session, draft_record, curator_user)
         expected_revision=1,
         actor=curator_user,
     )
-    with pytest.raises((svc.ForbiddenNotOwner, PermissionError)):
+    with pytest.raises(PermissionError):
         await svc.transition(
             draft_record.id,
             to_state="approved",

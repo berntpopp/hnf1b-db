@@ -6,6 +6,9 @@ will break, making the regression easy to diagnose.
 
 Spec reference:
   docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §3.
+
+Fixtures ``draft_record`` and ``published_record`` are defined in conftest.py
+and shared with test_state_flows.py (Nit #3).
 """
 
 from datetime import datetime, timezone
@@ -16,61 +19,6 @@ from sqlalchemy import update as sa_update
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.services.state_service import PhenopacketStateService
-
-# ---------------------------------------------------------------------------
-# Local fixtures (mirrors test_state_flows.py)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def draft_record(db_session, curator_user):
-    """Phenopacket in state='draft' owned by curator_user."""
-    pp = Phenopacket(
-        phenopacket_id="inv-draft-1",
-        phenopacket={"id": "inv-draft-1"},
-        state="draft",
-        revision=1,
-        draft_owner_id=curator_user.id,
-        created_by_id=curator_user.id,
-    )
-    db_session.add(pp)
-    await db_session.commit()
-    await db_session.refresh(pp)
-    return pp
-
-
-@pytest.fixture
-async def published_record(db_session, admin_user):
-    """Phenopacket in state='published' with head revision; draft_owner_id NULL (I5a)."""
-    pp = Phenopacket(
-        phenopacket_id="inv-pub-1",
-        phenopacket={"id": "inv-pub-1", "a": 1},
-        state="published",
-        revision=1,
-        created_by_id=admin_user.id,
-    )
-    db_session.add(pp)
-    await db_session.flush()
-
-    rev = PhenopacketRevision(
-        record_id=pp.id,
-        revision_number=1,
-        state="published",
-        content_jsonb={"id": "inv-pub-1", "a": 1},
-        change_reason="init",
-        actor_id=admin_user.id,
-        from_state=None,
-        to_state="published",
-        is_head_published=True,
-    )
-    db_session.add(rev)
-    await db_session.flush()
-
-    pp.head_published_revision_id = rev.id
-    await db_session.commit()
-    await db_session.refresh(pp)
-    return pp
-
 
 # ---------------------------------------------------------------------------
 # I1 — state='published' does NOT imply working copy == public copy
@@ -87,7 +35,7 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
     svc = PhenopacketStateService(db_session)
     await svc.edit_record(
         published_record.id,
-        new_content={"id": "inv-pub-1", "a": 99},
+        new_content={"id": "wave7-published-1", "a": 99},
         change_reason="edit",
         expected_revision=1,
         actor=curator_user,

@@ -524,6 +524,74 @@ async def another_curator(db_session):
 
 
 @pytest_asyncio.fixture
+async def draft_record(db_session, curator_user):
+    """A phenopacket in state='draft' owned by curator_user.
+
+    Wave 7 D.1: shared fixture used by test_state_flows.py and
+    test_state_invariants.py. Consolidated here (Nit #3) to avoid
+    duplicate definitions across test modules.
+    """
+    from app.phenopackets.models import Phenopacket
+
+    pp = Phenopacket(
+        phenopacket_id="wave7-draft-1",
+        phenopacket={"id": "wave7-draft-1"},
+        state="draft",
+        revision=1,
+        draft_owner_id=curator_user.id,
+        created_by_id=curator_user.id,
+    )
+    db_session.add(pp)
+    await db_session.commit()
+    await db_session.refresh(pp)
+    return pp
+
+
+@pytest_asyncio.fixture
+async def published_record(db_session, admin_user):
+    """A phenopacket in state='published' with a head revision row.
+
+    draft_owner_id is intentionally NULL — migrated historical records have
+    no active edit, so ownership semantics don't apply (I5a).
+
+    Wave 7 D.1: shared fixture used by test_state_flows.py and
+    test_state_invariants.py. Consolidated here (Nit #3) to avoid
+    duplicate definitions across test modules.
+    """
+    from app.phenopackets.models import Phenopacket, PhenopacketRevision
+
+    pp = Phenopacket(
+        phenopacket_id="wave7-published-1",
+        phenopacket={"id": "wave7-published-1", "a": 1},
+        state="published",
+        revision=1,
+        created_by_id=admin_user.id,
+        # draft_owner_id stays NULL — matches migration 3 behaviour
+    )
+    db_session.add(pp)
+    await db_session.flush()
+
+    rev = PhenopacketRevision(
+        record_id=pp.id,
+        revision_number=1,
+        state="published",
+        content_jsonb={"id": "wave7-published-1", "a": 1},
+        change_reason="init",
+        actor_id=admin_user.id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+
+    pp.head_published_revision_id = rev.id
+    await db_session.commit()
+    await db_session.refresh(pp)
+    return pp
+
+
+@pytest_asyncio.fixture
 async def seeded_system_user(db_session):
     """Create (or return) the ``system`` user used by migration 3 as actor.
 
