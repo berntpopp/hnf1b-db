@@ -50,7 +50,7 @@
     "lint-staged": "^16.2.7",
     "pinia": "^3.0.4",
     "prettier": "^3.8.2",
-    "rollup-plugin-visualizer": "^6.0.5",
+    "rollup-plugin-visualizer": "^7.0.1",
     "terser": "^5.44.1",
     "vite": "^7.3.1",
     "vite-plugin-compression": "^0.5.1",
