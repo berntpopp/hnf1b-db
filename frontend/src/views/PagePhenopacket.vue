@@ -97,8 +97,30 @@
             {{ error }}
           </v-alert>
 
+          <!-- Wave 7/D.1: State badge + editing banner + transition menu (curator/admin only) -->
+          <template v-if="phenopacketMeta && authStore.user?.role">
+            <div class="d-flex align-center gap-2 mb-3">
+              <StateBadge :state="phenopacketMeta.state" />
+              <TransitionMenu
+                v-if="phenopacketMeta.state"
+                :current-state="phenopacketMeta.state"
+                :role="authStore.user.role"
+                :is-owner="authStore.user.id === phenopacketMeta.draft_owner_id"
+                @transition="onTransitionRequest"
+              />
+            </div>
+            <EditingBanner
+              :editing-revision-id="phenopacketMeta.editing_revision_id"
+              :draft-owner-username="phenopacketMeta.draft_owner_username"
+              :current-username="authStore.user.username"
+              :started-at="phenopacketMeta.updated_at"
+              class="mb-3"
+              @continue="navigateToEdit"
+            />
+          </template>
+
           <!-- Main Content Card -->
-          <v-card v-else-if="phenopacket" variant="outlined" class="border-opacity-12" rounded="lg">
+          <v-card v-if="phenopacket" variant="outlined" class="border-opacity-12" rounded="lg">
             <!-- Action Bar -->
             <div class="d-flex align-center flex-wrap px-4 py-2 bg-grey-lighten-4 border-bottom">
               <v-icon color="teal-darken-2" class="mr-2" aria-hidden="true">
@@ -249,6 +271,14 @@
       @confirm="handleDeleteConfirm"
       @cancel="showDeleteDialog = false"
     />
+
+    <!-- Wave 7/D.1: Transition confirmation modal -->
+    <TransitionModal
+      v-if="pendingTargetState"
+      v-model="transitionModalOpen"
+      :to-state="pendingTargetState"
+      @confirm="onTransitionConfirm"
+    />
   </div>
 </template>
 
@@ -266,6 +296,11 @@ import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog.vue';
 import PhenotypeTimeline from '@/components/timeline/PhenotypeTimeline.vue';
 import { usePhenopacketSeo, useBreadcrumbStructuredData } from '@/composables/useSeoMeta';
+import StateBadge from '@/components/state/StateBadge.vue';
+import EditingBanner from '@/components/state/EditingBanner.vue';
+import TransitionMenu from '@/components/state/TransitionMenu.vue';
+import TransitionModal from '@/components/state/TransitionModal.vue';
+import { usePhenopacketState } from '@/composables/usePhenopacketState';
 
 export default {
   name: 'PagePhenopacket',
@@ -277,6 +312,10 @@ export default {
     MetadataCard,
     DeleteConfirmationDialog,
     PhenotypeTimeline,
+    StateBadge,
+    EditingBanner,
+    TransitionMenu,
+    TransitionModal,
   },
   setup() {
     const route = useRoute();
@@ -303,16 +342,24 @@ export default {
       phenopacketForSeo.value = pp;
     };
 
-    return { updateSeoPhenopacket };
+    // Expose authStore so template can access user role/id for state components.
+    const authStore = useAuthStore();
+
+    return { updateSeoPhenopacket, authStore };
   },
   data() {
     return {
       phenopacket: null,
+      // Full API response wrapper — holds state + pointer fields (Wave 7/D.1).
+      phenopacketMeta: null,
       loading: false,
       error: null,
       showDeleteDialog: false,
       deleteLoading: false,
       activeTab: 'overview',
+      // Transition modal state
+      transitionModalOpen: false,
+      pendingTargetState: null,
     };
   },
   computed: {
@@ -463,7 +510,9 @@ export default {
 
       try {
         const response = await getPhenopacket(phenopacketId);
-        // Backend returns the GA4GH phenopacket object nested under 'phenopacket' key
+        // Backend returns the GA4GH phenopacket object nested under 'phenopacket' key.
+        // Also store the full response wrapper for Wave 7/D.1 state fields.
+        this.phenopacketMeta = response.data;
         this.phenopacket = response.data.phenopacket;
 
         window.logService.debug('Phenopacket data received', {
@@ -595,6 +644,52 @@ export default {
         alert(`Failed to delete phenopacket: ${error.response?.data?.detail || error.message}`);
       } finally {
         this.deleteLoading = false;
+      }
+    },
+
+    // --- Wave 7/D.1 state machine handlers ---
+
+    /**
+     * Called when the user picks a transition from TransitionMenu.
+     * Opens TransitionModal with the target state pre-filled.
+     */
+    onTransitionRequest(toState) {
+      this.pendingTargetState = toState;
+      this.transitionModalOpen = true;
+    },
+
+    /**
+     * Called when the user confirms the transition in TransitionModal.
+     * Calls the API then refreshes the page data on success.
+     */
+    async onTransitionConfirm({ reason }) {
+      if (!this.pendingTargetState || !this.phenopacketMeta) return;
+      const phenopacketId = this.$route.params.phenopacket_id;
+      const stateComposable = usePhenopacketState(phenopacketId);
+      try {
+        await stateComposable.transitionTo(
+          this.pendingTargetState,
+          reason,
+          this.phenopacketMeta.revision
+        );
+        window.logService.info('State transition succeeded', {
+          phenopacketId,
+          toState: this.pendingTargetState,
+        });
+        this.transitionModalOpen = false;
+        this.pendingTargetState = null;
+        // Refresh to show new state
+        await this.fetchPhenopacket();
+      } catch (err) {
+        window.logService.error('State transition failed', {
+          phenopacketId,
+          toState: this.pendingTargetState,
+          error: err.message,
+          status: err.response?.status,
+        });
+        alert(
+          `Transition failed: ${err.response?.data?.detail?.message || err.response?.data?.detail || err.message}`
+        );
       }
     },
   },
