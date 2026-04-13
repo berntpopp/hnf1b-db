@@ -118,7 +118,16 @@ test('full state lifecycle: create draft → in_review → approved → publishe
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'e2e-test',
-          resources: [],
+          resources: [
+            {
+              id: 'hp',
+              name: 'Human Phenotype Ontology',
+              namespacePrefix: 'HP',
+              url: 'http://purl.obolibrary.org/obo/hp.owl',
+              version: '2024-01-01',
+              iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
+            },
+          ],
           phenopacketSchemaVersion: '2.0',
         },
       },

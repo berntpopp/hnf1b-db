@@ -137,7 +137,16 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'e2e-i1-test',
-          resources: [],
+          resources: [
+            {
+              id: 'hp',
+              name: 'Human Phenotype Ontology',
+              namespacePrefix: 'HP',
+              url: 'http://purl.obolibrary.org/obo/hp.owl',
+              version: '2024-01-01',
+              iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
+            },
+          ],
           phenopacketSchemaVersion: '2.0',
         },
       },
@@ -169,7 +178,16 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'e2e-i1-test',
-          resources: [],
+          resources: [
+            {
+              id: 'hp',
+              name: 'Human Phenotype Ontology',
+              namespacePrefix: 'HP',
+              url: 'http://purl.obolibrary.org/obo/hp.owl',
+              version: '2024-01-01',
+              iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
+            },
+          ],
           phenopacketSchemaVersion: '2.0',
         },
       },
