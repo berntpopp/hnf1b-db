@@ -1,6 +1,11 @@
 """Authentication and authorization module."""
 
-from app.auth.dependencies import get_current_user, require_admin, require_curator
+from app.auth.dependencies import (
+    get_current_user,
+    get_optional_user,
+    require_admin,
+    require_curator,
+)
 from app.auth.email import ConsoleEmailSender, EmailSender, get_email_sender
 from app.auth.password import (
     get_password_hash,
@@ -14,6 +19,7 @@ from app.auth.tokens import create_access_token, create_refresh_token, verify_to
 __all__ = [
     # Dependencies
     "get_current_user",
+    "get_optional_user",
     "require_admin",
     "require_curator",
     # Email

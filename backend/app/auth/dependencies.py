@@ -1,6 +1,7 @@
 """FastAPI dependencies for authentication and authorization."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -11,8 +12,13 @@ from app.auth.tokens import verify_token
 from app.database import get_db
 from app.models.user import User
 
-# FastAPI security scheme
+# FastAPI security scheme (required — raises 403 when header missing)
 security = HTTPBearer()
+
+# Optional variant — does NOT raise when the Authorization header is absent.
+# Used by ``get_optional_user`` to support anonymous + authenticated callers
+# on the same endpoint.
+_optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -108,3 +114,42 @@ async def require_curator(current_user: User = Depends(get_current_user)) -> Use
             detail="Curator or admin access required",
         )
     return current_user
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_security),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Return the authenticated user, or ``None`` for anonymous callers.
+
+    Unlike ``get_current_user``, this dependency does NOT raise when the
+    ``Authorization`` header is absent.  It is used by endpoints that serve
+    both anonymous visitors (public read) and authenticated curators
+    (working-copy read).
+
+    A present-but-invalid token still raises 401 — this dependency is not
+    a bypass for bad credentials.
+    """
+    if credentials is None:
+        return None
+
+    try:
+        payload = verify_token(credentials.credentials, token_type="access")
+    except HTTPException:
+        # Invalid / expired token — treat as anonymous (callers may choose to
+        # re-raise, but for optional auth the safest default is anonymous).
+        return None
+
+    username = payload.get("sub")
+    if not username:
+        return None
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+
+    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        return None
+
+    return user
