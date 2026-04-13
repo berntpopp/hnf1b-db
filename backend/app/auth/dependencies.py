@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,46 +127,32 @@ async def require_curator(current_user: User = Depends(get_current_user)) -> Use
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_security),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
-    """Return the authenticated user, or ``None`` for anonymous callers.
+    """Return the authenticated user, or ``None`` for truly anonymous callers.
 
-    Unlike ``get_current_user``, this dependency never raises.  It returns
-    ``None`` for **all** of the following cases:
+    Returns ``None`` **only** when no ``Authorization`` header is present.
+    If an ``Authorization`` header is present, this dependency validates
+    strictly — any validation failure (invalid token, expired, malformed,
+    user not found, inactive, or locked) raises ``HTTPException(401)``,
+    exactly the same as ``get_current_user``.
 
-    * No ``Authorization`` header present (anonymous visitor).
-    * Token present but invalid, expired, malformed, or signature-mismatched.
-    * Token valid but the referenced user does not exist, is inactive, or is
-      locked.
-
-    This dependency is for endpoints that allow anonymous access (list,
-    detail, search, aggregations, sitemap, …).  Callers receive ``None`` and
-    treat the request as anonymous — they never see a 401 from here.
+    This makes it safe to use on endpoints that allow anonymous access (list,
+    detail, search, aggregations, …): a visitor with no header gets ``None``,
+    but a caller who sends a broken token is rejected immediately rather than
+    being silently downgraded to anonymous, which would mask auth bugs.
 
     If your endpoint *requires* authentication, use ``get_current_user``
-    instead, which raises ``HTTP 401`` for missing or invalid credentials.
+    instead.
     """
-    if credentials is None:
+    if not request.headers.get("Authorization"):
         return None
 
-    try:
-        payload = verify_token(credentials.credentials, token_type="access")
-    except HTTPException:
-        # Invalid / expired token — treat as anonymous (callers may choose to
-        # re-raise, but for optional auth the safest default is anonymous).
-        return None
-
-    username = payload.get("sub")
-    if not username:
-        return None
-
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
-    if not user or not user.is_active:
-        return None
-
-    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        return None
-
-    return user
+    # Header is present — validate strictly; propagate any 401 raised by
+    # get_current_user rather than swallowing it.
+    # _optional_security returns None only when the header is absent, which
+    # we already ruled out above, so the assert is always satisfied.
+    credentials = await _optional_security(request)
+    assert credentials is not None  # header present → always non-None
+    return await get_current_user(credentials=credentials, db=db)
