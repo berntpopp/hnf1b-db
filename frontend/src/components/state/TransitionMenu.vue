@@ -31,14 +31,24 @@ const emit = defineEmits(['transition']);
 
 // Mirror of backend transitions.py::allowed_transitions.
 const RULES = {
-  draft: (role, owner) => (role === 'admin' || owner ? ['in_review'] : []),
+  draft: (role, owner) => {
+    const out = [];
+    if (role === 'admin' || owner) out.push('in_review');
+    if (role === 'admin') out.push('archived');
+    return out;
+  },
   in_review: (role, owner) => {
     const out = [];
     if (role === 'admin' || owner) out.push('draft');
     if (role === 'admin') out.push('changes_requested', 'approved', 'archived');
     return out;
   },
-  changes_requested: (role, owner) => (role === 'admin' || owner ? ['in_review'] : []),
+  changes_requested: (role, owner) => {
+    const out = [];
+    if (role === 'admin' || owner) out.push('in_review');
+    if (role === 'admin') out.push('archived');
+    return out;
+  },
   approved: (role) => (role === 'admin' ? ['published', 'archived'] : []),
   published: (role) => (role === 'admin' ? ['archived'] : []),
   archived: () => [],

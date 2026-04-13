@@ -49,6 +49,38 @@ describe('TransitionMenu', () => {
     expect(labels).toContain('Request changes');
   });
 
+  it('admin on draft sees in_review and archived', () => {
+    const wrapper = mountMenu({
+      currentState: 'draft',
+      role: 'admin',
+      isOwner: false,
+    });
+    const tos = wrapper.vm.items.map((i) => i.to);
+    expect(tos).toContain('in_review');
+    expect(tos).toContain('archived');
+  });
+
+  it('admin on changes_requested sees in_review and archived', () => {
+    const wrapper = mountMenu({
+      currentState: 'changes_requested',
+      role: 'admin',
+      isOwner: false,
+    });
+    const tos = wrapper.vm.items.map((i) => i.to);
+    expect(tos).toContain('in_review');
+    expect(tos).toContain('archived');
+  });
+
+  it('curator owner on draft sees submit only (no archive)', () => {
+    const wrapper = mountMenu({
+      currentState: 'draft',
+      role: 'curator',
+      isOwner: true,
+    });
+    const tos = wrapper.vm.items.map((i) => i.to);
+    expect(tos).toEqual(['in_review']);
+  });
+
   it('menu activator button is rendered', () => {
     const wrapper = mountMenu({
       currentState: 'draft',

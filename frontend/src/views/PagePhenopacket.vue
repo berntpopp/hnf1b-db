@@ -98,7 +98,7 @@
           </v-alert>
 
           <!-- Wave 7/D.1: State badge + editing banner + transition menu (curator/admin only) -->
-          <template v-if="phenopacketMeta && authStore.user?.role">
+          <template v-if="phenopacketMeta && authStore.isCurator">
             <div class="d-flex align-center gap-2 mb-3">
               <StateBadge :state="phenopacketMeta.state" />
               <TransitionMenu
