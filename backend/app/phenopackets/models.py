@@ -562,7 +562,8 @@ class PhenopacketResponse(BaseModel):
     updated_by: Optional[str] = None
 
     # Wave 7 D.1: state machine fields
-    state: str = "draft"
+    # Optional so non-curator callers receive state=None (spec §7.2).
+    state: Optional[str] = "draft"
     head_published_revision_id: Optional[int] = None
     editing_revision_id: Optional[int] = None
     draft_owner_id: Optional[int] = None

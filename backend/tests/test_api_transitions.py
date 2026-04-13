@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -55,7 +54,8 @@ async def test_transition_endpoint_end_to_end(
     draft_record,
 ):
     """Curator submits → admin approves → admin publishes; verifies state
-    progression and head_published_revision_id set after publish."""
+    progression and head_published_revision_id set after publish.
+    """
     pid = draft_record.phenopacket_id
     rev = draft_record.revision  # 1
 

@@ -7,7 +7,7 @@ This module follows the DRY (Don't Repeat Yourself) principle by extracting
 repeated query logic from endpoints.py into focused, testable functions.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func
 from sqlalchemy.sql import Select
@@ -70,7 +70,12 @@ def add_sex_filter(query: Select, sex: Optional[str]) -> Select:
     return query
 
 
-def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
+def build_phenopacket_response(
+    pp: Phenopacket,
+    *,
+    phenopacket_override: Optional[Dict[str, Any]] = None,
+    include_state: bool = True,
+) -> PhenopacketResponse:
     """Transform database model to response model.
 
     Used in: All CRUD endpoints (list, get, create, update, batch)
@@ -87,6 +92,15 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
 
     Args:
         pp: Phenopacket database model instance
+        phenopacket_override: If provided, use this dict as the ``phenopacket``
+            field instead of ``pp.phenopacket``.  Used by the public read path
+            to substitute the head-published revision content while leaving the
+            ORM row (and its working copy) untouched.
+        include_state: When ``False`` the Wave 7 D.1 state-machine fields
+            (``state``, ``editing_revision_id``, ``head_published_revision_id``,
+            ``draft_owner_id``, ``draft_owner_username``) are set to ``None``
+            in the response, hiding internal workflow metadata from non-curator
+            callers (spec §7.2).
 
     Returns:
         PhenopacketResponse Pydantic model for API response
@@ -97,17 +111,33 @@ def build_phenopacket_response(pp: Phenopacket) -> PhenopacketResponse:
     """
     created_by = pp.created_by_user.username if pp.created_by_user else None
     updated_by = pp.updated_by_user.username if pp.updated_by_user else None
+    content = (
+        phenopacket_override if phenopacket_override is not None else pp.phenopacket
+    )
+
+    draft_owner_username: Optional[str] = None
+    if include_state and pp.draft_owner is not None:
+        draft_owner_username = pp.draft_owner.username
+
     return PhenopacketResponse(
         id=str(pp.id),
         phenopacket_id=pp.phenopacket_id,
         version=pp.version,
         revision=pp.revision,
-        phenopacket=pp.phenopacket,
+        phenopacket=content,
         created_at=pp.created_at,
         updated_at=pp.updated_at,
         schema_version=pp.schema_version,
         created_by=created_by,
         updated_by=updated_by,
+        # Wave 7 D.1 state-machine fields (hidden from non-curators)
+        state=pp.state if include_state else None,
+        head_published_revision_id=(
+            pp.head_published_revision_id if include_state else None
+        ),
+        editing_revision_id=pp.editing_revision_id if include_state else None,
+        draft_owner_id=pp.draft_owner_id if include_state else None,
+        draft_owner_username=draft_owner_username if include_state else None,
     )
 
 

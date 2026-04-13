@@ -13,7 +13,6 @@ from app.phenopackets.services.transitions import (
     check_transition,
 )
 
-
 CURATOR = "curator"
 ADMIN = "admin"
 VIEWER = "viewer"

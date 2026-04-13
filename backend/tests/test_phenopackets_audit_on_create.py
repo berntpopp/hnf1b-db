@@ -73,16 +73,25 @@ async def test_create_phenopacket_emits_audit_row(
 
 
 @pytest.mark.asyncio
-async def test_create_then_update_yields_two_audit_rows(
+async def test_create_then_update_yields_create_audit_row(
     async_client: AsyncClient,
     admin_headers: dict,
     db_session: AsyncSession,
 ):
-    """Two audit rows: the CREATE row (from this task) + the UPDATE row."""
+    """POST emits a CREATE audit row; subsequent PUT is tracked via revisions.
+
+    Wave 7 D.1 contract change: PUT now delegates to PhenopacketStateService
+    which writes PhenopacketRevision rows instead of PhenopacketAudit rows.
+    The CREATE audit row (written by PhenopacketService.create) is still
+    present; only the UPDATE audit row is no longer written.
+    (DONE_WITH_CONCERNS: PUT audit trail moved from phenopacket_audit to
+    phenopacket_revisions as part of Wave 7 D.1 state-machine integration.)
+    """
     create_payload = _valid_payload("audit-on-create-002", "subject-aoc-002", "FEMALE")
-    await async_client.post(
+    create_resp = await async_client.post(
         "/api/v2/phenopackets/", json=create_payload, headers=admin_headers
     )
+    assert create_resp.status_code == 200, create_resp.text
 
     # Build update payload: same phenopacket but with sex changed to MALE
     update_inner = dict(create_payload["phenopacket"])
@@ -92,12 +101,14 @@ async def test_create_then_update_yields_two_audit_rows(
         "revision": 1,
         "change_reason": "correcting sex",
     }
-    await async_client.put(
+    put_resp = await async_client.put(
         "/api/v2/phenopackets/audit-on-create-002",
         json=update_payload,
         headers=admin_headers,
     )
+    assert put_resp.status_code == 200, put_resp.text
 
+    # Only the CREATE audit row exists; PUT no longer writes to phenopacket_audit.
     result = await db_session.execute(
         text("""
             SELECT action
@@ -107,4 +118,21 @@ async def test_create_then_update_yields_two_audit_rows(
         """)
     )
     actions = [row.action for row in result]
-    assert actions == ["CREATE", "UPDATE"]
+    assert actions == ["CREATE"]
+
+    # The PUT change is tracked via phenopacket_revisions (state-machine audit trail).
+    # _inplace_save on a fresh draft (no editing_revision_id) does not create
+    # a new revision row — it only bumps pp.revision and overwrites the content.
+    rev_result = await db_session.execute(
+        text("""
+            SELECT revision_number
+            FROM phenopacket_revisions
+            WHERE record_id = (
+                SELECT id FROM phenopackets WHERE phenopacket_id = 'audit-on-create-002'
+            )
+            ORDER BY revision_number
+        """)
+    )
+    rev_numbers = [row.revision_number for row in rev_result]
+    # No revision rows: _inplace_save with editing_revision_id=NULL skips row insert
+    assert rev_numbers == []

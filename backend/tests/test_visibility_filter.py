@@ -22,14 +22,13 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import Phenopacket
 from app.phenopackets.repositories.visibility import (
     curator_filter,
     public_filter,
     resolve_curator_content,
     resolve_public_content,
 )
-
 
 # ---------------------------------------------------------------------------
 # public_filter — invariants I3 + I7
@@ -131,7 +130,8 @@ async def test_resolve_public_content_dereferences_head(
     db_session, published_record
 ):
     """For a freshly published record with no active edit, resolve_public_content
-    returns the same content as pp.phenopacket (fast-path I1 check)."""
+    returns the same content as pp.phenopacket (fast-path I1 check).
+    """
     # published_record has editing_revision_id=None, state='published'
     # → fast path: pp.phenopacket == head revision content
     content = await resolve_public_content(db_session, published_record)
@@ -144,7 +144,8 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
     db_session, published_record, curator_user
 ):
     """After clone-to-draft, resolve_public_content returns the OLD head revision
-    content, not the current working copy (I1 test at the repository level)."""
+    content, not the current working copy (I1 test at the repository level).
+    """
     original_public_content = dict(published_record.phenopacket)
 
     from app.phenopackets.services.state_service import PhenopacketStateService
