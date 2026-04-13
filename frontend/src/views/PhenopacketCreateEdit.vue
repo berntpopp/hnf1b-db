@@ -228,6 +228,8 @@ export default {
       formSubmitted: false,
       revision: null, // For optimistic locking
       changeReason: '', // For audit trail
+      // Saved record state for toast message selection
+      savedRecordState: null,
       rules: {
         required: (value) => !!value || 'Required field',
         minLength: (value) => (value && value.length >= 5) || 'Must be at least 5 characters',
@@ -271,6 +273,9 @@ export default {
 
         // Enable optimistic locking by capturing current revision
         this.revision = response.data.revision;
+
+        // Capture state for toast message selection (Wave 7/D.1 §9.2)
+        this.savedRecordState = response.data.state ?? null;
 
         // Load existing publications from metaData.externalReferences
         this.publications = (this.phenopacket.metaData?.externalReferences || [])
@@ -344,6 +349,23 @@ export default {
             revision: this.revision,
             changeReasonLength: this.changeReason.length,
           });
+
+          // Wave 7/D.1 §9.2: context-sensitive toast after PUT.
+          // Pass the message via router state so it survives navigation and is
+          // displayed on the detail page (this view unmounts on push, so a
+          // local snackbar would never be visible).
+          const recordState = this.savedRecordState;
+          const toastMsg =
+            recordState === 'published'
+              ? 'Draft saved — submit for review when ready.'
+              : 'Draft updated.';
+          window.logService.info('Navigating to detail with save toast', { recordState, toastMsg });
+          // Navigate to detail page using phenopacket_id (not database id)
+          this.$router.push({
+            path: `/phenopackets/${result.data.phenopacket_id}`,
+            state: { toast: toastMsg },
+          });
+          return;
         } else {
           // Create new phenopacket
           result = await createPhenopacket({
@@ -358,14 +380,16 @@ export default {
         // Navigate to detail page using phenopacket_id (not database id)
         this.$router.push(`/phenopackets/${result.data.phenopacket_id}`);
       } catch (err) {
-        // Handle concurrent edit conflicts (409 Conflict)
+        // Handle concurrent edit conflicts (409 Conflict).
+        // Wave 7 D.1 envelope: {code: "revision_mismatch", message: "..."}
         if (err.response?.status === 409) {
           const errorDetail = err.response?.data?.detail;
-          const currentRev = errorDetail?.current_revision;
-          const expectedRev = errorDetail?.expected_revision;
+          // New shape (Wave 7 D.1): {code, message}
+          const errorCode = errorDetail?.code;
+          const errorMessage = errorDetail?.message;
 
-          if (currentRev && expectedRev) {
-            this.error = `Concurrent edit detected: This phenopacket was modified by another user. Your revision ${expectedRev} conflicts with the current revision ${currentRev}. Click "Reload" to get the latest version.`;
+          if (errorCode === 'revision_mismatch' && errorMessage) {
+            this.error = `Concurrent edit detected: ${errorMessage}. Click "Reload" to get the latest version.`;
           } else {
             this.error =
               'This phenopacket was modified by another user. Click "Reload" to see the latest version and try again.';
@@ -374,8 +398,8 @@ export default {
           window.logService.warn('Concurrent edit detected', {
             phenopacketId: this.phenopacket.id,
             revision: this.revision,
-            currentRevision: currentRev,
-            expectedRevision: expectedRev,
+            errorCode,
+            errorMessage,
             status: err.response?.status,
           });
         } else {

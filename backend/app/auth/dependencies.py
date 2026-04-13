@@ -1,8 +1,9 @@
 """FastAPI dependencies for authentication and authorization."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +12,23 @@ from app.auth.tokens import verify_token
 from app.database import get_db
 from app.models.user import User
 
-# FastAPI security scheme
+
+def is_curator_or_admin(user: Optional[User]) -> bool:
+    """Return True when user is authenticated and has curator or admin role.
+
+    Centralised here so that ``crud.py`` and ``transitions.py`` (and any
+    future callers) stay in sync when role names change.
+    """
+    return user is not None and user.is_curator
+
+
+# FastAPI security scheme (required — raises 403 when header missing)
 security = HTTPBearer()
+
+# Optional variant — does NOT raise when the Authorization header is absent.
+# Used by ``get_optional_user`` to support anonymous + authenticated callers
+# on the same endpoint.
+_optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -108,3 +124,35 @@ async def require_curator(current_user: User = Depends(get_current_user)) -> Use
             detail="Curator or admin access required",
         )
     return current_user
+
+
+async def get_optional_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Return the authenticated user, or ``None`` for truly anonymous callers.
+
+    Returns ``None`` **only** when no ``Authorization`` header is present.
+    If an ``Authorization`` header is present, this dependency validates
+    strictly — any validation failure (invalid token, expired, malformed,
+    user not found, inactive, or locked) raises ``HTTPException(401)``,
+    exactly the same as ``get_current_user``.
+
+    This makes it safe to use on endpoints that allow anonymous access (list,
+    detail, search, aggregations, …): a visitor with no header gets ``None``,
+    but a caller who sends a broken token is rejected immediately rather than
+    being silently downgraded to anonymous, which would mask auth bugs.
+
+    If your endpoint *requires* authentication, use ``get_current_user``
+    instead.
+    """
+    if not request.headers.get("Authorization"):
+        return None
+
+    # Header is present — validate strictly; propagate any 401 raised by
+    # get_current_user rather than swallowing it.
+    # _optional_security returns None only when the header is absent, which
+    # we already ruled out above, so the assert is always satisfied.
+    credentials = await _optional_security(request)
+    assert credentials is not None  # header present → always non-None
+    return await get_current_user(credentials=credentials, db=db)

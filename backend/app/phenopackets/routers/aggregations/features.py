@@ -71,9 +71,14 @@ async def aggregate_by_feature(
     # Fallback: Live JSONB query (O(n) scan)
     logger.debug("Falling back to live JSONB query for feature aggregation")
 
-    # First, get total number of phenopackets
+    # First, get total number of published phenopackets (public filter: I3 + I7)
     total_phenopackets_result = await db.execute(
-        text("SELECT COUNT(*) as total FROM phenopackets WHERE deleted_at IS NULL")
+        text(
+            "SELECT COUNT(*) as total FROM phenopackets"
+            " WHERE deleted_at IS NULL"
+            " AND state = 'published'"
+            " AND head_published_revision_id IS NOT NULL"
+        )
     )
     total_phenopackets = total_phenopackets_result.scalar() or 0
 
@@ -91,6 +96,8 @@ async def aggregate_by_feature(
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
     WHERE
         deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     GROUP BY
         feature->'type'->>'id',
         feature->'type'->>'label'

@@ -27,18 +27,24 @@ from app.phenopackets.query_builders import (
 
 
 def _with_actor_eager_loads(stmt: Select) -> Select:
-    """Attach ``selectinload`` options for the three audit-actor FKs.
+    """Attach ``selectinload`` options for audit-actor FKs and draft_owner.
 
     Used on every read path that may eventually render the phenopacket
     through ``build_phenopacket_response``. Eager loading means the
     render layer can read the relationship attribute synchronously
     (without tripping the MissingGreenlet guard in async contexts) and
     also avoids the classic N+1 on list responses.
+
+    ``draft_owner`` is included because ``build_phenopacket_response``
+    accesses ``pp.draft_owner.username`` for the Wave 7 D.1 state-machine
+    fields — omitting it would cause a ``MissingGreenlet`` error in async
+    context whenever a phenopacket has a non-NULL ``draft_owner_id``.
     """
     return stmt.options(
         selectinload(Phenopacket.created_by_user),
         selectinload(Phenopacket.updated_by_user),
         selectinload(Phenopacket.deleted_by_user),
+        selectinload(Phenopacket.draft_owner),
     )
 
 

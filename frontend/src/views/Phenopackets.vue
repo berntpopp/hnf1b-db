@@ -154,6 +154,11 @@
         </v-chip>
       </template>
 
+      <!-- Render state column with StateBadge (curator/admin only, Wave 7/D.1 §9.2) -->
+      <template #item.state="{ item }">
+        <StateBadge :state="item.state" />
+      </template>
+
       <template #no-data>
         <span class="text-body-2 text-medium-emphasis">No phenopackets found.</span>
       </template>
@@ -171,6 +176,7 @@ import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
 import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
+import StateBadge from '@/components/state/StateBadge.vue';
 
 export default {
   name: 'Phenopackets',
@@ -179,6 +185,7 @@ export default {
     AppTableToolbar,
     AppPagination,
     ColumnHeaderFilter,
+    StateBadge,
   },
   setup() {
     // URL state synchronization
@@ -189,7 +196,10 @@ export default {
       filters: { sex: null },
     });
 
-    return { urlState };
+    // Expose authStore so template + computed can access user role reactively.
+    const authStore = useAuthStore();
+
+    return { urlState, authStore };
   },
   data() {
     return {
@@ -212,20 +222,6 @@ export default {
         totalRecords: 0,
       },
 
-      // Table configuration
-      // features_count is now server-side sortable via generated column
-      headers: [
-        { title: 'Subject ID', value: 'subject_id', sortable: true, width: '160px' },
-        { title: 'Sex', value: 'sex', sortable: true, width: '100px' },
-        {
-          title: 'Phenotypes',
-          value: 'features_count',
-          sortable: true,
-          width: '100px',
-          align: 'center',
-        },
-        { title: 'Has Variant', value: 'has_variant', sortable: true, width: '120px' },
-      ],
       options: {
         page: 1,
         itemsPerPage: 10,
@@ -263,10 +259,28 @@ export default {
         sex: this.urlState?.filters?.sex?.value ?? null,
       };
     },
+    // Table headers — state column shown only to curator/admin (Wave 7/D.1 §9.2).
+    headers() {
+      const base = [
+        { title: 'Subject ID', value: 'subject_id', sortable: true, width: '160px' },
+        { title: 'Sex', value: 'sex', sortable: true, width: '100px' },
+        {
+          title: 'Phenotypes',
+          value: 'features_count',
+          sortable: true,
+          width: '100px',
+          align: 'center',
+        },
+        { title: 'Has Variant', value: 'has_variant', sortable: true, width: '120px' },
+      ];
+      const role = this.authStore.user?.role;
+      if (role === 'curator' || role === 'admin') {
+        base.push({ title: 'State', value: 'state', sortable: false, width: '130px' });
+      }
+      return base;
+    },
     canCreatePhenopacket() {
-      const authStore = useAuthStore();
-      const userRole = authStore.user?.role;
-      return userRole === 'curator' || userRole === 'admin';
+      return this.authStore.user?.role === 'curator' || this.authStore.user?.role === 'admin';
     },
     hasActiveFilters() {
       return (this.urlState?.activeFilterCount?.value ?? 0) > 0;
@@ -410,10 +424,15 @@ export default {
       }
     },
 
-    transformPhenopacket(phenopacket) {
-      const subject = phenopacket.subject || {};
-      const features = phenopacket.phenotypicFeatures || [];
-      const interpretations = phenopacket.interpretations || [];
+    transformPhenopacket(row) {
+      // Wave 7 D.1: list response is PhenopacketResponse (wrapper) with
+      // content under `.phenopacket`. Fall back to the row itself for
+      // backwards-compat with any call site still passing raw content.
+      const content =
+        row.phenopacket && typeof row.phenopacket === 'object' ? row.phenopacket : row;
+      const subject = content.subject || {};
+      const features = content.phenotypicFeatures || [];
+      const interpretations = content.interpretations || [];
 
       const presentFeaturesCount = features.filter((f) => !f.excluded).length;
 
@@ -459,7 +478,8 @@ export default {
       }
 
       return {
-        phenopacket_id: phenopacket.id,
+        phenopacket_id: row.phenopacket_id || content.id,
+        state: row.state ?? null,
         subject_id: subject.id || 'N/A',
         sex: subject.sex || 'UNKNOWN_SEX',
         features_count: presentFeaturesCount,

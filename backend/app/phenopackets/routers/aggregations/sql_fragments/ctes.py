@@ -17,10 +17,24 @@ Extracted during Wave 4 from ``aggregations/sql_fragments.py``.
 from __future__ import annotations
 
 # =============================================================================
+# Public visibility filter fragment (I3 + I7 + I1 invariants).
+#
+# Every public endpoint that touches the ``phenopackets`` table must embed
+# this fragment (or the ORM ``public_filter()`` helper) in its WHERE clause
+# so that draft, archived, and soft-deleted records are never exposed.
+# =============================================================================
+
+PUBLIC_FILTER_FRAGMENT = (
+    "p.deleted_at IS NULL"
+    "\n      AND p.state = 'published'"
+    "\n      AND p.head_published_revision_id IS NOT NULL"
+)
+
+# =============================================================================
 # Phenopacket-Variant Linking CTE (Survival Analysis)
 # =============================================================================
 
-PHENOPACKET_VARIANT_LINK_CTE = """
+PHENOPACKET_VARIANT_LINK_CTE = f"""
 phenopacket_variant_link AS (
     SELECT DISTINCT
         p.phenopacket_id,
@@ -39,7 +53,7 @@ phenopacket_variant_link AS (
              gi->'variantInterpretation'->'variationDescriptor'->'expressions'
          ) as expr
     WHERE expr->>'syntax' = 'vcf'
-      AND p.deleted_at IS NULL
+      AND {PUBLIC_FILTER_FRAGMENT}
 )
 """
 
@@ -95,14 +109,14 @@ vcf_variants AS (
                 'g'
             )
         ) as variant_id
-    FROM phenopackets,
-         jsonb_array_elements(phenopacket->'interpretations') as interp,
+    FROM phenopackets p,
+         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
          jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
          jsonb_array_elements(
              gi->'variantInterpretation'->'variationDescriptor'->'expressions'
          ) as expr
     WHERE expr->>'syntax' = 'vcf'
-      AND deleted_at IS NULL
+      AND {PUBLIC_FILTER_FRAGMENT}
       AND {VCF_VARIANT_PATTERNS}
 )"""
 

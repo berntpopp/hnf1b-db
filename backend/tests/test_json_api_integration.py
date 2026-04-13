@@ -16,17 +16,21 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.validator import PhenopacketSanitizer
 
 
 @pytest.fixture(scope="function")
-async def large_phenopacket_set(db_session: AsyncSession):
+async def large_phenopacket_set(db_session: AsyncSession, test_user):
     """Create a larger set of phenopackets for integration testing.
 
     Creates 100 phenopackets to test pagination across multiple pages.
 
     Scope: function - Each test gets a fresh set of data.
+
+    Wave 7 D.1: records are created with state='published' and a
+    head_published_revision_id so they are visible to anonymous / viewer
+    callers via the public_filter.
     """
     from sqlalchemy import delete
 
@@ -81,15 +85,34 @@ async def large_phenopacket_set(db_session: AsyncSession):
 
         sanitized = sanitizer.sanitize_phenopacket(data)
 
+        # Create the phenopacket row first (need its id for the revision FK)
         phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
             phenopacket=sanitized,
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
             created_by_id=None,
+            state="published",
         )
-
         db_session.add(phenopacket)
+        await db_session.flush()  # obtain phenopacket.id
+
+        # Create a matching head-published revision row (required by public_filter)
+        rev = PhenopacketRevision(
+            record_id=phenopacket.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=sanitized,
+            change_reason="initial",
+            actor_id=test_user.id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()  # obtain rev.id
+
+        phenopacket.head_published_revision_id = rev.id
         phenopackets_data.append(phenopacket)
 
     await db_session.commit()

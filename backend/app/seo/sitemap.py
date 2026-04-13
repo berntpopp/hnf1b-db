@@ -131,12 +131,15 @@ async def sitemap_variants(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for variant pages
     """
-    # Get all unique variants from phenopackets
-    # Query the JSONB to extract variant information
-    query = select(
-        Phenopacket.phenopacket,
-        Phenopacket.updated_at,
-    ).where(Phenopacket.deleted_at.is_(None))
+    # Get all unique variants from published phenopackets only (public filter I3+I7)
+    from app.phenopackets.repositories.visibility import public_filter
+
+    query = public_filter(
+        select(
+            Phenopacket.phenopacket,
+            Phenopacket.updated_at,
+        )
+    )
 
     result = await db.execute(query)
     records = result.all()
@@ -195,10 +198,14 @@ async def sitemap_phenopackets(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for phenopacket pages
     """
-    query = select(
-        Phenopacket.phenopacket_id,
-        Phenopacket.updated_at,
-    ).where(Phenopacket.deleted_at.is_(None))
+    from app.phenopackets.repositories.visibility import public_filter
+
+    query = public_filter(
+        select(
+            Phenopacket.phenopacket_id,
+            Phenopacket.updated_at,
+        )
+    )
 
     result = await db.execute(query)
     records = result.all()
@@ -230,10 +237,14 @@ async def sitemap_publications(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for publication pages
     """
-    # Extract unique PMIDs from phenopackets
-    query = select(
-        Phenopacket.phenopacket,
-    ).where(Phenopacket.deleted_at.is_(None))
+    # Extract unique PMIDs from published phenopackets only (public filter I3+I7)
+    from app.phenopackets.repositories.visibility import public_filter
+
+    query = public_filter(
+        select(
+            Phenopacket.phenopacket,
+        )
+    )
 
     result = await db.execute(query)
     records = result.all()

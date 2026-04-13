@@ -113,6 +113,17 @@ async def create_audit_entry(
     )
 
 
+def compute_json_patch(
+    old: Dict[str, Any], new: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Compute RFC 6902 JSON Patch between two dicts.
+
+    Thin wrapper used by ``PhenopacketStateService`` to compute ``change_patch``
+    for revision rows. Delegates to :func:`generate_json_patch`.
+    """
+    return generate_json_patch(old, new)
+
+
 def generate_json_patch(
     old: Dict[str, Any], new: Dict[str, Any]
 ) -> List[Dict[str, Any]]:

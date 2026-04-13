@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Computed,
     DateTime,
     ForeignKey,
@@ -147,6 +148,33 @@ class Phenopacket(Base):
         "User", foreign_keys=[deleted_by_id], viewonly=True
     )
 
+    # Wave 7 D.1: state machine columns
+    state: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="draft",
+        server_default="draft",
+        index=True,
+    )
+    editing_revision_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("phenopacket_revisions.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+    )
+    head_published_revision_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("phenopacket_revisions.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+    )
+    draft_owner_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    draft_owner: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[draft_owner_id], viewonly=True
+    )
+
 
 class Family(Base):
     """Family relationships model."""
@@ -246,6 +274,47 @@ class PhenopacketAudit(Base):
     changed_by_user: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[changed_by_id], viewonly=True
     )
+
+
+class PhenopacketRevision(Base):
+    """Immutable snapshot of a phenopacket at a state transition.
+
+    Each row represents one revision of a phenopacket, created when the
+    record transitions between workflow states or when a draft is saved.
+
+    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.2.
+    """
+
+    __tablename__ = "phenopacket_revisions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("phenopackets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    content_jsonb: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    change_patch: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB)
+    change_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    from_state: Mapped[Optional[str]] = mapped_column(Text)
+    to_state: Mapped[str] = mapped_column(Text, nullable=False)
+    is_head_published: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    actor: Mapped["User"] = relationship("User", foreign_keys=[actor_id], viewonly=True)
 
 
 # Pydantic Schemas for API
@@ -496,6 +565,14 @@ class PhenopacketResponse(BaseModel):
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
 
+    # Wave 7 D.1: state machine fields
+    # Optional so non-curator callers receive state=None (spec §7.2).
+    state: Optional[str] = "draft"
+    head_published_revision_id: Optional[int] = None
+    editing_revision_id: Optional[int] = None
+    draft_owner_id: Optional[int] = None
+    draft_owner_username: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -520,7 +597,18 @@ class PhenopacketSearchQuery(BaseModel):
 
 
 class PhenopacketAuditResponse(BaseModel):
-    """Response model for phenopacket audit trail entries."""
+    """Response model for phenopacket audit trail entries.
+
+    Unified view over two underlying sources:
+    - ``source='audit'``    — rows from ``phenopacket_audit`` (CREATE + legacy
+      pre-Wave-7 UPDATE/DELETE entries).
+    - ``source='revision'`` — rows from ``phenopacket_revisions`` (Wave 7 D.1
+      state-machine transitions and inplace-save drafts).
+
+    Both sources share the common fields; revision-only fields (``state_transition``)
+    are ``None`` for audit-source entries and vice versa (``old_value``,
+    ``new_value``, ``change_summary``).
+    """
 
     id: str
     phenopacket_id: str
@@ -532,6 +620,9 @@ class PhenopacketAuditResponse(BaseModel):
     change_patch: Optional[Any] = None  # JSONB can store arrays or objects
     old_value: Optional[Dict[str, Any]] = None
     new_value: Optional[Dict[str, Any]] = None
+    # Wave 7 D.1: merged audit view
+    source: str = "audit"  # 'audit' | 'revision'
+    state_transition: Optional[Dict[str, Optional[str]]] = None  # {from, to}
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -543,3 +634,50 @@ class AggregationResult(BaseModel):
     count: int
     percentage: Optional[float] = None
     details: Optional[Dict[str, Any]] = None
+
+
+# Wave 7 D.1: state-machine Pydantic schemas (§7.3)
+
+
+class TransitionRequest(BaseModel):
+    """Request body for POST /phenopackets/{id}/transitions.
+
+    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
+    """
+
+    to_state: Literal[
+        "draft",
+        "in_review",
+        "changes_requested",
+        "approved",
+        "published",
+        "archived",
+    ]
+    reason: str = Field(..., min_length=1, max_length=500)
+    revision: int
+
+
+class RevisionResponse(BaseModel):
+    """Response model for a single phenopacket revision row.
+
+    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    record_id: str  # UUID serialized as string
+    # populated via join with phenopackets table
+    phenopacket_id: str
+    revision_number: int
+    state: str
+    from_state: Optional[str] = None
+    to_state: str
+    is_head_published: bool
+    change_reason: str
+    actor_id: int
+    actor_username: Optional[str] = None
+    change_patch: Optional[List[Dict[str, Any]]] = None
+    created_at: datetime
+    # populated only on /{id}/revisions/{rev_id}
+    content_jsonb: Optional[Dict[str, Any]] = None

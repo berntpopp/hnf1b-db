@@ -232,6 +232,17 @@ jobs:
         cd backend
         uv run alembic upgrade head
 
+    - name: Seed admin user (required for E2E auth)
+      env:
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
+        ADMIN_USERNAME: admin
+        ADMIN_EMAIL: admin@hnf1b-db.local
+        ADMIN_PASSWORD: ci_test_admin_password_2026
+      run: |
+        cd backend
+        uv run python scripts/create_admin_user.py
+
     - name: Start backend
       env:
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
@@ -266,13 +277,16 @@ jobs:
       env:
         VITE_API_URL: http://localhost:8000/api/v2
         CI: "true"
+        # Credentials for state-machine E2E specs (Wave 7/D.1)
+        E2E_ADMIN_USERNAME: admin
+        E2E_ADMIN_PASSWORD: ci_test_admin_password_2026
       run: |
         cd frontend
         npx playwright test
 
     - name: Upload backend log on failure
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: backend-log
         path: /tmp/backend.log
@@ -280,7 +294,7 @@ jobs:
 
     - name: Upload Playwright report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: playwright-report
         path: frontend/playwright-report/

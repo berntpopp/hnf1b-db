@@ -19,13 +19,18 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth import require_curator
 from app.database import get_db
-from app.phenopackets.models import PhenopacketAuditResponse
+from app.phenopackets.models import (
+    Phenopacket,
+    PhenopacketAuditResponse,
+    PhenopacketRevision,
+)
 from app.phenopackets.repositories import PhenopacketRepository
 from app.phenopackets.routers.crud_helpers import validate_pmid
 
@@ -40,12 +45,18 @@ async def get_phenopacket_audit_history(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_curator),
 ):
-    """Get the audit history for a phenopacket.
+    """Get the merged audit history for a phenopacket.
 
-    Returns all audit-trail entries for the specified phenopacket,
-    ordered by timestamp (most recent first). Works even for
-    soft-deleted phenopackets — we still want to render their old
-    edits.
+    Returns entries from two sources, merged and sorted by timestamp
+    (most recent first):
+
+    - ``source='audit'`` — rows from ``phenopacket_audit`` (CREATE events
+      and any legacy pre-Wave-7 UPDATE/DELETE entries).
+    - ``source='revision'`` — rows from ``phenopacket_revisions`` (Wave 7
+      D.1 state-machine transitions and draft inplace-saves).
+
+    Works even for soft-deleted phenopackets so the full history is
+    always accessible.
     """
     repo = PhenopacketRepository(db)
 
@@ -54,9 +65,11 @@ async def get_phenopacket_audit_history(
     if phenopacket is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
+    # ------------------------------------------------------------------
+    # Source 1: phenopacket_audit rows (pre-D.1 + CREATE events)
+    # ------------------------------------------------------------------
     audit_entries = await repo.list_audit_history(phenopacket_id)
-
-    return [
+    result: list[PhenopacketAuditResponse] = [
         PhenopacketAuditResponse(
             id=str(audit.id),
             phenopacket_id=audit.phenopacket_id,
@@ -72,9 +85,51 @@ async def get_phenopacket_audit_history(
             change_patch=audit.change_patch,
             old_value=audit.old_value,
             new_value=audit.new_value,
+            source="audit",
+            state_transition=None,
         )
         for audit in audit_entries
     ]
+
+    # ------------------------------------------------------------------
+    # Source 2: phenopacket_revisions rows (Wave 7 D.1 state machine)
+    # ------------------------------------------------------------------
+    rev_stmt = (
+        select(PhenopacketRevision)
+        .join(
+            Phenopacket,
+            PhenopacketRevision.record_id == Phenopacket.id,
+        )
+        .where(Phenopacket.phenopacket_id == phenopacket_id)
+        .options(selectinload(PhenopacketRevision.actor))
+        .order_by(PhenopacketRevision.created_at.desc())
+    )
+    rev_rows = list((await db.execute(rev_stmt)).scalars().all())
+
+    for rev in rev_rows:
+        actor_username = rev.actor.username if rev.actor is not None else None
+        result.append(
+            PhenopacketAuditResponse(
+                id=str(rev.id),
+                phenopacket_id=phenopacket_id,
+                action=rev.to_state,
+                changed_by=actor_username,
+                changed_at=rev.created_at,
+                change_reason=rev.change_reason,
+                change_summary=None,
+                change_patch=rev.change_patch,
+                old_value=None,
+                new_value=None,
+                source="revision",
+                state_transition={"from": rev.from_state, "to": rev.to_state},
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # Merge: sort combined list newest-first
+    # ------------------------------------------------------------------
+    result.sort(key=lambda e: e.changed_at, reverse=True)
+    return result
 
 
 @router.get("/by-variant/{variant_id}")
@@ -90,12 +145,15 @@ async def get_phenopackets_by_variant(
     ``PhenopacketResponse`` Pydantic model here because several
     callers only need the embedded phenopacket JSON.
     """
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = text(
         """
     SELECT id, phenopacket_id, version, phenopacket,
            created_at, updated_at, schema_version
     FROM phenopackets p
     WHERE p.deleted_at IS NULL
+      AND p.state = 'published'
+      AND p.head_published_revision_id IS NOT NULL
       AND EXISTS (
         SELECT 1
         FROM jsonb_array_elements(p.phenopacket->'interpretations') as interp,
@@ -171,6 +229,7 @@ async def get_by_publication(
     # SECURITY: Cap limit to prevent excessive data exposure
     limit = min(limit, 500)
 
+    # Public endpoint — apply public visibility filter (I3 + I7)
     query = """
         SELECT
             phenopacket_id,
@@ -178,6 +237,8 @@ async def get_by_publication(
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
         AND deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     """
 
     pmid_filter = json.dumps([{"id": pmid}])
@@ -202,6 +263,8 @@ async def get_by_publication(
         FROM phenopackets
         WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
         AND deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     """
 
     if sex:

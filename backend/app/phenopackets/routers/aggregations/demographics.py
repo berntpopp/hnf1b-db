@@ -62,6 +62,8 @@ async def aggregate_sex_distribution(
         phenopackets
     WHERE
         deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     GROUP BY
         subject_sex
     ORDER BY
@@ -98,7 +100,10 @@ async def aggregate_age_of_onset(
         phenopackets,
         jsonb_array_elements(phenopacket->'diseases') as disease
     WHERE
-        disease->'onset'->'ontologyClass'->>'label' IS NOT NULL
+        deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
+        AND disease->'onset'->'ontologyClass'->>'label' IS NOT NULL
     GROUP BY
         disease->'onset'->'ontologyClass'->>'label',
         disease->'onset'->'ontologyClass'->>'id'

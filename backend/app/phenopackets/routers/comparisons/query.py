@@ -48,6 +48,8 @@ def build_phenotype_distribution_query(
              jsonb_array_elements(p.phenopacket->'interpretations') AS interp,
              jsonb_array_elements(interp.value#>'{diagnosis,genomicInterpretations}') AS gen_interp
         WHERE p.deleted_at IS NULL
+          AND p.state = 'published'
+          AND p.head_published_revision_id IS NOT NULL
           AND gen_interp.value->>'interpretationStatus'
               IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
     ),

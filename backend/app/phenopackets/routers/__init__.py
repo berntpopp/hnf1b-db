@@ -20,6 +20,7 @@ from .crud import router as crud_router
 from .crud_related import router as crud_related_router
 from .crud_timeline import router as crud_timeline_router
 from .search import router as search_router
+from .transitions import router as transitions_router
 
 # Combine all routers under /api/v2/phenopackets prefix
 router = APIRouter(prefix="/phenopackets")
@@ -29,9 +30,13 @@ router = APIRouter(prefix="/phenopackets")
 # crud_related and crud_timeline also need to be registered before
 # crud_router's /{phenopacket_id} so their more specific /{id}/audit
 # and /{id}/timeline paths are reached first.
+# transitions_router must also precede crud_router so that
+# /{phenopacket_id}/transitions and /{phenopacket_id}/revisions are
+# matched before the catch-all /{phenopacket_id} GET.
 router.include_router(search_router)
 router.include_router(crud_related_router)
 router.include_router(crud_timeline_router)
+router.include_router(transitions_router)
 router.include_router(crud_router)
 router.include_router(aggregations_router)
 router.include_router(comparisons_router)

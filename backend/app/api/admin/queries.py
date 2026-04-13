@@ -1,3 +1,4 @@
+# noqa: visibility: admin endpoint, intentionally exposes all states (curator_filter not appropriate; admins see all data including drafts and archived)
 """Raw SQL helper queries used by the admin endpoints.
 
 Extracted from the old flat ``app/api/admin_endpoints.py`` during the

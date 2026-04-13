@@ -20,6 +20,7 @@ from .sql_fragments import (
     VALID_STRUCTURAL_TYPES,
     get_structural_type_filter,
 )
+from .sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 
 
 @dataclass
@@ -372,7 +373,7 @@ class VariantQueryBuilder:
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
             WHERE
-                p.deleted_at IS NULL
+                {PUBLIC_FILTER_FRAGMENT}
                 AND vi_lateral.vi IS NOT NULL
                 AND vd_lateral.vd IS NOT NULL
         ),
@@ -439,7 +440,7 @@ class VariantQueryBuilder:
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
             WHERE
-                p.deleted_at IS NULL
+                {PUBLIC_FILTER_FRAGMENT}
                 AND vi_lateral.vi IS NOT NULL
                 AND vd_lateral.vd IS NOT NULL
                 {where_sql}

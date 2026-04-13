@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.phenopackets.survival_analysis import parse_iso8601_age
 
 from ...sql_fragments import CURRENT_AGE_PATH, INTERP_STATUS_PATH
+from ...sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 from .base import SurvivalHandler
 
 
@@ -84,7 +85,7 @@ class DiseaseSubtypeHandler(SurvivalHandler):
                 {CURRENT_AGE_PATH} as current_age
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
@@ -116,7 +117,7 @@ class DiseaseSubtypeHandler(SurvivalHandler):
                 {CURRENT_AGE_PATH} as current_age
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
@@ -154,7 +155,7 @@ class DiseaseSubtypeHandler(SurvivalHandler):
                 {CURRENT_AGE_PATH} as current_age
             FROM phenopackets p,
                 jsonb_array_elements(p.phenopacket->'interpretations') as interp
-            WHERE p.deleted_at IS NULL
+            WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
         ),
@@ -170,6 +171,7 @@ class DiseaseSubtypeHandler(SurvivalHandler):
                     jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
+                    AND {PUBLIC_FILTER_FRAGMENT}
             )
         )
         SELECT disease_group, current_age

@@ -1,4 +1,5 @@
 """``POST /api/v2/publications/sync`` endpoint + background task."""
+# noqa: visibility: admin sync needs to discover un-synced PMIDs across all states (require_admin guard enforced at route level)
 # ruff: noqa: E501 - SQL queries are more readable when not line-wrapped
 
 from __future__ import annotations

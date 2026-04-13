@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import text
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.publications.endpoints.list_route import _build_where_clauses
 
 # ---------------------------------------------------------------------------
@@ -136,6 +136,7 @@ async def _seed_publication_row(
     doi: str | None = None,
     authors: list[dict] | None = None,
     journal: str = "J. Test",
+    actor_id: int | None = None,
 ) -> None:
     """Insert one ``publication_metadata`` row via raw SQL.
 
@@ -178,34 +179,55 @@ async def _seed_publication_row(
     # Insert a phenopacket that cites the PMID so the list query's
     # pub_counts CTE returns a row for it.
     phenopacket_id = f"PUB-TEST-{pmid.replace('PMID:', '')}"
+    pp_json = {
+        "id": phenopacket_id,
+        "subject": {"id": f"SUB-{phenopacket_id}", "sex": "UNKNOWN_SEX"},
+        "phenotypicFeatures": [],
+        "metaData": {
+            "created": "2026-04-11T00:00:00Z",
+            "createdBy": "pub-test",
+            "phenopacketSchemaVersion": "2.0",
+            "resources": [
+                {
+                    "id": "hp",
+                    "name": "Human Phenotype Ontology",
+                    "namespacePrefix": "HP",
+                    "url": "http://purl.obolibrary.org/obo/hp.owl",
+                    "version": "2024-01-01",
+                    "iriPrefix": "http://purl.obolibrary.org/obo/HP_",
+                }
+            ],
+            "externalReferences": [{"id": pmid, "description": title}],
+        },
+    }
     row = Phenopacket(
         phenopacket_id=phenopacket_id,
-        phenopacket={
-            "id": phenopacket_id,
-            "subject": {"id": f"SUB-{phenopacket_id}", "sex": "UNKNOWN_SEX"},
-            "phenotypicFeatures": [],
-            "metaData": {
-                "created": "2026-04-11T00:00:00Z",
-                "createdBy": "pub-test",
-                "phenopacketSchemaVersion": "2.0",
-                "resources": [
-                    {
-                        "id": "hp",
-                        "name": "Human Phenotype Ontology",
-                        "namespacePrefix": "HP",
-                        "url": "http://purl.obolibrary.org/obo/hp.owl",
-                        "version": "2024-01-01",
-                        "iriPrefix": "http://purl.obolibrary.org/obo/HP_",
-                    }
-                ],
-                "externalReferences": [{"id": pmid, "description": title}],
-            },
-        },
+        phenopacket=pp_json,
         subject_id=f"SUB-{phenopacket_id}",
         subject_sex="UNKNOWN_SEX",
         created_by_id=None,
+        state="published",
+        revision=1,
     )
     db_session.add(row)
+
+    # Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+    if actor_id is not None:
+        await db_session.flush()
+        rev = PhenopacketRevision(
+            record_id=row.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=pp_json,
+            change_reason="init",
+            actor_id=actor_id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()
+        row.head_published_revision_id = rev.id
 
     await db_session.commit()
 
@@ -222,7 +244,9 @@ class TestPublicationsListEndpoint:
         assert "data" in body
         assert body["data"] == []
 
-    async def test_list_returns_seeded_publication(self, async_client, db_session):
+    async def test_list_returns_seeded_publication(
+        self, async_client, db_session, admin_user
+    ):
         """A seeded publication shows up in the default list."""
         await _seed_publication_row(
             db_session,
@@ -230,19 +254,30 @@ class TestPublicationsListEndpoint:
             title="HNF1B cystic disease",
             year=2020,
             doi="10.1000/abc",
+            actor_id=admin_user.id,
         )
         response = await async_client.get("/api/v2/publications/?page[size]=5")
         assert response.status_code == 200
         pmids = [item["pmid"] for item in response.json()["data"]]
         assert "11111" in pmids
 
-    async def test_year_filter_narrows_result_set(self, async_client, db_session):
+    async def test_year_filter_narrows_result_set(
+        self, async_client, db_session, admin_user
+    ):
         """``filter[year]=2021`` excludes publications from other years."""
         await _seed_publication_row(
-            db_session, pmid="PMID:22221", title="2020 paper", year=2020
+            db_session,
+            pmid="PMID:22221",
+            title="2020 paper",
+            year=2020,
+            actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:22222", title="2021 paper", year=2021
+            db_session,
+            pmid="PMID:22222",
+            title="2021 paper",
+            year=2021,
+            actor_id=admin_user.id,
         )
 
         response = await async_client.get(
@@ -253,13 +288,24 @@ class TestPublicationsListEndpoint:
         years = {item["year"] for item in data}
         assert years == {2021}
 
-    async def test_has_doi_filter_excludes_missing_doi(self, async_client, db_session):
+    async def test_has_doi_filter_excludes_missing_doi(
+        self, async_client, db_session, admin_user
+    ):
         """``filter[has_doi]=true`` excludes rows with NULL/empty DOI."""
         await _seed_publication_row(
-            db_session, pmid="PMID:33331", title="with doi", year=2022, doi="10.1/x"
+            db_session,
+            pmid="PMID:33331",
+            title="with doi",
+            year=2022,
+            doi="10.1/x",
+            actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:33332", title="no doi", year=2022
+            db_session,
+            pmid="PMID:33332",
+            title="no doi",
+            year=2022,
+            actor_id=admin_user.id,
         )
 
         response = await async_client.get(
@@ -270,13 +316,21 @@ class TestPublicationsListEndpoint:
         assert "33331" in pmids
         assert "33332" not in pmids
 
-    async def test_search_query_filter(self, async_client, db_session):
+    async def test_search_query_filter(self, async_client, db_session, admin_user):
         """``q=kidney`` matches title substring via ILIKE."""
         await _seed_publication_row(
-            db_session, pmid="PMID:44441", title="Kidney disease review", year=2022
+            db_session,
+            pmid="PMID:44441",
+            title="Kidney disease review",
+            year=2022,
+            actor_id=admin_user.id,
         )
         await _seed_publication_row(
-            db_session, pmid="PMID:44442", title="Liver disease review", year=2022
+            db_session,
+            pmid="PMID:44442",
+            title="Liver disease review",
+            year=2022,
+            actor_id=admin_user.id,
         )
 
         response = await async_client.get("/api/v2/publications/?q=kidney")
@@ -290,7 +344,9 @@ class TestPublicationsListEndpoint:
         response = await async_client.get("/api/v2/publications/?sort=not_a_real_field")
         assert response.status_code == 400
 
-    async def test_authors_formatting_many_names(self, async_client, db_session):
+    async def test_authors_formatting_many_names(
+        self, async_client, db_session, admin_user
+    ):
         """Four or more authors → ``First A et al.`` formatting."""
         await _seed_publication_row(
             db_session,
@@ -304,13 +360,16 @@ class TestPublicationsListEndpoint:
                 {"name": "Delta D"},
                 {"name": "Epsilon E"},
             ],
+            actor_id=admin_user.id,
         )
         response = await async_client.get("/api/v2/publications/?q=authors")
         assert response.status_code == 200
         data = response.json()["data"]
         assert any("et al." in item["authors"] for item in data)
 
-    async def test_title_fallback_when_metadata_missing(self, async_client, db_session):
+    async def test_title_fallback_when_metadata_missing(
+        self, async_client, db_session, admin_user
+    ):
         """Phenopackets referencing unknown PMIDs still appear with fallback text.
 
         The list query LEFT JOINs ``publication_metadata`` onto the
@@ -320,34 +379,53 @@ class TestPublicationsListEndpoint:
         This test wires up that scenario by inserting a phenopacket
         that references a PMID **without** seeding its metadata row.
         """
+        pp_json = {
+            "id": "PUB-FALLBACK-001",
+            "subject": {"id": "S1", "sex": "UNKNOWN_SEX"},
+            "phenotypicFeatures": [],
+            "metaData": {
+                "created": "2026-04-11T00:00:00Z",
+                "createdBy": "test",
+                "phenopacketSchemaVersion": "2.0",
+                "resources": [
+                    {
+                        "id": "hp",
+                        "name": "HPO",
+                        "namespacePrefix": "HP",
+                        "url": "http://x",
+                        "version": "1",
+                        "iriPrefix": "http://x",
+                    }
+                ],
+                "externalReferences": [{"id": "PMID:66661"}],
+            },
+        }
         row = Phenopacket(
             phenopacket_id="PUB-FALLBACK-001",
-            phenopacket={
-                "id": "PUB-FALLBACK-001",
-                "subject": {"id": "S1", "sex": "UNKNOWN_SEX"},
-                "phenotypicFeatures": [],
-                "metaData": {
-                    "created": "2026-04-11T00:00:00Z",
-                    "createdBy": "test",
-                    "phenopacketSchemaVersion": "2.0",
-                    "resources": [
-                        {
-                            "id": "hp",
-                            "name": "HPO",
-                            "namespacePrefix": "HP",
-                            "url": "http://x",
-                            "version": "1",
-                            "iriPrefix": "http://x",
-                        }
-                    ],
-                    "externalReferences": [{"id": "PMID:66661"}],
-                },
-            },
+            phenopacket=pp_json,
             subject_id="S1",
             subject_sex="UNKNOWN_SEX",
             created_by_id=None,
+            state="published",
+            revision=1,
         )
         db_session.add(row)
+        # Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+        await db_session.flush()
+        rev = PhenopacketRevision(
+            record_id=row.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=pp_json,
+            change_reason="init",
+            actor_id=admin_user.id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()
+        row.head_published_revision_id = rev.id
         await db_session.commit()
 
         response = await async_client.get("/api/v2/publications/?page[size]=50")

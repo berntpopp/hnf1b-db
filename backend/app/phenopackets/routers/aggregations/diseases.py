@@ -66,6 +66,8 @@ async def aggregate_by_disease(
         jsonb_array_elements(phenopacket->'diseases') as disease
     WHERE
         deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
     GROUP BY
         disease->'term'->>'id',
         disease->'term'->>'label'
@@ -104,7 +106,10 @@ async def aggregate_kidney_stages(
         jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
         jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
     WHERE
-        feature->'type'->>'id' = :ckd_hpo
+        deleted_at IS NULL
+        AND state = 'published'
+        AND head_published_revision_id IS NOT NULL
+        AND feature->'type'->>'id' = :ckd_hpo
         AND modifier->>'label' LIKE '%Stage%'
     GROUP BY
         modifier->>'label'

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.routers.crud_timeline import (
     _build_evidence_list,
     _categorise_feature,
@@ -262,11 +262,42 @@ def _make_phenopacket_row(
         subject_id=subject_id,
         subject_sex="MALE",
         created_by_id=None,
+        state="published",
+        revision=1,
     )
     if deleted:
         row.deleted_at = datetime.now(timezone.utc)
         row.deleted_by = "router-test"
     return row
+
+
+async def _add_head_revision(db_session, row: Phenopacket, actor_id: int) -> None:
+    """Flush ``row``, create a head-published revision, and link it back.
+
+    Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+    Call this after adding a non-deleted published row to the session, before
+    committing, when the row needs to be visible to anonymous endpoints.
+
+    Args:
+        db_session: Active async DB session.
+        row: The Phenopacket ORM instance (must already be added to the session).
+        actor_id: ID of the user performing the action (FK required by schema).
+    """
+    await db_session.flush()
+    rev = PhenopacketRevision(
+        record_id=row.id,
+        revision_number=1,
+        state="published",
+        content_jsonb=row.phenopacket,
+        change_reason="init",
+        actor_id=actor_id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+    row.head_published_revision_id = rev.id
 
 
 @pytest.mark.asyncio
@@ -343,7 +374,9 @@ class TestCrudRelatedEndpoints:
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_by_variant_filters_soft_deleted(self, async_client, db_session):
+    async def test_by_variant_filters_soft_deleted(
+        self, async_client, db_session, admin_user
+    ):
         """Variant lookup must NOT return soft-deleted rows.
 
         Regression test for the missing ``deleted_at IS NULL`` filter
@@ -362,6 +395,9 @@ class TestCrudRelatedEndpoints:
             deleted=True,
         )
         db_session.add_all([live, dead])
+        # Wave 7 D.1: public_filter requires head_published_revision_id for live row.
+        # dead row is excluded by deleted_at IS NULL — no revision needed.
+        await _add_head_revision(db_session, live, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get(
@@ -379,7 +415,9 @@ class TestCrudRelatedEndpoints:
         )
         assert response.status_code == 404
 
-    async def test_by_publication_returns_envelope(self, async_client, db_session):
+    async def test_by_publication_returns_envelope(
+        self, async_client, db_session, admin_user
+    ):
         """Matched PMID → envelope with data/total/skip/limit."""
         row = _make_phenopacket_row(
             phenopacket_id="BP-001",
@@ -387,6 +425,8 @@ class TestCrudRelatedEndpoints:
             include_pmid=True,
         )
         db_session.add(row)
+        # Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get(
@@ -405,3 +445,106 @@ class TestCrudRelatedEndpoints:
             "/api/v2/phenopackets/by-publication/not-a-pmid"
         )
         assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+class TestMergedAuditEndpoint:
+    """``GET /phenopackets/{id}/audit`` — merged audit+revision view.
+
+    Wave 7 D.1 follow-up: the endpoint now merges rows from both
+    ``phenopacket_audit`` (source='audit') and ``phenopacket_revisions``
+    (source='revision') into a single timeline sorted newest-first.
+    """
+
+    async def test_audit_endpoint_returns_both_sources(
+        self, async_client, db_session, admin_user, admin_headers
+    ):
+        """POST creates an audit row; subsequent PUT creates a revision row.
+        Both must appear under /audit with distinct source fields.
+        """
+        from app.phenopackets.models import PhenopacketAudit, PhenopacketRevision
+
+        # 1. Insert a phenopacket directly so we control the starting state.
+        pp = Phenopacket(
+            phenopacket_id="audit-merge-test-001",
+            phenopacket=_make_phenopacket_row(
+                "audit-merge-test-001", "SUB-MERGE-001"
+            ).phenopacket,
+            subject_id="SUB-MERGE-001",
+            subject_sex="UNKNOWN_SEX",
+            state="draft",
+            revision=1,
+            created_by_id=admin_user.id,
+        )
+        db_session.add(pp)
+        await db_session.flush()
+
+        # 2. Write a synthetic audit row (simulating a CREATE event).
+        audit_row = PhenopacketAudit(
+            phenopacket_id="audit-merge-test-001",
+            action="CREATE",
+            changed_by_id=admin_user.id,
+            change_reason="initial create",
+            new_value=pp.phenopacket,
+        )
+        db_session.add(audit_row)
+        await db_session.flush()
+
+        # 3. Write a synthetic revision row (simulating a Wave-7 transition).
+        rev = PhenopacketRevision(
+            record_id=pp.id,
+            revision_number=1,
+            state="in_review",
+            content_jsonb=pp.phenopacket,
+            change_reason="submitted for review",
+            actor_id=admin_user.id,
+            from_state="draft",
+            to_state="in_review",
+            is_head_published=False,
+        )
+        db_session.add(rev)
+        await db_session.commit()
+
+        # 4. Call the merged audit endpoint.
+        response = await async_client.get(
+            "/api/v2/phenopackets/audit-merge-test-001/audit",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        entries = response.json()
+
+        # Both sources must be present.
+        sources = {e["source"] for e in entries}
+        assert "audit" in sources, "audit-source entries missing from merged response"
+        assert "revision" in sources, (
+            "revision-source entries missing from merged response"
+        )
+
+        # Revision entry must carry state_transition metadata.
+        rev_entries = [e for e in entries if e["source"] == "revision"]
+        assert len(rev_entries) == 1
+        assert rev_entries[0]["state_transition"] == {
+            "from": "draft",
+            "to": "in_review",
+        }
+        assert rev_entries[0]["action"] == "in_review"
+
+        # Audit entry must not have state_transition.
+        audit_entries = [e for e in entries if e["source"] == "audit"]
+        assert len(audit_entries) == 1
+        assert audit_entries[0]["state_transition"] is None
+        assert audit_entries[0]["action"] == "CREATE"
+
+        # List must be sorted newest-first (monotonically non-increasing timestamps).
+        timestamps = [e["changed_at"] for e in entries]
+        assert timestamps == sorted(timestamps, reverse=True)
+
+    async def test_audit_endpoint_404_for_missing_phenopacket(
+        self, async_client, admin_headers
+    ):
+        """Unknown phenopacket_id → 404."""
+        response = await async_client.get(
+            "/api/v2/phenopackets/does-not-exist/audit",
+            headers=admin_headers,
+        )
+        assert response.status_code == 404

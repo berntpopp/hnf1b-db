@@ -31,6 +31,7 @@ from .ctes import (
     INTERNAL_CNV_PATTERN,
     INTERNAL_CNV_VARIANTS_CTE,
     PHENOPACKET_VARIANT_LINK_CTE,
+    PUBLIC_FILTER_FRAGMENT,
     UNIQUE_VARIANTS_CTE,
     VCF_VARIANT_PATTERNS,
     VCF_VARIANTS_CTE,
@@ -75,6 +76,7 @@ __all__ = [
     "get_structural_type_filter",
     "get_variant_type_classification_sql",
     # CTEs
+    "PUBLIC_FILTER_FRAGMENT",
     "PHENOPACKET_VARIANT_LINK_CTE",
     "get_phenopacket_variant_link_cte",
     "VCF_VARIANT_PATTERNS",

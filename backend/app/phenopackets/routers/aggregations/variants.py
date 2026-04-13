@@ -16,6 +16,7 @@ from .common import (
     text,
 )
 from .sql_fragments import VARIANT_TYPE_CASE
+from .sql_fragments.ctes import PUBLIC_FILTER_FRAGMENT
 
 router = APIRouter()
 
@@ -44,19 +45,20 @@ async def aggregate_variant_pathogenicity(
     """
     if count_mode == "unique":
         # Count unique variants by variant ID
-        query = """
+        query = f"""
         SELECT
             gi->>'interpretationStatus' as classification,
             COUNT(DISTINCT vd->>'id') as count
         FROM
-            phenopackets,
-            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
             LATERAL (
                 SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
             ) sub
         WHERE
             gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+            AND {PUBLIC_FILTER_FRAGMENT}
         GROUP BY
             gi->>'interpretationStatus'
         ORDER BY
@@ -64,14 +66,16 @@ async def aggregate_variant_pathogenicity(
         """
     else:
         # Count all variant instances (original behavior)
-        query = """
+        query = f"""
         SELECT
             gi->>'interpretationStatus' as classification,
             COUNT(*) as count
         FROM
-            phenopackets,
-            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
+        WHERE
+            {PUBLIC_FILTER_FRAGMENT}
         GROUP BY
             gi->>'interpretationStatus'
         ORDER BY
@@ -124,8 +128,8 @@ async def aggregate_variant_types(
                 vd->>'id' as variant_id,
                 {VARIANT_TYPE_CASE} as variant_type
             FROM
-                phenopackets,
-                jsonb_array_elements(phenopacket->'interpretations') as interp,
+                phenopackets p,
+                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
                 jsonb_array_elements(
                     interp->'diagnosis'->'genomicInterpretations'
                 ) as gi,
@@ -134,6 +138,7 @@ async def aggregate_variant_types(
             ) sub
             WHERE
                 gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+                AND {PUBLIC_FILTER_FRAGMENT}
         )
         SELECT
             variant_type,
@@ -149,14 +154,15 @@ async def aggregate_variant_types(
             {VARIANT_TYPE_CASE} as variant_type,
             COUNT(*) as count
         FROM
-            phenopackets,
-            jsonb_array_elements(phenopacket->'interpretations') as interp,
+            phenopackets p,
+            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
             LATERAL (
                 SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
             ) sub
         WHERE
             gi->'variantInterpretation'->'variationDescriptor' IS NOT NULL
+            AND {PUBLIC_FILTER_FRAGMENT}
         GROUP BY
             variant_type
         ORDER BY

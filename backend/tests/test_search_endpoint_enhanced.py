@@ -5,12 +5,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.validator import PhenopacketSanitizer
 
 
 @pytest.fixture(scope="function")
-async def sample_phenopackets_for_search(db_session: AsyncSession):
+async def sample_phenopackets_for_search(db_session: AsyncSession, admin_user):
     """Create sample phenopackets for enhanced search testing."""
     from sqlalchemy import delete
 
@@ -69,6 +69,8 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         subject_sex=pp1_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
         created_by_id=None,
         created_at=datetime.now() - timedelta(days=10),
+        state="published",
+        revision=1,
     )
     db_session.add(pp1)
     phenopackets_data.append(pp1)
@@ -111,6 +113,8 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         subject_sex=pp2_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
         created_by_id=None,
         created_at=datetime.now() - timedelta(days=5),
+        state="published",
+        revision=1,
     )
     db_session.add(pp2)
     phenopackets_data.append(pp2)
@@ -136,9 +140,31 @@ async def sample_phenopackets_for_search(db_session: AsyncSession):
         subject_sex=pp3_sanitized["subject"].get("sex", "UNKNOWN_SEX"),
         created_by_id=None,
         created_at=datetime.now() - timedelta(days=1),
+        state="published",
+        revision=1,
     )
     db_session.add(pp3)
     phenopackets_data.append(pp3)
+
+    # Flush to get IDs, then create head-published revisions for each record.
+    # Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+    await db_session.flush()
+
+    for pp in (pp1, pp2, pp3):
+        rev = PhenopacketRevision(
+            record_id=pp.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=pp.phenopacket,
+            change_reason="init",
+            actor_id=admin_user.id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()
+        pp.head_published_revision_id = rev.id
 
     await db_session.commit()
 

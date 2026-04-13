@@ -120,6 +120,7 @@ async_session_maker = test_session_maker
 _MUTABLE_TABLES: tuple[str, ...] = (
     "credential_tokens",
     "phenopacket_audit",
+    "phenopacket_revisions",
     "phenopackets",
     "variant_annotations",
     "publication_metadata",
@@ -483,6 +484,144 @@ async def cleanup_test_phenopackets(db_session):
     continue to work without modification.
     """
     yield
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 D.1 fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def another_curator(db_session):
+    """A second curator user — used to test ownership isolation.
+
+    Wave 7 D.1: clone-to-draft ownership checks need a second curator that is
+    *not* the draft owner, so that 409/403 paths can be exercised without
+    reusing ``curator_user``.
+    """
+    user = User(
+        username="curator2",
+        email="curator2@example.com",
+        hashed_password=get_password_hash("CuratorPass123!"),
+        role="curator",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
+async def draft_record(db_session, curator_user):
+    """A phenopacket in state='draft' owned by curator_user.
+
+    Wave 7 D.1: shared fixture used by test_state_flows.py and
+    test_state_invariants.py. Consolidated here (Nit #3) to avoid
+    duplicate definitions across test modules.
+    """
+    from app.phenopackets.models import Phenopacket
+
+    pp = Phenopacket(
+        phenopacket_id="wave7-draft-1",
+        phenopacket={"id": "wave7-draft-1"},
+        state="draft",
+        revision=1,
+        draft_owner_id=curator_user.id,
+        created_by_id=curator_user.id,
+    )
+    db_session.add(pp)
+    await db_session.commit()
+    await db_session.refresh(pp)
+    return pp
+
+
+@pytest_asyncio.fixture
+async def published_record(db_session, admin_user):
+    """A phenopacket in state='published' with a head revision row.
+
+    draft_owner_id is intentionally NULL — migrated historical records have
+    no active edit, so ownership semantics don't apply (I5a).
+
+    Wave 7 D.1: shared fixture used by test_state_flows.py and
+    test_state_invariants.py. Consolidated here (Nit #3) to avoid
+    duplicate definitions across test modules.
+    """
+    from app.phenopackets.models import Phenopacket, PhenopacketRevision
+
+    pp = Phenopacket(
+        phenopacket_id="wave7-published-1",
+        phenopacket={"id": "wave7-published-1", "a": 1},
+        state="published",
+        revision=1,
+        created_by_id=admin_user.id,
+        # draft_owner_id stays NULL — matches migration 3 behaviour
+    )
+    db_session.add(pp)
+    await db_session.flush()
+
+    rev = PhenopacketRevision(
+        record_id=pp.id,
+        revision_number=1,
+        state="published",
+        content_jsonb={"id": "wave7-published-1", "a": 1},
+        change_reason="init",
+        actor_id=admin_user.id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+
+    pp.head_published_revision_id = rev.id
+    await db_session.commit()
+    await db_session.refresh(pp)
+    return pp
+
+
+@pytest_asyncio.fixture
+async def seeded_system_user(db_session):
+    """Create (or return) the ``system`` user used by migration 3 as actor.
+
+    Wave 7 D.1: the ORM model test (``test_state_model.py``) needs a real
+    user row to satisfy the ``actor_id`` FK on ``phenopacket_revisions``.
+    This fixture mirrors the migration-3 INSERT but uses the ORM so that
+    the test-DB autouse truncation cleans it up automatically.
+    """
+    user = User(
+        username="system",
+        email="system@hnf1b-db.local",
+        hashed_password=get_password_hash("_system_nologin_"),
+        role="admin",
+        is_active=False,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
 
 
 # Silence ``pytest`` unused-import warning for the session fixture above.
