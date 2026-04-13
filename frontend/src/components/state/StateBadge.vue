@@ -4,20 +4,12 @@
 
 <script setup>
 import { computed } from 'vue';
+import { STATE_COLORS, STATE_LABELS } from '@/utils/stateConfig';
 
 const props = defineProps({
   state: { type: String, default: null },
 });
 
-const COLORS = {
-  draft: 'grey',
-  in_review: 'blue',
-  changes_requested: 'orange',
-  approved: 'purple',
-  published: 'green',
-  archived: 'brown',
-};
-
-const color = computed(() => COLORS[props.state] ?? 'grey');
-const label = computed(() => (props.state ? props.state.replace(/_/g, ' ') : ''));
+const color = computed(() => STATE_COLORS[props.state] ?? 'grey');
+const label = computed(() => STATE_LABELS[props.state] ?? '');
 </script>

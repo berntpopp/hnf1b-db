@@ -5,7 +5,7 @@
     @update:model-value="emit('update:modelValue', $event)"
   >
     <v-card>
-      <v-card-title>Transition to {{ toState.replace('_', ' ') }}</v-card-title>
+      <v-card-title>Transition to {{ toState.replace(/_/g, ' ') }}</v-card-title>
       <v-card-text>
         <v-textarea v-model="reason" label="Reason (required)" rows="3" autofocus />
       </v-card-text>

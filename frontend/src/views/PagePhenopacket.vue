@@ -279,6 +279,14 @@
       :to-state="pendingTargetState"
       @confirm="onTransitionConfirm"
     />
+
+    <!-- Wave 7/D.1: Transition error snackbar (replaces alert()) -->
+    <v-snackbar v-model="transitionErrorSnackbar" color="error" :timeout="6000" location="bottom">
+      {{ transitionErrorMessage }}
+      <template #actions>
+        <v-btn variant="text" @click="transitionErrorSnackbar = false">Dismiss</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -345,7 +353,11 @@ export default {
     // Expose authStore so template can access user role/id for state components.
     const authStore = useAuthStore();
 
-    return { updateSeoPhenopacket, authStore };
+    // Instantiate state composable once in setup() so reactive scope persists
+    // across calls. phenopacket_id is stable for the lifetime of this route.
+    const stateActions = usePhenopacketState(route.params.phenopacket_id);
+
+    return { updateSeoPhenopacket, authStore, stateActions };
   },
   data() {
     return {
@@ -360,6 +372,9 @@ export default {
       // Transition modal state
       transitionModalOpen: false,
       pendingTargetState: null,
+      // Transition error snackbar (replaces alert())
+      transitionErrorSnackbar: false,
+      transitionErrorMessage: '',
     };
   },
   computed: {
@@ -665,9 +680,8 @@ export default {
     async onTransitionConfirm({ reason }) {
       if (!this.pendingTargetState || !this.phenopacketMeta) return;
       const phenopacketId = this.$route.params.phenopacket_id;
-      const stateComposable = usePhenopacketState(phenopacketId);
       try {
-        await stateComposable.transitionTo(
+        await this.stateActions.transitionTo(
           this.pendingTargetState,
           reason,
           this.phenopacketMeta.revision
@@ -687,9 +701,12 @@ export default {
           error: err.message,
           status: err.response?.status,
         });
-        alert(
-          `Transition failed: ${err.response?.data?.detail?.message || err.response?.data?.detail || err.message}`
-        );
+        this.transitionErrorMessage =
+          err.response?.data?.detail?.message ||
+          err.response?.data?.detail ||
+          err.message ||
+          'Transition failed';
+        this.transitionErrorSnackbar = true;
       }
     },
   },

@@ -20,6 +20,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { TRANSITION_LABELS } from '@/utils/stateConfig';
 
 const props = defineProps({
   currentState: { type: String, required: true },
@@ -27,15 +28,6 @@ const props = defineProps({
   isOwner: { type: Boolean, default: false },
 });
 const emit = defineEmits(['transition']);
-
-const LABELS = {
-  in_review: 'Submit for review',
-  changes_requested: 'Request changes',
-  approved: 'Approve',
-  published: 'Publish',
-  archived: 'Archive',
-  draft: 'Withdraw',
-};
 
 // Mirror of backend transitions.py::allowed_transitions.
 const RULES = {
@@ -55,7 +47,7 @@ const RULES = {
 const items = computed(() => {
   if (props.role === 'viewer') return [];
   const fn = RULES[props.currentState] ?? (() => []);
-  return fn(props.role, props.isOwner).map((to) => ({ to, label: LABELS[to] }));
+  return fn(props.role, props.isOwner).map((to) => ({ to, label: TRANSITION_LABELS[to] }));
 });
 
 // Expose items so unit tests can verify role-gating without opening the overlay

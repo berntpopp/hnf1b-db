@@ -11,7 +11,7 @@
 import { computed } from 'vue';
 
 const props = defineProps({
-  editingRevisionId: { type: [Number, null], default: null },
+  editingRevisionId: { type: Number, default: null },
   draftOwnerUsername: { type: String, default: null },
   currentUsername: { type: String, default: null },
   startedAt: { type: String, default: null },
