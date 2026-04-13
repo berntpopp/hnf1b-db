@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.routers.crud_timeline import (
     _build_evidence_list,
     _categorise_feature,
@@ -262,11 +262,42 @@ def _make_phenopacket_row(
         subject_id=subject_id,
         subject_sex="MALE",
         created_by_id=None,
+        state="published",
+        revision=1,
     )
     if deleted:
         row.deleted_at = datetime.now(timezone.utc)
         row.deleted_by = "router-test"
     return row
+
+
+async def _add_head_revision(db_session, row: Phenopacket, actor_id: int) -> None:
+    """Flush ``row``, create a head-published revision, and link it back.
+
+    Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+    Call this after adding a non-deleted published row to the session, before
+    committing, when the row needs to be visible to anonymous endpoints.
+
+    Args:
+        db_session: Active async DB session.
+        row: The Phenopacket ORM instance (must already be added to the session).
+        actor_id: ID of the user performing the action (FK required by schema).
+    """
+    await db_session.flush()
+    rev = PhenopacketRevision(
+        record_id=row.id,
+        revision_number=1,
+        state="published",
+        content_jsonb=row.phenopacket,
+        change_reason="init",
+        actor_id=actor_id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+    row.head_published_revision_id = rev.id
 
 
 @pytest.mark.asyncio
@@ -343,7 +374,9 @@ class TestCrudRelatedEndpoints:
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_by_variant_filters_soft_deleted(self, async_client, db_session):
+    async def test_by_variant_filters_soft_deleted(
+        self, async_client, db_session, admin_user
+    ):
         """Variant lookup must NOT return soft-deleted rows.
 
         Regression test for the missing ``deleted_at IS NULL`` filter
@@ -362,6 +395,9 @@ class TestCrudRelatedEndpoints:
             deleted=True,
         )
         db_session.add_all([live, dead])
+        # Wave 7 D.1: public_filter requires head_published_revision_id for live row.
+        # dead row is excluded by deleted_at IS NULL — no revision needed.
+        await _add_head_revision(db_session, live, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get(
@@ -379,7 +415,9 @@ class TestCrudRelatedEndpoints:
         )
         assert response.status_code == 404
 
-    async def test_by_publication_returns_envelope(self, async_client, db_session):
+    async def test_by_publication_returns_envelope(
+        self, async_client, db_session, admin_user
+    ):
         """Matched PMID → envelope with data/total/skip/limit."""
         row = _make_phenopacket_row(
             phenopacket_id="BP-001",
@@ -387,6 +425,8 @@ class TestCrudRelatedEndpoints:
             include_pmid=True,
         )
         db_session.add(row)
+        # Wave 7 D.1: public_filter requires head_published_revision_id IS NOT NULL.
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get(
