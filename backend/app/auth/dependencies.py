@@ -132,13 +132,20 @@ async def get_optional_user(
 ) -> Optional[User]:
     """Return the authenticated user, or ``None`` for anonymous callers.
 
-    Unlike ``get_current_user``, this dependency does NOT raise when the
-    ``Authorization`` header is absent.  It is used by endpoints that serve
-    both anonymous visitors (public read) and authenticated curators
-    (working-copy read).
+    Unlike ``get_current_user``, this dependency never raises.  It returns
+    ``None`` for **all** of the following cases:
 
-    A present-but-invalid token still raises 401 — this dependency is not
-    a bypass for bad credentials.
+    * No ``Authorization`` header present (anonymous visitor).
+    * Token present but invalid, expired, malformed, or signature-mismatched.
+    * Token valid but the referenced user does not exist, is inactive, or is
+      locked.
+
+    This dependency is for endpoints that allow anonymous access (list,
+    detail, search, aggregations, sitemap, …).  Callers receive ``None`` and
+    treat the request as anonymous — they never see a 401 from here.
+
+    If your endpoint *requires* authentication, use ``get_current_user``
+    instead, which raises ``HTTP 401`` for missing or invalid credentials.
     """
     if credentials is None:
         return None
