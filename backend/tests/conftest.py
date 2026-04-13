@@ -486,5 +486,75 @@ async def cleanup_test_phenopackets(db_session):
     yield
 
 
+# ---------------------------------------------------------------------------
+# Wave 7 D.1 fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def another_curator(db_session):
+    """A second curator user — used to test ownership isolation.
+
+    Wave 7 D.1: clone-to-draft ownership checks need a second curator that is
+    *not* the draft owner, so that 409/403 paths can be exercised without
+    reusing ``curator_user``.
+    """
+    user = User(
+        username="curator2",
+        email="curator2@example.com",
+        hashed_password=get_password_hash("CuratorPass123!"),
+        role="curator",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture
+async def seeded_system_user(db_session):
+    """Create (or return) the ``system`` user used by migration 3 as actor.
+
+    Wave 7 D.1: the ORM model test (``test_state_model.py``) needs a real
+    user row to satisfy the ``actor_id`` FK on ``phenopacket_revisions``.
+    This fixture mirrors the migration-3 INSERT but uses the ORM so that
+    the test-DB autouse truncation cleans it up automatically.
+    """
+    user = User(
+        username="system",
+        email="system@hnf1b-db.local",
+        hashed_password=get_password_hash("_system_nologin_"),
+        role="admin",
+        is_active=False,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    yield user
+
+    try:
+        await db_session.execute(delete(User).where(User.id == user.id))
+        await db_session.commit()
+    except Exception:
+        try:
+            await db_session.rollback()
+        except Exception:
+            pass
+
+
 # Silence ``pytest`` unused-import warning for the session fixture above.
 _ = pytest
