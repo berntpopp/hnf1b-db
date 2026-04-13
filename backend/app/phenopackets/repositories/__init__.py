@@ -9,5 +9,17 @@ model; business rules and HTTP concerns live in
 """
 
 from .phenopacket_repository import PhenopacketRepository
+from .visibility import (
+    curator_filter,
+    public_filter,
+    resolve_curator_content,
+    resolve_public_content,
+)
 
-__all__ = ["PhenopacketRepository"]
+__all__ = [
+    "PhenopacketRepository",
+    "curator_filter",
+    "public_filter",
+    "resolve_curator_content",
+    "resolve_public_content",
+]
