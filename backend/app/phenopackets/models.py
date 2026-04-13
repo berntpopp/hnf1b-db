@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import uuid
-import uuid as _uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
@@ -289,7 +288,7 @@ class PhenopacketRevision(Base):
     __tablename__ = "phenopacket_revisions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    record_id: Mapped[_uuid.UUID] = mapped_column(
+    record_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("phenopackets.id", ondelete="CASCADE"),
         nullable=False,
@@ -621,10 +620,6 @@ class AggregationResult(BaseModel):
 # Wave 7 D.1: state-machine Pydantic schemas (§7.3)
 
 
-from datetime import datetime as _dt  # noqa: E402
-from typing import Literal  # noqa: E402
-
-
 class TransitionRequest(BaseModel):
     """Request body for POST /phenopackets/{id}/transitions.
 
@@ -649,8 +644,11 @@ class RevisionResponse(BaseModel):
     See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
     """
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     record_id: str  # UUID serialized as string
+    # populated via join with phenopackets table
     phenopacket_id: str
     revision_number: int
     state: str
@@ -661,6 +659,6 @@ class RevisionResponse(BaseModel):
     actor_id: int
     actor_username: Optional[str] = None
     change_patch: Optional[List[Dict[str, Any]]] = None
-    created_at: _dt
+    created_at: datetime
     # populated only on /{id}/revisions/{rev_id}
     content_jsonb: Optional[Dict[str, Any]] = None

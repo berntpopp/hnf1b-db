@@ -120,6 +120,7 @@ async_session_maker = test_session_maker
 _MUTABLE_TABLES: tuple[str, ...] = (
     "credential_tokens",
     "phenopacket_audit",
+    "phenopacket_revisions",
     "phenopackets",
     "variant_annotations",
     "publication_metadata",
