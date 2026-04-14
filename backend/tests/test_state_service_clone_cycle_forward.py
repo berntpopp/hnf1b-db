@@ -5,10 +5,6 @@ from app.phenopackets.services.state_service import PhenopacketStateService
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="Task 5 fixes transition() guard to use effective state; "
-    "check_transition('published','in_review') raises InvalidTransition until then"
-)
 async def test_submit_from_clone_cycle_keeps_pp_state_published(
     db_session, published_record, curator_user
 ):

@@ -251,11 +251,14 @@ class PhenopacketStateService:
         """
         pp = await self._lock_and_check(record_id, expected_revision)
 
-        # Guard-matrix check — cast plain str to the narrow Literal types that
-        # check_transition expects; runtime values are validated by the rule dict.
+        # §4.2.1: guard matrix reads the *effective* state (revision row if a
+        # clone-to-draft edit is in flight, pp.state otherwise) so that a
+        # cloned draft whose pp.state is still 'published' can advance through
+        # the review cycle.
+        effective = await self._effective_state(pp)
         try:
             check_transition(
-                cast(State, pp.state),
+                cast(State, effective),
                 cast(State, to_state),
                 role=cast(Role, actor.role),
                 is_owner=self._is_owner(pp, actor),
