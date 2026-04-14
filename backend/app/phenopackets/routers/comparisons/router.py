@@ -153,10 +153,10 @@ async def compare_variant_types(
 
     # Sort by the requested metric.
     if sort_by == "p_value":
-        phenotypes.sort(key=lambda x: (x.p_value if x.p_value is not None else 1.0))
+        phenotypes.sort(key=lambda x: x.p_value if x.p_value is not None else 1.0)
     elif sort_by == "effect_size":
         phenotypes.sort(
-            key=lambda x: (x.effect_size if x.effect_size is not None else 0.0),
+            key=lambda x: x.effect_size if x.effect_size is not None else 0.0,
             reverse=True,
         )
     elif sort_by == "prevalence_diff":
