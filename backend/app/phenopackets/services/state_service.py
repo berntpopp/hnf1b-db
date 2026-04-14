@@ -121,20 +121,30 @@ class PhenopacketStateService:
     ) -> Phenopacket:
         """Save new content to a phenopacket.
 
-        - ``state == 'published'``      → §6.1 clone-to-draft.
-        - ``state ∈ {draft, changes_requested}`` → §6.3 in-place save.
-        - Any other state raises :class:`InvalidTransition`.
+        Dispatches on the effective state (spec §4.2.1):
+        - effective == 'published' (editing_revision_id IS NULL) → §6.1 clone-to-draft.
+        - effective ∈ {draft, changes_requested}                 → §6.3 in-place save.
+        - effective ∈ {in_review, approved}                      → 409 edit_forbidden.
+        - effective == 'archived'                                → 409 invalid_transition.
         """
         pp = await self._lock_and_check(record_id, expected_revision)
+        effective = await self._effective_state(pp)
 
-        if pp.state == "published":
+        if effective == "published":
             return await self._clone_to_draft(pp, new_content, change_reason, actor)
 
-        if pp.state in ("draft", "changes_requested"):
+        if effective in ("draft", "changes_requested"):
             return await self._inplace_save(pp, new_content, change_reason, actor)
 
+        if effective in ("in_review", "approved"):
+            raise self.InvalidTransition(
+                f"cannot edit a record whose effective state is {effective!r};"
+                " withdraw or resubmit first"
+            )
+
+        # archived
         raise self.InvalidTransition(
-            f"cannot edit a record in state {pp.state!r}; withdraw or resubmit first"
+            f"cannot edit a record whose effective state is {effective!r}"
         )
 
     async def _clone_to_draft(
