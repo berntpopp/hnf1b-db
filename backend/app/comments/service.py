@@ -48,13 +48,27 @@ class CommentsService:
     async def _check_record_exists(
         self, record_type: str, record_id: uuid.UUID
     ) -> None:
-        """C3 — verify target record is not hard-deleted (soft-deleted is OK)."""
+        """C3 — verify target record is not hard-deleted (soft-deleted is OK).
+
+        The global soft-delete ORM filter (app.database._register_soft_delete_filter)
+        would exclude soft-deleted Phenopacket rows from the count query. We bypass
+        it via ``include_deleted=True`` so that soft-deleted records are still valid
+        comment targets (spec invariant C3).
+        """
         if record_type != "phenopacket":
             raise self.RecordNotFound(f"Unsupported record_type {record_type!r}")
         stmt = select(func.count()).select_from(Phenopacket).where(
             Phenopacket.id == record_id
         )
-        count = int((await self.db.execute(stmt)).scalar() or 0)
+        count = int(
+            (
+                await self.db.execute(
+                    stmt,
+                    execution_options={"include_deleted": True},
+                )
+            ).scalar()
+            or 0
+        )
         if count == 0:
             raise self.RecordNotFound(f"No phenopacket with id {record_id}")
 
