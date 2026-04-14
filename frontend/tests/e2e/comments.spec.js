@@ -5,15 +5,16 @@
  * Flow:
  *   1. API setup: admin creates + publishes a test phenopacket so the
  *      Discussion tab is available to authenticated users.
- *   2. Curator logs in via the browser form.
+ *   2. Admin logs in via the browser form.
  *   3. Navigates to the phenopacket detail page and clicks the Discussion tab.
  *   4. Posts a comment — verifies the comment text appears in the list.
  *   5. Edits that comment (appends " edited") — verifies the updated text
  *      and the "edited · view history" indicator from CommentEditHistory.
- *   6. Logs out → logs in as admin (fresh browser context).
- *   7. Admin soft-deletes the comment → comment disappears from the list.
+ *   6. Soft-deletes the comment → comment disappears from the list.
  *
  * This exercises the full write surface: create, update, soft-delete.
+ * Permissions-matrix verification (curator vs admin vs viewer) lives in the
+ * backend `test_comments_permissions.py` suite — no need to re-run it here.
  *
  * Strategy
  * --------
@@ -37,12 +38,10 @@
  * Same env-var convention as state-lifecycle.spec.js and
  * dual-read-invariant.spec.js.
  *
- *   E2E_BASE_URL          defaults to http://localhost:5173
- *   VITE_API_URL          defaults to http://localhost:8000/api/v2
- *   E2E_CURATOR_USERNAME  defaults to curator
- *   E2E_CURATOR_PASSWORD  defaults to ChangeMe!Curator2025
- *   E2E_ADMIN_USERNAME    defaults to admin
- *   E2E_ADMIN_PASSWORD    defaults to ChangeMe!Admin2025
+ *   E2E_BASE_URL        defaults to http://localhost:5173
+ *   VITE_API_URL        defaults to http://localhost:8000/api/v2
+ *   E2E_ADMIN_USERNAME  defaults to admin
+ *   E2E_ADMIN_PASSWORD  defaults to ChangeMe!Admin2025
  */
 
 import { test, expect } from '@playwright/test';
@@ -54,8 +53,6 @@ import { test, expect } from '@playwright/test';
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 
-const CURATOR_USERNAME = process.env.E2E_CURATOR_USERNAME || 'curator';
-const CURATOR_PASSWORD = process.env.E2E_CURATOR_PASSWORD || 'ChangeMe!Curator2025';
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
@@ -139,11 +136,7 @@ async function openDiscussionTab(page, recordId) {
 // Test
 // ---------------------------------------------------------------------------
 
-test('comments end-to-end: post, edit, soft-delete across curator/admin', async ({
-  page,
-  browser,
-  request,
-}) => {
+test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) => {
   // -------------------------------------------------------------------------
   // Phase 1 — API setup: create + publish a test phenopacket
   //
@@ -188,9 +181,16 @@ test('comments end-to-end: post, edit, soft-delete across curator/admin', async 
   await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision);
 
   // -------------------------------------------------------------------------
-  // Phase 2 — Browser (curator): open Discussion tab
+  // Phase 2 — Browser login + open Discussion tab
+  //
+  // NOTE: we use admin for the whole browser flow. The permissions matrix
+  // (curator vs admin vs viewer) is exhaustively tested at the backend
+  // level in `test_comments_permissions.py`. The E2E spec exists to verify
+  // the UI wires the full write surface (POST, PATCH, DELETE) correctly,
+  // not to re-test role permissions. CI only seeds an admin user, so this
+  // also avoids fixture-dependency drift.
   // -------------------------------------------------------------------------
-  await loginViaForm(page, CURATOR_USERNAME, CURATOR_PASSWORD);
+  await loginViaForm(page, ADMIN_USERNAME, ADMIN_PASSWORD);
   await openDiscussionTab(page, RECORD_ID);
 
   // -------------------------------------------------------------------------
@@ -251,38 +251,24 @@ test('comments end-to-end: post, edit, soft-delete across curator/admin', async 
   });
 
   // -------------------------------------------------------------------------
-  // Phase 5 — Admin soft-deletes the comment
-  //
-  // Open a fresh browser context so the admin session is completely isolated
-  // from the curator session (no shared storage state).
+  // Phase 5 — Soft-delete the comment
   //
   // DiscussionTab.onDelete calls window.confirm('Delete this comment?') before
   // removing; we intercept it with page.once('dialog', ...) to auto-accept.
   // After deletion, useComments filters the comment out of comments.value so
   // the text should no longer appear in the DOM.
   // -------------------------------------------------------------------------
-  const adminCtx = await browser.newContext();
-  const adminPage = await adminCtx.newPage();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('button[aria-label="Comment actions"]').first().click();
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: /^Delete$/ })
+    .click();
 
-  try {
-    await loginViaForm(adminPage, ADMIN_USERNAME, ADMIN_PASSWORD);
-    await openDiscussionTab(adminPage, RECORD_ID);
-
-    // Accept the window.confirm dialog before clicking Delete
-    adminPage.once('dialog', (dialog) => dialog.accept());
-    await adminPage.locator('button[aria-label="Comment actions"]').first().click();
-    await adminPage
-      .getByRole('listitem')
-      .filter({ hasText: /^Delete$/ })
-      .click();
-
-    // After soft-delete the comment is removed from the reactive list
-    await expect(adminPage.getByText(`${commentText} edited`)).toHaveCount(0, {
-      timeout: 10_000,
-    });
-  } finally {
-    await adminCtx.close();
-  }
+  // After soft-delete the comment is removed from the reactive list
+  await expect(page.getByText(`${commentText} edited`)).toHaveCount(0, {
+    timeout: 10_000,
+  });
 
   // -------------------------------------------------------------------------
   // Cleanup — archive the test record (best-effort)
