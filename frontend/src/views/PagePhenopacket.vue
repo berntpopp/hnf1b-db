@@ -175,6 +175,9 @@
               <v-tab value="overview" aria-label="Overview tab">Overview</v-tab>
               <v-tab value="timeline" aria-label="Timeline tab">Timeline</v-tab>
               <v-tab value="raw" aria-label="Raw JSON tab">Raw JSON</v-tab>
+              <v-tab v-if="canSeeDiscussion" value="discussion" aria-label="Discussion tab">
+                Discussion
+              </v-tab>
             </v-tabs>
 
             <v-card-text class="pa-4">
@@ -240,6 +243,11 @@
                       <pre class="json-display">{{ JSON.stringify(phenopacket, null, 2) }}</pre>
                     </v-card-text>
                   </v-card>
+                </v-tabs-window-item>
+
+                <!-- Discussion Tab (curator/admin only) -->
+                <v-tabs-window-item v-if="canSeeDiscussion" value="discussion">
+                  <DiscussionTab :record-id="discussionRecordId" />
                 </v-tabs-window-item>
               </v-tabs-window>
             </v-card-text>
@@ -317,6 +325,7 @@ import EditingBanner from '@/components/state/EditingBanner.vue';
 import TransitionMenu from '@/components/state/TransitionMenu.vue';
 import TransitionModal from '@/components/state/TransitionModal.vue';
 import { usePhenopacketState, effectiveStateOf } from '@/composables/usePhenopacketState';
+import DiscussionTab from '@/components/comments/DiscussionTab.vue';
 
 export default {
   name: 'PagePhenopacket',
@@ -332,6 +341,7 @@ export default {
     EditingBanner,
     TransitionMenu,
     TransitionModal,
+    DiscussionTab,
   },
   setup() {
     const route = useRoute();
@@ -477,6 +487,22 @@ export default {
      */
     effectiveState() {
       return effectiveStateOf(this.phenopacketMeta);
+    },
+    /**
+     * Whether the Discussion tab should be visible.
+     * Restricted to curators and admins. Extracted as a named computed so
+     * it can later be extended (e.g. badge counts) without touching the template.
+     */
+    canSeeDiscussion() {
+      return this.authStore?.isCurator ?? false;
+    },
+    /**
+     * UUID primary key passed to DiscussionTab as record_id.
+     * Prefers phenopacketMeta.id (UUID PK) over the public slug so that
+     * backend record lookups match the comments.record_id column.
+     */
+    discussionRecordId() {
+      return this.phenopacketMeta?.id ?? this.phenopacketMeta?.record_id ?? '';
     },
   },
   mounted() {
