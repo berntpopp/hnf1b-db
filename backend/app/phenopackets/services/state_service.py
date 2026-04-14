@@ -125,7 +125,7 @@ class PhenopacketStateService:
         - effective == 'published' (editing_revision_id IS NULL) → §6.1 clone-to-draft.
         - effective ∈ {draft, changes_requested}                 → §6.3 in-place save.
         - effective ∈ {in_review, approved}                      → 409 edit_forbidden.
-        - effective == 'archived'                                → 409 invalid_transition.
+        - effective == 'archived'                          → 409 invalid_transition.
         """
         pp = await self._lock_and_check(record_id, expected_revision)
         effective = await self._effective_state(pp)
@@ -280,7 +280,13 @@ class PhenopacketStateService:
         reason: str,
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
-        """§6.4: bump revision, snapshot working copy into a new row, advance state."""
+        """§6.4: bump revision, snapshot working copy into a new row, advance state.
+
+        Spec §4.2.1 — from_state reads effective state, not pp.state. pp.state
+        advancement is gated by I8: only for never-published records OR on archive.
+        """
+        from_state = await self._effective_state(pp)
+
         # Compute the patch against the *previous transition's* content, not the
         # latest draft-in-progress row. After a clone + in-place save the latest
         # row is the draft row, whose content equals pp.phenopacket, giving an
@@ -299,7 +305,6 @@ class PhenopacketStateService:
         patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
 
         pp.revision += 1
-        from_state = pp.state
 
         rev = PhenopacketRevision(
             record_id=pp.id,
@@ -316,7 +321,9 @@ class PhenopacketStateService:
         self.db.add(rev)
         await self.db.flush()  # get rev.id
 
-        pp.state = to_state
+        # I8: pp.state advances only for never-published records OR archive.
+        if pp.head_published_revision_id is None or to_state == "archived":
+            pp.state = to_state
 
         if to_state == "archived":
             # archive is terminal: clear both owner and edit pointer
