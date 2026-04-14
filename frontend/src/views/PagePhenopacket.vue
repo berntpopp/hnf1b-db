@@ -100,10 +100,10 @@
           <!-- Wave 7/D.1: State badge + editing banner + transition menu (curator/admin only) -->
           <template v-if="phenopacketMeta && authStore.isCurator">
             <div class="d-flex align-center gap-2 mb-3">
-              <StateBadge :state="phenopacketMeta.state" />
+              <StateBadge :state="effectiveState" />
               <TransitionMenu
-                v-if="phenopacketMeta.state"
-                :current-state="phenopacketMeta.state"
+                v-if="effectiveState"
+                :current-state="effectiveState"
                 :role="authStore.user.role"
                 :is-owner="authStore.user.id === phenopacketMeta.draft_owner_id"
                 @transition="onTransitionRequest"
@@ -316,7 +316,7 @@ import StateBadge from '@/components/state/StateBadge.vue';
 import EditingBanner from '@/components/state/EditingBanner.vue';
 import TransitionMenu from '@/components/state/TransitionMenu.vue';
 import TransitionModal from '@/components/state/TransitionModal.vue';
-import { usePhenopacketState } from '@/composables/usePhenopacketState';
+import { usePhenopacketState, effectiveStateOf } from '@/composables/usePhenopacketState';
 
 export default {
   name: 'PagePhenopacket',
@@ -469,6 +469,14 @@ export default {
       const authStore = useAuthStore();
       const userRole = authStore.user?.role;
       return userRole === 'curator' || userRole === 'admin';
+    },
+    /**
+     * Effective state for UI binding — prefers effective_state (D.2) over
+     * state, so the badge and transition menu reflect the in-flight revision
+     * (e.g. 'in_review') rather than the record-level 'published' state.
+     */
+    effectiveState() {
+      return effectiveStateOf(this.phenopacketMeta);
     },
   },
   mounted() {
