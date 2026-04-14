@@ -29,7 +29,21 @@ if config.config_file_name is not None:
 # ``tests/test_alembic_env_autogenerate.py::test_env_py_imports_all_orm_models``
 # statically enforces this at test time.
 try:
-    # Import Base from database module
+    # Import all ORM model classes so Base.metadata is complete for autogenerate.
+    # Redundant ``as`` aliases signal intentional re-exports so ruff/pyflakes
+    # does not flag the imports as unused — the import side-effect (model
+    # registration with ``Base.metadata``) is what actually matters here.
+
+    # Comments package (3 models: Comment, CommentEdit, CommentMention).
+    from app.comments.models import (
+        Comment as Comment,
+    )
+    from app.comments.models import (
+        CommentEdit as CommentEdit,
+    )
+    from app.comments.models import (
+        CommentMention as CommentMention,
+    )
     from app.database import Base
 
     # Core models (2).
@@ -40,10 +54,7 @@ try:
         User as User,
     )
 
-    # Phenopackets package (5 models).
-    # Redundant ``as`` aliases signal intentional re-exports so ruff/pyflakes
-    # does not flag the imports as unused — the import side-effect (model
-    # registration with ``Base.metadata``) is what actually matters here.
+    # Phenopackets package (6 models).
     from app.phenopackets.models import (
         Cohort as Cohort,
     )
