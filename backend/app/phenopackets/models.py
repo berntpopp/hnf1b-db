@@ -174,6 +174,12 @@ class Phenopacket(Base):
     draft_owner: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[draft_owner_id], viewonly=True
     )
+    editing_revision: Mapped[Optional["PhenopacketRevision"]] = relationship(
+        "PhenopacketRevision",
+        foreign_keys=[editing_revision_id],
+        viewonly=True,
+        primaryjoin="Phenopacket.editing_revision_id==PhenopacketRevision.id",
+    )
 
 
 class Family(Base):
