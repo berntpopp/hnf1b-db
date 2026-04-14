@@ -456,7 +456,7 @@ export default {
         // P-value text - use FDR-corrected p-value for display (matches R script)
         // The significance labeling uses qfdr (FDR-adjusted) not raw pfisher
         const pFdr = d.p_value_fdr;
-        let pValueText = '';
+        let pValueText;
         if (pFdr === null || pFdr === undefined) {
           pValueText = 'N/A';
         } else if (pFdr < 0.001) {

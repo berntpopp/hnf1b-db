@@ -157,7 +157,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // draft → in_review → approved → published
   revision = await apiTransition(request, adminToken, RECORD_ID, 'in_review', 'submit', revision);
   revision = await apiTransition(request, adminToken, RECORD_ID, 'approved', 'approve', revision);
-  revision = await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision);
+  await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision);
 
   // Verify it is published and head_published_revision_id is set
   const publishedDetail = await apiGetCurator(request, adminToken, RECORD_ID);
@@ -200,7 +200,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // (public head stays) but working copy is updated.  State stays 'published'
   // with editing_revision_id set to point at the in-progress draft.
   expect(clonedDetail.editing_revision_id).not.toBeNull();
-  revision = clonedDetail.revision;
+  // Revision tracking ends here — no further transitions are needed in this test.
 
   // -------------------------------------------------------------------------
   // Phase 3 — Browser (admin): detail page shows DRAFT_SUBJECT_ID
