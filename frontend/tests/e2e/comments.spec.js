@@ -225,7 +225,11 @@ test('comments end-to-end: post, edit, soft-delete across curator/admin', async 
   // to render <CommentEditHistory> with the text "edited · view history".
   // -------------------------------------------------------------------------
   await page.locator('button[aria-label="Comment actions"]').first().click();
-  await page.getByRole('menuitem', { name: /^Edit$/i }).click();
+  // Vuetify v-list-item renders with role="listitem", not "menuitem".
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: /^Edit$/ })
+    .click();
 
   // The composer editor now contains the existing comment body; append text
   const editedEditor = page.locator('.composer-editor .ProseMirror').first();
@@ -267,7 +271,10 @@ test('comments end-to-end: post, edit, soft-delete across curator/admin', async 
     // Accept the window.confirm dialog before clicking Delete
     adminPage.once('dialog', (dialog) => dialog.accept());
     await adminPage.locator('button[aria-label="Comment actions"]').first().click();
-    await adminPage.getByRole('menuitem', { name: /^Delete$/i }).click();
+    await adminPage
+      .getByRole('listitem')
+      .filter({ hasText: /^Delete$/ })
+      .click();
 
     // After soft-delete the comment is removed from the reactive list
     await expect(adminPage.getByText(`${commentText} edited`)).toHaveCount(0, {
