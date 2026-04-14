@@ -39,12 +39,18 @@ def _with_actor_eager_loads(stmt: Select) -> Select:
     accesses ``pp.draft_owner.username`` for the Wave 7 D.1 state-machine
     fields — omitting it would cause a ``MissingGreenlet`` error in async
     context whenever a phenopacket has a non-NULL ``draft_owner_id``.
+
+    ``editing_revision`` is included because ``build_phenopacket_response``
+    reads ``pp.editing_revision`` to compute ``effective_state`` (D.2).
+    ``selectinload`` is lazy on a NULL FK so the common case (no in-flight
+    edit) costs zero extra queries.
     """
     return stmt.options(
         selectinload(Phenopacket.created_by_user),
         selectinload(Phenopacket.updated_by_user),
         selectinload(Phenopacket.deleted_by_user),
         selectinload(Phenopacket.draft_owner),
+        selectinload(Phenopacket.editing_revision),  # D.2: effective_state
     )
 
 

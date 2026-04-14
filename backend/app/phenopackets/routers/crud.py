@@ -81,6 +81,7 @@ def _base_list_query() -> Any:
         selectinload(Phenopacket.updated_by_user),
         selectinload(Phenopacket.deleted_by_user),
         selectinload(Phenopacket.draft_owner),
+        selectinload(Phenopacket.editing_revision),  # D.2: effective_state
     )
 
 
@@ -279,6 +280,7 @@ async def get_phenopackets_batch(
             selectinload(Phenopacket.updated_by_user),
             selectinload(Phenopacket.deleted_by_user),
             selectinload(Phenopacket.draft_owner),
+            selectinload(Phenopacket.editing_revision),  # D.2: effective_state
         )
     )
     if is_curator:
@@ -332,6 +334,7 @@ async def get_phenopacket(
             selectinload(Phenopacket.updated_by_user),
             selectinload(Phenopacket.deleted_by_user),
             selectinload(Phenopacket.draft_owner),
+            selectinload(Phenopacket.editing_revision),  # D.2: effective_state
         )
     )
 
