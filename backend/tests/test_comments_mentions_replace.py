@@ -8,6 +8,7 @@ Spec reference:
   docs/superpowers/specs/
   2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.2 C2.
 """
+
 import pytest
 
 

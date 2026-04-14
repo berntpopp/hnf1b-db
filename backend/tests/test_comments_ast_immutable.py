@@ -8,6 +8,7 @@ Spec reference:
   docs/superpowers/specs/
   2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.2 C1.
 """
+
 import pathlib
 
 FORBIDDEN_PATTERNS = (
@@ -27,4 +28,6 @@ def test_no_mutations_against_comment_edits():
         for pattern in FORBIDDEN_PATTERNS:
             if pattern in src:
                 offenders.append((str(py), pattern))
-    assert not offenders, f"C1 violated — forbidden mutation patterns found: {offenders}"
+    assert not offenders, (
+        f"C1 violated — forbidden mutation patterns found: {offenders}"
+    )

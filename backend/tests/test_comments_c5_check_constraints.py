@@ -10,6 +10,7 @@ Spec reference:
   docs/superpowers/specs/
   2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.2 C5.
 """
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError

@@ -1,4 +1,5 @@
 """CommentsService mutation methods (update_body, resolve, unresolve, soft_delete)."""
+
 import pytest
 
 from app.comments.service import CommentsService
@@ -60,9 +61,7 @@ async def test_update_body_not_author_raises(
 
 
 @pytest.mark.asyncio
-async def test_resolve_unresolve_roundtrip(
-    db_session, published_record, curator_user
-):
+async def test_resolve_unresolve_roundtrip(db_session, published_record, curator_user):
     svc = CommentsService(db_session)
     comment = await svc.create(
         record_type="phenopacket",
@@ -100,7 +99,10 @@ async def test_soft_delete_terminal_for_writes_c6(
     # Every subsequent write raises SoftDeleted (→ 404 at router)
     with pytest.raises(svc.SoftDeleted):
         await svc.update_body(
-            comment_id=comment.id, body_markdown="q", mention_user_ids=[], actor=curator_user
+            comment_id=comment.id,
+            body_markdown="q",
+            mention_user_ids=[],
+            actor=curator_user,
         )
     with pytest.raises(svc.SoftDeleted):
         await svc.resolve(comment_id=comment.id, actor=curator_user)

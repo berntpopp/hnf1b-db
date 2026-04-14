@@ -1,4 +1,5 @@
 """PhenopacketRepository eager-loads editing_revision."""
+
 import pytest
 
 from app.phenopackets.repositories.phenopacket_repository import PhenopacketRepository
@@ -43,9 +44,7 @@ async def test_get_by_id_returns_editing_revision_when_set(
 
 
 @pytest.mark.asyncio
-async def test_get_by_id_editing_revision_none_when_unset(
-    db_session, published_record
-):
+async def test_get_by_id_editing_revision_none_when_unset(db_session, published_record):
     """get_by_id handles NULL editing_revision_id cleanly (no extra query)."""
     repo = PhenopacketRepository(db_session)
     loaded = await repo.get_by_id(published_record.phenopacket_id)

@@ -1,4 +1,5 @@
 """CommentsService — all mutating paths for the D.2 comments feature."""
+
 from __future__ import annotations
 
 import uuid
@@ -57,8 +58,10 @@ class CommentsService:
         """
         if record_type != "phenopacket":
             raise self.RecordNotFound(f"Unsupported record_type {record_type!r}")
-        stmt = select(func.count()).select_from(Phenopacket).where(
-            Phenopacket.id == record_id
+        stmt = (
+            select(func.count())
+            .select_from(Phenopacket)
+            .where(Phenopacket.id == record_id)
         )
         count = int(
             (
@@ -72,9 +75,7 @@ class CommentsService:
         if count == 0:
             raise self.RecordNotFound(f"No phenopacket with id {record_id}")
 
-    async def _validate_mentions(
-        self, mention_user_ids: Sequence[int]
-    ) -> List[int]:
+    async def _validate_mentions(self, mention_user_ids: Sequence[int]) -> List[int]:
         """Dedup + verify each id points to an active curator/admin."""
         if not mention_user_ids:
             return []
@@ -164,9 +165,10 @@ class CommentsService:
             base = base.where(Comment.resolved_at.is_(None))
 
         count = int(
-            (await self.db.execute(
-                select(func.count()).select_from(base.subquery())
-            )).scalar() or 0
+            (
+                await self.db.execute(select(func.count()).select_from(base.subquery()))
+            ).scalar()
+            or 0
         )
 
         stmt = (
@@ -229,11 +231,7 @@ class CommentsService:
 
     async def _fetch_live_or_404(self, comment_id: int) -> Comment:
         """Lock FOR UPDATE; raise SoftDeleted (→ 404) if already removed."""
-        stmt = (
-            select(Comment)
-            .where(Comment.id == comment_id)
-            .with_for_update()
-        )
+        stmt = select(Comment).where(Comment.id == comment_id).with_for_update()
         comment = (await self.db.execute(stmt)).scalar_one_or_none()
         if comment is None:
             raise self.SoftDeleted(f"comment {comment_id} not found")
@@ -270,9 +268,7 @@ class CommentsService:
         comment.updated_at = func.now()
         # 3. Replace mentions
         await self.db.execute(
-            delete(CommentMention).where(
-                CommentMention.comment_id == comment.id
-            )
+            delete(CommentMention).where(CommentMention.comment_id == comment.id)
         )
         for uid in validated:
             self.db.add(CommentMention(comment_id=comment.id, user_id=uid))
@@ -307,9 +303,7 @@ class CommentsService:
         comment = await self._fetch_live_or_404(comment_id)
         is_admin = actor.role == "admin"
         if comment.author_id != actor.id and not is_admin:
-            raise self.NotAuthorOrAdmin(
-                f"actor {actor.id} is not author and not admin"
-            )
+            raise self.NotAuthorOrAdmin(f"actor {actor.id} is not author and not admin")
         comment.deleted_at = func.now()
         comment.deleted_by_id = actor.id
         comment.updated_at = func.now()

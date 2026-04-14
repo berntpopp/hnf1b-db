@@ -8,6 +8,7 @@ Spec reference:
   docs/superpowers/specs/
   2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.2 C3.
 """
+
 import pytest
 from sqlalchemy.sql import func
 
@@ -33,7 +34,5 @@ async def test_create_against_soft_deleted_phenopacket_succeeds(
         mention_user_ids=[],
         actor=curator_user,
     )
-    assert c.id is not None, (
-        "C3: comment creation on soft-deleted record must succeed"
-    )
+    assert c.id is not None, "C3: comment creation on soft-deleted record must succeed"
     assert c.body_markdown == "rip"

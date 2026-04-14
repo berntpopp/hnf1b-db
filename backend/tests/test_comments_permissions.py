@@ -3,6 +3,7 @@
 Four roles × representative CRUD actions. Viewers are blocked everywhere.
 Curators can author/edit their own; admins can delete anyone's, not edit.
 """
+
 import pytest
 
 
@@ -56,7 +57,9 @@ async def test_patch_admin_not_author_forbidden(
     async_client, curator_headers, admin_headers, published_record
 ):
     # curator creates
-    created = await _post_comment(async_client, curator_headers, published_record.id, body="orig")
+    created = await _post_comment(
+        async_client, curator_headers, published_record.id, body="orig"
+    )
     assert created.status_code == 201
     cid = created.json()["id"]
     # admin tries to edit another user's comment — matrix forbids admin body edits
@@ -69,10 +72,10 @@ async def test_patch_admin_not_author_forbidden(
 
 
 @pytest.mark.asyncio
-async def test_patch_author_succeeds(
-    async_client, curator_headers, published_record
-):
-    created = await _post_comment(async_client, curator_headers, published_record.id, body="orig")
+async def test_patch_author_succeeds(async_client, curator_headers, published_record):
+    created = await _post_comment(
+        async_client, curator_headers, published_record.id, body="orig"
+    )
     cid = created.json()["id"]
     resp = await async_client.patch(
         f"/api/v2/comments/{cid}",

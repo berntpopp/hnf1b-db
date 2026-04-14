@@ -1,4 +1,5 @@
 """Full clone-cycle lifecycle: clone → submit → approve → publish + republish."""
+
 import pytest
 
 from app.phenopackets.services.state_service import PhenopacketStateService
@@ -23,15 +24,27 @@ async def test_full_clone_cycle_republish(
     )
     # Submit
     pp, _ = await svc.transition(
-        pp.id, to_state="in_review", reason="r", expected_revision=pp.revision, actor=curator_user
+        pp.id,
+        to_state="in_review",
+        reason="r",
+        expected_revision=pp.revision,
+        actor=curator_user,
     )
     # Approve
     pp, _ = await svc.transition(
-        pp.id, to_state="approved", reason="ok", expected_revision=pp.revision, actor=admin_user
+        pp.id,
+        to_state="approved",
+        reason="ok",
+        expected_revision=pp.revision,
+        actor=admin_user,
     )
     # Publish
     pp, rev = await svc.transition(
-        pp.id, to_state="published", reason="shipping", expected_revision=pp.revision, actor=admin_user
+        pp.id,
+        to_state="published",
+        reason="shipping",
+        expected_revision=pp.revision,
+        actor=admin_user,
     )
 
     # Record-level state converges

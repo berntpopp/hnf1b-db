@@ -3,6 +3,7 @@
 Spec reference: docs/superpowers/specs/
 2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.1.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -49,9 +50,7 @@ class Comment(Base):
         BigInteger, ForeignKey("users.id"), nullable=True
     )
 
-    author: Mapped[User] = relationship(
-        "User", foreign_keys=[author_id], viewonly=True
-    )
+    author: Mapped[User] = relationship("User", foreign_keys=[author_id], viewonly=True)
     resolved_by: Mapped[Optional[User]] = relationship(
         "User", foreign_keys=[resolved_by_id], viewonly=True
     )
@@ -77,9 +76,7 @@ class CommentEdit(Base):
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
 
-    editor: Mapped[User] = relationship(
-        "User", foreign_keys=[editor_id], viewonly=True
-    )
+    editor: Mapped[User] = relationship("User", foreign_keys=[editor_id], viewonly=True)
 
 
 class CommentMention(Base):
@@ -98,6 +95,4 @@ class CommentMention(Base):
         primary_key=True,
     )
 
-    user: Mapped[User] = relationship(
-        "User", foreign_keys=[user_id], viewonly=True
-    )
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id], viewonly=True)

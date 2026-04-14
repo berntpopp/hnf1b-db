@@ -7,6 +7,7 @@ in-flight revision row reaches.
 Spec reference:
   docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §3 I8.
 """
+
 import pytest
 
 

@@ -1,4 +1,5 @@
 """build_phenopacket_response populates effective_state correctly."""
+
 import pytest
 
 from app.phenopackets.query_builders import build_phenopacket_response

@@ -1,4 +1,5 @@
 """Unit tests for PhenopacketStateService._effective_state (spec I9)."""
+
 import pytest
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision

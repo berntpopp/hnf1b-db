@@ -1,4 +1,5 @@
 """Mentionable-users autocomplete endpoint (D.2 §5.7)."""
+
 from __future__ import annotations
 
 from typing import Dict, List

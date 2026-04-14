@@ -8,6 +8,7 @@ Static paths under /comments/ (if any are added) MUST be declared before
 a static path registered after /{id} will be swallowed by the int coercion
 on {id} and surface as 422.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -56,9 +57,7 @@ async def _build_comment_response(
         for u in mention_users
     ]
     edited = len(await svc.list_edits(comment.id)) > 0
-    resolved_by_username = (
-        comment.resolved_by.username if comment.resolved_by else None
-    )
+    resolved_by_username = comment.resolved_by.username if comment.resolved_by else None
     return CommentResponse(
         id=comment.id,
         record_type=comment.record_type,

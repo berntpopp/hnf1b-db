@@ -5,13 +5,14 @@ Revises: 20260412_0004
 Create Date: 2026-04-14 19:01:37.712136
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '531a38c865bd'
-down_revision: Union[str, Sequence[str], None] = '20260412_0004'
+revision: str = "531a38c865bd"
+down_revision: Union[str, Sequence[str], None] = "20260412_0004"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

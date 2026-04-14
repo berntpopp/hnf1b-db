@@ -1,4 +1,5 @@
 """Mentionable users endpoint — smoke + role filtering."""
+
 import pytest
 
 from app.auth.password import get_password_hash

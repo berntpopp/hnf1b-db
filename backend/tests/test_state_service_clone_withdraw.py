@@ -15,6 +15,7 @@ After clone → submit (draft→in_review) → withdraw (in_review→draft):
 Spec reference:
   docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §3 I8/I9.
 """
+
 import pytest
 
 
@@ -58,9 +59,7 @@ async def test_clone_cycle_withdraw_keeps_pp_state(
     )
 
     # I8: pp.state is unchanged (still 'published')
-    assert pp.state == "published", (
-        f"I8 violated: pp.state={pp.state!r} after withdraw"
-    )
+    assert pp.state == "published", f"I8 violated: pp.state={pp.state!r} after withdraw"
 
     # Revision row records the withdraw event
     assert rev.state == "draft"
