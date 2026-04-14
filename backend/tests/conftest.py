@@ -119,6 +119,9 @@ async_session_maker = test_session_maker
 # untouched so that lookup tables populated by Alembic migrations survive.
 _MUTABLE_TABLES: tuple[str, ...] = (
     "credential_tokens",
+    "comment_mentions",
+    "comment_edits",
+    "comments",
     "phenopacket_audit",
     "phenopacket_revisions",
     "phenopackets",
