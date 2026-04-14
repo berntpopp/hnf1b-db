@@ -6,15 +6,42 @@
 <script setup>
 import { computed } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { sanitize } from '@/utils/sanitize';
+import DOMPurify from 'dompurify';
 
 const props = defineProps({
   bodyMarkdown: { type: String, required: true },
 });
 
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+// html: true lets the Tiptap-serialized mention span survive into the
+// rendered tree. DOMPurify below strips anything dangerous.
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 
-const safeHtml = computed(() => sanitize(md.render(props.bodyMarkdown ?? '')));
+// Comment-specific sanitize config. We allow `class` and a narrow set of
+// data-* attributes so <span class="mention" data-id="..."> survives and
+// renders as a styled pill. Everything else follows DOMPurify defaults.
+const sanitizeForComment = (html) =>
+  DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      'strong',
+      'em',
+      'b',
+      'i',
+      'a',
+      'p',
+      'span',
+      'br',
+      'ul',
+      'ol',
+      'li',
+      'code',
+      'pre',
+      'blockquote',
+    ],
+    ALLOWED_ATTR: ['href', 'title', 'target', 'rel', 'class', 'data-id', 'data-type'],
+    // Event handlers are still blocked — ALLOWED_ATTR doesn't include any on* names.
+  });
+
+const safeHtml = computed(() => sanitizeForComment(md.render(props.bodyMarkdown ?? '')));
 </script>
 
 <style scoped>
@@ -26,5 +53,12 @@ const safeHtml = computed(() => sanitize(md.render(props.bodyMarkdown ?? '')));
   padding: 0.1em 0.3em;
   border-radius: 3px;
   font-size: 0.9em;
+}
+.comment-body :deep(.mention) {
+  background: rgba(94, 53, 177, 0.1);
+  color: rgb(94, 53, 177);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
 }
 </style>
