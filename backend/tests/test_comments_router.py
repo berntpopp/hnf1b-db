@@ -16,6 +16,4 @@ async def test_post_comment_201(
         },
         headers=curator_headers,
     )
-    # Note: the router isn't mounted yet (Task 20). Accept 404 as an expected
-    # pre-mount response; this test is primarily a module-import smoke check.
-    assert resp.status_code in (201, 404), resp.json()
+    assert resp.status_code == 201, resp.json()
