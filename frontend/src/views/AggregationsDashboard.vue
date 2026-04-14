@@ -486,7 +486,7 @@ function fetchAggregationData() {
         let data = response.data || [];
         const totalCount = data.reduce((sum, item) => sum + item.count, 0);
 
-        let groupedCounts = [];
+        let groupedCounts;
 
         if (params.limit && data.length > params.limit) {
           const topItems = data.slice(0, params.limit);

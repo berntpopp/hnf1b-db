@@ -135,7 +135,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   });
   expect(createResp.ok(), `Create failed: ${await createResp.text()}`).toBeTruthy();
   const created = await createResp.json();
-  let revision = created.revision ?? 1;
+  let revision; // will be set from API re-fetch after browser transitions
 
   // Confirm initial state is draft
   expect(created.state).toBe('draft');
