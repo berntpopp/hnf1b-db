@@ -104,7 +104,13 @@ Enforced by: `require_curator` dependency on all write endpoints, plus parametri
 
 `comments.resolved_at IS NULL ⇔ comments.resolved_by_id IS NULL`. Same for `deleted_at ⇔ deleted_by_id`. A comment is either resolved with an actor or not resolved at all; the actor is never anonymous. Deleted with an actor or not deleted at all.
 
-Enforced by: CHECK constraints in the migration (DDL given in §5.1).
+Enforced by: CHECK constraints in the migration (DDL given in §5.1). Actor FK columns (`author_id`, `resolved_by_id`, `deleted_by_id`) use the default `NO ACTION` on user delete, NOT `SET NULL` — a `SET NULL` would produce rows with a non-null timestamp and null actor, violating C5. Consequence: a user with any comment-action history cannot be hard-deleted from the `users` table. For v1 this is fine because the user model supports soft-deactivation (`is_active=FALSE`) and there is no hard-delete workflow; if one is added later, it must either reassign actor rows to a sentinel system user first or accept the constraint.
+
+#### C6 — Soft-deleted comments are terminal for writes
+
+Once `deleted_at IS NOT NULL`, all mutating operations (PATCH, resolve, unresolve, DELETE again) return `404` rather than `409` or a no-op. The soft-delete is a tombstone from the API's write-perspective. Read-perspective: invisible to default list/detail, visible via `?include=deleted` on list and detail, regardless of caller role (curator or admin — no per-role body redaction). v1 ships no restore endpoint.
+
+Enforced by: a pre-check at the top of every write service method that 404s on soft-deleted rows, plus a parametrized test over the four mutating endpoints.
 
 ---
 
@@ -177,17 +183,42 @@ Modify `transition`:
 
 **No changes.** The `_RULES` dict already covers every `(from, to)` pair the effective-state routing needs.
 
-#### 4.2.3 `backend/app/phenopackets/routers/transitions.py`
+#### 4.2.3 `backend/app/phenopackets/models.py` — ORM relationship
 
-Response builder additions in `post_transition` (and wherever `build_phenopacket_response` is called in ways the frontend will read):
+Add a `Phenopacket.editing_revision` relationship alongside the existing `draft_owner`:
 
 ```python
-pp_dict["effective_state"] = await svc._effective_state(pp_reloaded)
+editing_revision: Mapped[Optional["PhenopacketRevision"]] = relationship(
+    "PhenopacketRevision", foreign_keys=[editing_revision_id], viewonly=True
+)
 ```
 
-Add `effective_state: str | None` to `PhenopacketResponse` (backend schema).
+This lets the response builder read `pp.editing_revision.state` without an extra round-trip (when eager-loaded) and without crafting a second `SELECT`.
 
-#### 4.2.4 Frontend
+#### 4.2.4 `backend/app/phenopackets/query_builders.py` — central response builder
+
+This is the single source of truth the frontend reads for every `GET /phenopackets/{id}` and list response (not just the transition endpoint). Update `build_phenopacket_response`:
+
+```python
+effective_state = (
+    pp.editing_revision.state
+    if pp.editing_revision_id is not None and pp.editing_revision is not None
+    else pp.state
+)
+response.effective_state = effective_state
+```
+
+Add `effective_state: str | None` to `PhenopacketResponse` (Pydantic).
+
+#### 4.2.5 `backend/app/phenopackets/repositories.py` — eager loading
+
+Every read path that returns a `Phenopacket` to the response builder uses `selectinload(Phenopacket.editing_revision)`. Specifically: `PhenopacketRepository.get_by_id`, the list queries in `crud.py`, and the comparison/timeline queries in `crud_related.py` / `crud_timeline.py`. `selectinload` is lazy on NULL FK, so the common case (no in-flight edit) costs zero extra queries.
+
+#### 4.2.6 `backend/app/phenopackets/routers/transitions.py`
+
+The explicit `pp_dict["effective_state"] = ...` augmentation in `post_transition` is **removed**. The field now flows from the central builder automatically. The transition endpoint re-fetches via `PhenopacketRepository.get_by_id`, which eager-loads `editing_revision`.
+
+#### 4.2.7 Frontend
 
 - `frontend/src/components/StateBadge.vue` — rebind to `phenopacket.effective_state`.
 - `frontend/src/components/TransitionMenu.vue` — call `allowed_transitions(effective_state, role, is_owner)` (already pure; no backend change).
@@ -238,11 +269,11 @@ CREATE TABLE comments (
   author_id       BIGINT NOT NULL REFERENCES users(id),
   body_markdown   TEXT NOT NULL CHECK (char_length(body_markdown) BETWEEN 1 AND 10000),
   resolved_at     TIMESTAMPTZ NULL,
-  resolved_by_id  BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
+  resolved_by_id  BIGINT NULL REFERENCES users(id),                      -- NO ACTION (C5)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at      TIMESTAMPTZ NULL,
-  deleted_by_id   BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by_id   BIGINT NULL REFERENCES users(id),                       -- NO ACTION (C5)
   CONSTRAINT chk_resolved_consistency
     CHECK ((resolved_at IS NULL) = (resolved_by_id IS NULL)),
   CONSTRAINT chk_deleted_consistency
@@ -350,11 +381,14 @@ GET    /api/v2/comments
 
 GET    /api/v2/comments/{id}
        auth: curator or admin
+       query:
+         include            = "deleted"     # surfaces a soft-deleted comment with full body, curator or admin
        200:  CommentResponse
-       404:  not_found or soft-deleted (unless curator/admin + include=deleted)
+       404:  not found, OR the row is soft-deleted AND include=deleted was not supplied
 
 PATCH  /api/v2/comments/{id}
        auth: author only (admin CANNOT edit others' body — matrix)
+       precondition: comment is not soft-deleted (C6); 404 otherwise
        body: { body_markdown: string, mention_user_ids: int[] }
        side effects (single transaction):
          1. INSERT comment_edits(comment_id, editor_id=current_user.id, prev_body=<current body>)
@@ -368,16 +402,19 @@ PATCH  /api/v2/comments/{id}
 
 POST   /api/v2/comments/{id}/resolve
        auth: curator or admin
+       precondition: comment is not soft-deleted (C6); 404 otherwise
        200:  CommentResponse (resolved_at=now(), resolved_by_id=current_user.id)
        409:  already_resolved
 
 POST   /api/v2/comments/{id}/unresolve
        auth: curator or admin
+       precondition: comment is not soft-deleted (C6); 404 otherwise
        200:  CommentResponse (both resolved_* fields cleared)
        409:  not_resolved
 
 DELETE /api/v2/comments/{id}
        auth: author (any curator) OR admin
+       precondition: comment is not already soft-deleted (C6); 404 otherwise (no idempotent second-delete)
        side effect: soft-delete (deleted_at=now(), deleted_by_id=current_user.id)
        comment_edits and comment_mentions are NOT deleted
        204:  no content
@@ -452,10 +489,10 @@ Each module ≤ 500 lines per CLAUDE.md §Code Quality Principles. Every mutatin
 
 ### 5.7 Mentionable-users endpoint
 
-Autocomplete backing: reuse the existing `GET /api/v2/auth/users` admin-only endpoint is wrong (too privileged). Add:
+Autocomplete backing: reusing the existing `GET /api/v2/auth/users` admin-only endpoint is wrong (too privileged). Add a curator-accessible sibling under the users namespace, deliberately NOT under `/comments/*` to avoid colliding with the `/comments/{id}` pattern:
 
 ```
-GET /api/v2/comments/mentionable-users?q=<prefix>
+GET /api/v2/users/mentionable?q=<prefix>
     auth: curator or admin
     query: q (required, min 2 chars)
     200: { data: [{id, username, display_name}] }
@@ -464,6 +501,8 @@ GET /api/v2/comments/mentionable-users?q=<prefix>
 ```
 
 `q ≥ 2 chars` defends against list-scraping (risk #1 in §8).
+
+**Routing-order requirement.** `/comments/{id}`, `/comments/{id}/resolve`, `/comments/{id}/unresolve`, and `/comments/{id}/edits` are `{id}`-parametrized. FastAPI matches routes in registration order, so any static path under `/comments/` (e.g., a future `/comments/search`) must be registered **before** the `{id}` patterns in the router — otherwise the static path is swallowed by `{id}` and surfaces as `422: Input should be a valid integer`. Document this explicitly in a comment at the top of `backend/app/comments/routers.py`; a router-registration test asserts the static routes resolve correctly.
 
 ### 5.8 Frontend
 
@@ -599,7 +638,8 @@ Transaction:
 - `test_comments_mentions_replace.py` — C2 test: row-set equality after N successive edits.
 - `test_comments_record_integrity.py` — C3 test: non-existent record_id → 404; soft-deleted record → 201.
 - `test_comments_resolve.py` — resolve, unresolve, 409 on double-resolve.
-- `test_comments_soft_delete.py` — deleted comment hidden by default; body redacted to "[deleted]" for curators with `?include=deleted`, full body for admins.
+- `test_comments_soft_delete.py` — deleted comment hidden from default list/detail (404); surfaced with `?include=deleted` with full body regardless of role (curator or admin).
+- `test_comments_c6_terminal_writes.py` — C6 test: on a soft-deleted comment, PATCH / resolve / unresolve / second DELETE all return 404.
 - `test_comments_mention_unknown_user.py` — 422 on unknown / deactivated / non-curator mention.
 - `test_comments_ast_immutable.py` — AST scan: no `update()`/`delete()` against `comment_edits`.
 - `test_comments_mentionable_users.py` — q < 2 chars → 400; role and is_active filters applied.
@@ -648,7 +688,8 @@ All existing backend and frontend tests stay green. Backend coverage ≥ 70%; ne
 ### Part A
 
 - [ ] `backend/app/phenopackets/services/state_service.py` has `_effective_state(pp)`; `edit_record`, `_simple_transition`, and `transition` all route on it.
-- [ ] `PhenopacketResponse.effective_state` field populated in router responses.
+- [ ] `Phenopacket.editing_revision` relationship added; `build_phenopacket_response` in `query_builders.py` populates `effective_state` from it; every read path (`crud.py`, `crud_related.py`, `crud_timeline.py`, transitions) eager-loads it via `selectinload`. Verify with a test that `GET /phenopackets/{id}` returns `effective_state` correctly during an active clone-cycle.
+- [ ] `PhenopacketResponse.effective_state` field populated for every read endpoint, not only transitions.
 - [ ] Frontend `StateBadge`, `TransitionMenu`, `usePhenopacketState` read `effective_state`.
 - [ ] After clone-to-draft, a curator can iteratively save (no 409 `edit_in_progress`), submit, request_changes, resubmit, approve, and publish without DB intervention.
 - [ ] After clone-to-draft, withdraw returns effective state to `'draft'` with `pp.state='published'`.
@@ -658,12 +699,14 @@ All existing backend and frontend tests stay green. Backend coverage ≥ 70%; ne
 
 ### Part B
 
-- [ ] All eight endpoints in §5.3 plus the mentionable-users endpoint (§5.7) implemented, OpenAPI-documented, and parametrized-tested.
+- [ ] All eight endpoints in §5.3 plus the mentionable-users endpoint at `/api/v2/users/mentionable` (§5.7) implemented, OpenAPI-documented, and parametrized-tested. A router-order test asserts `/comments/{id}` routes don't swallow any static `/comments/*` subpath.
 - [ ] Permissions matrix enforced: viewer 403 on every endpoint; admin 403 on PATCH when not author; every other matrix cell passes its test.
 - [ ] C1 (append-only edit log) enforced by AST test.
 - [ ] C2 (mention row-set equality) test green after N iterations.
 - [ ] C3 (record reference integrity) test green for not-exists (404) and soft-deleted (201) cases.
-- [ ] CHECK constraints from C5 present in the migration; a test attempts violating inserts at the DB level and asserts `IntegrityError` is raised.
+- [ ] CHECK constraints from C5 present in the migration; a test attempts violating inserts at the DB level and asserts `IntegrityError` is raised. FK on actor columns uses default `NO ACTION` — a test attempts `DELETE FROM users WHERE id = <author of a comment>` and asserts the delete is rejected.
+- [ ] C6 (soft-delete terminal for writes) test: PATCH / resolve / unresolve / second DELETE on a soft-deleted comment all return 404.
+- [ ] `?include=deleted` returns soft-deleted rows with full body on both list and detail endpoints for curator and admin (no per-role redaction).
 - [ ] Discussion tab hidden for viewers; curator+ sees it; comment-count badge renders; open-count badge renders when any unresolved comment exists.
 - [ ] E2E flow (curator posts → edits → admin soft-deletes) green in one Playwright spec.
 - [ ] XSS sanitization test green: `<script>` / `<img onerror>` in a body render inert.
