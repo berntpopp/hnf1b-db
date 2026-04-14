@@ -200,7 +200,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // (public head stays) but working copy is updated.  State stays 'published'
   // with editing_revision_id set to point at the in-progress draft.
   expect(clonedDetail.editing_revision_id).not.toBeNull();
-  void clonedDetail.revision; // revision tracking ends here — no further transitions needed
+  // Revision tracking ends here — no further transitions are needed in this test.
 
   // -------------------------------------------------------------------------
   // Phase 3 — Browser (admin): detail page shows DRAFT_SUBJECT_ID
