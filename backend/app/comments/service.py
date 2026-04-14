@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -38,6 +38,7 @@ class CommentsService:
         """Write attempted on a soft-deleted comment (C6)."""
 
     def __init__(self, db: AsyncSession) -> None:
+        """Initialise with an async database session."""
         self.db = db
 
     # ------------------------------------------------------------------
@@ -170,6 +171,7 @@ class CommentsService:
     async def get_by_id(
         self, comment_id: int, *, include_deleted: bool = False
     ) -> Optional[Comment]:
+        """Return a single comment by id, or None if not found / soft-deleted."""
         stmt = (
             select(Comment)
             .where(Comment.id == comment_id)
@@ -184,6 +186,7 @@ class CommentsService:
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_edits(self, comment_id: int) -> List[CommentEdit]:
+        """Return all edit-log rows for a comment, newest first."""
         stmt = (
             select(CommentEdit)
             .where(CommentEdit.comment_id == comment_id)
@@ -253,7 +256,7 @@ class CommentsService:
         comment.updated_at = func.now()
         # 3. Replace mentions
         await self.db.execute(
-            CommentMention.__table__.delete().where(
+            delete(CommentMention).where(
                 CommentMention.comment_id == comment.id
             )
         )
@@ -264,6 +267,7 @@ class CommentsService:
         return await self._load_for_response(comment.id)
 
     async def resolve(self, *, comment_id: int, actor: User) -> Comment:
+        """Mark a comment resolved; raises AlreadyResolved if already so."""
         comment = await self._fetch_live_or_404(comment_id)
         if comment.resolved_at is not None:
             raise self.AlreadyResolved(f"comment {comment_id} already resolved")
@@ -274,6 +278,7 @@ class CommentsService:
         return await self._load_for_response(comment_id)
 
     async def unresolve(self, *, comment_id: int, actor: User) -> Comment:
+        """Clear the resolved flag; raises NotResolved if not currently resolved."""
         comment = await self._fetch_live_or_404(comment_id)
         if comment.resolved_at is None:
             raise self.NotResolved(f"comment {comment_id} is not resolved")
@@ -284,6 +289,7 @@ class CommentsService:
         return await self._load_for_response(comment_id)
 
     async def soft_delete(self, *, comment_id: int, actor: User) -> None:
+        """Soft-delete a comment (author or admin only). Terminal write (C6)."""
         comment = await self._fetch_live_or_404(comment_id)
         is_admin = actor.role == "admin"
         if comment.author_id != actor.id and not is_admin:

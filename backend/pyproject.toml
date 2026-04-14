@@ -116,7 +116,8 @@ convention = "google"
 "migration/**/*.py" = ["E501"]
 # Test files: allow long test strings and fixtures; test docstrings
 # can be informal (D205 summary/description formatting, D301 escapes)
-"tests/*.py" = ["E501", "D205", "D301"]
+# D103: test functions don't need formal docstrings
+"tests/*.py" = ["E501", "D103", "D205", "D301"]
 # App files with SQL/JSONPath queries and long API parameters
 "app/phenopackets/clinical_endpoints.py" = ["E501"]  # JSONPath queries
 "app/phenopackets/clinical_queries.py" = ["E501"]  # JSONPath and SQL queries
