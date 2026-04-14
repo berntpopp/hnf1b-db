@@ -88,6 +88,24 @@ class PhenopacketStateService:
         )
         return result.scalars().first()
 
+    async def _effective_state(self, pp: Phenopacket) -> State:
+        """Return the state governing edit-cycle decisions for this phenopacket.
+
+        Spec invariant I9 — pure function of (pp.state, editing_revision_id,
+        editing revision's state). If editing_revision_id is set, the
+        referenced revision row's state is authoritative; otherwise pp.state.
+        """
+        if pp.editing_revision_id is None:
+            return cast(State, pp.state)
+        rev = (
+            await self.db.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.id == pp.editing_revision_id
+                )
+            )
+        ).scalar_one()
+        return cast(State, rev.state)
+
     # ------------------------------------------------------------------
     # §6.1 — Clone-to-draft (published) or in-place edit (draft / changes_requested)
     # ------------------------------------------------------------------
