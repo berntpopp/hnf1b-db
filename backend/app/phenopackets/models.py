@@ -578,6 +578,9 @@ class PhenopacketResponse(BaseModel):
     editing_revision_id: Optional[int] = None
     draft_owner_id: Optional[int] = None
     draft_owner_username: Optional[str] = None
+    # Wave 7 D.2: derived from editing_revision.state when in-flight, else pp.state.
+    # None when include_state=False (non-curator callers).
+    effective_state: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
