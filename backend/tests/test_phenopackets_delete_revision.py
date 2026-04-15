@@ -20,6 +20,7 @@ from app.phenopackets.services.phenopacket_service import (
     PhenopacketService,
     ServiceConflict,
 )
+from app.phenopackets.services.state_service import PhenopacketStateService
 
 
 def _valid_payload(phenopacket_id: str, subject_id: str = "s", sex: str = "MALE"):
@@ -203,3 +204,131 @@ async def test_delete_fails_when_revision_changes_before_commit(
         update_done.set()
 
     await __import__("asyncio").gather(actor_a_delete(), actor_b_update())
+
+
+@pytest.mark.asyncio
+async def test_transition_fails_cleanly_when_delete_wins_after_preread(
+    db_session,
+    admin_user,
+):
+    """A state transition that loses to a concurrent delete must not leak KeyError.
+
+    The HTTP transition route currently performs an unlocked pre-read to resolve the
+    phenopacket id into the internal UUID before delegating to the state service.
+    If another session soft-deletes the row after that pre-read but before
+    ``SELECT .. FOR UPDATE`` runs inside ``_lock_and_check()``, the service should
+    raise a stable domain error that the router can map to 404 instead of leaking a
+    raw ``KeyError`` as a 500.
+    """
+    phenopacket = Phenopacket(
+        phenopacket_id="transition-delete-race",
+        phenopacket=_valid_payload("transition-delete-race")["phenopacket"],
+        subject_id="s",
+        subject_sex="MALE",
+        created_by_id=admin_user.id,
+        state="draft",
+        revision=1,
+    )
+    db_session.add(phenopacket)
+    await db_session.commit()
+
+    preread_complete = __import__("asyncio").Event()
+    delete_complete = __import__("asyncio").Event()
+
+    async def actor_a_transition() -> None:
+        async with async_session_maker() as session:
+            repo = PhenopacketRepository(session)
+            loaded = await repo.get_by_id("transition-delete-race")
+            assert loaded is not None
+            preread_complete.set()
+            await delete_complete.wait()
+
+            svc = PhenopacketStateService(session)
+            with pytest.raises(PhenopacketStateService.RecordNotFound):
+                await svc.transition(
+                    loaded.id,
+                    to_state="in_review",
+                    reason="submit after stale preread",
+                    expected_revision=loaded.revision,
+                    actor=admin_user,
+                )
+
+    async def actor_b_delete() -> None:
+        await preread_complete.wait()
+        async with async_session_maker() as session:
+            service = PhenopacketService(PhenopacketRepository(session))
+            result = await service.soft_delete(
+                "transition-delete-race",
+                "delete wins race",
+                actor_id=admin_user.id,
+                actor_username=admin_user.username,
+                expected_revision=1,
+            )
+            assert result["deleted_at"] is not None
+        delete_complete.set()
+
+    await __import__("asyncio").gather(actor_a_transition(), actor_b_delete())
+
+
+@pytest.mark.asyncio
+async def test_edit_fails_cleanly_when_delete_wins_after_preread(
+    db_session,
+    admin_user,
+):
+    """An edit that loses to a concurrent delete must surface a stable not-found error."""
+    payload = _valid_payload("edit-delete-race")
+    phenopacket = Phenopacket(
+        phenopacket_id="edit-delete-race",
+        phenopacket=payload["phenopacket"],
+        subject_id=payload["phenopacket"]["subject"]["id"],
+        subject_sex=payload["phenopacket"]["subject"].get("sex", "UNKNOWN_SEX"),
+        created_by_id=admin_user.id,
+        state="draft",
+        revision=1,
+    )
+    db_session.add(phenopacket)
+    await db_session.commit()
+
+    preread_complete = __import__("asyncio").Event()
+    delete_complete = __import__("asyncio").Event()
+
+    async def actor_a_edit() -> None:
+        async with async_session_maker() as session:
+            repo = PhenopacketRepository(session)
+            loaded = await repo.get_by_id("edit-delete-race")
+            assert loaded is not None
+            preread_complete.set()
+            await delete_complete.wait()
+
+            svc = PhenopacketStateService(session)
+            with pytest.raises(PhenopacketStateService.RecordNotFound):
+                await svc.edit_record(
+                    loaded.id,
+                    new_content={
+                        **payload["phenopacket"],
+                        "phenotypicFeatures": [
+                            {
+                                "type": {"id": "HP:0000001", "label": "updated"},
+                            }
+                        ],
+                    },
+                    change_reason="edit after stale preread",
+                    expected_revision=loaded.revision,
+                    actor=admin_user,
+                )
+
+    async def actor_b_delete() -> None:
+        await preread_complete.wait()
+        async with async_session_maker() as session:
+            service = PhenopacketService(PhenopacketRepository(session))
+            result = await service.soft_delete(
+                "edit-delete-race",
+                "delete wins race",
+                actor_id=admin_user.id,
+                actor_username=admin_user.username,
+                expected_revision=1,
+            )
+            assert result["deleted_at"] is not None
+        delete_complete.set()
+
+    await __import__("asyncio").gather(actor_a_edit(), actor_b_delete())

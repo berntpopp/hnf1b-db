@@ -51,6 +51,9 @@ class PhenopacketStateService:
     class ForbiddenNotOwner(Exception):
         """Curator is not the draft owner and not admin."""
 
+    class RecordNotFound(Exception):
+        """Record does not exist anymore by the time the mutation acquires its lock."""
+
     # ------------------------------------------------------------------
 
     def __init__(self, db: AsyncSession) -> None:
@@ -68,7 +71,7 @@ class PhenopacketStateService:
         stmt = select(Phenopacket).where(Phenopacket.id == record_id).with_for_update()
         pp = (await self.db.execute(stmt)).scalar_one_or_none()
         if pp is None:
-            raise KeyError(f"Phenopacket {record_id!r} not found")
+            raise self.RecordNotFound(f"Phenopacket {record_id!r} not found")
         if pp.revision != expected_revision:
             raise self.RevisionMismatch(
                 f"expected revision {expected_revision}, current is {pp.revision}"

@@ -121,7 +121,7 @@ This is the highest-leverage work. It should start before any additional collabo
 
 ### Workstream B: Workflow Integrity
 
-- [ ] Lock down the timeline endpoint to the same visibility rules as detail/list routes.
+- [x] Lock down the timeline endpoint to the same visibility rules as detail/list routes.
   Files:
   `backend/app/phenopackets/routers/crud_timeline.py`
   related detail/list visibility helpers and tests.
