@@ -42,11 +42,25 @@ router = APIRouter(prefix="/comments", tags=["comments"])
 
 
 async def _build_comment_response(
-    svc: CommentsService, comment: Comment
+    svc: CommentsService,
+    comment: Comment,
+    *,
+    mentions_by_id: Optional[Dict[int, List[User]]] = None,
+    edited_by_id: Optional[Dict[int, bool]] = None,
 ) -> CommentResponse:
-    """Assemble a CommentResponse from an eager-loaded Comment ORM row."""
-    mentions_map = await svc.load_mentions([comment.id])
-    mention_users = mentions_map.get(comment.id, [])
+    """Assemble a CommentResponse from an eager-loaded Comment ORM row.
+
+    When *mentions_by_id* and *edited_by_id* are provided (bulk-loaded by
+    list_comments), the function skips per-comment queries entirely.
+    When they are None (single-comment callers like create/get/update), the
+    function falls back to individual queries to preserve existing behaviour.
+    """
+    if mentions_by_id is not None:
+        mention_users = mentions_by_id.get(comment.id, [])
+    else:
+        mentions_map = await svc.load_mentions([comment.id])
+        mention_users = mentions_map.get(comment.id, [])
+
     mentions = [
         CommentMentionOut(
             user_id=u.id,
@@ -56,7 +70,12 @@ async def _build_comment_response(
         )
         for u in mention_users
     ]
-    edited = len(await svc.list_edits(comment.id)) > 0
+
+    if edited_by_id is not None:
+        edited = edited_by_id.get(comment.id, False)
+    else:
+        edited = len(await svc.list_edits(comment.id)) > 0
+
     resolved_by_username = comment.resolved_by.username if comment.resolved_by else None
     return CommentResponse(
         id=comment.id,
@@ -179,7 +198,17 @@ async def list_comments(
         include_deleted=include_deleted,
         resolved_filter=resolved_filter,
     )
-    data = [await _build_comment_response(svc, c) for c in rows]
+    # Bulk-load mentions and edit-existence for the whole page in two queries
+    # instead of 2×N per-comment queries (fixes N+1 from Copilot review).
+    comment_ids = [c.id for c in rows]
+    mentions_by_id = await svc.load_mentions(comment_ids)
+    edited_by_id = await svc.bulk_edit_existence(comment_ids)
+    data = [
+        await _build_comment_response(
+            svc, c, mentions_by_id=mentions_by_id, edited_by_id=edited_by_id
+        )
+        for c in rows
+    ]
     return {
         "data": [d.model_dump() for d in data],
         "meta": {"total": total, "page": page_number, "page_size": page_size},

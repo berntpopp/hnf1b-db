@@ -211,6 +211,27 @@ class CommentsService:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
+    async def bulk_edit_existence(
+        self, comment_ids: Sequence[int]
+    ) -> dict[int, bool]:
+        """Return {comment_id: True} for any id that has at least one edit row.
+
+        Uses a single GROUP BY query instead of N individual EXISTS queries.
+        comment_ids not present in the result have no edits (implicitly False).
+        """
+        if not comment_ids:
+            return {}
+        stmt = (
+            select(CommentEdit.comment_id)
+            .where(CommentEdit.comment_id.in_(list(comment_ids)))
+            .group_by(CommentEdit.comment_id)
+        )
+        rows = (await self.db.execute(stmt)).scalars().all()
+        result: dict[int, bool] = {cid: False for cid in comment_ids}
+        for cid in rows:
+            result[cid] = True
+        return result
+
     async def load_mentions(self, comment_ids: Sequence[int]) -> dict[int, List[User]]:
         """Bulk-load mentions for a set of comments. Used by the router."""
         if not comment_ids:

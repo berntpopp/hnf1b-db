@@ -19,7 +19,9 @@ async def test_update_body_writes_edit_log_and_replaces_mentions(
         mention_user_ids=[another_curator.id],
         actor=curator_user,
     )
-    assert len((await svc.load_mentions([comment.id]))[comment.id]) == 0 or True
+    # Verify the initial mention set matches the input (another_curator was mentioned).
+    mentions_after_create = (await svc.load_mentions([comment.id]))[comment.id]
+    assert {u.id for u in mentions_after_create} == {another_curator.id}
     # Replace body and mentions
     updated = await svc.update_body(
         comment_id=comment.id,
