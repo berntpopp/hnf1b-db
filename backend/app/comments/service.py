@@ -211,9 +211,7 @@ class CommentsService:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
-    async def bulk_edit_existence(
-        self, comment_ids: Sequence[int]
-    ) -> dict[int, bool]:
+    async def bulk_edit_existence(self, comment_ids: Sequence[int]) -> dict[int, bool]:
         """Return {comment_id: True} for any id that has at least one edit row.
 
         Uses a single GROUP BY query instead of N individual EXISTS queries.
