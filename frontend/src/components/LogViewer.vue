@@ -45,7 +45,7 @@
 
     <!-- Filter Controls -->
     <v-container class="py-2" fluid>
-      <v-row dense>
+      <v-row density="comfortable">
         <!-- Minimum Display Level -->
         <v-col cols="6">
           <v-select

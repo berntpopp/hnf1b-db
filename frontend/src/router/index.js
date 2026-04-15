@@ -163,7 +163,9 @@ const router = createRouter({
 });
 
 // Global navigation guard: Check authentication before each route
-router.beforeEach(async (to, from, next) => {
+// Uses the modern return-value signature (Vue Router 4.1+) instead of next()
+// callbacks to eliminate the deprecation warning (Copilot review #254 comment #10).
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
   // Check if route requires authentication
@@ -175,11 +177,10 @@ router.beforeEach(async (to, from, next) => {
         from: from.path,
         to: to.path,
       });
-      next({
+      return {
         name: 'Login',
         query: { redirect: to.fullPath },
-      });
-      return;
+      };
     }
 
     // If we have a token but no user data, fetch it
@@ -191,11 +192,10 @@ router.beforeEach(async (to, from, next) => {
         window.logService.warn('Failed to fetch user data, redirecting to login', {
           error: err.message,
         });
-        next({
+        return {
           name: 'Login',
           query: { redirect: to.fullPath },
-        });
-        return;
+        };
       }
     }
 
@@ -206,19 +206,16 @@ router.beforeEach(async (to, from, next) => {
         to: to.path,
         userRole: authStore.user?.role,
       });
-      next({ name: 'Home' });
-      return;
+      return { name: 'Home' };
     }
     // Has token and proper role, allow navigation
   } else if (to.name === 'Login' && authStore.accessToken) {
     // User already has token, redirect to home
     window.logService.info('User already authenticated, redirecting to home');
-    next({ name: 'Home' });
-    return;
+    return { name: 'Home' };
   }
 
-  // All good, proceed with navigation
-  next();
+  // All good, proceed with navigation (returning undefined/true is equivalent)
 });
 
 // Global navigation guard to update page title dynamically
