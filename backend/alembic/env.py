@@ -40,7 +40,11 @@ try:
     # test_env_py_imports_all_orm_models test sees the named classes.
     from app.comments.models import (
         Comment as Comment,
+    )
+    from app.comments.models import (
         CommentEdit as CommentEdit,
+    )
+    from app.comments.models import (
         CommentMention as CommentMention,
     )
     from app.database import Base
