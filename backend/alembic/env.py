@@ -34,16 +34,9 @@ try:
     # does not flag the imports as unused — the import side-effect (model
     # registration with ``Base.metadata``) is what actually matters here.
 
-    # Comments package (3 models: Comment, CommentEdit, CommentMention).
-    from app.comments.models import (
-        Comment as Comment,
-    )
-    from app.comments.models import (
-        CommentEdit as CommentEdit,
-    )
-    from app.comments.models import (
-        CommentMention as CommentMention,
-    )
+    # Register comments ORM models so Alembic autogenerate sees them.
+    # Module-level side-effect import — unambiguous and clean (Copilot #4).
+    import app.comments.models  # noqa: F401
     from app.database import Base
 
     # Core models (2).
