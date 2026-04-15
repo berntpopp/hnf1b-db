@@ -9,7 +9,13 @@ import compression from 'vite-plugin-compression';
 export default defineConfig({
   plugins: [
     vue(),
-    vuetify({ autoImport: true }),
+    // Restore Material Design 2 typography (Roboto + larger heading scale +
+    // uppercase buttons) so Vuetify 4's MD3 defaults don't regress the
+    // current production look. Overrides live in src/styles/settings.scss.
+    vuetify({
+      autoImport: true,
+      styles: { configFile: 'src/styles/settings.scss' },
+    }),
 
     // Brotli compression (best compression, ~20% smaller than gzip)
     compression({
