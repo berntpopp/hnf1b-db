@@ -111,6 +111,7 @@ async def post_transition(
     Returns ``{"phenopacket": PhenopacketResponse, "revision": RevisionResponse}``.
 
     HTTP error mapping:
+    - ``RecordNotFound``     → 404
     - ``RevisionMismatch``    → 409  code=revision_mismatch
     - ``InvalidTransition``   → 409  code=invalid_transition
     - ``ForbiddenNotOwner``   → 403  code=forbidden_not_owner
@@ -128,6 +129,8 @@ async def post_transition(
             expected_revision=body.revision,
             actor=current_user,
         )
+    except PhenopacketStateService.RecordNotFound as exc:
+        raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:
         raise HTTPException(
             status_code=409,

@@ -375,10 +375,10 @@ class TestCrudTimelineEndpoint:
         response = await async_client.get("/api/v2/phenopackets/TL-EP-DELETED/timeline")
         assert response.status_code == 404
 
-    async def test_timeline_returns_curator_view_for_soft_deleted_phenopacket(
+    async def test_timeline_hides_soft_deleted_phenopacket_from_curator_client(
         self, async_client, db_session, admin_user, curator_headers
     ):
-        """Curators should still be able to inspect deleted history."""
+        """Timeline should obey the same no-deleted rule as detail/list routes."""
         row = _make_phenopacket_row(
             phenopacket_id="TL-EP-DELETED-CURATOR",
             subject_id="SUB-TL-DELETED-CURATOR",
@@ -392,8 +392,7 @@ class TestCrudTimelineEndpoint:
             "/api/v2/phenopackets/TL-EP-DELETED-CURATOR/timeline",
             headers=curator_headers,
         )
-        assert response.status_code == 200
-        assert response.json()["subject_id"] == "SUB-TL-DELETED-CURATOR"
+        assert response.status_code == 404
 
     async def test_timeline_returns_head_content_for_public_client_during_clone(
         self, async_client, db_session, admin_user, curator_headers

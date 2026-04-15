@@ -421,6 +421,7 @@ async def update_phenopacket(
     - Any other state → 409 ``invalid_transition`` (withdraw or resubmit first).
 
     Exception → HTTP mapping:
+    - ``RecordNotFound``     → 404 not found / soft-deleted during race
     - ``RevisionMismatch``  → 409 revision_mismatch
     - ``EditInProgress``    → 409 edit_in_progress
     - ``ForbiddenNotOwner`` → 403 forbidden_not_owner
@@ -458,6 +459,8 @@ async def update_phenopacket(
             ),
             actor=current_user,
         )
+    except PhenopacketStateService.RecordNotFound as exc:
+        raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:
         raise HTTPException(
             status_code=409,
