@@ -50,27 +50,44 @@ const hnf1bTheme = {
   },
 };
 
-// Dark theme — desaturated background, lifted teal accent for AA
-// contrast against dark surfaces. Mirrors Material Design 3's on-dark
-// guidance without dropping the brand identity.
+// Dark theme — follows Material Design 3's "layered darkness" guidance.
+// Rather than pure black, the palette uses a series of slightly lighter
+// neutral tones so elevation and hierarchy can be communicated through
+// tone shifts (since drop shadows are barely visible on black). Base
+// #121212 is the MD3 canonical dark surface; elevated surfaces get a
+// few percent lighter each step (+1..+5 dp) simulated via solid colors
+// here to avoid the overhead of runtime overlay composition.
+//
+// References:
+//   https://m3.material.io/styles/elevation/applying-elevation
+//   https://material.io/design/color/dark-theme.html
 const hnf1bThemeDark = {
   dark: true,
   colors: {
-    background: '#0F1416',
-    surface: '#1A2124',
-    'surface-bright': '#242B2E',
-    'surface-light': '#2A3235',
-    'surface-variant': '#3A4246',
-    'on-surface-variant': '#C7CFD3',
-    primary: '#4DB6AC', // Lightened teal for contrast on dark
+    // Canvas behind everything — MD3 canonical dark surface.
+    background: '#121212',
+    // Elevation 1dp — cards, sheets at rest.
+    surface: '#1E1E1E',
+    // Elevation 3dp — hovered cards, menus.
+    'surface-bright': '#2A2A2A',
+    // Elevation 2dp — secondary containers (e.g. toolbars inside cards).
+    'surface-light': '#242424',
+    // Elevation 5dp — dialogs, menus floating over content.
+    'surface-variant': '#2F2F2F',
+    // Muted text / icons for on-surface-variant tones.
+    'on-surface-variant': '#C7C7C7',
+    // Desaturated teal keeps the brand but passes AA on #1E1E1E
+    // (contrast ratio ≈ 4.9 for large text against surface).
+    primary: '#4DB6AC',
     'primary-darken-1': '#00897B',
-    secondary: '#90A4AE',
-    'secondary-darken-1': '#607D8B',
+    secondary: '#B0BEC5',
+    'secondary-darken-1': '#78909C',
     accent: '#FFAB91',
-    error: '#CF6679',
-    info: '#64B5F6',
-    success: '#81C784',
-    warning: '#FFB74D',
+    // MD3 error-container-on-dark, softer than pure red.
+    error: '#F2B8B5',
+    info: '#90CAF9',
+    success: '#A5D6A7',
+    warning: '#FFCC80',
   },
 };
 

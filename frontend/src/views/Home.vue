@@ -504,7 +504,9 @@ export default {
   transition-duration: 0.1s;
 }
 
-/* Feature cards in About section */
+/* Feature cards in About section. Light theme uses a plain white
+   surface; dark theme lifts to the MD3 elevated-surface tone so the
+   card reads as "raised" against the about-section background. */
 .feature-card {
   background: white;
   border-radius: 12px;
@@ -513,5 +515,30 @@ export default {
 
 .feature-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.v-theme--dark .feature-card {
+  background: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.v-theme--dark .feature-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* The .about-section uses Vuetify's bg-grey-lighten-5 utility inline.
+   In dark mode the utility still resolves to the light grey tone, so
+   override it at the component level to the dark-surface MD3 base. */
+.v-theme--dark .about-section {
+  background-color: #121212 !important;
+}
+
+/* Protein/gene visualization toolbar + window backgrounds. The inline
+   classes (bg-grey-lighten-4, bg-white) don't flip automatically. */
+.v-theme--dark .bg-grey-lighten-4 {
+  background-color: #242424 !important;
+}
+.v-theme--dark .bg-white {
+  background-color: #1e1e1e !important;
 }
 </style>
