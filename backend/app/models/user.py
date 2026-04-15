@@ -76,6 +76,7 @@ class User(Base):
 
     # Token Management
     refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
