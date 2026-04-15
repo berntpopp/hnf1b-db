@@ -62,7 +62,7 @@ async def test_global_filter_hides_deleted_from_list(
     delete_resp = await async_client.request(
         "DELETE",
         "/api/v2/phenopackets/soft-delete-001",
-        json={"change_reason": "test"},
+        json={"change_reason": "test", "revision": 1},
         headers=admin_headers,
     )
     assert delete_resp.status_code == 200, delete_resp.text
@@ -90,7 +90,7 @@ async def test_include_deleted_escape_hatch_still_works(
     delete_resp = await async_client.request(
         "DELETE",
         "/api/v2/phenopackets/soft-delete-002",
-        json={"change_reason": "test"},
+        json={"change_reason": "test", "revision": 1},
         headers=admin_headers,
     )
     assert delete_resp.status_code == 200, delete_resp.text

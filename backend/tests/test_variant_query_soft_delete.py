@@ -125,7 +125,10 @@ async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     del_resp = await async_client.request(
         "DELETE",
         f"/api/v2/phenopackets/{pid}",
-        json={"change_reason": "wave5b soft-delete leak test"},
+        json={
+            "change_reason": "wave5b soft-delete leak test",
+            "revision": rev,
+        },
         headers=admin_headers,
     )
     assert del_resp.status_code == 200, del_resp.text
