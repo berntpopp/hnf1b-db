@@ -52,7 +52,11 @@ apiClient.interceptors.request.use(
       config.headers['X-CSRF-Token'] = csrfToken;
     }
 
-    if (config.url?.includes('/auth/refresh') || config.url?.includes('/auth/logout')) {
+    if (
+      config.url?.includes('/auth/login') ||
+      config.url?.includes('/auth/refresh') ||
+      config.url?.includes('/auth/logout')
+    ) {
       config.withCredentials = true;
     }
 
@@ -145,6 +149,7 @@ apiClient.interceptors.response.use(
           failedRequestsQueue.push({ resolve, reject });
         })
           .then((token) => {
+            originalRequest.headers = originalRequest.headers ?? {};
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return apiClient(originalRequest);
           })
@@ -167,6 +172,7 @@ apiClient.interceptors.response.use(
         isRefreshing = false;
 
         // Retry original request with new token
+        originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {

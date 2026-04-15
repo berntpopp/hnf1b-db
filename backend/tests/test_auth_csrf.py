@@ -7,7 +7,7 @@ from starlette.responses import Response
 
 from app.auth.dependencies import require_csrf_token
 from app.auth.session_cookies import clear_auth_cookies, set_auth_cookies
-from app.core.config import Settings
+from app.core.config import Settings, settings
 
 
 def _request_with_csrf(*, cookie: str | None, header: str | None) -> Request:
@@ -100,6 +100,23 @@ async def test_require_csrf_token_accepts_matching_cookie_and_header():
     request = _request_with_csrf(cookie="csrf-token", header="csrf-token")
 
     assert await require_csrf_token(request) is None
+
+
+async def test_cors_preflight_allows_csrf_header(async_client):
+    """CORS preflight admits the double-submit CSRF header."""
+    response = await async_client.options(
+        "/api/v2/auth/refresh",
+        headers={
+            "Origin": settings.get_cors_origins_list()[0],
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-csrf-token",
+        },
+    )
+
+    assert response.status_code == 200
+    allow_headers = response.headers["access-control-allow-headers"].lower()
+    assert "content-type" in allow_headers
+    assert "x-csrf-token" in allow_headers
 
 
 def test_settings_expose_cookie_defaults():

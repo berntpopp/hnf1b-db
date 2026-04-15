@@ -30,7 +30,9 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null;
 
     try {
-      const response = await apiClient.post('/auth/login', credentials);
+      const response = await apiClient.post('/auth/login', credentials, {
+        withCredentials: true,
+      });
       const { access_token } = response.data;
 
       // Access token stays in memory only; refresh lives in the HttpOnly cookie.

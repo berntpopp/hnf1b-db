@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import pytest_asyncio
 
+from app.database import async_session_maker
 from app.repositories.refresh_session_repository import RefreshSessionRepository
 
 
@@ -155,3 +156,32 @@ async def test_revoke_all_for_user_bumps_version_and_revokes_rows(
     assert refreshed_two.revoked_at is not None
     assert refreshed_one.session_version == old_version
     assert refreshed_two.session_version == old_version
+
+
+@pytest.mark.asyncio
+async def test_create_session_does_not_commit_until_caller_commits(
+    db_session, test_user
+):
+    """Create-session leaves transaction control with the caller."""
+    repo = RefreshSessionRepository(db_session)
+
+    await repo.create_session(
+        user_id=test_user.id,
+        token_jti="jti-uncommitted",
+        token_sha256="sha-uncommitted",
+        session_version=test_user.session_version,
+        expires_at=_future_time(),
+    )
+
+    async with async_session_maker() as other_session:
+        other_repo = RefreshSessionRepository(other_session)
+        visible_before_commit = await other_repo.get_by_jti("jti-uncommitted")
+
+    await db_session.commit()
+
+    async with async_session_maker() as other_session:
+        other_repo = RefreshSessionRepository(other_session)
+        visible_after_commit = await other_repo.get_by_jti("jti-uncommitted")
+
+    assert visible_before_commit is None
+    assert visible_after_commit is not None

@@ -23,7 +23,7 @@ from app.auth import (
     verify_token,
 )
 from app.auth.credential_tokens import CredentialTokenService
-from app.auth.dependencies import get_optional_user, require_csrf_token
+from app.auth.dependencies import get_best_effort_user, require_csrf_token
 from app.auth.email import get_email_sender
 from app.auth.permissions import get_all_roles
 from app.auth.rate_limit import RateLimiter
@@ -129,6 +129,8 @@ def _clear_cookie_error_response(exc: HTTPException) -> JSONResponse:
 async def _resolve_refresh_request(
     request: Request,
     db: AsyncSession,
+    *,
+    lock_session: bool = False,
 ) -> tuple[User, RefreshSession, str, dict[str, object], RefreshSessionRepository]:
     """Resolve the user and refresh-session row for a cookie-backed refresh token."""
     refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
@@ -157,7 +159,7 @@ async def _resolve_refresh_request(
         )
 
     refresh_sessions = RefreshSessionRepository(db)
-    session = await refresh_sessions.get_by_jti(token_jti)
+    session = await refresh_sessions.get_by_jti(token_jti, for_update=lock_session)
     if session is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -175,6 +177,7 @@ async def _resolve_refresh_request(
     )
     if not token_matches or not session_is_current:
         await refresh_sessions.revoke_family(session.token_jti)
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -230,7 +233,7 @@ async def login(
 ) -> Token:
     """Login with username and password.
 
-    Returns JWT access token and refresh token.
+    Returns a short-lived access token and sets refresh/CSRF cookies.
 
     **Security:**
     - Password verified with Argon2id (or legacy bcrypt via fallback)
@@ -239,7 +242,7 @@ async def login(
     - Tokens signed with JWT_SECRET
 
     **Returns:**
-    - 200: Login successful with tokens
+    - 200: Login successful with cookie-backed refresh session
     - 401: Invalid credentials
     - 423: Account locked
     """
@@ -314,12 +317,12 @@ async def refresh_access_token(
     _: None = Depends(require_csrf_token),
     db: AsyncSession = Depends(get_db),
 ) -> Token | JSONResponse:
-    """Refresh access token using refresh token.
+    """Refresh the access token using the cookie-backed refresh session.
 
     Implements token rotation for security.
 
     **Returns:**
-    - 200: New access token and refresh token
+    - 200: New access token and rotated auth cookies
     - 401: Invalid or expired refresh token
     """
     try:
@@ -332,6 +335,7 @@ async def refresh_access_token(
         ) = await _resolve_refresh_request(
             request,
             db,
+            lock_session=True,
         )
         del refresh_token_value, refresh_payload
         _assert_user_can_receive_tokens(user)
@@ -391,7 +395,7 @@ async def logout(
     request: Request,
     response: Response,
     _: None = Depends(require_csrf_token),
-    current_user: User | None = Depends(get_optional_user),
+    current_user: User | None = Depends(get_best_effort_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Logout by invalidating refresh token.
@@ -412,6 +416,7 @@ async def logout(
             ) = await _resolve_refresh_request(
                 request,
                 db,
+                lock_session=True,
             )
             del refresh_token_value, refresh_payload
             logout_user = logout_user or resolved_user

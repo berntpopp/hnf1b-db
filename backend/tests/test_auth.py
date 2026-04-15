@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import jwt
 import pytest
 from httpx import AsyncClient
 
@@ -336,6 +337,46 @@ async def test_logout_clears_auth_cookies_without_access_token(
     assert response.status_code == 200
     assert "Successfully logged out" in response.json()["message"]
 
+    set_cookie_headers = response.headers.get_list("set-cookie")
+    assert any(settings.REFRESH_COOKIE_NAME in header for header in set_cookie_headers)
+    assert any(settings.CSRF_COOKIE_NAME in header for header in set_cookie_headers)
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_auth_cookies_with_expired_access_token(
+    async_client: AsyncClient, test_user
+):
+    """Logout still clears cookies when a stale bearer token is present."""
+    login_response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+    cookies = _auth_cookies(login_response)
+    expired_access_token = jwt.encode(
+        {
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+            "iat": datetime.now(timezone.utc) - timedelta(minutes=2),
+            "sub": test_user.username,
+            "jti": "expired-access-token",
+            "type": "access",
+            "role": test_user.role,
+            "permissions": test_user.get_permissions(),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    response = await async_client.post(
+        "/api/v2/auth/logout",
+        headers={
+            **_csrf_headers(cookies),
+            **_cookie_headers(cookies),
+            "Authorization": f"Bearer {expired_access_token}",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Successfully logged out" in response.json()["message"]
     set_cookie_headers = response.headers.get_list("set-cookie")
     assert any(settings.REFRESH_COOKIE_NAME in header for header in set_cookie_headers)
     assert any(settings.CSRF_COOKIE_NAME in header for header in set_cookie_headers)

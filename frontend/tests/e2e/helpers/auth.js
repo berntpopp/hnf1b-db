@@ -62,7 +62,8 @@ export async function apiLogin(req, apiBase, username, password) {
       {
         name: 'csrf_token',
         value: readCookieValue(csrfHeader, 'csrf_token'),
-        url: API_COOKIE_URL,
+        url: BASE_URL,
+        path: '/',
       },
     ],
   };

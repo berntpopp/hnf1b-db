@@ -114,6 +114,14 @@ describe('Auth Store', () => {
       });
 
       expect(success).toBe(true);
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        {
+          username: 'testuser',
+          password: 'password123',
+        },
+        { withCredentials: true }
+      );
       expect(authStore.accessToken).toBe('mock_access_token');
       expect(getAccessToken()).toBe('mock_access_token');
       expect(authStore.user.username).toBe('testuser');

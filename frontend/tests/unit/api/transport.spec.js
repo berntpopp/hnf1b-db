@@ -87,9 +87,14 @@ describe('transport — request auth and refresh queue', () => {
     expect(result.headers['X-CSRF-Token']).toBe('csrf-token');
   });
 
-  it('marks refresh and logout requests as credentialed cookie requests', async () => {
+  it('marks login, refresh, and logout requests as credentialed cookie requests', async () => {
     await import('@/api/transport');
 
+    const loginConfig = requestInterceptorFulfill({
+      url: '/auth/login',
+      method: 'post',
+      headers: {},
+    });
     const refreshConfig = requestInterceptorFulfill({
       url: '/auth/refresh',
       method: 'post',
@@ -101,6 +106,7 @@ describe('transport — request auth and refresh queue', () => {
       headers: {},
     });
 
+    expect(loginConfig.withCredentials).toBe(true);
     expect(refreshConfig.withCredentials).toBe(true);
     expect(logoutConfig.withCredentials).toBe(true);
   });
@@ -128,6 +134,31 @@ describe('transport — request auth and refresh queue', () => {
       expect(result.status).toBe('fulfilled');
     });
     expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a 401 request even when the original config had no headers object', async () => {
+    await import('@/api/transport');
+
+    const result = await responseInterceptorReject({
+      config: {
+        url: '/phenopackets/42',
+        _retry: false,
+      },
+      response: {
+        status: 401,
+        data: { detail: 'Token expired' },
+      },
+      message: 'Request failed with status code 401',
+    });
+
+    expect(result).toEqual({ data: { ok: true } });
+    expect(mockAxiosInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer fresh-token',
+        }),
+      })
+    );
   });
 
   it('skips refresh for auth login, refresh, and logout endpoints', async () => {
