@@ -58,3 +58,17 @@ def test_user_update_old_name_is_removed():
         "UserUpdate must be renamed to UserUpdateAdmin — no back-compat alias. "
         "See Wave 5b Task 7."
     )
+
+
+def test_token_schema_allows_access_token_only_response():
+    """Token responses must support access-token-only auth contracts."""
+    from app.schemas.auth import Token
+
+    token = Token(
+        access_token="access-token",
+        token_type="bearer",
+        expires_in=1800,
+    )
+
+    assert token.access_token == "access-token"
+    assert token.refresh_token is None

@@ -136,7 +136,9 @@ async def dev_login_as(
         role=user.role,
         permissions=user.get_permissions(),
     )
-    refresh_token = create_refresh_token(subject=user.username)
+    refresh_token = create_refresh_token(
+        subject=user.username, session_version=user.session_version
+    )
     await repo.update_refresh_token(user, refresh_token)
     await db.commit()
 

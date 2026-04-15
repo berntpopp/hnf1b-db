@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
+from app.auth.tokens import verify_token
 from app.models.user import User
 
 
@@ -151,6 +152,48 @@ async def test_token_refresh_rejects_locked_account(
 
     assert response.status_code == 423
     assert "locked" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_login_refresh_token_uses_current_session_version(
+    async_client: AsyncClient, test_user, db_session
+):
+    """Login mints a refresh token with the user's current session version."""
+    test_user.session_version = 4
+    await db_session.commit()
+
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+
+    assert response.status_code == 200
+    payload = verify_token(response.json()["refresh_token"], token_type="refresh")
+    assert payload["sv"] == 4
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotation_preserves_current_session_version(
+    async_client: AsyncClient, test_user, db_session
+):
+    """Refresh rotation keeps the user's current session version in the new token."""
+    test_user.session_version = 6
+    await db_session.commit()
+
+    login_response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    response = await async_client.post(
+        "/api/v2/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 200
+    payload = verify_token(response.json()["refresh_token"], token_type="refresh")
+    assert payload["sv"] == 6
 
 
 @pytest.mark.asyncio

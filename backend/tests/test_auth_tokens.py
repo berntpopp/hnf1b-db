@@ -122,27 +122,28 @@ class TestCreateRefreshToken:
 
     def test_returns_encoded_jwt_string(self):
         """Refresh token is a three-segment JWT string."""
-        token = create_refresh_token(subject="user-1")
+        token = create_refresh_token(subject="user-1", session_version=1)
         assert isinstance(token, str)
         assert token.count(".") == 2
 
     def test_refresh_payload_has_refresh_type(self):
         """Refresh tokens carry type='refresh' and the correct subject."""
-        token = create_refresh_token(subject="user-1")
+        token = create_refresh_token(subject="user-1", session_version=7)
         payload = verify_token(token, token_type="refresh")
         assert payload["type"] == "refresh"
         assert payload["sub"] == "user-1"
+        assert payload["sv"] == 7
 
     def test_refresh_token_contains_jti(self):
         """Refresh tokens carry a jti claim for rotation tracking."""
-        token = create_refresh_token(subject="user-1")
+        token = create_refresh_token(subject="user-1", session_version=1)
         payload = verify_token(token, token_type="refresh")
         assert "jti" in payload
 
     def test_each_refresh_token_has_unique_jti(self):
         """Rotated jti values are essential for refresh-token security."""
-        token_a = create_refresh_token("user-1")
-        token_b = create_refresh_token("user-1")
+        token_a = create_refresh_token("user-1", session_version=1)
+        token_b = create_refresh_token("user-1", session_version=1)
         payload_a = verify_token(token_a, token_type="refresh")
         payload_b = verify_token(token_b, token_type="refresh")
         assert payload_a["jti"] != payload_b["jti"]
@@ -154,7 +155,7 @@ class TestTokenTypeDistinction:
     def test_access_and_refresh_tokens_differ(self):
         """Access and refresh tokens produced for the same subject differ."""
         access = create_access_token("user-1", "VIEWER", [])
-        refresh = create_refresh_token("user-1")
+        refresh = create_refresh_token("user-1", session_version=1)
         assert access != refresh
 
     def test_access_token_rejected_when_refresh_expected(self):
@@ -167,7 +168,7 @@ class TestTokenTypeDistinction:
 
     def test_refresh_token_rejected_when_access_expected(self):
         """A refresh token cannot be used where an access token is required."""
-        refresh = create_refresh_token("user-1")
+        refresh = create_refresh_token("user-1", session_version=1)
         with pytest.raises(HTTPException) as exc:
             verify_token(refresh, token_type="access")
         assert exc.value.status_code == 401
