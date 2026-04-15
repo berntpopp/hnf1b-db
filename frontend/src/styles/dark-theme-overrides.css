@@ -74,17 +74,34 @@
   color: rgba(255, 255, 255, 0.78) !important;
 }
 
-/* Gene & Protein Visualization plot lives inside an SVG / chart
- * canvas with its own white background. Visualizations rendered
- * client-side (D3, Chart.js) won't theme-flip automatically; the
- * cleanest fix is to give the wrapping card a tinted backdrop so the
- * white plot reads as an embedded "art board" rather than a flash
- * of light. */
+/* Gene & Protein Visualization SVGs (HNF1BGeneVisualization.vue,
+ * HNF1BProteinVisualization.vue) hardcode background-color: #fafafa
+ * and label fills #424242 / #757575. Override at the SVG element so
+ * the plots blend into the dark surface and labels stay legible.
+ * Domain glyphs (exons, introns, mutation lollipops) keep their
+ * brand colors — only the chrome flips. */
+.v-theme--dark .gene-visualization,
+.v-theme--dark .protein-visualization {
+  background-color: #1e1e1e !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* SVG text labels (chromosome name, exon coords, scale ticks) — flip
+ * fills from grey to a high-contrast off-white. */
+.v-theme--dark .gene-visualization .chromosome-label,
+.v-theme--dark .gene-visualization .coordinate-label,
+.v-theme--dark .gene-visualization .exon-label,
+.v-theme--dark .protein-visualization .scale-label,
+.v-theme--dark .protein-visualization .coordinate-label {
+  fill: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Generic chart canvases (Chart.js / D3) inside any v-card render to
+ * a white area. The protein viz card includes a 3D viewer
+ * (NGL / WebGL) — its <canvas> is opaque, but the surrounding chart
+ * containers may not be. Tint them so they read as a framed plot. */
 .v-theme--dark .chart-canvas-wrapper,
-.v-theme--dark .v-card .visualization-container,
-.v-theme--dark .protein-visualization-container,
-.v-theme--dark .gene-visualization-container {
-  background-color: #f5f5f5;
+.v-theme--dark .visualization-container {
+  background-color: #1e1e1e;
   border-radius: 8px;
-  padding: 8px;
 }
