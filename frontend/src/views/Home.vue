@@ -439,17 +439,31 @@ export default {
 </script>
 
 <style scoped>
+/* Hero gradient defaults to the light-theme palette. When the app is
+   in dark mode, the .v-theme--dark ancestor class flips it to a dark
+   teal gradient that keeps the brand hue but works at low luminance. */
 .hero-section {
   background: linear-gradient(135deg, #f5f7fa 0%, #e0f2f1 100%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.v-theme--dark .hero-section {
+  background: linear-gradient(135deg, #0f1416 0%, #1a2f2c 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .border-bottom {
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.v-theme--dark .border-bottom {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .border-opacity-12 {
   border-color: rgba(0, 0, 0, 0.12) !important;
+}
+.v-theme--dark .border-opacity-12 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Stat card link wrapper - removes default link styling */

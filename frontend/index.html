@@ -69,16 +69,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1976D2" />
 
-    <!-- Opt fully OUT of Chrome's forced/auto dark mode.
-         `only light` (vs plain `light`) explicitly forbids the browser's
-         "Auto Dark Mode for Web Contents" heuristic from selectively
-         inverting elements. Without `only`, Chrome (Linux especially)
-         with chrome://flags/#enable-force-dark set to "Enabled with
-         selective inversion" will flip white v-cards to dark while
-         leaving gradient sections alone, producing a broken mixed look.
-         This is a light-theme app; there is no dark palette to fall
-         back to. -->
-    <meta name="color-scheme" content="only light" />
+    <!-- The app supports both light and dark themes via the
+         ThemeSwitcher component. Advertise both schemes so the browser
+         uses sensible defaults for scrollbars / form controls under
+         either theme. The active scheme is switched at runtime on
+         <html> by useAppTheme() and the boot script below. -->
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Pre-boot theme script — runs before the Vue bundle loads so the
+         initial paint is already in the user's chosen theme. Reads the
+         same localStorage key (`hnf1b-theme`) and media query that
+         useAppTheme() / vuetify.js use, and applies:
+           - `color-scheme: <light|dark>` on <html>
+           - `hnf1b-theme--<light|dark>` class on <html>
+         The class is used by the critical CSS below to paint the right
+         background before Vuetify hydrates. Keep this inline and
+         unminified so it runs synchronously before the first paint. -->
+    <script>
+      (function bootTheme() {
+        try {
+          var stored = window.localStorage.getItem('hnf1b-theme');
+        } catch (e) {
+          stored = null;
+        }
+        var preference = stored === 'light' || stored === 'dark' || stored === 'system'
+          ? stored
+          : 'system';
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var resolved =
+          preference === 'dark' ? 'dark'
+            : preference === 'light' ? 'light'
+            : (systemDark ? 'dark' : 'light');
+        var el = document.documentElement;
+        el.classList.add('hnf1b-theme--' + resolved);
+        el.style.colorScheme = resolved;
+      })();
+    </script>
 
     <!-- Preconnect to API for faster first request -->
     <link rel="dns-prefetch" href="//api.hnf1b.org" />
@@ -91,27 +117,26 @@
 
     <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
     <style>
-      /* Opt out of forced / auto dark mode. `only light` forbids the
-         browser's dark-mode heuristic from rewriting any element's
-         colors. Matches the <meta name="color-scheme" content="only light">
-         above — belt and braces so at least one of them wins no matter
-         which CSS parser path the browser takes. */
-      :root {
-        color-scheme: only light;
-      }
-      /* Belt-and-braces hint for pages where Chrome's force-dark flag
-         might ignore the meta tag. `forced-color-adjust: none` disables
-         Windows High Contrast mode mapping on our UI. */
+      /* Disable Windows High Contrast mapping — we ship our own light
+         and dark palettes, so the browser should not remap colors. */
       html {
         forced-color-adjust: none;
       }
-      /* Paint the document root white immediately. Without this, Chrome
-         briefly shows its default background (which on Linux honours GTK
-         dark theme) during the window between page load and Vuetify
-         hydration. */
-      html, body {
+      /* Pre-hydration backgrounds. The hnf1b-theme--<mode> class is set
+         synchronously by the boot <script> above before Vue mounts, so
+         the initial paint already matches the user's preference and
+         there is no flash of the wrong theme. Once Vuetify hydrates,
+         the .v-application element takes over and these rules become
+         purely a no-FOUC fallback. */
+      html.hnf1b-theme--light,
+      html.hnf1b-theme--light body {
         background: #ffffff;
         color: rgba(0, 0, 0, 0.87);
+      }
+      html.hnf1b-theme--dark,
+      html.hnf1b-theme--dark body {
+        background: #0f1416;
+        color: rgba(255, 255, 255, 0.87);
       }
       /* Reserve space for app to prevent CLS during hydration */
       #app { min-height: 100vh; }
