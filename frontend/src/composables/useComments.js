@@ -92,9 +92,12 @@ export function useComments(recordType, recordId) {
   };
 
   const remove = async (id) => {
+    const target = comments.value.find((c) => c.id === id);
+    const wasUnresolved = target && !target.resolved_at;
     await deleteComment(id);
     comments.value = comments.value.filter((c) => c.id !== id);
     total.value = Math.max(0, total.value - 1);
+    if (wasUnresolved) openCount.value = Math.max(0, openCount.value - 1);
   };
 
   const badgeLabel = computed(() => {

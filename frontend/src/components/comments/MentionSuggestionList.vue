@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps({
   items: { type: Array, required: true },
@@ -25,6 +25,13 @@ const props = defineProps({
 });
 
 const selectedIndex = ref(0);
+
+watch(
+  () => props.items,
+  (next) => {
+    if (selectedIndex.value >= next.length) selectedIndex.value = 0;
+  }
+);
 
 const selectItem = (i) => {
   const item = props.items[i];

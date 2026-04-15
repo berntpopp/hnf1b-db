@@ -82,9 +82,15 @@ describe('CommentItem', () => {
     expect(wrapper.find('[aria-label="Comment actions"]').exists()).toBe(true);
   });
 
-  it('does not render action menu button for a non-author, non-admin viewer', () => {
-    // userId 99 is not the author (42), role is curator (not admin) — canAct = false
-    const wrapper = mountItem({}, { currentUserId: 99, currentUserRole: 'curator' });
+  it('does not render action menu button for a viewer role user', () => {
+    // userId 99 is not the author (42), role is viewer — canAct = false
+    const wrapper = mountItem({}, { currentUserId: 99, currentUserRole: 'viewer' });
     expect(wrapper.find('[aria-label="Comment actions"]').exists()).toBe(false);
+  });
+
+  it('renders action menu button for a non-author curator (Resolve/Unresolve only)', () => {
+    // userId 99 is not the author (42), role is curator — canAct = true via canResolve
+    const wrapper = mountItem({}, { currentUserId: 99, currentUserRole: 'curator' });
+    expect(wrapper.find('[aria-label="Comment actions"]').exists()).toBe(true);
   });
 });

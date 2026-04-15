@@ -67,7 +67,10 @@ const formatRelative = (ts) => formatDistanceToNow(new Date(ts), { addSuffix: tr
 
 const isAuthor = computed(() => props.currentUserId === props.comment.author_id);
 const isAdmin = computed(() => props.currentUserRole === 'admin');
-const canAct = computed(() => isAuthor.value || isAdmin.value);
-const canToggleResolve = computed(() => isAuthor.value || isAdmin.value);
+const canResolve = computed(
+  () => props.currentUserRole === 'curator' || props.currentUserRole === 'admin'
+);
+const canAct = computed(() => isAuthor.value || isAdmin.value || canResolve.value);
+const canToggleResolve = computed(() => canResolve.value);
 const canDelete = computed(() => isAuthor.value || isAdmin.value);
 </script>

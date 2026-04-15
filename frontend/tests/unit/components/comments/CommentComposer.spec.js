@@ -101,7 +101,8 @@ describe('CommentComposer', () => {
     // editingComment=null → initial content = '' → canSubmit = false
     const wrapper = mountComposer({ editingComment: null });
     // The v-btn renders as a <button> in the DOM.
-    const btn = wrapper.find('button[type="button"]') || wrapper.find('button');
+    const btnSpecific = wrapper.find('button[type="button"]');
+    const btn = btnSpecific.exists() ? btnSpecific : wrapper.find('button');
     expect(btn.exists()).toBe(true);
     // Vuetify v-btn with :disabled=true sets the disabled attribute.
     expect(btn.attributes('disabled')).toBeDefined();
@@ -113,7 +114,8 @@ describe('CommentComposer', () => {
       editingComment: { id: 5, body_markdown: 'existing text' },
       submitting: false,
     });
-    const btn = wrapper.find('button[type="button"]') || wrapper.find('button');
+    const btnSpecific = wrapper.find('button[type="button"]');
+    const btn = btnSpecific.exists() ? btnSpecific : wrapper.find('button');
     expect(btn.exists()).toBe(true);
     // When canSubmit=true and submitting=false the button should NOT be disabled.
     expect(btn.attributes('disabled')).toBeUndefined();
