@@ -286,7 +286,7 @@ See [tests/README.md](../../tests/README.md) for detailed testing documentation.
 
 - **Variant Search:** [docs/api/VARIANT_SEARCH.md](../../../docs/api/VARIANT_SEARCH.md)
 - **Backend README:** [backend/README.md](../../README.md)
-- **Project Overview:** [CLAUDE.md](../../../CLAUDE.md)
+- **Project Overview:** [AGENTS.md](../../../AGENTS.md)
 - **API Documentation:** Available at `/docs` when server is running
 - **Testing Guide:** [tests/README.md](../../tests/README.md)
 
@@ -296,4 +296,4 @@ For questions or issues:
 1. Check the documentation in `docs/`
 2. Review existing tests for examples
 3. Check FastAPI auto-generated docs at `/docs` endpoint
-4. See [CLAUDE.md](../../../CLAUDE.md) for development workflow
+4. See [AGENTS.md](../../../AGENTS.md) for development workflow

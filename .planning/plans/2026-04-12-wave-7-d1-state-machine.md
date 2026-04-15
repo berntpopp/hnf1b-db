@@ -76,7 +76,7 @@
 
 ### Task 0: Worktree + baseline
 
-- [ ] **Step 0.1: Create worktree per CLAUDE.md (sibling, never nested)**
+- [ ] **Step 0.1: Create worktree per AGENTS.md (sibling, never nested)**
 
 ```bash
 cd ~/development

@@ -44,6 +44,6 @@ implementation plans, and historical working notes live under
 ## Quick Links
 
 - [Project README](../README.md)
-- [CLAUDE.md](../CLAUDE.md)
+- [AGENTS.md](../AGENTS.md)
 - [Planning Index](../.planning/README.md)
 - API docs: http://localhost:8000/docs

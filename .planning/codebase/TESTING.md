@@ -521,7 +521,7 @@ export default defineConfig({
 });
 ```
 
-## Best Practices from CLAUDE.md
+## Best Practices from AGENTS.md
 
 1. **Tests use PUBLIC APIs only**
    - Test `builder.build_phenopacket(id, rows)` not `migration._build_subject(row)`

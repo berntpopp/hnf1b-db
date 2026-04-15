@@ -55,7 +55,7 @@ globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-// The app uses window.logService (see CLAUDE.md: no console.log in frontend).
+// The app uses window.logService (see AGENTS.md: no console.log in frontend).
 globalThis.window.logService = {
   debug: vi.fn(),
   info: vi.fn(),

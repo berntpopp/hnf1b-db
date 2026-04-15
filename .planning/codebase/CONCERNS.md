@@ -72,15 +72,15 @@
 ## Security Considerations
 
 **Default Admin Credentials in Repository:**
-- Risk: Default password was previously hardcoded and documented in `.env.example` and CLAUDE.md. **RESOLVED 2026-04-10**: ADMIN_PASSWORD is now required at startup via Settings validator (mirrors JWT_SECRET pattern).
-- Files: `backend/.env.example:15`, `CLAUDE.md:528`
+- Risk: Default password was previously hardcoded and documented in `.env.example` and the repo instruction file. **RESOLVED 2026-04-10**: ADMIN_PASSWORD is now required at startup via Settings validator (mirrors JWT_SECRET pattern).
+- Files: `backend/.env.example:15`, `AGENTS.md`
 - Current mitigation: Warning to change password after first login
 - Recommendations: Remove default password from docs; generate random password on first setup
 
 **JWT Secret Placeholder:**
 - Risk: Placeholder `CHANGE_ME_TO_SECURE_RANDOM_STRING` if not changed leads to predictable tokens
 - Files: `backend/.env.example:8`
-- Current mitigation: Application exits if JWT_SECRET is empty (documented in CLAUDE.md:186)
+- Current mitigation: Application exits if JWT_SECRET is empty (documented in `AGENTS.md`)
 - Recommendations: Auto-generate secret on first run if not set
 
 **SQL Query String Formatting:**

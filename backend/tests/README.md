@@ -424,7 +424,7 @@ def test_character_whitelist(self):
 - **Phenopackets Module:** [app/phenopackets/README.md](../app/phenopackets/README.md)
 - **Variant Search:** [docs/api/VARIANT_SEARCH.md](../../docs/api/VARIANT_SEARCH.md)
 - **Backend README:** [backend/README.md](../README.md)
-- **Project Guide:** [CLAUDE.md](../../CLAUDE.md)
+- **Project Guide:** [AGENTS.md](../../AGENTS.md)
 
 ## Support
 

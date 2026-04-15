@@ -351,7 +351,7 @@ Viewer role: no access anywhere. Viewers cannot see records in non-published sta
 
 ### 5.3 API surface
 
-All endpoints under `/api/v2/comments`. JSON:API v1.1 pagination per CLAUDE.md.
+All endpoints under `/api/v2/comments`. JSON:API v1.1 pagination per AGENTS.md.
 
 ```
 POST   /api/v2/comments
@@ -479,7 +479,7 @@ New module `backend/app/comments/` with:
 - `backend/app/comments/routers.py` — FastAPI router with the eight endpoints.
 - `backend/app/comments/schemas.py` — the Pydantic models above.
 
-Each module ≤ 500 lines per CLAUDE.md §Code Quality Principles. Every mutating service method opens a single async transaction and commits at the end; the `update_body` method performs the three-step atomic sequence (edit log INSERT → body UPDATE → mentions replace).
+Each module should stay focused and reasonably bounded per AGENTS.md. Every mutating service method opens a single async transaction and commits at the end; the `update_body` method performs the three-step atomic sequence (edit log INSERT → body UPDATE → mentions replace).
 
 ### 5.6 Authorization helpers
 
@@ -554,7 +554,7 @@ Six files, each ≤ 300 lines.
 
 #### 5.8.5 Logging
 
-Every mutation logs through `window.logService.info/warn/error` per CLAUDE.md. Comment body is NOT logged (could contain clinical free-text). Logs include `{comment_id, record_id, action}` only.
+Every mutation logs through `window.logService.info/warn/error` per AGENTS.md. Comment body is NOT logged (could contain clinical free-text). Logs include `{comment_id, record_id, action}` only.
 
 #### 5.8.6 Routing and guards
 

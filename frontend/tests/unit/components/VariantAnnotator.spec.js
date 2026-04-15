@@ -33,7 +33,7 @@ import VariantAnnotator from '@/components/VariantAnnotator.vue';
 function mountAnnotator() {
   const vuetify = createVuetify({ components, directives });
   // window.logService is required by the component — see
-  // CLAUDE.md: "NEVER use console.log, ALWAYS use window.logService".
+  // AGENTS.md: "Never use console.log; use window.logService."
   window.logService = {
     info: vi.fn(),
     debug: vi.fn(),

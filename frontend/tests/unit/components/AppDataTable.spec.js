@@ -3,7 +3,7 @@
  *
  * AppDataTable is a thin wrapper around Vuetify's v-data-table /
  * v-data-table-server that standardizes styling and exposes several
- * named slots (title-actions, toolbar, filters). Per CLAUDE.md, the
+ * named slots (title-actions, toolbar, filters). Per AGENTS.md, the
  * server-side default is important — all project data tables use
  * server-side pagination.
  *

@@ -8,15 +8,15 @@ Scope:
 - current external best practices for code review, API security, FastAPI, SQLAlchemy async, and Vue testing
 
 References reviewed:
-- `docs/reviews/codebase-best-practices-review-2026-04-09.md`
-- `docs/reviews/2026-04-11-platform-readiness-review.md`
-- `docs/reviews/codebase-review-wave-6-rescore.md`
-- `docs/refactor/wave-5-exit.md`
-- `docs/refactor/wave-5c-exit.md`
-- `docs/refactor/wave-6-exit.md`
-- `docs/superpowers/plans/2026-04-11-wave-5-scope.md`
-- `docs/superpowers/plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
-- `docs/superpowers/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
+- `.planning/reviews/codebase-best-practices-review-2026-04-09.md`
+- `.planning/reviews/2026-04-11-platform-readiness-review.md`
+- `.planning/archive/reviews/codebase-review-wave-6-rescore.md`
+- `.planning/archive/reviews/wave-5-exit.md`
+- `.planning/archive/reviews/wave-5c-exit.md`
+- `.planning/archive/reviews/wave-6-exit.md`
+- `.planning/archive/plans/2026-04-11-wave-5-scope.md`
+- `.planning/plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
+- `.planning/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
 
 ## Bottom Line
 
@@ -38,6 +38,8 @@ Those deferred areas are exactly where the live risk now sits. On the current co
 4. then merge workflow enrichments like PR `#254`
 
 PR `#254` is directionally good and likely worth merging after fixes, but it does **not** by itself move the platform above `8/10` because it expands workflow surface area without first removing the largest ship-risk items.
+
+The April 15 planning/docs cleanup was directionally correct and modernized repository hygiene, but it also exposed one more platform-readiness rule: durable documentation must stay separate from internal planning. The repo is not fully there yet because several stable docs still link directly into `.planning/` plans.
 
 ## Current PR Status
 
@@ -72,7 +74,7 @@ The key point from the old plans is not "everything was done". It is "the roadma
 
 ### Explicitly deferred in the Wave 5 scope
 
-`docs/superpowers/plans/2026-04-11-wave-5-scope.md` explicitly deferred:
+`.planning/archive/plans/2026-04-11-wave-5-scope.md` explicitly deferred:
 
 - Bundle D comments/review workflow
 - Bundle E ORCID + preferences + attribution
@@ -82,7 +84,7 @@ The key point from the old plans is not "everything was done". It is "the roadma
 
 ### Confirmed deferred in the Wave 5 exit
 
-`docs/refactor/wave-5-exit.md` still lists as remaining:
+`.planning/archive/reviews/wave-5-exit.md` still lists as remaining:
 
 - comments / review screen
 - ORCID / preferences / public attribution
@@ -114,6 +116,7 @@ Open issues:
 - refresh-token lifecycle is too weak after password change/reset
 - no real session inventory or forced logout path
 - email delivery can still degrade to console behavior in production-like misconfiguration
+- durable docs still depend on internal planning files for developer-facing explanation
 
 Why this blocks `>8`:
 
@@ -158,6 +161,19 @@ Still not delivered:
 - richer curation history UI
 
 These are not the first blockers, but they are still part of the platform-readiness scope defined on 2026-04-11.
+
+### E. Documentation and instruction hygiene
+
+Open issues:
+
+- durable docs still point to `.planning/plans/variant-annotation-implementation-plan.md`
+- some live docs and planning artifacts still refer to the pre-migration `CLAUDE.md` wording and should be normalized to `AGENTS.md`
+
+Why this blocks a clean `>8` posture:
+
+- current documentation best practice favors a small set of accurate docs and deleting dead or duplicate operational guidance
+- current Codex guidance favors small repository-level instructions and reusable skills/workflows
+- the instruction-file migration needs to be carried through current live docs, not just added at repo root
 
 ## PR #254 Review In Context
 
@@ -257,6 +273,15 @@ These items are mandatory before any honest `>8` claim.
    - Add mixed-actor tests for save, submit, approve, publish, comment edit, resolve, delete.
 
 ### Phase 4: Finish the deferred platform scope
+
+11. Split stable docs from planning all the way through.
+   - Remove `.planning/...` plan links from durable API and user docs unless those plan files are intentionally the archival source of truth.
+   - If the implementation details still matter, promote them into stable developer docs under `docs/`.
+
+12. Use one canonical agent-instructions file.
+   - `AGENTS.md` should be the canonical source.
+   - `CLAUDE.md` may exist only as a tiny compatibility shim that points to `AGENTS.md`.
+   - Worst option: maintain both as large overlapping instruction files.
 
 11. Deliver Bundle E equivalents.
    - ORCID link / unlink

@@ -21,7 +21,7 @@ This document turns the full re-baselined picture into an actionable, sequenced 
 **Design constraints (set during brainstorming):**
 
 - Full roadmap covering all 26 items, sequenced end-to-end.
-- Strict decomposition target: every file under 500 LOC (matches `CLAUDE.md` rule).
+- Strict decomposition target: every file under 500 LOC (matches the repo instruction guidance active when this roadmap was written).
 - Test harness first: characterization tests before risky decomposition.
 - Free to break: pre-1.0 treatment, breaking changes allowed with documentation.
 
@@ -62,7 +62,7 @@ Each wave is a tracked milestone, not a single PR. Within a wave, individual ite
 
 | Wave | Done when |
 |------|-----------|
-| 1 | All critical security items patched, all cleanup items merged, no regression in 747 backend tests. CI green. `ChangeMe!Admin2025` scrubbed from live config (`backend/.env`, `backend/.env.example`, `backend/app/core/config.py`, `CLAUDE.md`, `.planning/codebase/*.md`, `docker-compose*.yml`) and active planning docs; historical implementation notes (`docs/issues/IMPLEMENTATION-issue-61-user-auth-REVISED.md`) and the source review itself are explicitly permitted to retain the string as historical reference. |
+| 1 | All critical security items patched, all cleanup items merged, no regression in 747 backend tests. CI green. `ChangeMe!Admin2025` scrubbed from live config (`backend/.env`, `backend/.env.example`, `backend/app/core/config.py`, repo instruction files, `.planning/codebase/*.md`, `docker-compose*.yml`) and active planning docs; historical implementation notes (`docs/issues/IMPLEMENTATION-issue-61-user-auth-REVISED.md`) and the source review itself are explicitly permitted to retain the string as historical reference. |
 | 2 | Every component slated for Wave 5 decomposition has a characterization test file. `backend/app/auth/` modules have dedicated test files. Test DB isolated. Security headers present on all responses. Frontend error boundary intercepts a forced test error. |
 | 3 | `survival.py` has no handler functions (moved to `survival_handlers.py` or a `survival/` sub-package). No hardcoded HPO IDs in survival queries. `calculate_percentages()` and MV-fallback helpers added to existing `common.py`; duplicated percentage logic removed from 5+ aggregation modules. 747+ backend tests green. |
 | 4 | Every backend file in `backend/app/` under 500 LOC, with at most 2 documented exceptions in `docs/refactor/tech-debt.md` (each with a written justification and a follow-up ticket). `admin_endpoints.py`, `crud.py`, `variant_validator.py`, `comparisons.py`, `variants/service.py`, `sql_fragments.py`, `reference/service.py`, `variant_validator_endpoint.py`, `publications/endpoints.py`, `search/services.py` all split. `PhenopacketRepository` exists. `_sync_tasks` replaced with Redis-backed persistence. Backend tests green. |
@@ -103,7 +103,7 @@ Each wave ends with a short exit note in `docs/refactor/wave-N-exit.md` summariz
 - Remove hardcoded default in `backend/app/core/config.py:286`. Make `ADMIN_PASSWORD` required via `Field(...)`.
 - Add startup validation matching the `JWT_SECRET` pattern — application exits if missing.
 - Update `backend/.env.example` to show a placeholder (not a usable password).
-- Remove documented default from `CLAUDE.md:528`.
+- Remove documented default from the repo instruction file.
 - Update `docker-compose*.yml` environments to reference env vars without defaults.
 - Add test asserting `create_admin_user()` raises without env var set.
 
@@ -142,7 +142,7 @@ Beyond the config.py fix in item 2, the string appears in 13 files. Remove from 
 
 - `backend/.env` (local dev file) — replace with env-var reference.
 - `backend/.env.example:15` — replace with `ADMIN_PASSWORD=<required-strong-password>`.
-- `CLAUDE.md:528` — replace with `ADMIN_PASSWORD=<required; see .env.example>`.
+- Repo instruction file — replace documented default with `ADMIN_PASSWORD=<required; see .env.example>`.
 - `.planning/codebase/INTEGRATIONS.md:209` — replace with placeholder.
 - `.planning/codebase/CONCERNS.md:75` — acceptable to retain as a security-concern reference; update to say "was documented" in past tense.
 - `plan/01-active/README.md:388` and `plan/01-active/refactoring_optimization_plan.md:280` — replace with placeholder; these are active planning docs.

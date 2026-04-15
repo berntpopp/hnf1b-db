@@ -3,8 +3,8 @@
 Date: 2026-04-15
 Reviewer: Codex with 3 parallel code-review agents
 References:
-- `docs/reviews/2026-04-11-platform-readiness-review.md`
-- `docs/reviews/codebase-best-practices-review-2026-04-09.md`
+- `.planning/reviews/2026-04-11-platform-readiness-review.md`
+- `.planning/reviews/codebase-best-practices-review-2026-04-09.md`
 
 ## Executive Summary
 
@@ -19,6 +19,8 @@ That said, the platform is still **not production-ready for multi-user curation*
 - frontend auth still stores tokens in `localStorage`
 - the phenopacket edit UI appears to mishandle publication binding
 - backend workflow and auth verification currently fail targeted pytest slices
+- durable docs still leak internal planning artifacts as if they were stable developer documentation
+- the repo still relies on a large `CLAUDE.md` instead of one concise canonical agent-instructions file
 
 ## Overall Rating
 
@@ -180,6 +182,40 @@ Primary evidence:
 - `frontend/src/components/phenopacket/MetadataCard.vue`
 - `frontend/src/components/timeline/PhenotypeTimeline.vue`
 
+### 11. Medium: durable docs still point at internal planning artifacts
+
+The April 15 planning cleanup correctly moved plans and reviews into `.planning/`, but the durable API and user-guide docs still present `.planning/plans/variant-annotation-implementation-plan.md` as a "Developer Guide". That keeps user/reference docs coupled to an internal implementation plan instead of a stable developer-facing document.
+
+Primary evidence:
+
+- `docs/api/README.md`
+- `docs/api/variant-annotation.md`
+- `docs/user-guide/README.md`
+- `docs/user-guide/variant-annotation.md`
+- `backend/README.md`
+
+Impact:
+
+- weakens the new docs-vs-planning boundary introduced on 2026-04-15
+- makes reference docs depend on a planning artifact whose lifecycle is "active plan", not "stable guide"
+- risks reintroducing documentation drift and duplication
+
+### 12. Medium: the instruction-file migration must be carried through live docs consistently
+
+The repo now has a concise `AGENTS.md` and a small `CLAUDE.md` compatibility shim, which is the right structural direction. The remaining issue is consistency: current live docs and active planning material should point at `AGENTS.md` as the canonical source instead of continuing to describe `CLAUDE.md` as primary.
+
+Primary evidence:
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- remaining live references in current non-archived docs and plans
+
+Impact:
+
+- leaves the repo mid-migration
+- weakens the new single-source-of-truth rule for agent instructions
+- invites future drift if live docs keep naming the compatibility shim instead of the canonical file
+
 ## Testing And Verification Findings
 
 ### What I verified locally
@@ -215,6 +251,8 @@ This review was shaped by current primary and official sources:
 - OWASP API Security Top 10 2023 remains the right framing for several open issues, especially Broken Authentication, Broken Function Level Authorization, and sensitive business-flow protection.
 - Vue Test Utils recommends testing user-visible inputs/outputs rather than implementation details; the current frontend suite is still too smoke-test-heavy around the new admin/auth flows.
 - Vue’s style guide still emphasizes predictable list rendering and explicit component contracts; the repo follows some of this well, but several large view files remain hard to reason about safely.
+- Google’s documentation guidance explicitly favors deleting dead documentation and keeping a small, accurate docs set over a large mixed-quality pile.
+- OpenAI’s Codex guidance and the OpenAI skills/AGENTS workflow favor small repository-level instructions and reusable skills/workflows rather than large, tool-specific prompt dumps.
 
 ## Recommendations
 
@@ -246,6 +284,8 @@ This review was shaped by current primary and official sources:
 8. Make production email transport a startup requirement instead of a permissive default.
 9. Add a real curation-history UI backed by authoritative actor/revision data.
 10. Continue decomposing oversized view/service files that still carry too much state and orchestration.
+11. Stop treating `.planning/plans/variant-annotation-implementation-plan.md` as stable reference documentation; either write a real developer guide under `docs/` or remove the link from durable docs.
+12. Keep `AGENTS.md` as the canonical instruction file and restrict `CLAUDE.md` to a minimal compatibility shim only.
 
 ## Way Forward
 

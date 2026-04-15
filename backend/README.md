@@ -33,7 +33,7 @@ make server           # Uses backend/Makefile internally
 
 ## Development
 
-See the root [README.md](../README.md) and [CLAUDE.md](../CLAUDE.md) for comprehensive documentation.
+See the root [README.md](../README.md) and [AGENTS.md](../AGENTS.md) for comprehensive documentation.
 
 ### Common Commands
 

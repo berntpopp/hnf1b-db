@@ -72,7 +72,8 @@ hnf1b-db/
 ├── plan/                       # Project planning files
 ├── .github/                    # GitHub Actions workflows
 ├── Makefile                    # Root-level build commands
-├── CLAUDE.md                   # Claude Code instructions
+├── AGENTS.md                   # Canonical repository instructions for coding agents
+├── CLAUDE.md                   # Compatibility shim pointing to AGENTS.md
 └── docker-compose.*.yml        # Docker orchestration
 ```
 
