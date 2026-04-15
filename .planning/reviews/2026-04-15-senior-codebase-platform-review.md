@@ -1,5 +1,7 @@
 # HNF1B-DB Senior Codebase Platform Review
 
+> Status: This review remains a supporting assessment. The current execution source of truth is `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
+
 Date: 2026-04-15
 Reviewer: Codex with 3 parallel code-review agents
 References:
@@ -20,7 +22,7 @@ That said, the platform is still **not production-ready for multi-user curation*
 - the phenopacket edit UI appears to mishandle publication binding
 - backend workflow and auth verification currently fail targeted pytest slices
 - durable docs still leak internal planning artifacts as if they were stable developer documentation
-- the repo still relies on a large `CLAUDE.md` instead of one concise canonical agent-instructions file
+- live documentation and planning references still need to normalize on `AGENTS.md` as the canonical instruction file
 
 ## Overall Rating
 
@@ -202,7 +204,7 @@ Impact:
 
 ### 12. Medium: the instruction-file migration must be carried through live docs consistently
 
-The repo now has a concise `AGENTS.md` and a small `CLAUDE.md` compatibility shim, which is the right structural direction. The remaining issue is consistency: current live docs and active planning material should point at `AGENTS.md` as the canonical source instead of continuing to describe `CLAUDE.md` as primary.
+The repo now has a concise `AGENTS.md` and a small `CLAUDE.md` compatibility shim, which is the right structural direction. The remaining issue is consistency: current live docs and active planning material should point at `AGENTS.md` as the canonical source instead of naming `CLAUDE.md` as the primary instructions file.
 
 Primary evidence:
 

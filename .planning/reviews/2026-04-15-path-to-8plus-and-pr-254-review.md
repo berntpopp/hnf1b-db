@@ -1,5 +1,7 @@
 # HNF1B-DB Path To >8.0 And Current PR Review
 
+> Status: This review remains a supporting assessment. The current execution source of truth is `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
+
 Date: 2026-04-15
 Scope:
 - current codebase state on local `main`

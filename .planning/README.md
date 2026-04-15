@@ -28,13 +28,14 @@ durable reference documentation only.
 
 ## Current Active Set
 
+- `plans/2026-04-15-release-hardening-and-8plus-plan.md` — current source of truth for release-readiness sequencing and go/no-go criteria
 - `roadmaps/2026-04-10-codebase-refactor-roadmap-design.md`
 - `specs/2026-04-12-wave-7-d1-state-machine-design.md`
 - `specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
 - `plans/2026-04-12-wave-7-d1-state-machine.md`
-- `plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
+- `plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md` — feature-specific supporting plan, not the release driver
 - `plans/variant-annotation-implementation-plan.md`
 - `reviews/2026-04-11-platform-readiness-review.md`
-- `reviews/2026-04-15-path-to-8plus-and-pr-254-review.md`
-- `reviews/2026-04-15-senior-codebase-platform-review.md`
+- `reviews/2026-04-15-path-to-8plus-and-pr-254-review.md` — supporting assessment for the master release-hardening plan
+- `reviews/2026-04-15-senior-codebase-platform-review.md` — supporting assessment for the master release-hardening plan
 - `reviews/codebase-best-practices-review-2026-04-09.md`

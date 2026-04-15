@@ -1,5 +1,7 @@
 # Wave 7 / D.2 — Comments + Clone-Cycle Advancement Implementation Plan
 
+> Status: This remains the feature-specific D.2 implementation plan, but it is no longer the release-driving plan. Use `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md` for current sequencing and release-readiness priorities.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the D.1 clone-cycle advancement gap (Part A — effective-state read-through) AND ship the D.2 comments feature (Part B — generic comments table + immutable edit log + mentions join). One PR.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** FastAPI, SQLAlchemy 2.0 async, Alembic, PostgreSQL, Pydantic 2, Vue 3 + Composition API, Vuetify 4, Tiptap v3, markdown-it, Playwright, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
+**Spec:** `.planning/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
 
 ---
 
@@ -26,7 +28,7 @@ Commit after every task. Every task is self-contained; a fresh subagent should b
 
 ## Pre-flight checks
 
-Before Task 1, the worktree must be on a clean branch off `main`. The recommended branch name is `chore/wave-7-d2-comments-and-clone-advancement`. All backend + frontend test suites green at baseline.
+Before Task 1, the worktree must be on a clean branch off `main`. The recommended branch name is `chore/wave-7-d2-comments-and-clone-advancement`. Note that current April 15 review findings indicate backend verification is not fully green at baseline; if you execute this plan now, treat verification stabilization as a prerequisite rather than assuming a green starting point.
 
 - [ ] **Step 1 — verify working tree is clean and on a fresh branch**
 
@@ -1445,7 +1447,7 @@ Write `backend/app/comments/models.py`:
 ```python
 """SQLAlchemy ORM models for the D.2 comments feature.
 
-Spec reference: docs/superpowers/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.1.
+Spec reference: .planning/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md §5.1.
 """
 from __future__ import annotations
 
@@ -4192,4 +4194,3 @@ After writing this plan I ran the self-review checklist:
 3. **Type consistency.** `CommentsService.RecordNotFound` / `.MentionUnknownUser` / `.SoftDeleted` / etc. named consistently across Tasks 17–19. `effective_state` used identically in backend (Tasks 6–8) and frontend (Tasks 9–10). API endpoint paths match spec §5.3 and the router file in Task 19.
 
 Plan is complete. Handoff text below.
-
