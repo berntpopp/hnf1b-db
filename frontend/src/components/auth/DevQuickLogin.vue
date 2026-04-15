@@ -1,6 +1,6 @@
 <template>
   <v-card class="mt-4" variant="tonal" color="warning">
-    <v-card-title class="text-caption"> DEV MODE — not available in production </v-card-title>
+    <v-card-title class="text-caption"> DEV QUICK LOGIN — local development only </v-card-title>
     <v-card-text>
       <v-btn
         v-for="u in fixtureUsers"

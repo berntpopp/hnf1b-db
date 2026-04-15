@@ -2,6 +2,11 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
+import {
+  getDevQuickLoginBackendUnavailableMessage,
+  getDevQuickLoginDisabledMessage,
+  isDevQuickLoginEnabled,
+} from '@/config/devAuth';
 import { clearTokens, getAccessToken, getRefreshToken, persistTokens } from '@/api/session';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -176,7 +181,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function devLoginAs(username) {
     if (!import.meta.env.DEV) return;
 
+    if (!isDevQuickLoginEnabled()) {
+      const message = getDevQuickLoginDisabledMessage();
+      error.value = message;
+      throw new Error(message);
+    }
+
     isLoading.value = true;
+    error.value = null;
     try {
       const { data } = await apiClient.post(`/dev/login-as/${username}`);
       accessToken.value = data.access_token;
@@ -186,6 +198,11 @@ export const useAuthStore = defineStore('auth', () => {
       window.logService.info('dev quick-login', { username });
       return true;
     } catch (err) {
+      if (err.response?.status === 404) {
+        error.value = getDevQuickLoginBackendUnavailableMessage();
+      } else {
+        error.value = err.response?.data?.detail || 'Dev quick-login failed';
+      }
       window.logService.error('dev quick-login failed', { username, error: err.message });
       throw err;
     } finally {

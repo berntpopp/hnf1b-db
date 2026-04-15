@@ -31,17 +31,24 @@ globalThis.window.logService = {
 };
 
 describe('Auth Store', () => {
+  const originalDev = import.meta.env.DEV;
+  const originalFlag = import.meta.env.VITE_ENABLE_DEV_AUTH;
+
   beforeEach(() => {
     setActivePinia(createPinia());
     clearTokens();
     vi.clearAllMocks();
     apiClient.post.mockReset();
     apiClient.get.mockReset();
+    import.meta.env.DEV = true;
+    import.meta.env.VITE_ENABLE_DEV_AUTH = 'true';
   });
 
   afterEach(() => {
     clearTokens();
     vi.restoreAllMocks();
+    import.meta.env.DEV = originalDev;
+    import.meta.env.VITE_ENABLE_DEV_AUTH = originalFlag;
   });
 
   describe('Initial State', () => {
@@ -394,6 +401,32 @@ describe('Auth Store', () => {
         'Failed to initialize user session',
         expect.any(Object)
       );
+    });
+  });
+
+  describe('Dev Quick Login', () => {
+    it('refuses quick-login when the frontend flag is disabled', async () => {
+      import.meta.env.VITE_ENABLE_DEV_AUTH = 'false';
+      const authStore = useAuthStore();
+
+      await expect(authStore.devLoginAs('dev-curator')).rejects.toThrow(
+        'Dev quick-login is disabled'
+      );
+
+      expect(authStore.error).toContain('VITE_ENABLE_DEV_AUTH=true');
+      expect(apiClient.post).not.toHaveBeenCalled();
+    });
+
+    it('surfaces backend dev-auth misconfiguration on 404', async () => {
+      const authStore = useAuthStore();
+      apiClient.post.mockRejectedValueOnce({
+        response: { status: 404, data: { detail: 'Not Found' } },
+        message: 'Request failed with status code 404',
+      });
+
+      await expect(authStore.devLoginAs('dev-curator')).rejects.toThrow();
+
+      expect(authStore.error).toContain('ENABLE_DEV_AUTH=true');
     });
   });
 });

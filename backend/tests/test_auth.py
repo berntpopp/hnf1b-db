@@ -230,7 +230,6 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_se
     # Pre-cleanup: Remove any leftover newuser from failed previous runs
     from sqlalchemy import delete
 
-
     try:
         await db_session.execute(delete(User).where(User.email == "new@example.com"))
         await db_session.commit()

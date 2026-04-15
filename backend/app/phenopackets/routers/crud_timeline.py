@@ -157,7 +157,7 @@ async def get_phenotype_timeline(
             status_code=404, detail=f"Phenopacket '{phenopacket_id}' not found"
         )
 
-    phenopacket_data: Optional[Dict[str, Any]]
+    phenopacket_data: Dict[str, Any]
     if is_curator:
         phenopacket_data = resolve_curator_content(phenopacket_record)
     else:
@@ -171,18 +171,13 @@ async def get_phenotype_timeline(
                 status_code=404,
                 detail=f"Phenopacket '{phenopacket_id}' not found",
             )
-        phenopacket_data = await resolve_public_content(db, phenopacket_record)
-        if phenopacket_data is None:
+        public_content = await resolve_public_content(db, phenopacket_record)
+        if public_content is None:
             raise HTTPException(
                 status_code=404,
                 detail=f"Phenopacket '{phenopacket_id}' not found",
             )
-
-    if phenopacket_data is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Phenopacket '{phenopacket_id}' not found",
-        )
+        phenopacket_data = public_content
 
     subject = phenopacket_data.get("subject", {})
     subject_id = subject.get("id")

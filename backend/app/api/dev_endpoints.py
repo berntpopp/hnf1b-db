@@ -138,6 +138,7 @@ async def dev_login_as(
     )
     refresh_token = create_refresh_token(subject=user.username)
     await repo.update_refresh_token(user, refresh_token)
+    await db.commit()
 
     logger.warning(
         "DEV LOGIN as %s from %s",

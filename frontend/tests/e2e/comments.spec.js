@@ -38,19 +38,19 @@
  * Same env-var convention as state-lifecycle.spec.js and
  * dual-read-invariant.spec.js.
  *
- *   E2E_BASE_URL        defaults to http://localhost:5173
+ *   Playwright `baseURL` defaults to http://localhost:5173
  *   VITE_API_URL        defaults to http://localhost:8000/api/v2
  *   E2E_ADMIN_USERNAME  defaults to admin
  *   E2E_ADMIN_PASSWORD  defaults to ChangeMe!Admin2025
  */
 
 import { test, expect } from '@playwright/test';
+import { apiLogin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
@@ -58,24 +58,6 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 // Unique record ID — timestamp suffix avoids collisions across runs.
 const RECORD_ID = `e2e-wave7-d2-comments-${Date.now()}`;
-
-/**
- * Obtain a JWT access token via the API.
- * @param {import('@playwright/test').APIRequestContext} req
- * @param {string} username
- * @param {string} password
- * @returns {Promise<string>}
- */
-async function apiLogin(req, username, password) {
-  const resp = await req.post(`${API_BASE}/auth/login`, {
-    data: { username, password },
-  });
-  if (!resp.ok()) {
-    throw new Error(`API login failed for ${username}: ${resp.status()} ${await resp.text()}`);
-  }
-  const body = await resp.json();
-  return body.access_token;
-}
 
 /**
  * Perform a state transition via the REST endpoint.
@@ -100,29 +82,13 @@ async function apiTransition(req, token, phenopacketId, toState, reason, revisio
 }
 
 /**
- * Log in via the browser login form (standard Vuetify v-text-field pattern).
- * @param {import('@playwright/test').Page} page
- * @param {string} username
- * @param {string} password
- */
-async function loginViaForm(page, username, password) {
-  await page.goto(`${BASE}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.locator('input[autocomplete="username"]').fill(username);
-  await page.locator('input[autocomplete="current-password"]').fill(password);
-  await page.locator('button[type="submit"]').click();
-  // Wait until we leave the /login route
-  await page.waitForURL((u) => !u.pathname.endsWith('/login'), { timeout: 15_000 });
-}
-
-/**
  * Navigate to the phenopacket detail page and activate the Discussion tab.
  * Waits until the CommentComposer editor is visible.
  * @param {import('@playwright/test').Page} page
  * @param {string} recordId
  */
 async function openDiscussionTab(page, recordId) {
-  await page.goto(`${BASE}/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
+  await page.goto(`/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
   // The Discussion tab is rendered as:
   //   <v-tab value="discussion" aria-label="Discussion tab">Discussion</v-tab>
   await page.getByRole('tab', { name: /^Discussion/i }).click();
@@ -146,7 +112,8 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // We publish it so that the record is also reachable by the anonymous
   // public route (not required here, but keeps the fixture realistic).
   // -------------------------------------------------------------------------
-  const adminToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminToken = adminTokens.accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
     headers: { Authorization: `Bearer ${adminToken}` },
@@ -190,7 +157,7 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // not to re-test role permissions. CI only seeds an admin user, so this
   // also avoids fixture-dependency drift.
   // -------------------------------------------------------------------------
-  await loginViaForm(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await primeAuthSession(page, adminTokens);
   await openDiscussionTab(page, RECORD_ID);
 
   // -------------------------------------------------------------------------

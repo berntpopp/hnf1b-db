@@ -8,8 +8,6 @@ import { test, expect } from '@playwright/test';
  * synchronized with URL parameters for shareable/bookmarkable links.
  */
 
-const BASE_URL = 'http://localhost:5173';
-
 test.describe('Variants Table URL State', () => {
   // FIXME(wave-6-exit): pagination control no longer renders literal
   // "Page 2" text — the AppPagination component now uses numeric
@@ -19,7 +17,7 @@ test.describe('Variants Table URL State', () => {
   // previously-silent failures now gate merges.
   test.fixme('should preserve page parameter in URL', async ({ page }) => {
     // Navigate to page 2
-    await page.goto(`${BASE_URL}/variants?page=2&pageSize=10`);
+    await page.goto('/variants?page=2&pageSize=10');
     await page.waitForLoadState('networkidle');
 
     // Verify URL contains page parameter
@@ -31,7 +29,7 @@ test.describe('Variants Table URL State', () => {
   });
 
   test('should update URL when navigating pages', async ({ page }) => {
-    await page.goto(`${BASE_URL}/variants`);
+    await page.goto('/variants');
     await page.waitForLoadState('networkidle');
 
     // Click next page button
@@ -49,7 +47,7 @@ test.describe('Variants Table URL State', () => {
 
   test('should preserve search query in URL', async ({ page }) => {
     // Navigate with search query
-    await page.goto(`${BASE_URL}/variants?q=c.826`);
+    await page.goto('/variants?q=c.826');
     await page.waitForLoadState('networkidle');
 
     // Verify search input has the value
@@ -61,7 +59,7 @@ test.describe('Variants Table URL State', () => {
   });
 
   test('should update URL when searching', async ({ page }) => {
-    await page.goto(`${BASE_URL}/variants`);
+    await page.goto('/variants');
     await page.waitForLoadState('networkidle');
 
     // Type in search box
@@ -76,7 +74,7 @@ test.describe('Variants Table URL State', () => {
 
   test('should preserve sort parameter in URL', async ({ page }) => {
     // Navigate with descending sort on transcript
-    await page.goto(`${BASE_URL}/variants?sort=-transcript`);
+    await page.goto('/variants?sort=-transcript');
     await page.waitForLoadState('networkidle');
 
     // Verify URL contains sort parameter
@@ -84,7 +82,7 @@ test.describe('Variants Table URL State', () => {
   });
 
   test('should preserve type filter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/variants?type=SNV`);
+    await page.goto('/variants?type=SNV');
     await page.waitForLoadState('networkidle');
 
     // Verify URL contains filter
@@ -92,7 +90,7 @@ test.describe('Variants Table URL State', () => {
   });
 
   test('should preserve classification filter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/variants?classification=PATHOGENIC`);
+    await page.goto('/variants?classification=PATHOGENIC');
     await page.waitForLoadState('networkidle');
 
     // Verify URL contains filter
@@ -108,7 +106,7 @@ test.describe('Variants Table URL State', () => {
   // real gate.
   test.fixme('should handle combined URL parameters', async ({ page }) => {
     // Navigate with multiple parameters
-    await page.goto(`${BASE_URL}/variants?page=1&pageSize=20&sort=-simple_id&q=c.826&type=SNV`);
+    await page.goto('/variants?page=1&pageSize=20&sort=-simple_id&q=c.826&type=SNV');
     await page.waitForLoadState('networkidle');
 
     // Verify all parameters are in URL
@@ -120,7 +118,7 @@ test.describe('Variants Table URL State', () => {
   });
 
   test('partial HGVS search should work without error', async ({ page }) => {
-    await page.goto(`${BASE_URL}/variants`);
+    await page.goto('/variants');
     await page.waitForLoadState('networkidle');
 
     // Type partial HGVS (this used to return 400 error)
@@ -140,14 +138,14 @@ test.describe('Variants Table URL State', () => {
 
 test.describe('Phenopackets Table URL State', () => {
   test('should preserve page parameter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/phenopackets?page=2&pageSize=10`);
+    await page.goto('/phenopackets?page=2&pageSize=10');
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('page=2');
   });
 
   test('should preserve search query in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/phenopackets?q=test`);
+    await page.goto('/phenopackets?q=test');
     await page.waitForLoadState('networkidle');
 
     const searchInput = page.locator('input[placeholder*="Search"]').first();
@@ -156,14 +154,14 @@ test.describe('Phenopackets Table URL State', () => {
   });
 
   test('should preserve sex filter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/phenopackets?sex=MALE`);
+    await page.goto('/phenopackets?sex=MALE');
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('sex=MALE');
   });
 
   test('should update URL when using sex filter', async ({ page }) => {
-    await page.goto(`${BASE_URL}/phenopackets`);
+    await page.goto('/phenopackets');
     await page.waitForLoadState('networkidle');
 
     // Find and click the sex filter icon (in the column header)
@@ -184,7 +182,7 @@ test.describe('Phenopackets Table URL State', () => {
   });
 
   test('should clear filters and update URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/phenopackets?q=test&sex=MALE`);
+    await page.goto('/phenopackets?q=test&sex=MALE');
     await page.waitForLoadState('networkidle');
 
     // Find and click clear filters button
@@ -203,14 +201,14 @@ test.describe('Phenopackets Table URL State', () => {
 
 test.describe('Publications Table URL State', () => {
   test('should preserve page parameter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/publications?page=2&pageSize=10`);
+    await page.goto('/publications?page=2&pageSize=10');
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('page=2');
   });
 
   test('should preserve search query in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/publications?q=kidney`);
+    await page.goto('/publications?q=kidney');
     await page.waitForLoadState('networkidle');
 
     const searchInput = page.locator('input[placeholder*="Search"]').first();
@@ -219,14 +217,14 @@ test.describe('Publications Table URL State', () => {
   });
 
   test('should preserve sort parameter in URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/publications?sort=-first_added`);
+    await page.goto('/publications?sort=-first_added');
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('sort=-first_added');
   });
 
   test('should handle pageSize parameter', async ({ page }) => {
-    await page.goto(`${BASE_URL}/publications?pageSize=50`);
+    await page.goto('/publications?pageSize=50');
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('pageSize=50');
@@ -236,7 +234,7 @@ test.describe('Publications Table URL State', () => {
 test.describe('URL State Shareable Links', () => {
   test('should produce identical results when sharing URL', async ({ page, context }) => {
     // First user sets up filters
-    await page.goto(`${BASE_URL}/variants`);
+    await page.goto('/variants');
     await page.waitForLoadState('networkidle');
 
     // Apply search
