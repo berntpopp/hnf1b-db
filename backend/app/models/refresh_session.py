@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -21,11 +21,11 @@ class RefreshSession(Base):
         BigInteger, primary_key=True, index=True, autoincrement=True
     )
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     token_jti: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     token_sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    session_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    session_version: Mapped[int] = mapped_column(Integer, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
