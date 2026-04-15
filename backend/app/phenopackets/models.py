@@ -282,7 +282,7 @@ class PhenopacketRevision(Base):
     Each row represents one revision of a phenopacket, created when the
     record transitions between workflow states or when a draft is saved.
 
-    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.2.
+    See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.2.
     """
 
     __tablename__ = "phenopacket_revisions"
@@ -642,7 +642,7 @@ class AggregationResult(BaseModel):
 class TransitionRequest(BaseModel):
     """Request body for POST /phenopackets/{id}/transitions.
 
-    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
+    See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
     """
 
     to_state: Literal[
@@ -660,7 +660,7 @@ class TransitionRequest(BaseModel):
 class RevisionResponse(BaseModel):
     """Response model for a single phenopacket revision row.
 
-    See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
+    See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §7.3.
     """
 
     model_config = ConfigDict(from_attributes=True)

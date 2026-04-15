@@ -11,7 +11,8 @@ HNF1B Database is a full-stack monorepo for clinical and genetic data management
 hnf1b-db/
 ├── backend/              # FastAPI REST API (Python 3.10+)
 ├── frontend/             # Vue.js 3 application
-├── docs/                 # Documentation
+├── .planning/            # Internal plans, specs, reviews, and archives
+├── docs/                 # Durable reference documentation only
 ├── Makefile              # Unified root commands
 └── docker-compose.*.yml  # Docker orchestration
 ```
@@ -621,4 +622,5 @@ cd frontend && npm install
 - README.md: Project setup and overview
 - backend/README.md: Backend-specific details
 - frontend/README.md: Frontend-specific details
+- .planning/README.md: Planning index and archive layout
 - docs/COLOR_STYLE_GUIDE.md: UI color standards

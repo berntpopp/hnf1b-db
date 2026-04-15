@@ -26,7 +26,7 @@
 - Issue: `MAX_VARIANTS_FOR_PRIORITY_SORT: 1000` will break when database exceeds this limit
 - Files: `frontend/src/config/app.js:36`
 - Impact: Priority sorting, gene visualizations, and CNV displays fail silently beyond 1000 variants
-- Fix approach: Implement server-side sorting with cursor pagination (see `docs/issues/issue-93-incremental-variant-loading.md`)
+- Fix approach: Implement server-side sorting with cursor pagination (see `.planning/archive/tracking/issues/issue-93-incremental-variant-loading.md`)
 
 **Multiple Type Ignores and Noqa Comments:**
 - Issue: 25+ type ignores and noqa directives scattered across codebase
@@ -47,21 +47,21 @@
 - Files: `frontend/src/components/gene/HNF1BGeneVisualization.vue`, `frontend/src/components/gene/HNF1BProteinVisualization.vue`
 - Trigger: Attempt to zoom or pan on variant visualizations
 - Workaround: None documented
-- Reference: `docs/issues/issue-92-zoom-functionality-broken.md`
+- Reference: `.planning/archive/tracking/issues/issue-92-zoom-functionality-broken.md`
 
 **Variant Search Not Working:**
 - Symptoms: Search input exists but queries don't filter results
 - Files: `frontend/src/views/Variants.vue` (544 lines)
 - Trigger: Enter search query in variants table
 - Workaround: None documented
-- Reference: `docs/issues/issue-90-fix-variant-search.md`
+- Reference: `.planning/archive/tracking/issues/issue-90-fix-variant-search.md`
 
 **HPO Proxy Sometimes Returns Empty:**
 - Symptoms: HPO term search occasionally returns empty results
 - Files: `backend/app/hpo_proxy.py:206-211`
 - Trigger: Rate limiting from upstream OLS API
 - Workaround: Retry request; check Redis cache status
-- Reference: `docs/TODO.md:101`
+- Reference: `.planning/archive/tracking/TODO.md:101`
 
 **Search Endpoint Timeout with Large Datasets:**
 - Symptoms: Complex queries may timeout
@@ -91,7 +91,7 @@
 
 **CORS Configuration:**
 - Risk: CORS settings need review for production origins
-- Files: `backend/app/main.py` (presumed), `docs/TODO.md:128`
+- Files: `backend/app/main.py` (presumed), `.planning/archive/tracking/TODO.md:128`
 - Current mitigation: Environment-based configuration
 - Recommendations: Implement specific origin allowlist for production
 
@@ -172,17 +172,17 @@
 **Test Coverage Metrics:**
 - Problem: No test coverage reporting configured
 - Blocks: Unable to measure code coverage; quality gates incomplete
-- Reference: `docs/TODO.md:44`
+- Reference: `.planning/archive/tracking/TODO.md:44`
 
 **Rate Limiting for API:**
 - Problem: No rate limiting implemented on public endpoints
 - Blocks: API abuse prevention; production hardening
-- Reference: `docs/TODO.md:54`
+- Reference: `.planning/archive/tracking/TODO.md:54`
 
 **Error Tracking:**
 - Problem: No Sentry or equivalent error tracking
 - Blocks: Production monitoring; proactive bug detection
-- Reference: `docs/TODO.md:57`
+- Reference: `.planning/archive/tracking/TODO.md:57`
 
 **Forgot Password Flow:**
 - Problem: TODO in login view, flow not implemented

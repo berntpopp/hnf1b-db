@@ -398,7 +398,7 @@ class Settings(BaseSettings):
                 "REFUSING TO START: ENABLE_DEV_AUTH=true is only permitted "
                 f"when ENVIRONMENT=development (got {self.environment!r}). "
                 "This is the first of five dev-mode defense layers — see "
-                "docs/reviews/2026-04-11-platform-readiness-review.md §5.3."
+                ".planning/reviews/2026-04-11-platform-readiness-review.md §5.3."
             )
         return self
 

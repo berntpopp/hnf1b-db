@@ -1,53 +1,49 @@
 # Documentation
 
-## Overview
+`docs/` is for durable reference documentation only. Planning artifacts, reviews,
+implementation plans, and historical working notes live under
+[`../.planning/`](../.planning/README.md).
 
-This directory contains all project documentation organized by category. Each subdirectory focuses on a specific aspect of the HNF1B-API project.
+## Contents
 
-## Directory Structure
+### [api/](api/)
+- Endpoint references and API-specific guides.
+- Start with [api/README.md](api/README.md).
 
-### 📁 [migration/](migration/)
-Documentation related to data migration and database schema evolution.
+### [user-guide/](user-guide/)
+- Operator and researcher workflows.
+- Start with [user-guide/README.md](user-guide/README.md).
 
-- **[PHENOPACKETS_MIGRATION_RECORD.md](migration/PHENOPACKETS_MIGRATION_RECORD.md)** - Complete record of the migration from MongoDB to PostgreSQL with GA4GH Phenopackets v2 implementation
+### [adr/](adr/)
+- Architecture Decision Records for repo-level decisions.
 
-### 📁 [adr/](adr/)
-Architecture Decision Records — one file per significant design decision.
+### [deployment/](deployment/)
+- Deployment and environment setup guides.
 
-- **[0001-jwt-storage.md](adr/0001-jwt-storage.md)** — JWT token storage (localStorage vs HttpOnly cookies)
+### [admin/](admin/)
+- Admin-only operational procedures.
 
-### 📁 [api/](api/)
-API endpoint documentation and specifications.
+### [database/](database/)
+- Stable database reference material.
 
-- **[README.md](api/README.md)** - API overview
-- **[variant-annotation.md](api/variant-annotation.md)** - VEP variant annotation endpoints
-- **[reference-genome-api.md](api/reference-genome-api.md)** - Reference genome and gene endpoints
+### [migration/](migration/)
+- Historical migration record kept as durable system documentation.
 
-### 📁 [deployment/](deployment/)
-Deployment guides, environment setup, and production configurations.
+### [references/](references/)
+- External data source references and supporting material.
 
-- **[docker.md](deployment/docker.md)** - Complete Docker deployment guide with automatic data sync
+### [COLOR_STYLE_GUIDE.md](COLOR_STYLE_GUIDE.md)
+- Current UI color and styling reference for the frontend.
 
-### 📁 [admin/](admin/)
-Administrator guides for database management.
+## Rules
 
-- **[update-annotations.md](admin/update-annotations.md)** - Guide for updating genomic annotations
-
-## Key Documents
-
-### [TODO.md](TODO.md)
-Current project task list, priorities, and development roadmap.
+1. Put stable, user-facing or operator-facing documentation in `docs/`.
+2. Put specs, plans, reviews, issue writeups, and retrospectives in `.planning/`.
+3. Update links here when adding or removing durable documentation.
 
 ## Quick Links
 
-- **[Project README](../README.md)** - Main project overview, setup instructions, and quick start guide
-- **[CLAUDE.md](../CLAUDE.md)** - Claude Code AI assistant guidance and available commands
-- **[API Documentation](http://localhost:8000/docs)** - Interactive API documentation (when server is running)
-
-## Contributing
-
-When adding new documentation:
-1. Place documents in the appropriate subdirectory
-2. Update this README with a brief description
-3. Follow markdown best practices for formatting
-4. Include examples where applicable
+- [Project README](../README.md)
+- [CLAUDE.md](../CLAUDE.md)
+- [Planning Index](../.planning/README.md)
+- API docs: http://localhost:8000/docs

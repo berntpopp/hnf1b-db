@@ -3,7 +3,7 @@
 **Date:** December 5, 2025
 **Branch:** `feat/lighthouse-optimizations`
 **Status:** Active
-**Related:** [Issue #93](../docs/issues/issue-93-incremental-variant-loading.md), [ADR-001](../docs/adr/001-json-api-pagination.md)
+**Related:** [Issue #93](../../.planning/archive/tracking/issues/issue-93-incremental-variant-loading.md), [ADR-001](../../docs/adr/001-json-api-pagination.md)
 
 ---
 
@@ -368,4 +368,4 @@ async def aggregate_all_variants(...):
 - [Pinia Documentation](https://pinia.vuejs.org/core-concepts/actions.html)
 - [Vue.js Performance Guide](https://vuejs.org/guide/best-practices/performance)
 - [ADR-001: JSON:API Pagination](../../docs/adr/001-json-api-pagination.md)
-- [Issue #93: Incremental Variant Loading](../../docs/issues/issue-93-incremental-variant-loading.md)
+- [Issue #93: Incremental Variant Loading](../../.planning/archive/tracking/issues/issue-93-incremental-variant-loading.md)

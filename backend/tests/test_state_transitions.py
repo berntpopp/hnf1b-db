@@ -1,7 +1,7 @@
 """Pure-function guard matrix — no I/O.
 
 Wave 7 D.1 Task 6: tests for ``app.phenopackets.services.transitions``.
-Spec reference: docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
+Spec reference: .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
 """
 
 import pytest

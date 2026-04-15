@@ -134,7 +134,7 @@ done > variants_hgvs.txt
 ## Related Documentation
 
 - **API Reference:** [../api/variant-annotation.md](../api/variant-annotation.md) - Detailed API specs
-- **Developer Guide:** [../variant-annotation-implementation-plan.md](../variant-annotation-implementation-plan.md) - Implementation details
+- **Developer Guide:** [../../.planning/plans/variant-annotation-implementation-plan.md](../../.planning/plans/variant-annotation-implementation-plan.md) - Internal implementation details
 - **Backend README:** [../../backend/README.md](../../backend/README.md) - Setup instructions
 
 ---

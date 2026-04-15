@@ -5,7 +5,7 @@ and the frontend-mirrored decision-making in TransitionMenu.vue (via an
 API-exposed version of ``allowed_transitions``).
 
 Spec reference:
-  docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
+  .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
 """
 
 from __future__ import annotations

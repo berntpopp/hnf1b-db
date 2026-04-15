@@ -12,7 +12,7 @@ that removes the re-exports or switches submodules to binding imports
 fails loudly here — instead of spreading failures across the 1,671-line
 suite that happens to exercise the same code path for other reasons.
 
-See ``docs/refactor/tech-debt.md`` for the removal criteria.
+See ``.planning/archive/roadmaps/tech-debt.md`` for the removal criteria.
 """
 
 from __future__ import annotations

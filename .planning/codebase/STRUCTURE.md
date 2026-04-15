@@ -273,6 +273,16 @@ hnf1b-db/
 - Generated: Yes (by Claude Code)
 - Committed: Yes (documentation)
 
+**`.planning/`:**
+- Purpose: Internal plans, specs, reviews, tracking material, and archives
+- Generated: Mixed (manual + agent-authored)
+- Committed: Yes
+
+**`docs/`:**
+- Purpose: Durable reference documentation only
+- Contains: API docs, user guides, ADRs, deployment, admin, migration, database, references
+- Committed: Yes
+
 **`docs/adr/`:**
 - Purpose: Architecture Decision Records
 - Generated: No (manual documentation)

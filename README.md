@@ -61,5 +61,6 @@ The feature is structurally impossible to ship to production:
 
 - [docs/deployment/docker.md](docs/deployment/docker.md) — Docker deployment guide
 - [docs/api/README.md](docs/api/README.md) — API endpoint overview
+- [.planning/README.md](.planning/README.md) — internal plans, specs, reviews, and archives
 - [CLAUDE.md](CLAUDE.md) — Developer commands and architecture reference
 - API docs: http://localhost:8000/docs (when backend is running)

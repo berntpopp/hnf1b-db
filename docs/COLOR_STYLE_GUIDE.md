@@ -1,223 +1,91 @@
 # Color Style Guide
 
-This document defines the color scheme used throughout the HNF1B Database application to ensure visual consistency and cohesiveness.
+This document describes the current frontend styling sources of truth. Keep
+semantic styling in code, and use this file as the reference for where those
+tokens live and how they should be applied.
 
-## Design Principles
+## Primary Sources
 
-- **Consistency**: Use the same colors for the same semantic meaning across all views
-- **Accessibility**: All color combinations meet WCAG AA contrast requirements
-- **Vuetify Integration**: Uses Vuetify's built-in color system with `lighten-3` and `lighten-2` variants for pastel appearance
+- Theme palette: `frontend/src/plugins/vuetify.js`
+- Subject/phenotype/card tokens: `frontend/src/utils/cardStyles.js`
+- Sex display tokens: `frontend/src/utils/sex.js`
+- Variant/pathogenicity tokens: `frontend/src/utils/colors.js`
 
-## Core Color Palette
+## Theme Palette
 
-### Subject/Phenopacket Identification
-**Color**: `teal-lighten-3`
-**Usage**: Subject IDs, Phenopacket IDs
-**Components**: Phenopackets table, SearchResults table, PageVariant table, Publications table
-**Hex**: `#4DB6AC` (Vuetify Material Design)
+The app theme is defined in `frontend/src/plugins/vuetify.js`.
 
-```vue
-<v-chip color="teal-lighten-3" size="small" variant="flat">
-  <v-icon left size="small">mdi-card-account-details</v-icon>
-  {{ subject_id }}
-</v-chip>
-```
+- `primary`: `#009688`
+- `primary-darken-1`: `#00796B`
+- `secondary`: `#37474F`
+- `secondary-darken-1`: `#263238`
+- `accent`: `#FF8A65`
+- `background`: `#F5F7FA`
+- `surface`: `#FFFFFF`
 
-### Sex/Gender Indicators
+Use theme colors for layout-level UI, buttons, surfaces, and global emphasis.
 
-Defined in `frontend/src/utils/sex.js` for consistency:
+## Semantic Tokens
 
-#### Male
-**Color**: `blue-lighten-3`
-**Icon**: `mdi-gender-male`
-**Label**: "Male"
-**Hex**: `#64B5F6`
+### Subject and Demographics
 
-#### Female
-**Color**: `pink-lighten-3`
-**Icon**: `mdi-gender-female`
-**Label**: "Female"
-**Hex**: `#F48FB1`
+Use `frontend/src/utils/sex.js` for sex-specific icons, labels, and chip colors.
 
-#### Other Sex
-**Color**: `purple-lighten-3`
-**Icon**: `mdi-gender-non-binary`
-**Label**: "Other"
-**Hex**: `#BA68C8`
+- `MALE`: `blue-lighten-3`
+- `FEMALE`: `pink-lighten-3`
+- `OTHER_SEX`: `purple-lighten-3`
+- `UNKNOWN_SEX`: `grey-lighten-2`
 
-#### Unknown Sex
-**Color**: `grey-lighten-2`
-**Icon**: `mdi-help-circle`
-**Label**: "Unknown"
-**Hex**: `#EEEEEE`
+Use `frontend/src/utils/cardStyles.js` for subject-specific chip colors:
 
-```vue
-<v-chip :color="getSexChipColor(sex)" size="small" variant="flat">
-  <v-icon left size="small">{{ getSexIcon(sex) }}</v-icon>
-  {{ formatSex(sex) }}
-</v-chip>
-```
+- `subjectId`: `teal-lighten-4`
+- `alternateId`: `blue-lighten-4`
+- `reportId`: `grey-lighten-2`
+- `age`: `amber-lighten-4`
+- `karyotype`: `purple-lighten-4`
 
-### Phenotypic Features (HPO Terms)
+### Variant and Interpretation Semantics
 
-#### Present
-**Color**: `green-lighten-3`
-**Usage**: Count of phenotypic features present
-**Hex**: `#81C784`
+Use `frontend/src/utils/colors.js` instead of hardcoding classification colors.
 
-#### Absent/None
-**Color**: `grey-lighten-2`
-**Usage**: No phenotypic features or zero count
-**Hex**: `#EEEEEE`
+- `PATHOGENIC`: `red-lighten-1`
+- `LIKELY_PATHOGENIC`: `orange-lighten-1`
+- `VUS` / `UNCERTAIN_SIGNIFICANCE`: `yellow-darken-1`
+- `LIKELY_BENIGN`: `light-green-lighten-1`
+- `BENIGN`: `green-lighten-1`
 
-```vue
-<v-chip
-  :color="features_count > 0 ? 'green-lighten-3' : 'grey-lighten-2'"
-  size="small"
-  variant="flat"
->
-  {{ features_count }}
-</v-chip>
-```
+Variant type tokens:
 
-### Genetic Variants
+- `SNV`: `purple-lighten-3`
+- `deletion`: `red-lighten-3`
+- `duplication`: `blue-lighten-3`
+- `insertion`: `green-lighten-3`
+- `indel`: `pink-lighten-3`
+- `inversion`: `orange-lighten-3`
+- `CNV`: `amber-lighten-3`
 
-#### Has Variants
-**Color**: `blue-lighten-3`
-**Usage**: Indicates presence of genomic variants
-**Hex**: `#64B5F6`
+Use `frontend/src/utils/cardStyles.js` for interpretation badges where the UI is
+driven by card-level configs.
 
-#### No Variants
-**Color**: `grey-lighten-2`
-**Usage**: No genomic variants present
-**Hex**: `#EEEEEE`
+## Component Rules
 
-```vue
-<v-chip
-  :color="has_variants ? 'blue-lighten-3' : 'grey-lighten-2'"
-  size="small"
-  variant="flat"
->
-  {{ variant_count }}
-</v-chip>
-```
+1. Prefer shared token helpers over inline color strings.
+2. Use `CARD_HEADERS`, `PHENOTYPE_STYLES`, `TYPOGRAPHY`, and `CHIP_SIZES` from
+   `frontend/src/utils/cardStyles.js` for card UIs.
+3. Use `getSexChipColor()`, `getSexIcon()`, and `formatSex()` from
+   `frontend/src/utils/sex.js` for demographic displays.
+4. Use `getPathogenicityColor()`, `getPathogenicityHexColor()`, and
+   `getVariantTypeColor()` from `frontend/src/utils/colors.js` for variant UI.
+5. When adding a new semantic color, update the code token source first, then
+   update this document if the change affects shared guidance.
 
-### Publications
+## Design Direction
 
-#### Has PMID
-**Color**: `orange-lighten-3`
-**Usage**: Publication references with PubMed IDs
-**Hex**: `#FFB74D`
-
-#### No PMID
-**Color**: `grey-lighten-2`
-**Usage**: No publication reference
-**Hex**: `#EEEEEE`
-
-```vue
-<v-chip
-  :href="`https://pubmed.ncbi.nlm.nih.gov/${pmid}`"
-  color="orange-lighten-3"
-  size="small"
-  variant="flat"
-  target="_blank"
->
-  PMID: {{ pmid }}
-  <v-icon right size="small">mdi-open-in-new</v-icon>
-</v-chip>
-```
-
-## Status and Alert Colors
-
-### Backend Health Status
-
-Defined in `frontend/src/components/FooterBar.vue`:
-
-#### Healthy (< 500ms)
-**Color**: `green`
-**Icon**: `mdi-check-circle`
-**Label**: "Good"
-
-#### Slow (500ms - 1000ms)
-**Color**: `orange`
-**Icon**: `mdi-alert`
-**Label**: "Slow"
-
-#### Very Slow (> 1000ms)
-**Color**: `red`
-**Icon**: `mdi-alert-circle`
-**Label**: "Very Slow"
-
-#### Offline
-**Color**: `grey`
-**Icon**: `mdi-lan-disconnect`
-**Label**: "Offline"
-
-### Variant Classification (ACMG)
-
-**Pathogenic**:
-- **Color**: `red-lighten-2`
-- **Icon**: `mdi-alert-circle`
-- **Hex**: `#EF5350`
-
-**Likely Pathogenic**:
-- **Color**: `orange-lighten-2`
-- **Icon**: `mdi-alert`
-- **Hex**: `#FFA726`
-
-**VUS (Variant of Uncertain Significance)**:
-- **Color**: `yellow-darken-2`
-- **Icon**: `mdi-help-circle`
-- **Hex**: `#FDD835`
-
-**Likely Benign**:
-- **Color**: `light-green-lighten-2`
-- **Icon**: `mdi-check-circle`
-- **Hex**: `#AED581`
-
-**Benign**:
-- **Color**: `green-lighten-2`
-- **Icon**: `mdi-check-circle`
-- **Hex**: `#81C784`
-
-## Component-Specific Guidelines
-
-### Data Tables
-
-**Chip Properties**:
-- **Size**: `small`
-- **Variant**: `flat` (for all chips in tables)
-- **Density**: `compact` (for table layout)
-
-**Example**:
-```vue
-<v-chip
-  color="[semantic-color]"
-  size="small"
-  variant="flat"
->
-  <v-icon left size="small">[icon]</v-icon>
-  [text]
-</v-chip>
-```
-
-### Cards
-
-**Outlined Style**:
-- Use `outlined` prop for card borders
-- Use `tile` prop to remove rounded corners (optional)
-- Width: `90%` with `margin: auto` for centered layout
-
-### Buttons
-
-**Primary Actions**:
-- **Color**: Vuetify default primary (typically blue)
-
-**Secondary Actions**:
-- **Color**: `grey`
-
-**Danger Actions** (delete, remove):
-- **Color**: `red`
+- Prefer semantic meaning over decorative color use.
+- Keep dense data UIs readable with muted backgrounds and stronger foreground
+  contrast.
+- Reuse existing token families before inventing one-off shades.
+- Treat this guide as reference documentation, not a planning document.
 
 ## Utility Functions
 

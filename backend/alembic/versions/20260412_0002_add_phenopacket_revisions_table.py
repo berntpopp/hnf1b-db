@@ -4,7 +4,7 @@ Revision ID: 20260412_0002
 Revises: 20260412_0001
 Create Date: 2026-04-12
 
-Part of Wave 7 D.1. See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.2.
+Part of Wave 7 D.1. See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §5.2.
 """
 
 import sqlalchemy as sa

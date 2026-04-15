@@ -91,4 +91,4 @@ Rationale:
 - [frontend/src/utils/sanitize.js](../../frontend/src/utils/sanitize.js) — Wave 1 sanitize utility
 - [frontend/tests/unit/utils/sanitize.spec.js](../../frontend/tests/unit/utils/sanitize.spec.js) — XSS characterization test
 - [backend/app/core/security_headers.py](../../backend/app/core/security_headers.py) — Wave 2 CSP middleware
-- [docs/reviews/codebase-best-practices-review-2026-04-09.md](../reviews/codebase-best-practices-review-2026-04-09.md) — original finding (P5 #26, §8 Security)
+- [.planning/reviews/codebase-best-practices-review-2026-04-09.md](../../.planning/reviews/codebase-best-practices-review-2026-04-09.md) — original finding (P5 #26, §8 Security)

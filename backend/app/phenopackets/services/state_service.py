@@ -6,7 +6,7 @@ runs the guard matrix, mutates pointers + revisions + state atomically, then
 commits.
 
 Spec reference:
-  docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §6.
+  .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §6.
 """
 
 from __future__ import annotations

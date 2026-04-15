@@ -1,7 +1,7 @@
 """Unit tests: new ORM fields on Phenopacket + PhenopacketRevision + Pydantic schemas.
 
 Wave 7 D.1 Tasks 4 + 5.
-See docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §4 and §7.3.
+See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4 and §7.3.
 """
 
 import pytest

@@ -107,7 +107,7 @@ Comprehensive VEP-powered variant annotation, validation, and recoding system.
 **Documentation:**
 - **API Reference:** [docs/api/variant-annotation.md](../docs/api/variant-annotation.md)
 - **User Guide:** [docs/user-guide/variant-annotation.md](../docs/user-guide/variant-annotation.md)
-- **Developer Guide:** [docs/variant-annotation-implementation-plan.md](../docs/variant-annotation-implementation-plan.md)
+- **Developer Guide:** [.planning/plans/variant-annotation-implementation-plan.md](../.planning/plans/variant-annotation-implementation-plan.md)
 
 **Test Coverage:**
 - 83 unit tests + 18 integration tests

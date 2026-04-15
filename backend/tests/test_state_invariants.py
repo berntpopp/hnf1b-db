@@ -5,7 +5,7 @@ If the service or schema ever violates the invariant, exactly one test here
 will break, making the regression easy to diagnose.
 
 Spec reference:
-  docs/superpowers/specs/2026-04-12-wave-7-d1-state-machine-design.md §3.
+  .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §3.
 
 Fixtures ``draft_record`` and ``published_record`` are defined in conftest.py
 and shared with test_state_flows.py (Nit #3).
