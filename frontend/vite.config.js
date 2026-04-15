@@ -9,7 +9,13 @@ import compression from 'vite-plugin-compression';
 export default defineConfig({
   plugins: [
     vue(),
-    vuetify({ autoImport: true }),
+    // Restore Material Design 2 typography (Roboto + larger heading scale +
+    // uppercase buttons) so Vuetify 4's MD3 defaults don't regress the
+    // current production look. Overrides live in src/styles/settings.scss.
+    vuetify({
+      autoImport: true,
+      styles: { configFile: 'src/styles/settings.scss' },
+    }),
 
     // Brotli compression (best compression, ~20% smaller than gzip)
     compression({
@@ -68,17 +74,28 @@ export default defineConfig({
       ],
     },
 
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      // Health check endpoint for backend monitoring
-      '/health': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
+    // Proxy target: only the origin portion of VITE_API_URL.
+    //
+    // VITE_API_URL is doing double-duty in this repo: axios (transport.js)
+    // uses it as its baseURL (typically ending in /api/v2), while the Vite
+    // proxy here needs the bare origin so that /api and /health rewrite
+    // to the correct backend paths. Without this strip, running
+    //   VITE_API_URL=http://localhost:8000/api/v2 npx vite
+    // would proxy /health to /api/v2/health and get a 404.
+    proxy: (() => {
+      const raw = process.env.VITE_API_URL || 'http://localhost:8000';
+      let target;
+      try {
+        target = new URL(raw).origin;
+      } catch {
+        target = 'http://localhost:8000';
+      }
+      return {
+        '/api': { target, changeOrigin: true },
+        // Health check endpoint for backend monitoring
+        '/health': { target, changeOrigin: true },
+      };
+    })(),
 
     watch: {
       // Only use polling on Linux/WSL (not needed on macOS/Windows)

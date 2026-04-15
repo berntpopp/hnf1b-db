@@ -72,7 +72,14 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
 async def test_clone_to_draft_blocks_second_edit(
     db_session, published_record, curator_user, another_curator
 ):
-    """§6.1 / I4: second clone-to-draft raises EditInProgress (409)."""
+    """§6.1 / I4: a second curator cannot hijack an in-progress edit.
+
+    After Task 3 (dispatch on effective state): once a clone-to-draft has
+    created a draft revision, the effective state becomes 'draft', so a
+    second PUT routes to _inplace_save.  _inplace_save then enforces
+    ownership, raising ForbiddenNotOwner for a non-owner curator.
+    The net effect (second editor blocked with 409) is preserved.
+    """
     svc = PhenopacketStateService(db_session)
     await svc.edit_record(
         published_record.id,
@@ -82,7 +89,7 @@ async def test_clone_to_draft_blocks_second_edit(
         actor=curator_user,
     )
 
-    with pytest.raises(svc.EditInProgress):
+    with pytest.raises(svc.ForbiddenNotOwner):
         await svc.edit_record(
             published_record.id,
             new_content={"id": "wave7-published-1", "a": 3},

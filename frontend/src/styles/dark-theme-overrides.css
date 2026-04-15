@@ -1,0 +1,154 @@
+/* dark-theme-overrides.css
+ *
+ * App-wide dark-mode patches for places where the codebase uses
+ * hardcoded Vuetify utility classes (bg-white, bg-grey-lighten-4,
+ * bg-grey-lighten-5) that don't theme-flip automatically. Each rule
+ * is gated by `.v-theme--dark` so the light-theme rendering is
+ * untouched.
+ *
+ * Tone scale matches the dark palette in src/plugins/vuetify.js:
+ *   #121212  background canvas
+ *   #1E1E1E  surface (1dp)        — replaces bg-white
+ *   #242424  surface-light (2dp)  — replaces bg-grey-lighten-4
+ *   #1A1A1A  surface-dim          — replaces bg-grey-lighten-5
+ *
+ * Imported once globally from main.js so it covers every view.
+ */
+
+.v-theme--dark .bg-white {
+  background-color: #1e1e1e !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.v-theme--dark .bg-grey-lighten-4 {
+  background-color: #242424 !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.v-theme--dark .bg-grey-lighten-5 {
+  background-color: #1a1a1a !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+/* Muted-text utilities — flip from dark greys to high-contrast
+ * off-white on dark theme so headings and helper text stay readable. */
+.v-theme--dark .text-grey,
+.v-theme--dark .text-grey-darken-1,
+.v-theme--dark .text-grey-darken-2 {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+.v-theme--dark .text-grey-darken-3,
+.v-theme--dark .text-grey-darken-4 {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Tables — Vuetify's v-data-table inherits surface tones, but loose
+ * <table> elements (e.g., raw markup inside Pages) still default to
+ * a transparent background. Force the surface tone so they're not
+ * see-through islands on the dark canvas. */
+.v-theme--dark table:not(.v-table__wrapper *) {
+  background-color: #1e1e1e;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+/* Borders that hardcode rgba(0,0,0,*) need to flip to white-on-dark
+ * so they remain visible. Common in card outlines and dividers. */
+.v-theme--dark .border-bottom-grey {
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Search field on the home page hero — uses VAutocomplete which has
+ * its own theme integration, but our hero gradient sits on top so
+ * the field can read as a light island on dark. Force surface tones. */
+.v-theme--dark .hero-section .v-field,
+.v-theme--dark .hero-section .v-field__input {
+  background-color: #1e1e1e !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+.v-theme--dark .hero-section .v-field__outline__start,
+.v-theme--dark .hero-section .v-field__outline__end,
+.v-theme--dark .hero-section .v-field__outline__notch::before,
+.v-theme--dark .hero-section .v-field__outline__notch::after {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+/* text-medium-emphasis on dark surfaces.
+ *
+ * Vuetify's default text-medium-emphasis rule resolves to dark-theme
+ * grey only when the element is inside a `.v-theme--dark` wrapper
+ * AND nothing else specifies a color. Because our hardcoded
+ * bg-grey-lighten-5 overrides force `color: rgba(255,255,255,0.87)`
+ * on the section, descendants then inherit; but Vuetify's MD3
+ * typography utility classes (text-h6, text-h4) inject an inline
+ * color via CSS variables that win over inheritance.
+ *
+ * Doubling up the selectors with .v-application ensures we beat
+ * Vuetify's default specificity. */
+.v-theme--dark.v-application .text-medium-emphasis,
+.v-theme--dark .text-medium-emphasis,
+.v-theme--dark h1.text-medium-emphasis,
+.v-theme--dark h2.text-medium-emphasis,
+.v-theme--dark h3.text-medium-emphasis,
+.v-theme--dark h4.text-medium-emphasis,
+.v-theme--dark h5.text-medium-emphasis,
+.v-theme--dark h6.text-medium-emphasis {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Hero text on dark — the h1 uses text-teal-darken-2 (a dark-green
+ * intended for white backgrounds). Flip to the lifted-teal tone of
+ * the dark palette so it stays readable on the dark gradient. */
+.v-theme--dark .hero-section h1,
+.v-theme--dark .hero-section .text-teal-darken-2 {
+  color: #80cbc4 !important;
+}
+.v-theme--dark .hero-section p,
+.v-theme--dark .hero-section .text-subtitle-1 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Section headings inside the about-section / similar dim surfaces.
+ * Even when text-medium-emphasis isn't applied, some h2/h3 inherit
+ * the light-theme grey via Vuetify's typography defaults. Force a
+ * high-contrast off-white. */
+.v-theme--dark .about-section h1,
+.v-theme--dark .about-section h2,
+.v-theme--dark .about-section h3,
+.v-theme--dark .bg-grey-lighten-5 h1,
+.v-theme--dark .bg-grey-lighten-5 h2,
+.v-theme--dark .bg-grey-lighten-5 h3,
+.v-theme--dark .bg-grey-lighten-5 p {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Gene & Protein Visualization SVGs (HNF1BGeneVisualization.vue,
+ * HNF1BProteinVisualization.vue) hardcode background-color: #fafafa
+ * and label fills #424242 / #757575. Override at the SVG element so
+ * the plots blend into the dark surface and labels stay legible.
+ * Domain glyphs (exons, introns, mutation lollipops) keep their
+ * brand colors — only the chrome flips. */
+.v-theme--dark .gene-visualization,
+.v-theme--dark .protein-visualization {
+  background-color: #1e1e1e !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* SVG text labels (chromosome name, exon coords, scale ticks) — flip
+ * fills from grey to a high-contrast off-white. */
+.v-theme--dark .gene-visualization .chromosome-label,
+.v-theme--dark .gene-visualization .coordinate-label,
+.v-theme--dark .gene-visualization .exon-label,
+.v-theme--dark .protein-visualization .scale-label,
+.v-theme--dark .protein-visualization .coordinate-label {
+  fill: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Generic chart canvases (Chart.js / D3) inside any v-card render to
+ * a white area. The protein viz card includes a 3D viewer
+ * (NGL / WebGL) — its <canvas> is opaque, but the surrounding chart
+ * containers may not be. Tint them so they read as a framed plot. */
+.v-theme--dark .chart-canvas-wrapper,
+.v-theme--dark .visualization-container {
+  background-color: #1e1e1e;
+  border-radius: 8px;
+}

@@ -174,6 +174,12 @@ class Phenopacket(Base):
     draft_owner: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[draft_owner_id], viewonly=True
     )
+    editing_revision: Mapped[Optional["PhenopacketRevision"]] = relationship(
+        "PhenopacketRevision",
+        foreign_keys=[editing_revision_id],
+        viewonly=True,
+        primaryjoin="Phenopacket.editing_revision_id==PhenopacketRevision.id",
+    )
 
 
 class Family(Base):
@@ -572,6 +578,9 @@ class PhenopacketResponse(BaseModel):
     editing_revision_id: Optional[int] = None
     draft_owner_id: Optional[int] = None
     draft_owner_username: Optional[str] = None
+    # Wave 7 D.2: derived from editing_revision.state when in-flight, else pp.state.
+    # None when include_state=False (non-curator callers).
+    effective_state: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -88,6 +88,24 @@ class PhenopacketStateService:
         )
         return result.scalars().first()
 
+    async def _effective_state(self, pp: Phenopacket) -> State:
+        """Return the state governing edit-cycle decisions for this phenopacket.
+
+        Spec invariant I9 — pure function of (pp.state, editing_revision_id,
+        editing revision's state). If editing_revision_id is set, the
+        referenced revision row's state is authoritative; otherwise pp.state.
+        """
+        if pp.editing_revision_id is None:
+            return cast(State, pp.state)
+        rev = (
+            await self.db.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.id == pp.editing_revision_id
+                )
+            )
+        ).scalar_one()
+        return cast(State, rev.state)
+
     # ------------------------------------------------------------------
     # §6.1 — Clone-to-draft (published) or in-place edit (draft / changes_requested)
     # ------------------------------------------------------------------
@@ -103,20 +121,30 @@ class PhenopacketStateService:
     ) -> Phenopacket:
         """Save new content to a phenopacket.
 
-        - ``state == 'published'``      → §6.1 clone-to-draft.
-        - ``state ∈ {draft, changes_requested}`` → §6.3 in-place save.
-        - Any other state raises :class:`InvalidTransition`.
+        Dispatches on the effective state (spec §4.2.1):
+        - effective == 'published' (editing_revision_id IS NULL) → §6.1 clone-to-draft.
+        - effective ∈ {draft, changes_requested}                 → §6.3 in-place save.
+        - effective ∈ {in_review, approved}                      → 409 edit_forbidden.
+        - effective == 'archived'                          → 409 invalid_transition.
         """
         pp = await self._lock_and_check(record_id, expected_revision)
+        effective = await self._effective_state(pp)
 
-        if pp.state == "published":
+        if effective == "published":
             return await self._clone_to_draft(pp, new_content, change_reason, actor)
 
-        if pp.state in ("draft", "changes_requested"):
+        if effective in ("draft", "changes_requested"):
             return await self._inplace_save(pp, new_content, change_reason, actor)
 
+        if effective in ("in_review", "approved"):
+            raise self.InvalidTransition(
+                f"cannot edit a record whose effective state is {effective!r};"
+                " withdraw or resubmit first"
+            )
+
+        # archived
         raise self.InvalidTransition(
-            f"cannot edit a record in state {pp.state!r}; withdraw or resubmit first"
+            f"cannot edit a record whose effective state is {effective!r}"
         )
 
     async def _clone_to_draft(
@@ -223,11 +251,14 @@ class PhenopacketStateService:
         """
         pp = await self._lock_and_check(record_id, expected_revision)
 
-        # Guard-matrix check — cast plain str to the narrow Literal types that
-        # check_transition expects; runtime values are validated by the rule dict.
+        # §4.2.1: guard matrix reads the *effective* state (revision row if a
+        # clone-to-draft edit is in flight, pp.state otherwise) so that a
+        # cloned draft whose pp.state is still 'published' can advance through
+        # the review cycle.
+        effective = await self._effective_state(pp)
         try:
             check_transition(
-                cast(State, pp.state),
+                cast(State, effective),
                 cast(State, to_state),
                 role=cast(Role, actor.role),
                 is_owner=self._is_owner(pp, actor),
@@ -252,7 +283,13 @@ class PhenopacketStateService:
         reason: str,
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
-        """§6.4: bump revision, snapshot working copy into a new row, advance state."""
+        """§6.4: bump revision, snapshot working copy into a new row, advance state.
+
+        Spec §4.2.1 — from_state reads effective state, not pp.state. pp.state
+        advancement is gated by I8: only for never-published records OR on archive.
+        """
+        from_state = await self._effective_state(pp)
+
         # Compute the patch against the *previous transition's* content, not the
         # latest draft-in-progress row. After a clone + in-place save the latest
         # row is the draft row, whose content equals pp.phenopacket, giving an
@@ -271,7 +308,6 @@ class PhenopacketStateService:
         patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
 
         pp.revision += 1
-        from_state = pp.state
 
         rev = PhenopacketRevision(
             record_id=pp.id,
@@ -288,7 +324,9 @@ class PhenopacketStateService:
         self.db.add(rev)
         await self.db.flush()  # get rev.id
 
-        pp.state = to_state
+        # I8: pp.state advances only for never-published records OR archive.
+        if pp.head_published_revision_id is None or to_state == "archived":
+            pp.state = to_state
 
         if to_state == "archived":
             # archive is terminal: clear both owner and edit pointer

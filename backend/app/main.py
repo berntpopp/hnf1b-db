@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.api.admin import router as admin_router
+from app.comments.routers import router as comments_router
 from app.core.cache import close_cache, init_cache
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -22,6 +23,7 @@ from app.publications import endpoints as publication_endpoints
 from app.reference import router as reference_router
 from app.search.routers import router as search_router
 from app.seo import router as seo_router
+from app.users.mentionable import router as users_mentionable_router
 
 
 @asynccontextmanager
@@ -85,9 +87,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins_list(),  # Environment-specific origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Specific methods
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],  # Specific methods
     allow_headers=["Authorization", "Content-type"],  # Specific headers
 )
+
 
 # Include routers
 app.include_router(phenopackets_router, prefix="/api/v2")
@@ -101,6 +104,8 @@ app.include_router(ontology_router.router, prefix="/api/v2")
 app.include_router(reference_router.router, prefix="/api/v2")
 app.include_router(search_router, prefix="/api/v2")
 app.include_router(seo_router, prefix="/api/v2/seo")
+app.include_router(comments_router, prefix="/api/v2")
+app.include_router(users_mentionable_router, prefix="/api/v2")
 
 # --- Wave 5a dev-mode quick-login — Layer 2 conditional mount ------------
 #

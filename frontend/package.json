@@ -20,6 +20,10 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
+    "@tiptap/core": "^3.22.3",
+    "@tiptap/extension-mention": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
+    "@tiptap/vue-3": "^3.22.3",
     "@unhead/vue": "^2.0.8",
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
@@ -28,10 +32,12 @@
     "dompurify": "^3.3.3",
     "file-saver": "^2.0.5",
     "just-debounce-it": "^3.2.0",
+    "markdown-it": "^14.1.1",
     "ngl": "^2.4.0",
+    "tiptap-markdown": "^0.9.0",
     "vue": "^3.5.26",
     "vue-router": "^5.0.4",
-    "vuetify": "^4.0.5",
+    "vuetify": "~4.0.5",
     "yup": "^1.7.1"
   },
   "devDependencies": {
@@ -53,6 +59,7 @@
     "pinia": "^3.0.4",
     "prettier": "^3.8.2",
     "rollup-plugin-visualizer": "^7.0.1",
+    "sass": "^1.99.0",
     "terser": "^5.44.1",
     "vite": "^7.3.1",
     "vite-plugin-compression": "^0.5.1",

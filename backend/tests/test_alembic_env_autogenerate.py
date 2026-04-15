@@ -35,6 +35,7 @@ from sqlalchemy import create_engine
 
 # Mirror the production env.py import block so Base.metadata is complete
 # regardless of test-collection import order.
+import app.comments.models  # noqa: F401
 import app.models.user  # noqa: F401
 import app.phenopackets.models  # noqa: F401
 import app.reference.models  # noqa: F401

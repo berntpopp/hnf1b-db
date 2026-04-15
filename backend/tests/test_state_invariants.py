@@ -142,7 +142,14 @@ async def test_I3_head_pointer_state_consistency(db_session, published_record):
 async def test_I4_edit_in_progress_blocks_second_clone(
     db_session, published_record, curator_user, another_curator
 ):
-    """I4: second clone-to-draft on same record raises EditInProgress."""
+    """I4: second edit attempt on same record is blocked for a non-owner curator.
+
+    After Task 3 (dispatch on effective state): once curator_user has cloned to
+    draft, the effective state becomes 'draft' so a second PUT routes to
+    _inplace_save rather than _clone_to_draft. _inplace_save enforces ownership,
+    raising ForbiddenNotOwner for another_curator. The net security invariant is
+    preserved — a second editor cannot hijack the in-progress edit.
+    """
     svc = PhenopacketStateService(db_session)
     await svc.edit_record(
         published_record.id,
@@ -151,7 +158,7 @@ async def test_I4_edit_in_progress_blocks_second_clone(
         expected_revision=1,
         actor=curator_user,
     )
-    with pytest.raises(svc.EditInProgress):
+    with pytest.raises(svc.ForbiddenNotOwner):
         await svc.edit_record(
             published_record.id,
             new_content={"v": 2},

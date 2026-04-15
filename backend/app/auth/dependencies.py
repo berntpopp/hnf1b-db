@@ -126,6 +126,32 @@ async def require_curator(current_user: User = Depends(get_current_user)) -> Use
     return current_user
 
 
+# D.2 comments ------------------------------------------------------------------
+
+
+async def require_comment_author_or_admin(
+    comment_id: int,
+    current_user: User = Depends(require_curator),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """403 unless the caller authored the comment or is admin.
+
+    The router MUST use this for DELETE; PATCH has an additional
+    "author only (not admin)" check performed inline because the matrix
+    forbids admin body edits.
+    """
+    from app.comments.service import CommentsService  # local import avoids cycle
+
+    svc = CommentsService(db)
+    comment = await svc.get_by_id(comment_id, include_deleted=True)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    is_admin = current_user.role == "admin"
+    if comment.author_id != current_user.id and not is_admin:
+        raise HTTPException(status_code=403, detail="Author or admin only")
+    return current_user
+
+
 async def get_optional_user(
     request: Request,
     db: AsyncSession = Depends(get_db),

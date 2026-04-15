@@ -439,17 +439,46 @@ export default {
 </script>
 
 <style scoped>
+/* Hero gradient defaults to the light-theme palette. When the app is
+   in dark mode, the .v-theme--dark ancestor class flips it to a dark
+   teal gradient that keeps the brand hue but works at low luminance. */
 .hero-section {
   background: linear-gradient(135deg, #f5f7fa 0%, #e0f2f1 100%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Hero on dark — softer gradient (#1A2124 → #16383A) lifted off the
+ * #121212 canvas so the section reads as a card rather than a void.
+ * Endpoint hue keeps the brand-teal tint but at lower luminance. */
+.v-theme--dark .hero-section {
+  background: linear-gradient(135deg, #1a2124 0%, #1f3a3a 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Search field on dark — lifted surface + accent border so it stands
+ * out against the hero gradient as the obvious primary action. */
+.v-theme--dark .hero-section .v-field {
+  background-color: #2a2a2a !important;
+  box-shadow: 0 0 0 1px rgba(77, 182, 172, 0.4);
+}
+.v-theme--dark .hero-section .v-field--focused {
+  box-shadow:
+    0 0 0 2px rgba(77, 182, 172, 0.7),
+    0 0 12px rgba(77, 182, 172, 0.2);
+}
+
 .border-bottom {
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.v-theme--dark .border-bottom {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .border-opacity-12 {
   border-color: rgba(0, 0, 0, 0.12) !important;
+}
+.v-theme--dark .border-opacity-12 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Stat card link wrapper - removes default link styling */
@@ -490,7 +519,9 @@ export default {
   transition-duration: 0.1s;
 }
 
-/* Feature cards in About section */
+/* Feature cards in About section. Light theme uses a plain white
+   surface; dark theme lifts to the MD3 elevated-surface tone so the
+   card reads as "raised" against the about-section background. */
 .feature-card {
   background: white;
   border-radius: 12px;
@@ -499,5 +530,30 @@ export default {
 
 .feature-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.v-theme--dark .feature-card {
+  background: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.v-theme--dark .feature-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* The .about-section uses Vuetify's bg-grey-lighten-5 utility inline.
+   In dark mode the utility still resolves to the light grey tone, so
+   override it at the component level to the dark-surface MD3 base. */
+.v-theme--dark .about-section {
+  background-color: #121212 !important;
+}
+
+/* Protein/gene visualization toolbar + window backgrounds. The inline
+   classes (bg-grey-lighten-4, bg-white) don't flip automatically. */
+.v-theme--dark .bg-grey-lighten-4 {
+  background-color: #242424 !important;
+}
+.v-theme--dark .bg-white {
+  background-color: #1e1e1e !important;
 }
 </style>

@@ -158,14 +158,9 @@ async def post_transition(
     if pp_reloaded is None:
         pp_reloaded = pp
 
-    # Add state fields that build_phenopacket_response doesn't include yet
-    pp_response = build_phenopacket_response(pp_reloaded)
-    # Augment with state-machine fields
+    # Builder now populates all state fields including effective_state (spec §4.2.4–6).
+    pp_response = build_phenopacket_response(pp_reloaded, include_state=True)
     pp_dict = pp_response.model_dump()
-    pp_dict["state"] = pp_reloaded.state
-    pp_dict["head_published_revision_id"] = pp_reloaded.head_published_revision_id
-    pp_dict["editing_revision_id"] = pp_reloaded.editing_revision_id
-    pp_dict["draft_owner_id"] = pp_reloaded.draft_owner_id
 
     # Reload the revision with actor eager-loaded
     rev_reloaded = (

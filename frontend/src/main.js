@@ -9,6 +9,9 @@ import 'vuetify/styles';
 import '@mdi/font/css/materialdesignicons.css';
 // Import app styles AFTER MDI to allow font-display override
 import './style.css';
+// Dark-theme utility-class overrides (gated by .v-theme--dark, no-op
+// in light mode). Loaded once globally so every view picks it up.
+import './styles/dark-theme-overrides.css';
 
 // Import logging services
 import { logService } from '@/services/logService';

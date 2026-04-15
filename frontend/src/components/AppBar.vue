@@ -95,6 +95,9 @@
 
       <v-spacer />
 
+      <!-- Theme switcher (always available, no auth required) -->
+      <ThemeSwitcher class="ml-2" />
+
       <!-- User Menu (all screen sizes) -->
       <div v-if="authStore.isAuthenticated" class="ml-4">
         <v-menu location="bottom">
@@ -168,6 +171,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useAuthStore } from '@/stores/authStore';
 import { navigationItems } from '@/config/navigationItems';
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 
 // Emit toggle-drawer event for mobile menu
 defineEmits(['toggle-drawer']);

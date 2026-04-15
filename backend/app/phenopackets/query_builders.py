@@ -119,6 +119,16 @@ def build_phenopacket_response(
     if include_state and pp.draft_owner is not None:
         draft_owner_username = pp.draft_owner.username
 
+    # D.2 effective state (spec §4.2.4): in-flight revision's state
+    # takes precedence over pp.state when an edit is in progress.
+    effective_state_value = None
+    if include_state:
+        effective_state_value = (
+            pp.editing_revision.state
+            if pp.editing_revision_id is not None and pp.editing_revision is not None
+            else pp.state
+        )
+
     return PhenopacketResponse(
         id=str(pp.id),
         phenopacket_id=pp.phenopacket_id,
@@ -138,6 +148,7 @@ def build_phenopacket_response(
         editing_revision_id=pp.editing_revision_id if include_state else None,
         draft_owner_id=pp.draft_owner_id if include_state else None,
         draft_owner_username=draft_owner_username if include_state else None,
+        effective_state=effective_state_value,
     )
 
 

@@ -4,6 +4,18 @@ import { ref } from 'vue';
 import { transitionPhenopacket, fetchRevisions } from '@/api/domain/phenopackets';
 
 /**
+ * Derive the effective state for UI binding.
+ * Falls back to pp.state when the response predates D.2 (no effective_state field).
+ *
+ * @param {Object|null|undefined} pp - A phenopacket meta object (or null).
+ * @returns {string|null} The effective state, or pp.state if not present, or null.
+ */
+export function effectiveStateOf(pp) {
+  if (!pp) return null;
+  return pp.effective_state ?? pp.state ?? null;
+}
+
+/**
  * Composable encapsulating state-machine operations for one phenopacket.
  *
  * @param {string} phenopacketId - The phenopacket's public identifier.

@@ -1,0 +1,161 @@
+// src/styles/settings.scss
+//
+// Vuetify 4 SCSS settings overrides.
+//
+// Why this file exists
+// ────────────────────
+// Vuetify 4 shipped two visual regressions we need to reverse for this app:
+//
+//   1. Typography migrated from Material Design 2 → Material Design 3:
+//      - Heading variants (.text-h1 … .text-h6) got *significantly* smaller.
+//      - Heading font switched from Roboto to inherit from body.
+//      - Button `text-transform: uppercase` was dropped.
+//      Result: the production app (running Vuetify 3) has ~48px Roboto for
+//      .text-h3, the v4 default is ~32px inherited font. This file restores
+//      the MD2 type scale one-to-one.
+//
+//   2. CSS reset was mostly removed — components now normalise their own
+//      styles. We do not restore that here because our app already ships
+//      its own reset-like styles; the removal is fine.
+//
+// Guidance pulled from:
+//   https://vuetifyjs.com/en/getting-started/typography-migration/
+//   https://vuetifyjs.com/en/getting-started/upgrade-guide/
+//
+// How this file is loaded
+// ───────────────────────
+// vite-plugin-vuetify's `styles: { configFile: 'src/styles/settings.scss' }`
+// option pre-pends this file to every Vuetify SCSS entry, so the @use ...
+// with (...) overrides below reach the framework before it compiles its
+// own defaults. See vite.config.js.
+//
+// Do NOT `@import` Vuetify stylesheets here — vite-plugin-vuetify handles
+// that. This file only declares overrides.
+
+@use 'sass:string';
+
+// MD2 font stack — Roboto for body and headings, matches production.
+$body-font-family: string.unquote('"Roboto", sans-serif');
+$heading-font-family: $body-font-family;
+
+// MD2 type scale (six heading levels + body + caption + button + overline).
+// Values copied verbatim from Vuetify 3's default $typography map so the
+// visual output is byte-identical to production.
+$typography: (
+  'h1': (
+    'size': 6rem,
+    'weight': 300,
+    'line-height': 1,
+    'letter-spacing': -0.015625em,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'h2': (
+    'size': 3.75rem,
+    'weight': 300,
+    'line-height': 1,
+    'letter-spacing': -0.0083333333em,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'h3': (
+    'size': 3rem,
+    'weight': 400,
+    'line-height': 1.05,
+    'letter-spacing': normal,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'h4': (
+    'size': 2.125rem,
+    'weight': 400,
+    'line-height': 1.175,
+    'letter-spacing': 0.0073529412em,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'h5': (
+    'size': 1.5rem,
+    'weight': 400,
+    'line-height': 1.333,
+    'letter-spacing': normal,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'h6': (
+    'size': 1.25rem,
+    'weight': 500,
+    'line-height': 1.6,
+    'letter-spacing': 0.0125em,
+    'font-family': $heading-font-family,
+    'text-transform': none,
+  ),
+  'subtitle-1': (
+    'size': 1rem,
+    'weight': normal,
+    'line-height': 1.75,
+    'letter-spacing': 0.009375em,
+    'font-family': $body-font-family,
+    'text-transform': none,
+  ),
+  'subtitle-2': (
+    'size': 0.875rem,
+    'weight': 500,
+    'line-height': 1.6,
+    'letter-spacing': 0.0071428571em,
+    'font-family': $body-font-family,
+    'text-transform': none,
+  ),
+  'body-1': (
+    'size': 1rem,
+    'weight': 400,
+    'line-height': 1.5,
+    'letter-spacing': 0.03125em,
+    'font-family': $body-font-family,
+    'text-transform': none,
+  ),
+  'body-2': (
+    'size': 0.875rem,
+    'weight': 400,
+    'line-height': 1.425,
+    'letter-spacing': 0.0178571429em,
+    'font-family': $body-font-family,
+    'text-transform': none,
+  ),
+  'button': (
+    'size': 0.875rem,
+    'weight': 500,
+    'line-height': 2.6,
+    'letter-spacing': 0.0892857143em,
+    'font-family': $body-font-family,
+    // MD3 dropped uppercase buttons; restore it so CTAs keep their
+    // production look.
+    'text-transform': uppercase,
+  ),
+  'caption': (
+    'size': 0.75rem,
+    'weight': 400,
+    'line-height': 1.667,
+    'letter-spacing': 0.0333333333em,
+    'font-family': $body-font-family,
+    'text-transform': none,
+  ),
+  'overline': (
+    'size': 0.75rem,
+    'weight': 500,
+    'line-height': 2.667,
+    'letter-spacing': 0.1666666667em,
+    'font-family': $body-font-family,
+    'text-transform': uppercase,
+  ),
+);
+
+// Hand these to Vuetify's settings module. vite-plugin-vuetify wires this
+// up so Vuetify's own SCSS compiles against the overridden values.
+@use 'vuetify/settings' with (
+  $body-font-family: $body-font-family,
+  $heading-font-family: $heading-font-family,
+  $typography: $typography,
+  // VBtn default uppercase transform (MD2 behaviour).
+  $button-text-transform: uppercase
+);

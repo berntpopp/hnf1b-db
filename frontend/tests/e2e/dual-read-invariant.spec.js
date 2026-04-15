@@ -29,10 +29,10 @@
  *   3. Browser layer (anonymous context) — navigate to the same URL and
  *      assert the old subject ID ("ORIGINAL") is visible, NOT "CLONE-DRAFT".
  *
- * The "re-publish convergence" phase is NOT covered — advancing a cloned
- * draft through review while the outer record stays `state='published'`
- * is a spec gap for D.1 (no `('published', 'in_review')` rule in the
- * guard matrix). See D.2 follow-up.
+ * Phase 5 (re-publish convergence) exercises the full D.2 clone-cycle
+ * advancement: after submit → approve → publish on a cloned draft, anon
+ * and admin GETs converge on the new subject ID while pp.state stays
+ * 'published' throughout.
  *
  * Credentials
  * -----------
@@ -242,17 +242,66 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   }
 
   // -------------------------------------------------------------------------
-  // Cleanup
+  // Phase 5 — Re-publish convergence
+  //
+  // Advance the cloned draft through in_review → approved → published.
+  // Afterwards, anon and admin GETs converge on DRAFT_SUBJECT_ID (the new
+  // head). This is the key test of the D.2 effective-state routing: the
+  // whole review cycle must work while pp.state stays 'published' (I8).
   // -------------------------------------------------------------------------
-  // NOTE: The "re-publish convergence" phase (advancing the cloned draft
-  // through in_review → approved → published so the new subject becomes the
-  // public head) is deliberately NOT tested here. Spec §6.1 says
-  // `phenopackets.state` stays `'published'` during clone-to-draft, while the
-  // transition guard matrix in §4.1 has no `('published', 'in_review')` rule
-  // — so there is no current path to advance a cloned draft through review.
-  // Covering that flow requires either a state-machine change (make
-  // transitions read state from `editing_revision_id` when set) or a
-  // separate endpoint to promote the draft revision. Tracked as a D.2
-  // follow-up; the core I1 invariant (divergence during clone) is fully
-  // covered by Phases 1-4 above.
+  const curatorToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+
+  // Read the current revision from the API (after clone, pp.revision has advanced).
+  const detailResp = await request.get(`${API_BASE}/phenopackets/${RECORD_ID}`, {
+    headers: { Authorization: `Bearer ${curatorToken}` },
+  });
+  if (!detailResp.ok()) {
+    throw new Error(`Phase 5 setup GET failed: ${detailResp.status()} ${await detailResp.text()}`);
+  }
+  const detail = await detailResp.json();
+  let workingRevision = detail.revision;
+
+  workingRevision = await apiTransition(
+    request,
+    curatorToken,
+    RECORD_ID,
+    'in_review',
+    'ready for re-review',
+    workingRevision
+  );
+  workingRevision = await apiTransition(
+    request,
+    curatorToken,
+    RECORD_ID,
+    'approved',
+    'looks good',
+    workingRevision
+  );
+  await apiTransition(
+    request,
+    curatorToken,
+    RECORD_ID,
+    'published',
+    'shipping it',
+    workingRevision
+  );
+
+  // Anon context now sees the NEW head
+  const anonCtx2 = await context.browser().newContext();
+  const anonPage2 = await anonCtx2.newPage();
+  try {
+    await anonPage2.goto(`${BASE}/phenopackets/${RECORD_ID}`, {
+      waitUntil: 'networkidle',
+      timeout: 30_000,
+    });
+    // After republish, anon and admin converge on DRAFT_SUBJECT_ID
+    await expect(anonPage2.getByText(DRAFT_SUBJECT_ID).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(anonPage2.getByText(ORIGINAL_SUBJECT_ID)).toHaveCount(0, {
+      timeout: 10_000,
+    });
+  } finally {
+    await anonCtx2.close();
+  }
 });
