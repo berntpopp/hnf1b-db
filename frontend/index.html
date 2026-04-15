@@ -94,7 +94,7 @@
         }
         var preference = stored === 'light' || stored === 'dark' || stored === 'system'
           ? stored
-          : 'system';
+          : 'light';
         var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var resolved =
           preference === 'dark' ? 'dark'

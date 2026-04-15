@@ -43,7 +43,9 @@ function readStoredPreference() {
   if (stored === 'light' || stored === LIGHT_THEME) return 'light';
   if (stored === 'dark' || stored === DARK_THEME) return 'dark';
   if (stored === 'system') return 'system';
-  return 'system';
+  // Default to light (brand choice). Users who want system-follow can
+  // pick it explicitly; see ThemeSwitcher for the entry point.
+  return 'light';
 }
 
 function systemPrefersDark() {
@@ -65,9 +67,12 @@ function resolveThemeName(pref) {
  * Apply a theme name to Vuetify + update <html>.color-scheme. Pulled
  * out so the media-query listener can call it without knowing about
  * the stored preference.
+ *
+ * Uses `theme.change(name)` — the `theme.global.name.value = x`
+ * assignment was deprecated in Vuetify 4.
  */
 function applyTheme(vuetifyTheme, themeName) {
-  vuetifyTheme.global.name.value = themeName;
+  vuetifyTheme.change(themeName);
   if (typeof document !== 'undefined') {
     const scheme = themeName === DARK_THEME ? 'dark' : 'light';
     document.documentElement.style.colorScheme = scheme;
