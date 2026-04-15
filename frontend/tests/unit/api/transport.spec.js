@@ -48,6 +48,7 @@ vi.mock('axios', () => ({
 // Mock session — so the request interceptor can read the access token
 vi.mock('@/api/session', () => ({
   getAccessToken: vi.fn(() => 'initial-token'),
+  clearTokens: vi.fn(),
 }));
 
 // Mock auth store — refreshAccessToken resolves with a new token
@@ -174,5 +175,7 @@ describe('transport — refresh-queue thunder-herd guard', () => {
 
     // Still only one refresh attempt
     expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+    const { clearTokens } = await import('@/api/session');
+    expect(clearTokens).toHaveBeenCalledOnce();
   });
 });

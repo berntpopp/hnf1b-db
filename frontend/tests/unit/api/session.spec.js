@@ -1,77 +1,63 @@
 /**
- * session.spec.js — Token storage contract tests for src/api/session.js
+ * session.spec.js — In-memory token session tests for src/api/session.js
  *
- * Verifies localStorage round-trips, partial persistence, clearTokens,
- * and absent-token handling.
+ * Verifies tokens live only in module memory and that localStorage is
+ * not consulted or mutated.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getAccessToken, getRefreshToken, persistTokens, clearTokens } from '@/api/session';
 
-describe('session — token storage contract', () => {
-  /** @type {Record<string, string>} */
-  let store;
+describe('session — in-memory token session', () => {
+  const localStorageMock = {
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+  };
 
   beforeEach(() => {
-    store = {};
-    // Provide a minimal localStorage stub for happy-dom
+    clearTokens();
+    vi.clearAllMocks();
+
     Object.defineProperty(globalThis, 'localStorage', {
-      value: {
-        getItem: (key) => store[key] ?? null,
-        setItem: (key, value) => {
-          store[key] = String(value);
-        },
-        removeItem: (key) => {
-          delete store[key];
-        },
-        clear: () => {
-          store = {};
-        },
-      },
+      value: localStorageMock,
       writable: true,
       configurable: true,
     });
   });
 
-  it('returns null when no tokens are stored', () => {
+  it('starts empty and ignores stale localStorage entries', () => {
+    localStorageMock.getItem.mockReturnValueOnce('stale-access');
+    localStorageMock.getItem.mockReturnValueOnce('stale-refresh');
+
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+    expect(localStorageMock.getItem).not.toHaveBeenCalled();
   });
 
-  it('round-trips both tokens through persistTokens', () => {
+  it('persists tokens only in memory', () => {
     persistTokens({ accessToken: 'a-tok', refreshToken: 'r-tok' });
+
     expect(getAccessToken()).toBe('a-tok');
     expect(getRefreshToken()).toBe('r-tok');
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
   });
 
-  it('persists only the accessToken when refreshToken is omitted', () => {
-    persistTokens({ accessToken: 'a-only' });
-    expect(getAccessToken()).toBe('a-only');
-    expect(getRefreshToken()).toBeNull();
-  });
-
-  it('persists only the refreshToken when accessToken is omitted', () => {
-    persistTokens({ refreshToken: 'r-only' });
-    expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBe('r-only');
-  });
-
-  it('clearTokens removes both tokens', () => {
-    persistTokens({ accessToken: 'a', refreshToken: 'r' });
-    clearTokens();
-    expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBeNull();
-  });
-
-  it('clearTokens is safe when no tokens exist', () => {
-    // Should not throw
-    clearTokens();
-    expect(getAccessToken()).toBeNull();
-  });
-
-  it('overwrites existing tokens on re-persist', () => {
+  it('overwrites existing in-memory tokens on re-persist', () => {
     persistTokens({ accessToken: 'old-a', refreshToken: 'old-r' });
     persistTokens({ accessToken: 'new-a', refreshToken: 'new-r' });
+
     expect(getAccessToken()).toBe('new-a');
     expect(getRefreshToken()).toBe('new-r');
+  });
+
+  it('clears tokens from memory without touching localStorage', () => {
+    persistTokens({ accessToken: 'a', refreshToken: 'r' });
+
+    clearTokens();
+
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(localStorageMock.removeItem).not.toHaveBeenCalled();
   });
 });

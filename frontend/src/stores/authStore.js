@@ -2,12 +2,13 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { apiClient } from '@/api';
+import { clearTokens, getAccessToken, getRefreshToken, persistTokens } from '@/api/session';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref(null);
-  const accessToken = ref(localStorage.getItem('access_token'));
-  const refreshToken = ref(localStorage.getItem('refresh_token'));
+  const accessToken = ref(getAccessToken());
+  const refreshToken = ref(getRefreshToken());
   const isLoading = ref(false);
   const error = ref(null);
 
@@ -29,8 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Store tokens
       accessToken.value = access_token;
       refreshToken.value = refresh_token;
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
+      persistTokens({ accessToken: access_token, refreshToken: refresh_token });
 
       // Fetch user info
       await fetchCurrentUser();
@@ -72,9 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = null;
     error.value = null;
 
-    // Clear localStorage
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    // Clear in-memory token storage
+    clearTokens();
 
     isLoading.value = false;
 
@@ -127,8 +126,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Update tokens (token rotation)
       accessToken.value = access_token;
       refreshToken.value = new_refresh_token;
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', new_refresh_token);
+      persistTokens({ accessToken: access_token, refreshToken: new_refresh_token });
 
       window.logService.debug('Access token refreshed');
 
@@ -183,8 +181,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await apiClient.post(`/dev/login-as/${username}`);
       accessToken.value = data.access_token;
       refreshToken.value = data.refresh_token;
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
+      persistTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
       await fetchCurrentUser();
       window.logService.info('dev quick-login', { username });
       return true;
