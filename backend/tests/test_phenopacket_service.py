@@ -284,6 +284,7 @@ class TestPhenopacketServiceSoftDelete:
                 "DOES-NOT-EXIST",
                 change_reason="service test",
                 actor_id=None,
+                expected_revision=1,
             )
 
     @pytest.mark.asyncio
@@ -302,6 +303,7 @@ class TestPhenopacketServiceSoftDelete:
             "SERVICE-TEST-DEL",
             change_reason="service test delete",
             actor_id=None,
+            expected_revision=1,
         )
 
         assert "SERVICE-TEST-DEL" in result["message"]
@@ -328,6 +330,7 @@ class TestPhenopacketServiceSoftDelete:
             "SERVICE-TEST-HIDDEN",
             change_reason="service test",
             actor_id=None,
+            expected_revision=1,
         )
 
         service3 = make_service()

@@ -279,7 +279,7 @@ async def test_delete_phenopacket_soft_delete(
         "DELETE",
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         headers=admin_headers,
-        json={"change_reason": "Test deletion"},
+        json={"change_reason": "Test deletion", "revision": test_phenopacket.revision},
     )
 
     assert response.status_code == 200
@@ -421,7 +421,7 @@ async def test_delete_already_deleted(
         "DELETE",
         f"/api/v2/phenopackets/{test_phenopacket.phenopacket_id}",
         headers=admin_headers,
-        json={"change_reason": "Delete again"},
+        json={"change_reason": "Delete again", "revision": test_phenopacket.revision},
     )
 
     # Should return 404 (not found because soft-deleted records are filtered)

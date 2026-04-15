@@ -684,7 +684,7 @@ export default {
     },
 
     async handleDeleteConfirm(deleteReason) {
-      if (!this.phenopacket) return;
+      if (!this.phenopacket || !this.phenopacketMeta) return;
 
       this.deleteLoading = true;
 
@@ -694,7 +694,7 @@ export default {
       });
 
       try {
-        await deletePhenopacket(this.phenopacket.id, deleteReason);
+        await deletePhenopacket(this.phenopacket.id, this.phenopacketMeta.revision, deleteReason);
 
         window.logService.info('Phenopacket deleted successfully', {
           phenopacketId: this.phenopacket.id,

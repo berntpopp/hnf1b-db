@@ -83,7 +83,7 @@ async def validation_exception_handler(
         f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in errors
     )
     return _build_error_response(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=detail,
         error_code="validation_error",
         request=request,

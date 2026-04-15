@@ -111,16 +111,11 @@ async def test_delete_with_stale_revision_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_delete_without_revision_still_works(
+async def test_delete_without_revision_returns_422(
     async_client: AsyncClient, admin_headers: dict
 ):
-    """Backwards compat: clients that omit `revision` are not broken.
-
-    Revision is optional; if not provided, the delete proceeds without
-    a check. This preserves existing client behavior until the frontend
-    is updated.
-    """
-    create_payload = _valid_payload("delete-revision-optional")
+    """DELETE without a revision is rejected at request validation."""
+    create_payload = _valid_payload("delete-revision-required")
     create_resp = await async_client.post(
         "/api/v2/phenopackets/", json=create_payload, headers=admin_headers
     )
@@ -128,11 +123,11 @@ async def test_delete_without_revision_still_works(
 
     response = await async_client.request(
         "DELETE",
-        "/api/v2/phenopackets/delete-revision-optional",
+        "/api/v2/phenopackets/delete-revision-required",
         json={"change_reason": "no revision"},
         headers=admin_headers,
     )
-    assert response.status_code == 200
+    assert response.status_code == 422, response.text
 
 
 @pytest.mark.asyncio
