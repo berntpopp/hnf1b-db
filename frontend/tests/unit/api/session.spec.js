@@ -1,77 +1,107 @@
 /**
- * session.spec.js — Token storage contract tests for src/api/session.js
+ * session.spec.js — tab-scoped token session tests for src/api/session.js
  *
- * Verifies localStorage round-trips, partial persistence, clearTokens,
- * and absent-token handling.
+ * Verifies tokens are cached in memory, persisted to sessionStorage for the
+ * lifetime of the browser tab, and legacy localStorage keys are purged.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { getAccessToken, getRefreshToken, persistTokens, clearTokens } from '@/api/session';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-describe('session — token storage contract', () => {
-  /** @type {Record<string, string>} */
-  let store;
+describe('session — tab-scoped token session', () => {
+  let clearTokens;
+  let getAccessToken;
+  let getRefreshToken;
+  let persistTokens;
 
-  beforeEach(() => {
-    store = {};
-    // Provide a minimal localStorage stub for happy-dom
+  const localStorageMock = {
+    removeItem: vi.fn(),
+  };
+
+  const sessionStorageMock = {
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+  };
+
+  async function loadSessionModule() {
+    ({ clearTokens, getAccessToken, getRefreshToken, persistTokens } =
+      await import('@/api/session'));
+  }
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+
     Object.defineProperty(globalThis, 'localStorage', {
-      value: {
-        getItem: (key) => store[key] ?? null,
-        setItem: (key, value) => {
-          store[key] = String(value);
-        },
-        removeItem: (key) => {
-          delete store[key];
-        },
-        clear: () => {
-          store = {};
-        },
-      },
+      value: localStorageMock,
       writable: true,
       configurable: true,
     });
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      value: sessionStorageMock,
+      writable: true,
+      configurable: true,
+    });
+
+    await loadSessionModule();
   });
 
-  it('returns null when no tokens are stored', () => {
+  it('starts empty when the current tab has no stored tokens', () => {
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+    expect(sessionStorageMock.getItem).toHaveBeenCalledWith('access_token');
+    expect(sessionStorageMock.getItem).toHaveBeenCalledWith('refresh_token');
   });
 
-  it('round-trips both tokens through persistTokens', () => {
+  it('purges legacy localStorage token keys during module initialization', async () => {
+    await loadSessionModule();
+
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+  });
+
+  it('persists tokens in memory and sessionStorage', () => {
     persistTokens({ accessToken: 'a-tok', refreshToken: 'r-tok' });
+
     expect(getAccessToken()).toBe('a-tok');
     expect(getRefreshToken()).toBe('r-tok');
-  });
-
-  it('persists only the accessToken when refreshToken is omitted', () => {
-    persistTokens({ accessToken: 'a-only' });
-    expect(getAccessToken()).toBe('a-only');
-    expect(getRefreshToken()).toBeNull();
-  });
-
-  it('persists only the refreshToken when accessToken is omitted', () => {
-    persistTokens({ refreshToken: 'r-only' });
-    expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBe('r-only');
-  });
-
-  it('clearTokens removes both tokens', () => {
-    persistTokens({ accessToken: 'a', refreshToken: 'r' });
-    clearTokens();
-    expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBeNull();
-  });
-
-  it('clearTokens is safe when no tokens exist', () => {
-    // Should not throw
-    clearTokens();
-    expect(getAccessToken()).toBeNull();
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('access_token', 'a-tok');
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'r-tok');
   });
 
   it('overwrites existing tokens on re-persist', () => {
     persistTokens({ accessToken: 'old-a', refreshToken: 'old-r' });
     persistTokens({ accessToken: 'new-a', refreshToken: 'new-r' });
+
     expect(getAccessToken()).toBe('new-a');
     expect(getRefreshToken()).toBe('new-r');
+  });
+
+  it('clears tokens from memory, sessionStorage, and legacy localStorage keys', () => {
+    persistTokens({ accessToken: 'a', refreshToken: 'r' });
+
+    localStorageMock.removeItem.mockClear();
+    sessionStorageMock.removeItem.mockClear();
+    clearTokens();
+
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+    expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+  });
+
+  it('restores tokens from sessionStorage on module load', async () => {
+    vi.resetModules();
+    sessionStorageMock.getItem.mockImplementation((key) => {
+      if (key === 'access_token') return 'saved-access';
+      if (key === 'refresh_token') return 'saved-refresh';
+      return null;
+    });
+
+    await loadSessionModule();
+
+    expect(getAccessToken()).toBe('saved-access');
+    expect(getRefreshToken()).toBe('saved-refresh');
   });
 });

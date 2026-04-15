@@ -3,7 +3,7 @@
 // MUST stay in the same module as the axios instance to prevent thunder-herd.
 
 import axios from 'axios';
-import { getAccessToken } from './session';
+import { clearTokens, getAccessToken } from './session';
 
 export const apiClient = axios.create({
   // Use Vite proxy in development (avoids CORS), direct URL in production
@@ -35,9 +35,7 @@ function processQueue(error, token = null) {
   failedRequestsQueue = [];
 }
 
-// Request interceptor: Add JWT token from localStorage
-// Note: We use localStorage directly here for performance (synchronous)
-// The auth store manages the same tokens and keeps them in sync
+// Request interceptor: Add JWT token from the in-memory session helper.
 apiClient.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
@@ -163,8 +161,7 @@ apiClient.interceptors.response.use(
 
         // Clear auth state and redirect
         window.logService.warn('Token refresh failed, redirecting to login');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        clearTokens();
 
         // Only redirect if not already on login page
         if (window.location.pathname !== '/login') {

@@ -1,7 +1,11 @@
 """Tests for authentication endpoints."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
+
+from app.models.user import User
 
 
 @pytest.mark.asyncio
@@ -41,6 +45,22 @@ async def test_login_nonexistent_user(async_client: AsyncClient):
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_locked_account_is_rejected(
+    async_client: AsyncClient, test_user, db_session
+):
+    """Test login rejects an account that is currently locked."""
+    test_user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+    await db_session.commit()
+    response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+
+    assert response.status_code == 423
+    assert "locked" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -88,6 +108,52 @@ async def test_token_refresh(async_client: AsyncClient, test_user):
 
 
 @pytest.mark.asyncio
+async def test_token_refresh_rejects_inactive_account(
+    async_client: AsyncClient, test_user, db_session
+):
+    """Test refresh rejects a token for an inactive account."""
+    login_response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    test_user.is_active = False
+    await db_session.commit()
+
+    response = await async_client.post(
+        "/api/v2/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 403
+    assert "inactive" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_rejects_locked_account(
+    async_client: AsyncClient, test_user, db_session
+):
+    """Test refresh rejects a token for a locked account."""
+    login_response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    test_user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+    await db_session.commit()
+
+    response = await async_client.post(
+        "/api/v2/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 423
+    assert "locked" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_logout(async_client: AsyncClient, auth_headers):
     """Test logout."""
     response = await async_client.post("/api/v2/auth/logout", headers=auth_headers)
@@ -112,6 +178,36 @@ async def test_change_password(async_client: AsyncClient, auth_headers):
 
 
 @pytest.mark.asyncio
+async def test_change_password_invalidates_previous_refresh_token(
+    async_client: AsyncClient, test_user
+):
+    """Test password rotation clears the existing refresh capability."""
+    login_response = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": test_user.username, "password": "TestPass123!"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    change_response = await async_client.post(
+        "/api/v2/auth/change-password",
+        headers={"Authorization": f"Bearer {login_response.json()['access_token']}"},
+        json={
+            "current_password": "TestPass123!",
+            "new_password": "NewPass456!",
+        },
+    )
+    assert change_response.status_code == 200
+
+    refresh_response = await async_client.post(
+        "/api/v2/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert refresh_response.status_code == 401
+    assert "invalid" in refresh_response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_list_roles(async_client: AsyncClient, auth_headers):
     """Test listing roles."""
     response = await async_client.get("/api/v2/auth/roles", headers=auth_headers)
@@ -133,8 +229,6 @@ async def test_create_user_admin(async_client: AsyncClient, admin_headers, db_se
     """Test creating user as admin."""
     # Pre-cleanup: Remove any leftover newuser from failed previous runs
     from sqlalchemy import delete
-
-    from app.models.user import User
 
     try:
         await db_session.execute(delete(User).where(User.email == "new@example.com"))

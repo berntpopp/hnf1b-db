@@ -11,7 +11,7 @@ Per-test isolation strategy:
   their own sessions (e.g. race-condition tests) share the same engine as the
   tests which use the ``db_session`` fixture. This means the whole suite sees
   one test database with one connection pool.
-- Between tests we ``TRUNCATE`` the small set of mutable tables that test
+- After each test we ``TRUNCATE`` the small set of mutable tables that test
   fixtures and endpoints write to. Static lookup tables populated by Alembic
   migrations are intentionally left alone so the schema stays valid.
 - ``dispose_engine`` runs at session teardown to shut down asyncpg cleanly.
@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -134,26 +134,28 @@ _MUTABLE_TABLES: tuple[str, ...] = (
 async def _truncate_mutable_tables() -> None:
     """Wipe test-mutable tables in a single transaction.
 
-    Runs before every test so that each test starts from a clean, deterministic
-    state. Uses ``TRUNCATE ... RESTART IDENTITY CASCADE`` so that serial/bigint
-    primary keys are reset and any FK-dependent rows are removed in lock-step.
+    Runs after every test so that the next test starts from a clean,
+    deterministic state. Uses ``TRUNCATE ... RESTART IDENTITY CASCADE`` so that
+    serial/bigint primary keys are reset and any FK-dependent rows are removed
+    in lock-step.
     """
     async with engine.begin() as conn:
         joined = ", ".join(_MUTABLE_TABLES)
         await conn.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def _isolate_database_between_tests():
-    """Wipe mutable tables before each test for guaranteed isolation.
-
-    Declared ``autouse=True`` so every test gets a clean database without
-    having to remember to request the fixture. No yield body is needed — the
-    cleanup runs before the test and the next invocation handles the next
-    test's pre-state.
-    """
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _clean_database_at_session_start():
+    """Start the test session from a clean mutable-data state."""
     await _truncate_mutable_tables()
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_database_between_tests():
+    """Wipe mutable tables after each test for guaranteed isolation."""
+    yield
+    await _truncate_mutable_tables()
 
 
 @pytest_asyncio.fixture
@@ -214,16 +216,7 @@ async def test_user(db_session):
 
     yield user
 
-    # Best-effort cleanup — the autouse truncate will catch anything we miss
-    # before the next test runs.
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 @pytest_asyncio.fixture
@@ -243,14 +236,7 @@ async def admin_user(db_session):
 
     yield user
 
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 @pytest_asyncio.fixture
@@ -276,14 +262,7 @@ async def curator_user(db_session):
 
     yield user
 
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 @pytest_asyncio.fixture
@@ -436,14 +415,7 @@ async def viewer_user(db_session):
 
     yield user
 
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 @pytest_asyncio.fixture
@@ -516,14 +488,7 @@ async def another_curator(db_session):
 
     yield user
 
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 @pytest_asyncio.fixture
@@ -617,14 +582,7 @@ async def seeded_system_user(db_session):
 
     yield user
 
-    try:
-        await db_session.execute(delete(User).where(User.id == user.id))
-        await db_session.commit()
-    except Exception:
-        try:
-            await db_session.rollback()
-        except Exception:
-            pass
+    # Autouse table truncation handles cleanup after the test.
 
 
 # Silence ``pytest`` unused-import warning for the session fixture above.

@@ -1,6 +1,7 @@
 """Authentication API endpoints."""
 
 import logging
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -46,6 +47,21 @@ from app.schemas.auth import (
 from app.utils.audit_logger import log_user_action
 
 logger = logging.getLogger(__name__)
+
+
+def _assert_user_can_receive_tokens(user: User) -> None:
+    """Reject inactive or currently locked users before token issuance."""
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive",
+        )
+
+    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account locked until {user.locked_until.isoformat()}",
+        )
 
 
 def _frontend_base_url() -> str:
@@ -141,12 +157,7 @@ async def login(
         user.hashed_password = new_hash
         await db.flush()
 
-    # Check if account is active
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
-        )
+    _assert_user_can_receive_tokens(user)
 
     # Create tokens
     access_token = create_access_token(user.username, user.role, user.get_permissions())
@@ -155,6 +166,7 @@ async def login(
     # Update user record
     await repo.record_successful_login(user)
     await repo.update_refresh_token(user, refresh_token)
+    await db.commit()
 
     # Log successful login
     await log_user_action(
@@ -198,10 +210,13 @@ async def refresh_access_token(
             detail="User not found",
         )
 
+    _assert_user_can_receive_tokens(user)
+
     # Verify stored refresh token matches (token rotation)
     if user.refresh_token != request.refresh_token:
         # Possible token theft - invalidate all tokens
         await repo.update_refresh_token(user, "")
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -215,6 +230,7 @@ async def refresh_access_token(
 
     # Store new refresh token
     await repo.update_refresh_token(user, new_refresh_token)
+    await db.commit()
 
     return Token(
         access_token=new_access_token,
@@ -261,6 +277,7 @@ async def logout(
     """
     repo = UserRepository(db)
     await repo.update_refresh_token(current_user, "")
+    await db.commit()
 
     await log_user_action(
         db=db,
@@ -297,6 +314,8 @@ async def change_password(
     repo = UserRepository(db)
     user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]  # mypy+pydantic: Field(None) defaults not recognized
     await repo.update(current_user, user_update)
+    await repo.update_refresh_token(current_user, "")
+    await db.commit()
 
     await log_user_action(
         db=db,
@@ -871,6 +890,7 @@ async def confirm_password_reset(
         )
 
     user.hashed_password = get_password_hash(reset_data.new_password)
+    user.refresh_token = ""
     await db.commit()
 
     # Invalidate all remaining reset tokens for this email

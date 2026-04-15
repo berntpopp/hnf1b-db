@@ -111,6 +111,7 @@
 <script setup>
 import { ref, shallowRef, defineAsyncComponent } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { isDevQuickLoginEnabled } from '@/config/devAuth';
 import { useAuthStore } from '@/stores/authStore';
 
 // Wave 5a Layer 4: DCE-friendly conditional import.
@@ -119,7 +120,7 @@ import { useAuthStore } from '@/stores/authStore';
 // at build time, pruning the whole `if` body (including the
 // dynamic import and the component reference).
 const DevQuickLogin = shallowRef(null);
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && isDevQuickLoginEnabled()) {
   DevQuickLogin.value = defineAsyncComponent(() => import('@/components/auth/DevQuickLogin.vue'));
 }
 

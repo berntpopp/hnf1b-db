@@ -27,6 +27,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.phenopackets.models import (
@@ -301,7 +302,16 @@ class PhenopacketService:
         ``expected_revision`` is optional for backwards compatibility —
         callers that omit it get the original blind-delete behaviour.
         """
-        phenopacket = await self._repo.get_by_id(phenopacket_id)
+        lock_stmt = (
+            select(Phenopacket)
+            .where(
+                Phenopacket.phenopacket_id == phenopacket_id,
+                Phenopacket.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        phenopacket = (await self._repo.session.execute(lock_stmt)).scalar_one_or_none()
         if phenopacket is None:
             raise ServiceNotFound(
                 f"Phenopacket {phenopacket_id} not found or already deleted"

@@ -40,12 +40,12 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { apiLogin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
@@ -54,24 +54,6 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 const RECORD_ID = `e2e-wave7-i1-${Date.now()}`;
 const ORIGINAL_SUBJECT_ID = `original-subject-${Date.now()}`;
 const DRAFT_SUBJECT_ID = `draft-subject-${Date.now()}`;
-
-/**
- * Obtain a JWT access token via the API.
- * @param {import('@playwright/test').APIRequestContext} req
- * @param {string} username
- * @param {string} password
- * @returns {Promise<string>}
- */
-async function apiLogin(req, username, password) {
-  const resp = await req.post(`${API_BASE}/auth/login`, {
-    data: { username, password },
-  });
-  if (!resp.ok()) {
-    throw new Error(`API login failed for ${username}: ${resp.status()} ${await resp.text()}`);
-  }
-  const body = await resp.json();
-  return body.access_token;
-}
 
 /**
  * Perform a state transition via the REST endpoint.
@@ -124,7 +106,8 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // -------------------------------------------------------------------------
   // Phase 1 — API setup: create + publish a phenopacket with ORIGINAL_SUBJECT_ID
   // -------------------------------------------------------------------------
-  const adminToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminToken = adminTokens.accessToken;
 
   // Create draft
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
@@ -205,15 +188,8 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // -------------------------------------------------------------------------
   // Phase 3 — Browser (admin): detail page shows DRAFT_SUBJECT_ID
   // -------------------------------------------------------------------------
-  await page.goto(`${BASE}/login`);
-  await page.waitForLoadState('networkidle');
-
-  await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME);
-  await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD);
-  await page.locator('button[type="submit"]').click();
-  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 15_000 });
-
-  await page.goto(`${BASE}/phenopackets/${RECORD_ID}`, { waitUntil: 'networkidle' });
+  await primeAuthSession(page, adminTokens);
+  await page.goto(`/phenopackets/${RECORD_ID}`, { waitUntil: 'networkidle' });
 
   // Curator sees the NEW draft content (working copy contains DRAFT_SUBJECT_ID)
   await expect(page.getByText(DRAFT_SUBJECT_ID).first()).toBeVisible({ timeout: 10_000 });
@@ -225,7 +201,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   const anonPage = await anonCtx.newPage();
 
   try {
-    await anonPage.goto(`${BASE}/phenopackets/${RECORD_ID}`, {
+    await anonPage.goto(`/phenopackets/${RECORD_ID}`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });
@@ -249,7 +225,8 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // head). This is the key test of the D.2 effective-state routing: the
   // whole review cycle must work while pp.state stays 'published' (I8).
   // -------------------------------------------------------------------------
-  const curatorToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const curatorToken = (await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD))
+    .accessToken;
 
   // Read the current revision from the API (after clone, pp.revision has advanced).
   const detailResp = await request.get(`${API_BASE}/phenopackets/${RECORD_ID}`, {
@@ -290,7 +267,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   const anonCtx2 = await context.browser().newContext();
   const anonPage2 = await anonCtx2.newPage();
   try {
-    await anonPage2.goto(`${BASE}/phenopackets/${RECORD_ID}`, {
+    await anonPage2.goto(`/phenopackets/${RECORD_ID}`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });

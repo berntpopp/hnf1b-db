@@ -13,6 +13,14 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from app.database import async_session_maker
+from app.phenopackets.models import Phenopacket, PhenopacketUpdate
+from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.services.phenopacket_service import (
+    PhenopacketService,
+    ServiceConflict,
+)
+
 
 def _valid_payload(phenopacket_id: str, subject_id: str = "s", sex: str = "MALE"):
     """Build a minimal-but-valid phenopacket create payload.
@@ -124,3 +132,74 @@ async def test_delete_without_revision_still_works(
         headers=admin_headers,
     )
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_delete_fails_when_revision_changes_before_commit(
+    db_session,
+    admin_user,
+):
+    """A stale delete loses to a concurrent update even across sessions."""
+    create_payload = _valid_payload("delete-revision-race")
+    phenopacket = Phenopacket(
+        phenopacket_id=create_payload["phenopacket"]["id"],
+        phenopacket=create_payload["phenopacket"],
+        subject_id=create_payload["phenopacket"]["subject"]["id"],
+        subject_sex=create_payload["phenopacket"]["subject"].get("sex", "UNKNOWN_SEX"),
+        created_by_id=admin_user.id,
+        state="draft",
+        revision=1,
+    )
+    db_session.add(phenopacket)
+    await db_session.commit()
+
+    stale_ready = __import__("asyncio").Event()
+    update_done = __import__("asyncio").Event()
+
+    async def actor_a_delete() -> None:
+        async with async_session_maker() as session:
+            service = PhenopacketService(PhenopacketRepository(session))
+            loaded = await service.get("delete-revision-race")
+            assert loaded is not None
+            assert loaded.revision == 1
+            stale_ready.set()
+            await update_done.wait()
+
+            with pytest.raises(ServiceConflict) as exc_info:
+                await service.soft_delete(
+                    "delete-revision-race",
+                    "stale delete",
+                    actor_id=admin_user.id,
+                    actor_username=admin_user.username,
+                    expected_revision=loaded.revision,
+                )
+
+            assert exc_info.value.code == "revision_mismatch"
+            assert exc_info.value.detail["current_revision"] == 2
+            assert exc_info.value.detail["expected_revision"] == 1
+
+    async def actor_b_update() -> None:
+        await stale_ready.wait()
+        async with async_session_maker() as session:
+            service = PhenopacketService(PhenopacketRepository(session))
+            update_payload = PhenopacketUpdate(
+                phenopacket={
+                    **create_payload["phenopacket"],
+                    "phenotypicFeatures": [
+                        {
+                            "type": {"id": "HP:0000001", "label": "updated"},
+                        }
+                    ],
+                },
+                revision=1,
+                change_reason="concurrent edit",
+            )
+            updated = await service.update(
+                "delete-revision-race",
+                update_payload,
+                actor_id=admin_user.id,
+            )
+            assert updated.revision == 2
+        update_done.set()
+
+    await __import__("asyncio").gather(actor_a_delete(), actor_b_update())

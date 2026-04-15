@@ -18,8 +18,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_optional_user, is_curator_or_admin
 from app.database import get_db
+from app.models.user import User
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.repositories.visibility import (
+    resolve_curator_content,
+    resolve_public_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,20 +136,49 @@ def _categorise_feature(hpo_id: Optional[str]) -> str:
 async def get_phenotype_timeline(
     phenopacket_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Return a timeline-ready view of a phenopacket's phenotypic features.
 
     The response shape is unchanged from the pre-Wave-4 flat router:
     ``{"subject_id": ..., "current_age": ..., "features": [...]}``.
+
+    Public callers only see published head content. Curators/admins can
+    inspect the working copy, including soft-deleted rows, so the timeline
+    remains usable for audit and review flows.
     """
     repo = PhenopacketRepository(db)
-    phenopacket_record = await repo.get_by_id(phenopacket_id, include_deleted=True)
+    is_curator = is_curator_or_admin(current_user)
+    phenopacket_record = await repo.get_by_id(
+        phenopacket_id, include_deleted=is_curator
+    )
     if phenopacket_record is None:
         raise HTTPException(
             status_code=404, detail=f"Phenopacket '{phenopacket_id}' not found"
         )
 
-    phenopacket_data = phenopacket_record.phenopacket
+    phenopacket_data: Dict[str, Any]
+    if is_curator:
+        phenopacket_data = resolve_curator_content(phenopacket_record)
+    else:
+        # Public / viewer callers must obey the published-only visibility
+        # model used by the main detail and list routes.
+        if (
+            phenopacket_record.state != "published"
+            or phenopacket_record.head_published_revision_id is None
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Phenopacket '{phenopacket_id}' not found",
+            )
+        public_content = await resolve_public_content(db, phenopacket_record)
+        if public_content is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Phenopacket '{phenopacket_id}' not found",
+            )
+        phenopacket_data = public_content
+
     subject = phenopacket_data.get("subject", {})
     subject_id = subject.get("id")
 

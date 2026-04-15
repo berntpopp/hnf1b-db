@@ -38,12 +38,12 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { apiLogin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
@@ -51,24 +51,6 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 // Unique test record ID — timestamp suffix avoids collisions between runs.
 const RECORD_ID = `e2e-wave7-lifecycle-${Date.now()}`;
-
-/**
- * Obtain a JWT access token for the given credentials via the API.
- * @param {import('@playwright/test').APIRequestContext} req
- * @param {string} username
- * @param {string} password
- * @returns {Promise<string>} Bearer token
- */
-async function apiLogin(req, username, password) {
-  const resp = await req.post(`${API_BASE}/auth/login`, {
-    data: { username, password },
-  });
-  if (!resp.ok()) {
-    throw new Error(`API login failed for ${username}: ${resp.status()} ${await resp.text()}`);
-  }
-  const body = await resp.json();
-  return body.access_token;
-}
 
 /**
  * Perform a state transition via the backend REST endpoint.
@@ -107,7 +89,8 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // -------------------------------------------------------------------------
   // Step 1 — API: authenticate as admin + create test phenopacket
   // -------------------------------------------------------------------------
-  const adminToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminToken = adminTokens.accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
     headers: { Authorization: `Bearer ${adminToken}` },
@@ -141,21 +124,12 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   expect(created.state).toBe('draft');
 
   // -------------------------------------------------------------------------
-  // Step 2 — Browser: login as admin, navigate to detail page, verify badge
+  // Step 2 — Browser: prime an authenticated session, navigate to detail page, verify badge
   // -------------------------------------------------------------------------
-  await page.goto(`${BASE}/login`);
-  await page.waitForLoadState('networkidle');
-
-  // Fill the standard login form (Vuetify v-text-field with autocomplete attrs)
-  await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME);
-  await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD);
-  await page.locator('button[type="submit"]').click();
-
-  // Wait until we leave the /login route
-  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 15_000 });
+  await primeAuthSession(page, adminTokens);
 
   // Navigate to the detail page for our new record
-  await page.goto(`${BASE}/phenopackets/${RECORD_ID}`, { waitUntil: 'networkidle' });
+  await page.goto(`/phenopackets/${RECORD_ID}`, { waitUntil: 'networkidle' });
 
   // StateBadge chip should show "Draft"
   await expect(page.locator('.v-chip', { hasText: 'Draft' }).first()).toBeVisible({
@@ -224,7 +198,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   const anonPage = await anonCtx.newPage();
 
   try {
-    await anonPage.goto(`${BASE}/phenopackets/${RECORD_ID}`, {
+    await anonPage.goto(`/phenopackets/${RECORD_ID}`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     });

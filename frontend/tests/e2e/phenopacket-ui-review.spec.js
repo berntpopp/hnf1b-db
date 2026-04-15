@@ -18,7 +18,7 @@ test.describe('Phenopacket Page UI Review', () => {
       console.log(`\n=== Capturing ${id} ===`);
 
       // Navigate to phenopacket page
-      await page.goto(`http://localhost:5173/phenopackets/${id}`, {
+      await page.goto(`/phenopackets/${id}`, {
         waitUntil: 'networkidle',
         timeout: 30000,
       });
@@ -90,7 +90,7 @@ test.describe('Phenopacket Page UI Review', () => {
 
   test('accessibility audit for phenopacket page', async ({ page }) => {
     // Navigate to a representative phenopacket page
-    await page.goto('http://localhost:5173/phenopackets/phenopacket-415', {
+    await page.goto('/phenopackets/phenopacket-415', {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
@@ -181,7 +181,7 @@ test.describe('Phenopacket Page UI Review', () => {
   });
 
   test('layout density analysis', async ({ page }) => {
-    await page.goto('http://localhost:5173/phenopackets/phenopacket-415', {
+    await page.goto('/phenopackets/phenopacket-415', {
       waitUntil: 'networkidle',
       timeout: 30000,
     });

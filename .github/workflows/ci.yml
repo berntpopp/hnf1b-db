@@ -6,9 +6,17 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -20,7 +28,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U hnf1b_user -d hnf1b_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -92,6 +100,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v6
@@ -99,7 +108,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
@@ -166,6 +175,7 @@ jobs:
     name: E2E tests (Playwright)
     needs: frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     # Wave 6 Task 1: spin up Postgres + Redis + backend + frontend and run
     # the Playwright suite in tests/e2e/. The existing specs assume the
@@ -183,7 +193,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U hnf1b_user"
+          --health-cmd "pg_isready -U hnf1b_user -d hnf1b_phenopackets_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -204,7 +214,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
@@ -304,6 +314,7 @@ jobs:
   pre-commit:
     name: pre-commit hygiene gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     # Wave 5b Task 1: runs the .pre-commit-config.yaml check bundle on
     # every push so developers who forgot `pre-commit install` locally
@@ -325,7 +336,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 

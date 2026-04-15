@@ -16,6 +16,7 @@ the regex/parse logic from silently breaking.
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 
 import pytest
@@ -179,6 +180,7 @@ def _make_phenopacket_row(
     include_variant: bool = False,
     include_pmid: bool = False,
     deleted: bool = False,
+    state: str = "published",
 ) -> Phenopacket:
     """Build a ``Phenopacket`` ORM instance for direct DB insertion."""
     features: list[dict] = []
@@ -192,7 +194,7 @@ def _make_phenopacket_row(
                 "onset": {"age": {"iso8601duration": "P5Y"}},
                 "evidence": [
                     {
-                        "evidenceCode": {"label": "TAS"},
+                        "evidenceCode": {"id": "ECO:0000033", "label": "TAS"},
                         "reference": {"id": "PMID:99999"},
                     }
                 ],
@@ -262,7 +264,7 @@ def _make_phenopacket_row(
         subject_id=subject_id,
         subject_sex="MALE",
         created_by_id=None,
-        state="published",
+        state=state,
         revision=1,
     )
     if deleted:
@@ -310,14 +312,15 @@ class TestCrudTimelineEndpoint:
         assert response.status_code == 404
 
     async def test_timeline_returns_subject_and_features(
-        self, async_client, db_session
+        self, async_client, db_session, admin_user
     ):
-        """Stored phenopacket → timeline endpoint returns formatted features."""
+        """Published phenopacket with a head revision → timeline data."""
         row = _make_phenopacket_row(
             phenopacket_id="TL-EP-001",
             subject_id="SUB-TL-001",
         )
         db_session.add(row)
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get("/api/v2/phenopackets/TL-EP-001/timeline")
@@ -341,25 +344,89 @@ class TestCrudTimelineEndpoint:
         assert diabetes["onset_age"] == "P10Y"
         assert diabetes["onset_label"] == "Observed at age 10y"
 
-    async def test_timeline_renders_soft_deleted_phenopacket(
+    async def test_timeline_hides_draft_phenopacket_from_public_client(
         self, async_client, db_session
     ):
-        """Soft-deleted rows are still accessible via the timeline endpoint.
+        """Draft phenopackets must not leak through the timeline endpoint."""
+        row = _make_phenopacket_row(
+            phenopacket_id="TL-EP-DRAFT",
+            subject_id="SUB-TL-DRAFT",
+            state="draft",
+        )
+        db_session.add(row)
+        await db_session.commit()
 
-        The endpoint explicitly passes ``include_deleted=True`` so the
-        audit-trail UI can still render deleted phenopackets' features.
-        """
+        response = await async_client.get("/api/v2/phenopackets/TL-EP-DRAFT/timeline")
+        assert response.status_code == 404
+
+    async def test_timeline_hides_soft_deleted_phenopacket_from_public_client(
+        self, async_client, db_session, admin_user
+    ):
+        """Soft-deleted phenopackets must not leak through the timeline endpoint."""
         row = _make_phenopacket_row(
             phenopacket_id="TL-EP-DELETED",
             subject_id="SUB-TL-DELETED",
             deleted=True,
         )
         db_session.add(row)
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
         await db_session.commit()
 
         response = await async_client.get("/api/v2/phenopackets/TL-EP-DELETED/timeline")
+        assert response.status_code == 404
+
+    async def test_timeline_returns_curator_view_for_soft_deleted_phenopacket(
+        self, async_client, db_session, admin_user, curator_headers
+    ):
+        """Curators should still be able to inspect deleted history."""
+        row = _make_phenopacket_row(
+            phenopacket_id="TL-EP-DELETED-CURATOR",
+            subject_id="SUB-TL-DELETED-CURATOR",
+            deleted=True,
+        )
+        db_session.add(row)
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
+        await db_session.commit()
+
+        response = await async_client.get(
+            "/api/v2/phenopackets/TL-EP-DELETED-CURATOR/timeline",
+            headers=curator_headers,
+        )
         assert response.status_code == 200
-        assert response.json()["subject_id"] == "SUB-TL-DELETED"
+        assert response.json()["subject_id"] == "SUB-TL-DELETED-CURATOR"
+
+    async def test_timeline_returns_head_content_for_public_client_during_clone(
+        self, async_client, db_session, admin_user, curator_headers
+    ):
+        """Anonymous callers should keep seeing the published head during clone-to-draft."""
+        row = _make_phenopacket_row(
+            phenopacket_id="TL-EP-CLONE",
+            subject_id="SUB-TL-CLONE",
+        )
+        db_session.add(row)
+        await _add_head_revision(db_session, row, actor_id=admin_user.id)
+        await db_session.commit()
+
+        original_label = row.phenopacket["phenotypicFeatures"][0]["type"]["label"]
+        new_content = copy.deepcopy(row.phenopacket)
+        new_content["phenotypicFeatures"][0]["type"]["label"] = "Renal cyst UPDATED"
+
+        update_response = await async_client.put(
+            "/api/v2/phenopackets/TL-EP-CLONE",
+            json={
+                "phenopacket": new_content,
+                "revision": row.revision,
+                "change_reason": "clone for timeline regression",
+            },
+            headers=curator_headers,
+        )
+        assert update_response.status_code == 200, update_response.text
+
+        response = await async_client.get("/api/v2/phenopackets/TL-EP-CLONE/timeline")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["features"][0]["label"] == original_label
+        assert body["features"][0]["label"] != "Renal cyst UPDATED"
 
 
 @pytest.mark.asyncio
