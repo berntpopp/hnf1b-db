@@ -69,12 +69,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1976D2" />
 
-    <!-- Force light color scheme so Chrome doesn't paint the document root
-         dark when the user's OS is in dark mode. Without this, Chrome on
-         Linux/macOS/Windows with OS-level dark mode shows a black flash
-         before Vuetify hydrates, and scrollbars/form controls render dark
-         inside our light-theme app. -->
-    <meta name="color-scheme" content="light" />
+    <!-- Opt fully OUT of Chrome's forced/auto dark mode.
+         `only light` (vs plain `light`) explicitly forbids the browser's
+         "Auto Dark Mode for Web Contents" heuristic from selectively
+         inverting elements. Without `only`, Chrome (Linux especially)
+         with chrome://flags/#enable-force-dark set to "Enabled with
+         selective inversion" will flip white v-cards to dark while
+         leaving gradient sections alone, producing a broken mixed look.
+         This is a light-theme app; there is no dark palette to fall
+         back to. -->
+    <meta name="color-scheme" content="only light" />
 
     <!-- Preconnect to API for faster first request -->
     <link rel="dns-prefetch" href="//api.hnf1b.org" />
@@ -87,12 +91,19 @@
 
     <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
     <style>
-      /* Force light color scheme at the CSS root as well as via <meta>.
-         Belt-and-braces protection against OS-level dark mode painting
-         scrollbars, form controls, or the initial document background
-         dark before Vuetify hydrates. */
+      /* Opt out of forced / auto dark mode. `only light` forbids the
+         browser's dark-mode heuristic from rewriting any element's
+         colors. Matches the <meta name="color-scheme" content="only light">
+         above — belt and braces so at least one of them wins no matter
+         which CSS parser path the browser takes. */
       :root {
-        color-scheme: light;
+        color-scheme: only light;
+      }
+      /* Belt-and-braces hint for pages where Chrome's force-dark flag
+         might ignore the meta tag. `forced-color-adjust: none` disables
+         Windows High Contrast mode mapping on our UI. */
+      html {
+        forced-color-adjust: none;
       }
       /* Paint the document root white immediately. Without this, Chrome
          briefly shows its default background (which on Linux honours GTK
