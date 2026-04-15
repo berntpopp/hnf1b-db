@@ -29,14 +29,26 @@ describe('CommentBody', () => {
     expect(wrapper.html()).not.toContain('<script>');
   });
 
-  it('does not render <img> as a real element when markdown html is disabled', () => {
-    // markdown-it is configured with html:false, so raw HTML tags in the
-    // markdown source are escaped to entity text rather than rendered as
-    // DOM nodes. DOMPurify then receives only safe, entity-escaped content.
-    // We verify no actual <img> DOM node is present in the output.
+  it('strips <img onerror> even when markdown html:true is enabled', () => {
+    // markdown-it is configured with html:true so that Tiptap mention spans
+    // survive rendering. DOMPurify still strips dangerous tags/attributes
+    // (img is not in ALLOWED_TAGS), so no actual <img> DOM node is present.
     const wrapper = mount(CommentBody, {
       props: { bodyMarkdown: '<img src=x onerror="alert(1)">' },
     });
     expect(wrapper.find('img').exists()).toBe(false);
+  });
+
+  it('preserves <span class="mention"> through sanitization', () => {
+    // Mention pills serialized by Tiptap use <span class="mention" data-id="42">
+    // and must survive DOMPurify (ALLOWED_TAGS includes span; class and data-id
+    // are in ALLOWED_ATTR).
+    const wrapper = mount(CommentBody, {
+      props: {
+        bodyMarkdown: 'hi <span class="mention" data-id="42">@alice</span>',
+      },
+    });
+    expect(wrapper.find('.mention').exists()).toBe(true);
+    expect(wrapper.find('.mention').attributes('data-id')).toBe('42');
   });
 });

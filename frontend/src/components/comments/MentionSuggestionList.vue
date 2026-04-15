@@ -34,14 +34,17 @@ const selectItem = (i) => {
 };
 
 const upHandler = () => {
+  if (props.items.length === 0) return;
   selectedIndex.value = (selectedIndex.value + props.items.length - 1) % props.items.length;
 };
 
 const downHandler = () => {
+  if (props.items.length === 0) return;
   selectedIndex.value = (selectedIndex.value + 1) % props.items.length;
 };
 
 const enterHandler = () => {
+  if (props.items.length === 0) return;
   selectItem(selectedIndex.value);
 };
 

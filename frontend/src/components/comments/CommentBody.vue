@@ -37,7 +37,10 @@ const sanitizeForComment = (html) =>
       'pre',
       'blockquote',
     ],
-    ALLOWED_ATTR: ['href', 'title', 'target', 'rel', 'class', 'data-id', 'data-type'],
+    // 'target' is intentionally omitted: markdown links do not need it and
+    // allowing it would let user content set target="_blank" without rel,
+    // enabling tabnabbing (Copilot review #254 comment #8).
+    ALLOWED_ATTR: ['href', 'title', 'rel', 'class', 'data-id', 'data-type'],
     // Event handlers are still blocked — ALLOWED_ATTR doesn't include any on* names.
   });
 
