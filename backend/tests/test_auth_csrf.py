@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.auth.dependencies import require_csrf_token
+from app.auth import dependencies as auth_dependencies
+from app.auth.dependencies import get_best_effort_user, require_csrf_token
 from app.auth.session_cookies import clear_auth_cookies, set_auth_cookies
 from app.core.config import Settings, settings
 
@@ -100,6 +102,28 @@ async def test_require_csrf_token_accepts_matching_cookie_and_header():
     request = _request_with_csrf(cookie="csrf-token", header="csrf-token")
 
     assert await require_csrf_token(request) is None
+
+
+@pytest.mark.asyncio
+async def test_get_best_effort_user_handles_missing_credentials_from_security(
+    monkeypatch,
+):
+    """Best-effort auth returns None if optional security yields no credentials."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v2/auth/logout",
+            "headers": [(b"authorization", b"Bearer token")],
+        }
+    )
+
+    async def fake_optional_security(_request):
+        return None
+
+    monkeypatch.setattr(auth_dependencies, "_optional_security", fake_optional_security)
+
+    assert await get_best_effort_user(request, db=None) is None
 
 
 async def test_cors_preflight_allows_csrf_header(async_client):

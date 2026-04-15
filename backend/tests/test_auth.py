@@ -319,6 +319,23 @@ async def test_refresh_rejects_signed_refresh_cookie_without_backing_session(
 
 
 @pytest.mark.asyncio
+async def test_refresh_missing_cookie_clears_auth_cookies(async_client: AsyncClient):
+    """Refresh failures still clear auth cookies when no refresh cookie is present."""
+    cookies = {settings.CSRF_COOKIE_NAME: "csrf-token"}
+
+    response = await async_client.post(
+        "/api/v2/auth/refresh",
+        headers=_csrf_headers(cookies) | _cookie_headers(cookies),
+    )
+
+    assert response.status_code == 401
+    assert "missing" in response.json()["detail"].lower()
+    set_cookie_headers = response.headers.get_list("set-cookie")
+    assert any(settings.REFRESH_COOKIE_NAME in header for header in set_cookie_headers)
+    assert any(settings.CSRF_COOKIE_NAME in header for header in set_cookie_headers)
+
+
+@pytest.mark.asyncio
 async def test_logout_clears_auth_cookies_without_access_token(
     async_client: AsyncClient, test_user
 ):
