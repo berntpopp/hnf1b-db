@@ -35,7 +35,10 @@ def test_set_auth_cookies_sets_refresh_and_csrf_cookies():
 
     set_cookie_headers = response.headers.getlist("set-cookie")
     assert any("refresh_token=refresh-token" in header for header in set_cookie_headers)
-    assert any("HttpOnly" in header and "refresh_token=" in header for header in set_cookie_headers)
+    assert any(
+        "HttpOnly" in header and "refresh_token=" in header
+        for header in set_cookie_headers
+    )
     assert any("csrf_token=csrf-token" in header for header in set_cookie_headers)
     assert any("SameSite=lax" in header for header in set_cookie_headers)
     assert any("Path=/api/v2" in header for header in set_cookie_headers)
@@ -48,8 +51,14 @@ def test_clear_auth_cookies_expires_refresh_and_csrf_cookies():
     clear_auth_cookies(response)
 
     set_cookie_headers = response.headers.getlist("set-cookie")
-    assert any("refresh_token=\"\"" in header or "refresh_token=" in header for header in set_cookie_headers)
-    assert any("csrf_token=\"\"" in header or "csrf_token=" in header for header in set_cookie_headers)
+    assert any(
+        'refresh_token=""' in header or "refresh_token=" in header
+        for header in set_cookie_headers
+    )
+    assert any(
+        'csrf_token=""' in header or "csrf_token=" in header
+        for header in set_cookie_headers
+    )
     assert all("Max-Age=0" in header for header in set_cookie_headers)
 
 
