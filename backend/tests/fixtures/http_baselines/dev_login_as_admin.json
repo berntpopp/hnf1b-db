@@ -2,13 +2,11 @@
   "normalized_body": {
     "access_token": "<normalized>",
     "expires_in": 1800,
-    "refresh_token": "<normalized>",
     "token_type": "bearer"
   },
   "shape": {
     "access_token": "volatile",
     "expires_in": "int",
-    "refresh_token": "volatile",
     "token_type": "str"
   },
   "status_code": 200

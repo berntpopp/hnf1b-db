@@ -6,7 +6,8 @@
  */
 
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5173';
-const API_COOKIE_URL = `${BASE_URL}/api/v2`;
+const API_COOKIE_PATH = '/api/v2';
+const COOKIE_DOMAIN = new URL(BASE_URL).hostname;
 
 function readCookieValue(setCookieHeader, name) {
   const prefix = `${name}=`;
@@ -28,7 +29,7 @@ function readCookieValue(setCookieHeader, name) {
  * @param {string} apiBase
  * @param {string} username
  * @param {string} password
- * @returns {Promise<{accessToken: string, cookies: {name: string, value: string, url: string, httpOnly?: boolean}[]}>}
+ * @returns {Promise<{accessToken: string, cookies: {name: string, value: string, url?: string, domain?: string, path?: string, httpOnly?: boolean}[]}>}
  */
 export async function apiLogin(req, apiBase, username, password) {
   const resp = await req.post(`${apiBase}/auth/login`, {
@@ -56,14 +57,14 @@ export async function apiLogin(req, apiBase, username, password) {
       {
         name: 'refresh_token',
         value: readCookieValue(refreshHeader, 'refresh_token'),
-        url: API_COOKIE_URL,
+        domain: COOKIE_DOMAIN,
+        path: API_COOKIE_PATH,
         httpOnly: true,
       },
       {
         name: 'csrf_token',
         value: readCookieValue(csrfHeader, 'csrf_token'),
         url: BASE_URL,
-        path: '/',
       },
     ],
   };
