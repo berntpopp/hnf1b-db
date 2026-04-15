@@ -1,0 +1,90 @@
+/* dark-theme-overrides.css
+ *
+ * App-wide dark-mode patches for places where the codebase uses
+ * hardcoded Vuetify utility classes (bg-white, bg-grey-lighten-4,
+ * bg-grey-lighten-5) that don't theme-flip automatically. Each rule
+ * is gated by `.v-theme--dark` so the light-theme rendering is
+ * untouched.
+ *
+ * Tone scale matches the dark palette in src/plugins/vuetify.js:
+ *   #121212  background canvas
+ *   #1E1E1E  surface (1dp)        — replaces bg-white
+ *   #242424  surface-light (2dp)  — replaces bg-grey-lighten-4
+ *   #1A1A1A  surface-dim          — replaces bg-grey-lighten-5
+ *
+ * Imported once globally from main.js so it covers every view.
+ */
+
+.v-theme--dark .bg-white {
+  background-color: #1e1e1e !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.v-theme--dark .bg-grey-lighten-4 {
+  background-color: #242424 !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.v-theme--dark .bg-grey-lighten-5 {
+  background-color: #1a1a1a !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+/* Generic muted-text utility: bumped-up contrast on dark. */
+.v-theme--dark .text-grey,
+.v-theme--dark .text-grey-darken-1 {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Tables — Vuetify's v-data-table inherits surface tones, but loose
+ * <table> elements (e.g., raw markup inside Pages) still default to
+ * a transparent background. Force the surface tone so they're not
+ * see-through islands on the dark canvas. */
+.v-theme--dark table:not(.v-table__wrapper *) {
+  background-color: #1e1e1e;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+/* Borders that hardcode rgba(0,0,0,*) need to flip to white-on-dark
+ * so they remain visible. Common in card outlines and dividers. */
+.v-theme--dark .border-bottom-grey {
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Search field on the home page hero — uses VAutocomplete which has
+ * its own theme integration, but our hero gradient sits on top so
+ * the field can read as a light island on dark. Force surface tones. */
+.v-theme--dark .hero-section .v-field,
+.v-theme--dark .hero-section .v-field__input {
+  background-color: #1e1e1e !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+.v-theme--dark .hero-section .v-field__outline__start,
+.v-theme--dark .hero-section .v-field__outline__end,
+.v-theme--dark .hero-section .v-field__outline__notch::before,
+.v-theme--dark .hero-section .v-field__outline__notch::after {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+/* The text-medium-emphasis utility on dark theme already lowers
+ * opacity, but combined with our about-section background override
+ * the resulting contrast can dip below WCAG AA. Bump it up so taglines
+ * like "The definitive resource for MODY5..." stay readable. */
+.v-theme--dark .text-medium-emphasis {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Gene & Protein Visualization plot lives inside an SVG / chart
+ * canvas with its own white background. Visualizations rendered
+ * client-side (D3, Chart.js) won't theme-flip automatically; the
+ * cleanest fix is to give the wrapping card a tinted backdrop so the
+ * white plot reads as an embedded "art board" rather than a flash
+ * of light. */
+.v-theme--dark .chart-canvas-wrapper,
+.v-theme--dark .v-card .visualization-container,
+.v-theme--dark .protein-visualization-container,
+.v-theme--dark .gene-visualization-container {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 8px;
+}

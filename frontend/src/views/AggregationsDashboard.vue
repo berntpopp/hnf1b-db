@@ -85,7 +85,7 @@
                           Summary Statistics
                         </v-card-title>
                         <v-card-text class="pa-3">
-                          <v-row dense>
+                          <v-row density="comfortable">
                             <v-col cols="6" sm="3">
                               <div class="text-caption text-grey">Total Features</div>
                               <div class="text-h6">{{ stackedBarStats.totalFeatures }}</div>
