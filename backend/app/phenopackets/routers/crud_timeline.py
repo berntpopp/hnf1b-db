@@ -148,8 +148,9 @@ async def get_phenotype_timeline(
     ``{"subject_id": ..., "current_age": ..., "features": [...]}``.
 
     Public callers only see published head content. Curators/admins can
-    inspect the working copy, including soft-deleted rows, so the timeline
-    remains usable for audit and review flows.
+    inspect the working copy allowed by the standard curator visibility
+    filter, but soft-deleted rows are hidden here just like they are on the
+    detail and list endpoints.
     """
     is_curator = is_curator_or_admin(current_user)
     stmt = (
