@@ -3,7 +3,7 @@
 // MUST stay in the same module as the axios instance to prevent thunder-herd.
 
 import axios from 'axios';
-import { clearTokens, getAccessToken } from './session';
+import { clearTokens, getAccessToken, getCsrfToken } from './session';
 
 export const apiClient = axios.create({
   // Use Vite proxy in development (avoids CORS), direct URL in production
@@ -38,10 +38,24 @@ function processQueue(error, token = null) {
 // Request interceptor: Add JWT token from the in-memory session helper.
 apiClient.interceptors.request.use(
   (config) => {
+    config.headers = config.headers ?? {};
+
     const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const method = (config.method ?? 'get').toLowerCase();
+    const isUnsafeMethod = ['post', 'put', 'patch', 'delete'].includes(method);
+    const csrfToken = isUnsafeMethod ? getCsrfToken() : null;
+    if (csrfToken) {
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
+
+    if (config.url?.includes('/auth/refresh') || config.url?.includes('/auth/logout')) {
+      config.withCredentials = true;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -119,7 +133,8 @@ apiClient.interceptors.response.use(
       // Skip refresh for auth endpoints to prevent infinite loops
       if (
         originalRequest.url?.includes('/auth/login') ||
-        originalRequest.url?.includes('/auth/refresh')
+        originalRequest.url?.includes('/auth/refresh') ||
+        originalRequest.url?.includes('/auth/logout')
       ) {
         return Promise.reject(error);
       }

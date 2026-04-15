@@ -41,7 +41,14 @@ def test_set_auth_cookies_sets_refresh_and_csrf_cookies():
     )
     assert any("csrf_token=csrf-token" in header for header in set_cookie_headers)
     assert any("SameSite=lax" in header for header in set_cookie_headers)
-    assert any("Path=/api/v2" in header for header in set_cookie_headers)
+    assert any(
+        "refresh_token=refresh-token" in header and "Path=/api/v2" in header
+        for header in set_cookie_headers
+    )
+    assert any(
+        "csrf_token=csrf-token" in header and "Path=/" in header
+        for header in set_cookie_headers
+    )
 
 
 def test_clear_auth_cookies_expires_refresh_and_csrf_cookies():
@@ -105,4 +112,5 @@ def test_settings_expose_cookie_defaults():
     assert settings.REFRESH_COOKIE_NAME == "refresh_token"
     assert settings.CSRF_COOKIE_NAME == "csrf_token"
     assert settings.AUTH_COOKIE_PATH == "/api/v2"
+    assert settings.CSRF_COOKIE_PATH == "/"
     assert settings.AUTH_COOKIE_SAMESITE == "lax"

@@ -26,7 +26,7 @@ def set_auth_cookies(
         httponly=False,
         secure=settings.AUTH_COOKIE_SECURE,
         samesite=settings.AUTH_COOKIE_SAMESITE,
-        path=settings.AUTH_COOKIE_PATH,
+        path=settings.CSRF_COOKIE_PATH,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
 
@@ -39,5 +39,5 @@ def clear_auth_cookies(response: Response) -> None:
     )
     response.delete_cookie(
         key=settings.CSRF_COOKIE_NAME,
-        path=settings.AUTH_COOKIE_PATH,
+        path=settings.CSRF_COOKIE_PATH,
     )

@@ -170,6 +170,10 @@ router.beforeEach(async (to, from) => {
 
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
+    if (!authStore.accessToken && !authStore.hasInitialized) {
+      await authStore.initialize();
+    }
+
     // Check if user has a valid access token
     if (!authStore.accessToken) {
       // No token, redirect to login with return URL

@@ -1,10 +1,14 @@
 """Authentication API endpoints."""
 
+import hashlib
+import hmac
 import logging
+import secrets
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,13 +23,17 @@ from app.auth import (
     verify_token,
 )
 from app.auth.credential_tokens import CredentialTokenService
+from app.auth.dependencies import get_optional_user, require_csrf_token
 from app.auth.email import get_email_sender
 from app.auth.permissions import get_all_roles
 from app.auth.rate_limit import RateLimiter
+from app.auth.session_cookies import clear_auth_cookies, set_auth_cookies
 from app.core.config import settings
 from app.database import get_db
 from app.models.credential_token import CredentialToken
+from app.models.refresh_session import RefreshSession
 from app.models.user import User
+from app.repositories.refresh_session_repository import RefreshSessionRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
     InviteAcceptRequest,
@@ -35,7 +43,6 @@ from app.schemas.auth import (
     PasswordChange,
     PasswordResetConfirm,
     PasswordResetRequest,
-    RefreshTokenRequest,
     RoleResponse,
     Token,
     UserCreate,
@@ -75,6 +82,113 @@ def _frontend_base_url() -> str:
     return origins[0] if origins else ""
 
 
+def _hash_token(token: str) -> str:
+    """Return a stable SHA-256 digest for stored token material."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _create_refresh_session_token(
+    *,
+    user: User,
+    refresh_sessions: RefreshSessionRepository,
+    rotated_from_jti: str | None = None,
+) -> str:
+    """Mint a refresh token and persist its server-side session record."""
+    refresh_token = create_refresh_token(
+        user.username, session_version=user.session_version
+    )
+    payload = verify_token(refresh_token, token_type="refresh")
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    await refresh_sessions.create_session(
+        user_id=user.id,
+        token_jti=payload["jti"],
+        token_sha256=_hash_token(refresh_token),
+        session_version=user.session_version,
+        expires_at=expires_at,
+        rotated_from_jti=rotated_from_jti,
+    )
+    return refresh_token
+
+
+def _csrf_token() -> str:
+    """Generate a CSRF token for double-submit cookie validation."""
+    return secrets.token_urlsafe(32)
+
+
+def _clear_cookie_error_response(exc: HTTPException) -> JSONResponse:
+    """Return an auth error response that also clears auth cookies."""
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers,
+    )
+    clear_auth_cookies(response)
+    return response
+
+
+async def _resolve_refresh_request(
+    request: Request,
+    db: AsyncSession,
+) -> tuple[User, RefreshSession, str, dict[str, object], RefreshSessionRepository]:
+    """Resolve the user and refresh-session row for a cookie-backed refresh token."""
+    refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+        )
+
+    payload = verify_token(refresh_token, token_type="refresh")
+    username = payload.get("sub")
+    token_jti = payload.get("jti")
+    token_session_version = payload.get("sv")
+    if not isinstance(username, str) or not isinstance(token_jti, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_username(username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    refresh_sessions = RefreshSessionRepository(db)
+    session = await refresh_sessions.get_by_jti(token_jti)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    token_hash = _hash_token(refresh_token)
+    token_matches = hmac.compare_digest(session.token_sha256, token_hash)
+    session_is_current = (
+        session.user_id == user.id
+        and session.session_version == user.session_version
+        and token_session_version == user.session_version
+        and session.revoked_at is None
+        and session.expires_at > datetime.now(timezone.utc)
+    )
+    if not token_matches or not session_is_current:
+        await refresh_sessions.revoke_family(session.token_jti)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    return user, session, refresh_token, payload, refresh_sessions
+
+
+async def _revoke_all_refresh_capability(user: User, db: AsyncSession) -> int:
+    """Revoke all active refresh sessions for a user and bump session version."""
+    refresh_sessions = RefreshSessionRepository(db)
+    return await refresh_sessions.revoke_all_for_user(user)
+
+
 async def _safe_send_email(
     *, to: str, subject: str, body_html: str, context: str
 ) -> None:
@@ -108,9 +222,10 @@ users_router = APIRouter(
 )
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, response_model_exclude_none=True)
 async def login(
     credentials: UserLogin,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     """Login with username and password.
@@ -161,14 +276,21 @@ async def login(
 
     # Create tokens
     access_token = create_access_token(user.username, user.role, user.get_permissions())
-    refresh_token = create_refresh_token(
-        user.username, session_version=user.session_version
+    refresh_sessions = RefreshSessionRepository(db)
+    refresh_token = await _create_refresh_session_token(
+        user=user,
+        refresh_sessions=refresh_sessions,
     )
+    csrf_token = _csrf_token()
 
     # Update user record
     await repo.record_successful_login(user)
-    await repo.update_refresh_token(user, refresh_token)
     await db.commit()
+    set_auth_cookies(
+        response,
+        refresh_token=refresh_token,
+        csrf_token=csrf_token,
+    )
 
     # Log successful login
     await log_user_action(
@@ -180,17 +302,18 @@ async def login(
 
     return Token(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh", response_model=Token, response_model_exclude_none=True)
 async def refresh_access_token(
-    request: RefreshTokenRequest,
+    request: Request,
+    response: Response,
+    _: None = Depends(require_csrf_token),
     db: AsyncSession = Depends(get_db),
-) -> Token:
+) -> Token | JSONResponse:
     """Refresh access token using refresh token.
 
     Implements token rotation for security.
@@ -199,49 +322,43 @@ async def refresh_access_token(
     - 200: New access token and refresh token
     - 401: Invalid or expired refresh token
     """
-    # Verify refresh token
-    payload = verify_token(request.refresh_token, token_type="refresh")
-
-    # Get user
-    repo = UserRepository(db)
-    user = await repo.get_by_username(payload["sub"])
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+    try:
+        (
+            user,
+            session,
+            refresh_token_value,
+            refresh_payload,
+            refresh_sessions,
+        ) = await _resolve_refresh_request(
+            request,
+            db,
         )
+        del refresh_token_value, refresh_payload
+        _assert_user_can_receive_tokens(user)
 
-    _assert_user_can_receive_tokens(user)
-
-    # Verify stored refresh token matches (token rotation)
-    if user.refresh_token != request.refresh_token:
-        # Possible token theft - invalidate all tokens
-        await repo.update_refresh_token(user, "")
+        new_access_token = create_access_token(
+            user.username, user.role, user.get_permissions()
+        )
+        new_refresh_token = await _create_refresh_session_token(
+            user=user,
+            refresh_sessions=refresh_sessions,
+            rotated_from_jti=session.token_jti,
+        )
+        await refresh_sessions.revoke_session(session)
         await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+        set_auth_cookies(
+            response,
+            refresh_token=new_refresh_token,
+            csrf_token=_csrf_token(),
         )
 
-    # Create new tokens (rotation)
-    new_access_token = create_access_token(
-        user.username, user.role, user.get_permissions()
-    )
-    new_refresh_token = create_refresh_token(
-        user.username, session_version=user.session_version
-    )
-
-    # Store new refresh token
-    await repo.update_refresh_token(user, new_refresh_token)
-    await db.commit()
-
-    return Token(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+        return Token(
+            access_token=new_access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        )
+    except HTTPException as exc:
+        return _clear_cookie_error_response(exc)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -271,7 +388,10 @@ async def get_current_user_info(
 
 @router.post("/logout")
 async def logout(
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    response: Response,
+    _: None = Depends(require_csrf_token),
+    current_user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Logout by invalidating refresh token.
@@ -279,16 +399,37 @@ async def logout(
     **Returns:**
     - 200: Logout successful
     """
-    repo = UserRepository(db)
-    await repo.update_refresh_token(current_user, "")
+    logout_user = current_user
+    refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    if refresh_token:
+        try:
+            (
+                resolved_user,
+                session,
+                refresh_token_value,
+                refresh_payload,
+                refresh_sessions,
+            ) = await _resolve_refresh_request(
+                request,
+                db,
+            )
+            del refresh_token_value, refresh_payload
+            logout_user = logout_user or resolved_user
+            await refresh_sessions.revoke_session(session)
+        except HTTPException:
+            # Logout should still clear cookies even if the session is already absent.
+            pass
+
+    clear_auth_cookies(response)
     await db.commit()
 
-    await log_user_action(
-        db=db,
-        user_id=current_user.id,
-        action="LOGOUT",
-        details=f"User '{current_user.username}' logged out",
-    )
+    if logout_user is not None:
+        await log_user_action(
+            db=db,
+            user_id=logout_user.id,
+            action="LOGOUT",
+            details=f"User '{logout_user.username}' logged out",
+        )
 
     return {"message": "Successfully logged out"}
 
@@ -318,7 +459,7 @@ async def change_password(
     repo = UserRepository(db)
     user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]  # mypy+pydantic: Field(None) defaults not recognized
     await repo.update(current_user, user_update)
-    await repo.update_refresh_token(current_user, "")
+    await _revoke_all_refresh_capability(current_user, db)
     await db.commit()
 
     await log_user_action(
@@ -532,8 +673,14 @@ async def update_user(
             ),
         )
 
+    should_revoke_refresh_capability = (
+        user_data.is_active is False and user.is_active is True
+    )
+
     # Update user
     updated_user = await repo.update(user, user_data)
+    if should_revoke_refresh_capability:
+        await _revoke_all_refresh_capability(updated_user, db)
 
     await log_user_action(
         db=db,
@@ -894,8 +1041,8 @@ async def confirm_password_reset(
         )
 
     user.hashed_password = get_password_hash(reset_data.new_password)
-    user.refresh_token = ""
     await db.commit()
+    await _revoke_all_refresh_capability(user, db)
 
     # Invalidate all remaining reset tokens for this email
     await token_svc.invalidate_by_email_and_purpose(

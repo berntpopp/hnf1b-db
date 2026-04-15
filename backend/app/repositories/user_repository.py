@@ -181,16 +181,6 @@ class UserRepository:
         user.locked_until = None
         await self.db.flush()
 
-    async def update_refresh_token(self, user: User, refresh_token: str) -> None:
-        """Store refresh token for user.
-
-        Args:
-            user: User instance
-            refresh_token: Refresh token to store
-        """
-        user.refresh_token = refresh_token
-        await self.db.flush()
-
     async def unlock(self, user: User) -> User:
         """Clear failed login attempts and lockout for a user.
 

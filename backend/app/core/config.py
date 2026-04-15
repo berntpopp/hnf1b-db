@@ -323,6 +323,7 @@ class Settings(BaseSettings):
     REFRESH_COOKIE_NAME: str = "refresh_token"
     CSRF_COOKIE_NAME: str = "csrf_token"
     AUTH_COOKIE_PATH: str = "/api/v2"
+    CSRF_COOKIE_PATH: str = "/"
     AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
     AUTH_COOKIE_SECURE: bool = False
 

@@ -37,7 +37,9 @@ from sqlalchemy import delete
 
 from app.auth.password import get_password_hash
 from app.auth.tokens import verify_token
+from app.core.config import settings
 from app.models.user import User
+from app.repositories.refresh_session_repository import RefreshSessionRepository
 
 
 @pytest.mark.asyncio
@@ -66,7 +68,7 @@ async def test_dev_login_rejects_non_fixture_user(dev_auth_client, db_session):
 
 @pytest.mark.asyncio
 async def test_dev_login_accepts_fixture_user(dev_auth_client, db_session):
-    """A fixture user gets freshly minted access + refresh tokens."""
+    """A fixture user gets access JSON plus cookie-backed refresh state."""
     fixture = User(
         username="dev-admin",
         email="dev-admin@example.com",
@@ -87,16 +89,18 @@ async def test_dev_login_accepts_fixture_user(dev_auth_client, db_session):
         payload = response.json()
         assert payload["token_type"] == "bearer"
         assert isinstance(payload["access_token"], str)
-        assert isinstance(payload["refresh_token"], str)
         assert payload["access_token"]  # non-empty
-        assert payload["refresh_token"]  # non-empty
+        assert "refresh_token" not in payload
         assert payload["expires_in"] > 0
-        refresh_payload = verify_token(payload["refresh_token"], token_type="refresh")
+        refresh_token = response.cookies[settings.REFRESH_COOKIE_NAME]
+        refresh_payload = verify_token(refresh_token, token_type="refresh")
         assert refresh_payload["sv"] == fixture.session_version
+        assert response.cookies[settings.CSRF_COOKIE_NAME]
 
-        # The refresh token must have been persisted so /auth/refresh works.
-        await db_session.refresh(fixture)
-        assert fixture.refresh_token == payload["refresh_token"]
+        repo = RefreshSessionRepository(db_session)
+        session = await repo.get_by_jti(refresh_payload["jti"])
+        assert session is not None
+        assert session.user_id == fixture.id
     finally:
         await db_session.execute(delete(User).where(User.id == fixture.id))
         await db_session.commit()

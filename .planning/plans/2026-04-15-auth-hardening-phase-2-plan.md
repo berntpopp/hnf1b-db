@@ -22,11 +22,11 @@ Merged in PR `#256`:
 
 Still open:
 
-- [ ] endpoint contract flip for login, refresh, and logout
-- [ ] password-event invalidation rewiring
-- [ ] frontend in-memory-token and cookie-refresh migration
-- [ ] legacy raw refresh-path removal
-- [ ] full targeted verification reruns
+- [x] endpoint contract flip for login, refresh, and logout
+- [x] password-event invalidation rewiring
+- [x] frontend in-memory-token and cookie-refresh migration
+- [x] legacy raw refresh-path removal
+- [x] full targeted verification reruns
 
 ## Spec
 
@@ -153,7 +153,7 @@ Status: helper layer complete in PR `#256`
 
 ## Task 4: Rebuild Login, Refresh, And Logout Around Cookies
 
-Status: next execution slice
+Status: complete
 
 **Files:**
 - Modify: `backend/app/api/auth_endpoints.py`
@@ -162,13 +162,15 @@ Status: next execution slice
 - Test: `backend/tests/test_auth_refresh.py`
 - Test: `backend/tests/test_auth_logout.py`
 
-- [ ] Change login so successful authentication creates a refresh-session row, sets refresh and CSRF cookies, and returns only the access-token payload.
-- [ ] Change refresh so it reads the refresh JWT from the cookie, validates CSRF, validates the refresh-session row and user state, rotates the session, resets cookies, and returns a new access token.
-- [ ] Change logout so it can revoke the current refresh session and clear cookies even when the access token is expired or absent, as long as the request carries the valid refresh cookie plus CSRF token.
-- [ ] Preserve `_assert_user_can_receive_tokens()` as the gate on every token issuance path, including refresh and any dev-only token issuance path that remains relevant.
-- [ ] Add regression tests for inactive refresh denial, locked refresh denial, login cookie contract, refresh rotation, cookie clearing on logout, and suspicious refresh reuse rejection.
+- [x] Change login so successful authentication creates a refresh-session row, sets refresh and CSRF cookies, and returns only the access-token payload.
+- [x] Change refresh so it reads the refresh JWT from the cookie, validates CSRF, validates the refresh-session row and user state, rotates the session, resets cookies, and returns a new access token.
+- [x] Change logout so it can revoke the current refresh session and clear cookies even when the access token is expired or absent, as long as the request carries the valid refresh cookie plus CSRF token.
+- [x] Preserve `_assert_user_can_receive_tokens()` as the gate on every token issuance path, including refresh and any dev-only token issuance path that remains relevant.
+- [x] Add regression tests for inactive refresh denial, locked refresh denial, login cookie contract, refresh rotation, cookie clearing on logout, and suspicious refresh reuse rejection.
 
 ## Task 5: Make Password Events Revoke Refresh Capability
+
+Status: complete
 
 **Files:**
 - Modify: `backend/app/api/auth_endpoints.py`
@@ -176,25 +178,29 @@ Status: next execution slice
 - Test: `backend/tests/test_auth_password_change.py`
 - Test: `backend/tests/test_auth_password_reset.py`
 
-- [ ] Replace direct `update_refresh_token(user, "")` invalidation with a user session-version bump plus refresh-session revocation.
-- [ ] Apply the same invalidation rule to password change and password reset confirmation.
-- [ ] Ensure admin-driven deactivate flows also revoke future refresh capability by the same model if those flows already mutate account status in the release hardening scope.
-- [ ] Add tests proving a refresh cookie minted before password change or reset can no longer mint a new access token afterward.
+- [x] Replace direct `update_refresh_token(user, "")` invalidation with a user session-version bump plus refresh-session revocation.
+- [x] Apply the same invalidation rule to password change and password reset confirmation.
+- [x] Ensure admin-driven deactivate flows also revoke future refresh capability by the same model if those flows already mutate account status in the release hardening scope.
+- [x] Add tests proving a refresh cookie minted before password change or reset can no longer mint a new access token afterward.
 
 ## Task 6: Remove Frontend Refresh Persistence
+
+Status: complete
 
 **Files:**
 - Modify: `frontend/src/api/session.js`
 - Modify: `frontend/src/stores/authStore.js`
 - Test: `frontend/tests/**/*auth*.spec.js`
 
-- [ ] Replace the current session helper with in-memory access-token storage only; remove refresh-token getters, setters, and storage writes.
-- [ ] Keep legacy localStorage purge behavior only as cleanup for older clients; do not introduce new browser persistence for auth tokens.
-- [ ] Remove `refreshToken` store state and any code that expects login/refresh responses to include a refresh token.
-- [ ] Change auth initialization to attempt one refresh bootstrap before calling `/auth/me`.
-- [ ] Add frontend tests that fail if refresh token persistence or sessionStorage refresh reads are reintroduced.
+- [x] Replace the current session helper with in-memory access-token storage only; remove refresh-token getters, setters, and storage writes.
+- [x] Keep legacy localStorage purge behavior only as cleanup for older clients; do not introduce new browser persistence for auth tokens.
+- [x] Remove `refreshToken` store state and any code that expects login/refresh responses to include a refresh token.
+- [x] Change auth initialization to attempt one refresh bootstrap before calling `/auth/me`.
+- [x] Add frontend tests that fail if refresh token persistence or sessionStorage refresh reads are reintroduced.
 
 ## Task 7: Update Axios Transport For Cookie Refresh And CSRF
+
+Status: complete
 
 **Files:**
 - Modify: `frontend/src/api/transport.js`
@@ -202,13 +208,15 @@ Status: next execution slice
 - Modify: `frontend/src/stores/authStore.js`
 - Test: `frontend/tests/**/*transport*.spec.js`
 
-- [ ] Configure auth refresh requests to use `withCredentials` so the browser sends the refresh cookie.
-- [ ] Preserve the existing single-flight refresh queue so concurrent `401` responses still collapse into one refresh attempt.
-- [ ] Inject `X-CSRF-Token` on refresh, logout, and authenticated mutation requests using the readable CSRF cookie.
-- [ ] Ensure refresh failures clear only in-memory access state and route the user back to login without retry loops.
-- [ ] Add tests for queued request replay after refresh, refresh failure logout behavior, and CSRF header injection on unsafe methods.
+- [x] Configure auth refresh requests to use `withCredentials` so the browser sends the refresh cookie.
+- [x] Preserve the existing single-flight refresh queue so concurrent `401` responses still collapse into one refresh attempt.
+- [x] Inject `X-CSRF-Token` on refresh, logout, and authenticated mutation requests using the readable CSRF cookie.
+- [x] Ensure refresh failures clear only in-memory access state and route the user back to login without retry loops.
+- [x] Add tests for queued request replay after refresh, refresh failure logout behavior, and CSRF header injection on unsafe methods.
 
 ## Task 8: Remove Legacy Raw Refresh Paths
+
+Status: complete
 
 **Files:**
 - Modify: `backend/app/models/user.py`
@@ -216,21 +224,23 @@ Status: next execution slice
 - Modify: `backend/app/schemas/auth.py`
 - Modify: backend and frontend auth tests
 
-- [ ] Stop reading `users.refresh_token` anywhere in live auth code.
-- [ ] Remove the raw refresh token from API responses and fixtures that still assert it for non-dev browser paths.
-- [ ] Keep or remove the legacy database column based on migration appetite, but the implementation must no longer depend on it for runtime auth decisions.
-- [ ] Update docs/comments/tests so the cookie-based contract is the only supported browser flow.
+- [x] Stop reading `users.refresh_token` anywhere in live auth code.
+- [x] Remove the raw refresh token from API responses and fixtures that still assert it for non-dev browser paths.
+- [x] Keep or remove the legacy database column based on migration appetite, but the implementation must no longer depend on it for runtime auth decisions.
+- [x] Update docs/comments/tests so the cookie-based contract is the only supported browser flow.
 
 ## Task 9: Run Targeted Verification And Manual Release Slice
+
+Status: complete
 
 **Files:**
 - Modify: `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md` only if verification commands need to be updated after implementation
 
-- [ ] Run the targeted backend auth/session slice after the backend changes land.
-- [ ] Run the targeted frontend auth transport slice after the frontend changes land.
-- [ ] Run one end-to-end manual browser check: login, reload, access protected route, logout, then verify reload does not re-authenticate.
-- [ ] Capture any cookie/CORS/SameSite issues explicitly rather than treating them as environment noise.
-- [ ] Only call the phase complete when fresh runs show the new auth contract and invalidation model are stable.
+- [x] Run the targeted backend auth/session slice after the backend changes land.
+- [x] Run the targeted frontend auth transport slice after the frontend changes land.
+- [x] Run one end-to-end manual browser check: login, reload, access protected route, logout, then verify reload does not re-authenticate.
+- [x] Capture any cookie/CORS/SameSite issues explicitly rather than treating them as environment noise.
+- [x] Only call the phase complete when fresh runs show the new auth contract and invalidation model are stable.
 
 ## Verification Already Landed
 
@@ -250,7 +260,7 @@ PR `#256` also passed GitHub Actions for:
 
 ## Sequencing Notes
 
-- Tasks 4 and 5 are the immediate backend continuation and should land behind passing backend auth tests before frontend integration.
+- Task 5 is now the immediate backend continuation and should land behind passing backend auth tests before frontend integration.
 - Tasks 6 and 7 can overlap once the backend cookie and response contract is stable.
 - Task 8 should not start until both backend and frontend slices are green against the new contract.
 - Task 9 is the release gate for this phase, not an optional cleanup step.

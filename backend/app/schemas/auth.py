@@ -58,12 +58,6 @@ class Token(BaseModel):
     expires_in: int  # seconds
 
 
-class RefreshTokenRequest(BaseModel):
-    """Refresh token request."""
-
-    refresh_token: str
-
-
 class UserLogin(BaseModel):
     """User login credentials."""
 

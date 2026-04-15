@@ -2,7 +2,13 @@
 // Preserves both named exports AND the legacy `export default` shape.
 
 export { apiClient } from './transport';
-export { getAccessToken, getRefreshToken, persistTokens, clearTokens } from './session';
+export {
+  getAccessToken,
+  getCsrfToken,
+  persistTokens,
+  clearTokens,
+  setAccessToken,
+} from './session';
 
 export * from './domain/phenopackets';
 export * from './domain/aggregations';

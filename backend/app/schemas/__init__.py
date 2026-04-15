@@ -2,7 +2,6 @@
 
 from app.schemas.auth import (
     PasswordChange,
-    RefreshTokenRequest,
     RoleResponse,
     Token,
     UserCreate,
@@ -14,7 +13,6 @@ from app.schemas.auth import (
 
 __all__ = [
     "PasswordChange",
-    "RefreshTokenRequest",
     "RoleResponse",
     "Token",
     "UserCreate",
