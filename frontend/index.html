@@ -117,11 +117,12 @@
 
     <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
     <style>
-      /* Disable Windows High Contrast mapping — we ship our own light
-         and dark palettes, so the browser should not remap colors. */
-      html {
-        forced-color-adjust: none;
-      }
+      /* Note: previously set `forced-color-adjust: none` on <html> here.
+         Removed because it disables Windows High Contrast mode globally,
+         which is an accessibility regression for users who rely on it
+         (Copilot PR #254 review, index.html:124). The dark/light theme
+         switcher already covers user-driven theme choice; let the
+         browser keep its forced-colors mapping for accessibility users. */
       /* Pre-hydration backgrounds. The hnf1b-theme--<mode> class is set
          synchronously by the boot <script> above before Vue mounts, so
          the initial paint already matches the user's preference and

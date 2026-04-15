@@ -35,8 +35,14 @@ try:
     # registration with ``Base.metadata``) is what actually matters here.
 
     # Register comments ORM models so Alembic autogenerate sees them.
-    # Module-level side-effect import — unambiguous and clean (Copilot #4).
-    import app.comments.models  # noqa: F401
+    # Use the redundant-as-alias pattern so ruff/pyflakes accepts the
+    # imports (matches the rest of this block) AND so the AST-based
+    # test_env_py_imports_all_orm_models test sees the named classes.
+    from app.comments.models import (
+        Comment as Comment,
+        CommentEdit as CommentEdit,
+        CommentMention as CommentMention,
+    )
     from app.database import Base
 
     # Core models (2).

@@ -28,8 +28,13 @@ import { useComments } from '@/composables/useComments';
 import CommentComposer from './CommentComposer.vue';
 import CommentList from './CommentList.vue';
 
+// recordType defaults to 'phenopacket' for the existing PagePhenopacket
+// caller, but is exposed as a prop so the component can be reused for
+// any record type the backend exposes via /api/v2/comments
+// (Copilot PR #254 review, DiscussionTab.vue:47).
 const props = defineProps({
   recordId: { type: String, required: true },
+  recordType: { type: String, default: 'phenopacket' },
 });
 
 const authStore = useAuthStore();
@@ -42,7 +47,7 @@ watch(
 );
 
 const { comments, loading, error, load, post, edit, resolve, unresolve, remove } = useComments(
-  'phenopacket',
+  props.recordType,
   recordIdRef
 );
 

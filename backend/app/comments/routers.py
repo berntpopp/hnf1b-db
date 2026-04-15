@@ -11,6 +11,7 @@ on {id} and surface as 422.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -32,6 +33,8 @@ from app.comments.schemas import (
 from app.comments.service import CommentsService
 from app.database import get_db
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/comments", tags=["comments"])
 
@@ -134,7 +137,14 @@ def _map_service_error(exc: Exception) -> HTTPException:
             status_code=404,
             detail={"code": "not_found", "message": str(exc)},
         )
-    return HTTPException(status_code=500, detail=str(exc))
+    # Unmapped exception path: log the real cause server-side, return a
+    # generic 500 so we don't leak SQL fragments / stack context to the
+    # client (Copilot PR #254 routers.py:137).
+    logger.exception("Unmapped CommentsService error: %s", exc.__class__.__name__)
+    return HTTPException(
+        status_code=500,
+        detail={"code": "internal_error", "message": "Internal server error"},
+    )
 
 
 # ---------------------------------------------------------------------------

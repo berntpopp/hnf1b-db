@@ -8,8 +8,10 @@
 // brand teal). A user's preference — 'light' | 'dark' | 'system' — is
 // persisted to localStorage under `hnf1b-theme`. The key is read below
 // to pick a `defaultTheme`; a small boot script in index.html also
-// reads the same key and applies `v-theme--<name>` + `color-scheme` to
-// <html> before Vue mounts so there is no flash of wrong theme.
+// reads the same key and applies `hnf1b-theme--<light|dark>` class +
+// `color-scheme` style to <html> before Vue mounts so there is no
+// flash of wrong theme. (The `v-theme--<name>` class is added by
+// Vuetify itself once the .v-application root mounts.)
 //
 // When the value is `'system'`, we resolve it once at module-evaluation
 // time via `matchMedia('(prefers-color-scheme: dark)')`. Runtime system
