@@ -447,9 +447,24 @@ export default {
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Hero on dark — softer gradient (#1A2124 → #16383A) lifted off the
+ * #121212 canvas so the section reads as a card rather than a void.
+ * Endpoint hue keeps the brand-teal tint but at lower luminance. */
 .v-theme--dark .hero-section {
-  background: linear-gradient(135deg, #0f1416 0%, #1a2f2c 100%);
+  background: linear-gradient(135deg, #1a2124 0%, #1f3a3a 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Search field on dark — lifted surface + accent border so it stands
+ * out against the hero gradient as the obvious primary action. */
+.v-theme--dark .hero-section .v-field {
+  background-color: #2a2a2a !important;
+  box-shadow: 0 0 0 1px rgba(77, 182, 172, 0.4);
+}
+.v-theme--dark .hero-section .v-field--focused {
+  box-shadow:
+    0 0 0 2px rgba(77, 182, 172, 0.7),
+    0 0 12px rgba(77, 182, 172, 0.2);
 }
 
 .border-bottom {

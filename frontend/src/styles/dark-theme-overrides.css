@@ -30,10 +30,16 @@
   color: rgba(255, 255, 255, 0.87) !important;
 }
 
-/* Generic muted-text utility: bumped-up contrast on dark. */
+/* Muted-text utilities — flip from dark greys to high-contrast
+ * off-white on dark theme so headings and helper text stay readable. */
 .v-theme--dark .text-grey,
-.v-theme--dark .text-grey-darken-1 {
+.v-theme--dark .text-grey-darken-1,
+.v-theme--dark .text-grey-darken-2 {
   color: rgba(255, 255, 255, 0.6) !important;
+}
+.v-theme--dark .text-grey-darken-3,
+.v-theme--dark .text-grey-darken-4 {
+  color: rgba(255, 255, 255, 0.92) !important;
 }
 
 /* Tables — Vuetify's v-data-table inherits surface tones, but loose
@@ -66,12 +72,53 @@
   border-color: rgba(255, 255, 255, 0.24) !important;
 }
 
-/* The text-medium-emphasis utility on dark theme already lowers
- * opacity, but combined with our about-section background override
- * the resulting contrast can dip below WCAG AA. Bump it up so taglines
- * like "The definitive resource for MODY5..." stay readable. */
-.v-theme--dark .text-medium-emphasis {
+/* text-medium-emphasis on dark surfaces.
+ *
+ * Vuetify's default text-medium-emphasis rule resolves to dark-theme
+ * grey only when the element is inside a `.v-theme--dark` wrapper
+ * AND nothing else specifies a color. Because our hardcoded
+ * bg-grey-lighten-5 overrides force `color: rgba(255,255,255,0.87)`
+ * on the section, descendants then inherit; but Vuetify's MD3
+ * typography utility classes (text-h6, text-h4) inject an inline
+ * color via CSS variables that win over inheritance.
+ *
+ * Doubling up the selectors with .v-application ensures we beat
+ * Vuetify's default specificity. */
+.v-theme--dark.v-application .text-medium-emphasis,
+.v-theme--dark .text-medium-emphasis,
+.v-theme--dark h1.text-medium-emphasis,
+.v-theme--dark h2.text-medium-emphasis,
+.v-theme--dark h3.text-medium-emphasis,
+.v-theme--dark h4.text-medium-emphasis,
+.v-theme--dark h5.text-medium-emphasis,
+.v-theme--dark h6.text-medium-emphasis {
   color: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Hero text on dark — the h1 uses text-teal-darken-2 (a dark-green
+ * intended for white backgrounds). Flip to the lifted-teal tone of
+ * the dark palette so it stays readable on the dark gradient. */
+.v-theme--dark .hero-section h1,
+.v-theme--dark .hero-section .text-teal-darken-2 {
+  color: #80cbc4 !important;
+}
+.v-theme--dark .hero-section p,
+.v-theme--dark .hero-section .text-subtitle-1 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Section headings inside the about-section / similar dim surfaces.
+ * Even when text-medium-emphasis isn't applied, some h2/h3 inherit
+ * the light-theme grey via Vuetify's typography defaults. Force a
+ * high-contrast off-white. */
+.v-theme--dark .about-section h1,
+.v-theme--dark .about-section h2,
+.v-theme--dark .about-section h3,
+.v-theme--dark .bg-grey-lighten-5 h1,
+.v-theme--dark .bg-grey-lighten-5 h2,
+.v-theme--dark .bg-grey-lighten-5 h3,
+.v-theme--dark .bg-grey-lighten-5 p {
+  color: rgba(255, 255, 255, 0.92) !important;
 }
 
 /* Gene & Protein Visualization SVGs (HNF1BGeneVisualization.vue,
