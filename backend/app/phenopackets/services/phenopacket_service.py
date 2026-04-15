@@ -285,7 +285,7 @@ class PhenopacketService:
         *,
         actor_id: Optional[int],
         actor_username: Optional[str] = None,
-        expected_revision: Optional[int] = None,
+        expected_revision: int,
     ) -> Dict[str, Optional[str]]:
         """Soft-delete a phenopacket and create an audit entry.
 
@@ -295,12 +295,8 @@ class PhenopacketService:
         persisted FK is ``actor_id``. Raises ``ServiceNotFound`` if
         the row is missing or already soft-deleted; raises
         ``ServiceConflict`` (code="revision_mismatch") if
-        ``expected_revision`` is provided and does not match the
-        current row revision; raises ``ServiceDatabaseError`` on
-        commit failure.
-
-        ``expected_revision`` is optional for backwards compatibility —
-        callers that omit it get the original blind-delete behaviour.
+        ``expected_revision`` does not match the current row
+        revision; raises ``ServiceDatabaseError`` on commit failure.
         """
         lock_stmt = (
             select(Phenopacket)
@@ -317,7 +313,7 @@ class PhenopacketService:
                 f"Phenopacket {phenopacket_id} not found or already deleted"
             )
 
-        if expected_revision is not None and phenopacket.revision != expected_revision:
+        if phenopacket.revision != expected_revision:
             raise ServiceConflict(
                 {
                     "error": "Conflict detected",

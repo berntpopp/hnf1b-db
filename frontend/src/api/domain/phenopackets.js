@@ -112,12 +112,16 @@ export const updatePhenopacket = (id, data) =>
 /**
  * Delete a phenopacket (soft delete, requires curator role).
  * @param {string} id - Phenopacket ID
+ * @param {number} revision - Current revision for optimistic locking
  * @param {string} changeReason - Reason for deletion (required for audit trail)
  * @returns {Promise} Axios promise with deletion confirmation
  */
-export const deletePhenopacket = (id, changeReason) =>
+export const deletePhenopacket = (id, revision, changeReason) =>
   apiClient.delete(`/phenopackets/${id}`, {
-    params: { change_reason: changeReason },
+    data: {
+      revision,
+      change_reason: changeReason,
+    },
   });
 
 /**

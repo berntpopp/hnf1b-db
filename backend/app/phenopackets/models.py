@@ -548,11 +548,11 @@ class PhenopacketDelete(BaseModel):
     change_reason: str = Field(
         ..., min_length=1, description="Reason for deletion (audit trail)"
     )
-    revision: Optional[int] = Field(
-        None,
+    revision: int = Field(
+        ...,
         description=(
-            "Optional optimistic-locking revision. If provided, the delete "
-            "returns 409 Conflict when the current row revision differs."
+            "Required optimistic-locking revision. Delete returns 409 Conflict "
+            "when the current row revision differs."
         ),
     )
 
