@@ -27,6 +27,7 @@
 - Prefer root `make` targets first for setup, running, and verification.
 - Keep git worktrees as sibling directories, never nested inside the repo.
 - Before committing or merging, run the relevant repo checks for the code you changed.
+- Before calling work complete or opening/updating a PR, verify the relevant local checks pass and inspect the PR's GitHub Actions status; if Actions fail, investigate, fix, and re-run until the PR is green or a deliberate blocker is documented.
 - Do not ignore failing tests, lint errors, or type errors; fix them or document a deliberate exception.
 
 ## Backend Conventions

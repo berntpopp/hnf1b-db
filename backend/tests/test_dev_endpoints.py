@@ -36,6 +36,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete
 
 from app.auth.password import get_password_hash
+from app.auth.tokens import verify_token
 from app.models.user import User
 
 
@@ -90,6 +91,8 @@ async def test_dev_login_accepts_fixture_user(dev_auth_client, db_session):
         assert payload["access_token"]  # non-empty
         assert payload["refresh_token"]  # non-empty
         assert payload["expires_in"] > 0
+        refresh_payload = verify_token(payload["refresh_token"], token_type="refresh")
+        assert refresh_payload["sv"] == fixture.session_version
 
         # The refresh token must have been persisted so /auth/refresh works.
         await db_session.refresh(fixture)

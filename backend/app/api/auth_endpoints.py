@@ -161,7 +161,9 @@ async def login(
 
     # Create tokens
     access_token = create_access_token(user.username, user.role, user.get_permissions())
-    refresh_token = create_refresh_token(user.username)
+    refresh_token = create_refresh_token(
+        user.username, session_version=user.session_version
+    )
 
     # Update user record
     await repo.record_successful_login(user)
@@ -226,7 +228,9 @@ async def refresh_access_token(
     new_access_token = create_access_token(
         user.username, user.role, user.get_permissions()
     )
-    new_refresh_token = create_refresh_token(user.username)
+    new_refresh_token = create_refresh_token(
+        user.username, session_version=user.session_version
+    )
 
     # Store new refresh token
     await repo.update_refresh_token(user, new_refresh_token)

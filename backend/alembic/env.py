@@ -53,6 +53,9 @@ try:
     from app.models.credential_token import (
         CredentialToken as CredentialToken,
     )
+    from app.models.refresh_session import (
+        RefreshSession as RefreshSession,
+    )
     from app.models.user import (
         User as User,
     )

@@ -319,6 +319,13 @@ class Settings(BaseSettings):
     # Debug mode
     DEBUG: bool = False
 
+    # Auth cookie contract (Phase 2)
+    REFRESH_COOKIE_NAME: str = "refresh_token"
+    CSRF_COOKIE_NAME: str = "csrf_token"
+    AUTH_COOKIE_PATH: str = "/api/v2"
+    AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    AUTH_COOKIE_SECURE: bool = False
+
     # === Environment and dev-mode gating (Wave 5a Layer 1) ===
 
     environment: Literal["development", "staging", "production"] = "production"

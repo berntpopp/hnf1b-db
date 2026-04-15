@@ -37,11 +37,12 @@ def create_access_token(subject: str, role: str, permissions: list[str]) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(subject: str) -> str:
+def create_refresh_token(subject: str, session_version: int = 1) -> str:
     """Create JWT refresh token.
 
     Args:
         subject: Username (JWT sub claim)
+        session_version: Current per-user refresh session version
 
     Returns:
         Encoded JWT refresh token string
@@ -56,6 +57,7 @@ def create_refresh_token(subject: str) -> str:
         "sub": subject,
         "jti": str(uuid.uuid4()),  # Unique token ID (RFC 7519) ensures rotation
         "type": "refresh",
+        "sv": session_version,
     }
 
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
