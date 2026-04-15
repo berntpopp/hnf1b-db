@@ -77,11 +77,14 @@ const onDelete = async (c) => {
   await remove(c.id);
 };
 
-onMounted(load);
-watch(
-  () => props.recordId,
-  () => load()
-);
+// Guard: only call load() when recordId is truthy so that mounting the
+// component before phenopacketMeta arrives (discussionRecordId === '')
+// does not fire a malformed API request.
+const safeLoad = () => {
+  if (recordIdRef.value) load();
+};
+onMounted(safeLoad);
+watch(() => props.recordId, safeLoad);
 </script>
 
 <style scoped>

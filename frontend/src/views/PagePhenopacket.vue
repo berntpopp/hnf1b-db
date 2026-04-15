@@ -175,7 +175,11 @@
               <v-tab value="overview" aria-label="Overview tab">Overview</v-tab>
               <v-tab value="timeline" aria-label="Timeline tab">Timeline</v-tab>
               <v-tab value="raw" aria-label="Raw JSON tab">Raw JSON</v-tab>
-              <v-tab v-if="canSeeDiscussion" value="discussion" aria-label="Discussion tab">
+              <v-tab
+                v-if="canSeeDiscussion && discussionRecordId"
+                value="discussion"
+                aria-label="Discussion tab"
+              >
                 Discussion
               </v-tab>
             </v-tabs>
@@ -245,8 +249,11 @@
                   </v-card>
                 </v-tabs-window-item>
 
-                <!-- Discussion Tab (curator/admin only) -->
-                <v-tabs-window-item v-if="canSeeDiscussion" value="discussion">
+                <!-- Discussion Tab (curator/admin only, hidden until meta loaded) -->
+                <v-tabs-window-item
+                  v-if="canSeeDiscussion && discussionRecordId"
+                  value="discussion"
+                >
                   <DiscussionTab :record-id="discussionRecordId" />
                 </v-tabs-window-item>
               </v-tabs-window>

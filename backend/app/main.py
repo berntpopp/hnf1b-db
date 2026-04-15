@@ -91,6 +91,15 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-type"],  # Specific headers
 )
 
+# Liveness probe used by the frontend's healthService.js to detect backend
+# availability (the footer "Backend Offline" indicator). Intentionally
+# unprefixed — the frontend pings /health directly via the Vite proxy.
+@app.get("/health", tags=["health"], include_in_schema=False)
+async def health() -> dict[str, str]:
+    """Liveness probe. Returns 200 as long as the app process is serving."""
+    return {"status": "ok"}
+
+
 # Include routers
 app.include_router(phenopackets_router, prefix="/api/v2")
 app.include_router(clinical_endpoints.router)
