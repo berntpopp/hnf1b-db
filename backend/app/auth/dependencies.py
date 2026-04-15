@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.tokens import verify_token
+from app.core.config import settings
 from app.database import get_db
 from app.models.user import User
 
@@ -182,3 +183,15 @@ async def get_optional_user(
     credentials = await _optional_security(request)
     assert credentials is not None  # header present → always non-None
     return await get_current_user(credentials=credentials, db=db)
+
+
+async def require_csrf_token(request: Request) -> None:
+    """Require a matching CSRF cookie and header for cookie-auth flows."""
+    cookie_token = request.cookies.get(settings.CSRF_COOKIE_NAME)
+    header_token = request.headers.get("x-csrf-token")
+
+    if not cookie_token or not header_token or cookie_token != header_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing or invalid",
+        )
