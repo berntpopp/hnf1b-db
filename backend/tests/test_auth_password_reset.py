@@ -3,6 +3,24 @@
 import pytest
 
 from app.core.cache import cache
+from app.core.config import settings
+from app.models.user import User
+
+
+def _auth_cookies(response) -> dict[str, str]:
+    """Extract auth cookies from a login response."""
+    return {
+        settings.REFRESH_COOKIE_NAME: response.cookies[settings.REFRESH_COOKIE_NAME],
+        settings.CSRF_COOKIE_NAME: response.cookies[settings.CSRF_COOKIE_NAME],
+    }
+
+
+def _cookie_headers(cookies: dict[str, str]) -> dict[str, str]:
+    """Build request headers for cookie-authenticated routes."""
+    return {
+        "x-csrf-token": cookies[settings.CSRF_COOKIE_NAME],
+        "cookie": "; ".join(f"{name}={value}" for name, value in cookies.items()),
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -68,19 +86,20 @@ async def test_reset_confirm_changes_password(async_client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_reset_confirm_invalidates_existing_refresh_token(
-    async_client, admin_headers
+    async_client, admin_headers, db_session
 ):
     """Password rotation should retire the previous refresh token."""
     me_resp = await async_client.get("/api/v2/auth/me", headers=admin_headers)
     admin_email = me_resp.json()["email"]
     admin_username = me_resp.json()["username"]
+    admin_id = me_resp.json()["id"]
 
     login_resp = await async_client.post(
         "/api/v2/auth/login",
         json={"username": admin_username, "password": "AdminPass123!"},
     )
     assert login_resp.status_code == 200
-    refresh_token = login_resp.json()["refresh_token"]
+    cookies = _auth_cookies(login_resp)
 
     reset_resp = await async_client.post(
         "/api/v2/auth/password-reset/request",
@@ -95,9 +114,13 @@ async def test_reset_confirm_invalidates_existing_refresh_token(
     )
     assert confirm_resp.status_code == 200
 
+    admin_user = await db_session.get(User, admin_id)
+    assert admin_user is not None
+    assert admin_user.session_version == 2
+
     refresh_resp = await async_client.post(
         "/api/v2/auth/refresh",
-        json={"refresh_token": refresh_token},
+        headers=_cookie_headers(cookies),
     )
     assert refresh_resp.status_code == 401
     assert "invalid" in refresh_resp.json()["detail"].lower()

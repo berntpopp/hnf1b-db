@@ -1,25 +1,13 @@
 /**
- * transport.spec.js — Thunder-herd guard test for src/api/transport.js
- *
- * Fires N concurrent requests that all receive 401, then asserts that
- * the refresh endpoint is called exactly once (the queue coalesces).
- *
- * Uses vi.mock to intercept axios and the auth store without any extra
- * dependencies (no axios-mock-adapter needed).
+ * transport.spec.js — request/refresh queue behavior for src/api/transport.js
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Mocks — must be declared before importing the module under test
-// ---------------------------------------------------------------------------
-
-// Track interceptors registered by transport.js
 let requestInterceptorFulfill;
 let _requestInterceptorReject;
 let _responseInterceptorFulfill;
 let responseInterceptorReject;
 
-// Mock axios — capture interceptors and provide a callable client
 const mockAxiosInstance = vi.fn();
 mockAxiosInstance.interceptors = {
   request: {
@@ -45,13 +33,15 @@ vi.mock('axios', () => ({
   },
 }));
 
-// Mock session — so the request interceptor can read the access token
+const mockGetAccessToken = vi.fn(() => 'initial-token');
+const mockGetCsrfToken = vi.fn(() => 'csrf-token');
+
 vi.mock('@/api/session', () => ({
-  getAccessToken: vi.fn(() => 'initial-token'),
+  getAccessToken: mockGetAccessToken,
+  getCsrfToken: mockGetCsrfToken,
   clearTokens: vi.fn(),
 }));
 
-// Mock auth store — refreshAccessToken resolves with a new token
 const mockRefreshAccessToken = vi.fn();
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => ({
@@ -59,7 +49,6 @@ vi.mock('@/stores/authStore', () => ({
   }),
 }));
 
-// Provide window.logService stub
 beforeEach(() => {
   globalThis.window = globalThis.window || {};
   globalThis.window.logService = {
@@ -71,35 +60,60 @@ beforeEach(() => {
   globalThis.window.location = { pathname: '/somewhere', href: '' };
 });
 
-describe('transport — refresh-queue thunder-herd guard', () => {
+describe('transport — request auth and refresh queue', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
+    mockGetAccessToken.mockReturnValue('initial-token');
+    mockGetCsrfToken.mockReturnValue('csrf-token');
     mockRefreshAccessToken.mockResolvedValue('fresh-token');
-
-    // When apiClient retries a request, resolve it successfully
     mockAxiosInstance.mockResolvedValue({ data: { ok: true } });
   });
 
-  it('registers request and response interceptors', async () => {
-    // Dynamic import so mocks are in place first
+  it('attaches Bearer token from session', async () => {
     await import('@/api/transport');
 
-    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledOnce();
-    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledOnce();
-  });
-
-  it('request interceptor attaches Bearer token from session', async () => {
-    await import('@/api/transport');
-
-    const config = { headers: {} };
+    const config = { method: 'get', headers: {} };
     const result = requestInterceptorFulfill(config);
     expect(result.headers.Authorization).toBe('Bearer initial-token');
+  });
+
+  it('injects X-CSRF-Token on unsafe requests when the readable cookie exists', async () => {
+    await import('@/api/transport');
+
+    const config = { method: 'post', headers: {} };
+    const result = requestInterceptorFulfill(config);
+
+    expect(result.headers['X-CSRF-Token']).toBe('csrf-token');
+  });
+
+  it('marks login, refresh, and logout requests as credentialed cookie requests', async () => {
+    await import('@/api/transport');
+
+    const loginConfig = requestInterceptorFulfill({
+      url: '/auth/login',
+      method: 'post',
+      headers: {},
+    });
+    const refreshConfig = requestInterceptorFulfill({
+      url: '/auth/refresh',
+      method: 'post',
+      headers: {},
+    });
+    const logoutConfig = requestInterceptorFulfill({
+      url: '/auth/logout',
+      method: 'post',
+      headers: {},
+    });
+
+    expect(loginConfig.withCredentials).toBe(true);
+    expect(refreshConfig.withCredentials).toBe(true);
+    expect(logoutConfig.withCredentials).toBe(true);
   });
 
   it('coalesces 5 concurrent 401s into a single refresh call', async () => {
     await import('@/api/transport');
 
-    // Build 5 "401 error" objects with distinct configs
     const errors = Array.from({ length: 5 }, (_, i) => ({
       config: {
         url: `/phenopackets/${i}`,
@@ -113,44 +127,53 @@ describe('transport — refresh-queue thunder-herd guard', () => {
       message: 'Request failed with status code 401',
     }));
 
-    // Fire all 5 through the response error interceptor concurrently
     const promises = errors.map((err) => responseInterceptorReject(err));
-
-    // Wait for all to settle
     const results = await Promise.allSettled(promises);
 
-    // All should have resolved (retried successfully)
-    results.forEach((r) => {
-      expect(r.status).toBe('fulfilled');
+    results.forEach((result) => {
+      expect(result.status).toBe('fulfilled');
     });
-
-    // The refresh function should have been called exactly ONCE
     expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
   });
 
-  it('skips refresh for auth login endpoint', async () => {
+  it('retries a 401 request even when the original config had no headers object', async () => {
     await import('@/api/transport');
 
-    const error = {
-      config: { url: '/auth/login', headers: {}, _retry: false },
-      response: { status: 401, data: { detail: 'Bad credentials' } },
+    const result = await responseInterceptorReject({
+      config: {
+        url: '/phenopackets/42',
+        _retry: false,
+      },
+      response: {
+        status: 401,
+        data: { detail: 'Token expired' },
+      },
       message: 'Request failed with status code 401',
-    };
+    });
 
-    await expect(responseInterceptorReject(error)).rejects.toBeTruthy();
-    expect(mockRefreshAccessToken).not.toHaveBeenCalled();
+    expect(result).toEqual({ data: { ok: true } });
+    expect(mockAxiosInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer fresh-token',
+        }),
+      })
+    );
   });
 
-  it('skips refresh for auth refresh endpoint', async () => {
+  it('skips refresh for auth login, refresh, and logout endpoints', async () => {
     await import('@/api/transport');
 
-    const error = {
-      config: { url: '/auth/refresh', headers: {}, _retry: false },
-      response: { status: 401, data: { detail: 'Refresh expired' } },
-      message: 'Request failed with status code 401',
-    };
+    for (const url of ['/auth/login', '/auth/refresh', '/auth/logout']) {
+      const error = {
+        config: { url, headers: {}, _retry: false },
+        response: { status: 401, data: { detail: 'Unauthorized' } },
+        message: 'Request failed with status code 401',
+      };
 
-    await expect(responseInterceptorReject(error)).rejects.toBeTruthy();
+      await expect(responseInterceptorReject(error)).rejects.toBeTruthy();
+    }
+
     expect(mockRefreshAccessToken).not.toHaveBeenCalled();
   });
 
@@ -168,14 +191,12 @@ describe('transport — refresh-queue thunder-herd guard', () => {
     const promises = errors.map((err) => responseInterceptorReject(err));
     const results = await Promise.allSettled(promises);
 
-    // All should be rejected
-    results.forEach((r) => {
-      expect(r.status).toBe('rejected');
+    results.forEach((result) => {
+      expect(result.status).toBe('rejected');
     });
 
-    // Still only one refresh attempt
-    expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
     const { clearTokens } = await import('@/api/session');
+    expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
     expect(clearTokens).toHaveBeenCalledOnce();
   });
 });

@@ -7,15 +7,16 @@ import {
   getDevQuickLoginDisabledMessage,
   isDevQuickLoginEnabled,
 } from '@/config/devAuth';
-import { clearTokens, getAccessToken, getRefreshToken, persistTokens } from '@/api/session';
+import { clearTokens, getAccessToken, persistTokens } from '@/api/session';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref(null);
   const accessToken = ref(getAccessToken());
-  const refreshToken = ref(getRefreshToken());
   const isLoading = ref(false);
   const error = ref(null);
+  const hasInitialized = ref(false);
+  let initializationPromise = null;
 
   // Getters
   const isAuthenticated = computed(() => !!accessToken.value && !!user.value);
@@ -29,13 +30,14 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null;
 
     try {
-      const response = await apiClient.post('/auth/login', credentials);
-      const { access_token, refresh_token } = response.data;
+      const response = await apiClient.post('/auth/login', credentials, {
+        withCredentials: true,
+      });
+      const { access_token } = response.data;
 
-      // Store tokens
+      // Access token stays in memory only; refresh lives in the HttpOnly cookie.
       accessToken.value = access_token;
-      refreshToken.value = refresh_token;
-      persistTokens({ accessToken: access_token, refreshToken: refresh_token });
+      persistTokens({ accessToken: access_token });
 
       // Fetch user info
       await fetchCurrentUser();
@@ -59,10 +61,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(skipBackendCall = false) {
     isLoading.value = true;
 
-    // Only call backend logout if we have a valid token and not skipping
-    if (!skipBackendCall && accessToken.value) {
+    if (!skipBackendCall) {
       try {
-        await apiClient.post('/auth/logout');
+        await apiClient.post('/auth/logout', null, { withCredentials: true });
       } catch (err) {
         // Continue with logout even if backend call fails
         window.logService.warn('Logout API call failed, continuing with local logout', {
@@ -74,7 +75,6 @@ export const useAuthStore = defineStore('auth', () => {
     // Clear state
     user.value = null;
     accessToken.value = null;
-    refreshToken.value = null;
     error.value = null;
 
     // Clear in-memory token storage
@@ -117,21 +117,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAccessToken() {
-    if (!refreshToken.value) {
-      throw new Error('No refresh token available');
-    }
-
     try {
-      const response = await apiClient.post('/auth/refresh', {
-        refresh_token: refreshToken.value,
+      const response = await apiClient.post('/auth/refresh', null, {
+        withCredentials: true,
       });
 
-      const { access_token, refresh_token: new_refresh_token } = response.data;
+      const { access_token } = response.data;
 
-      // Update tokens (token rotation)
+      // Update the short-lived access token in memory only.
       accessToken.value = access_token;
-      refreshToken.value = new_refresh_token;
-      persistTokens({ accessToken: access_token, refreshToken: new_refresh_token });
+      persistTokens({ accessToken: access_token });
 
       window.logService.debug('Access token refreshed');
 
@@ -192,8 +187,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data } = await apiClient.post(`/dev/login-as/${username}`);
       accessToken.value = data.access_token;
-      refreshToken.value = data.refresh_token;
-      persistTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
+      persistTokens({ accessToken: data.access_token });
       await fetchCurrentUser();
       window.logService.info('dev quick-login', { username });
       return true;
@@ -212,15 +206,38 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Initialize: Load user if token exists
   async function initialize() {
-    if (accessToken.value) {
+    if (initializationPromise) {
+      return initializationPromise;
+    }
+
+    initializationPromise = (async () => {
+      if (accessToken.value) {
+        try {
+          await fetchCurrentUser();
+        } catch (err) {
+          // Token might be expired, will be handled by interceptor
+          window.logService.warn('Failed to initialize user session', {
+            error: err.message,
+          });
+        }
+        return;
+      }
+
       try {
+        await refreshAccessToken();
         await fetchCurrentUser();
       } catch (err) {
-        // Token might be expired, will be handled by interceptor
         window.logService.warn('Failed to initialize user session', {
           error: err.message,
         });
       }
+    })();
+
+    try {
+      await initializationPromise;
+    } finally {
+      hasInitialized.value = true;
+      initializationPromise = null;
     }
   }
 
@@ -228,9 +245,9 @@ export const useAuthStore = defineStore('auth', () => {
     // State
     user,
     accessToken,
-    refreshToken,
     isLoading,
     error,
+    hasInitialized,
 
     // Getters
     isAuthenticated,

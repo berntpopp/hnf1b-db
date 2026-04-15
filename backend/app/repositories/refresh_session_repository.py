@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.refresh_session import RefreshSession
@@ -17,6 +17,13 @@ class RefreshSessionRepository:
     def __init__(self, db: AsyncSession):
         """Initialize the repository with an async database session."""
         self.db = db
+
+    @staticmethod
+    def _maybe_lock(
+        statement: Select[tuple[RefreshSession]], *, for_update: bool
+    ) -> Select[tuple[RefreshSession]]:
+        """Apply row locking when the caller needs transaction isolation."""
+        return statement.with_for_update() if for_update else statement
 
     async def create_session(
         self,
@@ -38,39 +45,48 @@ class RefreshSessionRepository:
             rotated_from_jti=rotated_from_jti,
         )
         self.db.add(session)
-        await self.db.commit()
-        await self.db.refresh(session)
+        await self.db.flush()
         return session
 
-    async def get_by_jti(self, token_jti: str) -> RefreshSession | None:
+    async def get_by_jti(
+        self, token_jti: str, *, for_update: bool = False
+    ) -> RefreshSession | None:
         """Fetch a refresh session by JWT ID."""
-        result = await self.db.execute(
-            select(RefreshSession).where(RefreshSession.token_jti == token_jti)
+        statement = self._maybe_lock(
+            select(RefreshSession).where(RefreshSession.token_jti == token_jti),
+            for_update=for_update,
         )
+        result = await self.db.execute(statement)
         return result.scalar_one_or_none()
 
     async def get_valid_session(
-        self, *, token_jti: str, user_id: int, current_session_version: int
+        self,
+        *,
+        token_jti: str,
+        user_id: int,
+        current_session_version: int,
+        for_update: bool = False,
     ) -> RefreshSession | None:
         """Fetch an active refresh session matching the user's current version."""
         now = datetime.now(timezone.utc)
-        result = await self.db.execute(
+        statement = self._maybe_lock(
             select(RefreshSession).where(
                 RefreshSession.token_jti == token_jti,
                 RefreshSession.user_id == user_id,
                 RefreshSession.session_version == current_session_version,
                 RefreshSession.revoked_at.is_(None),
                 RefreshSession.expires_at > now,
-            )
+            ),
+            for_update=for_update,
         )
+        result = await self.db.execute(statement)
         return result.scalar_one_or_none()
 
     async def revoke_session(self, session: RefreshSession) -> RefreshSession:
         """Mark one refresh session as revoked."""
         if session.revoked_at is None:
             session.revoked_at = datetime.now(timezone.utc)
-            await self.db.commit()
-            await self.db.refresh(session)
+            await self.db.flush()
         return session
 
     async def revoke_family(self, token_jti: str) -> int:

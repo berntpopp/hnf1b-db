@@ -1,15 +1,12 @@
 /**
- * session.spec.js — tab-scoped token session tests for src/api/session.js
- *
- * Verifies tokens are cached in memory, persisted to sessionStorage for the
- * lifetime of the browser tab, and legacy localStorage keys are purged.
+ * session.spec.js — in-memory access token and CSRF cookie helpers
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-describe('session — tab-scoped token session', () => {
+describe('session — in-memory access token only', () => {
   let clearTokens;
   let getAccessToken;
-  let getRefreshToken;
+  let getCsrfToken;
   let persistTokens;
 
   const localStorageMock = {
@@ -23,8 +20,7 @@ describe('session — tab-scoped token session', () => {
   };
 
   async function loadSessionModule() {
-    ({ clearTokens, getAccessToken, getRefreshToken, persistTokens } =
-      await import('@/api/session'));
+    ({ clearTokens, getAccessToken, getCsrfToken, persistTokens } = await import('@/api/session'));
   }
 
   beforeEach(async () => {
@@ -41,67 +37,59 @@ describe('session — tab-scoped token session', () => {
       writable: true,
       configurable: true,
     });
+    Object.defineProperty(globalThis, 'document', {
+      value: { cookie: '' },
+      writable: true,
+      configurable: true,
+    });
 
     await loadSessionModule();
   });
 
-  it('starts empty when the current tab has no stored tokens', () => {
+  it('starts with no in-memory access token and does not restore from sessionStorage', () => {
     expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBeNull();
-    expect(sessionStorageMock.getItem).toHaveBeenCalledWith('access_token');
-    expect(sessionStorageMock.getItem).toHaveBeenCalledWith('refresh_token');
+    expect(sessionStorageMock.getItem).not.toHaveBeenCalled();
   });
 
-  it('purges legacy localStorage token keys during module initialization', async () => {
+  it('purges legacy token keys from browser storage during module initialization', async () => {
     await loadSessionModule();
 
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+    expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+    expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
   });
 
-  it('persists tokens in memory and sessionStorage', () => {
-    persistTokens({ accessToken: 'a-tok', refreshToken: 'r-tok' });
+  it('persists only the access token in memory', () => {
+    persistTokens({ accessToken: 'a-tok', refreshToken: 'ignored-refresh-token' });
 
     expect(getAccessToken()).toBe('a-tok');
-    expect(getRefreshToken()).toBe('r-tok');
-    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('access_token', 'a-tok');
-    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'r-tok');
+    expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
   });
 
-  it('overwrites existing tokens on re-persist', () => {
-    persistTokens({ accessToken: 'old-a', refreshToken: 'old-r' });
-    persistTokens({ accessToken: 'new-a', refreshToken: 'new-r' });
-
-    expect(getAccessToken()).toBe('new-a');
-    expect(getRefreshToken()).toBe('new-r');
-  });
-
-  it('clears tokens from memory, sessionStorage, and legacy localStorage keys', () => {
-    persistTokens({ accessToken: 'a', refreshToken: 'r' });
+  it('clears the in-memory token and legacy browser storage keys', () => {
+    persistTokens({ accessToken: 'a' });
 
     localStorageMock.removeItem.mockClear();
     sessionStorageMock.removeItem.mockClear();
     clearTokens();
 
     expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBeNull();
     expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('access_token');
     expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
   });
 
-  it('restores tokens from sessionStorage on module load', async () => {
-    vi.resetModules();
-    sessionStorageMock.getItem.mockImplementation((key) => {
-      if (key === 'access_token') return 'saved-access';
-      if (key === 'refresh_token') return 'saved-refresh';
-      return null;
-    });
+  it('reads the readable CSRF cookie value', () => {
+    globalThis.document.cookie = 'theme=light; csrf_token=csrf-123; other=value';
 
-    await loadSessionModule();
+    expect(getCsrfToken()).toBe('csrf-123');
+  });
 
-    expect(getAccessToken()).toBe('saved-access');
-    expect(getRefreshToken()).toBe('saved-refresh');
+  it('returns null when the CSRF cookie is absent', () => {
+    globalThis.document.cookie = 'theme=light';
+
+    expect(getCsrfToken()).toBeNull();
   });
 });

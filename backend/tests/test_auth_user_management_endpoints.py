@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from app.auth.password import get_password_hash
+from app.core.config import settings
 from app.models.user import User
 
 
@@ -33,6 +34,22 @@ async def _seed_system_migration(db_session) -> User:
     await db_session.commit()
     await db_session.refresh(placeholder)
     return placeholder
+
+
+def _auth_cookies(response) -> dict[str, str]:
+    """Extract auth cookies from a login response."""
+    return {
+        settings.REFRESH_COOKIE_NAME: response.cookies[settings.REFRESH_COOKIE_NAME],
+        settings.CSRF_COOKIE_NAME: response.cookies[settings.CSRF_COOKIE_NAME],
+    }
+
+
+def _cookie_headers(cookies: dict[str, str]) -> dict[str, str]:
+    """Build request headers for cookie-authenticated routes."""
+    return {
+        "x-csrf-token": cookies[settings.CSRF_COOKIE_NAME],
+        "cookie": "; ".join(f"{name}={value}" for name, value in cookies.items()),
+    }
 
 
 @pytest.mark.asyncio
@@ -93,6 +110,48 @@ async def test_create_then_update_then_unlock_then_delete_user(
         headers=admin_headers,
     )
     assert delete_resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_deactivate_user_invalidates_existing_refresh_cookie(
+    async_client, admin_headers
+):
+    """Admin deactivation should revoke the target user's refresh capability."""
+    create_resp = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "inactive-probe",
+            "email": "inactive-probe@example.com",
+            "password": "InactiveProbe!2026",
+            "full_name": "Inactive Probe",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    assert create_resp.status_code == 201
+    user_id = create_resp.json()["id"]
+
+    login_resp = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": "inactive-probe", "password": "InactiveProbe!2026"},
+    )
+    assert login_resp.status_code == 200
+    cookies = _auth_cookies(login_resp)
+
+    deactivate_resp = await async_client.put(
+        f"/api/v2/auth/users/{user_id}",
+        json={"is_active": False},
+        headers=admin_headers,
+    )
+    assert deactivate_resp.status_code == 200
+    assert deactivate_resp.json()["is_active"] is False
+
+    refresh_resp = await async_client.post(
+        "/api/v2/auth/refresh",
+        headers=_cookie_headers(cookies),
+    )
+    assert refresh_resp.status_code == 401
+    assert "invalid" in refresh_resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

@@ -37,14 +37,19 @@ implemented in Tasks 11 and 12 of the Wave 5a foundations plan.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import create_access_token, create_refresh_token
+from app.auth.session_cookies import set_auth_cookies
+from app.auth.tokens import create_access_token, create_refresh_token, verify_token
 from app.core.config import settings
 from app.database import get_db
+from app.repositories.refresh_session_repository import RefreshSessionRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import Token
 
@@ -99,10 +104,13 @@ def _require_loopback(request: Request) -> None:
         )
 
 
-@router.post("/login-as/{username}", response_model=Token)
+@router.post(
+    "/login-as/{username}", response_model=Token, response_model_exclude_none=True
+)
 async def dev_login_as(
     username: str,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(_require_loopback),
 ) -> Token:
@@ -136,10 +144,23 @@ async def dev_login_as(
         role=user.role,
         permissions=user.get_permissions(),
     )
+    refresh_repo = RefreshSessionRepository(db)
     refresh_token = create_refresh_token(
         subject=user.username, session_version=user.session_version
     )
-    await repo.update_refresh_token(user, refresh_token)
+    refresh_payload = verify_token(refresh_token, token_type="refresh")
+    await refresh_repo.create_session(
+        user_id=user.id,
+        token_jti=refresh_payload["jti"],
+        token_sha256=hashlib.sha256(refresh_token.encode("utf-8")).hexdigest(),
+        session_version=user.session_version,
+        expires_at=datetime.fromtimestamp(refresh_payload["exp"], tz=timezone.utc),
+    )
+    set_auth_cookies(
+        response,
+        refresh_token=refresh_token,
+        csrf_token=secrets.token_urlsafe(32),
+    )
     await db.commit()
 
     logger.warning(
@@ -150,7 +171,6 @@ async def dev_login_as(
 
     return Token(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )

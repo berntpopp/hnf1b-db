@@ -185,6 +185,28 @@ async def get_optional_user(
     return await get_current_user(credentials=credentials, db=db)
 
 
+async def get_best_effort_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Return the authenticated user when the bearer token is valid.
+
+    This helper is intentionally tolerant of invalid or expired bearer tokens
+    so cookie-backed logout can still proceed and clear auth cookies.
+    """
+    if not request.headers.get("Authorization"):
+        return None
+
+    credentials = await _optional_security(request)
+    if credentials is None:
+        return None
+
+    try:
+        return await get_current_user(credentials=credentials, db=db)
+    except HTTPException:
+        return None
+
+
 async def require_csrf_token(request: Request) -> None:
     """Require a matching CSRF cookie and header for cookie-auth flows."""
     cookie_token = request.cookies.get(settings.CSRF_COOKIE_NAME)

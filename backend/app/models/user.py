@@ -27,7 +27,7 @@ class User(Base):
         last_login: Last successful login timestamp
         failed_login_attempts: Failed login counter for lockout
         locked_until: Account lock expiration timestamp
-        refresh_token: Current refresh token (rotated on use)
+        refresh_token: Legacy raw refresh token column kept for migration compatibility
         created_at: Account creation timestamp
         updated_at: Last update timestamp
     """

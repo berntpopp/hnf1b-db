@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.auth.dependencies import require_csrf_token
+from app.auth import dependencies as auth_dependencies
+from app.auth.dependencies import get_best_effort_user, require_csrf_token
 from app.auth.session_cookies import clear_auth_cookies, set_auth_cookies
-from app.core.config import Settings
+from app.core.config import Settings, settings
 
 
 def _request_with_csrf(*, cookie: str | None, header: str | None) -> Request:
@@ -41,7 +43,14 @@ def test_set_auth_cookies_sets_refresh_and_csrf_cookies():
     )
     assert any("csrf_token=csrf-token" in header for header in set_cookie_headers)
     assert any("SameSite=lax" in header for header in set_cookie_headers)
-    assert any("Path=/api/v2" in header for header in set_cookie_headers)
+    assert any(
+        "refresh_token=refresh-token" in header and "Path=/api/v2" in header
+        for header in set_cookie_headers
+    )
+    assert any(
+        "csrf_token=csrf-token" in header and "Path=/" in header
+        for header in set_cookie_headers
+    )
 
 
 def test_clear_auth_cookies_expires_refresh_and_csrf_cookies():
@@ -95,6 +104,45 @@ async def test_require_csrf_token_accepts_matching_cookie_and_header():
     assert await require_csrf_token(request) is None
 
 
+@pytest.mark.asyncio
+async def test_get_best_effort_user_handles_missing_credentials_from_security(
+    monkeypatch,
+):
+    """Best-effort auth returns None if optional security yields no credentials."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v2/auth/logout",
+            "headers": [(b"authorization", b"Bearer token")],
+        }
+    )
+
+    async def fake_optional_security(_request):
+        return None
+
+    monkeypatch.setattr(auth_dependencies, "_optional_security", fake_optional_security)
+
+    assert await get_best_effort_user(request, db=None) is None
+
+
+async def test_cors_preflight_allows_csrf_header(async_client):
+    """CORS preflight admits the double-submit CSRF header."""
+    response = await async_client.options(
+        "/api/v2/auth/refresh",
+        headers={
+            "Origin": settings.get_cors_origins_list()[0],
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-csrf-token",
+        },
+    )
+
+    assert response.status_code == 200
+    allow_headers = response.headers["access-control-allow-headers"].lower()
+    assert "content-type" in allow_headers
+    assert "x-csrf-token" in allow_headers
+
+
 def test_settings_expose_cookie_defaults():
     """Settings expose explicit auth-cookie defaults for the backend contract."""
     settings = Settings(
@@ -105,4 +153,5 @@ def test_settings_expose_cookie_defaults():
     assert settings.REFRESH_COOKIE_NAME == "refresh_token"
     assert settings.CSRF_COOKIE_NAME == "csrf_token"
     assert settings.AUTH_COOKIE_PATH == "/api/v2"
+    assert settings.CSRF_COOKIE_PATH == "/"
     assert settings.AUTH_COOKIE_SAMESITE == "lax"

@@ -1,107 +1,62 @@
-// src/api/session.js — tab-scoped token storage (sessionStorage + in-memory cache)
+// src/api/session.js — in-memory access token helper + readable CSRF cookie access
 
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
-let accessToken = readSessionStorageToken(ACCESS_TOKEN_KEY);
-let refreshToken = readSessionStorageToken(REFRESH_TOKEN_KEY);
-const LEGACY_TOKEN_KEYS = ['access_token', 'refresh_token'];
+const CSRF_COOKIE_KEY = 'csrf_token';
+const LEGACY_TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY];
 
-function readSessionStorageToken(key) {
+let accessToken = null;
+
+function removeFromStorage(storage) {
   try {
-    return globalThis.sessionStorage?.getItem(key) ?? null;
+    if (!storage) {
+      return;
+    }
+
+    for (const key of LEGACY_TOKEN_KEYS) {
+      storage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage access failures (private mode, SSR, locked-down browser).
+  }
+}
+
+function purgeLegacyBrowserTokenStorage() {
+  removeFromStorage(globalThis.localStorage);
+  removeFromStorage(globalThis.sessionStorage);
+}
+
+purgeLegacyBrowserTokenStorage();
+
+export function getAccessToken() {
+  return accessToken;
+}
+
+export function getCsrfToken() {
+  try {
+    const cookieString = globalThis.document?.cookie ?? '';
+    const cookie = cookieString
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${CSRF_COOKIE_KEY}=`));
+
+    return cookie ? decodeURIComponent(cookie.slice(CSRF_COOKIE_KEY.length + 1)) : null;
   } catch {
     return null;
   }
 }
 
-function writeSessionStorageToken(key, value) {
-  try {
-    if (!globalThis.sessionStorage) {
-      return;
-    }
-    if (value == null) {
-      globalThis.sessionStorage.removeItem(key);
-    } else {
-      globalThis.sessionStorage.setItem(key, value);
-    }
-  } catch {
-    // Ignore storage access failures (private mode, SSR, locked-down browser).
-  }
-}
-
-function purgeLegacyLocalStorageTokens() {
-  try {
-    if (!globalThis.localStorage) {
-      return;
-    }
-
-    for (const key of LEGACY_TOKEN_KEYS) {
-      globalThis.localStorage.removeItem(key);
-    }
-  } catch {
-    // Ignore storage access failures (private mode, SSR, locked-down browser).
-  }
-}
-
-purgeLegacyLocalStorageTokens();
-
-/**
- * Read the access token from the current tab session store.
- * @returns {string|null} The stored access token, or null if absent.
- */
-export function getAccessToken() {
-  return accessToken;
-}
-
-/**
- * Read the refresh token from the current tab session store.
- * @returns {string|null} The stored refresh token, or null if absent.
- */
-export function getRefreshToken() {
-  return refreshToken;
-}
-
-/**
- * Persist one or both tokens to the current tab session store.
- * Only writes the values that are provided.
- * @param {Object} tokens
- * @param {string} [tokens.accessToken] - Access token to store
- * @param {string} [tokens.refreshToken] - Refresh token to store
- */
-export function persistTokens({ accessToken, refreshToken } = {}) {
-  if (accessToken !== undefined) {
-    setAccessToken(accessToken);
-  }
-  if (refreshToken !== undefined) {
-    setRefreshToken(refreshToken);
-  }
-}
-
-/**
- * Replace the access token for the current browser tab.
- * @param {string|null} token
- */
 export function setAccessToken(token) {
-  accessToken = token;
-  writeSessionStorageToken(ACCESS_TOKEN_KEY, token);
+  accessToken = token ?? null;
 }
 
-/**
- * Replace the refresh token for the current browser tab.
- * @param {string|null} token
- */
-export function setRefreshToken(token) {
-  refreshToken = token;
-  writeSessionStorageToken(REFRESH_TOKEN_KEY, token);
+export function persistTokens({ accessToken: nextAccessToken } = {}) {
+  if (nextAccessToken !== undefined) {
+    setAccessToken(nextAccessToken);
+  }
 }
 
-/**
- * Remove both tokens from the current tab session store.
- */
 export function clearTokens() {
   accessToken = null;
-  refreshToken = null;
-  writeSessionStorageToken(ACCESS_TOKEN_KEY, null);
-  writeSessionStorageToken(REFRESH_TOKEN_KEY, null);
-  purgeLegacyLocalStorageTokens();
+  purgeLegacyBrowserTokenStorage();
 }
