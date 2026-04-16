@@ -7,10 +7,16 @@ on list, full CRUD round-trip, and self-delete protection.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.password import get_password_hash
 from app.core.config import settings
 from app.models.user import User
+from app.repositories.user_repository import (
+    UserEmailConflictError,
+    UserRepository,
+)
+from app.schemas.auth import UserUpdateAdmin
 
 
 async def _seed_system_migration(db_session) -> User:
@@ -152,6 +158,124 @@ async def test_deactivate_user_invalidates_existing_refresh_cookie(
     )
     assert refresh_resp.status_code == 401
     assert "invalid" in refresh_resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_update_user_rejects_duplicate_email(async_client, admin_headers):
+    """PUT /auth/users/{id} returns 409 when email matches another user."""
+    first_resp = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "duplicate-email-a",
+            "email": "duplicate-email-a@example.com",
+            "password": "DuplicateEmailA!2026",
+            "full_name": "Duplicate Email A",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    assert first_resp.status_code == 201
+
+    second_resp = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "duplicate-email-b",
+            "email": "duplicate-email-b@example.com",
+            "password": "DuplicateEmailB!2026",
+            "full_name": "Duplicate Email B",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    assert second_resp.status_code == 201
+
+    response = await async_client.put(
+        f"/api/v2/auth/users/{second_resp.json()['id']}",
+        json={"email": "duplicate-email-a@example.com"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_user_repository_normalizes_integrity_error_on_email_update(
+    db_session, monkeypatch
+):
+    """Repository update normalizes a lower-level duplicate-email IntegrityError."""
+    existing_user = User(
+        username="repo-email-a",
+        email="repo-email-a@example.com",
+        hashed_password=get_password_hash("RepoEmailA!2026"),
+        full_name="Repo Email A",
+        role="viewer",
+        is_active=True,
+        is_verified=False,
+    )
+    target_user = User(
+        username="repo-email-b",
+        email="repo-email-b@example.com",
+        hashed_password=get_password_hash("RepoEmailB!2026"),
+        full_name="Repo Email B",
+        role="viewer",
+        is_active=True,
+        is_verified=False,
+    )
+    db_session.add_all([existing_user, target_user])
+    await db_session.commit()
+    await db_session.refresh(existing_user)
+    await db_session.refresh(target_user)
+
+    repo = UserRepository(db_session)
+
+    async def fake_commit():
+        raise IntegrityError(
+            "UPDATE users SET email = ...",
+            params={"email": "repo-email-a@example.com"},
+            orig=type("FakeOrig", (), {"sqlstate": "23505"})(),
+        )
+
+    monkeypatch.setattr(db_session, "commit", fake_commit)
+
+    with pytest.raises(UserEmailConflictError) as excinfo:
+        await repo.update(
+            target_user, UserUpdateAdmin(email="repo-email-c@example.com")
+        )
+
+    assert "already exists" in str(excinfo.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_user_repository_reraises_non_unique_integrity_error_on_email_update(
+    db_session, monkeypatch
+):
+    """Repository re-raises unrelated IntegrityError values unchanged."""
+    target_user = User(
+        username="repo-email-non-unique",
+        email="repo-email-non-unique@example.com",
+        hashed_password=get_password_hash("RepoEmailNonUnique!2026"),
+        full_name="Repo Email Non Unique",
+        role="viewer",
+        is_active=True,
+        is_verified=False,
+    )
+    db_session.add(target_user)
+    await db_session.commit()
+    await db_session.refresh(target_user)
+
+    repo = UserRepository(db_session)
+
+    async def fake_commit():
+        raise IntegrityError(
+            "UPDATE users SET full_name = ...",
+            params={"full_name": "Updated Name"},
+            orig=type("FakeOrig", (), {"sqlstate": "23503"})(),
+        )
+
+    monkeypatch.setattr(db_session, "commit", fake_commit)
+
+    with pytest.raises(IntegrityError):
+        await repo.update(target_user, UserUpdateAdmin(full_name="Updated Name"))
 
 
 @pytest.mark.asyncio

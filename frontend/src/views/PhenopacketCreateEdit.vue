@@ -277,8 +277,9 @@ export default {
         // Capture state for toast message selection (Wave 7/D.1 §9.2)
         this.savedRecordState = response.data.state ?? null;
 
-        // Load existing publications from metaData.externalReferences
-        this.publications = (this.phenopacket.metaData?.externalReferences || [])
+        // Load existing publications into the same state the template and
+        // submit path use so edits stay round-trippable.
+        this.phenopacket.publications = (this.phenopacket.metaData?.externalReferences || [])
           .filter((ref) => ref.id?.startsWith('PMID:'))
           .map((ref) => ({
             pmid: ref.id.replace('PMID:', ''),
@@ -287,7 +288,7 @@ export default {
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
           revision: this.revision,
-          publicationsLoaded: this.publications.length,
+          publicationsLoaded: this.phenopacket.publications.length,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
@@ -307,6 +308,27 @@ export default {
 
     removePublication(index) {
       this.phenopacket.publications.splice(index, 1);
+    },
+
+    buildSubmissionPhenopacket() {
+      const existingReferences = this.phenopacket.metaData?.externalReferences || [];
+      const nonPmidExternalReferences = existingReferences.filter(
+        (ref) => !ref.id?.startsWith('PMID:')
+      );
+      const pmidExternalReferences = this.phenopacket.publications
+        .map((pub) => `${pub.pmid || ''}`.trim())
+        .filter(Boolean)
+        .map((pmid) => ({
+          id: `PMID:${pmid}`,
+        }));
+
+      return {
+        ...this.phenopacket,
+        metaData: {
+          ...(this.phenopacket.metaData || {}),
+          externalReferences: [...nonPmidExternalReferences, ...pmidExternalReferences],
+        },
+      };
     },
 
     async handleSubmit() {
@@ -335,11 +357,12 @@ export default {
 
       try {
         let result;
+        const phenopacketPayload = this.buildSubmissionPhenopacket();
 
         if (this.isEditing) {
           // Update existing phenopacket with optimistic locking and audit trail
           result = await updatePhenopacket(this.phenopacket.id, {
-            phenopacket: this.phenopacket,
+            phenopacket: phenopacketPayload,
             revision: this.revision,
             change_reason: this.changeReason,
           });
@@ -369,7 +392,7 @@ export default {
         } else {
           // Create new phenopacket
           result = await createPhenopacket({
-            phenopacket: this.phenopacket,
+            phenopacket: phenopacketPayload,
           });
 
           window.logService.info('Phenopacket created successfully', {

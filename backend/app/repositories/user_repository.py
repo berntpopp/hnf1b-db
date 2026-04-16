@@ -3,12 +3,22 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.password import get_password_hash
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserUpdateAdmin, UserUpdatePublic
+
+
+class UserEmailConflictError(Exception):
+    """Raised when an update would violate the unique email constraint."""
+
+
+def _duplicate_email_message(email: str) -> str:
+    """Return the canonical duplicate-email conflict message."""
+    return f"Email '{email}' already exists"
 
 
 class UserRepository:
@@ -99,6 +109,11 @@ class UserRepository:
         Returns:
             Updated user instance
         """
+        if user_data.email is not None:
+            existing_user = await self.get_by_email(user_data.email)
+            if existing_user is not None and existing_user.id != user.id:
+                raise UserEmailConflictError(_duplicate_email_message(user_data.email))
+
         # Update only provided fields
         if user_data.email is not None:
             user.email = user_data.email
@@ -120,7 +135,17 @@ class UserRepository:
 
         user.updated_at = datetime.now(timezone.utc)
 
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            if user_data.email is not None:
+                sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+                if sqlstate == "23505":
+                    raise UserEmailConflictError(
+                        _duplicate_email_message(user_data.email)
+                    ) from exc
+            raise
         await self.db.refresh(user)
         return user
 
