@@ -16,6 +16,11 @@ class UserEmailConflictError(Exception):
     """Raised when an update would violate the unique email constraint."""
 
 
+def _duplicate_email_message(email: str) -> str:
+    """Return the canonical duplicate-email conflict message."""
+    return f"Email '{email}' already exists"
+
+
 class UserRepository:
     """Repository for user CRUD operations."""
 
@@ -107,9 +112,7 @@ class UserRepository:
         if user_data.email is not None:
             existing_user = await self.get_by_email(user_data.email)
             if existing_user is not None and existing_user.id != user.id:
-                raise UserEmailConflictError(
-                    f"Email '{user_data.email}' already exists"
-                )
+                raise UserEmailConflictError(_duplicate_email_message(user_data.email))
 
         # Update only provided fields
         if user_data.email is not None:
@@ -140,7 +143,7 @@ class UserRepository:
                 sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
                 if sqlstate == "23505":
                     raise UserEmailConflictError(
-                        f"Email '{user_data.email}' already exists"
+                        _duplicate_email_message(user_data.email)
                     ) from exc
             raise
         await self.db.refresh(user)
