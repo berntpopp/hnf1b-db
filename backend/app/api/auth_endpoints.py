@@ -34,7 +34,7 @@ from app.models.credential_token import CredentialToken
 from app.models.refresh_session import RefreshSession
 from app.models.user import User
 from app.repositories.refresh_session_repository import RefreshSessionRepository
-from app.repositories.user_repository import UserRepository
+from app.repositories.user_repository import UserEmailConflictError, UserRepository
 from app.schemas.auth import (
     InviteAcceptRequest,
     InviteRequest,
@@ -683,7 +683,13 @@ async def update_user(
     )
 
     # Update user
-    updated_user = await repo.update(user, user_data)
+    try:
+        updated_user = await repo.update(user, user_data)
+    except UserEmailConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     if should_revoke_refresh_capability:
         await _revoke_all_refresh_capability(updated_user, db)
 
