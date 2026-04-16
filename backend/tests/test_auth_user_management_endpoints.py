@@ -238,7 +238,9 @@ async def test_user_repository_normalizes_integrity_error_on_email_update(
     monkeypatch.setattr(db_session, "commit", fake_commit)
 
     with pytest.raises(UserEmailConflictError) as excinfo:
-        await repo.update(target_user, UserUpdateAdmin(email="repo-email-c@example.com"))
+        await repo.update(
+            target_user, UserUpdateAdmin(email="repo-email-c@example.com")
+        )
 
     assert "already exists" in str(excinfo.value).lower()
 
