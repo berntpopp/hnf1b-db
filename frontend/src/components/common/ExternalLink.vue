@@ -3,15 +3,16 @@
     :href="href"
     target="_blank"
     rel="noopener noreferrer"
-    :aria-label="ariaLabel || undefined"
+    :aria-label="ariaLabel"
     class="external-link"
   >
     <slot />
     <v-icon
       v-if="showIcon"
-      class="external-link__icon mdi-open-in-new"
+      class="external-link__icon"
       size="x-small"
       aria-hidden="true"
+      data-testid="external-link-icon"
     >
       mdi-open-in-new
     </v-icon>
@@ -22,7 +23,7 @@
 <script setup>
 defineProps({
   href: { type: String, required: true },
-  ariaLabel: { type: String, default: '' },
+  ariaLabel: { type: String, default: undefined },
   showIcon: { type: Boolean, default: true },
 });
 </script>

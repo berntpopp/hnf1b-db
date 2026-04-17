@@ -20,7 +20,10 @@ describe('ExternalLink', () => {
       props: { href: 'https://example.com/a' },
       slots: { default: 'Link text' },
     });
-    expect(wrapper.find('.mdi-open-in-new').exists()).toBe(true);
+    const icon = wrapper.find('[data-testid="external-link-icon"]');
+    expect(icon.exists()).toBe(true);
+    // Vuetify VIcon maps slot content to a CSS class on the rendered <i>
+    expect(icon.classes()).toContain('mdi-open-in-new');
   });
 
   it('suppresses the icon when showIcon=false', () => {
@@ -28,7 +31,7 @@ describe('ExternalLink', () => {
       props: { href: 'https://example.com/a', showIcon: false },
       slots: { default: 'Link text' },
     });
-    expect(wrapper.find('.mdi-open-in-new').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="external-link-icon"]').exists()).toBe(false);
   });
 
   it('applies aria-label when provided', () => {
@@ -37,6 +40,14 @@ describe('ExternalLink', () => {
       slots: { default: 'Docs' },
     });
     expect(wrapper.get('a').attributes('aria-label')).toBe('Open example docs');
+  });
+
+  it('omits aria-label attribute when not provided', () => {
+    const wrapper = mount(ExternalLink, {
+      props: { href: 'https://example.com/a' },
+      slots: { default: 'Link' },
+    });
+    expect(wrapper.get('a').attributes('aria-label')).toBeUndefined();
   });
 
   it('exposes a visually-hidden "opens in new tab" suffix for screen readers', () => {
