@@ -1,5 +1,52 @@
 <template>
   <div class="comment-composer">
+    <div
+      class="composer-toolbar d-flex align-center ga-1 mb-2"
+      data-testid="composer-toolbar"
+      role="toolbar"
+      aria-label="Comment formatting"
+    >
+      <v-btn
+        icon
+        size="small"
+        variant="text"
+        aria-label="Bold"
+        :disabled="!editor"
+        @click="editor?.chain().focus().toggleBold().run()"
+      >
+        <v-icon>mdi-format-bold</v-icon>
+      </v-btn>
+      <v-btn
+        icon
+        size="small"
+        variant="text"
+        aria-label="Italic"
+        :disabled="!editor"
+        @click="editor?.chain().focus().toggleItalic().run()"
+      >
+        <v-icon>mdi-format-italic</v-icon>
+      </v-btn>
+      <v-btn
+        icon
+        size="small"
+        variant="text"
+        aria-label="Insert link"
+        :disabled="!editor"
+        @click="insertLink"
+      >
+        <v-icon>mdi-link-variant</v-icon>
+      </v-btn>
+      <v-btn
+        icon
+        size="small"
+        variant="text"
+        aria-label="Mention user"
+        :disabled="!editor"
+        @click="insertMentionTrigger"
+      >
+        <v-icon>mdi-at</v-icon>
+      </v-btn>
+    </div>
     <editor-content :editor="editor" class="composer-editor" />
     <Teleport to="body">
       <div
@@ -21,7 +68,13 @@
       <v-btn v-if="editingComment" variant="text" class="ml-2" @click="$emit('cancel')">
         Cancel
       </v-btn>
-      <span class="ml-3 text-caption text-medium-emphasis"> {{ charCount }} / 10000 </span>
+      <span
+        id="composer-char-count"
+        class="ml-3 text-caption text-medium-emphasis"
+        aria-live="polite"
+      >
+        {{ charCount }} / 10000
+      </span>
     </div>
   </div>
 </template>
@@ -31,6 +84,7 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
+import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
 import { searchMentionableUsers } from '@/api/domain/comments';
 import MentionSuggestionList from './MentionSuggestionList.vue';
@@ -105,7 +159,13 @@ const mentionExtension = Mention.configure({
 
 const editor = useEditor({
   content: content.value,
-  extensions: [StarterKit, Markdown, mentionExtension],
+  extensions: [StarterKit, Markdown, mentionExtension, Link],
+  editorProps: {
+    attributes: {
+      'aria-label': 'Comment body',
+      'aria-describedby': 'composer-char-count',
+    },
+  },
   onUpdate: ({ editor: ed }) => {
     content.value = ed.storage.markdown.getMarkdown();
   },
@@ -128,6 +188,18 @@ const collectMentions = () => {
     }
   });
   return Array.from(new Set(ids));
+};
+
+const insertLink = () => {
+  if (!editor.value) return;
+  const url = window.prompt('Enter URL');
+  if (!url) return;
+  editor.value.chain().focus().setLink({ href: url }).run();
+};
+
+const insertMentionTrigger = () => {
+  if (!editor.value) return;
+  editor.value.chain().focus().insertContent('@').run();
 };
 
 const onSubmit = () => {

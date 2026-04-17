@@ -99,3 +99,34 @@ test.describe('Keyboard row activation (H3)', () => {
     expect(href).toMatch(/^\/publications\//);
   });
 });
+
+test.describe('Tiptap composer accessibility (H5)', () => {
+  test('Discussion composer exposes aria-label and a formatting toolbar', async ({
+    page,
+    request,
+  }) => {
+    const { apiLogin, primeAuthSession } = await import('./helpers/auth.js');
+    const apiBase = process.env.E2E_API_BASE || 'http://localhost:8000/api/v2';
+    const auth = await apiLogin(request, apiBase, 'dev-admin', 'DevAdmin!2026');
+    await primeAuthSession(page, auth);
+
+    await page.goto('/phenopackets');
+    await page.waitForLoadState('networkidle');
+    const firstChip = page.locator('table a.v-chip').first();
+    await firstChip.click();
+    await page.waitForLoadState('networkidle');
+
+    const discussionTab = page.getByRole('tab', { name: /discussion/i });
+    if (await discussionTab.count()) {
+      await discussionTab.click();
+    }
+
+    const editor = page.locator('.comment-composer .ProseMirror');
+    await editor.waitFor({ state: 'visible' });
+    await expect(editor).toHaveAttribute('aria-label', /comment body/i);
+
+    await expect(page.locator('.comment-composer [data-testid="composer-toolbar"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: /bold/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /italic/i })).toBeVisible();
+  });
+});
