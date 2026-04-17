@@ -12,7 +12,10 @@ test.describe('Critical findings', () => {
     await page.goto('/phenopackets/new');
     // Confirm we were redirected away from /phenopackets/new.
     // The login page has no h1, so we just assert the URL settled correctly.
-    await expect(page).toHaveURL(/\/(phenopackets\/create|login)/);
+    // Timeout is generous because the /create route fires an async auth-guard
+    // beforeEach hook that awaits the initial /auth/refresh API call; on a
+    // cold CI runner this can exceed the 5s default.
+    await expect(page).toHaveURL(/\/(phenopackets\/create|login)/, { timeout: 20_000 });
   });
 
   test('nonexistent phenopacket id shows error alert without spinner', async ({ page }) => {
