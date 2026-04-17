@@ -43,3 +43,25 @@ test('external anchors on a publication detail page carry rel', async ({ page })
   await page.waitForLoadState('networkidle');
   await assertExternalLinkRels(page);
 });
+
+test.describe('Real h1 on list + create views (H2)', () => {
+  for (const path of ['/phenopackets', '/publications', '/variants']) {
+    test(`${path} exposes an h1`, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await expect(page.locator('h1')).toHaveCount(1);
+      const text = await page.locator('h1').innerText();
+      expect(text.length).toBeGreaterThan(0);
+    });
+  }
+
+  test('/phenopackets/create exposes an h1', async ({ page, request }) => {
+    const { apiLogin, primeAuthSession } = await import('./helpers/auth.js');
+    const apiBase = process.env.E2E_API_BASE || 'http://localhost:8000/api/v2';
+    const auth = await apiLogin(request, apiBase, 'dev-admin', 'DevAdmin!2026');
+    await primeAuthSession(page, auth);
+    await page.goto('/phenopackets/create');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('h1')).toBeVisible();
+  });
+});
