@@ -65,3 +65,37 @@ test.describe('Real h1 on list + create views (H2)', () => {
     await expect(page.locator('h1')).toBeVisible();
   });
 });
+
+test.describe('Keyboard row activation (H3)', () => {
+  test('Tab reaches first subject-id chip on /phenopackets and Enter navigates', async ({
+    page,
+  }) => {
+    await page.goto('/phenopackets');
+    await page.waitForLoadState('networkidle');
+    const firstChipAnchor = page.locator('table a.v-chip').first();
+    await firstChipAnchor.waitFor({ state: 'visible' });
+    const href = await firstChipAnchor.getAttribute('href');
+    expect(href).toMatch(/^\/phenopackets\/[^/]+$/);
+    await firstChipAnchor.focus();
+    await firstChipAnchor.press('Enter');
+    await page.waitForURL(/\/phenopackets\/[^/]+$/, { timeout: 5000 });
+  });
+
+  test('/variants first chip is a keyboard-reachable anchor', async ({ page }) => {
+    await page.goto('/variants');
+    await page.waitForLoadState('networkidle');
+    const firstChipAnchor = page.locator('table a.v-chip').first();
+    await firstChipAnchor.waitFor({ state: 'visible' });
+    const href = await firstChipAnchor.getAttribute('href');
+    expect(href).toMatch(/^\/variants\//);
+  });
+
+  test('/publications PMID chip is a keyboard-reachable anchor', async ({ page }) => {
+    await page.goto('/publications');
+    await page.waitForLoadState('networkidle');
+    const firstChipAnchor = page.locator('table a.v-chip[href*="/publications/"]').first();
+    await firstChipAnchor.waitFor({ state: 'visible' });
+    const href = await firstChipAnchor.getAttribute('href');
+    expect(href).toMatch(/^\/publications\//);
+  });
+});

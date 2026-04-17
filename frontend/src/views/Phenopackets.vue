@@ -115,7 +115,12 @@
 
       <!-- Render subject ID with chip -->
       <template #item.subject_id="{ item }">
-        <v-chip color="teal-lighten-3" size="x-small" variant="flat">
+        <v-chip
+          :to="{ name: 'PagePhenopacket', params: { phenopacket_id: item.phenopacket_id } }"
+          color="teal-lighten-3"
+          size="x-small"
+          variant="flat"
+        >
           <v-icon start size="x-small">mdi-card-account-details</v-icon>
           {{ item.subject_id || 'N/A' }}
         </v-chip>
