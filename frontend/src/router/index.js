@@ -33,6 +33,8 @@ const routes = [
       ),
     meta: { title: 'Edit Phenopacket', requiresAuth: true },
   },
+  // /new is a common curator guess — alias to the real create route.
+  { path: '/phenopackets/new', redirect: '/phenopackets/create' },
   {
     path: '/phenopackets/:phenopacket_id',
     name: 'PagePhenopacket',

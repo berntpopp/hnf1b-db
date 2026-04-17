@@ -261,7 +261,7 @@
           </v-card>
 
           <!-- Loading State -->
-          <v-card v-else variant="outlined" class="border-opacity-12" rounded="lg">
+          <v-card v-else-if="!error" variant="outlined" class="border-opacity-12" rounded="lg">
             <v-card-text class="text-center py-12">
               <v-progress-circular
                 indeterminate
