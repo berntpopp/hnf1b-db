@@ -36,8 +36,9 @@ for (const path of PAGES_WITH_EXTERNAL_LINKS) {
 test('external anchors on a publication detail page carry rel', async ({ page }) => {
   await page.goto('/publications');
   await page.waitForLoadState('networkidle');
+  // Explicit selector wait guards against slow list hydration under CI.
+  await page.waitForSelector('a.v-chip[href*="/publications/"]', { state: 'visible' });
   const firstPmidChip = page.locator('a.v-chip[href*="/publications/"]').first();
-  await firstPmidChip.waitFor({ state: 'visible' });
   await firstPmidChip.click();
   await page.waitForLoadState('networkidle');
   await assertExternalLinkRels(page);
