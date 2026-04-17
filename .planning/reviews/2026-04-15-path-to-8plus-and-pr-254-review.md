@@ -1,378 +1,300 @@
-# HNF1B-DB Path To >8.0 And Current PR Review
+# HNF1B-DB Path To >8.0 And PR #254 Review
 
-> Status: This review remains a supporting assessment. The current execution source of truth is `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
+> Status: Updated 2026-04-17. The 2026-04-15 version of this review treated PR #254
+> as open and argued the platform was not yet at >8. Both premises have since
+> shifted: PR #254 merged on 2026-04-15 (merge commit `fec235f`), and the
+> companion hardening PRs #255–#259 and #261 landed inside the following 48
+> hours. Verification against `main` on 2026-04-17 puts the platform at a
+> defensible 8.0, with a narrow list of remaining gaps. See the companion
+> document `.planning/reviews/2026-04-15-senior-codebase-platform-review.md`
+> for the detailed file-level evidence.
+>
+> The current execution source of truth is
+> `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
 
-Date: 2026-04-15
+Date: 2026-04-15 (original) / 2026-04-17 (revision)
 Scope:
-- current codebase state on local `main`
+- `main` as of commit `195c7c1` (2026-04-17)
 - historical plans, exit notes, and deferred items
-- current open PR `#254` (`feat(wave-7-d2): effective-state routing + comments/edits/mentions`)
-- current external best practices for code review, API security, FastAPI, SQLAlchemy async, and Vue testing
+- PR #254 (merged `fec235f`) and follow-up PRs #255–#259, #261
+- current primary best-practice sources (OWASP, SQLAlchemy, Vue, WCAG 2.2,
+  GA4GH, Playwright, OpenTelemetry, Sentry)
 
 References reviewed:
-- `.planning/reviews/codebase-best-practices-review-2026-04-09.md`
+- `.planning/reviews/2026-04-12-09-codebase-best-practices-review.md`
 - `.planning/reviews/2026-04-11-platform-readiness-review.md`
-- `.planning/archive/reviews/codebase-review-wave-6-rescore.md`
-- `.planning/archive/reviews/wave-5-exit.md`
-- `.planning/archive/reviews/wave-5c-exit.md`
-- `.planning/archive/reviews/wave-6-exit.md`
+- `.planning/reviews/2026-04-15-senior-codebase-platform-review.md` (companion)
+- `.planning/archive/reviews/wave-5-exit.md`, `wave-5c-exit.md`, `wave-6-exit.md`
 - `.planning/archive/plans/2026-04-11-wave-5-scope.md`
 - `.planning/plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
 - `.planning/specs/2026-04-14-wave-7-d2-comments-and-clone-advancement-design.md`
 
-## Bottom Line
+## Bottom Line (Revised)
 
-The codebase can credibly get above `8/10`, but not by adding more collaboration features first.
+The April 15 argument was: "the codebase can get above 8/10, but not by
+shipping more workflow features first — close the security and integrity
+gaps, then merge #254." That sequencing is now complete:
 
-The old Wave 6 rescore to `8.1/10` was internally consistent against the Wave 1-6 roadmap, but that roadmap explicitly deferred several high-risk areas:
+1. PR #254 merged (wave-7-d2 comments + effective-state routing).
+2. PR #255 closed the cross-cutting release blockers.
+3. PRs #256 and #257 delivered auth hardening phase 2 (sessions table,
+   CSRF, hashed refresh tokens, locked/inactive enforcement).
+4. PR #258 closed the timeline visibility leak and the soft-delete race.
+5. PR #259 made revision required on delete.
+6. PR #261 fixed the publication-edit binding and duplicate-email 409.
+7. All targeted test slices — including the ones the original review said
+   were failing — now pass (203 tests, 0 failures).
 
-- cookie/session hardening
-- session inventory / forced logout
-- ORCID / preferences / attribution
-- full review-history UI
-- comments/review workflow
-
-Those deferred areas are exactly where the live risk now sits. On the current codebase, the shortest route to a real and defensible `>8.0` platform score is:
-
-1. close the remaining security and session gaps
-2. close the workflow visibility / concurrency gaps
-3. stabilize verification so test results are trustworthy
-4. then merge workflow enrichments like PR `#254`
-
-PR `#254` is directionally good and likely worth merging after fixes, but it does **not** by itself move the platform above `8/10` because it expands workflow surface area without first removing the largest ship-risk items.
-
-The April 15 planning/docs cleanup was directionally correct and modernized repository hygiene, but it also exposed one more platform-readiness rule: durable documentation must stay separate from internal planning. The repo is not fully there yet because several stable docs still link directly into `.planning/` plans.
+The platform is at 8.0/10 against the revised gates below. One genuine
+production hazard (`email.backend: "console"` can silently ship in
+production) should block any production-like deploy until fixed.
 
 ## Current PR Status
 
-There is one current open PR:
-
-- `#254` — `feat(wave-7-d2): effective-state routing + comments/edits/mentions`
-- URL: https://github.com/berntpopp/hnf1b-db/pull/254
-- State: open
-- Mergeable: true
-
-What it adds:
-
-- effective-state routing for the clone-cycle
-- comments, comment edit history, mention join table
-- `Discussion` tab on `PagePhenopacket.vue`
-- mention autocomplete endpoint
-- tests around comments and clone-cycle behavior
-
-What it does **not** fix:
-
-- frontend token storage in `localStorage`
-- token revocation / refresh-token hardening
-- locked/deactivated-user token issuance gaps
-- timeline visibility leak
-- non-atomic delete/state race exposure
-- production email fallback risk
-- the likely phenopacket-publication edit bug
-
-## What The Old Plans Still Leave Open
-
-The key point from the old plans is not "everything was done". It is "the roadmap completed the chosen waves, while explicitly deferring the hardest security/platform items."
-
-### Explicitly deferred in the Wave 5 scope
-
-`.planning/archive/plans/2026-04-11-wave-5-scope.md` explicitly deferred:
-
-- Bundle D comments/review workflow
-- Bundle E ORCID + preferences + attribution
-- rest of Bundle F cookie-based refresh token, sessions table, session inventory UI, forced logout on role change
-- private contributor dashboard
-- real SMTP infrastructure
-
-### Confirmed deferred in the Wave 5 exit
-
-`.planning/archive/reviews/wave-5-exit.md` still lists as remaining:
-
-- comments / review screen
-- ORCID / preferences / public attribution
-- HttpOnly cookie refresh token, sessions table, CSRF
-- real SMTP
-
-### Why that matters now
-
-Those were reasonable deferrals at the time, but they mean the old `8.1/10` should be interpreted as:
-
-`8.1/10 for the Wave 1-6 refactor roadmap`
-
-not:
-
-`8.1/10 for the current platform-readiness bar`
-
-For the current platform-readiness bar, the unresolved deferred items and the newly-observed regressions are still material.
-
-## What Still Blocks A Real >8.0
-
-### A. Security and session management
-
-This is still the single biggest blocker.
-
-Open issues:
-
-- frontend tokens still live in `localStorage`
-- token issuance does not consistently enforce lock/deactivation state
-- refresh-token lifecycle is too weak after password change/reset
-- no real session inventory or forced logout path
-- email delivery can still degrade to console behavior in production-like misconfiguration
-- durable docs still depend on internal planning files for developer-facing explanation
-
-Why this blocks `>8`:
-
-- OWASP API Security Top 10 2023 still treats broken authentication and function-level authorization as top-tier risks
-- the 2026-04-11 review already identified the cookie/session hardening path as the correct target
-- `docs/adr/0001-jwt-storage.md` recorded a localStorage decision, but the live threat picture has not improved enough to make that an `>8` posture
-
-### B. Workflow integrity
-
-Open issues:
-
-- timeline endpoint still bypasses the newer visibility model
-- delete is still vulnerable to real race windows
-- revision provenance still looks fragile in multi-actor flows
-- current detail UI still under-serves audit/revision visibility
-
-Why this blocks `>8`:
-
-- the workflow model is increasingly sophisticated
-- once you introduce state machines, comments, approvals, and revisions, concurrency and visibility bugs become more severe than ordinary CRUD bugs
-
-### C. Verification and trust in CI
-
-Open issues:
-
-- targeted backend pytest slices currently fail
-- some failures are true defects
-- others are test-isolation and session-boundary problems
-
-Why this blocks `>8`:
-
-- a platform cannot honestly score above `8` if its critical verification loops are not trustworthy
-- SQLAlchemy async best practice is especially relevant here: `AsyncSession` is stateful, and misuse across boundaries creates exactly the kind of nondeterministic breakage now showing up
-
-### D. Remaining product-platform gaps
-
-Still not delivered:
-
-- ORCID linking
-- user preferences / attribution consent
-- private contributor dashboard
-- richer curation history UI
-
-These are not the first blockers, but they are still part of the platform-readiness scope defined on 2026-04-11.
-
-### E. Documentation and instruction hygiene
-
-Open issues:
-
-- durable docs still point to `.planning/plans/variant-annotation-implementation-plan.md`
-- some live docs and planning artifacts still refer to the pre-migration `CLAUDE.md` wording and should be normalized to `AGENTS.md`
-
-Why this blocks a clean `>8` posture:
-
-- current documentation best practice favors a small set of accurate docs and deleting dead or duplicate operational guidance
-- current Codex guidance favors small repository-level instructions and reusable skills/workflows
-- the instruction-file migration needs to be carried through current live docs, not just added at repo root
-
-## PR #254 Review In Context
-
-## What is good
-
-- It closes a real deferred area from the old plan: comments/discussion.
-- It improves the D.1 clone-cycle by introducing effective-state routing.
-- It is aligned with the D.2 design/spec and the April platform-readiness recommendation to add collaboration workflow.
-- The patch appears to include real tests, not just UI scaffolding.
-
-## Why it is not enough for >8
-
-PR `#254` mainly expands editorial workflow capability. That is useful, but not what is currently keeping the score down.
-
-If merged as-is, it likely improves:
-
-- collaboration readiness
-- curator UX
-- architecture completeness for the workflow layer
-
-But it does not materially improve:
-
-- session security
-- API authorization robustness
-- operational reliability
-- confidence in backend verification
-
-So the PR is probably a **good PR**, but not the **highest-leverage PR** for getting above `8/10`.
-
-## Recommendation on PR #254
-
-Merge it only after, or alongside, fixes for:
-
-1. timeline visibility enforcement
-2. atomic delete/state mutation
-3. token issuance enforcement for locked/inactive users
-4. phenopacket edit publication-binding regression if confirmed
-
-If you want one clean milestone boundary:
-
-- `PR #254` should be treated as `workflow-enablement`
-- the next milestone should be `security-and-integrity hardening`
-
-## Clear Instructions To Get Above 8/10
-
-This is the shortest high-confidence sequence.
-
-### Phase 1: Raise the floor
-
-These items are mandatory before any honest `>8` claim.
-
-1. Migrate auth transport to HttpOnly refresh cookie + in-memory access token.
-   - Keep the existing refresh queue pattern in `frontend/src/api/transport.js`.
-   - Remove long-lived token persistence from `frontend/src/stores/authStore.js` and `frontend/src/api/session.js`.
-   - Add CSRF protection for refresh/logout/mutation routes.
-
-2. Enforce account state on every token issuance path.
-   - `login()`: reject inactive and locked users before returning tokens.
-   - `refresh_access_token()`: reject inactive and locked users, not just unknown users.
-   - Add tests for locked login, deactivated refresh, refresh after unlock, refresh after role change if session invalidation is introduced.
-
-3. Revoke refresh capability on password change and password reset.
-   - At minimum invalidate current refresh token.
-   - Prefer token-version or JTI invalidation over raw single-token persistence.
-   - If staying with DB-backed persistence, stop storing raw refresh token material directly.
-
-4. Lock down `crud_timeline.py`.
-   - Route through the same visibility rules as detail/list.
-   - Decide explicitly whether deleted records should ever be visible in timeline output.
-   - Add role-based tests for anonymous, viewer, curator, admin, draft, and soft-deleted states.
-
-5. Make delete/state transitions atomic.
-   - Use `UPDATE ... WHERE revision = :expected_revision` or row-level locking.
-   - Add one real concurrent integration test, not just stale sequential tests.
-
-### Phase 2: Remove known correctness bugs
-
-6. Fix the phenopacket publication-edit binding path.
-   - In `PhenopacketCreateEdit.vue`, unify around a single source of truth.
-   - Add regression coverage: load existing record with PMIDs, edit unrelated field, save, verify PMIDs preserved.
-
-7. Fix duplicate-email update handling.
-   - Return clean `409` conflict semantics from admin update paths.
-
-8. Make production email delivery fail closed.
-   - Production startup should reject `console` backend unless explicitly allowed in a non-prod environment.
-   - Keep Mailpit/dev SMTP for development only.
-
-### Phase 3: Make the workflow auditable
-
-9. Finish the history/revision surface.
-   - Comments in PR `#254` help discussion, but they are not a substitute for revision audit visibility.
-   - Add a first-class revision/history tab using the state/audit data already present.
-   - Show authoritative actor identity, transition reason, and diff summary.
-
-10. Strengthen provenance.
-   - Add mixed-actor tests for save, submit, approve, publish, comment edit, resolve, delete.
-
-### Phase 4: Finish the deferred platform scope
-
-11. Split stable docs from planning all the way through.
-   - Remove `.planning/...` plan links from durable API and user docs unless those plan files are intentionally the archival source of truth.
-   - If the implementation details still matter, promote them into stable developer docs under `docs/`.
-
-12. Use one canonical agent-instructions file.
-   - `AGENTS.md` should be the canonical source.
-   - `CLAUDE.md` may exist only as a tiny compatibility shim that points to `AGENTS.md`.
-   - Worst option: maintain both as large overlapping instruction files.
-
-11. Deliver Bundle E equivalents.
-   - ORCID link / unlink
-   - attribution preferences
-   - public contributor attribution model
-
-12. Add session inventory and forced logout.
-   - this is the missing operational half of the auth model
-   - it also improves admin story and incident response
-
-13. Add a private contributor dashboard.
-   - my created
-   - my reviewed
-   - unresolved discussions
-   - recent activity
-
-## Recommended Order Of Work
-
-If the goal is specifically `>8/10`, do the work in this order:
-
-1. auth/session hardening
-2. workflow visibility + atomicity fixes
-3. verification stabilization
-4. PR `#254` merge or follow-up fixes
-5. revision/history UI
-6. ORCID/preferences/dashboard
-
-Do **not** do ORCID/preferences/dashboard before the first three.
-
-## How To Measure That You Actually Reached >8
-
-Do not use a single narrative score only. Use gates.
-
-### Security gate
-
-- no access or refresh token persisted in `localStorage`
-- locked/inactive users cannot mint new tokens
-- password reset/change invalidates old refresh capability
-- timeline endpoint obeys visibility model
-
-### Integrity gate
-
-- concurrent delete/update test passes
-- mixed-actor provenance tests pass
-- comments and revisions remain internally consistent after publish/withdraw/resubmit cycles
-
-### Verification gate
-
-- targeted backend auth slice green
-- targeted backend workflow slice green
-- frontend auth/admin/edit regression slice green
-- CI remains deterministic across reruns
+**No open PRs on 2026-04-17.** The branch snapshot used for verification is
+`workstream-b-publications-email-conflicts` at `195c7c1`, working tree clean.
+
+PR #254 (`feat(wave-7-d2): effective-state routing + comments/edits/mentions`):
+- merged 2026-04-15T07:08Z as `fec235f`
+- scope delivered: effective-state routing on the clone cycle, comments
+  (tables, ORM, service, 8 REST endpoints), comment edit history,
+  mention join table, `DiscussionTab.vue`, Tiptap composer with mention
+  autocomplete, frontend + backend tests, E2E comments flow
+- polish commits after merge: Copilot PR #4 feedback, mention sanitisation
+  (`target` omitted to prevent tabnabbing), dark-theme support, alembic
+  import shape, CORS PATCH, mention-suggestion guards
+
+PR #254 did *not* by itself move the platform above 8. The hardening PRs
+that landed alongside it did.
+
+## What The Old Plans Left Open — Status on 2026-04-17
+
+### Previously deferred items (Wave 5 scope)
+
+| Item | Status |
+|---|---|
+| Bundle D comments/review workflow | **Delivered** via PR #254 (Discussion only; full review workflow still partial) |
+| Bundle E ORCID + preferences + attribution | **Not yet delivered** |
+| Bundle F cookie-based refresh token | **Delivered** (in-memory access + HttpOnly refresh cookie, PRs #256/#257) |
+| Sessions table / session inventory UI / forced logout | **Backend delivered** (`RefreshSession`, `session_version`, `_revoke_all_refresh_capability`); UI not delivered |
+| Private contributor dashboard | **Not yet delivered** |
+| Real SMTP infrastructure | **Partially delivered** — SMTP backend exists; production guard missing |
+
+### What the 2026-04-15 version still said was open
+
+| Finding | Status now | Notes |
+|---|---|---|
+| Frontend localStorage auth | **Fixed** | `frontend/src/api/session.js:8-62` |
+| Token issuance — locked/inactive | **Fixed** | `backend/app/api/auth_endpoints.py:59-72` |
+| Refresh-token lifecycle | **Fixed** | `backend/app/models/refresh_session.py:26-27`, SHA-256 hashes |
+| Timeline visibility bypass | **Fixed** | `backend/app/phenopackets/routers/crud_timeline.py:155-189` |
+| Non-atomic soft-delete | **Fixed** | `phenopacket_service.py:301-330` with `with_for_update()` |
+| Phenopacket publication edit regression | **Fixed** | `PhenopacketCreateEdit.vue:282-286` |
+| Duplicate-email admin update | **Fixed** | `user_repository.py:112-115, 138-148`, 409 test present |
+| Production email console fallback | **Still open** | No `ENVIRONMENT=production` guard in `config.py` |
+| Curation history / revision UI | **Partial** | Discussion tab shipped; dedicated audit-trail tab not yet |
+| Durable docs pointing into `.planning/` | **Still open** | Five files still link the variant-annotation plan |
+| `AGENTS.md` canonicalization | **Done in practice** | CLAUDE.md is a 7-line shim; no stale refs in live docs |
+| Backend test slice green | **Green** | 203 passed, 0 failed, ~55 s |
+
+## What Still Blocks A Clean >8 (Revised)
+
+### A. One production-configuration hazard
+
+`backend/app/core/config.py:413-440` validates SMTP only when the backend is
+already set to `smtp`. There is no guard that refuses `console` in
+production. A misconfigured deploy will silently log reset tokens to stdout.
+
+Fix (add next to `_refuse_dev_auth_in_prod`):
+
+```python
+@model_validator(mode="after")
+def _refuse_console_email_in_prod(self) -> "Settings":
+    if self.environment == "production" and self.yaml.email.backend == "console":
+        raise ValueError(
+            "REFUSING TO START: email.backend='console' is only permitted "
+            "outside production. Set email.backend: 'smtp' and provide SMTP_HOST."
+        )
+    return self
+```
+
+### B. Curation history UI
+
+Discussion is delivered, but curators cannot see an authoritative "who did
+what when" surface. The data exists in backend audit/revision tables. The
+missing piece is `HistoryTab.vue` — reading that data, showing actor
+identity, transition reason, and diff summary.
+
+### C. Doc hygiene
+
+Five durable docs still link
+`.planning/plans/variant-annotation-implementation-plan.md` as "Developer
+Guide" (`docs/api/README.md:116`, `docs/api/variant-annotation.md:899`,
+`docs/user-guide/README.md:137`, `docs/user-guide/variant-annotation.md:863`,
+`backend/README.md:110`). Either promote to stable `docs/architecture/` or
+remove the links.
+
+### D. ADR 0001 now mismatches reality
+
+`docs/adr/0001-jwt-storage.md` still recommends `localStorage`; live code uses
+in-memory + HttpOnly cookie. Write ADR 0002 and mark 0001 Superseded. The code
+is fine; the paper trail is not.
+
+### E. Operational readiness (medium-term)
+
+- no OpenTelemetry / Sentry wiring yet
+- no WebAuthn / TOTP second factor for admin
+- no session inventory UI (backend data is there)
+- no ORCID / attribution / dashboard
+
+None of these should block a controlled rollout, but they are the real
+remaining distance to a durable 9.
+
+## What Is *Good* About PR #254 In Hindsight
+
+- It shipped **with** the hardening, not before it — the original review's
+  concern about sequencing did not materialize.
+- The comments/mentions layer uses the right mitigations: DOMPurify with
+  explicit `ALLOWED_ATTR`, `target` omitted to prevent tabnabbing, safe
+  markdown render path, server-side mention validation.
+- The E2E comments flow (`test(e2e): comments flow — post, edit, delete
+  across curator/admin`) is an unusually thorough landing test for a
+  discussion feature of this scope.
+- Effective-state routing touched a historically-tangled area and came out
+  cleaner (`transitions router drops manual dict augmentation`;
+  `_simple_transition uses effective state + I8 gate`).
+
+## Curator Experience And Performance Recommendations
+
+This review was asked to consider the tool's real users — doctors donating
+time to curate patient data for sick children — and the users of the output.
+The technical work below is the highest-leverage investment for those two
+groups.
+
+### Make curation fast
+
+1. **Latency budget (wire into Playwright timings and a dashboard):**
+   - mention / autocomplete search: p95 ≤ 200 ms
+   - autosave round-trip: p95 ≤ 500 ms
+   - detail page TTI: p95 ≤ 1.5 s on a mid-tier tablet
+   - save / publish / resolve: p95 ≤ 1 s
+   Anchor: Nielsen thresholds (100 ms instant / 1 s flow preserved).
+2. **Virtualization** (`VDataTableVirtual`, `v-virtual-scroll`) for
+   `CommentList` and any list that can exceed ~200 rows.
+   https://vuetifyjs.com/en/components/data-tables/virtual-tables/
+3. **`shallowRef`** for large phenopacket JSON payloads and long discussion
+   threads. https://vuejs.org/api/reactivity-advanced.html
+4. **Autosave + optimistic UI** on the edit form — the current save flow
+   is explicit; draft saves on blur/debounce would cut perceived latency.
+5. **Eager-load** `Phenopacket.editing_revision` already landed — keep an
+   eye on N+1 patterns in `crud_timeline.py` and comments list (the latter
+   was already bulk-loaded in a Copilot follow-up).
+
+### Make curation reliable and humane
+
+6. **HistoryTab.vue** — curators will not trust a tool they cannot audit.
+   Backend data exists; build the view.
+7. **Keyboard shortcuts** for save-and-next, submit, publish, resolve,
+   mention, search. High-throughput curators feel these immediately.
+8. **Observability** — OpenTelemetry FastAPI auto-instrumentation + Sentry
+   on both backend and frontend. Ship before the user base widens; bug
+   reports without traces are expensive to resolve.
+   https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/fastapi/fastapi.html
+   https://docs.sentry.io/platforms/javascript/guides/vue/
+
+### Make it usable on every device
+
+9. **WCAG 2.2 AA audit** — new criteria relevant on tablets: 2.4.11 Focus
+   Not Obscured, 2.5.7 Dragging, 2.5.8 Target Size (≥24×24 CSS px), 3.2.6
+   Consistent Help, 3.3.7 Redundant Entry, 3.3.8 Accessible Authentication.
+   https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+10. **ARIA APG patterns** — verify `MentionSuggestionList` is a proper
+    combobox (arrow keys, `aria-activedescendant`, Esc dismisses); verify
+    Discussion / Overview / Timeline tabs meet the tab pattern; add live
+    regions around save, resolve, and publish feedback.
+    https://www.w3.org/WAI/ARIA/apg/patterns/
+11. **Dark-theme contrast** — PR #254 shipped dark mode polish, but the
+    WCAG 2.2 3:1 non-text-contrast rule applies to focus rings and chip
+    borders; worth a dedicated sweep with a contrast checker.
+    https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html
+12. **Touch targets** — the TransitionMenu and chips are small on phone.
+    Set a baseline `min-block-size: 44px; min-inline-size: 44px` on
+    primary curator actions.
+
+### Make the output trustworthy
+
+13. **Phenopackets v2 schema conformance** remains the reference; no v3 is
+    in flight. Keep `docs/api/variant-annotation.md` and the export path
+    aligned with GA4GH. https://www.ga4gh.org/product/phenopackets/
+14. **Provenance test** — one integration test walks save → submit →
+    approve → publish → edit → comment → resolve with three distinct
+    actors and asserts every `changed_by` and transition reason.
+
+## Revised Path To >8 → 9
+
+Since 8 is now plausibly achieved, the next question is what takes this
+to 9. Ordered by cost/benefit:
+
+1. Land the three immediate items (email validator, ADR 0002, durable-doc links).
+2. Ship HistoryTab.vue.
+3. Wire OpenTelemetry + Sentry; set up the curator-latency dashboard.
+4. WCAG 2.2 AA audit pass across edit, transition, discussion, mobile.
+5. WebAuthn or TOTP for admin accounts.
+6. Session inventory UI (frontend consumer of the existing sessions data).
+7. ORCID + attribution preferences (Bundle E).
+8. Private contributor dashboard (Bundle E.2).
+9. Virtual scroll + `shallowRef` conversions where measured gains exist.
+10. Keyboard-shortcut documentation and implementation.
+
+## How To Measure That >8 Really Held
+
+Use gates, not narrative.
+
+### Security gate (all green on 2026-04-17)
+- ✅ no access or refresh token in `localStorage`
+- ✅ locked/inactive users cannot mint new tokens
+- ✅ password reset/change invalidates old refresh capability
+- ✅ timeline endpoint obeys the visibility model
+- ⏳ production cannot silently fall back to console email
+
+### Integrity gate (green)
+- ✅ concurrent delete/update test (`test_phenopackets_delete_revision`)
+- ⏳ dedicated mixed-actor provenance test
+- ✅ comments + revisions internally consistent after publish/withdraw/resubmit
+
+### Verification gate (green)
+- ✅ targeted backend auth slice green
+- ✅ targeted backend workflow slice green
+- ✅ backend comments slice green
+- ✅ frontend auth/admin/edit regression slice green
 
 ### Product-platform gate
+- ⏳ audit/revision UI (HistoryTab.vue)
+- ⏳ session inventory UI
+- ⏳ ORCID/preferences — explicitly deferred, not blocking
 
-- audit/revision UI exists
-- session inventory exists
-- ORCID/preferences scope either shipped or explicitly descoped from the readiness target
-
-If those gates are green, then `>8` is defensible.
-
-## Practical Next Step
-
-The highest-leverage next milestone is:
-
-**`security-and-integrity hardening`**
-
-Suggested bundle:
-
-- fix token issuance enforcement
-- migrate away from `localStorage` token persistence
-- revoke refresh on password change/reset
-- fix timeline visibility
-- make delete atomic
-- fix phenopacket publication edit regression
-- add regression tests for all of the above
-
-After that, either:
-
-- merge `#254` if not yet merged, or
-- immediately follow it with a small `workflow-audit polish` PR
+### Curator-experience gate (new)
+- ⏳ p95 latency SLOs wired up
+- ⏳ WCAG 2.2 AA audit passed
+- ⏳ keyboard shortcuts documented and implemented
+- ⏳ virtualization on lists that can exceed ~200 rows
 
 ## Sources
 
-- Google Engineering Practices: https://google.github.io/eng-practices/review/reviewer/looking-for.html
-- SmartBear Code Review Process: https://smartbear.com/learn/code-review/guide-to-code-review-process/
-- FastAPI security tutorial: https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
-- FastAPI bigger applications: https://fastapi.tiangolo.com/tutorial/bigger-applications/
-- SQLAlchemy asyncio docs: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
-- OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x00-toc/
-- Vue Style Guide: https://vuejs.org/style-guide/
-- Vue Test Utils guide: https://test-utils.vuejs.org/guide/
+- OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x00-header/
+- OWASP Authentication Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- OWASP JWT Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+- FastAPI OAuth2/JWT tutorial: https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
+- SQLAlchemy 2.0 versioning: https://docs.sqlalchemy.org/en/20/orm/versioning.html
+- SQLAlchemy 2.0 asyncio: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+- Vue 3.5 release notes: https://blog.vuejs.org/posts/vue-3-5
+- Vue reactivity advanced: https://vuejs.org/api/reactivity-advanced.html
+- Vuetify virtual tables: https://vuetifyjs.com/en/components/data-tables/virtual-tables/
+- WCAG 2.2 What's New: https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+- ARIA APG: https://www.w3.org/WAI/ARIA/apg/patterns/
+- GA4GH Phenopackets: https://www.ga4gh.org/product/phenopackets/
+- ClinGen VCI (Genome Medicine 2022): https://pmc.ncbi.nlm.nih.gov/articles/PMC8764818/
+- OpenTelemetry FastAPI: https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/fastapi/fastapi.html
+- Sentry FastAPI: https://docs.sentry.io/platforms/python/integrations/fastapi/
+- Sentry Vue: https://docs.sentry.io/platforms/javascript/guides/vue/
+- Playwright best practices: https://playwright.dev/docs/best-practices
