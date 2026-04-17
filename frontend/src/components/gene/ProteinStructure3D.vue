@@ -14,6 +14,7 @@
             v-bind="props"
             href="https://www.rcsb.org/structure/2H8R"
             target="_blank"
+            rel="noopener noreferrer"
             class="ml-1"
             aria-label="View in RCSB PDB"
           >

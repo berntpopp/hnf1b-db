@@ -161,6 +161,7 @@
                       variant="outlined"
                       :href="block.url"
                       :target="block.external ? '_blank' : undefined"
+                      :rel="block.external ? 'noopener noreferrer' : undefined"
                       size="small"
                     >
                       <v-icon left>{{ block.icon }}</v-icon>

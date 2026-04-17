@@ -30,6 +30,7 @@
                 : 'https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=chr17%3A37686430-37745059'
             "
             target="_blank"
+            rel="noopener noreferrer"
             class="ml-1"
             :aria-label="
               effectiveViewMode === 'cnv'

@@ -24,6 +24,7 @@
               v-bind="props"
               :href="getHpoUrl(feature.type.id)"
               target="_blank"
+              rel="noopener noreferrer"
               color="green"
               variant="tonal"
               size="small"
