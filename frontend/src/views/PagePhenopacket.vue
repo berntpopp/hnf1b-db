@@ -869,24 +869,27 @@ export default {
 </style>
 
 <!-- Dark-theme token overrides in a non-scoped block so the
-     v-theme--dark descendant combinator is not stripped by Vue. -->
+     v-theme--dark descendant combinator is not stripped by Vue.
+     Every selector is anchored to .phenopacket-container so these rules
+     never bleed into Home.vue / PageVariant.vue / PagePublication.vue,
+     which each own a separate .hero-section with its own theming. -->
 <style>
 /* Dark-theme overrides — match the v-theme--dark class on <html>/<body>. */
 .v-theme--dark .phenopacket-container {
   --page-bg: #0d1617;
 }
-.v-theme--dark .hero-section {
+.v-theme--dark .phenopacket-container .hero-section {
   --hero-start: #102a2b;
   --hero-mid: #1e3a3a;
   --hero-end: #0d1b1c;
   --hero-border: rgba(255, 255, 255, 0.08);
 }
 
-/* Ensure foreground text on the hero meets WCAG AA contrast in dark mode.
-   teal-lighten-3 against #102a2b yields ~8.4:1 — well above 4.5:1. */
-.v-theme--dark .hero-section h1,
-.v-theme--dark .hero-section .v-tab,
-.v-theme--dark .hero-section .text-teal-darken-2 {
+/* Ensure foreground text on the phenopacket hero meets WCAG AA contrast in
+   dark mode. teal-lighten-3 against #102a2b yields ~8.4:1 — well above 4.5:1. */
+.v-theme--dark .phenopacket-container .hero-section h1,
+.v-theme--dark .phenopacket-container .hero-section .v-tab,
+.v-theme--dark .phenopacket-container .hero-section .text-teal-darken-2 {
   color: rgb(178, 223, 219) !important;
 }
 </style>
