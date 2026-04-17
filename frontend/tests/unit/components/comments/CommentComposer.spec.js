@@ -63,6 +63,8 @@ vi.mock('@tiptap/extension-mention', () => ({
 
 vi.mock('tiptap-markdown', () => ({ Markdown: {} }));
 
+vi.mock('@tiptap/extension-link', () => ({ default: {} }));
+
 vi.mock('@/api/domain/comments', () => ({
   searchMentionableUsers: vi.fn().mockResolvedValue({ data: { data: [] } }),
   listCommentEdits: vi.fn().mockResolvedValue({ data: { data: [] } }),
@@ -97,14 +99,18 @@ describe('CommentComposer', () => {
     expect(wrapper.exists()).toBe(true);
   });
 
+  // Helper: find the submit button by its rendered label (Post | Save).
+  // The formatting toolbar introduced in H5 adds four buttons before the
+  // submit, so a bare `wrapper.find('button')` no longer resolves to it.
+  function findSubmitButton(wrapper) {
+    return wrapper.findAll('button').find((b) => /^(post|save)$/i.test(b.text().trim()));
+  }
+
   it('submit button is disabled when body is empty', () => {
     // editingComment=null → initial content = '' → canSubmit = false
     const wrapper = mountComposer({ editingComment: null });
-    // The v-btn renders as a <button> in the DOM.
-    const btnSpecific = wrapper.find('button[type="button"]');
-    const btn = btnSpecific.exists() ? btnSpecific : wrapper.find('button');
-    expect(btn.exists()).toBe(true);
-    // Vuetify v-btn with :disabled=true sets the disabled attribute.
+    const btn = findSubmitButton(wrapper);
+    expect(btn).toBeDefined();
     expect(btn.attributes('disabled')).toBeDefined();
   });
 
@@ -114,10 +120,8 @@ describe('CommentComposer', () => {
       editingComment: { id: 5, body_markdown: 'existing text' },
       submitting: false,
     });
-    const btnSpecific = wrapper.find('button[type="button"]');
-    const btn = btnSpecific.exists() ? btnSpecific : wrapper.find('button');
-    expect(btn.exists()).toBe(true);
-    // When canSubmit=true and submitting=false the button should NOT be disabled.
+    const btn = findSubmitButton(wrapper);
+    expect(btn).toBeDefined();
     expect(btn.attributes('disabled')).toBeUndefined();
   });
 
@@ -131,5 +135,43 @@ describe('CommentComposer', () => {
   it('shows "Post" label when composing a new comment', () => {
     const wrapper = mountComposer({ editingComment: null });
     expect(wrapper.text()).toContain('Post');
+  });
+
+  // H5 — accessible name + formatting toolbar
+  it('wires aria-label and aria-describedby onto ProseMirror via editorProps', async () => {
+    const { useEditor } = await import('@tiptap/vue-3');
+    mountComposer();
+    expect(useEditor).toHaveBeenCalled();
+    const call = useEditor.mock.calls.at(-1)[0];
+    expect(call.editorProps?.attributes).toEqual(
+      expect.objectContaining({
+        'aria-label': 'Comment body',
+        'aria-describedby': 'composer-char-count',
+      })
+    );
+  });
+
+  it('renders a formatting toolbar with role=toolbar and its own accessible name', () => {
+    const wrapper = mountComposer();
+    const toolbar = wrapper.find('[data-testid="composer-toolbar"]');
+    expect(toolbar.exists()).toBe(true);
+    expect(toolbar.attributes('role')).toBe('toolbar');
+    expect(toolbar.attributes('aria-label')).toMatch(/comment formatting/i);
+  });
+
+  it('exposes Bold, Italic, Insert link, and Mention buttons with aria-labels', () => {
+    const wrapper = mountComposer();
+    const toolbar = wrapper.get('[data-testid="composer-toolbar"]');
+    const labels = toolbar.findAll('button').map((b) => b.attributes('aria-label'));
+    expect(labels).toEqual(
+      expect.arrayContaining(['Bold', 'Italic', 'Insert link', 'Mention user'])
+    );
+  });
+
+  it('gives the character counter a stable id so aria-describedby resolves', () => {
+    const wrapper = mountComposer();
+    const counter = wrapper.find('#composer-char-count');
+    expect(counter.exists()).toBe(true);
+    expect(counter.text()).toMatch(/\d+\s*\/\s*10000/);
   });
 });
