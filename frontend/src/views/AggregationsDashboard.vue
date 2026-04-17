@@ -1,6 +1,17 @@
 <!-- src/views/AggregationsDashboard.vue -->
 <template>
   <v-container fluid>
+    <h1 class="text-h5 font-weight-bold text-teal-darken-2 mb-3">Aggregations</h1>
+    <v-alert
+      v-if="pageError"
+      type="error"
+      variant="tonal"
+      class="mb-3"
+      data-testid="aggregations-page-error"
+    >
+      <v-alert-title>Unable to load aggregations</v-alert-title>
+      {{ pageError }}
+    </v-alert>
     <v-row>
       <v-col cols="12">
         <v-sheet outlined>
@@ -391,6 +402,7 @@ const survivalComparisonTypes = SURVIVAL_COMPARISON_TYPES;
 const survivalEndpointOptions = SURVIVAL_ENDPOINT_OPTIONS;
 
 // Reactive data
+const pageError = ref(null);
 const chartData = ref({});
 const stackedBarChartData = ref([]);
 const comparisonData = ref(null);
@@ -447,6 +459,7 @@ function fetchStackedBarData() {
       window.logService.error('Error fetching stacked bar chart data', {
         error: error.message,
       });
+      pageError.value = `Phenotypic features data unavailable: ${error.message}`;
     });
 }
 
@@ -526,6 +539,7 @@ function fetchAggregationData() {
         window.logService.error('Error fetching donut chart data', {
           error: error.message,
         });
+        pageError.value = `Aggregation chart data unavailable: ${error.message}`;
       });
   } else {
     window.logService.error('API function not found', { funcName });
@@ -564,6 +578,7 @@ async function fetchComparisonData() {
     });
     comparisonError.value =
       error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
+    pageError.value = `Variant comparison data unavailable: ${error.message}`;
   } finally {
     comparisonLoading.value = false;
   }
@@ -598,6 +613,7 @@ async function fetchSurvivalData() {
     });
     survivalError.value =
       error.response?.data?.detail || 'Failed to load survival data. Please try again.';
+    pageError.value = `Survival data unavailable: ${error.message}`;
   } finally {
     survivalLoading.value = false;
   }

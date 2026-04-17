@@ -52,6 +52,7 @@
                       size="small"
                       variant="flat"
                       target="_blank"
+                      rel="noopener noreferrer"
                       link
                       class="font-weight-medium"
                     >
@@ -114,6 +115,7 @@
                 size="small"
                 variant="flat"
                 target="_blank"
+                rel="noopener noreferrer"
                 link
                 class="mr-2"
               >
@@ -176,6 +178,7 @@
                             size="small"
                             variant="flat"
                             target="_blank"
+                            rel="noopener noreferrer"
                             link
                           >
                             {{ publication.doi }}
@@ -190,6 +193,7 @@
                             size="small"
                             variant="flat"
                             target="_blank"
+                            rel="noopener noreferrer"
                             link
                           >
                             PMID: {{ publicationId }}

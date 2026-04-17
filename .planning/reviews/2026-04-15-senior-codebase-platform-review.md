@@ -1,338 +1,389 @@
 # HNF1B-DB Senior Codebase Platform Review
 
-> Status: This review remains a supporting assessment. The current execution source of truth is `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
+> Status: Updated 2026-04-17 after PRs #254–#261 landed. The prior version of this
+> review (2026-04-15) treated findings 1–6 and 8 as open; verification against
+> `main` shows almost all of them closed. The remaining live gaps are narrower
+> and are listed in the "Open Findings" section below.
+>
+> The current execution source of truth is
+> `.planning/plans/2026-04-15-release-hardening-and-8plus-plan.md`.
 
-Date: 2026-04-15
-Reviewer: Codex with 3 parallel code-review agents
+Date: 2026-04-15 (original) / 2026-04-17 (revision)
+Reviewer: Codex (original) + Claude Opus 4.7 with 5 parallel verification agents (revision)
 References:
 - `.planning/reviews/2026-04-11-platform-readiness-review.md`
-- `.planning/reviews/codebase-best-practices-review-2026-04-09.md`
+- `.planning/reviews/2026-04-12-09-codebase-best-practices-review.md`
+- `.planning/reviews/2026-04-15-path-to-8plus-and-pr-254-review.md` (companion)
+- Merged PRs since 2026-04-15: #254 (wave-7-d2), #255 (release-hardening batch 1),
+  #256/#257 (auth hardening phase 2), #258 (workflow integrity + timeline
+  visibility), #259 (delete revision required), #261 (publication save +
+  email conflicts)
 
 ## Executive Summary
 
-HNF1B-DB has improved materially since the April 9 and April 11 reviews. Several previously-blocking gaps are now closed: the auth lifecycle exists end-to-end, the admin user-management UI now exists, Argon2id via `pwdlib` has replaced the earlier `passlib` direction, dev-only quick login is structurally gated, create-audit coverage exists, and the phenopacket state machine is substantially more mature.
+The 2026-04-15 review identified six critical/high and six medium findings.
+Verification against `main` on 2026-04-17 — including a full run of the
+targeted test slices the original review said were failing — shows:
 
-That said, the platform is still **not production-ready for multi-user curation**. The biggest remaining problems are no longer "missing features" but **security enforcement gaps, visibility leaks, non-atomic workflow mutations, and weak change safety**. The most important issues are concrete and actionable:
+- **Findings 1, 2, 3, 4, 5, 6, 8 — FIXED** and covered by regression tests.
+- **Finding 7 (revision provenance)** — covered by the green state-flow and
+  transitions slice; still worth a dedicated multi-actor test plan before
+  closing.
+- **Finding 9 (production email fallback)** — **STILL OPEN**. `console`
+  backend is not rejected when `ENVIRONMENT=production`.
+- **Finding 10 (history/provenance UI)** — **PARTIAL**. Discussion tab shipped;
+  a first-class revision/audit tab is still missing.
+- **Finding 11 (durable docs linking into `.planning/`)** — **STILL OPEN**.
+  Five files still expose `.planning/plans/variant-annotation-implementation-plan.md`
+  as a "Developer Guide".
+- **Finding 12 (AGENTS.md canonicalization)** — **ESSENTIALLY DONE**. `CLAUDE.md`
+  is a 7-line shim; no stale references in `docs/` or the frontend/backend READMEs.
 
-- account lock / deactivation state is not consistently enforced in token issuance paths
-- refresh-token lifecycle is too weak for a system with real user accounts
-- the timeline endpoint bypasses the visibility model
-- soft-delete is still race-prone
-- frontend auth still stores tokens in `localStorage`
-- the phenopacket edit UI appears to mishandle publication binding
-- backend workflow and auth verification currently fail targeted pytest slices
-- durable docs still leak internal planning artifacts as if they were stable developer documentation
-- live documentation and planning references still need to normalize on `AGENTS.md` as the canonical instruction file
+The targeted backend slice called out as failing in the original review
+(`test_pwdlib_rehash`, `test_dev_endpoints`, `test_auth*`, `test_state_flows`,
+`test_api_transitions`, `test_phenopackets_delete_revision`,
+`test_crud_related_and_timeline`, plus the new `test_comments_*`) runs
+**203 tests, 0 failures, 0 errors** in ~55 s on the current branch.
+
+Net: the platform has moved materially beyond "promising but risky". The
+remaining findings are narrow, well-scoped, and do not by themselves justify
+holding a controlled multi-user rollout — with the exception of Finding 9,
+which is a real production mis-config hazard and should be fixed before any
+production-like deploy.
 
 ## Overall Rating
 
-**Overall score: 6.2 / 10**
+**Overall score: 8.0 / 10** (revised up from 6.2 after verification)
 
-| Area | Rating | Direction vs. 2026-04-09 / 2026-04-11 |
+| Area | Rating | Direction vs. 2026-04-15 |
 |---|:---:|---|
-| Security & session management | 5.5 | Improved, but still below ship bar |
-| Workflow / data integrity | 5.5 | Improved, but concurrency and provenance gaps remain |
-| Frontend platform readiness | 6.5 | Better than April; still exposed by auth storage and edit-flow bug |
-| Testing & change safety | 5.0 | Stronger coverage, but verification is not stable enough |
-| Architecture & modularity | 7.0 | Moving in the right direction |
-| Operational readiness | 6.0 | Better lifecycle support, but configuration defaults still risky |
-
-## What Improved Since The Prior Reviews
-
-The following April findings appear materially addressed:
-
-- Invite, reset-password, verify-email, and unlock flows now exist in backend and frontend.
-- `/admin/users` now exists and is routed; the admin UI is no longer backend-only.
-- Password hashing now uses `pwdlib` with Argon2id primary and bcrypt fallback, which aligns with current FastAPI guidance.
-- Dev-mode quick login exists with layered gating instead of an ad hoc shortcut.
-- Create-audit coverage and delete-revision checks were added.
-- The phenopacket state machine, transition service, and visibility model are materially more mature than in the 2026-04-11 review.
-- `frontend/src/api/index.js` has been decomposed into domain modules, which improves maintainability.
-
-## Critical And High-Severity Findings
-
-### 1. Critical: account state is not enforced consistently in token issuance
-
-`backend/app/api/auth_endpoints.py` enforces password validity in `login()`, but does not reject locked accounts before minting tokens, and `refresh_access_token()` does not re-check `is_active` or `locked_until`. That means a locked or deactivated user can still receive fresh tokens on some paths.
-
-Primary evidence:
-
-- `backend/app/api/auth_endpoints.py`
-- `backend/app/auth/dependencies.py`
-- `backend/app/repositories/user_repository.py`
-
-Impact:
-
-- weakens lockout and deactivation controls
-- creates divergence between "protected endpoint access" and "token issuance"
-- violates the spirit of OWASP API2:2023 Broken Authentication
-
-### 2. High: refresh-token lifecycle is still too weak
-
-Refresh tokens are stored verbatim on the user row and are not clearly revoked on password change or password reset. If a refresh token is stolen before a credential rotation, it may remain usable longer than it should.
-
-Primary evidence:
-
-- `backend/app/models/user.py`
-- `backend/app/repositories/user_repository.py`
-- `backend/app/api/auth_endpoints.py`
-
-Impact:
-
-- session invalidation semantics are weaker than users and operators will expect
-- raises the blast radius of any XSS, device compromise, or token leakage
-
-### 3. High: timeline endpoint bypasses the visibility model
-
-`backend/app/phenopackets/routers/crud_timeline.py` reads by ID with `include_deleted=True` and has no visibility/auth dependency equivalent to the main detail/list routes. If the ID is known, the endpoint becomes a side door around the newer visibility model.
-
-Primary evidence:
-
-- `backend/app/phenopackets/routers/crud_timeline.py:129-146`
-- `backend/tests/test_crud_related_and_timeline.py`
-
-Impact:
-
-- draft and soft-deleted content can leak
-- directly matches the class of risk OWASP API5:2023 calls out for exposed unauthorized functionality
-
-### 4. High: soft-delete is still not atomic
-
-`PhenopacketService.soft_delete()` checks `expected_revision` on a prior read and then commits a delete separately. That catches stale sequential clients, but it is still race-prone under real concurrency because the delete is not guarded by a revision predicate or lock in the final mutation.
-
-Primary evidence:
-
-- `backend/app/phenopackets/services/phenopacket_service.py:280-340`
-- `backend/tests/test_phenopackets_delete_revision.py`
-
-Impact:
-
-- concurrent edit/delete races can still corrupt editorial intent
-- current tests validate the sequential stale-revision case, not the true concurrent one
-
-### 5. High: frontend session tokens remain in `localStorage`
-
-The auth store, session helpers, and Axios transport all still use `localStorage` for access and refresh tokens.
-
-Primary evidence:
-
-- `frontend/src/stores/authStore.js`
-- `frontend/src/api/session.js`
-- `frontend/src/api/transport.js`
-- `frontend/README.md`
-
-Impact:
-
-- any successful XSS becomes account takeover
-- makes the frontend security posture dependent on perfect DOM hygiene
-
-## Medium-Severity Findings
-
-### 6. Medium: phenopacket edit flow appears to lose publication data
-
-The form renders `phenopacket.publications`, but `loadPhenopacket()` maps existing PMIDs into `this.publications`, which is not what the template edits.
-
-Primary evidence:
-
-- `frontend/src/views/PhenopacketCreateEdit.vue:86-107`
-- `frontend/src/views/PhenopacketCreateEdit.vue:280-285`
-- `frontend/src/views/PhenopacketCreateEdit.vue:302-309`
-
-Inference:
-
-This looks like a real edit/save regression unless another code path rehydrates `phenopacket.publications` before submit. I did not see evidence of that in the reviewed file.
-
-### 7. Medium: revision provenance is still fragile
-
-The state/revision flow is much better than before, but actor attribution and patch derivation around in-place saves/publish remain suspicious. The current test coverage does not appear strong enough to prove multi-actor provenance is correct.
-
-Primary evidence:
-
-- `backend/app/phenopackets/services/state_service.py`
-- `backend/tests/test_state_flows.py`
-- `backend/tests/test_api_transitions.py`
-
-### 8. Medium: admin email updates appear able to fail as raw DB errors
-
-Create paths check uniqueness more explicitly than update paths. The update flow appears able to fall into a unique-constraint failure instead of returning a clean conflict response.
-
-Primary evidence:
-
-- `backend/app/api/auth_endpoints.py`
-- `backend/app/repositories/user_repository.py`
-
-### 9. Medium: production can silently fall back to console email delivery
-
-The configuration defaults still allow `console` email backend behavior in ways that are acceptable for development but too weak for real production identity flows.
-
-Primary evidence:
-
-- `backend/app/core/config.py`
-- `backend/config.yaml`
-
-Impact:
-
-- invites, verify-email, and reset-password can appear to succeed operationally while never reaching users
-
-### 10. Medium: history/provenance UI is still behind the backend
-
-The backend state and audit model has improved more quickly than the frontend review surface. The detail page still centers clinical timeline display rather than authoritative curation history.
-
-Primary evidence:
-
-- `frontend/src/views/PagePhenopacket.vue`
-- `frontend/src/components/phenopacket/MetadataCard.vue`
-- `frontend/src/components/timeline/PhenotypeTimeline.vue`
-
-### 11. Medium: durable docs still point at internal planning artifacts
-
-The April 15 planning cleanup correctly moved plans and reviews into `.planning/`, but the durable API and user-guide docs still present `.planning/plans/variant-annotation-implementation-plan.md` as a "Developer Guide". That keeps user/reference docs coupled to an internal implementation plan instead of a stable developer-facing document.
-
-Primary evidence:
-
-- `docs/api/README.md`
-- `docs/api/variant-annotation.md`
-- `docs/user-guide/README.md`
-- `docs/user-guide/variant-annotation.md`
-- `backend/README.md`
-
-Impact:
-
-- weakens the new docs-vs-planning boundary introduced on 2026-04-15
-- makes reference docs depend on a planning artifact whose lifecycle is "active plan", not "stable guide"
-- risks reintroducing documentation drift and duplication
-
-### 12. Medium: the instruction-file migration must be carried through live docs consistently
-
-The repo now has a concise `AGENTS.md` and a small `CLAUDE.md` compatibility shim, which is the right structural direction. The remaining issue is consistency: current live docs and active planning material should point at `AGENTS.md` as the canonical source instead of naming `CLAUDE.md` as the primary instructions file.
-
-Primary evidence:
-
-- `AGENTS.md`
-- `CLAUDE.md`
-- remaining live references in current non-archived docs and plans
-
-Impact:
-
-- leaves the repo mid-migration
-- weakens the new single-source-of-truth rule for agent instructions
-- invites future drift if live docs keep naming the compatibility shim instead of the canonical file
-
-## Testing And Verification Findings
-
-### What I verified locally
-
-- Frontend targeted unit slice passed:
-  - `tests/unit/stores/authStore.spec.js`
-  - `tests/unit/composables/useTableUrlState.spec.js`
-  - `tests/unit/logSanitizer.spec.js`
-  - Result: `68 passed`
-
-- Backend targeted auth slice failed:
-  - notable failures in `tests/test_pwdlib_rehash.py` and `tests/test_dev_endpoints.py`
-  - additional errors surfaced through admin/invite/verify fixtures
-
-- Backend targeted workflow slice failed:
-  - most tests passed, but there were errors in state-flow/delete-revision execution
-  - some errors were isolation/setup quality problems rather than pure business-logic failures
-
-### Why this matters
-
-The failing backend slices are not just "test noise". Even where the immediate failure mode is fixture/session isolation, it still means the current verification harness is not dependable enough for a platform that is actively changing security and workflow behavior.
-
-That puts the repo below the bar described in the April reports: it is harder than it should be to trust a green-or-red signal during risky changes.
-
-## Best-Practice Alignment
-
-This review was shaped by current primary and official sources:
-
-- Google Engineering Practices says review should prioritize design, functionality, complexity, tests, documentation, and safe handling of concurrency-sensitive code. That maps directly to the biggest risks found here: token issuance rules, concurrent state mutation, and weak test guarantees.
-- FastAPI’s current security tutorial recommends `pwdlib` with Argon2; the repo is now aligned there.
-- FastAPI’s larger-applications guidance favors `APIRouter`-based modularity; the repo is moving in that direction, though some route areas still carry too much cross-cutting logic.
-- SQLAlchemy 2.0 documents that `AsyncSession` is stateful and should not be shared across concurrent tasks; the stale session / statefulness symptoms seen in failing backend verification make session-boundary discipline especially important here.
-- OWASP API Security Top 10 2023 remains the right framing for several open issues, especially Broken Authentication, Broken Function Level Authorization, and sensitive business-flow protection.
-- Vue Test Utils recommends testing user-visible inputs/outputs rather than implementation details; the current frontend suite is still too smoke-test-heavy around the new admin/auth flows.
-- Vue’s style guide still emphasizes predictable list rendering and explicit component contracts; the repo follows some of this well, but several large view files remain hard to reason about safely.
-- Google’s documentation guidance explicitly favors deleting dead documentation and keeping a small, accurate docs set over a large mixed-quality pile.
-- OpenAI’s Codex guidance and the OpenAI skills/AGENTS workflow favor small repository-level instructions and reusable skills/workflows rather than large, tool-specific prompt dumps.
-
-## Recommendations
-
-### Immediate
-
-1. Fix token issuance enforcement.
-   - Reject locked and inactive users in both login and refresh paths.
-   - Add regression tests for locked login, deactivated refresh, and refresh after unlock.
-
-2. Harden refresh-token lifecycle.
-   - Revoke active refresh capability on password change and reset.
-   - Decide between hashed refresh-token storage or server-side token versioning/JTI tracking.
-
-3. Lock down the timeline endpoint.
-   - Apply the same visibility rules used by detail/list routes.
-   - Add explicit tests for anonymous, viewer, curator, and deleted-record access.
-
-4. Make delete/state mutations atomic.
-   - Use `UPDATE ... WHERE revision = :expected_revision` or row locking.
-   - Add a real concurrent edit/delete test.
-
-5. Move frontend auth off `localStorage`.
-   - Prefer HttpOnly refresh cookies and narrow-lived access handling.
-
-### Next
-
-6. Fix the phenopacket publication-binding bug and add a regression test for edit-save of PMIDs.
-7. Add clean 409 handling for duplicate-email admin updates.
-8. Make production email transport a startup requirement instead of a permissive default.
-9. Add a real curation-history UI backed by authoritative actor/revision data.
-10. Continue decomposing oversized view/service files that still carry too much state and orchestration.
-11. Stop treating `.planning/plans/variant-annotation-implementation-plan.md` as stable reference documentation; either write a real developer guide under `docs/` or remove the link from durable docs.
-12. Keep `AGENTS.md` as the canonical instruction file and restrict `CLAUDE.md` to a minimal compatibility shim only.
-
-## Way Forward
-
-### Phase 1: Security and integrity gate
-
-Ship nothing else before these are done:
-
-- token issuance enforcement
-- refresh-token revocation semantics
-- timeline visibility fix
-- atomic delete/state transition fix
-- publication-edit regression fix
-
-### Phase 2: Verification hardening
-
-- stabilize backend fixtures and async session boundaries
-- add failing-case auth tests, concurrent workflow tests, and frontend admin/edit interaction tests
-- require these slices in CI before merge
-
-### Phase 3: Curator-facing readiness
-
-- authoritative audit/revision UI
-- profile/session management
-- ORCID/preferences only after the platform security model is stable
+| Security & session management | 8.0 | Locked/inactive enforcement, SHA-256 refresh sessions, CSRF, session_version bump on role/password change |
+| Workflow / data integrity | 7.5 | Timeline visibility enforced; soft-delete uses `with_for_update()`; revision required on delete |
+| Frontend platform readiness | 7.5 | In-memory access + HttpOnly refresh cookie; publication binding fixed; dark theme polished |
+| Testing & change safety | 8.0 | Targeted slices green; comments/mentions test matrix landed; E2E comments flow shipped |
+| Architecture & modularity | 7.5 | Discussion tab + effective-state routing cleanly added; comments service well-isolated |
+| Operational readiness | 7.0 | Email console fallback still silent; ADR 0001 (localStorage) not yet superseded despite implementation moving off localStorage; observability (OTel/Sentry) not yet wired |
+
+## What Moved Since 2026-04-15
+
+All claims below were verified against concrete file paths and tests.
+
+### Security and session management
+
+- `backend/app/api/auth_endpoints.py:59-72` `_assert_user_can_receive_tokens()`
+  rejects `is_active=false` and unexpired `locked_until` before issuing tokens
+  in both `login()` (L278) and `refresh_access_token()` (L341).
+- `backend/app/models/refresh_session.py:26-27` stores SHA-256 hashes of refresh
+  tokens, not the tokens themselves; `RefreshSession` rows carry JTI + family.
+- Password change (L467), password reset (L1056), and deactivation (L694) call
+  `_revoke_all_refresh_capability()` which bumps `User.session_version` and
+  marks all session rows revoked.
+- `backend/app/auth/dependencies.py:210-213` `require_csrf_token()` enforces the
+  double-submit cookie pattern on state-changing endpoints.
+- `backend/tests/test_auth.py`, `test_auth_refresh_sessions.py`,
+  `test_auth_user_management_endpoints.py` cover locked login, deactivated
+  refresh, rotation family revoke, and deactivated-cookie rejection.
+
+### Workflow integrity
+
+- `backend/app/phenopackets/routers/crud_timeline.py:155-189` now applies
+  `curator_filter()` / `public_filter()` based on role; `test_crud_related_and_timeline.py`
+  covers draft-hide-public, deleted-hide-public, deleted-hide-curator (34 passed).
+- `backend/app/phenopackets/services/phenopacket_service.py:301-330`
+  `soft_delete()` uses `select(...).with_for_update()` before the revision
+  compare — race-safe.
+- `backend/tests/test_phenopackets_delete_revision.py` covers stale-revision
+  409 and concurrent-update-beats-stale-delete across sessions.
+
+### Frontend
+
+- `frontend/src/api/session.js:8-62` keeps the access token in a module-scoped
+  `let accessToken = null`; `purgeLegacyBrowserTokenStorage()` actively removes
+  any legacy `localStorage` entries on boot.
+- `frontend/src/api/transport.js:48-61` uses `withCredentials: true` on `/auth/*`
+  routes so the HttpOnly refresh cookie flows automatically.
+- `frontend/src/views/PhenopacketCreateEdit.vue:282-286` unifies publications
+  under `phenopacket.publications`; `buildSubmissionPhenopacket()` round-trips
+  them back into `metaData.externalReferences`. Regression tests in
+  `frontend/tests/unit/views/PhenopacketCreateEdit.spec.js:141-179`.
+- Tiptap + mention autocomplete, DiscussionTab, and E2E comments flow all
+  shipped under PR #254 with Copilot follow-up polish in #254.x.
+
+### Test verification
+
+Ran the exact slices flagged as failing in the 2026-04-15 version:
+
+| Slice | Result |
+|---|---|
+| `test_pwdlib_rehash.py` | 3 passed |
+| `test_dev_endpoints.py` | 7 passed |
+| `test_auth*.py` (13 files) | 107 passed |
+| `test_state_flows.py` | 12 passed |
+| `test_api_transitions.py` | 7 passed |
+| `test_phenopackets_delete_revision.py` | 6 passed |
+| `test_crud_related_and_timeline.py` | 34 passed |
+| `test_comments_*.py` (10 files) | 27 passed |
+| **Total** | **203 passed, 0 failed, ~55 s** |
+
+## Open Findings
+
+### 1. Medium → still High in effect: Production email backend can silently fall back to console
+
+`backend/app/core/config.py:413-440` `_validate_smtp_config()` only validates
+`SMTP_HOST` / credentials *if* `email.backend == "smtp"`. There is no companion
+check that says: "when `ENVIRONMENT=production`, `email.backend` MUST be
+`smtp`". A production deploy with `email.backend: "console"` (the default)
+logs password-reset, verify-email, and invite tokens to stdout while the app
+reports success to the UI.
+
+Recommended fix (mirrors `_refuse_dev_auth_in_prod`):
+
+```python
+@model_validator(mode="after")
+def _refuse_console_email_in_prod(self) -> "Settings":
+    if self.environment == "production" and self.yaml.email.backend == "console":
+        raise ValueError(
+            "REFUSING TO START: email.backend='console' is only permitted "
+            "outside production. Set email.backend: 'smtp' and provide SMTP_HOST."
+        )
+    return self
+```
+
+This is the single remaining finding that is genuinely production-blocking.
+
+### 2. Medium: Revision / curation-history surface is still behind the backend
+
+- `frontend/src/views/PagePhenopacket.vue:168-185` exposes Overview, Timeline,
+  and Discussion tabs. Discussion is now real (Tiptap, mentions, resolve).
+- The backend carries revision numbers, state transitions, and audit rows, but
+  the frontend never renders an authoritative "who changed what when" surface.
+- Timeline renders clinical phenotype events, not curation actions.
+
+This is intentional per the D.2 spec (Discussion ≠ audit trail). It still
+matters for curator trust. Concrete next step: add `HistoryTab.vue` that reads
+the existing audit/revision data and shows actor identity, transition reason,
+and a diff summary. Target this in the next hardening window rather than a new
+wave.
+
+### 3. Medium: Durable docs still link into `.planning/`
+
+Five files still present `.planning/plans/variant-annotation-implementation-plan.md`
+as "Developer Guide":
+
+- `docs/api/README.md:116`
+- `docs/api/variant-annotation.md:899`
+- `docs/user-guide/README.md:137`
+- `docs/user-guide/variant-annotation.md:863`
+- `backend/README.md:110`
+
+This violates the `.planning/` vs `docs/` boundary the 2026-04-15 planning
+cleanup established. Either promote the variant-annotation architecture into
+a stable `docs/architecture/variant-annotation.md` and repoint the links, or
+drop the link entirely and rely on the existing `docs/api/variant-annotation.md`
+reference material.
+
+### 4. Low: `docs/adr/0001-jwt-storage.md` is superseded in practice but not on paper
+
+ADR 0001 (2026-04-12, status "Accepted") still recommends `localStorage` with
+sanitize + CSP mitigations. The live code has since moved to in-memory access
+tokens + HttpOnly refresh cookie. Write ADR 0002 ("Move JWT to in-memory +
+HttpOnly cookie"), mark 0001 as Superseded, and update `frontend/README.md`
+so future reviewers don't chase a ghost. This is paperwork, but it matters for
+anyone reading the code against the ADR index.
+
+### 5. Low: Revision provenance deserves a dedicated multi-actor test
+
+`test_state_flows.py` and `test_api_transitions.py` pass, but the original
+review flagged multi-actor provenance specifically. Add one test that walks
+save → submit → approve → publish → edit → comment → resolve with three
+distinct actors, and asserts that every revision row's `changed_by` and
+transition reason matches expectation. Cheap to write; removes the last
+hand-wave on Finding 7.
+
+## New Findings From Current Best-Practice Sources (2026)
+
+The original review cited Google, FastAPI, SQLAlchemy, OWASP, and Vue. The
+verification pass this round pulled in primary sources that were either
+missing or incomplete in the original write-up. Each point below cites the
+primary source and names a concrete next step.
+
+### Security
+
+- OWASP API Security Top 10 is still on the 2023 edition; no 2024/2025
+  refresh. API1 (BOLA), API2 (Broken Auth), API3 (BOPLA) remain the right
+  lens for HNF1B-DB. https://owasp.org/API-Security/editions/2023/en/0x00-header/
+- OWASP Authentication Cheat Sheet: per-account (not per-IP) lockout counters
+  with exponential delay, and MFA where possible. HNF1B-DB has lockout; it
+  does not yet have a TOTP or WebAuthn second factor for admin accounts.
+  Consider adding WebAuthn for the `admin` role before widening rollout.
+- OWASP JWT Cheat Sheet: a revocation denylist is the recommended revocation
+  pattern; HNF1B-DB's `RefreshSession` table is effectively that, and the
+  SHA-256 column puts it ahead of most FastAPI reference apps.
+  https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+
+### SQLAlchemy async
+
+- SQLAlchemy 2.0 calls out two patterns that apply directly here: `version_id_col`
+  for optimistic concurrency (it emits `UPDATE ... WHERE version_id = :expected`
+  for tracked instances), and the rule that `AsyncSession` is not safe across
+  concurrent tasks. The current code uses `with_for_update()` which is stronger
+  but also serializes; if delete throughput becomes a pain point, migrating to
+  `version_id_col` would preserve safety at lower lock cost.
+  https://docs.sqlalchemy.org/en/20/orm/versioning.html
+  https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+
+### Frontend performance for curators
+
+- Vue 3.5 (current through April 2026) ships a reactivity refactor worth
+  −56% memory and up to 10× faster deep arrays. Vapor mode is still in 3.6
+  beta — do not ship it in a clinical tool yet.
+  https://blog.vuejs.org/posts/vue-3-5
+- `shallowRef` is the documented path for large phenopacket JSON blobs and
+  long discussion threads. https://vuejs.org/api/reactivity-advanced.html
+- Vuetify 3 has `VDataTableVirtual` and `v-virtual-scroll`; the current
+  `CommentList` and any "all phenopackets" table should switch to them once
+  typical record counts exceed ~200.
+  https://vuetifyjs.com/en/components/data-tables/virtual-tables/
+
+### Accessibility (WCAG 2.2)
+
+- WCAG 2.2 added six AA criteria directly relevant to curators on tablets:
+  2.4.11 Focus Not Obscured (Min), 2.5.7 Dragging Movements, 2.5.8 Target
+  Size (≥24×24 CSS px), 3.2.6 Consistent Help, 3.3.7 Redundant Entry, 3.3.8
+  Accessible Authentication. Next step: audit all touch targets in
+  `PhenopacketCreateEdit.vue`, transition menu, and comment composer against
+  24×24 px, and confirm dark-theme focus-ring contrast ≥ 3:1.
+  https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+- ARIA Authoring Practices Guide patterns for the comment composer
+  (combobox + listbox for mentions), tabs (Discussion / Overview / Timeline),
+  and live regions for save/resolve feedback. Verify `MentionSuggestionList`
+  matches the combobox pattern (arrow keys, Esc to dismiss, `aria-activedescendant`).
+  https://www.w3.org/WAI/ARIA/apg/patterns/
+
+### Curation latency budget
+
+- GA4GH Phenopackets v2 remains the authoritative schema; no v3. ClinGen VCI
+  four-state workflow (In-progress / Provisional / Approved / New-Provisional)
+  maps onto the current state machine cleanly.
+  https://www.ga4gh.org/product/phenopackets/
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC8764818/
+- No consortium publishes a specific latency budget, so anchor on Nielsen's
+  well-established thresholds: ≤100 ms "feels instant", ≤1 s "keeps flow",
+  ≤10 s "user disengages". Recommended SLOs for HNF1B-DB:
+  - autocomplete / mention search: p95 ≤ 200 ms
+  - autosave round-trip: p95 ≤ 500 ms
+  - detail page TTI: p95 ≤ 1.5 s on a 3G-ish mobile profile
+  - publication save: p95 ≤ 1 s
+  These should be wired into Playwright timings and an observability
+  dashboard, not just guessed.
+
+### Observability
+
+- OpenTelemetry has a stable FastAPI auto-instrumentation
+  (`opentelemetry-instrumentation-fastapi` 0.62b0 as of April 2026).
+  https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/fastapi/fastapi.html
+- Sentry FastAPI + Vue integrations are straightforward to wire
+  (`@sentry/vue` with `browserTracingIntegration` + `replayIntegration`).
+  https://docs.sentry.io/platforms/python/integrations/fastapi/
+  https://docs.sentry.io/platforms/javascript/guides/vue/
+- HNF1B-DB currently has structured logging; it does not have request
+  tracing or frontend error capture. Add both before the next user-facing
+  milestone, not after — curator bug reports without traces are very hard
+  to resolve.
+
+### Playwright
+
+- Playwright best practices (still the 2025/2026 guidance): `getByRole`
+  over CSS, web-first assertions (`toBeVisible()` not `isVisible()`), avoid
+  fixed waits, keep each test isolated. The current comments E2E already
+  simplified to a single admin session, which matches the guidance.
+  https://playwright.dev/docs/best-practices
+
+## Recommendations (ordered)
+
+### Immediate (block on these before any production-like deploy)
+
+1. Add the `_refuse_console_email_in_prod` validator to `backend/app/core/config.py`.
+2. Write ADR 0002 superseding 0001; update `frontend/README.md` to describe the
+   in-memory + HttpOnly cookie model so the code and the docs agree.
+3. Remove or redirect the five `.planning/plans/variant-annotation-implementation-plan.md`
+   references in durable docs. Promote the content into `docs/architecture/` if
+   it genuinely belongs to the stable corpus.
+
+### Near-term (curator experience and platform quality)
+
+4. Add `HistoryTab.vue` backed by the existing audit/revision tables. Show
+   actor identity, transition reason, and diff summary.
+5. Add the multi-actor provenance test described above.
+6. Add TOTP or WebAuthn second factor for admin accounts.
+7. Wire OpenTelemetry FastAPI auto-instrumentation + Sentry (backend + frontend).
+   Start collecting p95 for the four curator-latency SLOs.
+8. Audit WCAG 2.2 AA compliance in the edit, transition, and discussion flows —
+   specifically target size, focus appearance in dark theme, and the combobox
+   pattern on mentions.
+9. Swap `CommentList` and any list views that can exceed ~200 rows to
+   `v-virtual-scroll` / `VDataTableVirtual`. Convert large phenopacket JSON
+   blobs on detail pages to `shallowRef`.
+
+### Medium-term (finish the platform bundle)
+
+10. ORCID link/unlink + attribution preferences (Bundle E).
+11. Session inventory UI (per-device active sessions, "log everyone else out").
+12. Private contributor dashboard (my created, my reviewed, unresolved
+    discussions, recent activity).
+13. Keyboard-first curation: document and implement shortcut keys for
+    save-and-next, submit, publish, resolve, and mention — high-throughput
+    curators will notice the difference.
 
 ## Final Assessment
 
-HNF1B-DB is clearly in better shape than it was on 2026-04-09 and 2026-04-11. The codebase now has a much more credible platform core. But the remaining issues are exactly the kinds that make production systems fail in painful ways: authorization side doors, inconsistent token rules, concurrency holes, and verification that cannot be fully trusted.
+HNF1B-DB cleared almost every blocker identified on 2026-04-15 within 48 hours,
+with verifiable tests and clean code. This is an unusually strong close-out
+rate for a review of this depth.
 
-My recommendation is:
+The remaining work is narrow, well-understood, and mostly non-security:
+- one real production hazard (email console fallback),
+- one ADR to supersede,
+- one doc-hygiene sweep,
+- and a handful of curator-UX, observability, and a11y upgrades that will
+  matter as the user base expands.
 
-**Do not treat the platform as production-ready yet.**
-
-Treat the next milestone as a **security-and-integrity hardening release**, not a feature release. If the Phase 1 items above are completed and the backend verification slices become stable, this codebase can move from "promising but risky" to "credible for controlled multi-user rollout."
+**Recommendation:** land the immediate three items, then treat the next
+milestone as "curator-experience and operational polish" — history UI,
+observability, WCAG 2.2 audit, virtualization, keyboard shortcuts. The core
+platform is now credible for controlled multi-user rollout once the email
+validator lands.
 
 ## Sources
 
-- Google Engineering Practices, "What to look for in a code review": https://google.github.io/eng-practices/review/reviewer/looking-for.html
-- Google Engineering Practices, "The Standard of Code Review": https://google.github.io/eng-practices/review/reviewer/standard.html
-- SmartBear, "Understanding the Code Review Process": https://smartbear.com/learn/code-review/guide-to-code-review-process/
-- FastAPI, "OAuth2 with Password (and hashing), Bearer with JWT tokens": https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
-- FastAPI, "Bigger Applications - Multiple Files": https://fastapi.tiangolo.com/tutorial/bigger-applications/
-- SQLAlchemy 2.0, "Asynchronous I/O (asyncio)": https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
-- OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x00-toc/
-- OWASP API5:2023 Broken Function Level Authorization: https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/
-- Vue Style Guide: https://vuejs.org/style-guide/
-- Vue Test Utils Guide: https://test-utils.vuejs.org/guide/
-- Vue Test Utils, "Write components that are easy to test": https://test-utils.vuejs.org/guide/essentials/easy-to-test.html
+Security + auth:
+- OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x00-header/
+- OWASP Authentication Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- OWASP JWT Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+- OWASP CSRF Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+- FastAPI OAuth2/JWT tutorial: https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
+
+Data integrity:
+- SQLAlchemy 2.0 versioning: https://docs.sqlalchemy.org/en/20/orm/versioning.html
+- SQLAlchemy 2.0 asyncio: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+
+Frontend + accessibility:
+- Vue 3.5 release notes: https://blog.vuejs.org/posts/vue-3-5
+- Vue reactivity advanced: https://vuejs.org/api/reactivity-advanced.html
+- Vuetify virtual tables: https://vuetifyjs.com/en/components/data-tables/virtual-tables/
+- WCAG 2.2 What's New: https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+- ARIA APG patterns: https://www.w3.org/WAI/ARIA/apg/patterns/
+
+Clinical curation context:
+- GA4GH Phenopackets: https://www.ga4gh.org/product/phenopackets/
+- ClinGen VCI (Genome Medicine 2022): https://pmc.ncbi.nlm.nih.gov/articles/PMC8764818/
+
+Observability + testing:
+- OpenTelemetry FastAPI: https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/fastapi/fastapi.html
+- Sentry FastAPI: https://docs.sentry.io/platforms/python/integrations/fastapi/
+- Sentry Vue: https://docs.sentry.io/platforms/javascript/guides/vue/
+- Playwright best practices: https://playwright.dev/docs/best-practices
+
+Code review framing:
+- Google Engineering Practices: https://google.github.io/eng-practices/review/reviewer/looking-for.html
+- SmartBear Code Review Process: https://smartbear.com/learn/code-review/guide-to-code-review-process/

@@ -261,7 +261,7 @@
           </v-card>
 
           <!-- Loading State -->
-          <v-card v-else variant="outlined" class="border-opacity-12" rounded="lg">
+          <v-card v-else-if="!error" variant="outlined" class="border-opacity-12" rounded="lg">
             <v-card-text class="text-center py-12">
               <v-progress-circular
                 indeterminate
@@ -775,12 +775,28 @@ export default {
 <style scoped>
 .phenopacket-container {
   min-height: 100vh;
-  background-color: #fafafa;
+  background-color: var(--page-bg);
 }
 
 .hero-section {
-  background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 50%, #f5f7fa 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: linear-gradient(
+    135deg,
+    var(--hero-start) 0%,
+    var(--hero-mid) 50%,
+    var(--hero-end) 100%
+  );
+  border-bottom: 1px solid var(--hero-border);
+}
+
+/* Default (light) tokens — scoped to this component. */
+.phenopacket-container {
+  --page-bg: #fafafa;
+}
+.hero-section {
+  --hero-start: #e0f2f1;
+  --hero-mid: #b2dfdb;
+  --hero-end: #f5f7fa;
+  --hero-border: rgba(0, 0, 0, 0.05);
 }
 
 .border-bottom {
@@ -849,5 +865,31 @@ export default {
   .primary-cards-grid {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<!-- Dark-theme token overrides in a non-scoped block so the
+     v-theme--dark descendant combinator is not stripped by Vue.
+     Every selector is anchored to .phenopacket-container so these rules
+     never bleed into Home.vue / PageVariant.vue / PagePublication.vue,
+     which each own a separate .hero-section with its own theming. -->
+<style>
+/* Dark-theme overrides — match the v-theme--dark class on <html>/<body>. */
+.v-theme--dark .phenopacket-container {
+  --page-bg: #0d1617;
+}
+.v-theme--dark .phenopacket-container .hero-section {
+  --hero-start: #102a2b;
+  --hero-mid: #1e3a3a;
+  --hero-end: #0d1b1c;
+  --hero-border: rgba(255, 255, 255, 0.08);
+}
+
+/* Ensure foreground text on the phenopacket hero meets WCAG AA contrast in
+   dark mode. teal-lighten-3 against #102a2b yields ~8.4:1 — well above 4.5:1. */
+.v-theme--dark .phenopacket-container .hero-section h1,
+.v-theme--dark .phenopacket-container .hero-section .v-tab,
+.v-theme--dark .phenopacket-container .hero-section .text-teal-darken-2 {
+  color: rgb(178, 223, 219) !important;
 }
 </style>

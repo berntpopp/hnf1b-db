@@ -2,12 +2,12 @@
 <template>
   <v-container>
     <v-card>
-      <v-card-title class="text-h4">
+      <h1 class="v-card-title text-h4">
         <v-icon left color="primary" size="large">
           {{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}
         </v-icon>
         {{ isEditing ? 'Edit Phenopacket' : 'Create New Phenopacket' }}
-      </v-card-title>
+      </h1>
 
       <v-card-text>
         <!-- Error State -->

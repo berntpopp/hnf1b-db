@@ -161,6 +161,7 @@
                       variant="outlined"
                       :href="block.url"
                       :target="block.external ? '_blank' : undefined"
+                      :rel="block.external ? 'noopener noreferrer' : undefined"
                       size="small"
                     >
                       <v-icon left>{{ block.icon }}</v-icon>
@@ -193,7 +194,12 @@
             </v-card-title>
             <v-card-text class="pa-6 text-center">
               <p class="text-body-1 mb-4">{{ content.contact.text }}</p>
-              <v-btn color="primary" :href="content.contact.button.url" target="_blank">
+              <v-btn
+                color="primary"
+                :href="content.contact.button.url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <v-icon left>{{ content.contact.button.icon }}</v-icon>
                 {{ content.contact.button.text }}
               </v-btn>
@@ -257,7 +263,10 @@ const renderMarkdown = (text) => {
   const rendered = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>');
+    .replace(
+      /\[(.+?)\]\((.+?)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
   return sanitize(rendered);
 };
 

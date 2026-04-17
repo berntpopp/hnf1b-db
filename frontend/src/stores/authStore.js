@@ -117,6 +117,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAccessToken() {
+    const wasAuthenticated = !!user.value;
     try {
       const response = await apiClient.post('/auth/refresh', null, {
         withCredentials: true,
@@ -132,9 +133,15 @@ export const useAuthStore = defineStore('auth', () => {
 
       return access_token;
     } catch (err) {
-      window.logService.error('Token refresh failed', {
-        error: err.message,
-      });
+      if (wasAuthenticated) {
+        window.logService.error('Token refresh failed', {
+          error: err.message,
+        });
+      } else {
+        window.logService.debug('Anonymous session refresh rejected (expected)', {
+          error: err.message,
+        });
+      }
 
       // If refresh fails, logout user (skip backend call since token is already invalid)
       await logout(true);
@@ -216,7 +223,8 @@ export const useAuthStore = defineStore('auth', () => {
           await fetchCurrentUser();
         } catch (err) {
           // Token might be expired, will be handled by interceptor
-          window.logService.warn('Failed to initialize user session', {
+          const level = user.value ? 'warn' : 'debug';
+          window.logService[level]('Failed to initialize user session', {
             error: err.message,
           });
         }
@@ -227,7 +235,8 @@ export const useAuthStore = defineStore('auth', () => {
         await refreshAccessToken();
         await fetchCurrentUser();
       } catch (err) {
-        window.logService.warn('Failed to initialize user session', {
+        // Anonymous visitor — refresh rejection is expected.
+        window.logService.debug('Anonymous session bootstrap skipped', {
           error: err.message,
         });
       }

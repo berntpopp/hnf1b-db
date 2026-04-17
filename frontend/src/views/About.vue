@@ -163,7 +163,11 @@
                 <v-divider class="my-4" />
                 <p class="text-body-2 text-grey-darken-1">
                   {{ section.content.contact.text }}
-                  <a :href="section.content.contact.linkUrl" target="_blank">
+                  <a
+                    :href="section.content.contact.linkUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {{ section.content.contact.linkText }}
                   </a>
                   or submit a pull request.
@@ -188,7 +192,7 @@
                   <div>
                     <p class="text-body-1 mb-2">
                       This work is licensed under a
-                      <a :href="section.content.url" target="_blank" rel="noopener">
+                      <a :href="section.content.url" target="_blank" rel="noopener noreferrer">
                         {{ section.content.name }} </a
                       >.
                     </p>

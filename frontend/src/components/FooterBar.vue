@@ -172,22 +172,32 @@ const refreshHealth = async () => {
 };
 
 const loadFooterConfig = async () => {
-  // Get API URL from environment variable, fallback to localhost for development
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-  // Docs are mounted at /api/v2/docs in FastAPI, so append /docs to the base URL
-  const apiDocsUrl = apiBaseUrl + '/docs';
+  const rawApi = import.meta.env.VITE_API_URL || '';
+  const isProd = import.meta.env.PROD === true;
+
+  let apiDocsUrl = null;
+  if (rawApi) {
+    apiDocsUrl = rawApi.replace(/\/+$/, '') + '/docs';
+  } else if (!isProd) {
+    // Dev fallback — acceptable because localhost:8000 is the dev backend.
+    apiDocsUrl = 'http://localhost:8000/api/v2/docs';
+  } else {
+    window.logService.warn('API docs URL not configured (VITE_API_URL unset)', {
+      env: 'production',
+    });
+  }
 
   try {
     const response = await fetch('/config/footerConfig.json');
     const config = await response.json();
 
-    // Replace placeholders with actual URLs
     footerLinks.value = config
       .filter((link) => link.enabled)
       .map((link) => ({
         ...link,
         url: link.url === '__API_DOCS_URL__' ? apiDocsUrl : link.url,
-      }));
+      }))
+      .filter((link) => link.url); // drop entries with null URL (unconfigured API docs)
 
     window.logService.info('Footer configuration loaded', {
       linksCount: footerLinks.value.length,
@@ -197,7 +207,7 @@ const loadFooterConfig = async () => {
       error: error.message,
       path: '/config/footerConfig.json',
     });
-    // Fallback to default links with environment-aware API docs URL
+    // Fallback to default links; API docs entry is filtered if unconfigured.
     footerLinks.value = [
       {
         id: 'github',
@@ -205,12 +215,16 @@ const loadFooterConfig = async () => {
         icon: 'mdi-github',
         url: 'https://github.com/berntpopp/hnf1b-db',
       },
-      {
-        id: 'api-docs',
-        title: 'API Documentation',
-        icon: 'mdi-api',
-        url: apiDocsUrl,
-      },
+      ...(apiDocsUrl
+        ? [
+            {
+              id: 'api-docs',
+              title: 'API Documentation',
+              icon: 'mdi-api',
+              url: apiDocsUrl,
+            },
+          ]
+        : []),
       {
         id: 'license',
         title: 'CC BY 4.0 License',

@@ -66,6 +66,7 @@
                   <v-chip
                     :href="formatExternalReferenceUrl(ref)"
                     target="_blank"
+                    rel="noopener noreferrer"
                     color="blue"
                     size="small"
                     variant="flat"

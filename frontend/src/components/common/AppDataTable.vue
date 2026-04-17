@@ -22,9 +22,13 @@
       v-if="title || $slots['title-actions']"
       class="table-title-bar d-flex align-center justify-space-between px-4 py-2"
     >
-      <div v-if="title" class="text-subtitle-1 font-weight-bold text-teal-darken-2">
+      <component
+        :is="titleTag"
+        v-if="title"
+        class="text-subtitle-1 font-weight-bold text-teal-darken-2 ma-0"
+      >
         {{ title }}
-      </div>
+      </component>
       <div v-if="$slots['title-actions']" class="d-flex align-center ga-2">
         <slot name="title-actions" />
       </div>
@@ -71,6 +75,10 @@ defineProps({
   title: {
     type: String,
     default: '',
+  },
+  titleTag: {
+    type: String,
+    default: 'h1',
   },
   serverSide: {
     type: Boolean,

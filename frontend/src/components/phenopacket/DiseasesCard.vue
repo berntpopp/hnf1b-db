@@ -16,6 +16,7 @@
             <v-chip
               :href="getMondoUrl(disease.term.id)"
               target="_blank"
+              rel="noopener noreferrer"
               color="red"
               variant="flat"
               size="small"

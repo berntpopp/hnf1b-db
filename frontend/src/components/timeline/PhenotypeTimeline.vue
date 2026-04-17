@@ -80,6 +80,7 @@
                     <v-chip
                       :href="`https://hpo.jax.org/app/browse/term/${feature.hpo_id}`"
                       target="_blank"
+                      rel="noopener noreferrer"
                       color="green-lighten-4"
                       size="x-small"
                       variant="flat"

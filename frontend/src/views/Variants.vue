@@ -99,7 +99,12 @@
 
       <!-- Render simple_id as a clickable chip -->
       <template #item.simple_id="{ item }">
-        <v-chip color="pink-lighten-3" size="x-small" variant="flat">
+        <v-chip
+          :to="`/variants/${encodeURIComponent(item.variant_id)}`"
+          color="pink-lighten-3"
+          size="x-small"
+          variant="flat"
+        >
           {{ item.simple_id }}
           <v-icon end size="x-small">mdi-dna</v-icon>
         </v-chip>
