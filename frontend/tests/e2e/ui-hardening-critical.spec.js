@@ -23,3 +23,18 @@ test.describe('Critical findings', () => {
     await expect(page.locator('.v-progress-circular')).toHaveCount(0);
   });
 });
+
+test.describe('/aggregations reliability (C1)', () => {
+  test('renders a page-level h1 and either data or an error card — never pure white', async ({
+    page,
+  }) => {
+    await page.goto('/aggregations');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('h1')).toBeVisible();
+    // At least one of: tab chrome, a chart container, an error alert.
+    const tabCount = await page.locator('.v-tabs').count();
+    const alertCount = await page.locator('.v-alert').count();
+    const chartCount = await page.locator('canvas, svg').count();
+    expect(tabCount + alertCount + chartCount).toBeGreaterThan(0);
+  });
+});
