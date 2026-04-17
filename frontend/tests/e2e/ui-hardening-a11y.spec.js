@@ -105,3 +105,23 @@ test.describe('Keyboard row activation (H3)', () => {
 // contract (aria-label on .ProseMirror + toolbar buttons) is cheaper and
 // more robust to verify in a unit test than navigating to a seeded
 // authenticated detail page in Playwright.
+
+test.describe('Skip-to-main-content (L6)', () => {
+  test('first tab-able element is a visible skip link pointing to #main-content', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el
+        ? { tag: el.tagName, href: el.getAttribute('href'), text: el.textContent?.trim() }
+        : null;
+    });
+    expect(focused?.tag).toBe('A');
+    expect(focused?.href).toBe('#main-content');
+    expect(focused?.text?.toLowerCase()).toContain('skip');
+    await expect(page.locator('#main-content')).toHaveCount(1);
+  });
+});
