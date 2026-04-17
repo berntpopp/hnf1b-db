@@ -96,6 +96,7 @@
                 v-bind="props"
                 :href="`https://pubmed.ncbi.nlm.nih.gov/${extractPmidNumber(item.pmid)}`"
                 target="_blank"
+                rel="noopener noreferrer"
                 icon
                 size="x-small"
                 variant="text"
@@ -113,6 +114,7 @@
                 v-bind="props"
                 :href="`https://doi.org/${item.doi}`"
                 target="_blank"
+                rel="noopener noreferrer"
                 icon
                 size="x-small"
                 variant="text"

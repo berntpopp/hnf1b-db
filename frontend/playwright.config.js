@@ -6,13 +6,16 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Wave 6 Task 1: scaffolds the Playwright runner so CI can exercise the
  * existing `tests/e2e/*.spec.js` suite. Specs assume the frontend is on
- * :5173 and the backend on :8000 — we start the Vite dev server via
+ * :5174 and the backend on :8000 — we start the Vite dev server via
  * `webServer` here, and CI brings up the backend + Postgres + Redis
  * stack separately. If `E2E_BASE_URL` is set (e.g. by CI pointing at a
  * preview deploy), `webServer` is skipped.
+ *
+ * Port 5174 is used instead of the default 5173 to avoid collision with
+ * other Vite dev servers that may be running on this machine.
  */
 
-const baseURL = process.env.E2E_BASE_URL || 'http://localhost:5173';
+const baseURL = process.env.E2E_BASE_URL || 'http://localhost:5174';
 const useWebServer = !process.env.E2E_BASE_URL;
 
 export default defineConfig({
@@ -44,8 +47,8 @@ export default defineConfig({
   // wired up by the e2e-tests workflow job.
   webServer: useWebServer
     ? {
-        command: 'npm run dev -- --port 5173 --strictPort',
-        port: 5173,
+        command: 'npm run dev -- --port 5174 --strictPort',
+        port: 5174,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       }
