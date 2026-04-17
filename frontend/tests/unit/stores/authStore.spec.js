@@ -315,10 +315,63 @@ describe('Auth Store', () => {
       expect(apiClient.get).not.toHaveBeenCalled();
       expect(authStore.user).toBeNull();
       expect(authStore.accessToken).toBeNull();
-      expect(window.logService.warn).toHaveBeenCalledWith(
-        'Failed to initialize user session',
+      // M12: anonymous bootstrap failure is expected; logged at debug, not warn.
+      expect(window.logService.debug).toHaveBeenCalledWith(
+        'Anonymous session bootstrap skipped',
         expect.any(Object)
       );
+    });
+  });
+
+  describe('authStore — log hygiene (M12)', () => {
+    let logSpy;
+
+    beforeEach(() => {
+      setActivePinia(createPinia());
+      logSpy = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      };
+      window.logService = logSpy;
+      vi.clearAllMocks();
+    });
+
+    it('logs anonymous refresh rejection at debug, not error', async () => {
+      apiClient.post.mockRejectedValueOnce(new Error('401 Unauthorized'));
+      const store = useAuthStore();
+      // user is null → anonymous.
+      await expect(store.refreshAccessToken()).rejects.toThrow();
+      expect(logSpy.error).not.toHaveBeenCalledWith('Token refresh failed', expect.anything());
+      expect(logSpy.debug).toHaveBeenCalledWith(
+        'Anonymous session refresh rejected (expected)',
+        expect.objectContaining({ error: expect.any(String) })
+      );
+    });
+
+    it('logs authenticated refresh rejection at error', async () => {
+      apiClient.post.mockRejectedValueOnce(new Error('500 Server'));
+      const store = useAuthStore();
+      // Simulate an authenticated session by setting user before the refresh.
+      store.user = { username: 'x', role: 'curator' };
+      await expect(store.refreshAccessToken()).rejects.toThrow();
+      expect(logSpy.error).toHaveBeenCalledWith(
+        'Token refresh failed',
+        expect.objectContaining({ error: expect.any(String) })
+      );
+    });
+
+    it('initialize() logs anonymous bootstrap skip at debug', async () => {
+      apiClient.post.mockRejectedValueOnce(new Error('401 Unauthorized'));
+      const store = useAuthStore();
+      await store.initialize();
+      // The "Failed to initialize user session" warn must not fire for anons.
+      expect(logSpy.warn).not.toHaveBeenCalledWith(
+        'Failed to initialize user session',
+        expect.anything()
+      );
+      expect(logSpy.debug).toHaveBeenCalled();
     });
   });
 
