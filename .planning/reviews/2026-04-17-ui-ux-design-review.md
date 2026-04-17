@@ -1,9 +1,51 @@
 # HNF1B-DB UI/UX Design Review
 
-Date: 2026-04-17
+Date: 2026-04-17 (original) / 2026-04-17 (post-remediation update)
 Reviewer: Claude Opus 4.7 (senior UI/UX designer lens) + Playwright MCP instrument
 Scope: public + authenticated pages, desktop 1440×900 and phone 390×844
-Branch under test: `workstream-b-publications-email-conflicts` @ `195c7c1`
+Branch under test: `workstream-b-publications-email-conflicts` @ `195c7c1` (original audit)
+Remediation landed: `main` @ `e8c6f58` (squash merge of PR #263, 2026-04-17)
+
+> ## Status Update — Post PR #263
+>
+> The "Immediate" and partial "Near-term" work called out below shipped
+> in a single frontend PR the same day as this audit. Every Critical
+> and High finding is now closed, along with M10, M12, and L6.
+>
+> **Findings closed:** C1, C2, H1, H2, H3, H4, H5, H6, M10, M12, L6.
+> **Still open:** M1–M9 (except M10), M11, L1–L5, L7, and the cosmetic list.
+>
+> **Measurable gates from "How To Measure The Score Moved"** (bottom of
+> this review):
+>
+> - ✅ Every page renders a real `h1` — verified by
+>   `tests/e2e/ui-hardening-a11y.spec.js` H2 block.
+> - ✅ Every `target="_blank"` has `rel="noopener noreferrer"` — the
+>   H1 sweep extended beyond the 5 views originally listed to cover
+>   every such site in `frontend/src/`.
+> - ✅ `/aggregations` renders an `h1` + tab chrome, or a real error
+>   card on fetch failure.
+> - ✅ `/phenopackets/new` redirects to `/phenopackets/create` (auth
+>   guard forwards anon users to login with a `redirect` query).
+> - ✅ Tiptap composer exposes `aria-label="Comment body"` on the
+>   ProseMirror contenteditable + a formatting toolbar with
+>   aria-labelled Bold / Italic / Link / Mention buttons.
+> - ✅ Dark-theme detail header contrast: h1 8.4:1 against the dark
+>   gradient start, verified by a Playwright DOM contrast probe.
+> - ✅ Keyboard-only flow: Tab to the first subject-ID chip on
+>   `/phenopackets`, Enter navigates to detail. Same pattern on
+>   `/variants` and `/publications` (the PMID chip was already an
+>   anchor).
+> - ⏳ p95 latency SLOs (autocomplete, autosave, TTI, save) — not yet
+>   wired; tracked as an OpenTelemetry follow-up.
+>
+> **Revised overall score: 8.5 / 10** — seven of the eight review gates
+> are now satisfied.
+>
+> See `.planning/specs/2026-04-17-ui-hardening-immediate-design.md`
+> and `.planning/plans/2026-04-17-ui-hardening-immediate.md` for the
+> exact scope that shipped, and commit `e8c6f58` for the squashed
+> implementation.
 
 ## Summary
 
@@ -34,19 +76,19 @@ on mobile, `target="_blank"` without `rel="noopener"`).
 None of the findings here are catastrophic. Most are moderate, and the
 highest-impact fixes are mechanical.
 
-### Overall score: **7.0 / 10**
+### Overall score: **7.0 / 10** (original) → **8.5 / 10** (post PR #263)
 
-| Dimension | Score | One-line |
-|---|:---:|---|
-| Information hierarchy | 7 | Strong on home; list/create pages lack real heading structure |
-| Affordance & discoverability | 7 | Primary actions clear; row-activation model is mouse-only |
-| Feedback & system status | 7 | Health indicator nice; toasts on save; some loading+error shown simultaneously |
-| Error prevention & recovery | 7 | Required badges on form; no in-form validation preview on create |
-| Curator speed | 6 | No keyboard shortcuts, no autosave, row clicks not keyboard-reachable |
-| Accessibility (WCAG 2.2 AA) | 6 | Strong aria-labels on nav; missing headings; composer has no name; dark-theme contrast issues |
-| Visual design / consistency | 7.5 | Vuetify tokens used well; a few hand-styled elements break the system |
-| Mobile / responsive posture | 7 | Reader pages work at 390 px; tables scroll horizontally; labels wrap awkwardly |
-| Performance feel | 8.5 | DCL 135–271 ms local; health widget honest about latency |
+| Dimension | Before | After | Movement reason |
+|---|:---:|:---:|---|
+| Information hierarchy | 7 | 8.5 | Real `h1` on every list/create/aggregations view; skip-link to `#main-content` |
+| Affordance & discoverability | 7 | 8 | Primary identity chips are now keyboard-reachable anchors; Tiptap formatting toolbar discovers `@mention` |
+| Feedback & system status | 7 | 8 | `/aggregations` error fallback, `/phenopackets/new` redirect, dual-state dedupe on detail |
+| Error prevention & recovery | 7 | 7.5 | Mutually-exclusive loading/error; in-form validation preview still deferred |
+| Curator speed | 6 | 7 | Keyboard row activation closes the big gap; shortcut layer + autosave still pending |
+| Accessibility (WCAG 2.2 AA) | 6 | 8.5 | h1 everywhere; composer accessible name; dark-theme contrast 8.4:1; skip-link present; rel=noopener sweep |
+| Visual design / consistency | 7.5 | 7.5 | Unchanged in this batch; auth-verb + vocabulary unification still deferred |
+| Mobile / responsive posture | 7 | 7 | Unchanged; mobile pager collapse still deferred |
+| Performance feel | 8.5 | 8.5 | Unchanged; OpenTelemetry / SLO wiring still deferred |
 
 ---
 
@@ -91,20 +133,20 @@ speed, across any device they happen to have open.
 
 ## Per-Page Scores
 
-| # | Page | Role needed | Score | Highest-severity finding |
-|---|---|---|:---:|---|
-| 1 | `/` (Home) | anon | **7.5** | Lighthouse-style duplicated title tag; nice-to-fix |
-| 2 | `/phenopackets` (list) | anon | **6.5** | Row-activation not keyboard-reachable; no page `h1` |
-| 3 | `/phenopackets/:id` (detail, anon) | anon | **7.0** | Empty-state gives no next-step affordance for anon visitors |
-| 4 | `/publications` | anon | **6.5** | External links missing `rel="noopener noreferrer"` — security + a11y |
-| 5 | `/variants` | anon | **7.5** | Classification chip contrast borderline on some rows |
-| 6 | `/aggregations` | anon | **2.0** | Page renders blank on a fresh load — catastrophic per H1 |
-| 7 | `/login` | anon | **7.0** | "Sign in to access the HNF1B Databa…" truncated with ellipsis; no forgot-link rendered despite link existing |
-| 8 | `/user` (profile) | any | **8.5** | Cleanest page in the app; only gripe is avatar/name echo |
-| 9 | `/admin/users` | admin | **8.0** | Edit/delete targets ≤ 24 px (row actions); no bulk actions |
-| 10 | `/phenopackets/create` | curator/admin | **6.0** | Zero `h*` landmarks on a 23-control form; "Required" badge repetition |
-| 11 | `/phenopackets/:id` Discussion tab | curator/admin | **6.5** | Tiptap composer has no accessible name; dark-theme tab labels washed out |
-| – | `/phenopackets/new` | curator/admin | **n/a** | Routes to error — see Finding F3 |
+| # | Page | Role needed | Before | After | Highest-severity finding (status) |
+|---|---|---|:---:|:---:|---|
+| 1 | `/` (Home) | anon | 7.5 | 7.5 | Duplicated title tag (L1, still open) |
+| 2 | `/phenopackets` (list) | anon | 6.5 | **8.5** | Row-activation + h1 ✅ PR #263 |
+| 3 | `/phenopackets/:id` (detail, anon) | anon | 7.0 | **8.0** | Dark-theme contrast ✅; empty-state affordance (M9) still open |
+| 4 | `/publications` | anon | 6.5 | **8.5** | External link `rel` ✅; h1 ✅ |
+| 5 | `/variants` | anon | 7.5 | **8.5** | Row activation ✅; h1 ✅; classification chip contrast still noted |
+| 6 | `/aggregations` | anon | 2.0 | **8.0** | Always-present h1 + per-fetch error boundary ✅ |
+| 7 | `/login` | anon | 7.0 | 7.0 | Welcome truncation (M6), forgot-link (L7) still open |
+| 8 | `/user` (profile) | any | 8.5 | 8.5 | Unchanged; already the cleanest page |
+| 9 | `/admin/users` | admin | 8.0 | 8.0 | Target-size spacing (L2) still open |
+| 10 | `/phenopackets/create` | curator/admin | 6.0 | **7.5** | h1 ✅; fieldsets (M2) + dynamic Required (M3) still open |
+| 11 | `/phenopackets/:id` Discussion tab | curator/admin | 6.5 | **8.0** | Composer name + toolbar ✅; empty-state hint (M11) still open |
+| – | `/phenopackets/new` | curator/admin | n/a | **redirected** | Aliased to `/phenopackets/create` ✅ |
 
 ---
 
@@ -117,88 +159,93 @@ land.
 
 ### Critical
 
-**C1 — `/aggregations` renders a blank page.**
+**C1 — `/aggregations` renders a blank page.** ✅ **CLOSED — PR #263.**
 Heuristic: H1 Visibility of system status. WCAG: 1.3.1 Info and
-Relationships. After the nav header, the viewport is entirely white;
-no spinner, no empty state, no error. A clinician landing here will
-not know whether the tool is broken, slow, or they lack permission.
-Reproduce: navigate to `/aggregations` as anonymous user on desktop.
-Fix: either route-guard and redirect, or always render a
-"Loading aggregations…" skeleton with a timeout fallback to a real
-error card.
+Relationships. Original repro: viewport entirely white after the nav
+header; no spinner, no empty state, no error. **Resolution:** live
+Playwright repro against a running stack showed the page actually
+renders tab chrome and fetches data — the real defect was the
+*missing* `h1` landmark, which made the page read as blank to
+screen readers and the audit tooling. `AggregationsDashboard.vue`
+now always renders `<h1>Aggregations</h1>` above the tabs, and each
+fetch call sets a `pageError` ref on failure that surfaces a real
+error alert. Covered by `tests/e2e/ui-hardening-critical.spec.js`
+"/aggregations reliability" test.
 
 **C2 — `/phenopackets/new` is interpreted as a record ID and renders
-a red error + a spinner at the same time.**
+a red error + a spinner at the same time.** ✅ **CLOSED — PR #263.**
 Heuristic: H5 Error prevention + H9 Help users recover from errors.
-The UX paints both *Error Loading Phenopacket: Phenopacket 'new' not
-found* and *Loading phenopacket…* at once, then stops. The route that
-actually creates a phenopacket is `/phenopackets/create`, reached via
-the Curate menu. A curator who types "new" (a very reasonable guess
-after seeing other apps) will think the tool is broken.
-Fix: (a) suppress the contradictory dual state; (b) alias
-`/phenopackets/new` → `/phenopackets/create`, or reject it with a 404
-view that links to the create page.
+**Resolution:** (a) `router/index.js` now aliases
+`/phenopackets/new` → `/phenopackets/create`; (b) the loading card in
+`PagePhenopacket.vue` is guarded with `v-else-if="!error"` so the
+error alert and spinner are mutually exclusive. Covered by
+`tests/e2e/ui-hardening-critical.spec.js` redirect + no-dual-state
+tests.
 
 ### High
 
 **H1 — External PubMed links use `target="_blank"` without
-`rel="noopener noreferrer"`.**
-All thirteen externals on `/publications` are missing `rel="noopener"`.
-This is both a known tabnabbing risk and a Lighthouse best-practice
-fail. Fix: add `rel="noopener noreferrer"` wherever `target="_blank"`
-is rendered — PubMed links, UniProt link on home (`e350`), GitHub
-footer link, License link. Source: OWASP Cross-Site Request Forgery
-Cheat Sheet + MDN `target` docs.
+`rel="noopener noreferrer"`.** ✅ **CLOSED — PR #263.**
+Original scope: 13 externals on `/publications`. Shipped sweep
+covered every `target="_blank"` site under `frontend/src/`
+(Publications, PagePublication, PageVariant, About, FAQ, plus the
+previously-uncaught MetadataCard, DiseasesCard, PhenotypicFeaturesCard,
+PhenotypeTimeline, HNF1BGeneVisualization, ProteinStructure3D).
+Introduces a shared `<ExternalLink>` wrapper at
+`@/components/common/ExternalLink.vue` that enforces the attribute
+for future sites. Covered by `tests/e2e/ui-hardening-a11y.spec.js`
+rel-sweep tests.
 
 **H2 — No document-level headings on the list views and the create
-form.**
-WCAG 1.3.1 and 2.4.6 Headings and Labels. `/phenopackets`,
-`/publications`, `/variants`, and `/phenopackets/create` return
-`h1Count: 0` (or no headings at all for create). Screen readers cannot
-navigate by heading on any of the main curator pages. The visual
-"Phenopacket Registry", "Create New Phenopacket", etc. are styled
-`div`s. Fix: promote the card titles to real `h1`/`h2`. The app
-already does this correctly on the detail page ("Individual Details")
-and profile page ("Dev Admin") — just lift the pattern.
+form.** ✅ **CLOSED — PR #263.**
+WCAG 1.3.1 and 2.4.6 Headings and Labels. **Resolution:**
+`AppDataTable.vue` now renders its title via `<component :is="titleTag">`
+with a default of `h1`, so `/phenopackets`, `/publications`,
+`/variants`, and `/aggregations` all expose a single `h1`.
+`PhenopacketCreateEdit.vue` swaps its `v-card-title` for a real
+`<h1>` with the same Vuetify classes. Covered by
+`tests/e2e/ui-hardening-a11y.spec.js` "Real h1 on list + create
+views" block.
 
 **H3 — Clickable rows in the phenopackets / publications / variants
-tables are mouse-only.**
-WCAG 2.1.1 Keyboard. The rows carry
-`class="v-data-table__tr--clickable"` and a JS handler, but have no
-`tabindex`, no `role="link"` or `role="button"`, and no key handler
-(`tabindex: null, role: null, hasClick: false`). A curator on
-keyboard-only flow cannot reach the row. The subject-ID chip inside
-the first cell is not an anchor either (`a` tag check returned none).
-Fix: either render the subject-ID chip as an `<a>` linking to the
-detail URL (preferred — then the row click becomes a progressive
-enhancement), or set `tabindex="0" role="link"` on the row and wire
-an Enter/Space handler.
+tables are mouse-only.** ✅ **CLOSED — PR #263.**
+WCAG 2.1.1 Keyboard. **Resolution:** Vuetify renders `v-chip` with
+`:to` as a `router-link` `<a>` element (native keyboard focusability
++ Enter activation). `Phenopackets.vue`'s subject-ID chip and
+`Variants.vue`'s simple-ID chip now carry `:to`; `Publications.vue`'s
+PMID chip already did. The row `@click:row` handler stays as mouse
+progressive enhancement. Covered by
+`tests/e2e/ui-hardening-a11y.spec.js` "Keyboard row activation" block.
 
 **H4 — `/aggregations` offers no curator-visible indication that the
-page needs data not present.**
-If the blank page is an empty-state, it is indistinguishable from a
-broken page. H1 + H5. Fix tied to C1.
+page needs data not present.** ✅ **CLOSED — PR #263** (tied to C1).
+The always-present `h1` and per-fetch error boundary added in C1 give
+curators an unambiguous signal whether the page is loading, empty, or
+broken.
 
 **H5 — Discussion composer has no accessible name and no visible
-toolbar.**
-WCAG 1.3.1 + 4.1.2 Name, Role, Value. The Tiptap ProseMirror editor
-is a `contenteditable="true"` `div` with `aria-label: null`, no
-`aria-labelledby`, and no associated `label` element.
-`hasPasswordShowToggle` detection aside, the composer is invisible to
-screen readers until typed into. Adding `aria-label="Comment body"`
-and an `aria-describedby` pointing at the "0 / 10000" counter is
-one-line fixes. Also add a minimal formatting toolbar (bold, italic,
-link, mention `@`) so the domain convention — mentioning a colleague
-by `@username` — is discoverable.
+toolbar.** ✅ **CLOSED — PR #263.**
+WCAG 1.3.1 + 4.1.2 Name, Role, Value. **Resolution:**
+`CommentComposer.vue` passes `aria-label: "Comment body"` and
+`aria-describedby: "composer-char-count"` through Tiptap's
+`editorProps.attributes` so they land on the `.ProseMirror`
+contenteditable itself (not the wrapper `<div>`). A minimal toolbar
+with aria-labelled Bold / Italic / Insert link / Mention user
+buttons lives above the editor, backed by the new
+`@tiptap/extension-link` dependency. Covered by extended
+`tests/unit/components/comments/CommentComposer.spec.js` assertions.
 
-**H6 — Dark-theme contrast fails on the detail-page header.**
-WCAG 1.4.3 (text) and 1.4.11 (UI components). On dark mode, the "Individual
-Details" heading, the tab labels (OVERVIEW / TIMELINE / RAW JSON), and
-the "STATE ACTIONS" button become washed-out teal on teal-gradient.
-The top hero band is still rendered with the light-theme teal gradient. Fix: ensure the detail
-header respects `v-theme--dark`; recompute focus/text contrast in dark
-theme against a darkened gradient (`#102A2B` → `#1E3A3A` instead of
-`#B8E5D8` → …).
+**H6 — Dark-theme contrast fails on the detail-page header.** ✅
+**CLOSED — PR #263.**
+WCAG 1.4.3 (text) and 1.4.11 (UI components). **Resolution:**
+`PagePhenopacket.vue` replaces the static light-teal gradient with
+CSS custom properties that flip under `v-theme--dark`. Foreground
+overrides for `h1`, tab labels, and teal-darken-2 text classes use
+teal-lighten-3, yielding 8.4:1 contrast (well above 4.5:1). All
+selectors are anchored to `.phenopacket-container` so the overrides
+don't leak into the other views that share a `.hero-section` class.
+Covered by `tests/e2e/ui-hardening-dark-theme.spec.js` contrast
+probe.
 
 ### Medium
 
@@ -272,9 +319,11 @@ the following sections are empty: Variant Information, Phenotypic
 Features. [Continue editing]".
 
 **M10 — Footer pings a hard-coded `http://localhost:8000/api/v2/docs`
-link from the home page (`e84`).**
-H4 + operational. Production users will get a broken tab. Fix: use the
-`VITE_API_URL` value at render time, not the dev default.
+link from the home page (`e84`).** ✅ **CLOSED — PR #263.**
+**Resolution:** `FooterBar.vue` now suppresses the API docs link in
+production when `VITE_API_URL` is unset, and emits a `WARN` so
+operators see the misconfiguration. Dev-mode still falls back to
+localhost. Covered by `tests/unit/components/FooterBar.spec.js`.
 
 **M11 — Discussion empty-state gives no hint.**
 When a record has no comments, the Discussion tab shows only an empty
@@ -284,11 +333,12 @@ short empty-state message above the composer.
 
 **M12 — Background console errors on every public page
 (`Token refresh failed`, `Failed to initialize user session`) even for
-anonymous visitors.**
-H1. These are logged at `ERROR` level in the app's own log viewer, so
-curators who click the footer log icon will see a scary red stream on
-an otherwise working page. Fix: demote anonymous refresh failures to
-`DEBUG` or `INFO`; only log `ERROR` when the user is authenticated.
+anonymous visitors.** ✅ **CLOSED — PR #263.**
+**Resolution:** `authStore.refreshAccessToken()` and `initialize()`
+now branch on whether a user was authenticated before the attempt.
+Authenticated failures still log at `ERROR`; anonymous failures log
+at `DEBUG` with an explicit "expected" message. Covered by
+`tests/unit/stores/authStore.spec.js` M12 block.
 
 ### Low
 
@@ -322,10 +372,12 @@ session, a single-key "s" (save), "n" (next), "d" (add phenotype row),
 and "/" (focus search) would cut time-per-record materially. Fix: add
 a shortcut layer and a `?` help overlay listing the shortcuts.
 
-**L6 — No skip-link at top of page.**
-WCAG 2.4.1 Bypass Blocks. Screen-reader and keyboard-only users must
-tab through the nav every time. Fix: add a visually-hidden
-`a.skip-link` linking to `#main`.
+**L6 — No skip-link at top of page.** ✅ **CLOSED — PR #263.**
+WCAG 2.4.1 Bypass Blocks. **Resolution:** `App.vue` now renders
+`<a href="#main-content" class="skip-link">Skip to main content</a>`
+as the first child of `<v-app>`, revealed on `:focus`. `<v-main>`
+carries `id="main-content"`. Covered by
+`tests/e2e/ui-hardening-a11y.spec.js` "Skip-to-main-content" test.
 
 **L7 — Login card missing a visible dev-only quick-login block.**
 The codebase ships a dev-mode quick-login pathway (body text shows
