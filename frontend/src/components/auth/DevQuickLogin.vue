@@ -19,9 +19,12 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
 
 const authStore = useAuthStore();
+const router = useRouter();
+const route = useRoute();
 
 const fixtureUsers = [
   { username: 'dev-admin', label: 'admin' },
@@ -31,10 +34,27 @@ const fixtureUsers = [
 
 const loadingUser = ref(null);
 
+// Only treat relative in-app paths as valid redirect targets to avoid
+// open-redirect bounces. Also refuse to land back on an auth-adjacent
+// page so the user never "returns" to a login/reset form after signing in.
+function resolveRedirect(rawRedirect) {
+  if (typeof rawRedirect !== 'string') return '/user';
+  if (!rawRedirect.startsWith('/') || rawRedirect.startsWith('//')) return '/user';
+  if (
+    /^\/(login|forgot-password|reset-password|accept-invite|verify-email)(\/|$|\?)/.test(
+      rawRedirect
+    )
+  ) {
+    return '/user';
+  }
+  return rawRedirect;
+}
+
 async function onClick(username) {
   loadingUser.value = username;
   try {
     await authStore.devLoginAs(username);
+    router.push(resolveRedirect(route.query.redirect));
   } catch (err) {
     window.logService.error('dev login failed', { username, error: err.message });
   } finally {
