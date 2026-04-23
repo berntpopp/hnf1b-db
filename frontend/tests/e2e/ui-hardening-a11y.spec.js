@@ -1,10 +1,67 @@
 import { test, expect } from '@playwright/test';
+import { apiLogin } from './helpers/auth.js';
 
 /**
  * Every anchor with target="_blank" must carry rel containing both
  * "noopener" and "noreferrer". Covers H1 from the 2026-04-17 review.
  */
 const PAGES_WITH_EXTERNAL_LINKS = ['/publications', '/about', '/faq'];
+const FRONTEND_BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5173';
+const AUTH_CREDENTIAL_CANDIDATES =
+  process.env.E2E_ADMIN_USERNAME && process.env.E2E_ADMIN_PASSWORD
+    ? [{ username: process.env.E2E_ADMIN_USERNAME, password: process.env.E2E_ADMIN_PASSWORD }]
+    : [
+        { username: 'admin', password: 'ChangeMe!Admin2025' },
+        { username: 'dev-admin', password: 'DevAdmin!2026' },
+      ];
+
+function getHealthUrl(apiBase) {
+  const urls = [];
+  try {
+    urls.push(new URL('/health', new URL(apiBase).origin).toString());
+  } catch {
+    // Relative API bases are handled via frontend proxy and local backend fallback.
+  }
+  urls.push(new URL('/health', FRONTEND_BASE_URL).toString());
+  if (!apiBase.startsWith('http://') && !apiBase.startsWith('https://')) {
+    urls.push('http://localhost:8000/health');
+  }
+  return [...new Set(urls)];
+}
+
+async function isBackendAvailable(request) {
+  const apiBase =
+    process.env.E2E_API_BASE || process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
+  for (const healthUrl of getHealthUrl(apiBase)) {
+    try {
+      const response = await request.get(healthUrl, { failOnStatusCode: false });
+      if (!response.ok()) {
+        continue;
+      }
+      const payload = await response.json().catch(() => null);
+      if (payload?.ready === true || payload?.status === 'healthy') {
+        return true;
+      }
+    } catch {
+      // Try the next candidate URL.
+    }
+  }
+  return false;
+}
+
+async function loginForAuthenticatedCoverage(request, apiBase) {
+  let lastError;
+  for (const candidate of AUTH_CREDENTIAL_CANDIDATES) {
+    try {
+      return await apiLogin(request, apiBase, candidate.username, candidate.password);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw (
+    lastError ?? new Error('No authentication credentials configured for authenticated UI coverage')
+  );
+}
 
 /**
  * Snapshot all target=_blank anchors via evaluate (one-shot DOM read) to
@@ -15,7 +72,7 @@ async function assertExternalLinkRels(page) {
   const anchors = await page.evaluate(() =>
     Array.from(document.querySelectorAll('a[target="_blank"]')).map((a) => ({
       href: a.getAttribute('href'),
-      rel: a.getAttribute('rel') || '',
+      rel: (a.getAttribute('rel') || '').split(/\s+/).filter(Boolean),
     }))
   );
   expect(anchors.length, 'expected at least one external anchor').toBeGreaterThan(0);
@@ -23,6 +80,16 @@ async function assertExternalLinkRels(page) {
     expect(rel, `anchor ${href} must include noopener`).toContain('noopener');
     expect(rel, `anchor ${href} must include noreferrer`).toContain('noreferrer');
   }
+}
+
+async function tabToLocator(page, locator, maxTabs = 40) {
+  for (let attempt = 0; attempt < maxTabs; attempt += 1) {
+    await page.keyboard.press('Tab');
+    if (await locator.evaluate((element) => element === document.activeElement)) {
+      return;
+    }
+  }
+  throw new Error(`Failed to focus target via keyboard after ${maxTabs} Tab presses`);
 }
 
 for (const path of PAGES_WITH_EXTERNAL_LINKS) {
@@ -60,15 +127,15 @@ test.describe('Real h1 on list + create views (H2)', () => {
   }
 
   test('/phenopackets/create exposes an h1', async ({ page, request }) => {
-    const { apiLogin, primeAuthSession } = await import('./helpers/auth.js');
+    test.skip(
+      !(await isBackendAvailable(request)),
+      'Backend unavailable for authenticated create-page coverage'
+    );
+    const { primeAuthSession } = await import('./helpers/auth.js');
     const apiBase =
       process.env.E2E_API_BASE || process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-    // CI seeds an `admin` user via scripts/create_admin_user.py; dev loops
-    // use the `dev-admin` seeder. Pick whichever set of credentials is
-    // exported, falling back to the dev-mode default.
-    const username = process.env.E2E_ADMIN_USERNAME || 'dev-admin';
-    const password = process.env.E2E_ADMIN_PASSWORD || 'DevAdmin!2026';
-    const auth = await apiLogin(request, apiBase, username, password);
+    const resolvedApiBase = new URL(apiBase, FRONTEND_BASE_URL).toString().replace(/\/$/, '');
+    const auth = await loginForAuthenticatedCoverage(request, resolvedApiBase);
     await primeAuthSession(page, auth);
     await page.goto('/phenopackets/create');
     await page.waitForLoadState('networkidle');
@@ -83,11 +150,15 @@ test.describe('Keyboard row activation (H3)', () => {
     await page.goto('/phenopackets');
     await page.waitForLoadState('networkidle');
     const firstChipAnchor = page.locator('table a.v-chip').first();
+    if ((await firstChipAnchor.count()) === 0) {
+      test.skip(true, 'No seeded phenopackets on this environment');
+    }
     await firstChipAnchor.waitFor({ state: 'visible' });
     const href = await firstChipAnchor.getAttribute('href');
     expect(href).toMatch(/^\/phenopackets\/[^/]+$/);
-    await firstChipAnchor.focus();
-    await firstChipAnchor.press('Enter');
+    await tabToLocator(page, firstChipAnchor);
+    await expect(firstChipAnchor).toBeFocused();
+    await page.keyboard.press('Enter');
     await page.waitForURL(/\/phenopackets\/[^/]+$/, { timeout: 5000 });
   });
 
@@ -101,6 +172,10 @@ test.describe('Keyboard row activation (H3)', () => {
     await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
     const href = await firstChipAnchor.getAttribute('href');
     expect(href).toMatch(/^\/variants\//);
+    await tabToLocator(page, firstChipAnchor);
+    await expect(firstChipAnchor).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.waitForURL(/\/variants\/.+$/, { timeout: 5000 });
   });
 
   test('/publications PMID chip is a keyboard-reachable anchor', async ({ page }) => {
@@ -113,6 +188,10 @@ test.describe('Keyboard row activation (H3)', () => {
     await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
     const href = await firstChipAnchor.getAttribute('href');
     expect(href).toMatch(/^\/publications\//);
+    await tabToLocator(page, firstChipAnchor);
+    await expect(firstChipAnchor).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.waitForURL(/\/publications\/.+$/, { timeout: 5000 });
   });
 });
 
@@ -129,6 +208,8 @@ test.describe('Skip-to-main-content (L6)', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await page.keyboard.press('Tab');
+    const skipLink = page.locator('a[href="#main-content"]').first();
+    await expect(skipLink).toBeVisible();
     const focused = await page.evaluate(() => {
       const el = document.activeElement;
       return el

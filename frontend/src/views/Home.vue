@@ -124,7 +124,7 @@
             <h2 class="text-h5 font-weight-medium text-grey-darken-3 mb-2">
               About the HNF1B Database
             </h2>
-            <p class="text-body-2 text-grey-darken-1" style="max-width: 600px; margin: 0 auto">
+            <p class="text-body-2 text-grey-darken-2" style="max-width: 600px; margin: 0 auto">
               The definitive resource for MODY5 and RCAD syndrome research
             </p>
           </v-col>
@@ -224,7 +224,12 @@
                   @variant-clicked="navigateToVariant"
                 />
                 <div v-else class="d-flex flex-column align-center justify-center pa-12">
-                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <v-progress-circular
+                    indeterminate
+                    color="primary"
+                    size="64"
+                    aria-label="Loading protein visualization"
+                  />
                   <span class="mt-4 text-grey">Loading Protein Visualization...</span>
                 </div>
               </v-window-item>
@@ -238,7 +243,12 @@
                   @variant-clicked="navigateToVariant"
                 />
                 <div v-else class="d-flex flex-column align-center justify-center pa-12">
-                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <v-progress-circular
+                    indeterminate
+                    color="primary"
+                    size="64"
+                    aria-label="Loading gene visualization"
+                  />
                 </div>
               </v-window-item>
 
@@ -251,7 +261,12 @@
                   @variant-clicked="navigateToVariant"
                 />
                 <div v-else class="d-flex flex-column align-center justify-center pa-12">
-                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <v-progress-circular
+                    indeterminate
+                    color="primary"
+                    size="64"
+                    aria-label="Loading protein structure visualization"
+                  />
                 </div>
               </v-window-item>
 
@@ -264,7 +279,12 @@
                   @variant-clicked="navigateToVariant"
                 />
                 <div v-else class="d-flex flex-column align-center justify-center pa-12">
-                  <v-progress-circular indeterminate color="primary" size="64" />
+                  <v-progress-circular
+                    indeterminate
+                    color="primary"
+                    size="64"
+                    aria-label="Loading 17q12 region visualization"
+                  />
                   <span class="mt-4 text-grey">Loading CNV Data...</span>
                 </div>
               </v-window-item>

@@ -5,6 +5,7 @@
       v-model:search="searchQuery"
       :items="suggestions"
       :loading="loading"
+      label="Search the database"
       placeholder="Search variants, phenotypes, publications..."
       append-inner-icon="mdi-magnify"
       density="comfortable"
