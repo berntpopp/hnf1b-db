@@ -441,7 +441,7 @@ down the moment it asks a curator to behave like a database user.
 Ordered by cost × curator impact. Targets are for the next hardening
 cycle — these are all small, well-scoped changes.
 
-### Immediate (ship in next PR batch)
+### Completed In PR #263
 
 1. Fix `/aggregations` blank page (C1): route-guard + skeleton + error
    fallback.
@@ -455,26 +455,26 @@ cycle — these are all small, well-scoped changes.
 5. Promote card titles on `/phenopackets`, `/publications`,
    `/variants`, and `/phenopackets/create` to real `h1`/`h2` (H2).
 6. Demote anonymous-refresh log entries from `ERROR` to `DEBUG` (M12).
-
-### Near-term (this milestone)
-
 7. Make data-table rows keyboard-activatable (H3): render the subject/
    PMID/variant chip as an anchor; progressive-enhance the row click.
 8. Dark-theme contrast sweep on detail page header + badges + tabs
    (H6). Explicit WCAG 2.2 contrast audit at 4.5:1 / 3:1.
-9. Create-form:
+9. Add a skip-link (L6).
+10. Fix hard-coded `localhost:8000` in the API docs footer link (M10).
+
+### Still Open This Milestone
+
+1. Create-form:
    - Wrap each card in `<fieldset><legend>` (M2).
    - Change "Required" badges from static to dynamic (only show while
      missing) (M3).
    - Add inline validation preview on blur + a "Save draft" (autosave)
      on debounce.
-10. Login card: widen so the welcome line doesn't truncate; ensure the
+2. Login card: widen so the welcome line doesn't truncate; ensure the
     Forgot-password link is reachable by a screen-reader user without
     skipping steps (M6, L7).
-11. Mobile pager + table: collapse pager to bottom bar; stack subject
+3. Mobile pager + table: collapse pager to bottom bar; stack subject
     ID + state on < 480 px (M7).
-12. Add a skip-link (L6).
-13. Fix hard-coded `localhost:8000` in the API docs footer link (M10).
 
 ### Medium-term (before widening rollout)
 

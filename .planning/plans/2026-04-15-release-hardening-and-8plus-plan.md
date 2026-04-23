@@ -188,7 +188,10 @@ This is the highest-leverage work. It should start before any additional collabo
   `docs/user-guide/variant-annotation.md`
   `backend/README.md`
 
-- [ ] Keep `AGENTS.md` as canonical and reduce current references to `CLAUDE.md` in live docs/plans.
+- [x] Keep `AGENTS.md` as canonical and reduce current references to `CLAUDE.md` in live docs/plans.
+  Status:
+  canonicalization is complete in the active planning/docs surface; remaining
+  `CLAUDE.md` references are historical or archived.
 
 - [x] Update planning indexes so this file is the current active release plan and older documents are clearly historical/supporting.
 

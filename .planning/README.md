@@ -5,7 +5,7 @@ durable reference documentation only.
 
 ## Layout
 
-- `codebase/` — current-state architecture, structure, conventions, testing, and concerns
+- `codebase/` — reserved for current-state architecture, structure, conventions, testing, and concerns when maintained as active planning context
 - `specs/` — active design specs that still guide implementation
 - `plans/` — active execution plans and implementation guides
 - `roadmaps/` — active multi-phase strategy documents
@@ -15,6 +15,7 @@ durable reference documentation only.
 - `archive/plans/` — completed or superseded implementation plans
 - `archive/roadmaps/` — retired roadmap material
 - `archive/reviews/` — historical reviews, exit notes, and retrospectives
+- `archive/codebase/` — archived codebase-analysis snapshots from the prior GSD planning era
 - `archive/tracking/` — historical issue trackers, TODOs, and migration-era planning
 
 ## Filing Rules
@@ -34,4 +35,4 @@ durable reference documentation only.
 ## Current Notes
 
 - The April 10 roadmap and the April 12-17 implementation specs/plans were implemented or superseded and have been archived.
-- `codebase/*.md` remains the reference area for current-state architecture and conventions, but several files are now stale and need a refresh before they should be treated as authoritative.
+- The former `codebase/*.md` snapshots were archived as GSD-era planning material.
