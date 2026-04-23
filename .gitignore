@@ -209,6 +209,7 @@ frontend/.env.*.local
 
 # Claude Code settings (local user preferences)
 .claude/
+.worktrees/
 
 # OS
 .DS_Store
