@@ -1,5 +1,6 @@
 """Hybrid ontology service for phenopackets - uses APIs with local fallback."""
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta
@@ -332,6 +333,32 @@ class HybridOntologyService:
         # In-memory cache for performance
         self._memory_cache = {}
 
+    def _get_unknown_term(self, term_id: str) -> OntologyTerm:
+        """Build a placeholder for unknown terms."""
+        return OntologyTerm(
+            id=term_id,
+            label=f"Unknown term: {term_id}",
+            source=OntologySource.LOCAL_HARDCODED,
+            description="Term not found in any source",
+        )
+
+    def _get_cached_term(self, term_id: str) -> Optional[OntologyTerm]:
+        """Get a term from memory or file cache."""
+        if term_id in self._memory_cache:
+            return self._memory_cache[term_id]
+
+        cached_term = self.file_cache.get(term_id)
+        if cached_term:
+            self._memory_cache[term_id] = cached_term
+            return cached_term
+
+        return None
+
+    @staticmethod
+    def is_term_valid(term: OntologyTerm) -> bool:
+        """Return whether a term represents a valid, non-obsolete ontology hit."""
+        return not (term.label.startswith("Unknown term:") or term.is_obsolete)
+
     def get_term(self, term_id: str) -> OntologyTerm:
         """Get ontology term with fallback strategy:
         1. Memory cache
@@ -340,14 +367,8 @@ class HybridOntologyService:
         4. Local hardcoded mappings
         5. Unknown term placeholder.
         """
-        # 1. Check memory cache
-        if term_id in self._memory_cache:
-            return self._memory_cache[term_id]
-
-        # 2. Check file cache
-        cached_term = self.file_cache.get(term_id)
+        cached_term = self._get_cached_term(term_id)
         if cached_term:
-            self._memory_cache[term_id] = cached_term
             return cached_term
 
         # 3. Try APIs if enabled
@@ -365,12 +386,33 @@ class HybridOntologyService:
             return local_term
 
         # 5. Return unknown term placeholder
-        unknown_term = OntologyTerm(
-            id=term_id,
-            label=f"Unknown term: {term_id}",
-            source=OntologySource.LOCAL_HARDCODED,
-            description="Term not found in any source",
-        )
+        unknown_term = self._get_unknown_term(term_id)
+        self._memory_cache[term_id] = unknown_term
+        return unknown_term
+
+    async def get_term_async(self, term_id: str) -> OntologyTerm:
+        """Get ontology term without doing blocking network I/O on the event loop."""
+        if term_id in self._memory_cache:
+            return self._memory_cache[term_id]
+
+        cached_term = await asyncio.to_thread(self.file_cache.get, term_id)
+        if cached_term:
+            self._memory_cache[term_id] = cached_term
+            return cached_term
+
+        if self.use_apis:
+            api_term = await asyncio.to_thread(self._fetch_from_apis, term_id)
+            if api_term:
+                await asyncio.to_thread(self.file_cache.set, term_id, api_term)
+                self._memory_cache[term_id] = api_term
+                return api_term
+
+        local_term = self.local_provider.get_term(term_id)
+        if local_term:
+            self._memory_cache[term_id] = local_term
+            return local_term
+
+        unknown_term = self._get_unknown_term(term_id)
         self._memory_cache[term_id] = unknown_term
         return unknown_term
 

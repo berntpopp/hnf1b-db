@@ -291,19 +291,13 @@ async def validate_hpo_terms(
     # Use local ontology service instead of N API calls
     for term_id in ids:
         try:
-            # get_term uses local mappings + cache (fast!)
-            term = ontology_service.get_term(term_id)
-            if term:
-                results[term_id] = {
-                    "valid": True,
-                    "name": term.label,
-                    "source": term.source.value,
-                }
-            else:
-                results[term_id] = {
-                    "valid": False,
-                    "error": "Term not found in local ontology or APIs",
-                }
+            # Use the async lookup path so any API fallback stays off the event loop.
+            term = await ontology_service.get_term_async(term_id)
+            results[term_id] = {
+                "valid": ontology_service.is_term_valid(term),
+                "name": term.label,
+                "source": term.source.value,
+            }
         except (ValueError, KeyError, AttributeError, OSError) as e:
             results[term_id] = {"valid": False, "error": str(e)}
 

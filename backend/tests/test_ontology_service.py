@@ -1,194 +1,164 @@
-#!/usr/bin/env python3
-"""Test script for the hybrid ontology service."""
+from __future__ import annotations
 
-import os
-from pathlib import Path
+import threading
 
-# Set environment variables before importing the service
-os.environ["USE_ONTOLOGY_APIS"] = "true"  # Enable API usage
-os.environ["ONTOLOGY_API_TIMEOUT"] = "10"  # 10 second timeout
-os.environ["ONTOLOGY_CACHE_TTL_HOURS"] = "24"  # Cache for 24 hours
+import pytest
 
-
-def test_hybrid_ontology_service():
-    """Test the hybrid ontology service."""
-    print("Testing Hybrid Ontology Service\n" + "=" * 50)
-
-    # Import after setting environment variables
-    from app.services.ontology_service import ontology_service
-
-    # Test terms that should be in local mappings
-    print("\n1. Testing Local Hardcoded Terms:")
-    print("-" * 40)
-
-    local_terms = [
-        "HP:0012622",  # Chronic kidney disease
-        "HP:0100611",  # Multiple glomerular cysts
-        "ORPHA:2260",  # Oligomeganephronia
-    ]
-
-    for term_id in local_terms:
-        term = ontology_service.get_term(term_id)
-        print(f"✓ {term_id}: {term.label}")
-        print(f"  Source: {term.source.value}")
-
-    # Test terms that might need API lookup
-    print("\n2. Testing API Lookup (if enabled):")
-    print("-" * 40)
-
-    api_terms = [
-        "HP:0000819",  # Diabetes mellitus
-        "HP:0002917",  # Hypomagnesemia
-        "MONDO:0005147",  # Type 2 diabetes mellitus
-    ]
-
-    for term_id in api_terms:
-        term = ontology_service.get_term(term_id)
-        print(f"✓ {term_id}: {term.label}")
-        print(f"  Source: {term.source.value}")
-
-    # Test unknown term handling
-    print("\n3. Testing Unknown Term Handling:")
-    print("-" * 40)
-
-    unknown_term = "HP:9999999"  # This should not exist
-    term = ontology_service.get_term(unknown_term)
-    print(f"✓ {unknown_term}: {term.label}")
-    print(f"  Source: {term.source.value}")
-
-    # Test validation
-    print("\n4. Testing Term Validation:")
-    print("-" * 40)
-
-    valid_term = "HP:0012622"
-    invalid_term = "HP:9999999"
-
-    print(f"Is {valid_term} valid? {ontology_service.validate_term(valid_term)}")
-    print(f"Is {invalid_term} valid? {ontology_service.validate_term(invalid_term)}")
-
-    # Test phenopacket validation
-    print("\n5. Testing Phenopacket Validation:")
-    print("-" * 40)
-
-    test_phenopacket = {
-        "id": "test_phenopacket",
-        "subject": {"id": "patient1"},
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0012622"}},  # Valid
-            {"type": {"id": "HP:0100611"}},  # Valid
-            {"type": {"id": "HP:9999999"}},  # Invalid
-        ],
-        "diseases": [
-            {"term": {"id": "MONDO:0005147"}},  # Valid
-            {"term": {"id": "MONDO:9999999"}},  # Invalid
-        ],
-    }
-
-    validation_results = ontology_service.validate_phenopacket(test_phenopacket)
-    print(f"Valid terms: {validation_results['valid_terms']}")
-    print(f"Invalid terms: {validation_results['invalid_terms']}")
-    print(f"Overall valid: {validation_results['is_valid']}")
-
-    # Test phenopacket enhancement
-    print("\n6. Testing Phenopacket Enhancement:")
-    print("-" * 40)
-
-    simple_phenopacket = {
-        "phenotypicFeatures": [
-            {"type": {"id": "HP:0012622"}},
-            {"type": {"id": "HP:0100611"}},
-        ],
-        "diseases": [{"term": {"id": "MONDO:0005147"}}],
-    }
-
-    enhanced = ontology_service.enhance_phenopacket(simple_phenopacket)
-    print("Enhanced phenopacket:")
-    for feature in enhanced["phenotypicFeatures"]:
-        print(f"  {feature['type']['id']}: {feature['type'].get('label', 'No label')}")
-    for disease in enhanced["diseases"]:
-        print(f"  {disease['term']['id']}: {disease['term'].get('label', 'No label')}")
-
-    # Show service statistics
-    print("\n7. Service Statistics:")
-    print("-" * 40)
-
-    stats = ontology_service.get_statistics()
-    for key, value in stats.items():
-        print(f"  {key}: {value}")
-
-    # Check cache directory
-    cache_dir = Path(".ontology_cache")
-    if cache_dir.exists():
-        print("\n8. Cache Status:")
-        print("-" * 40)
-        cache_files = list(cache_dir.glob("*.json"))
-        print(f"  Cache directory: {cache_dir}")
-        print(f"  Cached terms: {len(cache_files)}")
-        if cache_files:
-            print("  Cached term IDs:")
-            for f in cache_files[:5]:  # Show first 5
-                print(f"    - {f.stem.replace('_', ':')}")
-            if len(cache_files) > 5:
-                print(f"    ... and {len(cache_files) - 5} more")
-
-    print("\n" + "=" * 50)
-    print("✅ Hybrid Ontology Service is working correctly!")
-    print("\nKey Features:")
-    print("• No large ontology files downloaded")
-    print("• Uses existing hardcoded mappings")
-    print("• Can fetch additional terms from APIs (if enabled)")
-    print("• Caches API responses to reduce network calls")
-    print("• Falls back gracefully when APIs are unavailable")
-    print("\nYou can now use this service in your phenopackets implementation!")
+from app.services.ontology_service import (
+    HybridOntologyService,
+    OntologySource,
+    OntologyTerm,
+)
 
 
-def test_performance():
-    """Test performance of the service."""
-    print("\n\nPerformance Test")
-    print("=" * 50)
+@pytest.fixture
+def ontology_service(monkeypatch, tmp_path) -> HybridOntologyService:
+    monkeypatch.setenv("USE_ONTOLOGY_APIS", "true")
+    monkeypatch.setenv("ONTOLOGY_API_TIMEOUT", "1")
+    monkeypatch.setenv("ONTOLOGY_CACHE_TTL_HOURS", "24")
 
-    import time
-
-    from app.services.ontology_service import ontology_service
-
-    test_terms = [
-        "HP:0012622",
-        "HP:0012623",
-        "HP:0012624",
-        "HP:0100611",
-        "ORPHA:2260",
-        "HP:0000819",
-        "MONDO:0005147",
-    ]
-
-    # First pass - might hit APIs
-    start = time.time()
-    for term_id in test_terms:
-        ontology_service.get_term(term_id)
-    first_pass = time.time() - start
-
-    print(f"First pass (potential API calls): {first_pass:.2f} seconds")
-
-    # Second pass - should use cache
-    start = time.time()
-    for term_id in test_terms:
-        ontology_service.get_term(term_id)
-    second_pass = time.time() - start
-
-    print(f"Second pass (from cache): {second_pass:.2f} seconds")
-    print(f"Speedup: {first_pass / second_pass:.1f}x faster")
+    service = HybridOntologyService()
+    service.file_cache.cache_dir = tmp_path
+    service._memory_cache.clear()
+    return service
 
 
-if __name__ == "__main__":
-    try:
-        test_hybrid_ontology_service()
-        test_performance()
-    except Exception as e:
-        print(f"\n❌ Error during testing: {e}")
-        print("\nTroubleshooting:")
-        print("1. Make sure all dependencies are installed: uv sync --all-groups")
-        print("2. Check that the migration/modules/phenotypes.py file exists")
-        print("3. Verify network connectivity for API calls")
-        import traceback
+@pytest.mark.asyncio
+async def test_get_term_async_returns_cached_term_without_api_fetch(
+    ontology_service: HybridOntologyService, monkeypatch
+):
+    term_id = "HP:0000083"
+    cached_term = OntologyTerm(
+        id=term_id,
+        label="Cached renal insufficiency",
+        source=OntologySource.LOCAL_CACHE,
+    )
 
-        traceback.print_exc()
+    monkeypatch.setattr(ontology_service.file_cache, "get", lambda _: cached_term)
+
+    def fail_fetch(term_id: str):
+        raise AssertionError(f"unexpected API fetch for {term_id}")
+
+    monkeypatch.setattr(ontology_service, "_fetch_from_apis", fail_fetch)
+
+    term = await ontology_service.get_term_async(term_id)
+
+    assert term == cached_term
+
+
+@pytest.mark.asyncio
+async def test_get_term_async_uses_api_fallback_before_local_and_populates_caches(
+    ontology_service: HybridOntologyService, monkeypatch
+):
+    term_id = "HP:9991234"
+    api_term = OntologyTerm(
+        id=term_id,
+        label="Mock API term",
+        description="Fetched from mocked API",
+        source=OntologySource.HPO_API,
+    )
+    loop_thread_id = threading.get_ident()
+    cache_set_thread_id = None
+
+    monkeypatch.setattr(ontology_service.local_provider, "get_term", lambda _: None)
+    monkeypatch.setattr(ontology_service, "_fetch_from_apis", lambda _: api_term)
+
+    def fake_cache_set(requested_term_id: str, requested_term: OntologyTerm):
+        nonlocal cache_set_thread_id
+        cache_set_thread_id = threading.get_ident()
+        assert requested_term_id == term_id
+        assert requested_term == api_term
+
+    monkeypatch.setattr(ontology_service.file_cache, "set", fake_cache_set)
+
+    term = await ontology_service.get_term_async(term_id)
+
+    assert term == api_term
+    assert ontology_service._memory_cache[term_id] == api_term
+    assert cache_set_thread_id is not None
+    assert cache_set_thread_id != loop_thread_id
+
+
+@pytest.mark.asyncio
+async def test_get_term_async_checks_api_before_local_when_cache_misses(
+    ontology_service: HybridOntologyService, monkeypatch
+):
+    term_id = "HP:1234567"
+    api_term = OntologyTerm(
+        id=term_id,
+        label="Fetched from API",
+        source=OntologySource.HPO_API,
+    )
+    local_term = OntologyTerm(
+        id=term_id,
+        label="Local fallback term",
+        source=OntologySource.LOCAL_HARDCODED,
+    )
+
+    monkeypatch.setattr(ontology_service.file_cache, "get", lambda _: None)
+    monkeypatch.setattr(ontology_service.local_provider, "get_term", lambda _: local_term)
+    monkeypatch.setattr(ontology_service, "_fetch_from_apis", lambda _: api_term)
+
+    term = await ontology_service.get_term_async(term_id)
+
+    assert term == api_term
+
+
+@pytest.mark.asyncio
+async def test_get_term_async_moves_file_cache_io_off_event_loop(
+    ontology_service: HybridOntologyService, monkeypatch
+):
+    term_id = "HP:7777777"
+    cached_term = OntologyTerm(
+        id=term_id,
+        label="Cached off-loop term",
+        source=OntologySource.LOCAL_CACHE,
+    )
+    loop_thread_id = None
+    cache_get_thread_id = None
+
+    async def capture_loop_thread():
+        import threading
+
+        return threading.get_ident()
+
+    def fake_cache_get(requested_term_id: str):
+        nonlocal cache_get_thread_id
+        cache_get_thread_id = threading.get_ident()
+        assert requested_term_id == term_id
+        return cached_term
+
+    monkeypatch.setattr(ontology_service.file_cache, "get", fake_cache_get)
+
+    loop_thread_id = await capture_loop_thread()
+    term = await ontology_service.get_term_async(term_id)
+
+    assert term == cached_term
+    assert cache_get_thread_id is not None
+    assert cache_get_thread_id != loop_thread_id
+
+
+@pytest.mark.asyncio
+async def test_get_term_async_preserves_file_cache_behavior(
+    ontology_service: HybridOntologyService, monkeypatch, tmp_path
+):
+    term_id = "HP:5555555"
+    api_term = OntologyTerm(
+        id=term_id,
+        label="Persisted cached term",
+        source=OntologySource.HPO_API,
+    )
+
+    monkeypatch.setattr(ontology_service.local_provider, "get_term", lambda _: None)
+    monkeypatch.setattr(ontology_service, "_fetch_from_apis", lambda _: api_term)
+
+    fetched_term = await ontology_service.get_term_async(term_id)
+    ontology_service._memory_cache.clear()
+    monkeypatch.setattr(ontology_service, "_fetch_from_apis", lambda _: None)
+
+    cached_term = await ontology_service.get_term_async(term_id)
+
+    assert fetched_term == api_term
+    assert cached_term is not None
+    assert cached_term.label == api_term.label
+    assert cached_term.source == OntologySource.HPO_API
