@@ -116,8 +116,8 @@ Comprehensive VEP-powered variant annotation, validation, and recoding system.
 ### Interactive API Docs
 
 When the server is running, visit:
-- **Swagger UI:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
+- **Swagger UI:** http://localhost:8000/api/v2/docs
+- **ReDoc:** http://localhost:8000/api/v2/redoc
 
 ## Testing
 

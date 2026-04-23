@@ -53,7 +53,7 @@ When the backend server is running, you can access interactive API documentation
 
 ### Swagger UI (Recommended)
 ```
-http://localhost:8000/docs
+http://localhost:8000/api/v2/docs
 ```
 - Try out API endpoints directly from the browser
 - See request/response schemas

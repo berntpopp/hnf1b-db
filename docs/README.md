@@ -46,4 +46,4 @@ implementation plans, and historical working notes live under
 - [Project README](../README.md)
 - [AGENTS.md](../AGENTS.md)
 - [Planning Index](../.planning/README.md)
-- API docs: http://localhost:8000/docs
+- API docs: http://localhost:8000/api/v2/docs

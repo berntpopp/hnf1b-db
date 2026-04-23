@@ -72,4 +72,4 @@ The feature is structurally impossible to ship to production:
 - [docs/adr/0002-cookie-refresh-and-memory-access-token.md](docs/adr/0002-cookie-refresh-and-memory-access-token.md) — current auth/session ADR
 - [.planning/README.md](.planning/README.md) — internal plans, specs, reviews, and archives
 - [AGENTS.md](AGENTS.md) — Canonical repository instructions for coding agents
-- API docs: http://localhost:8000/docs (when backend is running)
+- API docs: http://localhost:8000/api/v2/docs (when backend is running)

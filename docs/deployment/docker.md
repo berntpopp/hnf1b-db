@@ -90,7 +90,7 @@ The first startup with `ENABLE_DATA_IMPORT=true` will:
 |---------|-----|
 | Frontend | http://localhost:3000 |
 | API | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
+| API Docs | http://localhost:8000/api/v2/docs |
 | Database | localhost:5433 |
 | Redis | localhost:6380 |
 
@@ -127,11 +127,11 @@ The first startup with `ENABLE_DATA_IMPORT=true` will:
 
 ### Environment Variables
 
-Create a `.env.docker` file in the `docker/` directory:
+Create a root `.env.docker` file:
 
 ```bash
 # Copy example configuration
-cp docker/.env.example docker/.env.docker
+cp .env.docker.example .env.docker
 ```
 
 #### Required Variables
@@ -198,8 +198,8 @@ For production behind Nginx Proxy Manager:
 
 ```bash
 # 1. Configure production environment
-cp docker/.env.example docker/.env.docker
-vim docker/.env.docker  # Set production values
+cp .env.docker.example .env.docker
+vim .env.docker  # Set production values
 
 # 2. Create NPM network
 docker network create npm_default
@@ -208,7 +208,7 @@ docker network create npm_default
 docker compose \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.npm.yml \
-  --env-file docker/.env.docker \
+  --env-file .env.docker \
   up -d --build
 ```
 
@@ -510,8 +510,8 @@ docker compose -f docker/docker-compose.yml exec hnf1b_db \
 # Generate secure secret
 openssl rand -hex 32
 
-# Add to docker/.env.docker
-echo "JWT_SECRET=$(openssl rand -hex 32)" >> docker/.env.docker
+# Add to .env.docker
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env.docker
 ```
 
 #### Data Import Not Running
@@ -523,7 +523,7 @@ echo "JWT_SECRET=$(openssl rand -hex 32)" >> docker/.env.docker
 ENABLE_DATA_IMPORT=true docker compose -f docker/docker-compose.yml up -d
 ```
 
-Or add to `docker/.env.docker`:
+Or add to `.env.docker`:
 ```bash
 ENABLE_DATA_IMPORT=true
 ```

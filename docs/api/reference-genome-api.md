@@ -485,7 +485,7 @@ Cache-Control: max-age=86400
 
 For interactive API exploration, visit the Swagger UI:
 
-**URL:** `http://localhost:8000/docs` (when running locally)
+**URL:** `http://localhost:8000/api/v2/docs` (when running locally)
 
 The Swagger UI provides:
 - Interactive request/response testing
