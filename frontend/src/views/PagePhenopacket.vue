@@ -174,6 +174,7 @@
             >
               <v-tab value="overview" aria-label="Overview tab">Overview</v-tab>
               <v-tab value="timeline" aria-label="Timeline tab">Timeline</v-tab>
+              <v-tab v-if="canSeeHistory" value="history" aria-label="History tab">History</v-tab>
               <v-tab value="raw" aria-label="Raw JSON tab">Raw JSON</v-tab>
               <v-tab
                 v-if="canSeeDiscussion && discussionRecordId"
@@ -223,6 +224,14 @@
                 <!-- Timeline Tab -->
                 <v-tabs-window-item value="timeline">
                   <PhenotypeTimeline :phenopacket-id="phenopacket.id" />
+                </v-tabs-window-item>
+
+                <v-tabs-window-item v-if="canSeeHistory" value="history">
+                  <HistoryTab
+                    :entries="historyEntries"
+                    :loading="historyLoading"
+                    :error="historyError"
+                  />
                 </v-tabs-window-item>
 
                 <!-- Raw JSON Tab -->
@@ -333,6 +342,7 @@ import TransitionMenu from '@/components/state/TransitionMenu.vue';
 import TransitionModal from '@/components/state/TransitionModal.vue';
 import { usePhenopacketState, effectiveStateOf } from '@/composables/usePhenopacketState';
 import DiscussionTab from '@/components/comments/DiscussionTab.vue';
+import HistoryTab from '@/components/phenopacket/HistoryTab.vue';
 
 export default {
   name: 'PagePhenopacket',
@@ -349,6 +359,7 @@ export default {
     TransitionMenu,
     TransitionModal,
     DiscussionTab,
+    HistoryTab,
   },
   setup() {
     const route = useRoute();
@@ -394,6 +405,8 @@ export default {
       showDeleteDialog: false,
       deleteLoading: false,
       activeTab: 'overview',
+      historyLoaded: false,
+      historyLoadPromise: null,
       // Transition modal state
       transitionModalOpen: false,
       pendingTargetState: null,
@@ -504,12 +517,40 @@ export default {
       return this.authStore?.isCurator ?? false;
     },
     /**
+     * Whether the revision history tab should be visible.
+     * Restricted to curators and admins, matching the backend endpoints.
+     */
+    canSeeHistory() {
+      return this.authStore?.isCurator ?? false;
+    },
+    /**
      * UUID primary key passed to DiscussionTab as record_id.
      * Prefers phenopacketMeta.id (UUID PK) over the public slug so that
      * backend record lookups match the comments.record_id column.
      */
     discussionRecordId() {
       return this.phenopacketMeta?.id ?? this.phenopacketMeta?.record_id ?? '';
+    },
+    historyEntries() {
+      return this.stateActions?.historyEntries?.value ?? [];
+    },
+    historyLoading() {
+      return this.stateActions?.historyLoading?.value ?? false;
+    },
+    historyError() {
+      return this.stateActions?.historyError?.value ?? null;
+    },
+  },
+  watch: {
+    activeTab(newTab) {
+      if (newTab === 'history') {
+        void this.ensureHistoryLoaded();
+      }
+    },
+    canSeeHistory(newValue, oldValue) {
+      if (newValue && !oldValue && this.activeTab === 'history') {
+        void this.ensureHistoryLoaded();
+      }
     },
   },
   mounted() {
@@ -570,6 +611,35 @@ export default {
       }
 
       return duration; // Return as-is if no pattern matched
+    },
+
+    async ensureHistoryLoaded(force = false) {
+      if (!this.canSeeHistory || (!force && this.historyLoaded)) {
+        return;
+      }
+      if (this.historyLoadPromise) {
+        await this.historyLoadPromise;
+        if (!force) {
+          return;
+        }
+      }
+
+      this.historyLoadPromise = this.stateActions
+        .loadHistory()
+        .then(() => {
+          this.historyLoaded = true;
+        })
+        .catch((error) => {
+          window.logService.error('Failed to load phenopacket history', {
+            phenopacketId: this.$route.params.phenopacket_id,
+            error: error.message,
+          });
+        })
+        .finally(() => {
+          this.historyLoadPromise = null;
+        });
+
+      await this.historyLoadPromise;
     },
 
     async fetchPhenopacket() {
@@ -751,8 +821,12 @@ export default {
         });
         this.transitionModalOpen = false;
         this.pendingTargetState = null;
+        this.historyLoaded = false;
         // Refresh to show new state
         await this.fetchPhenopacket();
+        if (this.activeTab === 'history') {
+          await this.ensureHistoryLoaded(true);
+        }
       } catch (err) {
         window.logService.error('State transition failed', {
           phenopacketId,

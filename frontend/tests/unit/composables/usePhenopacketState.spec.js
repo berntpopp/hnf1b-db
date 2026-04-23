@@ -15,9 +15,14 @@ import { usePhenopacketState } from '@/composables/usePhenopacketState';
 vi.mock('@/api/domain/phenopackets', () => ({
   transitionPhenopacket: vi.fn(),
   fetchRevisions: vi.fn(),
+  getPhenopacketAuditHistory: vi.fn(),
 }));
 
-import { transitionPhenopacket, fetchRevisions } from '@/api/domain/phenopackets';
+import {
+  transitionPhenopacket,
+  fetchRevisions,
+  getPhenopacketAuditHistory,
+} from '@/api/domain/phenopackets';
 
 const PHENOPACKET_ID = 'test-pp-001';
 
@@ -99,6 +104,76 @@ describe('usePhenopacketState', () => {
       expect(revisions.value).toEqual(revisionRows);
       expect(loading.value).toBe(false);
       expect(fetchRevisions).toHaveBeenCalledWith(PHENOPACKET_ID, { pageSize: 10, pageNumber: 1 });
+    });
+  });
+
+  describe('loadHistory', () => {
+    it('merges revision and audit payloads into normalized history rows', async () => {
+      fetchRevisions.mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              id: 11,
+              revision_number: 11,
+              state: 'approved',
+              actor_username: 'curator.alice',
+              created_at: '2026-04-23T08:30:00Z',
+              change_reason: 'Approved after review',
+            },
+          ],
+        },
+      });
+      getPhenopacketAuditHistory.mockResolvedValueOnce({
+        data: [
+          {
+            id: '11',
+            source: 'revision',
+            changed_by: 'curator.alice',
+            changed_at: '2026-04-23T08:30:00Z',
+            change_summary: 'Approved after review',
+            state_transition: { from: 'in_review', to: 'approved' },
+          },
+        ],
+      });
+
+      const { historyEntries, historyLoading, historyError, loadHistory } =
+        usePhenopacketState(PHENOPACKET_ID);
+
+      await loadHistory({ pageSize: 10, pageNumber: 1 });
+      await flushPromises();
+
+      expect(fetchRevisions).toHaveBeenCalledWith(PHENOPACKET_ID, {
+        pageSize: 10,
+        pageNumber: 1,
+      });
+      expect(getPhenopacketAuditHistory).toHaveBeenCalledWith(PHENOPACKET_ID);
+      expect(historyLoading.value).toBe(false);
+      expect(historyError.value).toBe(null);
+      expect(historyEntries.value).toEqual([
+        {
+          id: '11',
+          revisionNumber: 11,
+          state: 'approved',
+          actor: 'curator.alice',
+          timestamp: '2026-04-23T08:30:00Z',
+          summary: 'Approved after review',
+        },
+      ]);
+    });
+
+    it('stores historyError and rethrows when history loading fails', async () => {
+      const apiError = new Error('Audit unavailable');
+      fetchRevisions.mockRejectedValueOnce(apiError);
+
+      const { historyEntries, historyLoading, historyError, loadHistory } =
+        usePhenopacketState(PHENOPACKET_ID);
+
+      await expect(loadHistory()).rejects.toThrow('Audit unavailable');
+      await flushPromises();
+
+      expect(historyEntries.value).toEqual([]);
+      expect(historyLoading.value).toBe(false);
+      expect(historyError.value).toBe('Audit unavailable');
     });
   });
 });

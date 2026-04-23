@@ -1,7 +1,11 @@
 // frontend/src/composables/usePhenopacketState.js
 // Wave 7 / D.1 §9.3 — composable for state machine actions on a single phenopacket.
 import { ref } from 'vue';
-import { transitionPhenopacket, fetchRevisions } from '@/api/domain/phenopackets';
+import {
+  transitionPhenopacket,
+  fetchRevisions,
+  getPhenopacketAuditHistory,
+} from '@/api/domain/phenopackets';
 
 /**
  * Derive the effective state for UI binding.
@@ -25,6 +29,9 @@ export function usePhenopacketState(phenopacketId) {
   const revisions = ref([]);
   const loading = ref(false);
   const error = ref(null);
+  const historyEntries = ref([]);
+  const historyLoading = ref(false);
+  const historyError = ref(null);
 
   /**
    * POST a state transition.
@@ -61,5 +68,52 @@ export function usePhenopacketState(phenopacketId) {
     }
   };
 
-  return { revisions, loading, error, transitionTo, loadRevisions };
+  const loadHistory = async (opts) => {
+    historyLoading.value = true;
+    historyError.value = null;
+
+    try {
+      const [{ data: revisionData }, { data: auditData }] = await Promise.all([
+        fetchRevisions(phenopacketId, opts),
+        getPhenopacketAuditHistory(phenopacketId),
+      ]);
+
+      const auditByRevisionId = new Map(
+        auditData
+          .filter((entry) => entry?.source === 'revision' && entry?.id != null)
+          .map((entry) => [String(entry.id), entry])
+      );
+
+      historyEntries.value = (revisionData.data ?? []).map((revision) => {
+        const auditEntry = auditByRevisionId.get(String(revision.id));
+
+        return {
+          id: String(revision.id),
+          revisionNumber: revision.revision_number,
+          state: revision.state ?? revision.to_state ?? auditEntry?.state_transition?.to ?? null,
+          actor: revision.actor_username ?? auditEntry?.changed_by ?? null,
+          timestamp: revision.created_at ?? auditEntry?.changed_at ?? null,
+          summary:
+            auditEntry?.change_summary ?? revision.change_reason ?? auditEntry?.change_reason,
+        };
+      });
+    } catch (e) {
+      historyError.value = e.response?.data?.detail || e.message || 'Failed to load history';
+      throw e;
+    } finally {
+      historyLoading.value = false;
+    }
+  };
+
+  return {
+    revisions,
+    loading,
+    error,
+    historyEntries,
+    historyLoading,
+    historyError,
+    transitionTo,
+    loadRevisions,
+    loadHistory,
+  };
 }
