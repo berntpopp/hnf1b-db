@@ -6,9 +6,7 @@
  */
 
 import { config } from '@vue/test-utils';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
+import vuetify from '@/plugins/vuetify';
 
 // Polyfill ResizeObserver for Vuetify components
 // happy-dom doesn't include ResizeObserver by default
@@ -33,14 +31,6 @@ if (!globalThis.visualViewport) {
     removeEventListener: () => {},
   };
 }
-
-// Create Vuetify instance for tests
-// CRITICAL: Without this, Vuetify components will crash with
-// "Error: [Vuetify] Could not find defaults instance"
-const vuetify = createVuetify({
-  components,
-  directives,
-});
 
 // Register Vuetify plugin globally for all tests
 config.global.plugins = [vuetify];

@@ -4,9 +4,7 @@ import { createPinia } from 'pinia';
 import { createHead } from '@unhead/vue/client';
 import App from './App.vue';
 import router from './router';
-import { createVuetify } from 'vuetify';
-import 'vuetify/styles';
-import '@mdi/font/css/materialdesignicons.css';
+import vuetify from './plugins/vuetify';
 // Import app styles AFTER MDI to allow font-display override
 import './style.css';
 // Dark-theme utility-class overrides (gated by .v-theme--dark, no-op
@@ -20,7 +18,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { configureErrorHandler } from './main-error-handler';
 
 const pinia = createPinia();
-const vuetify = createVuetify();
 
 // Create head manager for SEO meta tags
 // @see https://unhead.unjs.io/setup/vue/installation
