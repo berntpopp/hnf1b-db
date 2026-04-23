@@ -294,6 +294,7 @@ class Settings(BaseSettings):
     OLD_DATABASE_URL: Optional[str] = None  # For migration purposes
     JWT_SECRET: str = Field(default="")
     REDIS_URL: str = "redis://localhost:6379/0"
+    ALLOW_REDIS_FALLBACK: Optional[bool] = None
     PUBMED_API_KEY: Optional[str] = None
 
     # SMTP credentials (for email delivery)
@@ -429,6 +430,20 @@ class Settings(BaseSettings):
             raise ValueError(
                 "REFUSING TO START: AUTH_COOKIE_SECURE must be true when "
                 f"ENVIRONMENT={self.environment}."
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def _validate_redis_fallback_contract(self) -> "Settings":
+        """Apply an explicit, fail-closed Redis fallback contract."""
+        if self.ALLOW_REDIS_FALLBACK is None:
+            self.ALLOW_REDIS_FALLBACK = self.environment == "development"
+
+        if self.ALLOW_REDIS_FALLBACK and self.environment != "development":
+            raise ValueError(
+                "REFUSING TO START: ALLOW_REDIS_FALLBACK=true is only permitted "
+                f"when ENVIRONMENT=development (got {self.environment!r})."
             )
 
         return self

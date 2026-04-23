@@ -158,11 +158,13 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
+      let hadAccessToken = false;
 
       try {
         // Import auth store dynamically to avoid circular dependency
         const { useAuthStore } = await import('@/stores/authStore');
         const authStore = useAuthStore();
+        hadAccessToken = !!authStore.accessToken;
 
         // Attempt to refresh access token
         const newAccessToken = await authStore.refreshAccessToken();
@@ -180,13 +182,17 @@ apiClient.interceptors.response.use(
         processQueue(refreshError, null);
         isRefreshing = false;
 
-        // Clear auth state and redirect
+        // Clear auth state and preserve return intent only for active sessions.
         window.logService.warn('Token refresh failed, redirecting to login');
         clearTokens();
 
-        // Only redirect if not already on login page
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        if (hadAccessToken) {
+          const { buildLoginLocation, default: router } = await import('@/router');
+          const currentFullPath =
+            router.currentRoute.value?.fullPath ??
+            `${window.location.pathname}${window.location.search ?? ''}${window.location.hash ?? ''}`;
+
+          await router.push(buildLoginLocation(currentFullPath));
         }
 
         return Promise.reject(refreshError);

@@ -43,6 +43,17 @@ from redis.exceptions import RedisError
 logger = logging.getLogger(__name__)
 
 
+async def _close_redis_client(redis_client: aioredis.Redis | None) -> None:
+    """Close a Redis client if it was created during a failed connect attempt."""
+    if redis_client is None:
+        return
+
+    if hasattr(redis_client, "aclose"):
+        await redis_client.aclose()
+    elif hasattr(redis_client, "close"):
+        await redis_client.close()
+
+
 class InMemoryCache:
     """Simple in-memory cache with TTL support for fallback when Redis is unavailable.
 
@@ -192,12 +203,20 @@ class CacheService:
             self._connected = True
             logger.info(f"Redis connected: {self._redis_url.split('@')[-1]}")
         except (RedisError, ConnectionError, OSError) as e:
-            logger.warning(
-                f"Redis unavailable ({e}), using in-memory fallback. "
-                "This is fine for development but not recommended for production."
-            )
+            await _close_redis_client(self._redis)
             self._redis = None
             self._connected = False
+
+            if not settings.ALLOW_REDIS_FALLBACK:
+                raise RuntimeError(
+                    "Redis is required in this environment and fallback is disabled. "
+                    f"Unable to connect to {self._redis_url}."
+                ) from e
+
+            logger.warning(
+                f"Redis unavailable ({e}), using in-memory fallback because "
+                "ALLOW_REDIS_FALLBACK is enabled."
+            )
 
     async def close(self) -> None:
         """Close Redis connection."""

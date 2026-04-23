@@ -2,6 +2,17 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { updatePageTitle } from '@/composables/usePageTitle';
 import { useAuthStore } from '@/stores/authStore';
 
+export function buildLoginLocation(fullPath) {
+  if (!fullPath || fullPath === '/login') {
+    return { name: 'Login' };
+  }
+
+  return {
+    name: 'Login',
+    query: { redirect: fullPath },
+  };
+}
+
 const routes = [
   {
     path: '/',
@@ -183,10 +194,7 @@ router.beforeEach(async (to, from) => {
         from: from.path,
         to: to.path,
       });
-      return {
-        name: 'Login',
-        query: { redirect: to.fullPath },
-      };
+      return buildLoginLocation(to.fullPath);
     }
 
     // If we have a token but no user data, fetch it
@@ -198,10 +206,7 @@ router.beforeEach(async (to, from) => {
         window.logService.warn('Failed to fetch user data, redirecting to login', {
           error: err.message,
         });
-        return {
-          name: 'Login',
-          query: { redirect: to.fullPath },
-        };
+        return buildLoginLocation(to.fullPath);
       }
     }
 

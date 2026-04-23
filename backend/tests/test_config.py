@@ -3,8 +3,14 @@
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import EmailConfig, Settings, YamlConfig
+
+
+def build_yaml_config(*, email_backend: str = "console") -> YamlConfig:
+    """Build a minimal YAML config for settings tests."""
+    return YamlConfig(email=EmailConfig(backend=email_backend))
 
 
 class TestJWTSecretValidation:
@@ -125,3 +131,62 @@ class TestYAMLConfiguration:
             == settings.security.access_token_expire_minutes
         )
         assert settings.VEP_API_BASE_URL == settings.external_apis.vep.base_url
+
+
+class TestRedisFallbackConfiguration:
+    """Test Redis fallback configuration contract."""
+
+    def test_redis_fallback_defaults_enabled_in_development(self):
+        """Development defaults to allowing in-memory Redis fallback."""
+        with patch(
+            "app.core.config.load_yaml_config",
+            lambda: build_yaml_config(email_backend="console"),
+        ):
+            settings = Settings(
+                JWT_SECRET="test-secret",
+                ADMIN_PASSWORD="test-admin-password",
+                environment="development",
+                AUTH_COOKIE_SECURE=False,
+                enable_dev_auth=False,
+                _env_file=None,
+            )
+        assert settings.ALLOW_REDIS_FALLBACK is True
+
+    def test_redis_fallback_defaults_disabled_in_production(self):
+        """Production defaults to disallowing in-memory Redis fallback."""
+        with patch(
+            "app.core.config.load_yaml_config",
+            lambda: build_yaml_config(email_backend="smtp"),
+        ):
+            settings = Settings(
+                JWT_SECRET="test-secret",
+                ADMIN_PASSWORD="test-admin-password",
+                environment="production",
+                AUTH_COOKIE_SECURE=True,
+                SMTP_HOST="smtp.example.test",
+                SMTP_USERNAME="smtp-user",
+                SMTP_PASSWORD="smtp-password",
+                enable_dev_auth=False,
+                _env_file=None,
+            )
+        assert settings.ALLOW_REDIS_FALLBACK is False
+
+    def test_redis_fallback_cannot_be_enabled_in_production(self):
+        """Production must refuse startup when Redis fallback is explicitly enabled."""
+        with patch(
+            "app.core.config.load_yaml_config",
+            lambda: build_yaml_config(email_backend="smtp"),
+        ):
+            with pytest.raises(ValidationError, match="ALLOW_REDIS_FALLBACK"):
+                Settings(
+                    JWT_SECRET="test-secret",
+                    ADMIN_PASSWORD="test-admin-password",
+                    environment="production",
+                    AUTH_COOKIE_SECURE=True,
+                    SMTP_HOST="smtp.example.test",
+                    SMTP_USERNAME="smtp-user",
+                    SMTP_PASSWORD="smtp-password",
+                    ALLOW_REDIS_FALLBACK=True,
+                    enable_dev_auth=False,
+                    _env_file=None,
+                )
