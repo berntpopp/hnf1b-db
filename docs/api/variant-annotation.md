@@ -896,6 +896,5 @@ uv run pytest tests/test_variant_validator_api_integration.py -v
 
 For issues or questions:
 - **GitHub Issues:** [hnf1b-db/issues](https://github.com/yourusername/hnf1b-db/issues)
-- **Developer Guide:** [../../.planning/plans/variant-annotation-implementation-plan.md](../../.planning/plans/variant-annotation-implementation-plan.md)
 - **API Version:** v2 (current)
 - **Last Updated:** 2025-01-15

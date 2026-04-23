@@ -860,7 +860,6 @@ curl -X POST .../annotate -d '{"variant": "NM_007294.3:c.5266dupC"}'
 ### API Documentation
 
 - **API Reference:** [docs/api/variant-annotation.md](/docs/api/variant-annotation.md)
-- **Developer Guide:** [../../.planning/plans/variant-annotation-implementation-plan.md](../../.planning/plans/variant-annotation-implementation-plan.md)
 
 ---
 

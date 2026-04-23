@@ -113,7 +113,6 @@ curl -X POST http://localhost:8000/api/v2/variants/annotate \
 ## Related Documentation
 
 - **User Guide:** [../user-guide/variant-annotation.md](../user-guide/variant-annotation.md) - Practical workflows and examples
-- **Developer Guide:** [../../.planning/plans/variant-annotation-implementation-plan.md](../../.planning/plans/variant-annotation-implementation-plan.md) - Internal implementation details
 - **Backend README:** [../../backend/README.md](../../backend/README.md) - Backend setup and architecture
 
 ---

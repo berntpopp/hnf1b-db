@@ -58,7 +58,7 @@ async function mountCard() {
     global: { plugins: [vuetify, router] },
   });
   await router.isReady();
-  return wrapper;
+  return { wrapper, router };
 }
 
 describe('SearchCard', () => {
@@ -68,7 +68,7 @@ describe('SearchCard', () => {
   });
 
   it('mounts and renders a text input (the v-autocomplete host)', async () => {
-    const wrapper = await mountCard();
+    const { wrapper } = await mountCard();
     expect(wrapper.exists()).toBe(true);
     // v-autocomplete renders an <input> — we assert on that instead of the
     // `.v-autocomplete` class, which Vuetify 3 does not always attach to
@@ -82,12 +82,29 @@ describe('SearchCard', () => {
   });
 
   it('renders inside a v-card wrapper with the search-card class', async () => {
-    const wrapper = await mountCard();
+    const { wrapper } = await mountCard();
     expect(wrapper.find('.search-card').exists()).toBe(true);
   });
 
   it('does not eagerly call clearRecentSearches on mount', async () => {
     await mountCard();
     expect(clearRecentSearches).not.toHaveBeenCalled();
+  });
+
+  it('routes Variant selections to Variants using the q query key', async () => {
+    const { wrapper, router } = await mountCard();
+    const pushSpy = vi.spyOn(router, 'push');
+    const autocomplete = wrapper.findComponent({ name: 'VAutocomplete' });
+
+    await autocomplete.vm.$emit('update:modelValue', {
+      id: 'VAR-123',
+      label: 'NM_000458.4:c.826C>T',
+      type: 'Variant',
+    });
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      name: 'Variants',
+      query: { q: 'NM_000458.4:c.826C>T' },
+    });
   });
 });

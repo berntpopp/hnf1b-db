@@ -45,17 +45,20 @@ test.describe('Variants Table URL State', () => {
     }
   });
 
-  test('should preserve search query in URL', async ({ page }) => {
+  test('should initialize variants search from routed q query', async ({ page }) => {
     // Navigate with search query
-    await page.goto('/variants?q=c.826');
+    await page.goto('/variants?q=pathogenic');
     await page.waitForLoadState('networkidle');
 
-    // Verify search input has the value
-    const searchInput = page.locator('input[placeholder*="Search"]').first();
-    await expect(searchInput).toHaveValue('c.826');
+    // Verify the routed query initializes the page search state
+    const searchInput = page.locator(
+      'input[placeholder="Search HGVS, gene symbol, or variant ID..."]'
+    );
+    await expect(searchInput).toHaveValue('pathogenic');
+    await expect(page).toHaveURL(/\/variants\?q=pathogenic/);
 
     // Verify URL contains search query
-    expect(page.url()).toContain('q=c.826');
+    expect(page.url()).toContain('q=pathogenic');
   });
 
   test('should update URL when searching', async ({ page }) => {

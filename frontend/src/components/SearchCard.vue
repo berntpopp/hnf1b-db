@@ -133,7 +133,7 @@ const onSelect = (item) => {
     // Assuming item.id is usable as a query (e.g. HGVS or ID)
     router.push({
       name: 'Variants',
-      query: { query: item.label }, // Search by label (usually HGVS)
+      query: { q: item.label }, // Search by label (usually HGVS)
     });
   } else {
     // Default fallback: Global Search Results
