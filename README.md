@@ -4,7 +4,7 @@ Full-stack monorepo for clinical and genetic data management, implementing the
 GA4GH Phenopackets v2 standard.
 
 - **Backend:** FastAPI REST API (Python 3.10+)
-- **Frontend:** Vue.js 3 with Vuetify 3 (Material Design)
+- **Frontend:** Vue.js 3 with Vuetify 4 (Material Design)
 - **Database:** PostgreSQL with JSONB storage
 
 ## Quick Start

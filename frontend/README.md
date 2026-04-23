@@ -72,10 +72,10 @@ src/
 - **Vite 7** - Next generation frontend tooling
 - **Vitest 4** - Unit/component test runner (with @vue/test-utils)
 - **Playwright** - End-to-end test runner (`tests/e2e/`)
-- **Vuetify 3** - Material Design component framework
-- **Vue Router 4** - Official router for Vue.js
+- **Vuetify 4** - Material Design component framework
+- **Vue Router 5** - Official router for Vue.js
 - **Pinia** - State management (stores in `src/stores/`)
-- **Axios** - HTTP client for API requests with JWT authentication
+- **Axios** - HTTP client for API requests with in-memory access tokens, cookie-backed refresh, and CSRF support
 - **D3.js** - Data visualization library
 
 ## API Configuration
