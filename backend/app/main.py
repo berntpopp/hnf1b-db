@@ -4,12 +4,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.api.admin import router as admin_router
 from app.comments.routers import router as comments_router
-from app.core.cache import close_cache, init_cache
+from app.core.cache import cache, close_cache, init_cache
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.mv_cache import init_mv_cache
@@ -154,15 +156,58 @@ async def root():
     }
 
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+async def _database_ready() -> tuple[bool, str | None]:
+    """Check whether the primary database is reachable."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True, None
+    except Exception as exc:  # pragma: no cover - exercised via route tests
+        return False, str(exc)
+
+
+async def _cache_ready() -> tuple[bool, str | None]:
+    """Check whether the cache dependency is reachable."""
+    if cache.is_connected:
+        return True, None
+    return False, "Redis cache is not connected"
+
+
+@app.get("/livez")
+async def liveness_check():
+    """Lightweight liveness endpoint for process-level health checks."""
     return {
-        "status": "healthy",
+        "status": "alive",
         "version": "2.0.0",
         "phenopackets_schema": "2.0.0",
     }
+
+
+@app.get("/health")
+async def health_check():
+    """Dependency-aware readiness endpoint."""
+    db_ready, db_error = await _database_ready()
+    cache_ready, cache_error = await _cache_ready()
+    is_ready = db_ready and cache_ready
+
+    payload = {
+        "status": "healthy" if is_ready else "degraded",
+        "version": "2.0.0",
+        "phenopackets_schema": "2.0.0",
+        "ready": is_ready,
+        "dependencies": {
+            "database": {
+                "ready": db_ready,
+                "error": db_error,
+            },
+            "cache": {
+                "ready": cache_ready,
+                "backend": "redis",
+                "error": cache_error,
+            },
+        },
+    }
+    return JSONResponse(status_code=200 if is_ready else 503, content=payload)
 
 
 # API information endpoint
