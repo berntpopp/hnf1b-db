@@ -411,6 +411,29 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _validate_environment_security_requirements(self) -> "Settings":
+        """Fail closed on environment-specific email and cookie settings."""
+        email_cfg = self.yaml.email
+
+        if self.environment == "production" and email_cfg.backend == "console":
+            raise ValueError(
+                "REFUSING TO START: email.backend is 'console' while "
+                "ENVIRONMENT=production. Configure SMTP delivery before "
+                "starting production."
+            )
+
+        if (
+            self.environment in {"staging", "production"}
+            and not self.AUTH_COOKIE_SECURE
+        ):
+            raise ValueError(
+                "REFUSING TO START: AUTH_COOKIE_SECURE must be true when "
+                f"ENVIRONMENT={self.environment}."
+            )
+
+        return self
+
+    @model_validator(mode="after")
     def _validate_smtp_config(self) -> "Settings":
         """Fail fast if email backend is smtp but SMTP_HOST is missing."""
         email_cfg = self.yaml.email

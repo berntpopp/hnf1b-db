@@ -4,14 +4,37 @@ Exercises the field_validators for JWT_SECRET and ADMIN_PASSWORD that
 cause the application to fail fast if critical secrets are unset.
 """
 
+import importlib
+
 import pytest
 from pydantic import ValidationError
-
-from app.core.config import Settings
 
 BASE_ENV = {
     "DATABASE_URL": "postgresql+asyncpg://test:test@localhost:5433/test",
 }
+
+
+def seed_safe_import_env(monkeypatch):
+    """Seed a safe ambient env before reloading app.core.config."""
+    for k, v in BASE_ENV.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("JWT_SECRET", "0" * 64)
+    monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("AUTH_COOKIE_SECURE", "true")
+
+
+def load_config_module():
+    """Reload app.core.config so settings construct from current test env."""
+    config_module = importlib.import_module("app.core.config")
+    return importlib.reload(config_module)
+
+
+def build_yaml_config(config_module, *, email_backend: str = "console"):
+    """Build a minimal YAML config override for settings tests."""
+    return config_module.YamlConfig(
+        email=config_module.EmailConfig(backend=email_backend)
+    )
 
 
 class TestJwtSecretValidation:
@@ -19,29 +42,33 @@ class TestJwtSecretValidation:
 
     def test_empty_jwt_secret_raises(self, monkeypatch):
         """Empty JWT_SECRET must raise ValidationError."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "")
-        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         with pytest.raises(ValidationError) as exc_info:
-            Settings(_env_file=None)
+            Settings(
+                _env_file=None,
+                DATABASE_URL=BASE_ENV["DATABASE_URL"],
+                JWT_SECRET="",
+                ADMIN_PASSWORD="validpassword",
+            )
         assert "JWT_SECRET" in str(exc_info.value)
 
     def test_whitespace_jwt_secret_raises(self, monkeypatch):
         """Whitespace-only JWT_SECRET must raise ValidationError."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "   ")
-        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         with pytest.raises(ValidationError):
-            Settings(_env_file=None)
+            Settings(
+                _env_file=None,
+                DATABASE_URL=BASE_ENV["DATABASE_URL"],
+                JWT_SECRET="   ",
+                ADMIN_PASSWORD="validpassword",
+            )
 
     def test_valid_jwt_secret_accepted(self, monkeypatch):
         """A non-empty JWT_SECRET must allow Settings to construct."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "0" * 64)
-        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         s = Settings(_env_file=None)
         assert s.JWT_SECRET == "0" * 64
 
@@ -51,22 +78,28 @@ class TestAdminPasswordValidation:
 
     def test_empty_admin_password_raises(self, monkeypatch):
         """Empty ADMIN_PASSWORD must raise ValidationError."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "0" * 64)
-        monkeypatch.setenv("ADMIN_PASSWORD", "")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         with pytest.raises(ValidationError) as exc_info:
-            Settings(_env_file=None)
+            Settings(
+                _env_file=None,
+                DATABASE_URL=BASE_ENV["DATABASE_URL"],
+                JWT_SECRET="0" * 64,
+                ADMIN_PASSWORD="",
+            )
         assert "ADMIN_PASSWORD" in str(exc_info.value)
 
     def test_whitespace_admin_password_raises(self, monkeypatch):
         """Whitespace-only ADMIN_PASSWORD must raise ValidationError."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "0" * 64)
-        monkeypatch.setenv("ADMIN_PASSWORD", "   ")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         with pytest.raises(ValidationError):
-            Settings(_env_file=None)
+            Settings(
+                _env_file=None,
+                DATABASE_URL=BASE_ENV["DATABASE_URL"],
+                JWT_SECRET="0" * 64,
+                ADMIN_PASSWORD="   ",
+            )
 
 
 class TestHpoTermsConfig:
@@ -74,10 +107,8 @@ class TestHpoTermsConfig:
 
     def test_hpo_terms_section_accessible(self, monkeypatch):
         """hpo_terms property should expose the YAML HPOTermsConfig model."""
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "0" * 64)
-        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         s = Settings(_env_file=None)
         # hpo_terms is exposed as a property that proxies to yaml.hpo_terms
         assert hasattr(s, "hpo_terms")
@@ -97,10 +128,8 @@ class TestHpoTermsConfig:
         but not the other fails fast instead of introducing silent config
         divergence.
         """
-        for k, v in BASE_ENV.items():
-            monkeypatch.setenv(k, v)
-        monkeypatch.setenv("JWT_SECRET", "0" * 64)
-        monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
+        seed_safe_import_env(monkeypatch)
+        Settings = load_config_module().Settings
         s = Settings(_env_file=None)
 
         # stage_5_ckd is a single-element list holding the ESRD HPO ID
@@ -123,3 +152,94 @@ class TestHpoTermsConfig:
         ):
             assert term.startswith("HP:")
             assert len(term) == 10  # "HP:" + 7 digits
+
+
+class TestProductionEmailAndCookieValidation:
+    """Validate fail-closed startup rules for email and auth cookies."""
+
+    def test_production_console_email_raises(self, monkeypatch):
+        """Production must reject console email delivery."""
+        seed_safe_import_env(monkeypatch)
+        config_module = load_config_module()
+        monkeypatch.setattr(
+            config_module,
+            "load_yaml_config",
+            lambda: build_yaml_config(config_module, email_backend="console"),
+        )
+
+        with pytest.raises(ValidationError, match="email.backend"):
+            config_module.Settings(
+                _env_file=None,
+                environment="production",
+                AUTH_COOKIE_SECURE=True,
+            )
+
+    @pytest.mark.parametrize("environment", ["staging", "production"])
+    def test_staging_and_production_insecure_auth_cookies_raise(
+        self, monkeypatch, environment
+    ):
+        """Staging-like environments must reject insecure auth cookies."""
+        seed_safe_import_env(monkeypatch)
+        config_module = load_config_module()
+        monkeypatch.setattr(
+            config_module,
+            "load_yaml_config",
+            lambda: build_yaml_config(config_module, email_backend="smtp"),
+        )
+        monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+        monkeypatch.setenv("SMTP_USERNAME", "user")
+        monkeypatch.setenv("SMTP_PASSWORD", "password")
+
+        with pytest.raises(ValidationError, match="AUTH_COOKIE_SECURE"):
+            config_module.Settings(
+                _env_file=None,
+                environment=environment,
+                AUTH_COOKIE_SECURE=False,
+            )
+
+    def test_development_console_email_allowed(self, monkeypatch):
+        """Development may use console email delivery."""
+        seed_safe_import_env(monkeypatch)
+        config_module = load_config_module()
+        monkeypatch.setattr(
+            config_module,
+            "load_yaml_config",
+            lambda: build_yaml_config(config_module, email_backend="console"),
+        )
+
+        s = config_module.Settings(
+            _env_file=None,
+            DATABASE_URL=BASE_ENV["DATABASE_URL"],
+            JWT_SECRET="0" * 64,
+            ADMIN_PASSWORD="validpassword",
+            environment="development",
+            AUTH_COOKIE_SECURE=False,
+        )
+
+        assert s.environment == "development"
+        assert s.email.backend == "console"
+
+    def test_development_insecure_auth_cookies_allowed(self, monkeypatch):
+        """Development may keep insecure auth cookies."""
+        seed_safe_import_env(monkeypatch)
+        config_module = load_config_module()
+        monkeypatch.setattr(
+            config_module,
+            "load_yaml_config",
+            lambda: build_yaml_config(config_module, email_backend="smtp"),
+        )
+
+        s = config_module.Settings(
+            _env_file=None,
+            DATABASE_URL=BASE_ENV["DATABASE_URL"],
+            JWT_SECRET="0" * 64,
+            ADMIN_PASSWORD="validpassword",
+            environment="development",
+            AUTH_COOKIE_SECURE=False,
+            SMTP_HOST="smtp.example.test",
+            SMTP_USERNAME="user",
+            SMTP_PASSWORD="password",
+        )
+
+        assert s.environment == "development"
+        assert s.AUTH_COOKIE_SECURE is False
