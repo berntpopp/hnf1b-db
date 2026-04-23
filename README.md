@@ -26,6 +26,14 @@ make frontend
 See [docs/deployment/docker.md](docs/deployment/docker.md) for full Docker
 deployment instructions (including production with Nginx Proxy Manager).
 
+## Authentication and Session Model
+
+The live auth flow uses short-lived JWT access tokens in frontend memory only.
+Browser refresh state is handled separately with a rotating refresh token stored
+in an `HttpOnly` cookie. Cookie-auth flows that mutate state also require a
+CSRF double-submit check using the readable `csrf_token` cookie and the
+`X-CSRF-Token` request header.
+
 ## Dev-mode quick-login (local development only)
 
 For faster iteration on features that need to switch between admin, curator, and
@@ -61,6 +69,7 @@ The feature is structurally impossible to ship to production:
 
 - [docs/deployment/docker.md](docs/deployment/docker.md) — Docker deployment guide
 - [docs/api/README.md](docs/api/README.md) — API endpoint overview
+- [docs/adr/0002-cookie-refresh-and-memory-access-token.md](docs/adr/0002-cookie-refresh-and-memory-access-token.md) — current auth/session ADR
 - [.planning/README.md](.planning/README.md) — internal plans, specs, reviews, and archives
 - [AGENTS.md](AGENTS.md) — Canonical repository instructions for coding agents
 - API docs: http://localhost:8000/docs (when backend is running)

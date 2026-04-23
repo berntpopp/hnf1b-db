@@ -1,8 +1,23 @@
 # ADR 0001: JWT Storage Location
 
-**Status:** Accepted
+**Status:** Superseded by ADR 0002
 **Date:** 2026-04-12
+**Superseded Date:** 2026-04-23
+**Superseded By:** [ADR 0002: Cookie-backed refresh sessions with in-memory access token](0002-cookie-refresh-and-memory-access-token.md)
 **Context:** 2026-04-09 review flagged localStorage JWT as "vulnerable to XSS" (P5 #26)
+
+## Superseded
+
+This ADR no longer describes the live authentication/session design.
+The application has since migrated away from `localStorage` token storage.
+Current behavior is documented in ADR 0002:
+
+- Access tokens are short-lived and kept in frontend memory only.
+- Refresh tokens are stored in a rotating `HttpOnly` cookie.
+- Cookie-auth mutation flows require a CSRF double-submit check using the
+  readable `csrf_token` cookie and the `X-CSRF-Token` request header.
+
+The historical decision record below is preserved for context only.
 
 ## Context
 

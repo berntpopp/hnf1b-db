@@ -9,7 +9,7 @@ Vue 3 application for the HNF1B clinical genetics database. Part of the HNF1B Da
 - Clinical feature aggregations and statistics
 - HPO term autocomplete search
 - Responsive Material Design interface
-- JWT authentication
+- JWT authentication with in-memory access tokens and cookie-backed refresh
 
 ## Prerequisites
 
@@ -103,7 +103,7 @@ VITE_API_URL=http://localhost:8000/api/v2
 The application uses the **GA4GH Phenopackets v2** API format:
 
 - **Base URL**: `http://localhost:8000/api/v2`
-- **Authentication**: JWT tokens (stored in `localStorage`; see [ADR 0001](../docs/adr/0001-jwt-storage.md))
+- **Authentication**: Short-lived access token in frontend memory, rotating refresh token in an `HttpOnly` cookie, and `X-CSRF-Token` header support for cookie-auth flows (see [ADR 0002](../docs/adr/0002-cookie-refresh-and-memory-access-token.md))
 - **Pagination**: JSON:API v1.1 — `page[number]`/`page[size]` (offset) or `page[after]` (cursor); `sort=-created_at` style sort keys
 - **Data Format**: JSON:API v1.1 responses (data/meta/links envelope)
 
