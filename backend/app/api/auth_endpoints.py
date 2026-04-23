@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -190,6 +190,28 @@ async def _revoke_all_refresh_capability(user: User, db: AsyncSession) -> int:
     """Revoke all active refresh sessions for a user and bump session version."""
     refresh_sessions = RefreshSessionRepository(db)
     return await refresh_sessions.revoke_all_for_user(user)
+
+
+async def _revoke_all_refresh_capability_in_transaction(
+    user: User,
+    db: AsyncSession,
+) -> int:
+    """Revoke active refresh sessions without committing the enclosing flow."""
+    result = await db.execute(
+        select(RefreshSession).where(
+            RefreshSession.user_id == user.id,
+            RefreshSession.session_version == user.session_version,
+            RefreshSession.revoked_at.is_(None),
+        )
+    )
+    sessions = list(result.scalars().all())
+    revoked_at = datetime.now(timezone.utc)
+    for session in sessions:
+        session.revoked_at = revoked_at
+
+    user.session_version += 1
+    await db.flush()
+    return len(sessions)
 
 
 async def _safe_send_email(
@@ -843,16 +865,19 @@ async def create_invite(
     """
     token_svc = CredentialTokenService(db)
 
-    # Invalidate any existing invite tokens for this email
-    await token_svc.invalidate_by_email_and_purpose(
-        email=invite_data.email, purpose="invite"
-    )
-
-    raw_token, db_token = await token_svc.create_token(
-        purpose="invite",
-        email=invite_data.email,
-        metadata={"role": invite_data.role},
-    )
+    try:
+        await token_svc.invalidate_by_email_and_purpose(
+            email=invite_data.email, purpose="invite"
+        )
+        raw_token, db_token = await token_svc.create_token(
+            purpose="invite",
+            email=invite_data.email,
+            metadata={"role": invite_data.role},
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # URL-encode email query param — addresses with '+' or reserved
     # characters would otherwise produce broken links (Copilot PR #235).
@@ -910,45 +935,46 @@ async def accept_invite(
     by receiving the invite).
     """
     token_svc = CredentialTokenService(db)
-    db_token = await token_svc.verify_and_consume(token, purpose="invite")
-
-    if db_token is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid, expired, or already-used invite token.",
-        )
-
     repo = UserRepository(db)
 
-    # Check username uniqueness
-    if await repo.get_by_username(accept_data.username):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Username '{accept_data.username}' already exists",
+    try:
+        db_token = await token_svc.verify_and_consume(token, purpose="invite")
+
+        if db_token is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid, expired, or already-used invite token.",
+            )
+
+        if await repo.get_by_username(accept_data.username):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Username '{accept_data.username}' already exists",
+            )
+
+        if await repo.get_by_email(db_token.email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Email '{db_token.email}' already exists",
+            )
+
+        role = (db_token.metadata_ or {}).get("role", "viewer")
+        user = User(
+            username=accept_data.username,
+            email=db_token.email,
+            hashed_password=get_password_hash(accept_data.password),
+            full_name=accept_data.full_name,
+            role=role,
+            is_active=True,
+            is_verified=True,
         )
+        db.add(user)
+        await db.flush()
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
-    # Check email uniqueness
-    if await repo.get_by_email(db_token.email):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Email '{db_token.email}' already exists",
-        )
-
-    # Extract role from token metadata
-    role = (db_token.metadata_ or {}).get("role", "viewer")
-
-    # Create user
-    user = User(
-        username=accept_data.username,
-        email=db_token.email,
-        hashed_password=get_password_hash(accept_data.password),
-        full_name=accept_data.full_name,
-        role=role,
-        is_active=True,
-        is_verified=True,
-    )
-    db.add(user)
-    await db.commit()
     await db.refresh(user)
 
     await log_user_action(
@@ -994,14 +1020,19 @@ async def request_password_reset(
     raw_token = None
     if user:
         token_svc = CredentialTokenService(db)
-        await token_svc.invalidate_by_email_and_purpose(
-            email=reset_data.email, purpose="reset"
-        )
-        raw_token, _ = await token_svc.create_token(
-            purpose="reset",
-            email=reset_data.email,
-            user_id=user.id,
-        )
+        try:
+            await token_svc.invalidate_by_email_and_purpose(
+                email=reset_data.email, purpose="reset"
+            )
+            raw_token, _ = await token_svc.create_token(
+                purpose="reset",
+                email=reset_data.email,
+                user_id=user.id,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         # Email errors MUST NOT leak user existence (OWASP anti-enum).
         # Swallow + log via _safe_send_email (Copilot PR #235 review).
@@ -1034,31 +1065,33 @@ async def confirm_password_reset(
 ) -> MessageResponse:
     """Confirm a password reset with a valid token."""
     token_svc = CredentialTokenService(db)
-    db_token = await token_svc.verify_and_consume(token, purpose="reset")
-
-    if db_token is None or db_token.user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid, expired, or already-used reset token.",
-        )
-
     repo = UserRepository(db)
-    user = await repo.get_by_id(db_token.user_id)
+    try:
+        db_token = await token_svc.verify_and_consume(token, purpose="reset")
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User associated with this token no longer exists.",
+        if db_token is None or db_token.user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid, expired, or already-used reset token.",
+            )
+
+        user = await repo.get_by_id(db_token.user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User associated with this token no longer exists.",
+            )
+
+        user.hashed_password = get_password_hash(reset_data.new_password)
+        await _revoke_all_refresh_capability_in_transaction(user, db)
+        await token_svc.invalidate_by_email_and_purpose(
+            email=db_token.email, purpose="reset"
         )
-
-    user.hashed_password = get_password_hash(reset_data.new_password)
-    await db.commit()
-    await _revoke_all_refresh_capability(user, db)
-
-    # Invalidate all remaining reset tokens for this email
-    await token_svc.invalidate_by_email_and_purpose(
-        email=db_token.email, purpose="reset"
-    )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     await log_user_action(
         db=db,
@@ -1088,14 +1121,19 @@ async def resend_verification(
         )
 
     token_svc = CredentialTokenService(db)
-    await token_svc.invalidate_by_email_and_purpose(
-        email=current_user.email, purpose="verify"
-    )
-    raw_token, _ = await token_svc.create_token(
-        purpose="verify",
-        email=current_user.email,
-        user_id=current_user.id,
-    )
+    try:
+        await token_svc.invalidate_by_email_and_purpose(
+            email=current_user.email, purpose="verify"
+        )
+        raw_token, _ = await token_svc.create_token(
+            purpose="verify",
+            email=current_user.email,
+            user_id=current_user.id,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     verify_url = f"{_frontend_base_url()}/verify-email/{raw_token}"
     await _safe_send_email(
@@ -1122,34 +1160,35 @@ async def verify_email(
 ) -> MessageResponse:
     """Verify email address using a credential token."""
     token_svc = CredentialTokenService(db)
-    db_token = await token_svc.verify_and_consume(token, purpose="verify")
-
-    if db_token is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid, expired, or already-used verification token.",
-        )
-
-    # verify tokens are always created with user_id set (see create_user
-    # and resend_verification above); user_id: int | None is only used
-    # by the invite flow, which has its own endpoint.
-    if db_token.user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification token is not bound to a user.",
-        )
-
     repo = UserRepository(db)
-    user = await repo.get_by_id(db_token.user_id)
+    try:
+        db_token = await token_svc.verify_and_consume(token, purpose="verify")
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User associated with this token no longer exists.",
-        )
+        if db_token is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid, expired, or already-used verification token.",
+            )
 
-    user.is_verified = True
-    await db.commit()
+        if db_token.user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification token is not bound to a user.",
+            )
+
+        user = await repo.get_by_id(db_token.user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User associated with this token no longer exists.",
+            )
+
+        user.is_verified = True
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     await log_user_action(
         db=db,

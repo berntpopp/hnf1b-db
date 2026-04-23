@@ -106,6 +106,7 @@ async def test_invite_accept_rejects_expired_token(async_client, db_session):
         metadata={"role": "viewer"},
         expires_in=timedelta(seconds=-1),
     )
+    await db_session.commit()
 
     resp = await async_client.post(
         f"/api/v2/auth/invite/accept/{raw_token}",

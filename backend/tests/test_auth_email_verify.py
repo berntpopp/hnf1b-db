@@ -66,6 +66,7 @@ async def test_verify_email_sets_verified(async_client, admin_headers, db_sessio
         email="verifyable@example.com",
         user_id=user_id,
     )
+    await db_session.commit()
 
     resp = await async_client.post(f"/api/v2/auth/verify-email/{raw_token}")
     assert resp.status_code == 200
@@ -106,6 +107,7 @@ async def test_verify_email_single_use(async_client, db_session):
     raw_token, _ = await svc.create_token(
         purpose="verify", email="singleuse@example.com", user_id=user.id
     )
+    await db_session.commit()
 
     resp1 = await async_client.post(f"/api/v2/auth/verify-email/{raw_token}")
     assert resp1.status_code == 200

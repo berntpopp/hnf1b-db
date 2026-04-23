@@ -57,8 +57,7 @@ class CredentialTokenService:
             metadata_=metadata,
         )
         self.db.add(db_token)
-        await self.db.commit()
-        await self.db.refresh(db_token)
+        await self.db.flush()
 
         return raw_token, db_token
 
@@ -89,7 +88,6 @@ class CredentialTokenService:
             .returning(CredentialToken)
         )
         db_token = result.scalar_one_or_none()
-        await self.db.commit()
 
         if db_token is None:
             return None
@@ -115,5 +113,4 @@ class CredentialTokenService:
             )
             .values(used_at=now)
         )
-        await self.db.commit()
         return result.rowcount
