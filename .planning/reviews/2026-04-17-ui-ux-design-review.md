@@ -42,8 +42,8 @@ Remediation landed: `main` @ `e8c6f58` (squash merge of PR #263, 2026-04-17)
 > **Revised overall score: 8.5 / 10** — seven of the eight review gates
 > are now satisfied.
 >
-> See `.planning/specs/2026-04-17-ui-hardening-immediate-design.md`
-> and `.planning/plans/2026-04-17-ui-hardening-immediate.md` for the
+> See `.planning/archive/specs/2026-04-17-ui-hardening-immediate-design.md`
+> and `.planning/archive/plans/2026-04-17-ui-hardening-immediate.md` for the
 > exact scope that shipped, and commit `e8c6f58` for the squashed
 > implementation.
 

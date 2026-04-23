@@ -14,13 +14,21 @@
 
 This is the **single current planning document** for the next release-hardening steps.
 
+Audit update: as of 2026-04-23, most auth/workflow hardening slices from this
+plan are implemented on `main`. The remaining live blockers are:
+
+- production email must fail closed instead of defaulting to console delivery
+- durable docs still link to `.planning/` implementation plans as reference docs
+- release-facing docs and ADRs still lag the live auth/session model
+- the April 17 UI review still has medium/low follow-up items
+
 It consolidates and supersedes as the active execution driver:
 
-- `.planning/reviews/2026-04-15-senior-codebase-platform-review.md`
-- `.planning/reviews/2026-04-15-path-to-8plus-and-pr-254-review.md`
-- `.planning/plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
+- `.planning/archive/reviews/2026-04-15-senior-codebase-platform-review.md`
+- `.planning/archive/reviews/2026-04-15-path-to-8plus-and-pr-254-review.md`
+- `.planning/archive/plans/2026-04-14-wave-7-d2-comments-and-clone-advancement.md`
 
-Those documents remain useful as historical analysis and feature-specific references, but this file is the source of truth for sequencing and go/no-go release decisions.
+Those archived documents remain useful as historical analysis and feature-specific references, but this file is the source of truth for sequencing and go/no-go release decisions.
 
 ## Release Goal
 
@@ -86,7 +94,7 @@ The release is not ready until all four gates are green.
 
 This is the highest-leverage work. It should start before any additional collaboration features.
 
-- [ ] Enforce account state on every token issuance path.
+- [x] Enforce account state on every token issuance path.
   Files:
   `backend/app/api/auth_endpoints.py`
   `backend/app/auth/dependencies.py`
@@ -94,7 +102,7 @@ This is the highest-leverage work. It should start before any additional collabo
   Tests:
   add locked-login, inactive-refresh, and unlock-follow-up regression coverage under `backend/tests/`.
 
-- [ ] Replace frontend long-lived token persistence.
+- [x] Replace frontend long-lived token persistence.
   Files:
   `frontend/src/stores/authStore.js`
   `frontend/src/api/session.js`
@@ -102,11 +110,11 @@ This is the highest-leverage work. It should start before any additional collabo
   Goal:
   move to HttpOnly refresh cookie plus short-lived in-memory access token.
 
-- [ ] Add CSRF protection for refresh/logout/mutation routes if cookie refresh is introduced.
+- [x] Add CSRF protection for refresh/logout/mutation routes if cookie refresh is introduced.
   Files:
   backend auth/router and frontend transport/auth plumbing.
 
-- [ ] Rework refresh-token invalidation semantics.
+- [x] Rework refresh-token invalidation semantics.
   Minimum:
   password change and password reset revoke existing refresh capability.
   Prefer:
@@ -126,26 +134,26 @@ This is the highest-leverage work. It should start before any additional collabo
   `backend/app/phenopackets/routers/crud_timeline.py`
   related detail/list visibility helpers and tests.
 
-- [ ] Make delete/state mutations atomic.
+- [x] Make delete/state mutations atomic.
   Files:
   `backend/app/phenopackets/services/phenopacket_service.py`
   related state/transition services.
   Goal:
   final mutation guarded by revision predicate or row lock, not only pre-read checks.
 
-- [ ] Fix the phenopacket publication binding regression.
+- [x] Fix the phenopacket publication binding regression.
   Files:
   `frontend/src/views/PhenopacketCreateEdit.vue`
   Goal:
   one source of truth for publication editing and save payload generation.
 
-- [ ] Normalize duplicate-email update handling to explicit conflict responses.
+- [x] Normalize duplicate-email update handling to explicit conflict responses.
   Files:
   backend admin/auth update paths and repository methods.
 
 ### Workstream C: Verification Stabilization
 
-- [ ] Define the required release verification slices and keep them small enough to run often.
+- [x] Define the required release verification slices and keep them small enough to run often.
   Backend target groups:
   auth/session lifecycle
   state workflow
@@ -155,15 +163,15 @@ This is the highest-leverage work. It should start before any additional collabo
   admin user management
   phenopacket edit regression
 
-- [ ] Fix fixture/session-boundary defects that make targeted backend slices unreliable.
+- [x] Fix fixture/session-boundary defects that make targeted backend slices unreliable.
   Focus:
   async SQLAlchemy session isolation and fixture cleanup discipline.
 
 - [ ] Add at least one real concurrent integration test for edit/delete or state/delete races.
 
-- [ ] Add frontend regression coverage for existing-record PMID preservation.
+- [x] Add frontend regression coverage for existing-record PMID preservation.
 
-- [ ] Add one release-candidate command list and use it consistently before merge.
+- [x] Add one release-candidate command list and use it consistently before merge.
   Candidate commands:
   `cd backend && make test`
   `cd backend && uv run pytest tests/test_dev_endpoints.py tests/test_pwdlib_rehash.py -v`
@@ -182,7 +190,7 @@ This is the highest-leverage work. It should start before any additional collabo
 
 - [ ] Keep `AGENTS.md` as canonical and reduce current references to `CLAUDE.md` in live docs/plans.
 
-- [ ] Update planning indexes so this file is the current active release plan and older documents are clearly historical/supporting.
+- [x] Update planning indexes so this file is the current active release plan and older documents are clearly historical/supporting.
 
 ## PR #254 Position
 
@@ -205,14 +213,12 @@ The next release candidate can be called credible only when:
 
 ## Immediate Next Step
 
-Start with a narrow hardening milestone in this order:
+Finish the remaining hardening/doc cleanup in this order:
 
-1. token issuance enforcement
-2. frontend token-storage migration
-3. refresh invalidation semantics
-4. timeline visibility fix
-5. atomic delete/state fix
-6. PMID edit/save regression fix
-7. verification slice stabilization
+1. production email fail-closed
+2. durable doc link cleanup out of `.planning/`
+3. ADR and release-facing auth/session docs refresh
+4. remaining release-candidate verification reruns
+5. medium/low UI follow-up work from the 2026-04-17 review
 
 Only after those are in place should the codebase be rescored for `>8.0` and considered for release-candidate signoff.
