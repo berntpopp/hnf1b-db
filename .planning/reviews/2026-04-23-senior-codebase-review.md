@@ -2,10 +2,45 @@
 
 Date: 2026-04-23  
 Reviewer: Codex (senior staff engineer review)  
-Scope: live `main` branch only; backend, frontend, tests, docs, planning/release hygiene, and operational safety.  
+Original scope: live `main` branch only; backend, frontend, tests, docs, planning/release hygiene, and operational safety.  
 Style reference: `.planning/archive/reviews/2026-04-15-senior-codebase-platform-review.md`, `.planning/archive/reviews/2026-04-11-platform-readiness-review.md`.
 
+## 2026-04-24 implementation status update
+
+This file started as a point-in-time review of `main` on 2026-04-23. It now also records what was finished immediately after the review in the remediation branch and PR:
+
+- Remediation branch: `review/remediation-2026-04-23`
+- Current remediation head: `6bcbc11`
+- PR: `#274` (`https://github.com/berntpopp/hnf1b-db/pull/274`)
+- PR `#274` status at update time: open draft, mergeable, all CI checks green
+- Live `main` at update time: `5576dc5`
+
+The practical consequence is important:
+
+- The original findings below were accurate for the reviewed `main` snapshot.
+- Many of the highest-value findings have now been implemented and verified on the remediation branch, but are not yet reflected in live `main` until `#274` merges.
+- This document should therefore be read as a historical review plus a remediation-status ledger, not as a claim that every item below is still open on the exact same branch tip.
+
+### Remediation status summary
+
+| Finding area | Status on reviewed `main` | Status after remediation work | Notes |
+|---|---|---|---|
+| Production console-email fail-open | Open | Implemented on remediation branch | Startup now fails closed for production email configuration. |
+| Production insecure auth cookies | Open | Implemented on remediation branch | Production startup now guards cookie security instead of relying on operator discipline. |
+| SearchCard -> Variants query mismatch | Open | Implemented on remediation branch | The home/search handoff now uses the table query contract. |
+| `/health` not readiness-aware | Open | Implemented on remediation branch | Dependency-aware readiness checks were added. |
+| Blocking sync ontology I/O on async request path | Open | Implemented on remediation branch | The review branch removes this blocking request-path behavior. |
+| Inconsistent transaction ownership in auth flows | Open | Implemented on remediation branch | Auth/credential transaction ownership was centralized and re-tested. |
+| Durable docs behind live auth/docs behavior | Open | Partially implemented on remediation branch | The durable-docs cleanup moved forward materially, but final parity still depends on merge and follow-through. |
+| Missing curator-facing revision/history UI | Open | Implemented on remediation branch | A curator history tab landed after the review snapshot. |
+| Vuetify hardening mounted as dead code | Open | Implemented on remediation branch | The review branch mounts the real hardened plugin path. |
+| Accessibility automation too narrow | Open | Implemented on remediation branch | Automated accessibility coverage and broader browser-path checks were added. |
+| Dependabot mergeable updates | Not part of original findings | Implemented on remediation branch | Mergeable dependency updates were folded into `#274`; blocked `protobuf` and `chardet` bumps were closed with explicit upstream-constraint reasons. |
+| Redis fallback too permissive | Open | Still open / decision pending | This remains the most material operational-policy item not fully closed by the remediation branch. |
+
 ## Executive summary
+
+Update note: the executive summary below describes the 2026-04-23 `main` snapshot. After that review, the branch `review/remediation-2026-04-23` closed most of the highest-severity findings and passed CI; treat the original score as historical unless you are specifically evaluating pre-merge `main`.
 
 HNF1B-DB is materially stronger than the archived April reviews described. The codebase now has real admin user management UI, working identity-lifecycle flows, cookie-backed refresh with CSRF protection, discussion/comments, state workflow coverage, and much better planning hygiene. The live repo is not in the shape those older reviews described.
 
@@ -227,6 +262,14 @@ The following prior themes should no longer be scored as active platform failure
 - **Planning hygiene is much better.** The repo now has a coherent active `.planning` index and recent archive cleanup commits; the problem is follow-through in durable docs, not planning sprawl itself.
 
 ## Prior finding status
+
+### 2026-04-24 branch-status overlay
+
+The original status buckets below describe the reviewed `main` snapshot. As of the remediation branch and PR `#274`, the effective status is:
+
+- Implemented on remediation branch: production email fail-closed behavior, secure-cookie enforcement, variant routing fix, readiness checks, async ontology path cleanup, auth transaction ownership cleanup, curator history UI, mounted Vuetify plugin, broader accessibility automation, and the durable-docs cleanup tranche that was part of the review program.
+- Still intentionally not upgraded: `protobuf 7.x` and `chardet 7.x`, because upstream package constraints currently require `phenopackets` with `protobuf < 7` and `pronto` with `chardet ~= 5.0`.
+- Still materially open after the remediation tranche: Redis production fallback policy remains the main unresolved operational-safety decision.
 
 ### Fixed since prior reviews
 
