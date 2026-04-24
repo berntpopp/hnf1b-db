@@ -65,12 +65,20 @@ jobs:
       run: |
         python - <<'PY'
         from pathlib import Path
-        import yaml
+        import re
 
         path = Path("backend/config.yaml")
-        config = yaml.safe_load(path.read_text())
-        config.setdefault("email", {})["backend"] = "smtp"
-        path.write_text(yaml.safe_dump(config, sort_keys=False))
+        original = path.read_text()
+        updated = re.sub(
+            r'(^email:\n(?:^[^\S\r\n].*\n)*?^[^\S\r\n]*backend:\s*)"console"',
+            r'\1"smtp"',
+            original,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if updated == original:
+            raise SystemExit("Failed to switch backend/config.yaml email.backend to smtp")
+        path.write_text(updated)
         PY
 
     - name: Run database migrations
@@ -255,32 +263,67 @@ jobs:
         cd backend
         uv sync --group dev --group test
 
+    - name: Configure production email backend for E2E CI
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import re
+
+        path = Path("backend/config.yaml")
+        original = path.read_text()
+        updated = re.sub(
+            r'(^email:\n(?:^[^\S\r\n].*\n)*?^[^\S\r\n]*backend:\s*)"console"',
+            r'\1"smtp"',
+            original,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if updated == original:
+            raise SystemExit("Failed to switch backend/config.yaml email.backend to smtp")
+        path.write_text(updated)
+        PY
+
     - name: Run backend migrations
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         uv run alembic upgrade head
 
     - name: Seed admin user (required for E2E auth)
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_USERNAME: admin
         ADMIN_EMAIL: admin@hnf1b-db.local
         ADMIN_PASSWORD: ci_test_admin_password_2026
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         uv run python scripts/create_admin_user.py
 
     - name: Start backend
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
         REDIS_URL: redis://localhost:6379/0
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &

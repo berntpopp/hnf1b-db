@@ -16,8 +16,9 @@ const baseURL = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const useWebServer = !process.env.E2E_BASE_URL;
 // Keep Firefox coverage intentionally narrow: it adds a second-browser run for
 // the axe-based accessibility smoke suite without moving broader UI coverage
-// out of Chromium.
-const FIREFOX_A11Y_FILE_RE = /(?:^|\/)tests\/e2e\/accessibility\.spec\.js$/;
+// out of Chromium. Match the spec name whether Playwright supplies a path
+// relative to testDir or one that still includes parent segments.
+const FIREFOX_A11Y_FILE_RE = /(?:^|\/)accessibility\.spec\.js$/;
 
 export default defineConfig({
   testDir: './tests/e2e',

@@ -7,7 +7,7 @@ import {
   getDevQuickLoginDisabledMessage,
   isDevQuickLoginEnabled,
 } from '@/config/devAuth';
-import { clearTokens, getAccessToken, persistTokens } from '@/api/session';
+import { clearTokens, getAccessToken, getCsrfToken, persistTokens } from '@/api/session';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -228,6 +228,13 @@ export const useAuthStore = defineStore('auth', () => {
             error: err.message,
           });
         }
+        return;
+      }
+
+      if (!getCsrfToken()) {
+        window.logService.debug('Anonymous session bootstrap skipped (no csrf cookie)', {
+          reason: 'missing_csrf_cookie',
+        });
         return;
       }
 
