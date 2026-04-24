@@ -223,11 +223,11 @@ class TestVEPAnnotation:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock 400 Bad Request for invalid format
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 400
             mock_response.headers = {}
 
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
                 return_value=mock_response
             )
 
@@ -257,7 +257,7 @@ class TestVEPAnnotation:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock unexpected status code (e.g., 301 redirect)
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 301
             mock_response.headers = {}
 
@@ -278,7 +278,7 @@ class TestVEPAnnotation:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock successful response with low rate limit
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json = MagicMock(return_value=[{"id": "test"}])
             mock_response.headers = {
@@ -344,7 +344,7 @@ class TestRateLimiting:
         mock_response_data = {"most_severe_consequence": "test"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
@@ -378,7 +378,7 @@ class TestRateLimiting:
         mock_response_data = {"most_severe_consequence": "test"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json = MagicMock(return_value=[mock_response_data])
             mock_response.headers = {}
@@ -556,7 +556,7 @@ class TestErrorHandling:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock 429 response with Retry-After header
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 429
             mock_response.headers = {"Retry-After": "1"}  # Wait 1 second
 
@@ -581,7 +581,7 @@ class TestErrorHandling:
 
         with patch("httpx.AsyncClient") as mock_client:
             # Mock 500 response
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 500
             mock_response.headers = {}
 

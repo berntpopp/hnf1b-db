@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format typecheck server clean hybrid-up hybrid-down \
+.PHONY: help install dev test lint format typecheck server clean ci ci-backend ci-frontend hybrid-up hybrid-down \
         dev-up dev-down dev-logs backend frontend status db-migrate db-upgrade db-reset db-init db-create-admin \
         phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry check reset clean-all \
         docker-build docker-npm docker-npm-bg docker-down docker-logs docker-clean docker-clean-all \
@@ -99,6 +99,14 @@ format:  ## Format code (ruff)
 
 typecheck:  ## Run type checking (mypy)
 	cd backend && uv run mypy app/ migration/
+
+ci-backend:  ## Run the backend CI parity target
+	cd backend && $(MAKE) check
+
+ci-frontend:  ## Run the frontend CI parity target
+	cd frontend && $(MAKE) ci
+
+ci: ci-backend ci-frontend  ## Run the local CI parity targets
 
 server:  ## Start development server
 	cd backend && uv run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

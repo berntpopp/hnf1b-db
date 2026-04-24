@@ -27,15 +27,38 @@ this package at call time rather than binding them at import time.
 That way the 1,671-line regression test suite keeps working unchanged.
 """
 
-# Re-export cache + settings at the package level first, so that
-# submodules imported below (and test-suite patches targeting
-# ``app.phenopackets.validation.variant_validator.cache``) can both see
-# the same attribute.
-from app.core.cache import cache  # noqa: F401 (re-export)
-from app.core.config import settings  # noqa: F401 (re-export)
+from typing import TYPE_CHECKING, Any
 
-# The validator facade pulls in the submodules — order matters: cache
-# and settings must be in the package namespace first.
+if TYPE_CHECKING:
+    from app.core.cache import CacheService
+    from app.core.config import Settings
+
+    cache: CacheService
+    settings: Settings
+
+# The validator facade pulls in the submodules. ``cache`` and
+# ``settings`` are resolved dynamically via ``__getattr__`` so they stay
+# aligned with the current ``app.core`` module state even if tests
+# reload ``app.core.config``.
 from .validator import VariantValidator
 
 __all__ = ["VariantValidator", "cache", "settings"]
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve compat re-exports lazily.
+
+    Returning the live objects instead of binding them once at import
+    time keeps ``variant_validator.settings`` aligned with
+    ``app.core.config.settings`` after module reloads in the test suite,
+    while still preserving legacy patch targets at the package root.
+    """
+    if name == "cache":
+        from app.core.cache import cache
+
+        return cache
+    if name == "settings":
+        from app.core.config import settings
+
+        return settings
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

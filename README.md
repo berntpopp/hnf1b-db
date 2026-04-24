@@ -26,6 +26,20 @@ make frontend
 See [docs/deployment/docker.md](docs/deployment/docker.md) for full Docker
 deployment instructions (including production with Nginx Proxy Manager).
 
+## CI Parity
+
+Use the make-based CI parity targets before updating a PR:
+
+```bash
+make ci           # backend + frontend parity checks
+make ci-backend   # backend/Makefile check target
+make ci-frontend  # frontend checks + production bundle guards
+```
+
+`make ci` intentionally mirrors the non-E2E GitHub Actions jobs. The
+Playwright workflow remains a separate integration pass because it needs the
+backend, frontend, PostgreSQL, and Redis services running together.
+
 ## Authentication and Session Model
 
 The live auth flow uses short-lived JWT access tokens in frontend memory only.
