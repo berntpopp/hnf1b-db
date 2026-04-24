@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import delete as sa_delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -85,6 +86,46 @@ def _frontend_base_url() -> str:
 def _hash_token(token: str) -> str:
     """Return a stable SHA-256 digest for stored token material."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    """Return whether an IntegrityError came from a unique-constraint violation."""
+    sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+    return sqlstate == "23505"
+
+
+def _user_unique_conflict_detail(
+    exc: IntegrityError,
+    *,
+    attempted_email: str | None = None,
+    attempted_username: str | None = None,
+) -> str | None:
+    """Return a user-facing duplicate-field message for user unique violations."""
+    if not _is_unique_violation(exc):
+        return None
+
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    constraint_name = getattr(orig, "constraint_name", None) or getattr(
+        diag, "constraint_name", None
+    )
+    raw_context = " ".join(
+        part
+        for part in (
+            str(constraint_name).lower() if constraint_name else "",
+            str(orig).lower() if orig else "",
+            str(exc).lower(),
+        )
+        if part
+    )
+
+    if "username" in raw_context and attempted_username is not None:
+        return f"Username '{attempted_username}' already exists"
+
+    if "email" in raw_context and attempted_email is not None:
+        return f"Email '{attempted_email}' already exists"
+
+    return None
 
 
 async def _create_refresh_session_token(
@@ -286,6 +327,7 @@ async def login(
         # Record failed attempt if user exists
         if user:
             await repo.record_failed_login(user)
+            await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -485,9 +527,13 @@ async def change_password(
     # Update password
     repo = UserRepository(db)
     user_update = UserUpdatePublic(password=password_data.new_password)  # type: ignore[call-arg]  # mypy+pydantic: Field(None) defaults not recognized
-    await repo.update(current_user, user_update)
-    await _revoke_all_refresh_capability(current_user, db)
-    await db.commit()
+    try:
+        await repo.update(current_user, user_update)
+        await _revoke_all_refresh_capability_in_transaction(current_user, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     await log_user_action(
         db=db,
@@ -547,28 +593,46 @@ async def create_user(
             detail=f"Email '{user_data.email}' already exists",
         )
 
-    # Create user
-    user = await repo.create(user_data)
+    try:
+        user = await repo.create(user_data)
+    except IntegrityError as exc:
+        await db.rollback()
+        detail = _user_unique_conflict_detail(
+            exc,
+            attempted_email=user_data.email,
+            attempted_username=getattr(user_data, "username", None),
+        )
+        if detail is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+        raise
 
-    await log_user_action(
-        db=db,
-        user_id=user.id,
-        action="USER_CREATED",
-        details=(
-            f"Admin '{current_user.username}' created user "
-            f"'{user.username}' with role '{user.role}'"
-        ),
-    )
+    try:
+        await log_user_action(
+            db=db,
+            user_id=user.id,
+            action="USER_CREATED",
+            details=(
+                f"Admin '{current_user.username}' created user "
+                f"'{user.username}' with role '{user.role}'"
+            ),
+        )
 
-    # Auto-dispatch email verification (Wave 5c Task 8).
-    # Token is committed before email dispatch; email errors are logged
-    # but do not fail the create-user response (Copilot PR #235 review).
-    token_svc = CredentialTokenService(db)
-    raw_token, _ = await token_svc.create_token(
-        purpose="verify",
-        email=user.email,
-        user_id=user.id,
-    )
+        # Auto-dispatch email verification (Wave 5c Task 8).
+        # Token is committed before email dispatch; email errors are logged
+        # but do not fail the create-user response (Copilot PR #235 review).
+        token_svc = CredentialTokenService(db)
+        raw_token, _ = await token_svc.create_token(
+            purpose="verify",
+            email=user.email,
+            user_id=user.id,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     verify_url = f"{_frontend_base_url()}/verify-email/{raw_token}"
     await _safe_send_email(
@@ -707,13 +771,32 @@ async def update_user(
     # Update user
     try:
         updated_user = await repo.update(user, user_data)
+        if should_revoke_refresh_capability:
+            await _revoke_all_refresh_capability_in_transaction(updated_user, db)
+        await db.commit()
     except UserEmailConflictError as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    if should_revoke_refresh_capability:
-        await _revoke_all_refresh_capability(updated_user, db)
+    except IntegrityError as exc:
+        await db.rollback()
+        detail = _user_unique_conflict_detail(
+            exc,
+            attempted_email=user_data.email,
+            attempted_username=getattr(user_data, "username", None),
+        )
+        if detail is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+    await db.refresh(updated_user)
 
     await log_user_action(
         db=db,
@@ -798,6 +881,7 @@ async def delete_user(
     )
 
     await repo.delete(user)
+    await db.commit()
 
 
 @users_router.patch("/{user_id}/unlock", response_model=UserResponse)
@@ -827,6 +911,8 @@ async def unlock_user(
         )
 
     unlocked = await repo.unlock(user)
+    await db.commit()
+    await db.refresh(unlocked)
 
     await log_user_action(
         db=db,

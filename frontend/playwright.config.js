@@ -14,6 +14,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const useWebServer = !process.env.E2E_BASE_URL;
+// Keep Firefox coverage intentionally narrow: it adds a second-browser run for
+// the axe-based accessibility smoke suite without moving broader UI coverage
+// out of Chromium.
+const FIREFOX_A11Y_FILE_RE = /(?:^|\/)tests\/e2e\/accessibility\.spec\.js$/;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -35,6 +39,11 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox-a11y',
+      testMatch: FIREFOX_A11Y_FILE_RE,
+      use: { ...devices['Desktop Firefox'] },
     },
   ],
 

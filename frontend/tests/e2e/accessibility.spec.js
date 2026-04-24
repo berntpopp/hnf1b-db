@@ -84,82 +84,84 @@ async function expectNoSeriousAxeViolations(page, configure) {
   expect(seriousViolations, JSON.stringify(seriousViolations, null, 2)).toEqual([]);
 }
 
-test('homepage has no serious accessibility violations', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+test.describe('axe accessibility smoke', () => {
+  test('homepage has no serious accessibility violations', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
-  await expect(page.locator('main, #main-content')).toHaveCount(1);
-  await expect(page.locator('.v-skeleton-loader')).toHaveCount(0);
-  await expect(page.locator('.stat-card .text-h4 span')).toHaveCount(4);
-  await expectNoSeriousAxeViolations(page, (builder) =>
-    builder.exclude('.v-tooltip').exclude('.v-window-item:not(.v-window-item--active)')
-  );
-});
+    await expect(page.locator('main, #main-content')).toHaveCount(1);
+    await expect(page.locator('.v-skeleton-loader')).toHaveCount(0);
+    await expect(page.locator('.stat-card .text-h4 span')).toHaveCount(4);
+    await expectNoSeriousAxeViolations(page, (builder) =>
+      builder.exclude('.v-tooltip').exclude('.v-window-item:not(.v-window-item--active)')
+    );
+  });
 
-test('authenticated phenopacket detail has no serious accessibility violations', async ({
-  page,
-  request,
-}) => {
-  test.skip(
-    !(await isBackendAvailable(request)),
-    'Backend unavailable for authenticated phenopacket accessibility scan'
-  );
-  const auth = await loginForAuthenticatedCoverage(request);
+  test('authenticated phenopacket detail has no serious accessibility violations', async ({
+    page,
+    request,
+  }) => {
+    test.skip(
+      !(await isBackendAvailable(request)),
+      'Backend unavailable for authenticated phenopacket accessibility scan'
+    );
+    const auth = await loginForAuthenticatedCoverage(request);
 
-  const recordId = `e2e-a11y-${Date.now()}`;
-  let created = false;
-  let revision = 1;
-  try {
-    const createResp = await request.post(`${RESOLVED_API_BASE}/phenopackets/`, {
-      headers: { Authorization: `Bearer ${auth.accessToken}` },
-      data: {
-        phenopacket: {
-          id: recordId,
-          subject: { id: `subject-${recordId}`, sex: 'UNKNOWN_SEX' },
-          metaData: {
-            created: new Date().toISOString(),
-            createdBy: 'e2e-a11y-test',
-            resources: [
-              {
-                id: 'hp',
-                name: 'Human Phenotype Ontology',
-                namespacePrefix: 'HP',
-                url: 'http://purl.obolibrary.org/obo/hp.owl',
-                version: '2024-01-01',
-                iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
-              },
-            ],
-            phenopacketSchemaVersion: '2.0',
-          },
-        },
-      },
-    });
-
-    expect(createResp.ok(), `Create failed: ${await createResp.text()}`).toBeTruthy();
-    const createdBody = await createResp.json();
-    revision = createdBody.phenopacket?.revision ?? revision;
-    created = true;
-
-    await primeAuthSession(page, auth);
-    await page.goto(`/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
-    await expect(
-      page.getByRole('button', { name: 'Download phenopacket as JSON file' })
-    ).toBeVisible();
-    await expect(page.locator('.v-chip').filter({ hasText: recordId }).first()).toBeVisible();
-    await expect(page.getByText('Error Loading Phenopacket')).toHaveCount(0);
-
-    await expectNoSeriousAxeViolations(page, (builder) => builder.exclude('.v-tooltip'));
-  } finally {
-    if (created) {
-      const deleteResp = await request.delete(`${RESOLVED_API_BASE}/phenopackets/${recordId}`, {
+    const recordId = `e2e-a11y-${Date.now()}`;
+    let created = false;
+    let revision = 1;
+    try {
+      const createResp = await request.post(`${RESOLVED_API_BASE}/phenopackets/`, {
         headers: { Authorization: `Bearer ${auth.accessToken}` },
         data: {
-          change_reason: 'Clean up accessibility test fixture',
-          revision,
+          phenopacket: {
+            id: recordId,
+            subject: { id: `subject-${recordId}`, sex: 'UNKNOWN_SEX' },
+            metaData: {
+              created: new Date().toISOString(),
+              createdBy: 'e2e-a11y-test',
+              resources: [
+                {
+                  id: 'hp',
+                  name: 'Human Phenotype Ontology',
+                  namespacePrefix: 'HP',
+                  url: 'http://purl.obolibrary.org/obo/hp.owl',
+                  version: '2024-01-01',
+                  iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
+                },
+              ],
+              phenopacketSchemaVersion: '2.0',
+            },
+          },
         },
-        failOnStatusCode: false,
       });
-      expect(deleteResp.ok(), `Fixture cleanup failed: ${await deleteResp.text()}`).toBeTruthy();
+
+      expect(createResp.ok(), `Create failed: ${await createResp.text()}`).toBeTruthy();
+      const createdBody = await createResp.json();
+      revision = createdBody.phenopacket?.revision ?? revision;
+      created = true;
+
+      await primeAuthSession(page, auth);
+      await page.goto(`/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
+      await expect(
+        page.getByRole('button', { name: 'Download phenopacket as JSON file' })
+      ).toBeVisible();
+      await expect(page.locator('.v-chip').filter({ hasText: recordId }).first()).toBeVisible();
+      await expect(page.getByText('Error Loading Phenopacket')).toHaveCount(0);
+
+      await expectNoSeriousAxeViolations(page, (builder) => builder.exclude('.v-tooltip'));
+    } finally {
+      if (created) {
+        const deleteResp = await request.delete(`${RESOLVED_API_BASE}/phenopackets/${recordId}`, {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+          data: {
+            change_reason: 'Clean up accessibility test fixture',
+            revision,
+          },
+          failOnStatusCode: false,
+        });
+        expect(deleteResp.ok(), `Fixture cleanup failed: ${await deleteResp.text()}`).toBeTruthy();
+      }
     }
-  }
+  });
 });

@@ -4,7 +4,9 @@
 **Date:** 2026-04-12
 **Superseded Date:** 2026-04-23
 **Superseded By:** [ADR 0002: Cookie-backed refresh sessions with in-memory access token](0002-cookie-refresh-and-memory-access-token.md)
-**Context:** 2026-04-09 review flagged localStorage JWT as "vulnerable to XSS" (P5 #26)
+**Context:** An April 9, 2026 security review flagged `localStorage` JWT
+storage as vulnerable to XSS; in the original review notes this appeared as
+finding 26.
 
 ## Superseded
 
@@ -22,10 +24,14 @@ The historical decision record below is preserved for context only.
 ## Context
 
 The HNF1B frontend currently stores the JWT access token and refresh
-token in `localStorage`. The 2026-04-09 codebase review flagged this
+token in `localStorage`. An April 9, 2026 security review flagged this
 as a medium-severity concern because `localStorage` is accessible to
 any JavaScript that runs on the page, making it vulnerable to token
 theft via XSS.
+
+The shorthand `P5 #26` used in contemporaneous notes referred to that same
+April 9, 2026 review item: finding 26 about XSS exposure of browser-stored
+JWTs.
 
 Two mitigating actions were taken in Waves 1-2:
 
@@ -106,4 +112,3 @@ Rationale:
 - [frontend/src/utils/sanitize.js](../../frontend/src/utils/sanitize.js) — Wave 1 sanitize utility
 - [frontend/tests/unit/utils/sanitize.spec.js](../../frontend/tests/unit/utils/sanitize.spec.js) — XSS characterization test
 - [backend/app/core/security_headers.py](../../backend/app/core/security_headers.py) — Wave 2 CSP middleware
-- [.planning/reviews/codebase-best-practices-review-2026-04-09.md](../../.planning/reviews/codebase-best-practices-review-2026-04-09.md) — original finding (P5 #26, §8 Security)

@@ -6,16 +6,16 @@ on list, full CRUD round-trip, and self-delete protection.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.password import get_password_hash
 from app.core.config import settings
+from app.database import async_session_maker
 from app.models.user import User
-from app.repositories.user_repository import (
-    UserEmailConflictError,
-    UserRepository,
-)
+from app.repositories.user_repository import UserRepository
 from app.schemas.auth import UserUpdateAdmin
 
 
@@ -75,7 +75,7 @@ async def test_list_users_supports_role_filter(async_client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_create_then_update_then_unlock_then_delete_user(
-    async_client, admin_headers
+    async_client, admin_headers, db_session
 ):
     """Full CRUD round-trip: create, update, unlock, delete."""
     # CREATE
@@ -103,12 +103,27 @@ async def test_create_then_update_then_unlock_then_delete_user(
     assert update_resp.json()["full_name"] == "Updated CRUD Probe"
     assert update_resp.json()["role"] == "curator"
 
-    # UNLOCK (even if not locked, endpoint should succeed)
+    repo = UserRepository(db_session)
+    user = await repo.get_by_id(user_id)
+    assert user is not None
+    user.failed_login_attempts = settings.MAX_LOGIN_ATTEMPTS
+    user.locked_until = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCOUNT_LOCKOUT_MINUTES
+    )
+    await db_session.commit()
+
+    # UNLOCK
     unlock_resp = await async_client.patch(
         f"/api/v2/auth/users/{user_id}/unlock",
         headers=admin_headers,
     )
     assert unlock_resp.status_code == 200
+    async with async_session_maker() as fresh_session:
+        fresh_repo = UserRepository(fresh_session)
+        unlocked_user = await fresh_repo.get_by_id(user_id)
+    assert unlocked_user is not None
+    assert unlocked_user.failed_login_attempts == 0
+    assert unlocked_user.locked_until is None
 
     # DELETE
     delete_resp = await async_client.delete(
@@ -116,6 +131,9 @@ async def test_create_then_update_then_unlock_then_delete_user(
         headers=admin_headers,
     )
     assert delete_resp.status_code == 204
+    async with async_session_maker() as fresh_session:
+        fresh_repo = UserRepository(fresh_session)
+        assert await fresh_repo.get_by_id(user_id) is None
 
 
 @pytest.mark.asyncio
@@ -199,50 +217,116 @@ async def test_update_user_rejects_duplicate_email(async_client, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_user_repository_normalizes_integrity_error_on_email_update(
-    db_session, monkeypatch
+async def test_update_user_normalizes_duplicate_email_integrity_error(
+    async_client, admin_headers, monkeypatch
 ):
-    """Repository update normalizes a lower-level duplicate-email IntegrityError."""
-    existing_user = User(
-        username="repo-email-a",
-        email="repo-email-a@example.com",
-        hashed_password=get_password_hash("RepoEmailA!2026"),
-        full_name="Repo Email A",
-        role="viewer",
-        is_active=True,
-        is_verified=False,
+    """Endpoint translates duplicate-email IntegrityError using attempted email."""
+    create_resp = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "repo-email-b",
+            "email": "repo-email-b@example.com",
+            "password": "RepoEmailB!2026",
+            "full_name": "Repo Email B",
+            "role": "viewer",
+        },
+        headers=admin_headers,
     )
-    target_user = User(
-        username="repo-email-b",
-        email="repo-email-b@example.com",
-        hashed_password=get_password_hash("RepoEmailB!2026"),
-        full_name="Repo Email B",
-        role="viewer",
-        is_active=True,
-        is_verified=False,
-    )
-    db_session.add_all([existing_user, target_user])
-    await db_session.commit()
-    await db_session.refresh(existing_user)
-    await db_session.refresh(target_user)
+    assert create_resp.status_code == 201
+    user_id = create_resp.json()["id"]
 
-    repo = UserRepository(db_session)
-
-    async def fake_commit():
+    async def fake_update(*args, **kwargs):
         raise IntegrityError(
             "UPDATE users SET email = ...",
             params={"email": "repo-email-a@example.com"},
             orig=type("FakeOrig", (), {"sqlstate": "23505"})(),
         )
 
-    monkeypatch.setattr(db_session, "commit", fake_commit)
+    monkeypatch.setattr(UserRepository, "update", fake_update)
 
-    with pytest.raises(UserEmailConflictError) as excinfo:
-        await repo.update(
-            target_user, UserUpdateAdmin(email="repo-email-c@example.com")
+    response = await async_client.put(
+        f"/api/v2/auth/users/{user_id}",
+        json={"email": "repo-email-race@example.com"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Email 'repo-email-race@example.com' already exists"
+
+
+@pytest.mark.asyncio
+async def test_create_user_normalizes_duplicate_email_integrity_error(
+    async_client, admin_headers, monkeypatch
+):
+    """Create-user translates duplicate-email IntegrityError using attempted email."""
+
+    async def fake_create(*args, **kwargs):
+        raise IntegrityError(
+            "INSERT INTO users ...",
+            params={"email": "repo-email-a@example.com"},
+            orig=type("FakeOrig", (), {"sqlstate": "23505"})(),
         )
 
-    assert "already exists" in str(excinfo.value).lower()
+    monkeypatch.setattr(UserRepository, "create", fake_create)
+
+    response = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "repo-email-create-race",
+            "email": "repo-email-create-race@example.com",
+            "password": "RepoEmailCreate!2026",
+            "full_name": "Repo Email Create Race",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]
+        == "Email 'repo-email-create-race@example.com' already exists"
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_user_normalizes_duplicate_username_integrity_error(
+    async_client, admin_headers, monkeypatch
+):
+    """Create-user translates duplicate-username IntegrityError using attempted username."""
+
+    async def fake_create(*args, **kwargs):
+        raise IntegrityError(
+            "INSERT INTO users ...",
+            params={"username": "repo-username-a"},
+            orig=type(
+                "FakeOrig",
+                (),
+                {
+                    "sqlstate": "23505",
+                    "constraint_name": "uq_users_username",
+                },
+            )(),
+        )
+
+    monkeypatch.setattr(UserRepository, "create", fake_create)
+
+    response = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "repo-username-create-race",
+            "email": "repo-username-create-race@example.com",
+            "password": "RepoUsernameCreate!2026",
+            "full_name": "Repo Username Create Race",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]
+        == "Username 'repo-username-create-race' already exists"
+    )
 
 
 @pytest.mark.asyncio
@@ -265,14 +349,14 @@ async def test_user_repository_reraises_non_unique_integrity_error_on_email_upda
 
     repo = UserRepository(db_session)
 
-    async def fake_commit():
+    async def fake_flush():
         raise IntegrityError(
             "UPDATE users SET full_name = ...",
             params={"full_name": "Updated Name"},
             orig=type("FakeOrig", (), {"sqlstate": "23503"})(),
         )
 
-    monkeypatch.setattr(db_session, "commit", fake_commit)
+    monkeypatch.setattr(db_session, "flush", fake_flush)
 
     with pytest.raises(IntegrityError):
         await repo.update(target_user, UserUpdateAdmin(full_name="Updated Name"))

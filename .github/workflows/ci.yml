@@ -281,7 +281,10 @@ jobs:
     - name: Install Playwright browsers
       run: |
         cd frontend
-        npx playwright install --with-deps chromium
+        # Default E2E coverage stays Chromium-first; Firefox is installed only
+        # to add a second-browser run for the explicit axe accessibility smoke
+        # file routed to the `firefox-a11y` project in frontend/playwright.config.js.
+        npx playwright install --with-deps chromium firefox
 
     - name: Run E2E tests
       env:

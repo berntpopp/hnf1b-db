@@ -70,6 +70,6 @@ The feature is structurally impossible to ship to production:
 - [docs/deployment/docker.md](docs/deployment/docker.md) — Docker deployment guide
 - [docs/api/README.md](docs/api/README.md) — API endpoint overview
 - [docs/adr/0002-cookie-refresh-and-memory-access-token.md](docs/adr/0002-cookie-refresh-and-memory-access-token.md) — current auth/session ADR
-- [.planning/README.md](.planning/README.md) — internal plans, specs, reviews, and archives
+- [docs/README.md](docs/README.md) — durable documentation index
 - [AGENTS.md](AGENTS.md) — Canonical repository instructions for coding agents
 - API docs: http://localhost:8000/api/v2/docs (when backend is running)
