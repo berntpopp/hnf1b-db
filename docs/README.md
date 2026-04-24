@@ -1,8 +1,9 @@
 # Documentation
 
-`docs/` is for durable reference documentation only. Planning artifacts, reviews,
-implementation plans, and historical working notes live under
-[`../.planning/`](../.planning/README.md).
+`docs/` is for durable reference documentation only. It should stay focused on
+stable operator and developer reference material rather than in-flight planning
+or review work. For repository workflow and artifact-placement conventions, use
+the canonical guidance in `AGENTS.md`.
 
 ## Contents
 
@@ -38,12 +39,12 @@ implementation plans, and historical working notes live under
 ## Rules
 
 1. Put stable, user-facing or operator-facing documentation in `docs/`.
-2. Put specs, plans, reviews, issue writeups, and retrospectives in `.planning/`.
+2. Keep active specs, plans, reviews, issue writeups, and retrospectives out of
+   `docs/`; follow `AGENTS.md` for where those artifacts belong.
 3. Update links here when adding or removing durable documentation.
 
 ## Quick Links
 
 - [Project README](../README.md)
 - [AGENTS.md](../AGENTS.md)
-- [Planning Index](../.planning/README.md)
 - API docs: http://localhost:8000/api/v2/docs

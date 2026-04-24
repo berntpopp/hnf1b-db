@@ -17,6 +17,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000
+      ADMIN_PASSWORD: test-admin-password-ci-2026
 
     services:
       postgres:
@@ -62,41 +68,13 @@ jobs:
         uv sync --group dev --group test
 
     - name: Run database migrations
-      env:
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
-        JWT_SECRET: test-secret-key-for-ci
-        ADMIN_PASSWORD: test-admin-password-ci-2026
       run: |
         cd backend
-        uv run alembic upgrade head
+        make db-upgrade
 
-    # Quality checks - must match `make check` exactly for 1-to-1 compatibility
-    # Commands: check-env lint typecheck test
-
-    - name: Run linting (ruff check)
-      run: |
-        cd backend
-        uv run ruff check .
-
-    - name: Run type checking (mypy)
-      run: |
-        cd backend
-        uv run mypy app/ migration/
-
-    - name: Run tests (pytest)
-      env:
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
-        JWT_SECRET: test-secret-key-for-ci
-        ADMIN_PASSWORD: test-admin-password-ci-2026
-      run: |
-        cd backend
-        uv run pytest -m "not benchmark" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v6
-      with:
-        files: ./backend/coverage.xml
-        fail_ci_if_error: false
+    # Quality checks - must match the local make target exactly.
+    - name: Run backend CI parity target
+      run: make ci-backend
 
   frontend:
     runs-on: ubuntu-latest
@@ -117,59 +95,9 @@ jobs:
         cd frontend
         npm ci
 
-    # Quality checks - must match `make check` for 1-to-1 compatibility
-    # Commands: test lint:check format:check
-
-    - name: Run tests (vitest)
-      run: |
-        cd frontend
-        npm test
-
-    - name: Run linting (eslint)
-      run: |
-        cd frontend
-        npm run lint:check
-
-    - name: Run format check (prettier)
-      run: |
-        cd frontend
-        npm run format:check
-
-    - name: Build production bundle (Wave 5a Layer 5 pre-requisite)
-      run: |
-        cd frontend
-        npm run build
-
-    - name: Verify no dev-auth strings in production bundle (Wave 5a Layer 5)
-      run: |
-        cd frontend
-        if grep -rqE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' 2>/dev/null; then
-          echo "::error::dev-auth strings leaked into production bundle — check Task 11 DCE gating"
-          grep -rnE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' || true
-          exit 1
-        fi
-        echo "dev-auth strings are NOT in the production bundle — Layer 5 green"
-
-    - name: Verify ENABLE_DEV_AUTH not truthy in prod compose (Wave 5a Layer 5)
-      run: |
-        # Catch every YAML-truthy spelling: mapping form, list form,
-        # bare or quoted (single or double), and all common YAML 1.1 truthy
-        # spellings (true/True/TRUE/yes/Yes/YES/on/On/ON/1). If any matches,
-        # the prod compose has dev-auth turned on — refuse the build.
-        if grep -Eq "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH[[:space:]]*[:=][[:space:]]*['\"]?(true|True|TRUE|yes|Yes|YES|on|On|ON|1)['\"]?[[:space:]]*$" docker/docker-compose.npm.yml; then
-          echo "::error::ENABLE_DEV_AUTH must not be truthy in docker/docker-compose.npm.yml"
-          grep -nE "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH" docker/docker-compose.npm.yml || true
-          exit 1
-        fi
-        echo "ENABLE_DEV_AUTH is not truthy in docker/docker-compose.npm.yml — Layer 5 green"
-
-    - name: Verify ENVIRONMENT=production in prod compose (Wave 5a Layer 5)
-      run: |
-        if ! grep -Eq "^\s*(-\s*)?ENVIRONMENT\s*[:=]\s*production" docker/docker-compose.npm.yml; then
-          echo "::error::docker/docker-compose.npm.yml must set ENVIRONMENT=production explicitly"
-          exit 1
-        fi
-        echo "ENVIRONMENT=production is pinned in docker/docker-compose.npm.yml — Layer 5 green"
+    # Quality checks - must match the local make target exactly.
+    - name: Run frontend CI parity target
+      run: make ci-frontend
 
   e2e-tests:
     name: E2E tests (Playwright)
@@ -233,32 +161,67 @@ jobs:
         cd backend
         uv sync --group dev --group test
 
+    - name: Configure production email backend for E2E CI
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import re
+
+        path = Path("backend/config.yaml")
+        original = path.read_text()
+        updated = re.sub(
+            r'(^email:\n(?:^[^\S\r\n].*\n)*?^[^\S\r\n]*backend:\s*)"console"',
+            r'\1"smtp"',
+            original,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if updated == original:
+            raise SystemExit("Failed to switch backend/config.yaml email.backend to smtp")
+        path.write_text(updated)
+        PY
+
     - name: Run backend migrations
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         uv run alembic upgrade head
 
     - name: Seed admin user (required for E2E auth)
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_USERNAME: admin
         ADMIN_EMAIL: admin@hnf1b-db.local
         ADMIN_PASSWORD: ci_test_admin_password_2026
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         uv run python scripts/create_admin_user.py
 
     - name: Start backend
       env:
+        ENVIRONMENT: production
+        AUTH_COOKIE_SECURE: "true"
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
         JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
         ADMIN_PASSWORD: ci_test_admin_password_2026
         REDIS_URL: redis://localhost:6379/0
+        SMTP_HOST: localhost
+        SMTP_USERNAME: ci
+        SMTP_PASSWORD: ci-password
       run: |
         cd backend
         nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
@@ -281,7 +244,10 @@ jobs:
     - name: Install Playwright browsers
       run: |
         cd frontend
-        npx playwright install --with-deps chromium
+        # Default E2E coverage stays Chromium-first; Firefox is installed only
+        # to add a second-browser run for the explicit axe accessibility smoke
+        # file routed to the `firefox-a11y` project in frontend/playwright.config.js.
+        npx playwright install --with-deps chromium firefox
 
     - name: Run E2E tests
       env:

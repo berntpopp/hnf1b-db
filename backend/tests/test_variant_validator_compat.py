@@ -23,12 +23,6 @@ from app.phenopackets.validation import variant_validator as _vv_pkg
 from app.phenopackets.validation.variant_validator import (
     VariantValidator,
 )
-from app.phenopackets.validation.variant_validator import (
-    cache as pkg_cache,
-)
-from app.phenopackets.validation.variant_validator import (
-    settings as pkg_settings,
-)
 
 
 class TestPackageLevelReExports:
@@ -36,14 +30,14 @@ class TestPackageLevelReExports:
 
     def test_cache_is_re_exported_at_package_root(self):
         """``app.phenopackets.validation.variant_validator.cache`` resolves."""
-        assert pkg_cache is not None
-        assert hasattr(pkg_cache, "get_json")
-        assert hasattr(pkg_cache, "set_json")
+        assert _vv_pkg.cache is not None
+        assert hasattr(_vv_pkg.cache, "get_json")
+        assert hasattr(_vv_pkg.cache, "set_json")
 
     def test_settings_is_re_exported_at_package_root(self):
         """``app.phenopackets.validation.variant_validator.settings`` resolves."""
-        assert pkg_settings is not None
-        assert hasattr(pkg_settings, "external_apis")
+        assert _vv_pkg.settings is not None
+        assert hasattr(_vv_pkg.settings, "external_apis")
 
     def test_cache_re_export_shares_identity_with_app_core_cache(self):
         """Patching ``app.core.cache.cache`` must be visible through the re-export.
@@ -54,13 +48,13 @@ class TestPackageLevelReExports:
         """
         from app.core.cache import cache as core_cache
 
-        assert pkg_cache is core_cache
+        assert _vv_pkg.cache is core_cache
 
     def test_settings_re_export_shares_identity_with_app_core_config(self):
         """Same invariant for ``settings``."""
         from app.core.config import settings as core_settings
 
-        assert pkg_settings is core_settings
+        assert _vv_pkg.settings is core_settings
 
 
 class TestVVPkgDynamicLookup:

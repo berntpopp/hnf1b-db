@@ -4,14 +4,19 @@ import hashlib
 
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from sqlalchemy import select
 
+from app.auth import verify_password
 from app.auth.credential_tokens import CredentialTokenService
 from app.auth.password import get_password_hash
 from app.auth.tokens import create_access_token
 from app.core.cache import cache
+from app.core.config import settings
+from app.database import async_session_maker
 from app.models.credential_token import CredentialToken
 from app.models.user import User
+from app.repositories.user_repository import UserRepository
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -38,6 +43,13 @@ async def _get_token(db_session, raw_token: str) -> CredentialToken:
     token = result.scalar_one_or_none()
     assert token is not None
     return token
+
+
+async def _get_user_fresh(user_id: int) -> User | None:
+    """Load a user through a fresh database session."""
+    async with async_session_maker() as fresh_session:
+        repo = UserRepository(fresh_session)
+        return await repo.get_by_id(user_id)
 
 
 @pytest.mark.asyncio
@@ -249,3 +261,194 @@ async def test_verify_resend_rolls_back_old_token_invalidation_on_failure(
 
     db_token = await _get_token(db_session, first_token)
     assert db_token.used_at is None
+
+
+@pytest.mark.asyncio
+async def test_admin_create_user_rolls_back_user_if_verify_token_creation_fails(
+    async_client, admin_headers, db_session, monkeypatch
+):
+    """Admin create-user should not persist the user before verify-token work succeeds."""
+
+    async def _boom(*args, **kwargs):
+        raise HTTPException(status_code=503, detail="verify token creation failed")
+
+    monkeypatch.setattr(
+        "app.auth.credential_tokens.CredentialTokenService.create_token",
+        _boom,
+    )
+
+    response = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "atomic-create-failure",
+            "email": "atomic-create-failure@example.com",
+            "password": "AtomicCreate!2026",
+            "full_name": "Atomic Create Failure",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "verify token creation failed"
+
+    async with async_session_maker() as fresh_session:
+        repo = UserRepository(fresh_session)
+        assert await repo.get_by_username("atomic-create-failure") is None
+        assert await repo.get_by_email("atomic-create-failure@example.com") is None
+
+
+@pytest.mark.asyncio
+async def test_change_password_rolls_back_password_if_refresh_revocation_fails(
+    async_client, db_session, monkeypatch
+):
+    """Password change should remain atomic with refresh-capability revocation."""
+    original_password = "AtomicPassword!2026"
+    new_password = "AtomicPasswordNew!2026"
+    user = User(
+        username="atomic-password-user",
+        email="atomic-password-user@example.com",
+        hashed_password=get_password_hash(original_password),
+        role="viewer",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    user_id = user.id
+    username = user.username
+
+    login_resp = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": user.username, "password": original_password},
+    )
+    assert login_resp.status_code == 200
+    access_token = login_resp.json()["access_token"]
+
+    async def _boom(*args, **kwargs):
+        raise HTTPException(status_code=503, detail="refresh revoke failed")
+
+    monkeypatch.setattr(
+        "app.api.auth_endpoints._revoke_all_refresh_capability_in_transaction",
+        _boom,
+    )
+
+    response = await async_client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": original_password,
+            "new_password": new_password,
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "refresh revoke failed"
+
+    updated_user = await _get_user_fresh(user_id)
+    assert updated_user is not None
+    assert verify_password(original_password, updated_user.hashed_password)
+    assert not verify_password(new_password, updated_user.hashed_password)
+
+    old_login = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": original_password},
+    )
+    assert old_login.status_code == 200
+
+    new_login = await async_client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": new_password},
+    )
+    assert new_login.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_deactivate_rolls_back_user_state_if_refresh_revocation_fails(
+    async_client, admin_headers, db_session, monkeypatch
+):
+    """Admin deactivation should not persist if refresh-session revocation fails."""
+    create_resp = await async_client.post(
+        "/api/v2/auth/users",
+        json={
+            "username": "atomic-deactivate-user",
+            "email": "atomic-deactivate-user@example.com",
+            "password": "AtomicDeactivate!2026",
+            "full_name": "Atomic Deactivate User",
+            "role": "viewer",
+        },
+        headers=admin_headers,
+    )
+    assert create_resp.status_code == 201
+    user_id = create_resp.json()["id"]
+
+    login_resp = await async_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "atomic-deactivate-user",
+            "password": "AtomicDeactivate!2026",
+        },
+    )
+    assert login_resp.status_code == 200
+    refresh_cookie = login_resp.cookies["refresh_token"]
+    csrf_cookie = login_resp.cookies["csrf_token"]
+
+    async def _boom(*args, **kwargs):
+        raise HTTPException(status_code=503, detail="refresh revoke failed")
+
+    monkeypatch.setattr(
+        "app.api.auth_endpoints._revoke_all_refresh_capability_in_transaction",
+        _boom,
+    )
+
+    response = await async_client.put(
+        f"/api/v2/auth/users/{user_id}",
+        json={"is_active": False},
+        headers=admin_headers,
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "refresh revoke failed"
+
+    updated_user = await _get_user_fresh(user_id)
+    assert updated_user is not None
+    assert updated_user.is_active is True
+
+    refresh_resp = await async_client.post(
+        "/api/v2/auth/refresh",
+        headers={
+            "x-csrf-token": csrf_cookie,
+            "cookie": f"refresh_token={refresh_cookie}; csrf_token={csrf_cookie}",
+        },
+    )
+    assert refresh_resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_failed_login_commits_attempts_and_lockout_state_on_401(
+    async_client, db_session
+):
+    """Wrong-password logins should persist failed-attempt counters before the 401."""
+    user = User(
+        username="failed-login-boundary",
+        email="failed-login-boundary@example.com",
+        hashed_password=get_password_hash("CorrectPass!2026"),
+        role="viewer",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    user_id = user.id
+
+    for _ in range(settings.MAX_LOGIN_ATTEMPTS):
+        response = await async_client.post(
+            "/api/v2/auth/login",
+            json={"username": user.username, "password": "WrongPass!2026"},
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Incorrect username or password"
+
+    updated_user = await _get_user_fresh(user_id)
+    assert updated_user is not None
+    assert updated_user.failed_login_attempts == settings.MAX_LOGIN_ATTEMPTS
+    assert updated_user.locked_until is not None

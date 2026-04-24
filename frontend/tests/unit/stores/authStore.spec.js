@@ -35,6 +35,11 @@ describe('Auth Store', () => {
     vi.clearAllMocks();
     apiClient.post.mockReset();
     apiClient.get.mockReset();
+    Object.defineProperty(globalThis.document, 'cookie', {
+      value: '',
+      writable: true,
+      configurable: true,
+    });
     import.meta.env.DEV = true;
     import.meta.env.VITE_ENABLE_DEV_AUTH = 'true';
   });
@@ -283,6 +288,7 @@ describe('Auth Store', () => {
 
     it('attempts one refresh bootstrap before loading the current user', async () => {
       const authStore = useAuthStore();
+      globalThis.document.cookie = 'csrf_token=bootstrap-cookie';
 
       apiClient.post.mockResolvedValueOnce({
         data: {
@@ -307,6 +313,7 @@ describe('Auth Store', () => {
 
     it('stays anonymous when refresh bootstrap fails', async () => {
       const authStore = useAuthStore();
+      globalThis.document.cookie = 'csrf_token=bootstrap-cookie';
 
       apiClient.post.mockRejectedValueOnce(new Error('Refresh failed'));
 
@@ -319,6 +326,21 @@ describe('Auth Store', () => {
       expect(window.logService.debug).toHaveBeenCalledWith(
         'Anonymous session bootstrap skipped',
         expect.any(Object)
+      );
+    });
+
+    it('skips refresh bootstrap when no csrf cookie is present', async () => {
+      const authStore = useAuthStore();
+
+      await authStore.initialize();
+
+      expect(apiClient.post).not.toHaveBeenCalled();
+      expect(apiClient.get).not.toHaveBeenCalled();
+      expect(authStore.user).toBeNull();
+      expect(authStore.accessToken).toBeNull();
+      expect(window.logService.debug).toHaveBeenCalledWith(
+        'Anonymous session bootstrap skipped (no csrf cookie)',
+        { reason: 'missing_csrf_cookie' }
       );
     });
   });

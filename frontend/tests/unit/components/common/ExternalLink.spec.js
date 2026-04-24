@@ -22,8 +22,7 @@ describe('ExternalLink', () => {
     });
     const icon = wrapper.find('[data-testid="external-link-icon"]');
     expect(icon.exists()).toBe(true);
-    // Vuetify VIcon maps slot content to a CSS class on the rendered <i>
-    expect(icon.classes()).toContain('mdi-open-in-new');
+    expect(icon.text()).toContain('mdi-open-in-new');
   });
 
   it('suppresses the icon when showIcon=false', () => {

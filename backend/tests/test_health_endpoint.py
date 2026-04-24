@@ -18,7 +18,9 @@ async def test_livez_reports_process_alive(async_client):
 
 
 @pytest.mark.asyncio
-async def test_health_reports_ready_when_dependencies_are_healthy(async_client, monkeypatch):
+async def test_health_reports_ready_when_dependencies_are_healthy(
+    async_client, monkeypatch
+):
     """Readiness should report healthy when DB and cache checks pass."""
     monkeypatch.setattr("app.main._database_ready", lambda: _resolved((True, None)))
     monkeypatch.setattr("app.main._cache_ready", lambda: _resolved((True, None)))
@@ -39,9 +41,13 @@ async def test_health_reports_ready_when_dependencies_are_healthy(async_client, 
 
 
 @pytest.mark.asyncio
-async def test_health_reports_not_ready_when_a_dependency_fails(async_client, monkeypatch):
+async def test_health_reports_not_ready_when_a_dependency_fails(
+    async_client, monkeypatch
+):
     """Readiness should return 503 with machine-readable dependency failures."""
-    monkeypatch.setattr("app.main._database_ready", lambda: _resolved((False, "db down")))
+    monkeypatch.setattr(
+        "app.main._database_ready", lambda: _resolved((False, "db down"))
+    )
     monkeypatch.setattr("app.main._cache_ready", lambda: _resolved((True, None)))
 
     response = await async_client.get("/health")

@@ -5,10 +5,12 @@ fail-fast validators already in config.py.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import EmailConfig, Settings, YamlConfig
 
 
 def test_dev_auth_allowed_in_development():
@@ -60,11 +62,21 @@ def test_default_environment_is_production(monkeypatch):
     """
     monkeypatch.delenv("ENVIRONMENT", raising=False)
     monkeypatch.delenv("ENABLE_DEV_AUTH", raising=False)
+    monkeypatch.delenv("AUTH_COOKIE_SECURE", raising=False)
 
-    s = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        JWT_SECRET="x" * 32,
-        ADMIN_PASSWORD="A" * 20,
-    )
+    with patch(
+        "app.core.config.load_yaml_config",
+        return_value=YamlConfig(email=EmailConfig(backend="smtp")),
+    ):
+        s = Settings(
+            _env_file=None,  # type: ignore[call-arg]
+            JWT_SECRET="x" * 32,
+            ADMIN_PASSWORD="A" * 20,
+            AUTH_COOKIE_SECURE=True,
+            SMTP_HOST="smtp.example.test",
+            SMTP_USERNAME="user",
+            SMTP_PASSWORD="pass",
+        )
+
     assert s.environment == "production"
     assert s.enable_dev_auth is False

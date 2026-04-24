@@ -26,6 +26,20 @@ make frontend
 See [docs/deployment/docker.md](docs/deployment/docker.md) for full Docker
 deployment instructions (including production with Nginx Proxy Manager).
 
+## CI Parity
+
+Use the make-based CI parity targets before updating a PR:
+
+```bash
+make ci           # backend + frontend parity checks
+make ci-backend   # backend/Makefile check target
+make ci-frontend  # frontend checks + production bundle guards
+```
+
+`make ci` intentionally mirrors the non-E2E GitHub Actions jobs. The
+Playwright workflow remains a separate integration pass because it needs the
+backend, frontend, PostgreSQL, and Redis services running together.
+
 ## Authentication and Session Model
 
 The live auth flow uses short-lived JWT access tokens in frontend memory only.
@@ -70,6 +84,6 @@ The feature is structurally impossible to ship to production:
 - [docs/deployment/docker.md](docs/deployment/docker.md) — Docker deployment guide
 - [docs/api/README.md](docs/api/README.md) — API endpoint overview
 - [docs/adr/0002-cookie-refresh-and-memory-access-token.md](docs/adr/0002-cookie-refresh-and-memory-access-token.md) — current auth/session ADR
-- [.planning/README.md](.planning/README.md) — internal plans, specs, reviews, and archives
+- [docs/README.md](docs/README.md) — durable documentation index
 - [AGENTS.md](AGENTS.md) — Canonical repository instructions for coding agents
 - API docs: http://localhost:8000/api/v2/docs (when backend is running)

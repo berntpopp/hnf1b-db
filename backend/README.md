@@ -44,6 +44,9 @@ make check            # Run all checks (lint + typecheck + tests)
 make format           # Format code with ruff
 ```
 
+From the repo root, `make ci-backend` runs the same backend parity target used
+by GitHub Actions.
+
 ## Database Services
 
 Database services (PostgreSQL, Redis) are managed from the project root:

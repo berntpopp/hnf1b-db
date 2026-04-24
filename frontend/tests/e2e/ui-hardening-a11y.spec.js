@@ -92,133 +92,135 @@ async function tabToLocator(page, locator, maxTabs = 40) {
   throw new Error(`Failed to focus target via keyboard after ${maxTabs} Tab presses`);
 }
 
-for (const path of PAGES_WITH_EXTERNAL_LINKS) {
-  test(`external anchors on ${path} carry rel=noopener noreferrer`, async ({ page }) => {
-    await page.goto(path);
+test.describe('UI accessibility hardening', () => {
+  for (const path of PAGES_WITH_EXTERNAL_LINKS) {
+    test(`external anchors on ${path} carry rel=noopener noreferrer`, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await assertExternalLinkRels(page);
+    });
+  }
+
+  test('external anchors on a publication detail page carry rel', async ({ page }) => {
+    await page.goto('/publications');
+    await page.waitForLoadState('networkidle');
+    const pmidChip = page.locator('a.v-chip[href*="/publications/"]').first();
+    // CI seeds no publications by default; skip cleanly when the table is empty
+    // rather than waiting 60s for a row that will never appear.
+    if ((await pmidChip.count()) === 0) {
+      test.skip(true, 'No seeded publications on this environment — detail-page coverage deferred');
+    }
+    await pmidChip.waitFor({ state: 'visible', timeout: 10_000 });
+    await pmidChip.click();
     await page.waitForLoadState('networkidle');
     await assertExternalLinkRels(page);
   });
-}
 
-test('external anchors on a publication detail page carry rel', async ({ page }) => {
-  await page.goto('/publications');
-  await page.waitForLoadState('networkidle');
-  const pmidChip = page.locator('a.v-chip[href*="/publications/"]').first();
-  // CI seeds no publications by default; skip cleanly when the table is empty
-  // rather than waiting 60s for a row that will never appear.
-  if ((await pmidChip.count()) === 0) {
-    test.skip(true, 'No seeded publications on this environment — detail-page coverage deferred');
-  }
-  await pmidChip.waitFor({ state: 'visible', timeout: 10_000 });
-  await pmidChip.click();
-  await page.waitForLoadState('networkidle');
-  await assertExternalLinkRels(page);
-});
+  test.describe('Real h1 on list + create views (H2)', () => {
+    for (const path of ['/phenopackets', '/publications', '/variants']) {
+      test(`${path} exposes an h1`, async ({ page }) => {
+        await page.goto(path);
+        await page.waitForLoadState('networkidle');
+        await expect(page.locator('h1')).toHaveCount(1);
+        const text = await page.locator('h1').innerText();
+        expect(text.length).toBeGreaterThan(0);
+      });
+    }
 
-test.describe('Real h1 on list + create views (H2)', () => {
-  for (const path of ['/phenopackets', '/publications', '/variants']) {
-    test(`${path} exposes an h1`, async ({ page }) => {
-      await page.goto(path);
+    test('/phenopackets/create exposes an h1', async ({ page, request }) => {
+      test.skip(
+        !(await isBackendAvailable(request)),
+        'Backend unavailable for authenticated create-page coverage'
+      );
+      const { primeAuthSession } = await import('./helpers/auth.js');
+      const apiBase =
+        process.env.E2E_API_BASE || process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
+      const resolvedApiBase = new URL(apiBase, FRONTEND_BASE_URL).toString().replace(/\/$/, '');
+      const auth = await loginForAuthenticatedCoverage(request, resolvedApiBase);
+      await primeAuthSession(page, auth);
+      await page.goto('/phenopackets/create');
       await page.waitForLoadState('networkidle');
-      await expect(page.locator('h1')).toHaveCount(1);
-      const text = await page.locator('h1').innerText();
-      expect(text.length).toBeGreaterThan(0);
+      await expect(page.locator('h1')).toBeVisible();
     });
-  }
-
-  test('/phenopackets/create exposes an h1', async ({ page, request }) => {
-    test.skip(
-      !(await isBackendAvailable(request)),
-      'Backend unavailable for authenticated create-page coverage'
-    );
-    const { primeAuthSession } = await import('./helpers/auth.js');
-    const apiBase =
-      process.env.E2E_API_BASE || process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-    const resolvedApiBase = new URL(apiBase, FRONTEND_BASE_URL).toString().replace(/\/$/, '');
-    const auth = await loginForAuthenticatedCoverage(request, resolvedApiBase);
-    await primeAuthSession(page, auth);
-    await page.goto('/phenopackets/create');
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('h1')).toBeVisible();
-  });
-});
-
-test.describe('Keyboard row activation (H3)', () => {
-  test('Tab reaches first subject-id chip on /phenopackets and Enter navigates', async ({
-    page,
-  }) => {
-    await page.goto('/phenopackets');
-    await page.waitForLoadState('networkidle');
-    const firstChipAnchor = page.locator('table a.v-chip').first();
-    if ((await firstChipAnchor.count()) === 0) {
-      test.skip(true, 'No seeded phenopackets on this environment');
-    }
-    await firstChipAnchor.waitFor({ state: 'visible' });
-    const href = await firstChipAnchor.getAttribute('href');
-    expect(href).toMatch(/^\/phenopackets\/[^/]+$/);
-    await tabToLocator(page, firstChipAnchor);
-    await expect(firstChipAnchor).toBeFocused();
-    await page.keyboard.press('Enter');
-    await page.waitForURL(/\/phenopackets\/[^/]+$/, { timeout: 5000 });
   });
 
-  test('/variants first chip is a keyboard-reachable anchor', async ({ page }) => {
-    await page.goto('/variants');
-    await page.waitForLoadState('networkidle');
-    const firstChipAnchor = page.locator('table a.v-chip').first();
-    if ((await firstChipAnchor.count()) === 0) {
-      test.skip(true, 'No seeded variants on this environment');
-    }
-    await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
-    const href = await firstChipAnchor.getAttribute('href');
-    expect(href).toMatch(/^\/variants\//);
-    await tabToLocator(page, firstChipAnchor);
-    await expect(firstChipAnchor).toBeFocused();
-    await page.keyboard.press('Enter');
-    await page.waitForURL(/\/variants\/.+$/, { timeout: 5000 });
-  });
-
-  test('/publications PMID chip is a keyboard-reachable anchor', async ({ page }) => {
-    await page.goto('/publications');
-    await page.waitForLoadState('networkidle');
-    const firstChipAnchor = page.locator('table a.v-chip[href*="/publications/"]').first();
-    if ((await firstChipAnchor.count()) === 0) {
-      test.skip(true, 'No seeded publications on this environment');
-    }
-    await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
-    const href = await firstChipAnchor.getAttribute('href');
-    expect(href).toMatch(/^\/publications\//);
-    await tabToLocator(page, firstChipAnchor);
-    await expect(firstChipAnchor).toBeFocused();
-    await page.keyboard.press('Enter');
-    await page.waitForURL(/\/publications\/.+$/, { timeout: 5000 });
-  });
-});
-
-// H5 composer accessibility assertions live in
-// tests/unit/components/comments/CommentComposer.spec.js — the component
-// contract (aria-label on .ProseMirror + toolbar buttons) is cheaper and
-// more robust to verify in a unit test than navigating to a seeded
-// authenticated detail page in Playwright.
-
-test.describe('Skip-to-main-content (L6)', () => {
-  test('first tab-able element is a visible skip link pointing to #main-content', async ({
-    page,
-  }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.keyboard.press('Tab');
-    const skipLink = page.locator('a[href="#main-content"]').first();
-    await expect(skipLink).toBeVisible();
-    const focused = await page.evaluate(() => {
-      const el = document.activeElement;
-      return el
-        ? { tag: el.tagName, href: el.getAttribute('href'), text: el.textContent?.trim() }
-        : null;
+  test.describe('Keyboard row activation (H3)', () => {
+    test('Tab reaches first subject-id chip on /phenopackets and Enter navigates', async ({
+      page,
+    }) => {
+      await page.goto('/phenopackets');
+      await page.waitForLoadState('networkidle');
+      const firstChipAnchor = page.locator('table a.v-chip').first();
+      if ((await firstChipAnchor.count()) === 0) {
+        test.skip(true, 'No seeded phenopackets on this environment');
+      }
+      await firstChipAnchor.waitFor({ state: 'visible' });
+      const href = await firstChipAnchor.getAttribute('href');
+      expect(href).toMatch(/^\/phenopackets\/[^/]+$/);
+      await tabToLocator(page, firstChipAnchor);
+      await expect(firstChipAnchor).toBeFocused();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(/\/phenopackets\/[^/]+$/, { timeout: 5000 });
     });
-    expect(focused?.tag).toBe('A');
-    expect(focused?.href).toBe('#main-content');
-    expect(focused?.text?.toLowerCase()).toContain('skip');
-    await expect(page.locator('#main-content')).toHaveCount(1);
+
+    test('/variants first chip is a keyboard-reachable anchor', async ({ page }) => {
+      await page.goto('/variants');
+      await page.waitForLoadState('networkidle');
+      const firstChipAnchor = page.locator('table a.v-chip').first();
+      if ((await firstChipAnchor.count()) === 0) {
+        test.skip(true, 'No seeded variants on this environment');
+      }
+      await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
+      const href = await firstChipAnchor.getAttribute('href');
+      expect(href).toMatch(/^\/variants\//);
+      await tabToLocator(page, firstChipAnchor);
+      await expect(firstChipAnchor).toBeFocused();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(/\/variants\/.+$/, { timeout: 5000 });
+    });
+
+    test('/publications PMID chip is a keyboard-reachable anchor', async ({ page }) => {
+      await page.goto('/publications');
+      await page.waitForLoadState('networkidle');
+      const firstChipAnchor = page.locator('table a.v-chip[href*="/publications/"]').first();
+      if ((await firstChipAnchor.count()) === 0) {
+        test.skip(true, 'No seeded publications on this environment');
+      }
+      await firstChipAnchor.waitFor({ state: 'visible', timeout: 10_000 });
+      const href = await firstChipAnchor.getAttribute('href');
+      expect(href).toMatch(/^\/publications\//);
+      await tabToLocator(page, firstChipAnchor);
+      await expect(firstChipAnchor).toBeFocused();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(/\/publications\/.+$/, { timeout: 5000 });
+    });
+  });
+
+  // H5 composer accessibility assertions live in
+  // tests/unit/components/comments/CommentComposer.spec.js — the component
+  // contract (aria-label on .ProseMirror + toolbar buttons) is cheaper and
+  // more robust to verify in a unit test than navigating to a seeded
+  // authenticated detail page in Playwright.
+
+  test.describe('Skip-to-main-content (L6)', () => {
+    test('first tab-able element is a visible skip link pointing to #main-content', async ({
+      page,
+    }) => {
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('Tab');
+      const skipLink = page.locator('a[href="#main-content"]').first();
+      await expect(skipLink).toBeVisible();
+      const focused = await page.evaluate(() => {
+        const el = document.activeElement;
+        return el
+          ? { tag: el.tagName, href: el.getAttribute('href'), text: el.textContent?.trim() }
+          : null;
+      });
+      expect(focused?.tag).toBe('A');
+      expect(focused?.href).toBe('#main-content');
+      expect(focused?.text?.toLowerCase()).toContain('skip');
+      await expect(page.locator('#main-content')).toHaveCount(1);
+    });
   });
 });

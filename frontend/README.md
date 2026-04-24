@@ -40,8 +40,12 @@ make preview      # Preview production build
 make lint         # Lint and fix code
 make format       # Format code with Prettier
 make check        # Run all checks (lint + format)
+make ci           # CI parity target (check + build + production guards)
 make clean        # Remove node_modules and build artifacts
 ```
+
+From the repo root, `make ci-frontend` runs the same frontend parity target
+used by GitHub Actions.
 
 Or use npm directly:
 

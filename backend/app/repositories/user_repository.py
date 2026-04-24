@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.password import get_password_hash
@@ -88,8 +87,7 @@ class UserRepository:
         )
 
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        await self.db.flush()
         return user
 
     async def update(
@@ -135,18 +133,7 @@ class UserRepository:
 
         user.updated_at = datetime.now(timezone.utc)
 
-        try:
-            await self.db.commit()
-        except IntegrityError as exc:
-            await self.db.rollback()
-            if user_data.email is not None:
-                sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
-                if sqlstate == "23505":
-                    raise UserEmailConflictError(
-                        _duplicate_email_message(user_data.email)
-                    ) from exc
-            raise
-        await self.db.refresh(user)
+        await self.db.flush()
         return user
 
     async def delete(self, user: User) -> None:
@@ -156,7 +143,6 @@ class UserRepository:
             user: User instance to delete
         """
         await self.db.delete(user)
-        await self.db.commit()
 
     async def list_users(
         self, skip: int = 0, limit: int = 100, role: str | None = None
@@ -193,7 +179,7 @@ class UserRepository:
                 minutes=settings.ACCOUNT_LOCKOUT_MINUTES
             )
 
-        await self.db.commit()
+        await self.db.flush()
 
     async def record_successful_login(self, user: User) -> None:
         """Record successful login and reset failed attempts.
@@ -222,6 +208,5 @@ class UserRepository:
         """
         user.failed_login_attempts = 0
         user.locked_until = None
-        await self.db.commit()
-        await self.db.refresh(user)
+        await self.db.flush()
         return user
