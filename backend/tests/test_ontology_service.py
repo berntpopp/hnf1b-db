@@ -96,7 +96,9 @@ async def test_get_term_async_checks_api_before_local_when_cache_misses(
     )
 
     monkeypatch.setattr(ontology_service.file_cache, "get", lambda _: None)
-    monkeypatch.setattr(ontology_service.local_provider, "get_term", lambda _: local_term)
+    monkeypatch.setattr(
+        ontology_service.local_provider, "get_term", lambda _: local_term
+    )
     monkeypatch.setattr(ontology_service, "_fetch_from_apis", lambda _: api_term)
 
     term = await ontology_service.get_term_async(term_id)

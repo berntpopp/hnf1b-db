@@ -383,7 +383,10 @@ async def test_admin_deactivate_rolls_back_user_state_if_refresh_revocation_fail
 
     login_resp = await async_client.post(
         "/api/v2/auth/login",
-        json={"username": "atomic-deactivate-user", "password": "AtomicDeactivate!2026"},
+        json={
+            "username": "atomic-deactivate-user",
+            "password": "AtomicDeactivate!2026",
+        },
     )
     assert login_resp.status_code == 200
     refresh_cookie = login_resp.cookies["refresh_token"]

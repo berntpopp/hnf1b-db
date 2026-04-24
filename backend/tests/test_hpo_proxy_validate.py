@@ -27,9 +27,13 @@ async def test_validate_route_uses_async_term_lookup_for_slow_fetch(
         return mocked_term
 
     monkeypatch.setattr(ontology_service, "get_term", fail_sync_lookup)
-    monkeypatch.setattr(ontology_service, "get_term_async", fake_async_lookup, raising=False)
+    monkeypatch.setattr(
+        ontology_service, "get_term_async", fake_async_lookup, raising=False
+    )
 
-    response = await async_client.get("/api/v2/hpo/validate", params={"term_ids": term_id})
+    response = await async_client.get(
+        "/api/v2/hpo/validate", params={"term_ids": term_id}
+    )
 
     assert response.status_code == 200
     assert response.json()[term_id] == {
@@ -54,9 +58,13 @@ async def test_validate_route_marks_unknown_placeholder_invalid(
         assert requested_term_id == term_id
         return unknown_term
 
-    monkeypatch.setattr(ontology_service, "get_term_async", fake_async_lookup, raising=False)
+    monkeypatch.setattr(
+        ontology_service, "get_term_async", fake_async_lookup, raising=False
+    )
 
-    response = await async_client.get("/api/v2/hpo/validate", params={"term_ids": term_id})
+    response = await async_client.get(
+        "/api/v2/hpo/validate", params={"term_ids": term_id}
+    )
 
     assert response.status_code == 200
     assert response.json()[term_id] == {
@@ -80,9 +88,13 @@ async def test_validate_route_marks_obsolete_term_invalid(async_client, monkeypa
         assert requested_term_id == term_id
         return obsolete_term
 
-    monkeypatch.setattr(ontology_service, "get_term_async", fake_async_lookup, raising=False)
+    monkeypatch.setattr(
+        ontology_service, "get_term_async", fake_async_lookup, raising=False
+    )
 
-    response = await async_client.get("/api/v2/hpo/validate", params={"term_ids": term_id})
+    response = await async_client.get(
+        "/api/v2/hpo/validate", params={"term_ids": term_id}
+    )
 
     assert response.status_code == 200
     assert response.json()[term_id] == {

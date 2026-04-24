@@ -251,7 +251,10 @@ async def test_update_user_normalizes_duplicate_email_integrity_error(
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "Email 'repo-email-race@example.com' already exists"
+    assert (
+        response.json()["detail"]
+        == "Email 'repo-email-race@example.com' already exists"
+    )
 
 
 @pytest.mark.asyncio
