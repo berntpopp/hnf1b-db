@@ -303,6 +303,11 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
 
+    # Email backend override — when set, takes precedence over YAML
+    # `email.backend`. Production must set EMAIL_BACKEND=smtp in .env.docker
+    # because the Wave 5c validator refuses to start with backend='console'.
+    EMAIL_BACKEND: Literal["console", "smtp"] | None = None
+
     # Admin credentials (for initial setup)
     # SECURITY: ADMIN_PASSWORD is REQUIRED and has no default. The previous
     # default was removed in Wave 1 of the 2026-04-10 refactor roadmap to
@@ -415,8 +420,9 @@ class Settings(BaseSettings):
     def _validate_environment_security_requirements(self) -> "Settings":
         """Fail closed on environment-specific email and cookie settings."""
         email_cfg = self.yaml.email
+        resolved_backend = self.EMAIL_BACKEND or email_cfg.backend
 
-        if self.environment == "production" and email_cfg.backend == "console":
+        if self.environment == "production" and resolved_backend == "console":
             raise ValueError(
                 "REFUSING TO START: email.backend is 'console' while "
                 "ENVIRONMENT=production. Configure SMTP delivery before "
@@ -452,7 +458,8 @@ class Settings(BaseSettings):
     def _validate_smtp_config(self) -> "Settings":
         """Fail fast if email backend is smtp but SMTP_HOST is missing."""
         email_cfg = self.yaml.email
-        if email_cfg.backend == "smtp":
+        resolved_backend = self.EMAIL_BACKEND or email_cfg.backend
+        if resolved_backend == "smtp":
             if not self.SMTP_HOST or self.SMTP_HOST.strip() == "":
                 raise ValueError(
                     "REFUSING TO START: email.backend is 'smtp' but SMTP_HOST "
@@ -467,8 +474,6 @@ class Settings(BaseSettings):
                         "SMTP_PASSWORD is empty. Set them in .env or set "
                         "email.use_credentials: false in config.yaml."
                     )
-            # Gate TLS warning behind smtp backend — it is irrelevant (and
-            # noisy) when backend is console (Copilot PR #235 review).
             if email_cfg.tls_mode == "none":
                 logger.critical(
                     "EMAIL TLS IS DISABLED (email.tls_mode: 'none'). "

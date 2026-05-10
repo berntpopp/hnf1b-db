@@ -92,7 +92,7 @@ security:
 # "smtp" sends real emails (requires SMTP_* env vars in .env).
 email:
   backend: "console"
-  from_address: "noreply@hnf1b-db.org"
+  from_address: "noreply@hnf1b.org"
   from_name: "HNF1B Database"
   tls_mode: "starttls"
   validate_certs: true
