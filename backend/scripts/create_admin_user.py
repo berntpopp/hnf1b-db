@@ -49,6 +49,7 @@ async def create_admin_user() -> None:
                 existing_admin.locked_until = None
                 await db.commit()
                 print(f"✅ Admin user updated: {admin_username}")
+                print("   (password reset from $ADMIN_PASSWORD; not echoed)")
             else:
                 print("Creating new admin user...")
                 admin_user = User(
@@ -65,13 +66,13 @@ async def create_admin_user() -> None:
                 await db.refresh(admin_user)
                 print(f"✅ Admin user created: {admin_username} (ID: {admin_user.id})")
 
-            print("\n🔐 Login credentials:")
-            print(f"   Username: {admin_username}")
-            print(f"   Password: {admin_password}")
-            print(
-                "\n⚠️  SECURITY: Change the admin password immediately "
-                "after first login!\n"
-            )
+                print("\n🔐 Login credentials:")
+                print(f"   Username: {admin_username}")
+                print(f"   Password: {admin_password}")
+                print(
+                    "\n⚠️  SECURITY: Change the admin password immediately "
+                    "after first login!\n"
+                )
 
         except Exception as e:
             print(f"❌ Error creating admin user: {e}")

@@ -88,6 +88,9 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
 
+    env_file:
+      - ../.env.docker
+
     # PRODUCTION: No exposed ports - NPM handles routing
     ports: []
 
