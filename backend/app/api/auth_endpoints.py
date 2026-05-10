@@ -23,7 +23,11 @@ from app.auth import (
     verify_token,
 )
 from app.auth.credential_tokens import CredentialTokenService
-from app.auth.dependencies import get_best_effort_user, require_csrf_token
+from app.auth.dependencies import (
+    get_best_effort_user,
+    require_csrf_token,
+    require_session_then_csrf,
+)
 from app.auth.email import get_email_sender
 from app.auth.permissions import get_all_roles
 from app.auth.rate_limit import RateLimiter
@@ -336,7 +340,7 @@ async def login(
 async def refresh_access_token(
     request: Request,
     response: Response,
-    _: None = Depends(require_csrf_token),
+    _: None = Depends(require_session_then_csrf),
     db: AsyncSession = Depends(get_db),
 ) -> Token | JSONResponse:
     """Refresh the access token using the cookie-backed refresh session.

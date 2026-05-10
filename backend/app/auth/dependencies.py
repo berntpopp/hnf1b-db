@@ -217,3 +217,21 @@ async def require_csrf_token(request: Request) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="CSRF token missing or invalid",
         )
+
+
+async def require_session_then_csrf(request: Request) -> None:
+    """Layered guard for cookie-auth endpoints invoked from anonymous SPAs.
+
+    Returns 401 when there is no refresh-session cookie at all (an anonymous
+    bootstrap probe), and only runs the CSRF check when a session is actually
+    claimed. This keeps 403 reserved for genuine CSRF rejections and gives
+    the frontend the more-correct status to discriminate on.
+
+    Used on /auth/refresh; logout keeps plain require_csrf_token.
+    """
+    if not request.cookies.get(settings.REFRESH_COOKIE_NAME):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No active session",
+        )
+    await require_csrf_token(request)

@@ -7,7 +7,11 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.auth import dependencies as auth_dependencies
-from app.auth.dependencies import get_best_effort_user, require_csrf_token
+from app.auth.dependencies import (
+    get_best_effort_user,
+    require_csrf_token,
+    require_session_then_csrf,
+)
 from app.auth.session_cookies import clear_auth_cookies, set_auth_cookies
 from app.core.config import Settings, settings
 
@@ -155,3 +159,66 @@ def test_settings_expose_cookie_defaults():
     assert settings.AUTH_COOKIE_PATH == "/api/v2"
     assert settings.CSRF_COOKIE_PATH == "/"
     assert settings.AUTH_COOKIE_SAMESITE == "lax"
+
+
+# ----- require_session_then_csrf (issue #288) -----
+
+
+def _request_with_cookies(*, refresh: str | None, csrf_cookie: str | None, csrf_header: str | None) -> Request:
+    """Build a Starlette request with optional refresh cookie + CSRF pair."""
+    cookie_parts: list[str] = []
+    if refresh is not None:
+        cookie_parts.append(f"refresh_token={refresh}")
+    if csrf_cookie is not None:
+        cookie_parts.append(f"csrf_token={csrf_cookie}")
+
+    headers: list[tuple[bytes, bytes]] = []
+    if cookie_parts:
+        headers.append((b"cookie", "; ".join(cookie_parts).encode()))
+    if csrf_header is not None:
+        headers.append((b"x-csrf-token", csrf_header.encode()))
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v2/auth/refresh",
+        "headers": headers,
+    }
+    return Request(scope)
+
+
+async def test_require_session_then_csrf_returns_401_when_no_session_cookie():
+    """Anonymous bootstrap probe (no refresh cookie) returns 401, not 403."""
+    request = _request_with_cookies(refresh=None, csrf_cookie=None, csrf_header=None)
+
+    try:
+        await require_session_then_csrf(request)
+    except Exception as exc:  # noqa: BLE001
+        assert getattr(exc, "status_code", None) == 401
+        assert "no active session" in str(getattr(exc, "detail", "")).lower()
+    else:  # pragma: no cover - red phase guard
+        raise AssertionError("Expected 401 when refresh cookie is absent")
+
+
+async def test_require_session_then_csrf_returns_403_when_session_present_but_csrf_missing():
+    """With a refresh session cookie but no CSRF header, fall through to 403."""
+    request = _request_with_cookies(
+        refresh="rt-xyz", csrf_cookie="csrf-abc", csrf_header=None
+    )
+
+    try:
+        await require_session_then_csrf(request)
+    except Exception as exc:  # noqa: BLE001
+        assert getattr(exc, "status_code", None) == 403
+        assert "csrf" in str(getattr(exc, "detail", "")).lower()
+    else:  # pragma: no cover - red phase guard
+        raise AssertionError("Expected 403 when CSRF header is missing despite session cookie")
+
+
+async def test_require_session_then_csrf_accepts_full_session_with_matching_csrf():
+    """Refresh cookie + matching CSRF cookie/header pair is accepted (returns None)."""
+    request = _request_with_cookies(
+        refresh="rt-xyz", csrf_cookie="csrf-abc", csrf_header="csrf-abc"
+    )
+
+    assert await require_session_then_csrf(request) is None

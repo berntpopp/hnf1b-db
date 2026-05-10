@@ -28,8 +28,17 @@ globalThis.window.logService = {
 describe('Auth Store', () => {
   const originalDev = import.meta.env.DEV;
   const originalFlag = import.meta.env.VITE_ENABLE_DEV_AUTH;
+  let _originalCookieDescriptor;
+
+  function setCookie(value) {
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      get: () => value,
+    });
+  }
 
   beforeEach(() => {
+    _originalCookieDescriptor = Object.getOwnPropertyDescriptor(document, 'cookie');
     setActivePinia(createPinia());
     clearTokens();
     vi.clearAllMocks();
@@ -40,6 +49,9 @@ describe('Auth Store', () => {
   });
 
   afterEach(() => {
+    if (_originalCookieDescriptor) {
+      Object.defineProperty(document, 'cookie', _originalCookieDescriptor);
+    }
     clearTokens();
     vi.restoreAllMocks();
     import.meta.env.DEV = originalDev;
@@ -282,6 +294,9 @@ describe('Auth Store', () => {
     });
 
     it('attempts one refresh bootstrap before loading the current user', async () => {
+      // Simulate a returning user who has the csrf_token cookie set.
+      setCookie('csrf_token=bootstrap-csrf');
+
       const authStore = useAuthStore();
 
       apiClient.post.mockResolvedValueOnce({
@@ -306,6 +321,9 @@ describe('Auth Store', () => {
     });
 
     it('stays anonymous when refresh bootstrap fails', async () => {
+      // Simulate a user with a stale/expired session (csrf_token cookie present).
+      setCookie('csrf_token=stale-csrf');
+
       const authStore = useAuthStore();
 
       apiClient.post.mockRejectedValueOnce(new Error('Refresh failed'));
@@ -363,15 +381,51 @@ describe('Auth Store', () => {
     });
 
     it('initialize() logs anonymous bootstrap skip at debug', async () => {
+      // Need csrf_token cookie so the probe runs and we can observe the debug log.
+      setCookie('csrf_token=stale-csrf');
+
       apiClient.post.mockRejectedValueOnce(new Error('401 Unauthorized'));
       const store = useAuthStore();
       await store.initialize();
+
       // The "Failed to initialize user session" warn must not fire for anons.
       expect(logSpy.warn).not.toHaveBeenCalledWith(
         'Failed to initialize user session',
         expect.anything()
       );
       expect(logSpy.debug).toHaveBeenCalled();
+    });
+  });
+
+  describe('initialize() bootstrap probe gate (#288)', () => {
+    it('skips /auth/refresh when no csrf_token cookie is present', async () => {
+      setCookie('');
+      const authStore = useAuthStore();
+
+      await authStore.initialize();
+
+      expect(apiClient.post).not.toHaveBeenCalledWith(
+        '/auth/refresh',
+        expect.anything(),
+        expect.anything()
+      );
+      expect(authStore.hasInitialized).toBe(true);
+    });
+
+    it('calls /auth/refresh when csrf_token cookie is present', async () => {
+      setCookie('csrf_token=abc123');
+      apiClient.post.mockResolvedValueOnce({ data: { access_token: 'new-token' } });
+      apiClient.get.mockResolvedValueOnce({ data: { username: 'alice', role: 'curator' } });
+
+      const authStore = useAuthStore();
+      await authStore.initialize();
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/refresh',
+        null,
+        expect.objectContaining({ withCredentials: true })
+      );
+      expect(authStore.accessToken).toBe('new-token');
     });
   });
 

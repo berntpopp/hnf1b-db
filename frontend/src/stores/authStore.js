@@ -7,7 +7,7 @@ import {
   getDevQuickLoginDisabledMessage,
   isDevQuickLoginEnabled,
 } from '@/config/devAuth';
-import { clearTokens, getAccessToken, persistTokens } from '@/api/session';
+import { clearTokens, getAccessToken, getCsrfToken, persistTokens } from '@/api/session';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -228,6 +228,14 @@ export const useAuthStore = defineStore('auth', () => {
             error: err.message,
           });
         }
+        return;
+      }
+
+      // No csrf_token cookie → no refresh session is possible (cookies are
+      // set together at /auth/login). Skip the probe to avoid an unnecessary
+      // round trip — and the misleading 403 — on every anonymous page load.
+      // See issue #288.
+      if (!getCsrfToken()) {
         return;
       }
 
