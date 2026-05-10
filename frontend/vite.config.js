@@ -119,17 +119,22 @@ export default defineConfig({
           // D3 modules - used for visualizations
           if (id.includes('d3-') || id.includes('/d3/')) return 'd3-modules';
 
-          // Vuetify data table components (heavy, often lazy loaded)
-          if (id.includes('vuetify/lib/components/VDataTable')) {
-            return 'vuetify-data';
+          // Consolidated Vue stack — keeps any cycle intra-chunk.
+          // Splitting vue/@vue/vue-router/pinia/vuetify across chunks has
+          // produced TDZ "Cannot access 'b' before initialization" errors
+          // when a downstream dependency from the catch-all `vendor` bucket
+          // re-imports vue while @vue/reactivity is still mid-evaluation.
+          // See vitejs/vite#9686, #22122, #12209.
+          if (
+            id.includes('node_modules/vue/') ||
+            id.includes('node_modules/@vue/') ||
+            id.includes('node_modules/vue-router') ||
+            id.includes('node_modules/pinia') ||
+            id.includes('node_modules/vuetify') ||
+            id.includes('node_modules/@vuetify')
+          ) {
+            return 'vue-stack';
           }
-          if (id.includes('vuetify')) return 'vuetify-core';
-
-          // Vue ecosystem - core framework
-          if (id.includes('vue-router') || id.includes('pinia')) {
-            return 'vue-core';
-          }
-          if (id.includes('/vue/') || id.includes('@vue/')) return 'vue-vendor';
 
           // Axios for API calls - frequently used
           if (id.includes('axios')) return 'axios';
