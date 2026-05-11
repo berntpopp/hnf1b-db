@@ -52,3 +52,72 @@ export function exportSvgAsSvg(svgEl, filename) {
   const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
   saveAs(blob, filename);
 }
+
+/**
+ * Inline computed styles from the live DOM onto a cloned SVG subtree so that
+ * the serialized SVG renders identically when loaded into a canvas.
+ * D3 sets some styles via .style() (inline) and some via class rules; only
+ * inline styles survive cloneNode. This walk transfers the rest.
+ * @param {Element} liveRoot - The original element still in the DOM.
+ * @param {Element} clonedRoot - The cloned element to mutate.
+ */
+function inlineComputedStyles(liveRoot, clonedRoot) {
+  const liveNodes = [liveRoot, ...liveRoot.querySelectorAll('*')];
+  const clonedNodes = [clonedRoot, ...clonedRoot.querySelectorAll('*')];
+  for (let i = 0; i < liveNodes.length; i++) {
+    const computed = window.getComputedStyle(liveNodes[i]);
+    let inline = '';
+    for (let j = 0; j < computed.length; j++) {
+      const prop = computed[j];
+      inline += `${prop}:${computed.getPropertyValue(prop)};`;
+    }
+    clonedNodes[i].setAttribute('style', inline);
+  }
+}
+
+/**
+ * Export an SVG element as a PNG via canvas. No external dependencies for
+ * rasterization; uses file-saver for the download trigger.
+ * @param {SVGElement} svgEl
+ * @param {{filename:string, scale?:number, background?:string}} options
+ * @returns {Promise<void>}
+ */
+export function exportSvgAsPng(svgEl, { filename, scale = 2, background = '#ffffff' }) {
+  return new Promise((resolve, reject) => {
+    const bbox = {
+      width: parseFloat(svgEl.getAttribute('width')) || svgEl.clientWidth,
+      height: parseFloat(svgEl.getAttribute('height')) || svgEl.clientHeight,
+    };
+
+    const clone = svgEl.cloneNode(true);
+    inlineComputedStyles(svgEl, clone);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', bbox.width);
+    clone.setAttribute('height', bbox.height);
+
+    const serialized = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = bbox.width * scale;
+      canvas.height = bbox.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((pngBlob) => {
+        saveAs(pngBlob, filename);
+        resolve();
+      }, 'image/png');
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
