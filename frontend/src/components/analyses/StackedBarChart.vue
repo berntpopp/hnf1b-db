@@ -1,12 +1,37 @@
 <template>
-  <div class="stacked-bar-chart-container">
-    <!-- The div where the chart will be rendered -->
-    <div ref="chart" />
+  <div class="stacked-bar-chart-container" v-bind="ariaProps">
+    <span :id="titleId" class="sr-only">{{ chartName }}</span>
+    <span :id="descId" class="sr-only">{{ description }}</span>
+    <ChartExportMenu
+      :svg-el="svgEl"
+      :rows="exportRows"
+      :columns="exportColumns"
+      :chart-name="chartName"
+    />
+    <div ref="chart" aria-hidden="true" />
+    <details class="chart-data-table">
+      <summary>View data as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th v-for="c in exportColumns" :key="c.key">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in exportRows" :key="i">
+            <td v-for="c in exportColumns" :key="c.key">{{ r[c.key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
   </div>
 </template>
 
 <script>
+import { ref, computed } from 'vue';
 import * as d3 from 'd3';
+import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
 /**
  * CKD stage HPO IDs to aggregate into a single "Chronic Kidney Disease" entry.
@@ -28,6 +53,7 @@ const CKD_HPO_IDS = [
 
 export default {
   name: 'StackedBarChart',
+  components: { ChartExportMenu },
   props: {
     /**
      * The data to be plotted.
@@ -71,6 +97,37 @@ export default {
       type: Array,
       default: () => ['#4CAF50', '#F44336', '#9E9E9E'], // Green, Red, Gray
     },
+    chartName: { type: String, default: 'Phenotypic features' },
+  },
+  setup(props) {
+    const svgEl = ref(null);
+    const exportRows = computed(() => {
+      const limited = (props.chartData || []).slice(0, props.displayLimit);
+      return limited.map((row) => ({
+        feature: row.label,
+        present: row.details?.present_count ?? 0,
+        absent: row.details?.absent_count ?? 0,
+        not_reported: row.details?.not_reported_count ?? 0,
+      }));
+    });
+    const exportColumns = [
+      { key: 'feature', label: 'Feature' },
+      { key: 'present', label: 'Present' },
+      { key: 'absent', label: 'Absent' },
+      { key: 'not_reported', label: 'Not reported' },
+    ];
+    const summary = computed(() => {
+      const rows = exportRows.value;
+      if (!rows.length) return `${props.chartName}: no data.`;
+      const top = rows
+        .slice(0, 5)
+        .map((r) => `${r.feature}: ${r.present} present, ${r.absent} absent`);
+      const tail =
+        rows.length > 5 ? ` and ${rows.length - 5} more, available in the data table` : '';
+      return `${props.chartName} across ${rows.length} entries. ${top.join('; ')}${tail}.`;
+    });
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    return { svgEl, exportRows, exportColumns, ...a11y };
   },
   watch: {
     chartData: {
@@ -179,16 +236,16 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
-      // Append the SVG element.
-      const svg = d3
+      // Append the SVG element. Capture the root for export.
+      const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+      this.svgEl = svgRoot.node();
+      const svg = svgRoot.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Aggregate CKD stages into a single entry
       const aggregatedData = this.aggregateCKDStages(this.chartData);
@@ -392,5 +449,26 @@ export default {
   pointer-events: none;
   font-size: 14px;
   color: #333;
+}
+
+.chart-data-table {
+  margin-top: 16px;
+  font-size: 14px;
+}
+.chart-data-table summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
+}
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>
