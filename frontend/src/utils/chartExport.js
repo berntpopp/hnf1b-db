@@ -41,3 +41,14 @@ export function exportDataAsCsv(rows, columns, filename) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   saveAs(blob, filename);
 }
+
+/**
+ * Export an SVG element as a raw .svg file (vector, editable in Illustrator/Inkscape).
+ * @param {SVGElement} svgEl
+ * @param {string} filename
+ */
+export function exportSvgAsSvg(svgEl, filename) {
+  const serialized = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+  saveAs(blob, filename);
+}

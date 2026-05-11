@@ -82,3 +82,34 @@ describe('exportDataAsCsv', () => {
     expect(text).toBe('﻿A,B,C\r\n,,0\r\n');
   });
 });
+
+describe('exportSvgAsSvg', () => {
+  let saveAsMock;
+  beforeEach(() => {
+    saveAsMock = vi.fn();
+    vi.resetModules();
+    vi.doMock('file-saver', () => ({ saveAs: saveAsMock, default: { saveAs: saveAsMock } }));
+  });
+
+  it('serializes the SVG element and saves with image/svg+xml MIME', async () => {
+    const { exportSvgAsSvg: fn } = await import('@/utils/chartExport');
+    const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgEl.setAttribute('width', '100');
+    svgEl.setAttribute('height', '50');
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '10');
+    circle.setAttribute('cy', '10');
+    circle.setAttribute('r', '5');
+    svgEl.appendChild(circle);
+
+    fn(svgEl, 'chart.svg');
+
+    expect(saveAsMock).toHaveBeenCalledOnce();
+    const [blob, filename] = saveAsMock.mock.calls[0];
+    expect(filename).toBe('chart.svg');
+    expect(blob.type).toBe('image/svg+xml;charset=utf-8');
+    const text = await blob.text();
+    expect(text).toContain('<svg');
+    expect(text).toContain('<circle');
+  });
+});
