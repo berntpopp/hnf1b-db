@@ -28,7 +28,14 @@ globalThis.window.logService = {
 describe('Auth Store', () => {
   const originalDev = import.meta.env.DEV;
   const originalFlag = import.meta.env.VITE_ENABLE_DEV_AUTH;
-  let _originalCookieDescriptor;
+  // `document.cookie` lives on Document.prototype, NOT the instance, so
+  // Object.getOwnPropertyDescriptor(document, 'cookie') returns undefined
+  // before any stub is installed. We capture *whether* an own descriptor
+  // existed so afterEach can either restore it or delete the stub we
+  // installed (which falls back to the prototype getter again).
+  // See PR #289 Copilot review.
+  let _hadOwnCookieDescriptor;
+  let _originalOwnCookieDescriptor;
 
   function setCookie(value) {
     Object.defineProperty(document, 'cookie', {
@@ -38,7 +45,8 @@ describe('Auth Store', () => {
   }
 
   beforeEach(() => {
-    _originalCookieDescriptor = Object.getOwnPropertyDescriptor(document, 'cookie');
+    _originalOwnCookieDescriptor = Object.getOwnPropertyDescriptor(document, 'cookie');
+    _hadOwnCookieDescriptor = _originalOwnCookieDescriptor !== undefined;
     setActivePinia(createPinia());
     clearTokens();
     vi.clearAllMocks();
@@ -49,8 +57,12 @@ describe('Auth Store', () => {
   });
 
   afterEach(() => {
-    if (_originalCookieDescriptor) {
-      Object.defineProperty(document, 'cookie', _originalCookieDescriptor);
+    if (_hadOwnCookieDescriptor) {
+      Object.defineProperty(document, 'cookie', _originalOwnCookieDescriptor);
+    } else {
+      // No own descriptor existed before — delete our stub so the
+      // prototype getter (Document.prototype.cookie) takes over again.
+      delete document.cookie;
     }
     clearTokens();
     vi.restoreAllMocks();
