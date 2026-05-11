@@ -32,11 +32,11 @@ The issue lists name 5 (#135) or 5 (#136), with overlap; covering all 7 avoids l
 ### Files added
 
 - `frontend/src/utils/chartExport.js` — SVG→PNG, data→CSV, raw SVG, filename helper
-- `frontend/src/utils/__tests__/chartExport.spec.js`
+- `frontend/tests/unit/utils/chartExport.spec.js`
 - `frontend/src/components/analyses/ChartExportMenu.vue` — Vuetify `v-menu` with PNG / CSV / SVG actions
-- `frontend/src/components/analyses/__tests__/ChartExportMenu.spec.js`
+- `frontend/tests/unit/components/analyses/ChartExportMenu.spec.js`
 - `frontend/src/composables/useChartAccessibility.js` — generates stable IDs + ARIA prop bundle
-- `frontend/src/composables/__tests__/useChartAccessibility.spec.js`
+- `frontend/tests/unit/composables/useChartAccessibility.spec.js`
 - `frontend/src/style.css` — add a global `.sr-only` helper class (currently scoped-local in `components/common/ExternalLink.vue` only)
 
 ### Out of scope (deferred)
