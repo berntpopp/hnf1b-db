@@ -28,6 +28,7 @@ dependencies = [
     "jsonschema>=4.20.0", # For phenopacket validation
     "jsonpatch>=1.33", # For RFC 6902 JSON Patch (audit trail)
     "pronto>=2.5.0", # For parsing OBO ontologies (HPO, MONDO)
+    "lxml>=6.1.0", # Pin transitive lxml above CVE-2026-41066 (XXE via iterparse/ETCompatXMLParser)
     "jsonpath-ng>=1.6.0", # For complex JSON queries
     "httpx>=0.28.1",
     "aiohttp>=3.13.1",
