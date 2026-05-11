@@ -419,10 +419,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_environment_security_requirements(self) -> "Settings":
         """Fail closed on environment-specific email and cookie settings."""
-        email_cfg = self.yaml.email
-        resolved_backend = self.EMAIL_BACKEND or email_cfg.backend
-
-        if self.environment == "production" and resolved_backend == "console":
+        if (
+            self.environment == "production"
+            and self.resolved_email_backend == "console"
+        ):
             raise ValueError(
                 "REFUSING TO START: email.backend is 'console' while "
                 "ENVIRONMENT=production. Configure SMTP delivery before "
@@ -458,8 +458,7 @@ class Settings(BaseSettings):
     def _validate_smtp_config(self) -> "Settings":
         """Fail fast if email backend is smtp but SMTP_HOST is missing."""
         email_cfg = self.yaml.email
-        resolved_backend = self.EMAIL_BACKEND or email_cfg.backend
-        if resolved_backend == "smtp":
+        if self.resolved_email_backend == "smtp":
             if not self.SMTP_HOST or self.SMTP_HOST.strip() == "":
                 raise ValueError(
                     "REFUSING TO START: email.backend is 'smtp' but SMTP_HOST "
@@ -535,6 +534,18 @@ class Settings(BaseSettings):
     def email(self) -> EmailConfig:
         """Access email configuration."""
         return self.yaml.email
+
+    @property
+    def resolved_email_backend(self) -> str:
+        """Return the effective email backend.
+
+        ``EMAIL_BACKEND`` (env override) wins over ``email.backend`` (YAML).
+        Both the Wave 5c fail-closed validators and the runtime
+        ``get_email_sender()`` factory must read this single source of
+        truth so that production deploys that pass validation also
+        actually send via the chosen backend.
+        """
+        return self.EMAIL_BACKEND or self.yaml.email.backend
 
     # === Legacy compatibility properties ===
     # These provide backward compatibility with code using old config names

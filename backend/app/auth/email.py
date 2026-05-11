@@ -164,12 +164,16 @@ class SMTPEmailSender:
 def get_email_sender() -> EmailSender:
     """Return the configured email sender.
 
-    Reads ``email.backend`` from ``config.yaml``:
+    Reads the resolved email backend (``EMAIL_BACKEND`` env override winning
+    over ``email.backend`` from ``config.yaml``) so the runtime dispatch
+    matches the fail-closed validator in :mod:`app.core.config`. Production
+    deploys that pass startup validation also actually send via the
+    chosen backend.
 
-    - ``"console"`` → :class:`ConsoleEmailSender` (default)
+    - ``"console"`` → :class:`ConsoleEmailSender` (dev default)
     - ``"smtp"`` → :class:`SMTPEmailSender` (Wave 6)
     """
-    backend = settings.email.backend
+    backend = settings.resolved_email_backend
     if backend == "console":
         return ConsoleEmailSender()
     if backend == "smtp":
