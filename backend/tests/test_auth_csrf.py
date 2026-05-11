@@ -164,7 +164,9 @@ def test_settings_expose_cookie_defaults():
 # ----- require_session_then_csrf (issue #288) -----
 
 
-def _request_with_cookies(*, refresh: str | None, csrf_cookie: str | None, csrf_header: str | None) -> Request:
+def _request_with_cookies(
+    *, refresh: str | None, csrf_cookie: str | None, csrf_header: str | None
+) -> Request:
     """Build a Starlette request with optional refresh cookie + CSRF pair."""
     cookie_parts: list[str] = []
     if refresh is not None:
@@ -212,7 +214,9 @@ async def test_require_session_then_csrf_returns_403_when_session_present_but_cs
         assert getattr(exc, "status_code", None) == 403
         assert "csrf" in str(getattr(exc, "detail", "")).lower()
     else:  # pragma: no cover - red phase guard
-        raise AssertionError("Expected 403 when CSRF header is missing despite session cookie")
+        raise AssertionError(
+            "Expected 403 when CSRF header is missing despite session cookie"
+        )
 
 
 async def test_require_session_then_csrf_accepts_full_session_with_matching_csrf():
