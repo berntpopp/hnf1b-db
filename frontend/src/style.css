@@ -140,3 +140,16 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
     scroll-behavior: auto !important;
   }
 }
+
+/* Visually-hidden helper for screen-reader-only content (WCAG 1.1.1 fallback). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
