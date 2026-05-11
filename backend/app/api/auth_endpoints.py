@@ -341,18 +341,23 @@ async def login(
 async def refresh_access_token(
     request: Request,
     response: Response,
-    _: None = Depends(require_session_then_csrf),
     db: AsyncSession = Depends(get_db),
 ) -> Token | JSONResponse:
     """Refresh the access token using the cookie-backed refresh session.
 
-    Implements token rotation for security.
+    Implements token rotation for security. The session/CSRF check is
+    performed inline (not via Depends) so its HTTPExceptions flow through
+    the same ``_clear_cookie_error_response`` handler below and the
+    response defensively clears stale auth cookies on every failure
+    path — including the anonymous-bootstrap-probe path (#288).
 
     **Returns:**
     - 200: New access token and rotated auth cookies
-    - 401: Invalid or expired refresh token
+    - 401: Anonymous probe (no session cookie) — see #288
+    - 403: Session cookie present but CSRF check fails
     """
     try:
+        await require_session_then_csrf(request)
         (
             user,
             session,

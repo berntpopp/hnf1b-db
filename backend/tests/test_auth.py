@@ -320,7 +320,14 @@ async def test_refresh_rejects_signed_refresh_cookie_without_backing_session(
 
 @pytest.mark.asyncio
 async def test_refresh_missing_cookie_clears_auth_cookies(async_client: AsyncClient):
-    """Refresh failures still clear auth cookies when no refresh cookie is present."""
+    """Refresh failures still clear auth cookies when no refresh cookie is present.
+
+    Wave 5d / issue #288: the anonymous-bootstrap-probe path now returns
+    401 with detail "No active session" (was 403 "CSRF token missing"
+    before, which leaked the existence of the CSRF check on
+    unauthenticated requests). The response must still defensively clear
+    the stale csrf_token cookie so the client doesn't keep retrying.
+    """
     cookies = {settings.CSRF_COOKIE_NAME: "csrf-token"}
 
     response = await async_client.post(
@@ -329,7 +336,7 @@ async def test_refresh_missing_cookie_clears_auth_cookies(async_client: AsyncCli
     )
 
     assert response.status_code == 401
-    assert "missing" in response.json()["detail"].lower()
+    assert "no active session" in response.json()["detail"].lower()
     set_cookie_headers = response.headers.get_list("set-cookie")
     assert any(settings.REFRESH_COOKIE_NAME in header for header in set_cookie_headers)
     assert any(settings.CSRF_COOKIE_NAME in header for header in set_cookie_headers)
