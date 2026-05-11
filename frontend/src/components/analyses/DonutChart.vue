@@ -1,20 +1,45 @@
 <template>
-  <div class="donut-chart-container">
+  <div class="donut-chart-container" v-bind="ariaProps">
+    <span :id="titleId" class="sr-only">{{ chartName }}</span>
+    <span :id="descId" class="sr-only">{{ description }}</span>
+    <ChartExportMenu
+      :svg-el="svgEl"
+      :rows="exportRows"
+      :columns="exportColumns"
+      :chart-name="chartName"
+    />
     <div class="chart-wrapper">
-      <!-- The div where the chart will be rendered -->
-      <div ref="chart" class="chart" />
-      <!-- Legend -->
+      <div ref="chart" class="chart" aria-hidden="true" />
       <div ref="legend" class="legend" />
     </div>
+    <details class="chart-data-table">
+      <summary>View data as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th v-for="c in exportColumns" :key="c.key">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in exportRows" :key="i">
+            <td v-for="c in exportColumns" :key="c.key">{{ r[c.key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
   </div>
 </template>
 
 <script>
 // Import D3 and utilities for exporting.
 import * as d3 from 'd3';
+import { ref, computed } from 'vue';
+import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
 export default {
   name: 'DonutChart',
+  components: { ChartExportMenu },
   props: {
     /**
      * The data to be plotted.
@@ -24,25 +49,13 @@ export default {
      *   grouped_counts: [ { _id: string, count: number }, … ]
      * }
      */
-    chartData: {
-      type: Object,
-      required: true,
-    },
+    chartData: { type: Object, required: true },
     /** Width of the chart (in pixels) */
-    width: {
-      type: Number,
-      default: 600,
-    },
+    width: { type: Number, default: 600 },
     /** Height of the chart (in pixels) */
-    height: {
-      type: Number,
-      default: 500,
-    },
+    height: { type: Number, default: 500 },
     /** Margin (in pixels) used to compute the donut radius */
-    margin: {
-      type: Number,
-      default: 50,
-    },
+    margin: { type: Number, default: 50 },
     /** Color scheme for the donut slices (fallback when colorMap not provided) */
     colorScheme: {
       type: Array,
@@ -50,25 +63,41 @@ export default {
     },
     /**
      * Color map for semantic coloring (label -> color).
-     * When provided, labels are mapped to specific colors.
-     * Example: { 'Pathogenic': '#D32F2F', 'Benign': '#388E3C' }
      */
-    colorMap: {
-      type: Object,
-      default: null,
-    },
-    /**
-     * If true, shows an export button that lets the user download the chart as PNG.
-     */
-    exportable: {
-      type: Boolean,
-      default: false,
-    },
+    colorMap: { type: Object, default: null },
+    /** Human-readable chart name used for ARIA + export filenames. */
+    chartName: { type: String, default: 'Donut chart' },
+  },
+  setup(props) {
+    const svgEl = ref(null);
+    const exportRows = computed(() => {
+      const entries = props.chartData?.grouped_counts ?? [];
+      const total = props.chartData?.total_count ?? entries.reduce((s, e) => s + e.count, 0);
+      return entries.map((e) => ({
+        group: e._id,
+        count: e.count,
+        percent: total ? ((e.count / total) * 100).toFixed(1) : '0.0',
+      }));
+    });
+    const exportColumns = [
+      { key: 'group', label: 'Group' },
+      { key: 'count', label: 'Count' },
+      { key: 'percent', label: 'Percent' },
+    ];
+    const summary = computed(() => {
+      const entries = props.chartData?.grouped_counts ?? [];
+      const total = props.chartData?.total_count ?? entries.reduce((s, e) => s + e.count, 0);
+      if (!entries.length) return `${props.chartName}: no data.`;
+      const parts = entries.map(
+        (e) => `${e._id}: ${e.count} (${total ? ((e.count / total) * 100).toFixed(1) : '0.0'}%)`
+      );
+      return `${props.chartName}. ${parts.join(', ')}. Total ${total}.`;
+    });
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    return { svgEl, exportRows, exportColumns, ...a11y };
   },
   data() {
-    return {
-      mdiDownload: 'mdi-download',
-    };
+    return {};
   },
   watch: {
     // Redraw the chart if the data changes.
@@ -93,16 +122,16 @@ export default {
       const { width, height, margin } = this;
       const radius = Math.min(width, height) / 2 - margin;
 
-      // Create the SVG element.
-      const svg = d3
+      // Create the SVG element. Capture the root <svg> so the export menu can read it.
+      const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${width / 2}, ${height / 2})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+      this.svgEl = svgRoot.node();
+      const svg = svgRoot.append('g').attr('transform', `translate(${width / 2}, ${height / 2})`);
 
       // Create a tooltip div within the chart container.
       const tooltip = d3
@@ -268,5 +297,26 @@ export default {
   pointer-events: none;
   font-size: 14px;
   color: #333;
+}
+
+.chart-data-table {
+  margin-top: 16px;
+  font-size: 14px;
+}
+.chart-data-table summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
+}
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>
