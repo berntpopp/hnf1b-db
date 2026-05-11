@@ -1,21 +1,43 @@
 <!-- D3 Box Plot / Violin Plot Chart for DNA Distance Analysis -->
 <template>
-  <div class="box-plot-wrapper">
-    <div class="export-controls">
-      <button class="export-btn" title="Download as SVG" @click="exportSVG">
-        <span class="export-icon">⬇</span> Export SVG
-      </button>
-    </div>
-    <div ref="chartContainer" class="chart-container" />
+  <div class="box-plot-wrapper" v-bind="ariaProps">
+    <span :id="titleId" class="sr-only">{{ chartName }}</span>
+    <span :id="descId" class="sr-only">{{ description }}</span>
+    <ChartExportMenu
+      :svg-el="svgEl"
+      :rows="exportRows"
+      :columns="exportColumns"
+      :chart-name="chartName"
+    />
+    <div ref="chartContainer" class="chart-container" aria-hidden="true" />
+    <details class="chart-data-table">
+      <summary>View data as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th v-for="c in exportColumns" :key="c.key">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in exportRows" :key="i">
+            <td v-for="c in exportColumns" :key="c.key">{{ r[c.key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
   </div>
 </template>
 
 <script>
 import * as d3 from 'd3';
+import { ref, computed } from 'vue';
 import { formatPValue } from '@/utils/statistics';
+import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
 export default {
   name: 'BoxPlotChart',
+  components: { ChartExportMenu },
   props: {
     pathogenicDistances: {
       type: Array,
@@ -41,8 +63,81 @@ export default {
       type: Number,
       default: 400,
     },
+    chartName: { type: String, default: 'DNA distance by pathogenicity' },
   },
   emits: ['variant-hover'],
+  setup(props) {
+    const svgEl = ref(null);
+
+    function computeStats(distances) {
+      if (!distances.length) return null;
+      const sorted = [...distances].map((v) => v.distance).sort((a, b) => a - b);
+      const n = sorted.length;
+      const q = (p) => {
+        const idx = (sorted.length - 1) * p;
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+      };
+      return {
+        n,
+        min: sorted[0],
+        q1: q(0.25),
+        median: q(0.5),
+        q3: q(0.75),
+        max: sorted[n - 1],
+      };
+    }
+
+    const exportRows = computed(() => {
+      const rows = [];
+      const groups = [
+        { label: 'P/LP', data: props.pathogenicDistances || [] },
+        { label: 'VUS', data: props.vusDistances || [] },
+      ];
+      for (const g of groups) {
+        const stats = computeStats(g.data);
+        if (!stats) continue;
+        rows.push({
+          group: g.label,
+          n: stats.n,
+          min: stats.min.toFixed(2),
+          q1: stats.q1.toFixed(2),
+          median: stats.median.toFixed(2),
+          q3: stats.q3.toFixed(2),
+          max: stats.max.toFixed(2),
+        });
+      }
+      return rows;
+    });
+
+    const exportColumns = [
+      { key: 'group', label: 'Group' },
+      { key: 'n', label: 'N' },
+      { key: 'min', label: 'Min (Å)' },
+      { key: 'q1', label: 'Q1 (Å)' },
+      { key: 'median', label: 'Median (Å)' },
+      { key: 'q3', label: 'Q3 (Å)' },
+      { key: 'max', label: 'Max (Å)' },
+    ];
+
+    const summary = computed(() => {
+      const rows = exportRows.value;
+      if (!rows.length) return `${props.chartName}: no data.`;
+      const parts = rows.map(
+        (r) => `${r.group}: median ${r.median} Å, IQR ${r.q1}–${r.q3} Å, n=${r.n}`
+      );
+      let sig = '';
+      if (props.mannWhitneyResult && typeof props.mannWhitneyResult.pValue === 'number') {
+        const p = props.mannWhitneyResult.pValue;
+        sig = ` Mann-Whitney p=${p < 0.001 ? '<0.001' : p.toFixed(3)}${props.pValueSignificant ? ' (significant)' : ''}.`;
+      }
+      return `${props.chartName}. ${parts.join('; ')}.${sig}`;
+    });
+
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    return { svgEl, exportRows, exportColumns, ...a11y };
+  },
   watch: {
     pathogenicDistances: {
       handler() {
@@ -65,49 +160,6 @@ export default {
     d3.select('body').select('.dna-distance-tooltip').remove();
   },
   methods: {
-    exportSVG() {
-      const svgElement = this.$refs.chartContainer?.querySelector('svg');
-      if (!svgElement) {
-        return;
-      }
-
-      // Clone the SVG to avoid modifying the original
-      const clonedSvg = svgElement.cloneNode(true);
-
-      // Add XML declaration and namespace for standalone SVG
-      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-
-      // Add white background for better compatibility with publication software
-      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      background.setAttribute('width', '100%');
-      background.setAttribute('height', '100%');
-      background.setAttribute('fill', 'white');
-      clonedSvg.insertBefore(background, clonedSvg.firstChild);
-
-      // Serialize to string
-      const serializer = new XMLSerializer();
-      let svgString = serializer.serializeToString(clonedSvg);
-
-      // Add XML declaration
-      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-
-      // Create blob and download
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-
-      // Generate filename
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `dna-distance-violin-plot-${timestamp}.svg`;
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    },
     renderChart() {
       if (!this.$refs.chartContainer) {
         return;
@@ -141,6 +193,7 @@ export default {
         .attr('width', containerWidth)
         .attr('height', this.height)
         .style('display', 'block');
+      this.svgEl = svg.node();
 
       const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
@@ -434,6 +487,7 @@ export default {
 <style scoped>
 .box-plot-wrapper {
   width: 100%;
+  position: relative;
 }
 
 .chart-container {
@@ -441,36 +495,24 @@ export default {
   min-height: 400px;
 }
 
-.export-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
+.chart-data-table {
+  margin-top: 16px;
+  font-size: 14px;
 }
-
-.export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background-color: #1976d2;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+.chart-data-table summary {
   cursor: pointer;
-  transition: background-color 0.2s;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
 }
-
-.export-btn:hover {
-  background-color: #1565c0;
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
 }
-
-.export-btn:active {
-  background-color: #0d47a1;
-}
-
-.export-icon {
-  font-size: 12px;
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>

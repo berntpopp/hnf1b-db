@@ -1,19 +1,41 @@
 <template>
-  <div class="kaplan-meier-container">
-    <div class="export-controls">
-      <button class="export-btn" title="Download as SVG" @click="exportSVG">
-        <span class="export-icon">⬇</span> Export SVG
-      </button>
-    </div>
-    <div ref="chart" />
+  <div class="kaplan-meier-container" v-bind="ariaProps">
+    <span :id="titleId" class="sr-only">{{ chartName }}</span>
+    <span :id="descId" class="sr-only">{{ description }}</span>
+    <ChartExportMenu
+      :svg-el="svgEl"
+      :rows="exportRows"
+      :columns="exportColumns"
+      :chart-name="chartName"
+    />
+    <div ref="chart" aria-hidden="true" />
+    <details class="chart-data-table">
+      <summary>View data as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th v-for="c in exportColumns" :key="c.key">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in exportRows" :key="i">
+            <td v-for="c in exportColumns" :key="c.key">{{ r[c.key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
   </div>
 </template>
 
 <script>
+import { ref, computed } from 'vue';
 import * as d3 from 'd3';
+import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
 export default {
   name: 'KaplanMeierChart',
+  components: { ChartExportMenu },
   props: {
     survivalData: {
       type: Object,
@@ -31,6 +53,67 @@ export default {
       type: Object,
       default: () => ({ top: 60, right: 100, bottom: 60, left: 80 }),
     },
+    chartName: { type: String, default: 'Renal survival curve' },
+  },
+  setup(props) {
+    const svgEl = ref(null);
+
+    const exportRows = computed(() => {
+      const groups = props.survivalData?.groups ?? [];
+      const rows = [];
+      for (const g of groups) {
+        for (const point of g.survival_data ?? []) {
+          rows.push({
+            group: g.name,
+            time: point.time,
+            survival:
+              typeof point.survival_probability === 'number'
+                ? point.survival_probability.toFixed(3)
+                : point.survival_probability,
+            ci_lower: typeof point.ci_lower === 'number' ? point.ci_lower.toFixed(3) : '',
+            ci_upper: typeof point.ci_upper === 'number' ? point.ci_upper.toFixed(3) : '',
+            at_risk: point.at_risk ?? '',
+            events: point.events ?? '',
+            censored: point.censored ?? '',
+          });
+        }
+      }
+      return rows;
+    });
+
+    const exportColumns = [
+      { key: 'group', label: 'Group' },
+      { key: 'time', label: 'Time (years)' },
+      { key: 'survival', label: 'Survival probability' },
+      { key: 'ci_lower', label: '95% CI lower' },
+      { key: 'ci_upper', label: '95% CI upper' },
+      { key: 'at_risk', label: 'N at risk' },
+      { key: 'events', label: 'Events' },
+      { key: 'censored', label: 'Censored' },
+    ];
+
+    const summary = computed(() => {
+      const groups = props.survivalData?.groups ?? [];
+      if (!groups.length) return `${props.chartName}: no data.`;
+      const parts = groups.map((g) => {
+        const points = g.survival_data ?? [];
+        const last = points[points.length - 1];
+        const lastSurvival =
+          last && typeof last.survival_probability === 'number'
+            ? last.survival_probability.toFixed(3)
+            : 'unknown';
+        const median = points.find((p) => p.survival_probability <= 0.5);
+        const medianText = median ? `median ${median.time.toFixed(1)}y` : 'median not reached';
+        return `${g.name} (n=${g.n}, ${g.events} events, ${medianText}, final S(t)=${lastSurvival})`;
+      });
+      const endpoint = props.survivalData?.endpoint
+        ? ` Endpoint: ${props.survivalData.endpoint}.`
+        : '';
+      return `${props.chartName}.${endpoint} ${parts.join('; ')}.`;
+    });
+
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    return { svgEl, exportRows, exportColumns, ...a11y };
   },
   watch: {
     survivalData: {
@@ -48,52 +131,6 @@ export default {
     window.removeEventListener('resize', this.renderChart);
   },
   methods: {
-    exportSVG() {
-      const svgElement = this.$refs.chart.querySelector('svg');
-      if (!svgElement) {
-        return;
-      }
-
-      // Clone the SVG to avoid modifying the original
-      const clonedSvg = svgElement.cloneNode(true);
-
-      // Add XML declaration and namespace for standalone SVG
-      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-
-      // Add white background for better compatibility with publication software
-      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      background.setAttribute('width', '100%');
-      background.setAttribute('height', '100%');
-      background.setAttribute('fill', 'white');
-      clonedSvg.insertBefore(background, clonedSvg.firstChild);
-
-      // Serialize to string
-      const serializer = new XMLSerializer();
-      let svgString = serializer.serializeToString(clonedSvg);
-
-      // Add XML declaration
-      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-
-      // Create blob and download
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-
-      // Generate filename based on comparison type and endpoint
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const comparison = this.survivalData?.comparison_type || 'survival';
-      const endpoint =
-        this.survivalData?.endpoint?.replace(/\s+/g, '-').toLowerCase() || 'analysis';
-      const filename = `kaplan-meier-${comparison}-${endpoint}-${timestamp}.svg`;
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    },
     renderChart() {
       d3.select(this.$refs.chart).selectAll('*').remove();
 
@@ -115,15 +152,15 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
-      const svg = d3
+      const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+      this.svgEl = typeof svgRoot.node === 'function' ? svgRoot.node() : null;
+      const svg = svgRoot.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       const groups = this.survivalData.groups;
 
@@ -446,39 +483,27 @@ export default {
 .kaplan-meier-container {
   width: 100%;
   overflow-x: auto;
+  position: relative;
 }
 
-.export-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-  padding-right: 10px;
-}
-
-.export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background-color: #1976d2;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.export-btn:hover {
-  background-color: #1565c0;
-}
-
-.export-btn:active {
-  background-color: #0d47a1;
-}
-
-.export-icon {
+.chart-data-table {
+  margin-top: 16px;
   font-size: 14px;
+}
+.chart-data-table summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
+}
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>

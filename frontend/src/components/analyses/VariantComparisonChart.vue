@@ -1,19 +1,41 @@
 <template>
-  <div class="variant-comparison-container">
-    <div class="export-controls">
-      <button class="export-btn" title="Download as SVG" @click="exportSVG">
-        <span class="export-icon">⬇</span> Export SVG
-      </button>
-    </div>
-    <div ref="chart" />
+  <div class="variant-comparison-container" v-bind="ariaProps">
+    <span :id="titleId" class="sr-only">{{ chartName }}</span>
+    <span :id="descId" class="sr-only">{{ description }}</span>
+    <ChartExportMenu
+      :svg-el="svgEl"
+      :rows="exportRows"
+      :columns="exportColumns"
+      :chart-name="chartName"
+    />
+    <div ref="chart" aria-hidden="true" />
+    <details class="chart-data-table">
+      <summary>View data as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th v-for="c in exportColumns" :key="c.key">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in exportRows" :key="i">
+            <td v-for="c in exportColumns" :key="c.key">{{ r[c.key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
   </div>
 </template>
 
 <script>
+import { ref, computed } from 'vue';
 import * as d3 from 'd3';
+import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
 export default {
   name: 'VariantComparisonChart',
+  components: { ChartExportMenu },
   props: {
     comparisonData: {
       type: Object,
@@ -39,6 +61,72 @@ export default {
       type: Object,
       default: () => ({ top: 120, right: 30, bottom: 220, left: 80 }),
     },
+    chartName: { type: String, default: 'Variant group phenotype comparison' },
+  },
+  setup(props) {
+    const svgEl = ref(null);
+
+    const exportRows = computed(() => {
+      const data = props.comparisonData;
+      if (!data || !Array.isArray(data.phenotypes)) return [];
+      return data.phenotypes.map((p) => ({
+        phenotype: p.hpo_label,
+        hpo_id: p.hpo_id ?? '',
+        group1_present: p.group1_present,
+        group1_total: p.group1_total,
+        group1_percent:
+          typeof p.group1_percentage === 'number' ? p.group1_percentage.toFixed(1) : '',
+        group2_present: p.group2_present,
+        group2_total: p.group2_total,
+        group2_percent:
+          typeof p.group2_percentage === 'number' ? p.group2_percentage.toFixed(1) : '',
+        p_value: typeof p.p_value === 'number' ? p.p_value : '',
+        p_value_fdr: typeof p.p_value_fdr === 'number' ? p.p_value_fdr : '',
+        effect_size: typeof p.effect_size === 'number' ? p.effect_size.toFixed(2) : '',
+        significant: p.significant ? 'yes' : 'no',
+      }));
+    });
+
+    const exportColumns = computed(() => {
+      const g1 = props.comparisonData?.group1_name ?? 'Group 1';
+      const g2 = props.comparisonData?.group2_name ?? 'Group 2';
+      return [
+        { key: 'phenotype', label: 'Phenotype' },
+        { key: 'hpo_id', label: 'HPO ID' },
+        { key: 'group1_present', label: `${g1} present` },
+        { key: 'group1_total', label: `${g1} total` },
+        { key: 'group1_percent', label: `${g1} %` },
+        { key: 'group2_present', label: `${g2} present` },
+        { key: 'group2_total', label: `${g2} total` },
+        { key: 'group2_percent', label: `${g2} %` },
+        { key: 'p_value', label: 'p (Fisher)' },
+        { key: 'p_value_fdr', label: 'p (FDR)' },
+        { key: 'effect_size', label: "Cohen's h" },
+        { key: 'significant', label: 'Significant' },
+      ];
+    });
+
+    const summary = computed(() => {
+      const data = props.comparisonData;
+      if (!data || !Array.isArray(data.phenotypes) || !data.phenotypes.length) {
+        return `${props.chartName}: no data.`;
+      }
+      const g1 = data.group1_name ?? 'Group 1';
+      const g2 = data.group2_name ?? 'Group 2';
+      const total1 = data.group1_count ?? '';
+      const total2 = data.group2_count ?? '';
+      const sig = data.phenotypes.filter((p) => p.significant);
+      const sigText = sig.length
+        ? `${sig.length} of ${data.phenotypes.length} phenotypes show significant differences (FDR p < 0.05): ${sig
+            .slice(0, 5)
+            .map((p) => p.hpo_label)
+            .join(', ')}${sig.length > 5 ? ` and ${sig.length - 5} more` : ''}`
+        : `No phenotypes reach FDR p < 0.05 across ${data.phenotypes.length} tested`;
+      return `${props.chartName}. ${g1} (n=${total1}) vs ${g2} (n=${total2}). ${sigText}.`;
+    });
+
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    return { svgEl, exportRows, exportColumns, ...a11y };
   },
   watch: {
     comparisonData: {
@@ -125,63 +213,6 @@ export default {
         return !ckdStagePatterns.some((pattern) => lowerLabel.includes(pattern));
       });
     },
-    exportSVG() {
-      const svgElement = this.$refs.chart.querySelector('svg');
-      if (!svgElement) {
-        return;
-      }
-
-      // Clone the SVG to avoid modifying the original
-      const clonedSvg = svgElement.cloneNode(true);
-
-      // Add padding to prevent content cutoff (4mm ≈ 15px)
-      const padding = 15;
-      const originalWidth = parseFloat(svgElement.getAttribute('width')) || this.width;
-      const originalHeight = parseFloat(svgElement.getAttribute('height')) || this.height;
-      const newWidth = originalWidth + padding * 2;
-      const newHeight = originalHeight + padding * 2;
-
-      // Update SVG dimensions and viewBox
-      clonedSvg.setAttribute('width', newWidth);
-      clonedSvg.setAttribute('height', newHeight);
-      clonedSvg.setAttribute('viewBox', `${-padding} ${-padding} ${newWidth} ${newHeight}`);
-
-      // Add XML declaration and namespace for standalone SVG
-      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-
-      // Add white background for better compatibility with publication software
-      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      background.setAttribute('x', -padding);
-      background.setAttribute('y', -padding);
-      background.setAttribute('width', newWidth);
-      background.setAttribute('height', newHeight);
-      background.setAttribute('fill', 'white');
-      clonedSvg.insertBefore(background, clonedSvg.firstChild);
-
-      // Serialize to string
-      const serializer = new XMLSerializer();
-      let svgString = serializer.serializeToString(clonedSvg);
-
-      // Add XML declaration
-      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-
-      // Create blob and download
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-
-      // Generate filename based on comparison type and filter
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `variant-comparison-${this.comparisonType}-${this.organSystemFilter}-${timestamp}.svg`;
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    },
     renderChart() {
       d3.select(this.$refs.chart).selectAll('*').remove();
       // Clean up any existing tooltips from previous renders
@@ -205,15 +236,15 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
-      const svg = d3
+      const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet')
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+        .attr('preserveAspectRatio', 'xMinYMin meet');
+      this.svgEl = typeof svgRoot.node === 'function' ? svgRoot.node() : null;
+      const svg = svgRoot.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Apply filtering: first remove uninformative phenotypes, then filter by organ system
       const allPhenotypes = this.comparisonData.phenotypes;
@@ -611,39 +642,27 @@ export default {
 .variant-comparison-container {
   width: 100%;
   overflow-x: auto;
+  position: relative;
 }
 
-.export-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-  padding-right: 10px;
-}
-
-.export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background-color: #1976d2;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.export-btn:hover {
-  background-color: #1565c0;
-}
-
-.export-btn:active {
-  background-color: #0d47a1;
-}
-
-.export-icon {
+.chart-data-table {
+  margin-top: 16px;
   font-size: 14px;
+}
+.chart-data-table summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
+}
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>

@@ -41,6 +41,7 @@
             </v-card-title>
             <v-card-text>
               <BoxPlotChart
+                chart-name="Distance Distribution by Pathogenicity"
                 :pathogenic-distances="pathogenicDistances"
                 :vus-distances="vusDistances"
                 :p-value-significant="pValueSignificant"
