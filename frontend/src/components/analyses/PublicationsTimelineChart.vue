@@ -1,20 +1,43 @@
 <template>
-  <v-card flat>
+  <v-card flat v-bind="ariaProps">
     <v-card-title class="text-h6 d-flex align-center justify-space-between">
-      <div class="d-flex align-center">
+      <div :id="titleId" class="d-flex align-center">
         <v-icon class="mr-2">mdi-chart-line</v-icon>
         Publications by Type Over Years
       </div>
-      <v-btn-toggle v-model="chartMode" mandatory dense color="primary">
-        <v-btn value="cumulative" size="small">
-          <v-icon left size="small">mdi-chart-timeline-variant</v-icon>
-          Cumulative
-        </v-btn>
-        <v-btn value="annual" size="small">
-          <v-icon left size="small">mdi-chart-line</v-icon>
-          Annual
-        </v-btn>
-      </v-btn-toggle>
+      <div class="d-flex align-center">
+        <v-btn-toggle v-model="chartMode" mandatory dense color="primary">
+          <v-btn value="cumulative" size="small">
+            <v-icon left size="small">mdi-chart-timeline-variant</v-icon>
+            Cumulative
+          </v-btn>
+          <v-btn value="annual" size="small">
+            <v-icon left size="small">mdi-chart-line</v-icon>
+            Annual
+          </v-btn>
+        </v-btn-toggle>
+        <v-menu offset="4">
+          <template #activator="{ props: activator }">
+            <v-btn
+              v-bind="activator"
+              :disabled="!chart"
+              icon="mdi-download"
+              size="small"
+              variant="text"
+              :aria-label="`Export ${chartName}`"
+              class="ml-2"
+            />
+          </template>
+          <v-list density="compact">
+            <v-list-item @click="exportPng">
+              <v-list-item-title>Export as PNG</v-list-item-title>
+            </v-list-item>
+            <v-list-item @click="exportCsv">
+              <v-list-item-title>Export as CSV</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+      </div>
     </v-card-title>
 
     <v-card-text>
@@ -50,12 +73,14 @@
         <code>make publications-sync</code> to fetch metadata from PubMed.
       </v-alert>
 
+      <span :id="descId" class="sr-only">{{ description }}</span>
+
       <!-- Chart -->
       <div
         v-if="!loading && !error && chartData.labels && chartData.labels.length > 0"
         style="height: 500px"
       >
-        <canvas ref="chartCanvas" />
+        <canvas ref="chartCanvas" aria-hidden="true" />
       </div>
 
       <!-- No Data State -->
@@ -70,12 +95,38 @@
           Publication metadata not synced. Run <code>make publications-sync</code> first.
         </div>
       </div>
+
+      <details
+        v-if="!loading && !error && chartData.labels && chartData.labels.length > 0"
+        class="chart-data-table"
+      >
+        <summary>View data as table</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th v-for="ds in chartData.datasets" :key="ds.label">{{ ds.label }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(year, i) in chartData.labels" :key="year">
+              <td>{{ year }}</td>
+              <td v-for="ds in chartData.datasets" :key="ds.label">{{ ds.data[i] }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </v-card-text>
   </v-card>
 </template>
 
 <script>
 import { Chart, registerables } from 'chart.js';
+import { ref, computed } from 'vue';
+import { saveAs } from 'file-saver';
+import { exportDataAsCsv, buildExportFilename } from '@/utils/chartExport';
+import { useChartAccessibility } from '@/composables/useChartAccessibility';
+import { useAnnouncer } from '@/composables/useAccessibility';
 import * as API from '@/api';
 
 // Register Chart.js components
@@ -89,8 +140,19 @@ export default {
       default: 'cumulative',
       validator: (value) => ['annual', 'cumulative'].includes(value),
     },
+    chartName: { type: String, default: 'Publications per year by type' },
   },
   emits: ['update:mode'],
+  setup(props) {
+    const titleElId = 'publications-timeline-title';
+    // Source summary off a manually-bridged ref that the Options API updates in
+    // processChartData below.
+    const summarySource = ref('No publications data loaded yet.');
+    const summary = computed(() => summarySource.value);
+    const a11y = useChartAccessibility({ chartName: props.chartName, summary });
+    const { announce } = useAnnouncer();
+    return { ...a11y, summarySource, announce, titleElId };
+  },
   data() {
     return {
       loading: false,
@@ -259,6 +321,22 @@ export default {
         labels: years,
         datasets: datasets,
       };
+
+      // Update summary for screen readers
+      if (years.length === 0) {
+        this.summarySource = `${this.chartName}: no data.`;
+      } else {
+        const totalCount = datasets.reduce(
+          (sum, ds) => sum + ds.data.reduce((s, v) => s + v, 0),
+          0
+        );
+        const typeList = datasets.map((d) => d.label).join(', ');
+        const cumulativeNote = this.chartMode === 'cumulative' ? ' (cumulative)' : ' (annual)';
+        this.summarySource =
+          `${this.chartName}${cumulativeNote}, ${years[0]}–${years[years.length - 1]}. ` +
+          `${datasets.length} publication types: ${typeList}. ` +
+          `Total ${totalCount} phenopackets.`;
+      }
     },
 
     renderChart() {
@@ -333,6 +411,46 @@ export default {
         },
       });
     },
+
+    /**
+     * Build the rows + columns used by CSV export and the data-table fallback.
+     * Returns { rows, columns } shaped for exportDataAsCsv.
+     */
+    buildExportData() {
+      const columns = [
+        { key: 'year', label: 'Year' },
+        ...this.chartData.datasets.map((d) => ({ key: d.label, label: d.label })),
+      ];
+      const rows = (this.chartData.labels || []).map((year, idx) => {
+        const row = { year };
+        for (const ds of this.chartData.datasets) {
+          row[ds.label] = ds.data[idx];
+        }
+        return row;
+      });
+      return { rows, columns };
+    },
+
+    exportPng() {
+      if (!this.chart) return;
+      const dataUrl = this.chart.toBase64Image('image/png', 1.0);
+      // Convert data URL to Blob without fetch (fetch on a data URL works in
+      // browsers but adds a microtask; do it inline so we can call saveAs sync).
+      const [meta, base64] = dataUrl.split(',');
+      const mime = meta.match(/data:(.*?);/)[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      saveAs(blob, buildExportFilename(this.chartName, 'png'));
+      this.announce('Chart exported as PNG');
+    },
+
+    exportCsv() {
+      const { rows, columns } = this.buildExportData();
+      exportDataAsCsv(rows, columns, buildExportFilename(this.chartName, 'csv'));
+      this.announce('Chart exported as CSV');
+    },
   },
 };
 </script>
@@ -340,5 +458,26 @@ export default {
 <style scoped>
 canvas {
   max-height: 500px;
+}
+
+.chart-data-table {
+  margin-top: 16px;
+  font-size: 14px;
+}
+.chart-data-table summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: rgb(var(--v-theme-on-surface), 0.7);
+}
+.chart-data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.chart-data-table th,
+.chart-data-table td {
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+  text-align: left;
 }
 </style>
