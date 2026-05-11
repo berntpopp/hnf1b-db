@@ -9,9 +9,33 @@ import importlib
 import pytest
 from pydantic import ValidationError
 
+import app.core.config as _config_module
+
 BASE_ENV = {
     "DATABASE_URL": "postgresql+asyncpg://test:test@localhost:5433/test",
 }
+
+
+@pytest.fixture(autouse=True)
+def _preserve_settings_singleton_identity():
+    """Restore ``app.core.config.settings`` identity after each reload.
+
+    Tests in this module call ``importlib.reload(config_module)`` to get a
+    fresh ``Settings`` class for env-driven validator coverage. Reload
+    re-executes the module top-level, which constructs a NEW ``settings``
+    instance and rebinds ``app.core.config.settings`` to it. That breaks
+    the ``pkg_settings is core_settings`` invariant in
+    ``test_variant_validator_compat.py`` (the re-export was bound to the
+    original instance via ``from app.core.config import settings``).
+
+    Save the original object reference and restore it post-test so the
+    re-export identity check in subsequent test files still holds.
+    """
+    original_settings = _config_module.settings
+    try:
+        yield
+    finally:
+        _config_module.settings = original_settings
 
 
 def seed_safe_import_env(monkeypatch):
