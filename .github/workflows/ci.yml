@@ -63,6 +63,11 @@ jobs:
 
     - name: Run database migrations
       env:
+        # ENVIRONMENT=development lets the test job bypass the Wave 5c
+        # production-only validators (email backend, AUTH_COOKIE_SECURE).
+        # CI is not production; the validators are still exercised by
+        # dedicated unit tests in backend/tests/test_config_*.py.
+        ENVIRONMENT: development
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
         ADMIN_PASSWORD: test-admin-password-ci-2026
@@ -85,6 +90,11 @@ jobs:
 
     - name: Run tests (pytest)
       env:
+        # ENVIRONMENT=development lets the test job bypass the Wave 5c
+        # production-only validators (email backend, AUTH_COOKIE_SECURE).
+        # CI is not production; the validators are still exercised by
+        # dedicated unit tests in backend/tests/test_config_*.py.
+        ENVIRONMENT: development
         DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
         JWT_SECRET: test-secret-key-for-ci
         ADMIN_PASSWORD: test-admin-password-ci-2026

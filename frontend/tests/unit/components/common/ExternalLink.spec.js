@@ -22,8 +22,11 @@ describe('ExternalLink', () => {
     });
     const icon = wrapper.find('[data-testid="external-link-icon"]');
     expect(icon.exists()).toBe(true);
-    // Vuetify VIcon maps slot content to a CSS class on the rendered <i>
-    expect(icon.classes()).toContain('mdi-open-in-new');
+    // Vuetify is not registered in this unit-test mount, so VIcon does
+    // not render to an <i class="mdi mdi-open-in-new">. Assert on the
+    // slot content passed to <v-icon> instead — that's what the
+    // Vuetify renderer will turn into the mdi class at runtime.
+    expect(icon.text()).toContain('mdi-open-in-new');
   });
 
   it('suppresses the icon when showIcon=false', () => {
