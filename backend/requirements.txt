@@ -48,7 +48,7 @@ chardet==5.2.0
     # via pronto
 charset-normalizer==3.4.7
     # via requests
-click==8.3.3
+click==8.4.0
     # via uvicorn
 colorama==0.4.6
     # via
@@ -80,7 +80,7 @@ httptools==0.7.1
     # via uvicorn
 httpx==0.28.1
     # via hnf1b-api (pyproject.toml)
-idna==3.14
+idna==3.15
     # via
     #   anyio
     #   email-validator
@@ -154,7 +154,7 @@ python-dotenv==1.2.2
     #   hnf1b-api (pyproject.toml)
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.28
+python-multipart==0.0.29
     # via hnf1b-api (pyproject.toml)
 pyyaml==6.0.3
     # via
@@ -166,7 +166,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.1
+requests==2.34.2
     # via
     #   hnf1b-api (pyproject.toml)
     #   bioutils
@@ -207,9 +207,9 @@ tzdata==2026.2
     # via pandas
 urllib3==2.7.0
     # via requests
-uvicorn==0.46.0
+uvicorn==0.47.0
     # via hnf1b-api (pyproject.toml)
-watchfiles==1.1.1
+watchfiles==1.2.0
     # via uvicorn
 websockets==16.0
     # via uvicorn
