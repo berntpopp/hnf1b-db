@@ -6,7 +6,7 @@
 
 # Development tools (from [dependency-groups.dev])
 ruff==0.15.12
-mypy==1.20.1
+mypy==2.1.0
 
 # Testing (from [dependency-groups.test])  
 pytest==9.0.3
