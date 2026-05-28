@@ -12,6 +12,53 @@ from ..contract._generated_paths import (
 )
 from .citation import build_citation
 
+# Per-mode field policy for a shaped individual record. ``full`` keeps every
+# field (identity projection); the narrower modes drop the largest sections so
+# response_mode is a real lever, not a no-op. ``publication_refs`` is retained
+# whenever publications would be (dedupe_publications hoists them).
+_INDIVIDUAL_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
+    "minimal": ("phenopacket_id", "subject", "uri"),
+    "compact": (
+        "phenopacket_id",
+        "subject",
+        "diseases",
+        "phenotypic_features",
+        "variants",
+        "publication_refs",
+        "uri",
+    ),
+    "standard": (
+        "phenopacket_id",
+        "subject",
+        "diseases",
+        "phenotypic_features",
+        "variants",
+        "publications",
+        "publication_refs",
+        "uri",
+    ),
+}
+
+
+def _project_individual(record: dict[str, Any], mode: str) -> dict[str, Any]:
+    """Project a shaped individual down to the fields allowed by *mode*.
+
+    ``full`` returns the record unchanged; ``minimal``/``compact``/``standard``
+    keep only their allow-listed keys so smaller modes return genuinely smaller
+    payloads.
+
+    Args:
+        record: A shaped individual dict (output of :func:`_shape_individual`).
+        mode: One of ``minimal``, ``compact``, ``standard``, ``full``.
+
+    Returns:
+        The projected record (a new dict for the narrower modes).
+    """
+    allowed = _INDIVIDUAL_FIELDS_BY_MODE.get(mode)
+    if allowed is None:  # full (or unknown) → identity
+        return record
+    return {key: value for key, value in record.items() if key in allowed}
+
 
 def _extract_variants(phenopacket: dict[str, Any]) -> list[dict[str, Any]]:
     """Walk interpretations and extract a compact variant list.
@@ -138,6 +185,7 @@ async def get_individual(
     include_variants: bool = True,
     include_measurements: bool = True,
     include_publications: bool = True,
+    response_mode: str = "compact",
 ) -> dict[str, Any]:
     """Fetch and shape a single individual record by phenopacket_id.
 
@@ -151,20 +199,23 @@ async def get_individual(
         include_variants: Include variants in the output.
         include_measurements: Include measurements in the output.
         include_publications: Include publications in the output.
+        response_mode: One of ``minimal``, ``compact``, ``standard``, ``full``;
+            controls how much of the shaped record is returned (full = all).
 
     Returns:
-        A plain dict with shaped individual data.
+        A plain dict with shaped individual data, projected to *response_mode*.
     """
     record: dict[str, Any] = await client.get(
         PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=phenopacket_id)
     )
-    return _shape_individual(
+    shaped = _shape_individual(
         record,
         include_phenotypes=include_phenotypes,
         include_variants=include_variants,
         include_measurements=include_measurements,
         include_publications=include_publications,
     )
+    return _project_individual(shaped, response_mode)
 
 
 async def get_individuals(
@@ -174,6 +225,7 @@ async def get_individuals(
     page_size: int = 25,
     expand: bool = False,
     dedupe_publications: bool = False,
+    response_mode: str = "compact",
 ) -> dict[str, Any]:
     """Retrieve a list of individuals, either by IDs (batch) or filtered list.
 
@@ -189,13 +241,17 @@ async def get_individuals(
         expand: If True and using discovery, fetch each record in full.
         dedupe_publications: Hoist unique publications to a top-level list
             and replace per-record publications with publication_refs.
+        response_mode: One of ``minimal``, ``compact``, ``standard``, ``full``;
+            projects each returned record to a progressively smaller field set.
 
     Returns:
-        A plain dict with keys: individuals, total, page_size (and
-        optionally publications when dedupe_publications=True).
+        A plain dict with keys: individuals, total, page_size (plus
+        ``requested``/``not_found`` for batch ``ids`` requests, and
+        ``publications`` when dedupe_publications=True).
     """
     individuals: list[dict[str, Any]] = []
     total = 0
+    not_found: list[str] = []
 
     if ids is not None:
         # Batch endpoint: GET /phenopackets/batch?phenopacket_ids=a,b,c
@@ -220,6 +276,10 @@ async def get_individuals(
             }
             individuals.append(_shape_individual(record))
         total = len(individuals)
+        # Surface which requested IDs the batch endpoint did not return, so a
+        # caller can distinguish "does not exist" from a silently-dropped id.
+        returned_ids = {ind.get("phenopacket_id") for ind in individuals}
+        not_found = [i for i in ids if i not in returned_ids]
     else:
         # Discovery list endpoint
         # Response: {data:[ITEM,...], meta:{page:{totalRecords:N}}, links:{}}
@@ -275,15 +335,23 @@ async def get_individuals(
                 ind["publication_refs"] = [
                     pub.get("pmid", "") for pub in ind.pop("publications")
                 ]
-        return {
-            "individuals": individuals,
+        result: dict[str, Any] = {
+            "individuals": [_project_individual(i, response_mode) for i in individuals],
             "total": total,
             "page_size": page_size,
             "publications": list(seen.values()),
         }
+    else:
+        result = {
+            "individuals": [_project_individual(i, response_mode) for i in individuals],
+            "total": total,
+            "page_size": page_size,
+        }
 
-    return {
-        "individuals": individuals,
-        "total": total,
-        "page_size": page_size,
-    }
+    # Batch (ids) requests echo coverage so a caller never has to diff the
+    # request against the response to learn which ids were missing.
+    if ids is not None:
+        result["requested"] = len(ids)
+        result["not_found"] = not_found
+
+    return result

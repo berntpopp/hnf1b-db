@@ -193,7 +193,7 @@ async def test_get_individual_shaped_fields_present():
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X")
+    result = await get_individual(c, "X", response_mode="full")
     await c.aclose()
 
     assert result["phenopacket_id"] == "X"
@@ -228,7 +228,7 @@ async def test_get_individual_publication_has_recommended_citation():
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X")
+    result = await get_individual(c, "X", response_mode="full")
     await c.aclose()
 
     # Only PMID references should be included (not OMIM:137920)
@@ -272,7 +272,9 @@ async def test_get_individual_include_measurements_false_omits_key():
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X", include_measurements=False)
+    result = await get_individual(
+        c, "X", include_measurements=False, response_mode="full"
+    )
     await c.aclose()
 
     assert "measurements" not in result
@@ -285,7 +287,9 @@ async def test_get_individual_include_publications_false_omits_key():
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X", include_publications=False)
+    result = await get_individual(
+        c, "X", include_publications=False, response_mode="full"
+    )
     await c.aclose()
 
     assert "publications" not in result
@@ -324,6 +328,51 @@ async def test_get_individuals_by_ids_uses_batch():
     assert len(result["individuals"]) == 2
     ids = {ind["phenopacket_id"] for ind in result["individuals"]}
     assert ids == {"A", "B"}
+    # Batch requests echo coverage so missing ids are never silently dropped.
+    assert result["requested"] == 2
+    assert result["not_found"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_reports_not_found():
+    """A requested id the batch endpoint does not return appears in not_found."""
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, ids=["A", "DOES-NOT-EXIST"])
+    await c.aclose()
+
+    assert result["requested"] == 2
+    assert result["not_found"] == ["DOES-NOT-EXIST"]
+    assert {i["phenopacket_id"] for i in result["individuals"]} == {"A"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_response_mode_trims():
+    """minimal/compact return strictly smaller field sets than full (H3)."""
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json=_PHENOPACKET_X)
+    )
+    c = ApiClient(base_url=BASE)
+    minimal = await get_individual(c, "X", response_mode="minimal")
+    compact = await get_individual(c, "X", response_mode="compact")
+    full = await get_individual(c, "X", response_mode="full")
+    await c.aclose()
+
+    assert set(minimal) == {"phenopacket_id", "subject", "uri"}
+    # compact carries phenotypes/variants but drops the heavy measurements +
+    # the redundant publications block.
+    assert "phenotypic_features" in compact
+    assert "variants" in compact
+    assert "measurements" not in compact
+    assert "publications" not in compact
+    # full keeps everything.
+    assert "measurements" in full
+    assert "publications" in full
+    assert len(set(full)) > len(set(compact)) > len(set(minimal))
 
 
 @pytest.mark.asyncio
