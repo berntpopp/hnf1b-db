@@ -77,10 +77,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             A dict with keys ``variants``, ``total``, ``total_pages``,
             ``has_more``, ``page``, ``page_size``, ``data_class``, and
             ``meta``.  In ``minimal``/``compact`` the invariant gene symbol is
-            hoisted to ``gene_symbol_all`` and dropped from each row.  When a
-            ``consequence`` filter is supplied the rows are post-filtered
-            client-side (the upstream filter is currently ignored) and a
-            ``filtered_count`` is included.
+            hoisted to ``gene_symbol_all`` and dropped from each row, while the
+            friendly ``simple_id`` is retained alongside ``variant_id``.  When a
+            ``consequence`` filter is supplied it is applied server-side and a
+            ``filtered_count`` (== ``total``) is included.
         """
         mode = resolve_mode(response_mode)
         return await run_tool(
@@ -119,9 +119,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         ``hnf1b_get_individuals`` for per-carrier phenotype detail.
 
         Args:
-            variant_id: The exact variant identifier as returned by
-                ``hnf1b_search_variants`` (e.g.
-                ``"var:HNF1B:17:36459258-37832869:DEL"``).
+            variant_id: The variant identifier as returned by
+                ``hnf1b_search_variants`` — either the canonical id (GA4GH VRS
+                ``"ga4gh:VA.…"`` or CNV ``"var:HNF1B:17:…:DEL"``) or the
+                friendly ``simple_id`` (e.g. ``"Var6"``).
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
