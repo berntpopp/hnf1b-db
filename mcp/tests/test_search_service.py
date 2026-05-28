@@ -376,3 +376,18 @@ async def test_search_jsonapi_data_envelope():
 
     assert len(result["hits"]) == 1
     assert result["hits"][0]["uri"] == "hnf1b://individual/999"
+
+
+def test_pub_uri_not_double_prefixed():
+    from hnf1b_mcp.services.search import _derive_uri
+
+    # id already carrying PMID: must not become PMID:PMID:
+    assert _derive_uri("pub_PMID:30666461") == (
+        "publication",
+        "hnf1b://publication/PMID:30666461",
+    )
+    # bare numeric id still gets a single PMID: prefix
+    assert _derive_uri("pub_30666461") == (
+        "publication",
+        "hnf1b://publication/PMID:30666461",
+    )
