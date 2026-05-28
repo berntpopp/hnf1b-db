@@ -76,22 +76,36 @@ def build_meta(
     response_mode: str,
     effective_chars: int,
     dropped: dict[str, Any] | None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the meta block echoed in every payload.
 
     Args:
         response_mode: The resolved response_mode string.
-        effective_chars: Number of characters in the shaped payload.
-        dropped: Optional dropped_summary dict from apply_budget.
+        effective_chars: Number of characters in the shaped payload (the data
+            portion plus ``data_class``; the self-referential ``meta`` block is
+            excluded).
+        dropped: Optional dropped_summary dict from apply_budget. When present a
+            ``truncated`` flag is added so a caller never mistakes a budget-
+            trimmed payload for a complete one.
+        extra: Optional service-supplied meta fields to merge verbatim. Used to
+            make otherwise-silent server behavior visible — e.g.
+            ``applied_sort`` / ``ignored_params`` for parameters the upstream
+            API does not honor, or ``total_available_chars`` for truncation.
 
     Returns:
-        A meta dict with response_mode, effective_chars, and optionally
-        dropped_summary.
+        A meta dict with response_mode, effective_chars, optional
+        dropped_summary/truncated, and any merged *extra* fields.
     """
     meta: dict[str, Any] = {
         "response_mode": response_mode,
         "effective_chars": effective_chars,
     }
+    if extra:
+        for key, value in extra.items():
+            if value is not None:
+                meta[key] = value
     if dropped:
         meta["dropped_summary"] = dropped
+        meta["truncated"] = True
     return meta

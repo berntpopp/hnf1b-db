@@ -15,6 +15,7 @@ from fastmcp.server.middleware import (
     Middleware as FastMCPMiddleware,
 )
 from fastmcp.tools.base import ToolResult
+from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -22,9 +23,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
-from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.client.api_client import _FIELD_ALLOWED, ApiClient
 from hnf1b_mcp.config import Settings, get_settings
 from hnf1b_mcp.server_ratelimit import RateLimiter, set_limiter
+from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 from hnf1b_mcp.tools import register_all
 
@@ -128,6 +130,96 @@ class RateLimitMiddleware(FastMCPMiddleware):
         return await call_next(context)
 
 
+def _validation_error_envelope(exc: ValidationError, tool_name: str) -> dict[str, Any]:
+    """Translate a pydantic argument-validation error into the clean envelope.
+
+    FastMCP validates tool arguments with pydantic *inside* ``tool.run`` (enum/
+    ``Literal`` mismatches, unexpected keyword arguments). Those raise a raw
+    :class:`pydantic.ValidationError` that would otherwise surface as an opaque
+    ``literal_error`` / ``unexpected_keyword_argument`` string. This maps the
+    first error into the same ``{schema_version, error, is_error}`` envelope the
+    service layer produces, naming the offending field, its allowed values (when
+    it maps to a contract enum), and an actionable hint.
+
+    Args:
+        exc: The pydantic validation error raised during argument coercion.
+        tool_name: The tool that was called (for the message).
+
+    Returns:
+        The error envelope dict with ``is_error: True``.
+    """
+    errors = exc.errors()
+    first: dict[str, Any] = dict(errors[0]) if errors else {}
+    loc = first.get("loc") or ()
+    field = str(loc[-1]) if loc else "unknown"
+    etype = str(first.get("type") or "")
+    allowed = _FIELD_ALLOWED.get(field)
+
+    if "unexpected_keyword" in etype or "extra_forbidden" in etype:
+        message = f"unknown parameter {field!r} for tool {tool_name!r}"
+        hint = (
+            "check hnf1b_get_capabilities filterable_fields for the exact"
+            " parameter names this tool accepts"
+        )
+        field_detail = field
+    else:
+        bad_value = first.get("input")
+        raw_msg = str(first.get("msg") or "value not permitted")
+        field_detail = field
+        if bad_value is not None and not isinstance(bad_value, dict):
+            message = f"invalid value {bad_value!r} for {field!r}: {raw_msg}"
+        else:
+            message = f"invalid value for {field!r}: {raw_msg}"
+        hint = (
+            f"use one of the allowed values for {field!r}"
+            if allowed
+            else "check hnf1b_get_capabilities filterable_fields"
+        )
+
+    err = McpToolError(
+        "invalid_input",
+        message,
+        field=field_detail,
+        allowed=allowed,
+        hint=hint,
+    )
+    envelope = err.to_envelope()
+    envelope["is_error"] = True
+    return envelope
+
+
+class ErrorEnvelopeMiddleware(FastMCPMiddleware):
+    """Map raw argument-validation errors into the clean tool-result envelope.
+
+    Wraps tool dispatch so a pydantic :class:`ValidationError` raised during
+    argument coercion (bad enum, ``Literal`` mismatch, unexpected keyword) is
+    returned as the same structured ``{schema_version, error, is_error}``
+    envelope the service layer uses — never as an opaque FastMCP/pydantic
+    string. Other exceptions propagate unchanged so genuine bugs are not masked.
+    """
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext[mt.CallToolRequestParams],
+        call_next: CallNext[mt.CallToolRequestParams, ToolResult],
+    ) -> ToolResult:
+        """Catch argument-validation errors and wrap them in the envelope.
+
+        Args:
+            context: The middleware context carrying the tool call parameters.
+            call_next: The downstream handler to invoke.
+
+        Returns:
+            The downstream :class:`ToolResult`, or an ``invalid_input`` envelope
+            when argument validation fails.
+        """
+        try:
+            return await call_next(context)
+        except ValidationError as exc:
+            envelope = _validation_error_envelope(exc, context.message.name)
+            return ToolResult(content=envelope)
+
+
 class OriginValidationMiddleware(BaseHTTPMiddleware):
     """Reject requests whose Origin header is present but not allowlisted."""
 
@@ -194,6 +286,7 @@ def build_app(settings: Settings | None = None) -> FastMCP:
 
     mcp = FastMCP("HNF1B-db", instructions=SERVER_INSTRUCTIONS)
     mcp.add_middleware(RateLimitMiddleware(limiter))
+    mcp.add_middleware(ErrorEnvelopeMiddleware())
     register_all(mcp, client)
 
     def _make_resource(resource_uri: str) -> Callable[[], str]:

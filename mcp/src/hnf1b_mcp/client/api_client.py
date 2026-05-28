@@ -143,7 +143,17 @@ class ApiClient:
         except httpx.HTTPError as e:
             raise McpToolError("temporarily_unavailable", "upstream API error") from e
         if resp.status_code == 404:
-            raise McpToolError("not_found", f"resource not found: {path}")
+            # Domain-framed message only — never echo the internal API route
+            # (path leakage). Callers that can name the resource (e.g.
+            # get_variant) raise their own more specific not_found upstream.
+            raise McpToolError(
+                "not_found",
+                "the requested record was not found",
+                hint=(
+                    "verify the identifier via hnf1b_search or"
+                    " hnf1b_resolve_terms before fetching"
+                ),
+            )
         if resp.status_code == 422:
             raise _build_422_error(resp)
         if resp.status_code >= 500:
