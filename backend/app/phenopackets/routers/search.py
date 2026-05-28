@@ -47,40 +47,56 @@ async def search_phenopackets(
     """
     # Base query parts — apply visibility filter based on caller role.
     # Curators see draft + published rows; anonymous callers see only published.
-    select_clause = "SELECT id, phenopacket_id, phenopacket, created_at"
-    from_clause = "FROM phenopackets"
-    if is_curator_or_admin(user):
-        # Curator: exclude only archived and (by default) deleted rows
-        where_conditions = ["deleted_at IS NULL", "state != 'archived'"]
-    else:
+    #
+    # Visibility fix (Wave A): anonymous callers must see the *head-published*
+    # content, never the working copy in ``phenopackets.phenopacket`` (which may
+    # hold an unpublished clone-to-draft edit). We join the head revision row and
+    # source JSONB content from ``r.content_jsonb``; the FTS ``search_vector``
+    # predicate stays on ``p``. The curator branch keeps reading ``p.phenopacket``.
+    anonymous = not is_curator_or_admin(user)
+    content_col = "r.content_jsonb" if anonymous else "p.phenopacket"
+    select_clause = (
+        f"SELECT p.id, p.phenopacket_id, {content_col} AS phenopacket, p.created_at"
+    )
+    if anonymous:
+        from_clause = (
+            "FROM phenopackets p"
+            " JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id"
+        )
         # Anonymous / viewer: public filter — published rows only (I3 + I7)
         where_conditions = [
-            "deleted_at IS NULL",
-            "state = 'published'",
-            "head_published_revision_id IS NOT NULL",
+            "p.deleted_at IS NULL",
+            "p.state = 'published'",
+            "p.head_published_revision_id IS NOT NULL",
         ]
+    else:
+        from_clause = "FROM phenopackets p"
+        # Curator: exclude only archived and (by default) deleted rows
+        where_conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
     params: Dict[str, Any] = {}
 
     # Full-text search
     if q:
         select_clause += (
-            ", ts_rank(search_vector, plainto_tsquery('english', :search_query))"
+            ", ts_rank(p.search_vector, plainto_tsquery('english', :search_query))"
             " AS search_rank"
         )
         where_conditions.append(
-            "search_vector @@ plainto_tsquery('english', :search_query)"
+            "p.search_vector @@ plainto_tsquery('english', :search_query)"
         )
         params["search_query"] = q
 
     # Structured filters
     if hpo_id:
-        where_conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+        where_conditions.append(
+            f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
+        )
         params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
     if sex:
-        where_conditions.append("subject_sex = :sex")
+        where_conditions.append("p.subject_sex = :sex")
         params["sex"] = sex
     if gene:
-        where_conditions.append("phenopacket->'interpretations' @> :gene_filter")
+        where_conditions.append(f"{content_col}->'interpretations' @> :gene_filter")
         params["gene_filter"] = json.dumps(
             [
                 {
@@ -100,7 +116,7 @@ async def search_phenopackets(
         )
     if pmid:
         where_conditions.append(
-            "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+            f"{content_col}->'metaData'->'externalReferences' @> :pmid_filter"
         )
         params["pmid_filter"] = json.dumps([{"id": f"PMID:{pmid}"}])
 
@@ -123,15 +139,15 @@ async def search_phenopackets(
                 # Going backward: get records BEFORE cursor
                 # (newer records if sorting DESC)
                 where_conditions.append("""(
-                    (created_at > :cursor_created_at)
-                    OR (created_at = :cursor_created_at AND id > :cursor_id)
+                    (p.created_at > :cursor_created_at)
+                    OR (p.created_at = :cursor_created_at AND p.id > :cursor_id)
                 )""")
             else:
                 # Going forward: get records AFTER cursor
                 # (older records if sorting DESC)
                 where_conditions.append("""(
-                    (created_at < :cursor_created_at)
-                    OR (created_at = :cursor_created_at AND id < :cursor_id)
+                    (p.created_at < :cursor_created_at)
+                    OR (p.created_at = :cursor_created_at AND p.id < :cursor_id)
                 )""")
             params["cursor_created_at"] = cursor_created_at
             params["cursor_id"] = str(cursor_id)
@@ -142,14 +158,14 @@ async def search_phenopackets(
     # Order by search rank if searching, otherwise by created_at
     if q:
         if is_backward:
-            order_clause = "ORDER BY search_rank ASC, created_at ASC, id ASC"
+            order_clause = "ORDER BY search_rank ASC, p.created_at ASC, p.id ASC"
         else:
-            order_clause = "ORDER BY search_rank DESC, created_at DESC, id DESC"
+            order_clause = "ORDER BY search_rank DESC, p.created_at DESC, p.id DESC"
     else:
         if is_backward:
-            order_clause = "ORDER BY created_at ASC, id ASC"
+            order_clause = "ORDER BY p.created_at ASC, p.id ASC"
         else:
-            order_clause = "ORDER BY created_at DESC, id DESC"
+            order_clause = "ORDER BY p.created_at DESC, p.id DESC"
 
     # Fetch one extra to detect if there are more pages
     params["limit"] = page_size + 1
@@ -254,33 +270,47 @@ async def get_search_facets(
 ):
     """Get facet counts for search filters based on current search criteria."""
     # Base query conditions — apply visibility filter based on caller role.
-    if is_curator_or_admin(user):
-        where_conditions = ["deleted_at IS NULL", "state != 'archived'"]
-    else:
+    #
+    # Visibility fix (Wave A): anonymous callers source JSONB content from the
+    # head-published revision (``r.content_jsonb``), never the working copy.
+    anonymous = not is_curator_or_admin(user)
+    content_col = "r.content_jsonb" if anonymous else "p.phenopacket"
+    if anonymous:
+        # FROM clause used by every facet query: join the head revision so the
+        # public branch never reads the (possibly mid-edit) working copy.
+        from_phenopackets = (
+            "FROM phenopackets p"
+            " JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id"
+        )
         where_conditions = [
-            "deleted_at IS NULL",
-            "state = 'published'",
-            "head_published_revision_id IS NOT NULL",
+            "p.deleted_at IS NULL",
+            "p.state = 'published'",
+            "p.head_published_revision_id IS NOT NULL",
         ]
+    else:
+        from_phenopackets = "FROM phenopackets p"
+        where_conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
     params: Dict[str, Any] = {}
 
     # Apply existing filters for facet counts
     if q:
         where_conditions.append(
-            "search_vector @@ plainto_tsquery('english', :search_query)"
+            "p.search_vector @@ plainto_tsquery('english', :search_query)"
         )
         params["search_query"] = q
 
     if hpo_id:
-        where_conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+        where_conditions.append(
+            f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
+        )
         params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
 
     if sex:
-        where_conditions.append("subject_sex = :sex")
+        where_conditions.append("p.subject_sex = :sex")
         params["sex"] = sex
 
     if gene:
-        where_conditions.append("phenopacket->'interpretations' @> :gene_filter")
+        where_conditions.append(f"{content_col}->'interpretations' @> :gene_filter")
         params["gene_filter"] = json.dumps(
             [
                 {
@@ -301,17 +331,19 @@ async def get_search_facets(
 
     if pmid:
         where_conditions.append(
-            "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+            f"{content_col}->'metaData'->'externalReferences' @> :pmid_filter"
         )
         params["pmid_filter"] = json.dumps([{"id": f"PMID:{pmid}"}])
 
     where_clause = f"WHERE {' AND '.join(where_conditions)}"
 
     # Get sex distribution (don't apply sex filter for sex facet)
-    sex_where = " AND ".join([c for c in where_conditions if "subject_sex" not in c])
+    sex_where = " AND ".join(
+        [c for c in where_conditions if "p.subject_sex" not in c]
+    )
     sex_query = f"""
         SELECT p.subject_sex AS value, COUNT(*) AS count
-        FROM phenopackets p
+        {from_phenopackets}
         WHERE {sex_where}
         GROUP BY p.subject_sex
         ORDER BY count DESC
@@ -326,11 +358,12 @@ async def get_search_facets(
     variants_query = f"""
         SELECT
             CASE
-                WHEN jsonb_array_length(phenopacket->'interpretations') > 0 THEN true
+                WHEN jsonb_array_length({content_col}->'interpretations') > 0
+                    THEN true
                 ELSE false
             END AS value,
             COUNT(*) AS count
-        FROM phenopackets
+        {from_phenopackets}
         {where_clause}
         GROUP BY value
         ORDER BY value DESC
@@ -351,9 +384,9 @@ async def get_search_facets(
             gi.value->'variantInterpretation'
                 ->>'acmgPathogenicityClassification' AS value,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p
+        {from_phenopackets}
         CROSS JOIN LATERAL jsonb_array_elements(
-            p.phenopacket->'interpretations') AS interp
+            {content_col}->'interpretations') AS interp
         CROSS JOIN LATERAL jsonb_array_elements(
             interp.value->'diagnosis'->'genomicInterpretations') AS gi
         {where_clause}
@@ -376,9 +409,9 @@ async def get_search_facets(
             gi.value->'variantInterpretation'->'variationDescriptor'
                 ->'geneContext'->>'symbol' AS value,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p
+        {from_phenopackets}
         CROSS JOIN LATERAL jsonb_array_elements(
-            p.phenopacket->'interpretations') AS interp
+            {content_col}->'interpretations') AS interp
         CROSS JOIN LATERAL jsonb_array_elements(
             interp.value->'diagnosis'->'genomicInterpretations') AS gi
         {where_clause}
@@ -401,9 +434,9 @@ async def get_search_facets(
             pf.value->'type'->>'id' AS hpo_id,
             pf.value->'type'->>'label' AS label,
             COUNT(DISTINCT p.id) AS count
-        FROM phenopackets p
+        {from_phenopackets}
         CROSS JOIN LATERAL jsonb_array_elements(
-            p.phenopacket->'phenotypicFeatures') AS pf
+            {content_col}->'phenotypicFeatures') AS pf
         {where_clause}
         AND pf.value->'type'->>'id' IS NOT NULL
         GROUP BY hpo_id, label

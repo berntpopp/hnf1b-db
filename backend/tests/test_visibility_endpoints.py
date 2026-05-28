@@ -284,3 +284,23 @@ async def test_by_publication_excludes_drafts_from_anonymous(
         )
     else:
         assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Wave A Task A1: clone-in-progress must show last-published, not working copy
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_search_returns_head_published_not_working_copy(
+    async_client, clone_in_progress_record
+):
+    """Anonymous /search must show last-published content, never mid-edit working copy."""
+    r = await async_client.get("/api/v2/phenopackets/search")
+    assert r.status_code == 200
+    body = r.text
+    assert "LEAKED-DRAFT-SUBJECT" not in body
+    assert "_secret_working_copy" not in body
+    pid = clone_in_progress_record["record"].phenopacket_id
+    ids = {item.get("id") for item in r.json().get("data", [])}
+    assert pid in ids  # still visible, just with old content
