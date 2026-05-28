@@ -272,15 +272,25 @@ async def search_variants(
         filtered = [
             item for item in data if item.get("molecular_consequence") == consequence
         ]
-        shaped_full = [_shape_variant(item) for item in filtered]
+        total_filtered = len(filtered)
+        # Apply the caller's requested page/page_size to the locally-filtered rows.
+        requested_page_size = min(page_size, _MAX_PAGE_SIZE)
+        start = (page - 1) * requested_page_size
+        page_rows = filtered[start : start + requested_page_size]
+        post_total_pages = (
+            max(1, -(-total_filtered // requested_page_size))
+            if requested_page_size
+            else 1
+        )
+        shaped_full = [_shape_variant(item) for item in page_rows]
         result: dict[str, Any] = {
             "variants": [_project_row(row, response_mode) for row in shaped_full],
-            "total": len(filtered),
-            "total_pages": 1,
-            "page": 1,
-            "page_size": effective_page_size,
-            "has_more": False,
-            "filtered_count": len(filtered),
+            "total": total_filtered,
+            "total_pages": post_total_pages,
+            "page": page,
+            "page_size": requested_page_size,
+            "has_more": page < post_total_pages,
+            "filtered_count": total_filtered,
             "consequence_filter_note": (
                 "Results post-filtered client-side on molecular_consequence"
                 f" == {consequence!r}; the upstream consequence filter is"

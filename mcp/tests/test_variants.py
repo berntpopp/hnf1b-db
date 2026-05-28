@@ -255,6 +255,89 @@ async def test_search_variants_consequence_post_filter():
     assert "consequence_filter_note" in result
 
 
+# Missense variant template — cloned N times for pagination test.
+def _make_missense(n: int) -> dict:
+    return {
+        "simple_id": f"var-m{n}",
+        "variant_id": f"HNF1B:c.{n}G>A",
+        "label": f"c.{n}G>A",
+        "gene_symbol": "HNF1B",
+        "structural_type": "SNV",
+        "pathogenicity": "PATHOGENIC",
+        "phenopacket_count": 1,
+        "hg38": f"17:36{n:06d}:G:A",
+        "transcript": "NM_000458.3",
+        "protein": "p.Xaa",
+        "molecular_consequence": "Missense",
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_consequence_respects_pagination():
+    """Consequence post-filter must honour the caller's page / page_size."""
+    # 5 Missense rows returned by the API (upstream ignores ?consequence=)
+    missense_rows = [_make_missense(i) for i in range(1, 6)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": missense_rows,
+                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
+            },
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    # Request page 1 with page_size=2 → should get first 2 of 5 matching rows.
+    result = await search_variants(client, consequence="Missense", page=1, page_size=2)
+    await client.aclose()
+
+    assert result["total"] == 5
+    assert result["filtered_count"] == 5
+    assert result["page"] == 1
+    assert result["page_size"] == 2
+    assert len(result["variants"]) == 2
+    assert result["total_pages"] == 3  # ceil(5/2)
+    assert result["has_more"] is True
+    assert "consequence_filter_note" in result
+
+    # Request page 2 → next 2 rows.
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": missense_rows,
+                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
+            },
+        )
+    )
+    client2 = ApiClient(base_url=BASE)
+    result2 = await search_variants(client2, consequence="Missense", page=2, page_size=2)
+    await client2.aclose()
+
+    assert result2["page"] == 2
+    assert len(result2["variants"]) == 2
+    assert result2["has_more"] is True  # page 2 < 3
+
+    # Request page 3 → last 1 row.
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": missense_rows,
+                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
+            },
+        )
+    )
+    client3 = ApiClient(base_url=BASE)
+    result3 = await search_variants(client3, consequence="Missense", page=3, page_size=2)
+    await client3.aclose()
+
+    assert result3["page"] == 3
+    assert len(result3["variants"]) == 1
+    assert result3["has_more"] is False
+
+
 # ---------------------------------------------------------------------------
 # search_variants – enum validation errors
 # ---------------------------------------------------------------------------

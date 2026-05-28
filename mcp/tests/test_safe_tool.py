@@ -15,6 +15,7 @@ async def test_success_wraps_meta_and_dataclass():
     assert out["data_class"] == DataClass.CURATED
     assert out["meta"]["response_mode"] == "compact"
     assert "elapsed_ms" in out["meta"]
+    assert out["meta"]["effective_chars"] > 0
 
 
 @pytest.mark.asyncio

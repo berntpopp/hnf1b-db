@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Awaitable, Callable
 
@@ -25,7 +26,12 @@ async def run_tool(
         return env
     elapsed_ms = round((time.monotonic() - start) * 1000, 1)
     dropped = result.pop("_dropped", None)
-    meta = build_meta(response_mode=response_mode, effective_chars=0, dropped=dropped)
+    effective_chars = len(json.dumps(result, default=str))
+    meta = build_meta(
+        response_mode=response_mode,
+        effective_chars=effective_chars,
+        dropped=dropped,
+    )
     meta["elapsed_ms"] = elapsed_ms
     result["data_class"] = data_class
     result["meta"] = meta

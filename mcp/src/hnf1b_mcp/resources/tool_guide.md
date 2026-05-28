@@ -41,21 +41,22 @@ hnf1b_get_individual(phenopacket_id=<id>, response_mode="standard")
 
 **Goal**: Find a known HNF1B variant and retrieve all individuals who carry it.
 
-1. **`hnf1b_search_variants`** — supply `hgvs_c` (e.g., `"c.494G>A"`) or
-   free-text variant description. Returns variant IDs and ACMG class summaries.
+1. **`hnf1b_search_variants`** — supply `query` (e.g., `"c.494G>A"`) or
+   other filters such as `variant_type`, `classification`, `gene`,
+   `consequence`, or `domain`. Returns variant IDs and ACMG class summaries.
 2. **`hnf1b_get_variant`** — retrieve full variant details including all
    published evidence and associated phenopacket IDs.
 3. **`hnf1b_get_individuals`** — batch-fetch all individuals linked to that
    variant in one call.
 
 ```
-hnf1b_search_variants(hgvs_c="c.494G>A")
+hnf1b_search_variants(query="c.494G>A")
   → [variant_id, ...]
     ↓
 hnf1b_get_variant(variant_id=<id>)
-  → {variant detail, phenopacket_ids: [...]}
+  → {variant detail, carriers: [...]}
     ↓
-hnf1b_get_individuals(phenopacket_ids=[...], response_mode="compact")
+hnf1b_get_individuals(ids=[...], response_mode="compact")
 ```
 
 ### Workflow 3: Preview and Retrieve Cohort Statistics
@@ -86,8 +87,8 @@ hnf1b_get_statistics(categories=["acmg_distribution", "phenotype_frequency"])
 3. **`hnf1b_get_individual`** — retrieve full records for individuals of interest.
 
 ```
-hnf1b_resolve_terms(hpo_ids=["HP:0000093", "HP:0001317"])
-  → {HP:0000093: "Proteinuria", HP:0001317: "Cerebellar ataxia"}
+hnf1b_resolve_terms(text="proteinuria")
+  → {HP:0000093: "Proteinuria", ...}
     ↓
 hnf1b_find_individuals_by_phenotype(hpo_ids=["HP:0000093"])
   → [phenopacket_id, ...]

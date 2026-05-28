@@ -186,9 +186,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                     if item_id and item_id not in seen:
                         seen[item_id] = None
             merged_ids = list(seen.keys())
+            if not merged_ids:
+                return {"individuals": [], "total": 0, "page_size": page_size}
             return await individuals_service.get_individuals(
                 client,  # type: ignore[arg-type]
-                ids=merged_ids[:page_size] if merged_ids else None,
+                ids=merged_ids[:page_size],
                 page_size=page_size,
             )
 
