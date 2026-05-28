@@ -27,8 +27,10 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_search",
         "summary": (
-            "Search individuals by phenotype keywords, free text, or HPO "
-            "term IDs. Returns paginated phenopacket IDs and summaries."
+            "Unified free-text discovery across individuals, variants, and "
+            "publications (default) — also genes. Returns typed ID hits; each "
+            "hit carries a 'resolve_with' {tool, argument, value} naming exactly "
+            "how to fetch its authoritative content. Pass types=[...] to scope."
         ),
     },
     {
@@ -48,9 +50,10 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_find_individuals_by_phenotype",
         "summary": (
-            "Find individuals sharing a specified set of HPO term IDs via the "
-            "`hpo_ids` parameter. Caller must supply exact HPO IDs; v1 does "
-            "not resolve free text."
+            "Find individuals carrying ANY of a set of HPO term IDs (OR/union "
+            "match) via `hpo_ids`. Returns the matched cohort with the FULL "
+            "match `total` and `has_more`. Caller supplies exact HPO IDs; v1 "
+            "does not resolve free text (use hnf1b_resolve_terms first)."
         ),
     },
     {
@@ -74,15 +77,19 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_get_gene_context",
         "summary": (
-            "Return a structured overview of the HNF1B gene: coordinates, "
-            "transcripts, disease associations, and variant statistics."
+            "Return the HNF1B gene reference record: genomic coordinates, "
+            "cross-references (HGNC/NCBI/OMIM), transcripts, and annotated "
+            "protein domains. Emits reference_data_status when the backend's "
+            "reference tables are not seeded."
         ),
     },
     {
         "name": "hnf1b_get_publications",
         "summary": (
-            "List publications curated in the database, optionally filtered "
-            "by PMID list or keyword. Returns recommended_citation strings."
+            "List cached publications (filter by keyword `q`, `year`, "
+            "`has_doi`; sort via `sort`, default most-cited first), OR reverse-"
+            "lookup the individuals citing one publication via `citing_pmid`. "
+            "Returns recommended_citation strings."
         ),
     },
     {
@@ -141,6 +148,23 @@ _EXCLUSIONS: list[str] = [
     "HPO OLS proxy — callers must supply HPO IDs directly",
     "admin, authentication, and developer-management endpoints",
 ]
+
+_IDENTIFIERS: dict[str, str] = {
+    "individual": (
+        "phenopacket_id (e.g. 'phenopacket-596'); pass to hnf1b_get_individual."
+    ),
+    "variant": (
+        "canonical variant_id is the GA4GH VRS descriptor ('ga4gh:VA.…') or the "
+        "CNV form ('var:HNF1B:17:START-END:DEL'); pass either to "
+        "hnf1b_get_variant. 'simple_id' (e.g. 'Var6') is a display ordinal, not "
+        "a lookup key."
+    ),
+    "publication": "PMID (bare digits or 'PMID:NNN').",
+    "resolution": (
+        "Do not guess identifiers. Obtain them from hnf1b_search (each hit "
+        "carries resolve_with), hnf1b_search_variants, or hnf1b_resolve_terms."
+    ),
+}
 
 _CITATION_CONTRACT: str = (
     "Every response includes a recommended_citation field that should be "
@@ -225,6 +249,53 @@ def _filterable_fields() -> dict[str, Any]:
                 "required": True,
                 "hint": "required even when dry_run=True",
             },
+            "count_mode": {
+                "values": ["all", "unique"],
+                "hint": (
+                    "variant_types/variant_pathogenicity only: 'all' (default) "
+                    "= per-carrier instances; 'unique' = distinct variants. The "
+                    "response 'unit' field states which was used."
+                ),
+            },
+        },
+        "hnf1b_get_publications": {
+            "sort": {
+                "values": [
+                    "phenopacket_count",
+                    "year",
+                    "pmid",
+                    "title",
+                    "journal",
+                    "first_added",
+                ],
+                "hint": (
+                    "prefix with '-' for descending; default '-phenopacket_count' "
+                    "(most-cited first). Echoed as applied_sort."
+                ),
+            },
+            "citing_pmid": {
+                "type": "string",
+                "hint": "reverse lookup: individuals citing this PMID",
+            },
+            "q": {"type": "string", "hint": "free-text keyword filter"},
+        },
+        "hnf1b_get_individuals": {
+            "sex": {
+                "type": "string",
+                "hint": (
+                    "exact token from hnf1b_resolve_terms(vocabulary='sex'), "
+                    "e.g. 'MALE'/'FEMALE' (uppercase)"
+                ),
+            },
+        },
+        "hnf1b_find_individuals_by_phenotype": {
+            "hpo_ids": {
+                "type": "list[string]",
+                "hint": (
+                    "exact HPO IDs (e.g. ['HP:0000107']); OR/union match. "
+                    "Resolve free text via hnf1b_resolve_terms first."
+                ),
+            },
         },
     }
 
@@ -248,6 +319,7 @@ def get_capabilities() -> dict[str, Any]:
             for mode, budget in settings.mode_char_budgets.items()
         },
         "limits": _LIMITS,
+        "identifiers": _IDENTIFIERS,
         "citation_contract": _CITATION_CONTRACT,
         "error_codes": sorted(ERROR_CODES),
         "data_classes": _DATA_CLASSES,

@@ -5,16 +5,16 @@
 | Tool | Purpose |
 |---|---|
 | `hnf1b_get_capabilities` | Retrieve server capabilities, limits, error codes, and this guide. Call first in any new session. |
-| `hnf1b_search` | Search individuals by phenotype keywords, free text, or HPO term IDs. Returns a paginated list of matching phenopacket IDs and summary fields. |
+| `hnf1b_search` | Unified free-text discovery across individuals, variants, and publications (and genes). Returns typed ID hits; each hit carries a `resolve_with` object naming the exact tool + argument to fetch its content. |
 | `hnf1b_get_individual` | Retrieve the full phenopacket record for a single individual by `phenopacket_id`. |
 | `hnf1b_get_individuals` | Retrieve multiple phenopacket records in one call given a list of `phenopacket_id` values (batch fetch). |
 | `hnf1b_find_individuals_by_phenotype` | Find individuals with a specific set of HPO term IDs. Caller supplies exact HPO IDs; v1 does not resolve free-text HPO labels. |
 | `hnf1b_search_variants` | Search variant records by gene, HGVS notation, variant type, or ACMG class. Returns a paginated list of matching variant IDs and summaries. |
 | `hnf1b_get_variant` | Retrieve the full record for a single variant by `variant_id`, including all associated interpretation details. |
-| `hnf1b_get_gene_context` | Return a structured overview of the HNF1B gene: genomic coordinates, transcript IDs, disease associations, and published variant statistics. |
-| `hnf1b_get_publications` | List publications curated in the database, optionally filtered by PMID list or keyword. Returns citation metadata with `recommended_citation` strings. |
-| `hnf1b_get_statistics` | Return aggregate cohort statistics (variant counts by ACMG class, phenotype frequency histograms, etc.). Supports `dry_run=True` to preview payload cost. |
-| `hnf1b_resolve_terms` | Resolve a list of HPO term IDs to their labels and hierarchy paths using the embedded ontology snapshot. |
+| `hnf1b_get_gene_context` | Return the HNF1B gene reference record: genomic coordinates, cross-references (HGNC/NCBI/OMIM), transcript IDs, and annotated protein domains. |
+| `hnf1b_get_publications` | List cached publications (keyword `q`, `year`, `has_doi`; `sort`), OR reverse-lookup the individuals citing one publication via `citing_pmid`. Returns `recommended_citation` strings. |
+| `hnf1b_get_statistics` | Return one aggregate cohort `metric` (variant counts by ACMG class, phenotype frequency, survival, etc.). Supports `dry_run=True` to preview payload cost. |
+| `hnf1b_resolve_terms` | Resolve free text to HPO terms (autocomplete) or list a controlled vocabulary (sex, allelic-state, evidence-code, …). Returns `{id, label, description}` entries. |
 
 ## Canonical Workflows
 
@@ -70,10 +70,11 @@ payloads.
    statistics payload with the desired `response_mode`.
 
 ```
-hnf1b_get_statistics(dry_run=True)
-  → {estimated_chars, available_categories: [...]}
+hnf1b_get_statistics(metric="variant_types", dry_run=True)
+  → {metric, available, estimated}
     ↓
-hnf1b_get_statistics(categories=["acmg_distribution", "phenotype_frequency"])
+hnf1b_get_statistics(metric="variant_types")
+  → {metric, unit, result}   # unit states instances-per-carrier vs distinct
 ```
 
 ### Workflow 4: HPO Term Phenotype Search

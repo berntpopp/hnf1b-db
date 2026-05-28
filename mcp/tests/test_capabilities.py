@@ -35,6 +35,9 @@ def test_capabilities_filterable_fields_present():
         "hnf1b_search_variants",
         "hnf1b_resolve_terms",
         "hnf1b_get_statistics",
+        "hnf1b_get_publications",
+        "hnf1b_get_individuals",
+        "hnf1b_find_individuals_by_phenotype",
     }
 
     sv = ff["hnf1b_search_variants"]
