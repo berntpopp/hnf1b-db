@@ -51,10 +51,25 @@ async def search_phenopackets(
     # Visibility fix (Wave A): anonymous callers must see the *head-published*
     # content, never the working copy in ``phenopackets.phenopacket`` (which may
     # hold an unpublished clone-to-draft edit). We join the head revision row and
-    # source JSONB content from ``r.content_jsonb``; the FTS ``search_vector``
-    # predicate stays on ``p``. The curator branch keeps reading ``p.phenopacket``.
+    # source JSONB content from ``r.content_jsonb``; the curator branch keeps
+    # reading ``p.phenopacket``.
+    #
+    # FTS draft-leak fix (Copilot HIGH): ``p.search_vector`` is derived from the
+    # mutable working copy, so for the public branch the MATCH predicate and
+    # ranking must be computed from the head-published content at query time
+    # (``to_tsvector('english', r.content_jsonb::text)``) — otherwise an
+    # anonymous full-text query could MATCH/rank on terms that exist ONLY in the
+    # unpublished working copy, leaking draft edits. The curator branch keeps
+    # using the precomputed ``p.search_vector``.
     anonymous = not is_curator_or_admin(user)
     content_col = "r.content_jsonb" if anonymous else "p.phenopacket"
+    # tsvector source for the FTS MATCH/rank: head-published content for the
+    # public branch, precomputed working-copy vector for curators.
+    search_tsvector = (
+        "to_tsvector('english', r.content_jsonb::text)"
+        if anonymous
+        else "p.search_vector"
+    )
     select_clause = (
         f"SELECT p.id, p.phenopacket_id, {content_col} AS phenopacket, p.created_at"
     )
@@ -78,11 +93,11 @@ async def search_phenopackets(
     # Full-text search
     if q:
         select_clause += (
-            ", ts_rank(p.search_vector, plainto_tsquery('english', :search_query))"
-            " AS search_rank"
+            f", ts_rank({search_tsvector},"
+            " plainto_tsquery('english', :search_query)) AS search_rank"
         )
         where_conditions.append(
-            "p.search_vector @@ plainto_tsquery('english', :search_query)"
+            f"{search_tsvector} @@ plainto_tsquery('english', :search_query)"
         )
         params["search_query"] = q
 
@@ -271,8 +286,16 @@ async def get_search_facets(
     #
     # Visibility fix (Wave A): anonymous callers source JSONB content from the
     # head-published revision (``r.content_jsonb``), never the working copy.
+    #
+    # FTS draft-leak fix (Copilot HIGH): the public branch matches on a tsvector
+    # computed from the head-published content, not the mutable ``p.search_vector``.
     anonymous = not is_curator_or_admin(user)
     content_col = "r.content_jsonb" if anonymous else "p.phenopacket"
+    search_tsvector = (
+        "to_tsvector('english', r.content_jsonb::text)"
+        if anonymous
+        else "p.search_vector"
+    )
     if anonymous:
         # FROM clause used by every facet query: join the head revision so the
         # public branch never reads the (possibly mid-edit) working copy.
@@ -293,7 +316,7 @@ async def get_search_facets(
     # Apply existing filters for facet counts
     if q:
         where_conditions.append(
-            "p.search_vector @@ plainto_tsquery('english', :search_query)"
+            f"{search_tsvector} @@ plainto_tsquery('english', :search_query)"
         )
         params["search_query"] = q
 

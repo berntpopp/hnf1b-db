@@ -277,7 +277,17 @@ class PhenopacketSearchRepository:
         # only. Visibility fix (Wave A): the public branch sources JSONB content
         # from the head-published revision (``r.content_jsonb``), never the working
         # copy ``p.phenopacket`` (which may hold an unpublished clone-to-draft edit).
+        #
+        # FTS draft-leak fix (Copilot HIGH): ``p.search_vector`` is derived from the
+        # mutable working copy, so the public branch matches/ranks against a tsvector
+        # computed from the head-published content at query time. The curator branch
+        # keeps using the precomputed ``p.search_vector``.
         content_col = "p.phenopacket" if is_curator else "r.content_jsonb"
+        search_tsvector = (
+            "p.search_vector"
+            if is_curator
+            else "to_tsvector('simple', r.content_jsonb::text)"
+        )
         if is_curator:
             from_clause = "FROM phenopackets p"
             conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
@@ -297,10 +307,11 @@ class PhenopacketSearchRepository:
         # Full-text search using 'simple' config for scientific notation
         if query:
             select_extra = (
-                ", ts_rank(p.search_vector, plainto_tsquery('simple', :query)) AS rank"
+                f", ts_rank({search_tsvector},"
+                " plainto_tsquery('simple', :query)) AS rank"
             )
             conditions.append(
-                "(p.search_vector @@ plainto_tsquery('simple', :query) "
+                f"({search_tsvector} @@ plainto_tsquery('simple', :query) "
                 f"OR {content_col}::text ILIKE :query_like)"
             )
             params["query"] = query
@@ -412,7 +423,15 @@ class PhenopacketSearchRepository:
         # Visibility filter for count: same branching as search(). Visibility fix
         # (Wave A): the public branch joins the head revision and matches on
         # ``r.content_jsonb`` so a mid-edit working copy never affects the count.
+        #
+        # FTS draft-leak fix (Copilot HIGH): the public branch matches on a tsvector
+        # computed from the head-published content, not the mutable ``p.search_vector``.
         content_col = "p.phenopacket" if is_curator else "r.content_jsonb"
+        search_tsvector = (
+            "p.search_vector"
+            if is_curator
+            else "to_tsvector('simple', r.content_jsonb::text)"
+        )
         if is_curator:
             from_clause = "FROM phenopackets p"
             conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
@@ -430,7 +449,7 @@ class PhenopacketSearchRepository:
 
         if query:
             conditions.append(
-                "(p.search_vector @@ plainto_tsquery('simple', :query) "
+                f"({search_tsvector} @@ plainto_tsquery('simple', :query) "
                 f"OR {content_col}::text ILIKE :query_like)"
             )
             params["query"] = query

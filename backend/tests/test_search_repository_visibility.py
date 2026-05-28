@@ -58,3 +58,45 @@ async def test_repository_search_text_query_uses_head_content(
     serialized = json.dumps(rows, default=str)
     assert "_secret_working_copy" not in serialized
     assert "LEAKED-DRAFT-SUBJECT" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_repository_search_fts_does_not_match_draft_only_term(
+    db_session, clone_in_progress_record
+):
+    """Public FTS must not MATCH a working-copy-only term.
+
+    ``p.search_vector`` is derived from the mutable working copy, so a query
+    for a draft-only marker would otherwise MATCH the published-but-mid-edit
+    record. The public branch must match/rank against the head-published
+    content (``r.content_jsonb``) instead.
+    """
+    pid = clone_in_progress_record["record"].phenopacket_id
+
+    repo = PhenopacketSearchRepository(db_session)
+
+    # Draft-only term must NOT match the record.
+    rows = await repo.search(query="LEAKED-DRAFT-SUBJECT", is_curator=False, limit=100)
+    ids = {row["phenopacket_id"] for row in rows}
+    assert pid not in ids
+
+    # A term present in the PUBLISHED content still matches.
+    rows2 = await repo.search(query="wave7-published-1", is_curator=False, limit=100)
+    ids2 = {row["phenopacket_id"] for row in rows2}
+    assert pid in ids2
+
+
+@pytest.mark.asyncio
+async def test_repository_count_does_not_match_draft_only_term(
+    db_session, clone_in_progress_record
+):
+    """Public count must not count a record solely via a working-copy-only term."""
+    repo = PhenopacketSearchRepository(db_session)
+
+    # Draft-only term must not match -> count 0 for this query.
+    draft_count = await repo.count(query="LEAKED-DRAFT-SUBJECT", is_curator=False)
+    assert draft_count == 0
+
+    # Published term still counts the record.
+    published_count = await repo.count(query="wave7-published-1", is_curator=False)
+    assert published_count >= 1
