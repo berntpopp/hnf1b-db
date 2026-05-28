@@ -18,64 +18,44 @@ BASE = "http://api.test/api/v2"
 # ---------------------------------------------------------------------------
 
 _PUB_WITH_YEAR = {
-    "id": "PMID:1001",
-    "type": "Publication",
-    "attributes": {
-        "pmid": "PMID:1001",
-        "title": "HNF1B variants and kidney disease",
-        "authors": "Smith J, Jones B",
-        "journal": "Kidney Int",
-        "year": 2022,
-        "doi": "10.1016/j.kint.2022.01.001",
-        "phenopacket_count": 5,
-        "first_added": "2023-01-01",
-    },
+    "pmid": "PMID:1001",
+    "title": "HNF1B variants and kidney disease",
+    "authors": "Smith J, Jones B",
+    "journal": "Kidney Int",
+    "year": 2022,
+    "doi": "10.1016/j.kint.2022.01.001",
+    "phenopacket_count": 5,
+    "first_added": "2023-01-01",
 }
 
 _PUB_WITHOUT_YEAR = {
-    "id": "PMID:1002",
-    "type": "Publication",
-    "attributes": {
-        "pmid": "PMID:1002",
-        "title": "Early HNF1B study",
-        "authors": "Brown K",
-        "journal": "Nephrology",
-        "year": None,
-        "doi": None,
-        "phenopacket_count": 2,
-        "first_added": "2022-06-15",
-    },
+    "pmid": "PMID:1002",
+    "title": "Early HNF1B study",
+    "authors": "Brown K",
+    "journal": "Nephrology",
+    "year": None,
+    "doi": None,
+    "phenopacket_count": 2,
+    "first_added": "2022-06-15",
 }
 
 _PUBS_RESPONSE = {
     "data": [_PUB_WITH_YEAR, _PUB_WITHOUT_YEAR],
     "meta": {
-        "total": 42,
-        "page": 1,
-        "page_size": 25,
+        "page": {
+            "totalRecords": 42,
+            "currentPage": 1,
+            "pageSize": 25,
+            "totalPages": 2,
+        }
     },
 }
 
-_BY_PUB_RESPONSE = {
-    "data": [
-        {
-            "id": "PP001",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP001"},
-        },
-        {
-            "id": "PP002",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP002"},
-        },
-        {
-            "id": "PP003",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP003"},
-        },
-    ],
-    "meta": {"total": 3},
-}
+_BY_PUB_RESPONSE = [
+    {"phenopacket_id": "PP001", "phenopacket": {}},
+    {"phenopacket_id": "PP002", "phenopacket": {}},
+    {"phenopacket_id": "PP003", "phenopacket": {}},
+]
 
 
 # ---------------------------------------------------------------------------

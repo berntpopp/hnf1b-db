@@ -18,65 +18,49 @@ BASE = "http://api.test/api/v2"
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
+# FLAT item shape matching the real API (no JSON:API attributes nesting)
 _PUB_WITH_YEAR = {
-    "id": "PMID:1001",
-    "type": "Publication",
-    "attributes": {
-        "pmid": "PMID:1001",
-        "title": "HNF1B variants and kidney disease",
-        "authors": "Smith J, Jones B",
-        "journal": "Kidney Int",
-        "year": 2022,
-        "doi": "10.1016/j.kint.2022.01.001",
-        "phenopacket_count": 5,
-        "first_added": "2023-01-01",
-    },
+    "pmid": "PMID:1001",
+    "title": "HNF1B variants and kidney disease",
+    "authors": "Smith J, Jones B",
+    "journal": "Kidney Int",
+    "year": 2022,
+    "doi": "10.1016/j.kint.2022.01.001",
+    "phenopacket_count": 5,
+    "first_added": "2023-01-01",
 }
 
 _PUB_WITHOUT_YEAR = {
-    "id": "PMID:1002",
-    "type": "Publication",
-    "attributes": {
-        "pmid": "PMID:1002",
-        "title": "Early HNF1B study",
-        "authors": "Brown K",
-        "journal": "Nephrology",
-        "year": None,
-        "doi": None,
-        "phenopacket_count": 2,
-        "first_added": "2022-06-15",
-    },
+    "pmid": "PMID:1002",
+    "title": "Early HNF1B study",
+    "authors": "Brown K",
+    "journal": "Nephrology",
+    "year": None,
+    "doi": None,
+    "phenopacket_count": 2,
+    "first_added": "2022-06-15",
 }
 
+# Real meta shape: meta.page.{totalRecords, currentPage, pageSize, totalPages}
 _PUBS_RESPONSE = {
     "data": [_PUB_WITH_YEAR, _PUB_WITHOUT_YEAR],
     "meta": {
-        "total": 42,
-        "page": 1,
-        "page_size": 25,
+        "page": {
+            "totalRecords": 42,
+            "currentPage": 1,
+            "pageSize": 25,
+            "totalPages": 2,
+        }
     },
+    "links": {},
 }
 
-_BY_PUB_RESPONSE = {
-    "data": [
-        {
-            "id": "PP001",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP001"},
-        },
-        {
-            "id": "PP002",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP002"},
-        },
-        {
-            "id": "PP003",
-            "type": "Phenopacket",
-            "attributes": {"phenopacket_id": "PP003"},
-        },
-    ],
-    "meta": {"total": 3},
-}
+# Real by-publication shape: a BARE JSON list of {phenopacket_id, phenopacket}
+_BY_PUB_RESPONSE = [
+    {"phenopacket_id": "PP001", "phenopacket": {}},
+    {"phenopacket_id": "PP002", "phenopacket": {}},
+    {"phenopacket_id": "PP003", "phenopacket": {}},
+]
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +270,9 @@ async def test_get_publication_citing_individuals_returns_ids():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_publication_citing_individuals_empty():
-    """Empty data list returns zero total."""
+    """Empty bare-list response returns zero total."""
     respx.get(f"{BASE}/phenopackets/by-publication/999").mock(
-        return_value=httpx.Response(200, json={"data": [], "meta": {"total": 0}})
+        return_value=httpx.Response(200, json=[])
     )
     c = ApiClient(base_url=BASE)
     result = await get_publication_citing_individuals(c, "999")
@@ -303,7 +287,7 @@ async def test_get_publication_citing_individuals_empty():
 async def test_get_publication_citing_individuals_never_calls_metadata():
     """Defensive: reverse-lookup never calls /publications/.*/metadata."""
     route = respx.get(f"{BASE}/phenopackets/by-publication/456").mock(
-        return_value=httpx.Response(200, json={"data": [], "meta": {"total": 0}})
+        return_value=httpx.Response(200, json=[])
     )
     c = ApiClient(base_url=BASE)
     await get_publication_citing_individuals(c, "456")

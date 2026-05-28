@@ -104,11 +104,11 @@ async def resolve_terms(
             ONTOLOGY_HPO_AUTOCOMPLETE,
             params={"q": text, "limit": limit},
         )
-        raw_items: list[dict[str, Any]] = data.get("items") or []
+        raw_items: list[dict[str, Any]] = data.get("data") or []
         matches = [_map_hpo_item(item) for item in raw_items]
     else:
         data = await client.get(f"{_VOCAB_PATH_PREFIX}{vocabulary}")
-        raw_items = data.get("items") or []
+        raw_items = data.get("data") or []
         mapped = [_map_vocab_item(item) for item in raw_items]
         if text:
             lower = text.lower()

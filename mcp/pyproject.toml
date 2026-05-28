@@ -62,8 +62,10 @@ disable_error_code = ["explicit-any"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not live'"
 markers = [
     "smoke: end-to-end smoke tests (excluded from default CI with -m 'not smoke')",
+    "live: tests that hit the live API at http://localhost:8000 (skipped in CI)",
 ]
 
 [tool.coverage.report]

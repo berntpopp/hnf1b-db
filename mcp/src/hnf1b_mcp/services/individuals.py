@@ -199,14 +199,31 @@ async def get_individuals(
 
     if ids is not None:
         # Batch endpoint: GET /phenopackets/batch?phenopacket_ids=a,b,c
+        # Response is a BARE LIST: [{phenopacket_id, phenopacket}, ...]
         params: dict[str, Any] = {"phenopacket_ids": ",".join(ids)}
-        batch_resp: dict[str, Any] = await client.get(PHENOPACKETS_BATCH, params=params)
-        records: list[dict[str, Any]] = batch_resp.get("results", [])
-        for record in records:
+        batch_resp: Any = await client.get(PHENOPACKETS_BATCH, params=params)
+        batch_list: list[dict[str, Any]] = (
+            batch_resp
+            if isinstance(batch_resp, list)
+            else batch_resp.get("results", [])
+        )
+        for item in batch_list:
+            # Each batch item has phenopacket_id and phenopacket keys
+            pp_id: str = item.get("phenopacket_id", item.get("id", ""))
+            if not pp_id:
+                continue
+            phenopacket_content: dict[str, Any] = item.get("phenopacket", item)
+            # Build a normalised record that _shape_individual understands
+            record: dict[str, Any] = {
+                "phenopacket_id": pp_id,
+                "phenopacket": phenopacket_content,
+            }
             individuals.append(_shape_individual(record))
         total = len(individuals)
     else:
         # Discovery list endpoint
+        # Response: {data:[ITEM,...], meta:{page:{totalRecords:N}}, links:{}}
+        # Each ITEM is a raw phenopacket object with top-level "id".
         params = {"page[size]": page_size}
         if filters:
             for key, val in filters.items():
@@ -214,22 +231,35 @@ async def get_individuals(
         list_resp: dict[str, Any] = await client.get(PHENOPACKETS, params=params)
         data_items: list[dict[str, Any]] = list_resp.get("data", [])
         meta: dict[str, Any] = list_resp.get("meta", {})
-        total = int(meta.get("total", len(data_items)))
+        # Support both meta.page.totalRecords (real API) and legacy meta.total
+        page_meta: dict[str, Any] = meta.get("page", {})
+        total = int(page_meta.get("totalRecords", meta.get("total", len(data_items))))
 
         for item in data_items:
-            attrs: dict[str, Any] = item.get("attributes", item)
-            pp_id: str = attrs.get("phenopacket_id", "")
-            if expand and pp_id:
+            # Real API: item["id"] is the phenopacket id.
+            # Defensive: also support legacy {attributes:{phenopacket_id:...}}.
+            if "id" in item and not item.get("attributes"):
+                # Real API shape: id is at the top level
+                item_pp_id: str = item.get("id", item.get("phenopacket_id", ""))
+            else:
+                # Legacy/attributes shape
+                attrs: dict[str, Any] = item.get("attributes", item)
+                item_pp_id = attrs.get("phenopacket_id", attrs.get("id", ""))
+
+            if not item_pp_id:
+                continue
+
+            if expand:
                 full_record: dict[str, Any] = await client.get(
-                    PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=pp_id)
+                    PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=item_pp_id)
                 )
                 individuals.append(_shape_individual(full_record))
             else:
                 # Minimal stub without full phenopacket data
                 individuals.append(
                     {
-                        "phenopacket_id": pp_id,
-                        "uri": f"hnf1b://individual/{pp_id}",
+                        "phenopacket_id": item_pp_id,
+                        "uri": f"hnf1b://individual/{item_pp_id}",
                     }
                 )
 

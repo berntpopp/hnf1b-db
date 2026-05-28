@@ -148,6 +148,38 @@ _PHENOPACKET_B: dict = {
     },
 }
 
+# Real batch-endpoint shape: bare list of {phenopacket_id, phenopacket} objects.
+_BATCH_ITEM_A: dict = {
+    "phenopacket_id": "A",
+    "phenopacket": _PHENOPACKET_A["phenopacket"],
+}
+_BATCH_ITEM_B: dict = {
+    "phenopacket_id": "B",
+    "phenopacket": _PHENOPACKET_B["phenopacket"],
+}
+
+# Real list-endpoint item shape: raw phenopacket with top-level "id" (no phenopacket_id).
+_LIST_ITEM_A: dict = {
+    "id": "A",
+    "subject": {"id": "A", "sex": "FEMALE"},
+    "phenotypicFeatures": [],
+    "measurements": [],
+    "diseases": [],
+    "interpretations": [],
+    "medicalActions": [],
+    "metaData": {"externalReferences": [{"id": "PMID:11111111"}]},
+}
+_LIST_ITEM_B: dict = {
+    "id": "B",
+    "subject": {"id": "B", "sex": "MALE"},
+    "phenotypicFeatures": [],
+    "measurements": [],
+    "diseases": [],
+    "interpretations": [],
+    "medicalActions": [],
+    "metaData": {"externalReferences": [{"id": "PMID:22222222"}]},
+}
+
 
 # ---------------------------------------------------------------------------
 # get_individual tests
@@ -280,10 +312,9 @@ async def test_get_individual_not_found_raises():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individuals_by_ids_uses_batch():
+    # Batch endpoint returns a BARE LIST (not a {results:[...]} envelope)
     respx.get(f"{BASE}/phenopackets/batch").mock(
-        return_value=httpx.Response(
-            200, json={"results": [_PHENOPACKET_A, _PHENOPACKET_B]}
-        )
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A, _BATCH_ITEM_B])
     )
     c = ApiClient(base_url=BASE)
     result = await get_individuals(c, ids=["A", "B"])
@@ -298,10 +329,9 @@ async def test_get_individuals_by_ids_uses_batch():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individuals_by_ids_uri_present():
+    # Batch endpoint returns a BARE LIST (not a {results:[...]} envelope)
     respx.get(f"{BASE}/phenopackets/batch").mock(
-        return_value=httpx.Response(
-            200, json={"results": [_PHENOPACKET_A, _PHENOPACKET_B]}
-        )
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A, _BATCH_ITEM_B])
     )
     c = ApiClient(base_url=BASE)
     result = await get_individuals(c, ids=["A", "B"])
@@ -315,18 +345,23 @@ async def test_get_individuals_by_ids_uri_present():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individuals_list_endpoint():
+    # Real API shape: data items have top-level "id"; meta uses page.totalRecords
     list_resp = {
-        "data": [
-            {"attributes": {"phenopacket_id": "A"}},
-            {"attributes": {"phenopacket_id": "B"}},
-        ],
-        "meta": {"total": 2},
+        "data": [_LIST_ITEM_A, _LIST_ITEM_B],
+        "meta": {
+            "page": {
+                "currentPage": 1,
+                "pageSize": 10,
+                "totalPages": 1,
+                "totalRecords": 2,
+            }
+        },
         "links": {},
     }
     respx.get(f"{BASE}/phenopackets/").mock(
         return_value=httpx.Response(200, json=list_resp)
     )
-    # Each individual fetched separately
+    # Each individual fetched separately when expand=True
     respx.get(f"{BASE}/phenopackets/A").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_A)
     )
@@ -344,10 +379,46 @@ async def test_get_individuals_list_endpoint():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_get_individuals_list_stub_no_expand():
+    # Without expand=True the service returns minimal stubs; ids must be non-empty
+    list_resp = {
+        "data": [_LIST_ITEM_A, _LIST_ITEM_B],
+        "meta": {
+            "page": {
+                "currentPage": 1,
+                "pageSize": 25,
+                "totalPages": 1,
+                "totalRecords": 2,
+            }
+        },
+        "links": {},
+    }
+    respx.get(f"{BASE}/phenopackets/").mock(
+        return_value=httpx.Response(200, json=list_resp)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, page_size=25)
+    await c.aclose()
+
+    assert result["total"] == 2
+    for ind in result["individuals"]:
+        assert ind["phenopacket_id"] != ""
+        assert ind["uri"] == f"hnf1b://individual/{ind['phenopacket_id']}"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_get_individuals_filters_passed():
     list_resp = {
-        "data": [{"attributes": {"phenopacket_id": "A"}}],
-        "meta": {"total": 1},
+        "data": [_LIST_ITEM_A],
+        "meta": {
+            "page": {
+                "currentPage": 1,
+                "pageSize": 5,
+                "totalPages": 1,
+                "totalRecords": 1,
+            }
+        },
         "links": {},
     }
     route = respx.get(f"{BASE}/phenopackets/").mock(
@@ -367,16 +438,15 @@ async def test_get_individuals_filters_passed():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individuals_dedupe_publications():
-    # Both phenopackets share PMID:11111111 via _PHENOPACKET_A (and we'll make B share it)
-    pp_b_shared = {**_PHENOPACKET_B}
-    inner = dict(_PHENOPACKET_B["phenopacket"])
-    inner["metaData"] = {"externalReferences": [{"id": "PMID:11111111"}]}
-    pp_b_shared = {**_PHENOPACKET_B, "phenopacket": inner}
+    # Both phenopackets share PMID:11111111; batch returns a BARE LIST
+    inner_b_shared: dict = {
+        **_PHENOPACKET_B["phenopacket"],
+        "metaData": {"externalReferences": [{"id": "PMID:11111111"}]},
+    }
+    batch_item_b_shared: dict = {"phenopacket_id": "B", "phenopacket": inner_b_shared}
 
     respx.get(f"{BASE}/phenopackets/batch").mock(
-        return_value=httpx.Response(
-            200, json={"results": [_PHENOPACKET_A, pp_b_shared]}
-        )
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A, batch_item_b_shared])
     )
     c = ApiClient(base_url=BASE)
     result = await get_individuals(c, ids=["A", "B"], dedupe_publications=True)

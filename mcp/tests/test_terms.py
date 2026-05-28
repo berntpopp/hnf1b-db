@@ -17,7 +17,7 @@ BASE = "http://api.test/api/v2"
 # ---------------------------------------------------------------------------
 
 _HPO_AUTOCOMPLETE_RESP = {
-    "items": [
+    "data": [
         {
             "hpo_id": "HP:0000083",
             "label": "Renal insufficiency",
@@ -36,7 +36,7 @@ _HPO_AUTOCOMPLETE_RESP = {
 }
 
 _SEX_VOCAB_RESP = {
-    "items": [
+    "data": [
         {"id": "MALE", "label": "Male", "description": "Biological male"},
         {"id": "FEMALE", "label": "Female", "description": "Biological female"},
         {"id": "UNKNOWN_SEX", "label": "Unknown", "description": "Sex not recorded"},
@@ -216,7 +216,7 @@ async def test_resolve_terms_interpretation_status_accepted() -> None:
         return_value=httpx.Response(
             200,
             json={
-                "items": [{"id": "CAUSATIVE", "label": "Causative", "description": ""}]
+                "data": [{"id": "CAUSATIVE", "label": "Causative", "description": ""}]
             },
         )
     )
@@ -233,7 +233,7 @@ async def test_resolve_terms_interpretation_status_accepted() -> None:
 async def test_resolve_terms_allelic_state_accepted() -> None:
     respx.get(f"{BASE}/ontology/vocabularies/allelic-state").mock(
         return_value=httpx.Response(
-            200, json={"items": [{"id": "GENO:0000135", "label": "heterozygous"}]}
+            200, json={"data": [{"id": "GENO:0000135", "label": "heterozygous"}]}
         )
     )
     c = ApiClient(base_url=BASE)

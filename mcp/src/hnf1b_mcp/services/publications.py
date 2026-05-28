@@ -32,28 +32,31 @@ def _strip_pmid_prefix(raw: str) -> str:
 
 
 def _shape_publication(item: dict[str, Any]) -> dict[str, Any]:
-    """Convert a JSON:API publication item into a flat output dict.
+    """Convert a FLAT publication item into an output dict.
+
+    The API returns flat items (no JSON:API ``attributes`` nesting).
+    Fields like ``pmid``, ``title``, ``authors``, etc. are top-level keys.
 
     Args:
-        item: A single JSON:API ``data`` element with ``id`` and ``attributes``.
+        item: A single flat item from the ``data`` list returned by
+            ``GET /publications/``.
 
     Returns:
         A flat dict with ``pmid``, ``recommended_citation``,
         ``date_confidence``, ``journal``, ``year``, ``phenopacket_count``,
         and ``uri``.
     """
-    attrs: dict[str, Any] = item.get("attributes") or {}
-    # Prefer attributes.pmid; fall back to the top-level id.
-    pmid: str = str(attrs.get("pmid") or item.get("id") or "")
+    # Items are FLAT — read fields directly from the top-level dict.
+    pmid: str = str(item.get("pmid") or "")
 
-    # Build a merged record for the citation helper.
+    # Build a record for the citation helper.
     pub_record: dict[str, Any] = {
         "pmid": pmid,
-        "title": attrs.get("title"),
-        "authors": attrs.get("authors"),
-        "journal": attrs.get("journal"),
-        "year": attrs.get("year"),
-        "doi": attrs.get("doi"),
+        "title": item.get("title"),
+        "authors": item.get("authors"),
+        "journal": item.get("journal"),
+        "year": item.get("year"),
+        "doi": item.get("doi"),
     }
     citation_info = build_citation(pub_record)
 
@@ -64,9 +67,9 @@ def _shape_publication(item: dict[str, Any]) -> dict[str, Any]:
         "pmid": pmid,
         "recommended_citation": citation_info["recommended_citation"],
         "date_confidence": citation_info["date_confidence"],
-        "journal": attrs.get("journal"),
-        "year": attrs.get("year"),
-        "phenopacket_count": attrs.get("phenopacket_count"),
+        "journal": item.get("journal"),
+        "year": item.get("year"),
+        "phenopacket_count": item.get("phenopacket_count"),
         "uri": uri,
     }
 
@@ -109,14 +112,31 @@ async def list_publications(
 
     data: list[dict[str, Any]] = body.get("data") or []
     meta: dict[str, Any] = body.get("meta") or {}
+    # Real API: meta.page is a nested dict with totalRecords/currentPage/pageSize.
+    # Older/stub responses may have flat meta.total / meta.page (int) / meta.page_size.
+    _raw_page_meta = meta.get("page")
+    page_meta: dict[str, Any] = (
+        _raw_page_meta if isinstance(_raw_page_meta, dict) else {}
+    )
 
     publications = [_shape_publication(item) for item in data]
 
+    total: int = int(
+        page_meta.get("totalRecords") or meta.get("total") or len(publications)
+    )
+    _page_int = _raw_page_meta if isinstance(_raw_page_meta, int) else None
+    current_page: int = int(
+        page_meta.get("currentPage") or _page_int or meta.get("page") or page
+    )
+    current_size: int = int(
+        page_meta.get("pageSize") or meta.get("page_size") or effective_size
+    )
+
     return {
         "publications": publications,
-        "total": meta.get("total", len(publications)),
-        "page": meta.get("page", page),
-        "page_size": meta.get("page_size", effective_size),
+        "total": total,
+        "page": current_page,
+        "page_size": current_size,
     }
 
 
@@ -142,15 +162,23 @@ async def get_publication_citing_individuals(
     bare = _strip_pmid_prefix(pmid)
     path = PHENOPACKETS_BY_PUBLICATION_BY_PMID.format(pmid=bare)
 
-    body: dict[str, Any] = await client.get(path)
+    # The endpoint returns a BARE JSON LIST, not a JSON:API envelope.
+    # Shape: [{"phenopacket_id": "...", "phenopacket": {...}}, ...]
+    raw = await client.get(path)
 
-    data: list[dict[str, Any]] = body.get("data") or []
+    # Normalise: the endpoint returns a bare list; client.get returns Any.
+    items: list[dict[str, Any]]
+    if isinstance(raw, list):
+        items = raw
+    else:
+        # Fallback: treat as envelope with a "data" key (defensive)
+        envelope: dict[str, Any] = raw
+        items = envelope.get("data") or []
 
-    # Extract phenopacket_id from attributes, falling back to the item id.
+    # Extract phenopacket_id directly from the flat list items.
     citing: list[str] = []
-    for item in data:
-        attrs: dict[str, Any] = item.get("attributes") or {}
-        pid: str = str(attrs.get("phenopacket_id") or item.get("id") or "")
+    for item in items:
+        pid: str = str(item.get("phenopacket_id") or "")
         if pid:
             citing.append(pid)
 

@@ -17,7 +17,7 @@ BASE = "http://api.test/api/v2"
 # ---------------------------------------------------------------------------
 
 _HPO_AUTOCOMPLETE_RESP = {
-    "items": [
+    "data": [
         {
             "hpo_id": "HP:0000083",
             "label": "Renal insufficiency",
@@ -36,7 +36,7 @@ _HPO_AUTOCOMPLETE_RESP = {
 }
 
 _SEX_VOCAB_RESP = {
-    "items": [
+    "data": [
         {"id": "MALE", "label": "Male", "description": "Biological male"},
         {"id": "FEMALE", "label": "Female", "description": "Biological female"},
         {"id": "UNKNOWN_SEX", "label": "Unknown", "description": "Sex not recorded"},
