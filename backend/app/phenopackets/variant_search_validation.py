@@ -25,40 +25,23 @@ from app.core.patterns import (
     HGVS_P_SEARCH_PATTERN,
     is_safe_search_query,
 )
+from app.phenopackets.variant_vocab import (
+    MolecularConsequence,
+    VariantClassification,
+    VariantType,
+)
 
-# Allowed values for controlled vocabularies
-ALLOWED_VARIANT_TYPES = {
-    "SNV",
-    "deletion",
-    "duplication",
-    "insertion",
-    "indel",
-    "inversion",
-    "CNV",
-}
-ALLOWED_CLASSIFICATIONS = {
-    "PATHOGENIC",
-    "LIKELY_PATHOGENIC",
-    "UNCERTAIN_SIGNIFICANCE",
-    "LIKELY_BENIGN",
-    "BENIGN",
-}
+# Allowed values for controlled vocabularies.
+# These are DERIVED from the shared enums in `variant_vocab` so the enums remain
+# the single source of truth for both validation and the OpenAPI schema.
+ALLOWED_VARIANT_TYPES = frozenset(e.value for e in VariantType)
+ALLOWED_CLASSIFICATIONS = frozenset(e.value for e in VariantClassification)
 ALLOWED_GENES = {"HNF1B"}  # Expand as database grows
 
-# Molecular consequence types (computed from HGVS notation)
-# Note: CNV-related consequences (Copy Number Loss/Gain) are covered by variant type filters
-ALLOWED_CONSEQUENCES = {
-    "Frameshift",
-    "Nonsense",
-    "Missense",
-    "Splice Donor",
-    "Splice Acceptor",
-    "In-frame Deletion",
-    "In-frame Insertion",
-    "Synonymous",
-    "Intronic Variant",
-    "Coding Sequence Variant",
-}
+# Molecular consequence types (computed from HGVS notation).
+# Note: CNV-related consequences (Copy Number Loss/Gain) are covered by variant
+# type filters and so are absent from the MolecularConsequence enum.
+ALLOWED_CONSEQUENCES = frozenset(e.value for e in MolecularConsequence)
 
 
 def validate_hgvs_notation(query: str) -> bool:

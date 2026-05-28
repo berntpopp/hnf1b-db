@@ -21,6 +21,12 @@ from app.phenopackets.variant_search_validation import (
     validate_search_query,
     validate_variant_type,
 )
+from app.phenopackets.variant_vocab import (
+    MolecularConsequence,
+    ProteinDomain,
+    VariantClassification,
+    VariantType,
+)
 from app.utils.audit_logger import log_variant_search
 from app.utils.pagination import build_offset_response
 
@@ -29,12 +35,13 @@ from .variant_query_builder import VariantQueryBuilder
 router = APIRouter()
 
 
-# HNF1B protein domain boundaries from UniProt P35680
+# HNF1B protein domain boundaries from UniProt P35680.
+# Keyed by ProteinDomain member values so the domain vocabulary is single-sourced.
 DOMAIN_BOUNDARIES = {
-    "Dimerization Domain": (1, 31),
-    "POU-Specific Domain": (8, 173),
-    "POU Homeodomain": (232, 305),
-    "Transactivation Domain": (314, 557),
+    ProteinDomain.DIMERIZATION.value: (1, 31),
+    ProteinDomain.POU_SPECIFIC.value: (8, 173),
+    ProteinDomain.POU_HOMEODOMAIN.value: (232, 305),
+    ProteinDomain.TRANSACTIVATION.value: (314, 557),
 }
 
 # Map frontend field names to SQL column names for sorting
@@ -64,17 +71,17 @@ async def aggregate_all_variants(
         None,
         description="Search in HGVS notations, variant ID, or genomic coordinates",
     ),
-    variant_type: Optional[str] = Query(
+    variant_type: Optional[VariantType] = Query(
         None, description="Filter by variant type (SNV, deletion, etc.)"
     ),
-    classification: Optional[str] = Query(
+    classification: Optional[VariantClassification] = Query(
         None, description="Filter by ACMG classification"
     ),
     gene: Optional[str] = Query(None, description="Filter by gene symbol"),
-    consequence: Optional[str] = Query(
+    consequence: Optional[MolecularConsequence] = Query(
         None, description="Filter by molecular consequence"
     ),
-    domain: Optional[str] = Query(
+    domain: Optional[ProteinDomain] = Query(
         None, description="Filter by protein domain (e.g., 'POU-Specific Domain')"
     ),
     pathogenicity: Optional[str] = Query(
@@ -108,14 +115,21 @@ async def aggregate_all_variants(
     # HTTP caching: 5 minutes for variant data
     response.headers["Cache-Control"] = "public, max-age=300"
 
+    # Coerce enum params to their string values so downstream validation, the
+    # query builder, and asyncpg receive plain strings (never Enum instances).
+    variant_type_value = variant_type.value if variant_type else None
+    classification_value = classification.value if classification else None
+    consequence_value = consequence.value if consequence else None
+    domain_value = domain.value if domain else None
+
     # Input validation (security layer)
     validated_query = validate_search_query(query)
-    validated_variant_type = validate_variant_type(variant_type)
+    validated_variant_type = validate_variant_type(variant_type_value)
     validated_gene = validate_gene(gene)
-    validated_consequence = validate_molecular_consequence(consequence)
+    validated_consequence = validate_molecular_consequence(consequence_value)
 
     # Handle legacy 'pathogenicity' parameter
-    classification_param = classification or pathogenicity
+    classification_param = classification_value or pathogenicity
     validated_classification = validate_classification(classification_param)
 
     # Build query using fluent builder pattern
@@ -131,8 +145,8 @@ async def aggregate_all_variants(
         builder.with_gene_filter(validated_gene)
     if validated_consequence:
         builder.with_consequence(validated_consequence)
-    if domain and domain in DOMAIN_BOUNDARIES:
-        start_pos, end_pos = DOMAIN_BOUNDARIES[domain]
+    if domain_value and domain_value in DOMAIN_BOUNDARIES:
+        start_pos, end_pos = DOMAIN_BOUNDARIES[domain_value]
         builder.with_domain_filter(start_pos, end_pos)
 
     # Build ORDER BY clause
@@ -210,8 +224,8 @@ async def aggregate_all_variants(
         filters["gene"] = validated_gene
     if validated_consequence:
         filters["consequence"] = validated_consequence
-    if domain:
-        filters["domain"] = domain
+    if domain_value:
+        filters["domain"] = domain_value
 
     # Build JSON:API offset response
     base_url = str(request.url.path)
