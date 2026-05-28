@@ -78,11 +78,15 @@ async def search_phenopackets(
             "FROM phenopackets p"
             " JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id"
         )
-        # Anonymous / viewer: public filter — published rows only (I3 + I7)
+        # Anonymous / viewer: public filter — published rows only (I3 + I7),
+        # excluding synthetic e2e-* fixtures from public discovery/search
+        # (single-record GET is unaffected, so the e2e lifecycle self-check
+        # still works).
         where_conditions = [
             "p.deleted_at IS NULL",
             "p.state = 'published'",
             "p.head_published_revision_id IS NOT NULL",
+            "p.phenopacket_id NOT LIKE 'e2e-%'",
         ]
     else:
         from_clause = "FROM phenopackets p"

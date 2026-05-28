@@ -78,6 +78,7 @@ async def aggregate_by_feature(
             " WHERE deleted_at IS NULL"
             " AND state = 'published'"
             " AND head_published_revision_id IS NOT NULL"
+            " AND phenopacket_id NOT LIKE 'e2e-%'"
         )
     )
     total_phenopackets = total_phenopackets_result.scalar() or 0
@@ -98,6 +99,7 @@ async def aggregate_by_feature(
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
+        AND phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
         feature->'type'->>'id',
         feature->'type'->>'label'

@@ -64,6 +64,7 @@ async def aggregate_sex_distribution(
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
+        AND phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
         subject_sex
     ORDER BY
@@ -103,6 +104,7 @@ async def aggregate_age_of_onset(
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
+        AND phenopacket_id NOT LIKE 'e2e-%'
         AND disease->'onset'->'ontologyClass'->>'label' IS NOT NULL
     GROUP BY
         disease->'onset'->'ontologyClass'->>'label',

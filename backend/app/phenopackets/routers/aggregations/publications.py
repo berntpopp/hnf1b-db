@@ -42,6 +42,7 @@ async def aggregate_publication_types(
         p.deleted_at IS NULL
         AND p.state = 'published'
         AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
         AND ext_ref->>'reference' IS NOT NULL
         AND ext_ref->>'reference' != ''
     GROUP BY
@@ -112,6 +113,7 @@ async def get_publications_timeline(
         WHERE p.deleted_at IS NULL
           AND p.state = 'published'
           AND p.head_published_revision_id IS NOT NULL
+          AND p.phenopacket_id NOT LIKE 'e2e-%'
           AND ext_ref->>'id' LIKE 'PMID:%'
     ),
     year_counts AS (
@@ -187,6 +189,7 @@ async def get_publications_by_type(
       AND p.deleted_at IS NULL
       AND p.state = 'published'
       AND p.head_published_revision_id IS NOT NULL
+      AND p.phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY ext_ref->>'id', ext_ref->>'reference', pm.year, pm.title
     ORDER BY pmid
     """
@@ -248,6 +251,7 @@ async def get_publications_timeline_data(
           AND p.deleted_at IS NULL
           AND p.state = 'published'
           AND p.head_published_revision_id IS NOT NULL
+          AND p.phenopacket_id NOT LIKE 'e2e-%'
         GROUP BY ext_ref->>'id', ext_ref->>'reference', pm.year
     )
     SELECT

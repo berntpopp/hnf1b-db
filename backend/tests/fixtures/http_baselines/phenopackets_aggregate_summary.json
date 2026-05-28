@@ -2,6 +2,7 @@
   "normalized_body": {
     "distinct_hpo_terms": 0,
     "distinct_publications": 0,
+    "distinct_sources": 0,
     "distinct_variants": 0,
     "female": 0,
     "male": 0,
@@ -12,6 +13,7 @@
   "shape": {
     "distinct_hpo_terms": "int",
     "distinct_publications": "int",
+    "distinct_sources": "int",
     "distinct_variants": "int",
     "female": "int",
     "male": "int",

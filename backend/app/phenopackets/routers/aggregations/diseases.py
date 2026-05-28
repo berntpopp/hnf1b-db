@@ -68,6 +68,7 @@ async def aggregate_by_disease(
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
+        AND phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
         disease->'term'->>'id',
         disease->'term'->>'label'
@@ -109,6 +110,7 @@ async def aggregate_kidney_stages(
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
+        AND phenopacket_id NOT LIKE 'e2e-%'
         AND feature->'type'->>'id' = :ckd_hpo
         AND modifier->>'label' LIKE '%Stage%'
     GROUP BY

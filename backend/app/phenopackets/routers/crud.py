@@ -156,7 +156,12 @@ async def list_phenopackets(
     if is_curator:
         query = curator_filter(base_stmt)
     else:
-        query = public_filter(base_stmt)
+        # Public listing also drops synthetic e2e-* fixtures so they never
+        # appear in anonymous discovery/browse. Single-record GET below keeps
+        # them (the e2e lifecycle self-check reads its own record by id).
+        query = public_filter(base_stmt).where(
+            Phenopacket.phenopacket_id.not_like("e2e-%")
+        )
 
     # Apply sex and variant filters
     query = add_sex_filter(query, filter_sex)
@@ -178,7 +183,9 @@ async def list_phenopackets(
     if is_curator:
         count_base = curator_filter(count_base)
     else:
-        count_base = public_filter(count_base)
+        count_base = public_filter(count_base).where(
+            Phenopacket.phenopacket_id.not_like("e2e-%")
+        )
     count_base = add_sex_filter(count_base, filter_sex)
     count_base = add_has_variants_filter(count_base, filter_has_variants)
     count_result = await db.execute(count_base)
