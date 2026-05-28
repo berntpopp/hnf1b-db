@@ -4,16 +4,22 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..contract._generated_paths import (
+    ALL_PATHS,
+    ONTOLOGY_HPO_AUTOCOMPLETE,
+)
 from .errors import McpToolError
 
-#: Vocabulary name → allowlisted path segment.
-_CONTROLLED_VOCABS: list[str] = [
-    "sex",
-    "interpretation-status",
-    "progress-status",
-    "allelic-state",
-    "evidence-code",
-]
+# Path prefix for named controlled vocabularies, e.g. /ontology/vocabularies/sex.
+_VOCAB_PATH_PREFIX = "/ontology/vocabularies/"
+
+#: Controlled-vocabulary names, derived from the generated ``/ontology/
+#: vocabularies/{name}`` path segments so they cannot drift from the backend.
+_CONTROLLED_VOCABS: list[str] = sorted(
+    path[len(_VOCAB_PATH_PREFIX) :]
+    for path in ALL_PATHS
+    if path.startswith(_VOCAB_PATH_PREFIX)
+)
 
 _VALID_VOCABULARIES: list[str] = ["hpo", *_CONTROLLED_VOCABS]
 
@@ -94,13 +100,13 @@ async def resolve_terms(
 
     if vocabulary == "hpo":
         data = await client.get(
-            "/ontology/hpo/autocomplete",
+            ONTOLOGY_HPO_AUTOCOMPLETE,
             params={"q": text, "limit": limit},
         )
         raw_items: list[dict[str, Any]] = data.get("items") or []
         matches = [_map_hpo_item(item) for item in raw_items]
     else:
-        data = await client.get(f"/ontology/vocabularies/{vocabulary}")
+        data = await client.get(f"{_VOCAB_PATH_PREFIX}{vocabulary}")
         raw_items = data.get("items") or []
         mapped = [_map_vocab_item(item) for item in raw_items]
         if text:

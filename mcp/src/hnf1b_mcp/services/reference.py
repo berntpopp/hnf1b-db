@@ -4,6 +4,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..contract._generated_paths import (
+    REFERENCE_GENES_BY_SYMBOL,
+    REFERENCE_GENES_BY_SYMBOL_DOMAINS,
+    REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS,
+)
 
 
 async def get_gene_context(
@@ -37,7 +42,7 @@ async def get_gene_context(
     params: dict[str, Any] = {"genome_build": genome_build}
 
     gene: dict[str, Any] = await client.get(
-        f"/reference/genes/{gene_symbol}", params=params
+        REFERENCE_GENES_BY_SYMBOL.format(symbol=gene_symbol), params=params
     )
 
     result: dict[str, Any] = {
@@ -47,13 +52,15 @@ async def get_gene_context(
 
     if include_transcripts:
         transcripts: list[Any] = await client.get(
-            f"/reference/genes/{gene_symbol}/transcripts", params=params
+            REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS.format(symbol=gene_symbol),
+            params=params,
         )
         result["transcripts"] = transcripts
 
     if include_domains:
         domains_response: dict[str, Any] = await client.get(
-            f"/reference/genes/{gene_symbol}/domains", params=params
+            REFERENCE_GENES_BY_SYMBOL_DOMAINS.format(symbol=gene_symbol),
+            params=params,
         )
         result["domains"] = domains_response.get("domains", [])
 

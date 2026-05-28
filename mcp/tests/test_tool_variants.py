@@ -26,7 +26,7 @@ VARIANT_1 = {
     "hg38": "17:36107165:G:A",
     "transcript": "NM_000458.3",
     "protein": "p.Arg165Gln",
-    "molecular_consequence": "missense",
+    "molecular_consequence": "Missense",
 }
 
 ALL_VARIANTS_RESPONSE = {
@@ -95,7 +95,7 @@ async def test_search_variants_happy_path():
     v = variants[0]
     assert v["variant_id"] == "HNF1B:c.494G>A"
     assert v["classification"] == "PATHOGENIC"
-    assert v["consequence"] == "missense"
+    assert v["consequence"] == "Missense"
     assert v["carrier_count"] == 5
     assert v["uri"] == "hnf1b://variant/HNF1B:c.494G>A"
 
@@ -120,7 +120,7 @@ async def test_search_variants_with_filters():
         {
             "query": "kidney",
             "classification": "PATHOGENIC",
-            "consequence": "missense",
+            "consequence": "Missense",
             "domain": "POU Homeodomain",
             "page": 2,
             "page_size": 10,
@@ -136,7 +136,7 @@ async def test_search_variants_with_filters():
     sent_params = dict(call.request.url.params)
     assert sent_params["query"] == "kidney"
     assert sent_params["classification"] == "PATHOGENIC"
-    assert sent_params["consequence"] == "missense"
+    assert sent_params["consequence"] == "Missense"
     assert sent_params["domain"] == "POU Homeodomain"
     assert sent_params["page[number]"] == "2"
     assert sent_params["page[size]"] == "10"

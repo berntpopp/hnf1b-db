@@ -1,11 +1,16 @@
 """MCP tools: hnf1b_search_variants and hnf1b_get_variant."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from fastmcp import FastMCP
 
 from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.contract import (
+    MolecularConsequence,
+    ProteinDomain,
+    VariantClassification,
+)
 from hnf1b_mcp.services import variants as variants_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
@@ -29,29 +34,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     async def hnf1b_search_variants(
         query: str | None = None,
         variant_type: str | None = None,
-        classification: (
-            Literal[
-                "PATHOGENIC",
-                "LIKELY_PATHOGENIC",
-                "UNCERTAIN_SIGNIFICANCE",
-                "LIKELY_BENIGN",
-                "BENIGN",
-            ]
-            | None
-        ) = None,
+        classification: VariantClassification | None = None,
         gene: str | None = None,
-        consequence: (
-            Literal["lof", "missense", "splicing", "inframe", "other"] | None
-        ) = None,
-        domain: (
-            Literal[
-                "Dimerization Domain",
-                "POU-Specific Domain",
-                "POU Homeodomain",
-                "Transactivation Domain",
-            ]
-            | None
-        ) = None,
+        consequence: MolecularConsequence | None = None,
+        domain: ProteinDomain | None = None,
         page: int = 1,
         page_size: int = 25,
         sort: str | None = None,
@@ -73,9 +59,9 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 of ``PATHOGENIC``, ``LIKELY_PATHOGENIC``,
                 ``UNCERTAIN_SIGNIFICANCE``, ``LIKELY_BENIGN``, or ``BENIGN``.
             gene: Gene symbol or identifier filter (free-form).
-            consequence: Molecular consequence filter.  Must be one of
-                ``lof``, ``missense``, ``splicing``, ``inframe``, or
-                ``other``.
+            consequence: Molecular consequence filter.  Must be one of the
+                ``MolecularConsequence`` values (e.g. ``Frameshift``,
+                ``Nonsense``, ``Missense``, ``Splice Donor``).
             domain: Protein domain filter.  Must be one of
                 ``"Dimerization Domain"``, ``"POU-Specific Domain"``,
                 ``"POU Homeodomain"``, or ``"Transactivation Domain"``.

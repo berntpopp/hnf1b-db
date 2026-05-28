@@ -4,32 +4,26 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..contract import (
+    MOLECULAR_CONSEQUENCE_VALUES,
+    PROTEIN_DOMAIN_VALUES,
+    VARIANT_CLASSIFICATION_VALUES,
+    VARIANT_TYPE_VALUES,
+)
+from ..contract._generated_paths import (
+    PHENOPACKETS_AGGREGATE_ALL_VARIANTS,
+    PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID,
+)
 from .errors import McpToolError
 
 # ---------------------------------------------------------------------------
-# Valid enum values
+# Valid enum values — sourced from the generated API contract (DRY Layer 2).
 # ---------------------------------------------------------------------------
 
-_VALID_CLASSIFICATION = frozenset(
-    {
-        "PATHOGENIC",
-        "LIKELY_PATHOGENIC",
-        "UNCERTAIN_SIGNIFICANCE",
-        "LIKELY_BENIGN",
-        "BENIGN",
-    }
-)
-
-_VALID_CONSEQUENCE = frozenset({"lof", "missense", "splicing", "inframe", "other"})
-
-_VALID_DOMAIN = frozenset(
-    {
-        "Dimerization Domain",
-        "POU-Specific Domain",
-        "POU Homeodomain",
-        "Transactivation Domain",
-    }
-)
+_VALID_CLASSIFICATION = frozenset(VARIANT_CLASSIFICATION_VALUES)
+_VALID_CONSEQUENCE = frozenset(MOLECULAR_CONSEQUENCE_VALUES)
+_VALID_VARIANT_TYPE = frozenset(VARIANT_TYPE_VALUES)
+_VALID_DOMAIN = frozenset(PROTEIN_DOMAIN_VALUES)
 
 _MAX_PAGE_SIZE = 500
 
@@ -117,8 +111,9 @@ async def search_variants(
             ``PATHOGENIC``, ``LIKELY_PATHOGENIC``, ``UNCERTAIN_SIGNIFICANCE``,
             ``LIKELY_BENIGN``, or ``BENIGN``.
         gene: Gene symbol or ID filter (free-form).
-        consequence: Molecular consequence filter.  Must be one of ``lof``,
-            ``missense``, ``splicing``, ``inframe``, or ``other``.
+        consequence: Molecular consequence filter.  Must be one of the
+            ``MolecularConsequence`` values (e.g. ``Frameshift``, ``Nonsense``,
+            ``Missense``, ``Splice Donor``).
         domain: Protein domain filter.  Must be one of ``"Dimerization Domain"``,
             ``"POU-Specific Domain"``, ``"POU Homeodomain"``, or
             ``"Transactivation Domain"``.
@@ -162,7 +157,7 @@ async def search_variants(
         params["sort"] = sort
 
     raw: dict[str, Any] = await client.get(
-        "/phenopackets/aggregate/all-variants", params=params
+        PHENOPACKETS_AGGREGATE_ALL_VARIANTS, params=params
     )
 
     data: list[dict[str, Any]] = raw.get("data") or []
@@ -201,7 +196,7 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
             ``temporarily_unavailable`` on upstream errors.
     """
     raw: list[dict[str, Any]] = await client.get(
-        f"/phenopackets/by-variant/{variant_id}"
+        PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID.format(variant_id=variant_id)
     )
 
     carriers: list[str] = [

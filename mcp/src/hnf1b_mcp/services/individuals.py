@@ -4,6 +4,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..contract._generated_paths import (
+    PHENOPACKETS,
+    PHENOPACKETS_BATCH,
+    PHENOPACKETS_BY_PHENOPACKET_ID,
+)
 from .citation import build_citation
 
 
@@ -149,7 +154,9 @@ async def get_individual(
     Returns:
         A plain dict with shaped individual data.
     """
-    record: dict[str, Any] = await client.get(f"/phenopackets/{phenopacket_id}")
+    record: dict[str, Any] = await client.get(
+        PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=phenopacket_id)
+    )
     return _shape_individual(
         record,
         include_phenotypes=include_phenotypes,
@@ -193,7 +200,7 @@ async def get_individuals(
         # Batch endpoint: GET /phenopackets/batch?phenopacket_ids=a,b,c
         params: dict[str, Any] = {"phenopacket_ids": ",".join(ids)}
         batch_resp: dict[str, Any] = await client.get(
-            "/phenopackets/batch", params=params
+            PHENOPACKETS_BATCH, params=params
         )
         records: list[dict[str, Any]] = batch_resp.get("results", [])
         for record in records:
@@ -205,7 +212,7 @@ async def get_individuals(
         if filters:
             for key, val in filters.items():
                 params[f"filter[{key}]"] = val
-        list_resp: dict[str, Any] = await client.get("/phenopackets/", params=params)
+        list_resp: dict[str, Any] = await client.get(PHENOPACKETS, params=params)
         data_items: list[dict[str, Any]] = list_resp.get("data", [])
         meta: dict[str, Any] = list_resp.get("meta", {})
         total = int(meta.get("total", len(data_items)))
@@ -215,7 +222,7 @@ async def get_individuals(
             pp_id: str = attrs.get("phenopacket_id", "")
             if expand and pp_id:
                 full_record: dict[str, Any] = await client.get(
-                    f"/phenopackets/{pp_id}"
+                    PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=pp_id)
                 )
                 individuals.append(_shape_individual(full_record))
             else:

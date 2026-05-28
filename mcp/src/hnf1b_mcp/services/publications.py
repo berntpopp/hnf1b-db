@@ -11,6 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.contract._generated_paths import (
+    PHENOPACKETS_BY_PUBLICATION_BY_PMID,
+    PUBLICATIONS,
+)
 from hnf1b_mcp.services.citation import build_citation
 
 
@@ -100,7 +104,7 @@ async def list_publications(
         for key, value in filters.items():
             params[f"filter[{key}]"] = value
 
-    body: dict[str, Any] = await client.get("/publications/", params=params)
+    body: dict[str, Any] = await client.get(PUBLICATIONS, params=params)
 
     data: list[dict[str, Any]] = body.get("data") or []
     meta: dict[str, Any] = body.get("meta") or {}
@@ -135,7 +139,7 @@ async def get_publication_citing_individuals(
         and ``total`` (length of that list).
     """
     bare = _strip_pmid_prefix(pmid)
-    path = f"/phenopackets/by-publication/{bare}"
+    path = PHENOPACKETS_BY_PUBLICATION_BY_PMID.format(pmid=bare)
 
     body: dict[str, Any] = await client.get(path)
 

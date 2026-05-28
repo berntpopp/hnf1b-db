@@ -10,6 +10,18 @@ from typing import Any
 
 from ..client.api_client import ApiClient
 from ..config import Settings
+from ..contract._generated_paths import (
+    PHENOPACKETS_AGGREGATE_AGE_OF_ONSET,
+    PHENOPACKETS_AGGREGATE_BY_DISEASE,
+    PHENOPACKETS_AGGREGATE_BY_FEATURE,
+    PHENOPACKETS_AGGREGATE_KIDNEY_STAGES,
+    PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE,
+    PHENOPACKETS_AGGREGATE_SEX_DISTRIBUTION,
+    PHENOPACKETS_AGGREGATE_SUMMARY,
+    PHENOPACKETS_AGGREGATE_SURVIVAL_DATA,
+    PHENOPACKETS_AGGREGATE_VARIANT_PATHOGENICITY,
+    PHENOPACKETS_AGGREGATE_VARIANT_TYPES,
+)
 from .errors import McpToolError
 from .shaping import apply_budget, resolve_mode
 
@@ -17,18 +29,20 @@ from .shaping import apply_budget, resolve_mode
 # Constants
 # ---------------------------------------------------------------------------
 
-# Map metric name → relative path under /phenopackets/aggregate/
+# Map the MCP-side friendly metric name → the generated API path constant.
+# The friendly KEYS are an MCP-side curation concern (kept here); the path VALUES
+# are sourced from the generated contract so they cannot drift from the backend.
 _METRIC_PATH: dict[str, str] = {
-    "summary": "/phenopackets/aggregate/summary",
-    "sex_distribution": "/phenopackets/aggregate/sex-distribution",
-    "age_of_onset": "/phenopackets/aggregate/age-of-onset",
-    "by_disease": "/phenopackets/aggregate/by-disease",
-    "kidney_stages": "/phenopackets/aggregate/kidney-stages",
-    "by_feature": "/phenopackets/aggregate/by-feature",
-    "variant_pathogenicity": "/phenopackets/aggregate/variant-pathogenicity",
-    "variant_types": "/phenopackets/aggregate/variant-types",
-    "survival": "/phenopackets/aggregate/survival-data",
-    "publications_timeline": "/phenopackets/aggregate/publications-timeline",
+    "summary": PHENOPACKETS_AGGREGATE_SUMMARY,
+    "sex_distribution": PHENOPACKETS_AGGREGATE_SEX_DISTRIBUTION,
+    "age_of_onset": PHENOPACKETS_AGGREGATE_AGE_OF_ONSET,
+    "by_disease": PHENOPACKETS_AGGREGATE_BY_DISEASE,
+    "kidney_stages": PHENOPACKETS_AGGREGATE_KIDNEY_STAGES,
+    "by_feature": PHENOPACKETS_AGGREGATE_BY_FEATURE,
+    "variant_pathogenicity": PHENOPACKETS_AGGREGATE_VARIANT_PATHOGENICITY,
+    "variant_types": PHENOPACKETS_AGGREGATE_VARIANT_TYPES,
+    "survival": PHENOPACKETS_AGGREGATE_SURVIVAL_DATA,
+    "publications_timeline": PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE,
 }
 
 # Metrics that have well-known top-level list keys in their upstream payload.
@@ -48,6 +62,9 @@ _METRIC_LIST_KEYS: dict[str, list[str]] = {
 
 _VALID_METRICS: list[str] = sorted(_METRIC_PATH.keys())
 
+# NOTE: the survival-data ``comparison`` param is NOT exposed as an enum in the
+# OpenAPI snapshot (it is a runtime-validated plain string distinct from the
+# /compare/variant-types ``Comparison`` enum), so it stays hand-coded MCP-side.
 _SURVIVAL_COMPARISONS: list[str] = sorted(
     ["variant_type", "pathogenicity", "disease_subtype", "protein_domain"]
 )

@@ -27,7 +27,7 @@ VARIANT_1 = {
     "hg38": "17:36107165:G:A",
     "transcript": "NM_000458.3",
     "protein": "p.Arg165Gln",
-    "molecular_consequence": "missense",
+    "molecular_consequence": "Missense",
 }
 
 VARIANT_2 = {
@@ -42,7 +42,7 @@ VARIANT_2 = {
     "hg38": "17:36000000:A:T",
     "transcript": "NM_000458.3",
     "protein": "p.Met1Leu",
-    "molecular_consequence": "lof",
+    "molecular_consequence": "Frameshift",
 }
 
 ALL_VARIANTS_RESPONSE = {
@@ -87,7 +87,7 @@ async def test_search_variants_shapes_items():
     # enum mapping: pathogenicity → classification
     assert v1["classification"] == "PATHOGENIC"
     # enum mapping: molecular_consequence → consequence
-    assert v1["consequence"] == "missense"
+    assert v1["consequence"] == "Missense"
     assert v1["hg38"] == "17:36107165:G:A"
     assert v1["transcript"] == "NM_000458.3"
     assert v1["protein"] == "p.Arg165Gln"
@@ -96,7 +96,7 @@ async def test_search_variants_shapes_items():
 
     v2 = variants[1]
     assert v2["classification"] == "LIKELY_PATHOGENIC"
-    assert v2["consequence"] == "lof"
+    assert v2["consequence"] == "Frameshift"
     assert v2["carrier_count"] == 2
 
 
@@ -112,7 +112,7 @@ async def test_search_variants_passes_filters():
         client,
         query="kidney",
         classification="PATHOGENIC",
-        consequence="missense",
+        consequence="Missense",
         domain="POU Homeodomain",
         page=2,
         page_size=10,
@@ -126,7 +126,7 @@ async def test_search_variants_passes_filters():
     sent_params = dict(call.request.url.params)
     assert sent_params["query"] == "kidney"
     assert sent_params["classification"] == "PATHOGENIC"
-    assert sent_params["consequence"] == "missense"
+    assert sent_params["consequence"] == "Missense"
     assert sent_params["domain"] == "POU Homeodomain"
     assert sent_params["page[number]"] == "2"
     assert sent_params["page[size]"] == "10"

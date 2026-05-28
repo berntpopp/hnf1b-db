@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..contract._generated_paths import SEARCH_GLOBAL
 from .errors import McpToolError
 
 # Recognised entity types understood by this service.
@@ -158,7 +159,7 @@ async def search(
         params["type"] = _TYPE_TOKEN[types[0]]
 
     # --- Call the API -------------------------------------------------------
-    raw = await client.get("/search/global", params=params)
+    raw = await client.get(SEARCH_GLOBAL, params=params)
 
     # --- Normalise and filter results ---------------------------------------
     items = _extract_results(raw)
