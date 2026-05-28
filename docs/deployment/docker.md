@@ -566,8 +566,75 @@ Status: chr17q12 genes synced
 
 ---
 
+## MCP Server — mcp.hnf1b.org
+
+The HNF1B MCP sidecar (`hnf1b_mcp`) runs on port **8788** and is exposed via
+Nginx Proxy Manager in the same way as the API and frontend.
+
+### NPM Proxy Host: mcp.hnf1b.org → hnf1b_mcp:8788
+
+1. In the NPM dashboard, go to **Proxy Hosts → Add Proxy Host**.
+2. Fill in the **Details** tab:
+
+   | Field | Value |
+   |---|---|
+   | Domain Names | `mcp.hnf1b.org` |
+   | Scheme | `http` |
+   | Forward Hostname / IP | `hnf1b_mcp` |
+   | Forward Port | `8788` |
+   | Cache Assets | Off |
+   | Block Common Exploits | On |
+   | Websockets Support | Off |
+
+3. On the **SSL** tab, select **Request a new SSL Certificate** (Let's Encrypt),
+   tick **Force SSL** and **HTTP/2 Support**, enter a valid e-mail address, and
+   accept the Let's Encrypt ToS.
+
+4. On the **Advanced** tab, add the following custom Nginx directives to disable
+   proxy buffering (required for Server-Sent Events / Streamable HTTP), set
+   generous timeouts, and restrict the `Origin` header to the allowed clients:
+
+   ```nginx
+   # Required for MCP Streamable HTTP (SSE keep-alive)
+   proxy_buffering off;
+   proxy_read_timeout 300s;
+   proxy_send_timeout 300s;
+
+   # Origin allowlist — only Claude.ai and direct (no-origin) callers
+   set $allowed_origin 0;
+   if ($http_origin = "https://claude.ai")  { set $allowed_origin 1; }
+   if ($http_origin = "https://claude.com") { set $allowed_origin 1; }
+   if ($http_origin = "")                   { set $allowed_origin 1; }
+   if ($allowed_origin = 0) {
+       return 403;
+   }
+   ```
+
+5. Click **Save**. NPM will obtain the Let's Encrypt certificate and activate
+   the proxy.
+
+6. Verify the endpoint:
+
+   ```bash
+   curl https://mcp.hnf1b.org/health
+   # Expected: {"status": "ok"}
+   ```
+
+### Registering the connector in Claude.ai
+
+1. Open **Claude.ai → Settings → Connectors**.
+2. Click **Add custom connector**.
+3. Enter the connector URL: `https://mcp.hnf1b.org/mcp`
+4. Click **Save**.
+
+Claude will call `hnf1b_get_capabilities` on the next session start to
+discover the full tool inventory.
+
+---
+
 ## See Also
 
 - [Admin Guide: Updating Annotations](../admin/update-annotations.md)
 - [API Documentation](../api/README.md)
 - [Variant Annotation API](../api/variant-annotation.md)
+- [MCP Server README](../../mcp/README.md)
