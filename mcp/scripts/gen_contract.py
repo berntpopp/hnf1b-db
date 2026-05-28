@@ -18,10 +18,13 @@ Usage::
 
     uv run python scripts/gen_contract.py
 """
+
 from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -248,6 +251,15 @@ def main() -> None:
     _OUT_DIR.mkdir(parents=True, exist_ok=True)
     _PATHS_OUT.write_text(_render_paths(paths), encoding="utf-8")
     _ENUMS_OUT.write_text(_render_enums(schema_enums, param_enums), encoding="utf-8")
+
+    # Normalise formatting with ruff so the output is byte-identical whether
+    # produced here or by the CI contract-drift guard (both run this script).
+    ruff = shutil.which("ruff")
+    if ruff is not None:
+        subprocess.run(  # noqa: S603 — fixed args, pinned dev dependency
+            [ruff, "format", "--quiet", str(_PATHS_OUT), str(_ENUMS_OUT)],
+            check=True,
+        )
 
     print(f"wrote {_PATHS_OUT.relative_to(_ROOT)} ({len(paths)} paths)")
     print(
