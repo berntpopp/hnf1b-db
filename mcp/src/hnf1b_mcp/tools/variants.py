@@ -74,9 +74,15 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``compact``.
 
         Returns:
-            A dict with keys ``variants``, ``total``, ``page``,
-            ``page_size``, ``data_class``, and ``meta``.
+            A dict with keys ``variants``, ``total``, ``total_pages``,
+            ``has_more``, ``page``, ``page_size``, ``data_class``, and
+            ``meta``.  In ``minimal``/``compact`` the invariant gene symbol is
+            hoisted to ``gene_symbol_all`` and dropped from each row.  When a
+            ``consequence`` filter is supplied the rows are post-filtered
+            client-side (the upstream filter is currently ignored) and a
+            ``filtered_count`` is included.
         """
+        mode = resolve_mode(response_mode)
         return await run_tool(
             lambda: variants_service.search_variants(
                 client,  # type: ignore[arg-type]
@@ -89,9 +95,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 page=page,
                 page_size=page_size,
                 sort=sort,
+                response_mode=mode,
             ),
             data_class=DataClass.CURATED,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )
 
     @mcp.tool(
@@ -102,22 +109,29 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         variant_id: str,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
-        """Fetch carrier phenopacket IDs for a specific HNF1B variant.
+        """Fetch the full authoritative record for a single HNF1B variant.
 
-        Returns the list of phenopacket IDs that carry the requested variant.
-        This is a discovery endpoint; for authoritative carrier detail pass
-        the returned IDs to ``hnf1b_get_individuals``.
+        Returns the complete curated variant record — ``classification``
+        (pathogenicity), molecular ``consequence``, ``label``, ``hg38``,
+        ``transcript``, ``protein``, ``structural_type``, ``gene_symbol`` and
+        ``carrier_count`` — together with the list of ``carriers``
+        (phenopacket IDs). Pass those ``carriers`` IDs to
+        ``hnf1b_get_individuals`` for per-carrier phenotype detail.
 
         Args:
-            variant_id: The variant identifier (e.g. ``"HNF1B:c.494G>A"``).
+            variant_id: The exact variant identifier as returned by
+                ``hnf1b_search_variants`` (e.g.
+                ``"var:HNF1B:17:36459258-37832869:DEL"``).
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
 
         Returns:
-            A dict with keys ``variant_id``, ``carriers``,
-            ``carrier_count``, ``uri``, ``note``, ``data_class``, and
-            ``meta``.
+            A dict with keys ``variant_id``, ``simple_id``, ``label``,
+            ``gene_symbol``, ``classification``, ``consequence``,
+            ``structural_type``, ``hg38``, ``transcript``, ``protein``,
+            ``carrier_count``, ``carriers``, ``uri``, ``data_provenance``,
+            ``note``, ``data_class``, and ``meta``.
         """
         return await run_tool(
             lambda: variants_service.get_variant(

@@ -46,9 +46,17 @@ VARIANT_2 = {
     "molecular_consequence": "Frameshift",
 }
 
+# Real meta shape: meta.page.totalRecords / totalPages / currentPage.
 ALL_VARIANTS_RESPONSE = {
     "data": [VARIANT_1, VARIANT_2],
-    "meta": {"total": 42},
+    "meta": {
+        "page": {
+            "currentPage": 1,
+            "pageSize": 25,
+            "totalPages": 2,
+            "totalRecords": 42,
+        }
+    },
 }
 
 CARRIER_RESPONSE = [
@@ -65,15 +73,18 @@ CARRIER_RESPONSE = [
 @pytest.mark.asyncio
 @respx.mock
 async def test_search_variants_shapes_items():
-    """search_variants returns correctly shaped variant dicts."""
+    """search_variants returns correctly shaped variant dicts (standard mode)."""
     respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
         return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
     )
     client = ApiClient(base_url=BASE)
-    result = await search_variants(client)
+    result = await search_variants(client, response_mode="standard")
     await client.aclose()
 
+    # total reflects meta.page.totalRecords, NOT 0
     assert result["total"] == 42
+    assert result["total_pages"] == 2
+    assert result["has_more"] is True
     assert result["page"] == 1
     assert result["page_size"] == 25
     variants = result["variants"]
@@ -83,7 +94,6 @@ async def test_search_variants_shapes_items():
     assert v1["simple_id"] == "var-1"
     assert v1["variant_id"] == "HNF1B:c.494G>A"
     assert v1["label"] == "c.494G>A (p.Arg165Gln)"
-    assert v1["gene_symbol"] == "HNF1B"
     assert v1["structural_type"] == "SNV"
     # enum mapping: pathogenicity → classification
     assert v1["classification"] == "PATHOGENIC"
@@ -103,17 +113,85 @@ async def test_search_variants_shapes_items():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_variants_total_not_zero_when_rows_present():
+    """Total must equal totalRecords (41 here), never 0 with rows present."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [VARIANT_1],
+                "meta": {
+                    "page": {
+                        "currentPage": 1,
+                        "pageSize": 2,
+                        "totalPages": 21,
+                        "totalRecords": 41,
+                    }
+                },
+            },
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, classification="PATHOGENIC")
+    await client.aclose()
+
+    assert result["total"] == 41
+    assert result["total"] != 0
+    assert result["total_pages"] == 21
+    assert result["has_more"] is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_compact_hoists_gene_symbol():
+    """Compact mode drops per-row gene_symbol and hoists gene_symbol_all."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, response_mode="compact")
+    await client.aclose()
+
+    assert result["gene_symbol_all"] == "HNF1B"
+    row = result["variants"][0]
+    assert "gene_symbol" not in row
+    assert "uri" not in row  # deterministic, dropped in compact
+    # high-signal fields always present
+    for key in (
+        "variant_id",
+        "label",
+        "classification",
+        "consequence",
+        "carrier_count",
+    ):
+        assert key in row
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_variants_passes_filters():
     """search_variants forwards valid enum filters to the API."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
-        return_value=httpx.Response(200, json={"data": [], "meta": {"total": 0}})
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [],
+                "meta": {
+                    "page": {
+                        "currentPage": 2,
+                        "pageSize": 10,
+                        "totalPages": 0,
+                        "totalRecords": 0,
+                    }
+                },
+            },
+        )
     )
     client = ApiClient(base_url=BASE)
     result = await search_variants(
         client,
         query="kidney",
         classification="PATHOGENIC",
-        consequence="Missense",
         domain="POU Homeodomain",
         page=2,
         page_size=10,
@@ -127,7 +205,6 @@ async def test_search_variants_passes_filters():
     sent_params = dict(call.request.url.params)
     assert sent_params["query"] == "kidney"
     assert sent_params["classification"] == "PATHOGENIC"
-    assert sent_params["consequence"] == "Missense"
     assert sent_params["domain"] == "POU Homeodomain"
     assert sent_params["page[number]"] == "2"
     assert sent_params["page[size]"] == "10"
@@ -138,7 +215,10 @@ async def test_search_variants_passes_filters():
 async def test_search_variants_page_size_capped_at_500():
     """search_variants caps page_size at 500."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
-        return_value=httpx.Response(200, json={"data": [], "meta": {"total": 0}})
+        return_value=httpx.Response(
+            200,
+            json={"data": [], "meta": {"page": {"totalRecords": 0}}},
+        )
     )
     client = ApiClient(base_url=BASE)
     await search_variants(client, page_size=9999)
@@ -146,6 +226,33 @@ async def test_search_variants_page_size_capped_at_500():
 
     call = route.calls[0]
     assert dict(call.request.url.params)["page[size]"] == "500"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_consequence_post_filter():
+    """Consequence filter post-filters rows client-side (upstream bug)."""
+    # Upstream ignores ?consequence= and returns mixed rows; the MCP must
+    # filter so only matching rows are returned.
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [VARIANT_1, VARIANT_2],  # Missense + Frameshift
+                "meta": {"page": {"totalRecords": 198}},
+            },
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, consequence="Missense")
+    await client.aclose()
+
+    variants = result["variants"]
+    assert len(variants) == 1
+    assert variants[0]["consequence"] == "Missense"
+    assert result["filtered_count"] == 1
+    assert result["total"] == 1
+    assert "consequence_filter_note" in result
 
 
 # ---------------------------------------------------------------------------
@@ -194,53 +301,54 @@ async def test_invalid_domain_raises():
 
 
 # ---------------------------------------------------------------------------
-# get_variant – happy path
+# get_variant – authoritative full record
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_get_variant_returns_carriers():
-    """get_variant extracts phenopacket_ids and returns carrier list."""
-    respx.get(f"{BASE}/phenopackets/by-variant/var-1").mock(
+async def test_get_variant_returns_full_record():
+    """get_variant merges the full variant record with carrier IDs."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
         return_value=httpx.Response(200, json=CARRIER_RESPONSE)
     )
     client = ApiClient(base_url=BASE)
-    result = await get_variant(client, "var-1")
+    result = await get_variant(client, "HNF1B:c.494G>A")
     await client.aclose()
 
-    assert result["variant_id"] == "var-1"
+    assert result["variant_id"] == "HNF1B:c.494G>A"
+    # authoritative interpretation fields present
+    assert result["classification"] == "PATHOGENIC"
+    assert result["consequence"] == "Missense"
+    assert result["label"] == "c.494G>A (p.Arg165Gln)"
+    assert result["structural_type"] == "SNV"
+    assert result["hg38"] == "17:36107165:G:A"
+    assert result["transcript"] == "NM_000458.3"
+    assert result["protein"] == "p.Arg165Gln"
+    assert result["gene_symbol"] == "HNF1B"
+    # carriers merged in
     assert result["carriers"] == ["pp-001", "pp-002"]
     assert result["carrier_count"] == 2
-    assert result["uri"] == "hnf1b://variant/var-1"
+    assert result["uri"] == "hnf1b://variant/HNF1B:c.494G>A"
+    assert result["data_provenance"] == "curated HNF1B-db variant record"
     assert "note" in result
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_get_variant_empty_carriers():
-    """get_variant handles an empty carrier list."""
-    respx.get(f"{BASE}/phenopackets/by-variant/rare-var").mock(
-        return_value=httpx.Response(200, json=[])
-    )
-    client = ApiClient(base_url=BASE)
-    result = await get_variant(client, "rare-var")
-    await client.aclose()
-
-    assert result["carriers"] == []
-    assert result["carrier_count"] == 0
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_variant_not_found_propagates():
-    """get_variant propagates McpToolError not_found from ApiClient."""
-    respx.get(f"{BASE}/phenopackets/by-variant/missing").mock(
-        return_value=httpx.Response(404)
+async def test_get_variant_not_found_when_no_match():
+    """get_variant raises not_found when no variant matches the id."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
     )
     client = ApiClient(base_url=BASE)
     with pytest.raises(McpToolError) as exc_info:
-        await get_variant(client, "missing")
+        await get_variant(client, "HNF1B:c.999X>Y")
     await client.aclose()
 
-    assert exc_info.value.code == "not_found"
+    err = exc_info.value
+    assert err.code == "not_found"
+    assert err.details.get("field") == "variant_id"

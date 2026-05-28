@@ -145,43 +145,49 @@ _DOMAINS_RESP: dict[str, Any] = {
     "domains": [{"name": "POU Homeodomain", "start": 200, "end": 280}]
 }
 
+# Flat item shape matching real API (no JSON:API attributes nesting)
 _PUBLICATIONS_RESP: dict[str, Any] = {
     "data": [
         {
-            "id": "12345678",
-            "attributes": {
-                "pmid": "12345678",
-                "title": "HNF1B case series",
-                "authors": "Author A et al.",
-                "journal": "J Genet",
-                "year": 2024,
-                "doi": "10.1000/test",
-                "phenopacket_count": 3,
-            },
+            "pmid": "12345678",
+            "title": "HNF1B case series",
+            "authors": "Author A et al.",
+            "journal": "J Genet",
+            "year": 2024,
+            "doi": "10.1000/test",
+            "phenopacket_count": 3,
+            "first_added": "2024-01-01",
         }
     ],
-    "meta": {"total": 1, "page": 1, "page_size": 25},
+    "meta": {
+        "page": {
+            "totalRecords": 1,
+            "currentPage": 1,
+            "pageSize": 25,
+            "totalPages": 1,
+        }
+    },
+    "links": {},
 }
 
-_BY_PUBLICATION_RESP: dict[str, Any] = {
-    "data": [
-        {"id": "pp-001", "attributes": {"phenopacket_id": "pp-001"}},
-        {"id": "pp-002", "attributes": {"phenopacket_id": "pp-002"}},
-    ]
-}
+# Real by-publication shape: bare JSON list of {phenopacket_id, phenopacket}
+_BY_PUBLICATION_RESP: list[dict[str, Any]] = [
+    {"phenopacket_id": "pp-001", "phenopacket": {}},
+    {"phenopacket_id": "pp-002", "phenopacket": {}},
+]
 
 _AGGREGATE_SUMMARY_RESP: dict[str, Any] = {"total_phenopackets": 42, "data": []}
 _AGGREGATE_SURVIVAL_RESP: dict[str, Any] = {"groups": [{"group": "del", "data": []}]}
 _AGGREGATE_SEX_RESP: dict[str, Any] = {"data": [{"sex": "MALE", "count": 30}]}
 
 _HPO_AUTOCOMPLETE_RESP: dict[str, Any] = {
-    "items": [
+    "data": [
         {"hpo_id": "HP:0000083", "label": "Renal insufficiency", "description": ""}
     ]
 }
 
 _VOCAB_SEX_RESP: dict[str, Any] = {
-    "items": [
+    "data": [
         {"id": "MALE", "label": "Male", "description": ""},
         {"id": "FEMALE", "label": "Female", "description": ""},
     ]
@@ -389,7 +395,7 @@ async def test_search_variants_uses_allowlisted_paths() -> None:
 
 @pytest.mark.asyncio
 async def test_get_variant_uses_allowlisted_paths() -> None:
-    """get_variant() only requests /phenopackets/by-variant/{variant_id}."""
+    """get_variant() requests all-variants + by-variant, both allowlisted."""
     stub = StubClient()
     variant_id = "HNF1B:c.494G>A"
     result = await get_variant(stub, variant_id)  # type: ignore[arg-type]
