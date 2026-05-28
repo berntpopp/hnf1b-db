@@ -47,6 +47,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             "protein_domain",
         ]
         | None = None,
+        count_mode: Literal["all", "unique"] | None = None,
         dry_run: bool = False,
         response_mode: str | None = None,
         max_response_chars: int | None = None,
@@ -78,6 +79,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 grouping variable for survival curves.  Must be one of
                 ``variant_type``, ``pathogenicity``, ``disease_subtype``,
                 ``protein_domain``.
+            count_mode: For ``variant_types``/``variant_pathogenicity`` only —
+                ``"all"`` (default) counts per-carrier variant instances;
+                ``"unique"`` counts distinct variants. The returned ``unit``
+                field states which was used.
             dry_run: When ``True`` skip the HTTP fetch and return a lightweight
                 availability/size estimate dict (no API call is made).
             response_mode: Budget tier — ``"minimal"``, ``"compact"``
@@ -98,6 +103,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 max_response_chars=max_response_chars,
                 dry_run=dry_run,
                 comparison=comparison,
+                count_mode=count_mode,
             ),
             data_class=DataClass.DERIVED,
             response_mode=resolve_mode(response_mode),
