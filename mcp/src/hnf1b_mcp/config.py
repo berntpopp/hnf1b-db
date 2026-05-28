@@ -1,7 +1,10 @@
 """Runtime configuration for the HNF1B MCP server."""
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -20,11 +23,24 @@ class Settings(BaseSettings):
         "minimal": 4000, "compact": 12000, "standard": 24000, "full": 48000,
     }
     max_response_chars_cap: int = 80000
-    allowed_origins: list[str] = [
+    allowed_origins: Annotated[list[str], NoDecode] = [
         "https://claude.ai", "https://claude.com",
     ]
     redis_url: str | None = None
     rate_limit_global_rps: float = 10.0
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_csv_origins(cls, value: object) -> object:
+        """Accept a comma-separated string for allowed_origins from env vars.
+
+        pydantic-settings would otherwise expect a JSON array for a ``list``
+        field, so a plain ``HNF1B_MCP_ALLOWED_ORIGINS=https://a,https://b``
+        env value fails to parse. Split it into a list here.
+        """
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 def get_settings() -> Settings:
