@@ -11,6 +11,9 @@ dependencies = [
     "redis>=5.0",
 ]
 
+[project.scripts]
+hnf1b-mcp = "hnf1b_mcp.server:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
