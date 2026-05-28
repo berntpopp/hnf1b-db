@@ -40,7 +40,7 @@ select = ["E", "W", "F", "I", "D"]
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["D103", "D100", "D104", "E501"]
+"tests/*.py" = ["D100", "D101", "D102", "D103", "D104", "E501"]
 # Generated contract artifacts: do not hand-edit; regenerate via `make contract`.
 # datamodel-codegen / the path-const emitter produce long lines and a style that
 # fights the doc/line-length rules — ignore them rather than touch generated files.
@@ -62,6 +62,9 @@ disable_error_code = ["explicit-any"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "smoke: end-to-end smoke tests (excluded from default CI with -m 'not smoke')",
+]
 
 [tool.coverage.report]
 fail_under = 80
