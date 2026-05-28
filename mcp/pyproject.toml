@@ -41,6 +41,10 @@ select = ["E", "W", "F", "I", "D"]
 convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["D103", "D100", "D104", "E501"]
+# Generated contract artifacts: do not hand-edit; regenerate via `make contract`.
+# datamodel-codegen / the path-const emitter produce long lines and a style that
+# fights the doc/line-length rules — ignore them rather than touch generated files.
+"src/hnf1b_mcp/contract/_generated_*.py" = ["E501", "D", "W", "F", "I", "N", "UP"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -48,6 +52,12 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["fastmcp.*", "mcp.*", "respx.*"]
 ignore_missing_imports = true
+# Generated pydantic models from datamodel-codegen: relax strict-mode noise that
+# the generated style triggers (do not hand-edit the generated files).
+[[tool.mypy.overrides]]
+module = ["hnf1b_mcp.contract._generated_models"]
+disallow_any_explicit = false
+disable_error_code = ["explicit-any"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

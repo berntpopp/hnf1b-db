@@ -1,0 +1,227 @@
+"""API path-template constants (``/api/v2`` stripped).
+
+GENERATED FILE — do not hand-edit.
+Regenerate with ``scripts/gen_contract.py`` (``make contract``) from
+``contract/openapi.snapshot.json``.
+"""
+
+from __future__ import annotations
+
+
+ADMIN_REFERENCE_STATUS = "/admin/reference/status"
+ADMIN_STATISTICS = "/admin/statistics"
+ADMIN_STATUS = "/admin/status"
+ADMIN_SYNC_GENES = "/admin/sync/genes"
+ADMIN_SYNC_GENES_STATUS = "/admin/sync/genes/status"
+ADMIN_SYNC_PUBLICATIONS = "/admin/sync/publications"
+ADMIN_SYNC_PUBLICATIONS_STATUS = "/admin/sync/publications/status"
+ADMIN_SYNC_REFERENCE_INIT = "/admin/sync/reference/init"
+ADMIN_SYNC_VARIANTS = "/admin/sync/variants"
+ADMIN_SYNC_VARIANTS_STATUS = "/admin/sync/variants/status"
+AUTH_CHANGE_PASSWORD = "/auth/change-password"
+AUTH_INVITE_ACCEPT_BY_TOKEN = "/auth/invite/accept/{token}"
+AUTH_LOGIN = "/auth/login"
+AUTH_LOGOUT = "/auth/logout"
+AUTH_ME = "/auth/me"
+AUTH_PASSWORD_RESET_CONFIRM_BY_TOKEN = "/auth/password-reset/confirm/{token}"
+AUTH_PASSWORD_RESET_REQUEST = "/auth/password-reset/request"
+AUTH_REFRESH = "/auth/refresh"
+AUTH_ROLES = "/auth/roles"
+AUTH_USERS = "/auth/users"
+AUTH_USERS_BY_USER_ID = "/auth/users/{user_id}"
+AUTH_USERS_BY_USER_ID_UNLOCK = "/auth/users/{user_id}/unlock"
+AUTH_USERS_INVITE = "/auth/users/invite"
+AUTH_VERIFY_EMAIL_BY_TOKEN = "/auth/verify-email/{token}"
+AUTH_VERIFY_EMAIL_RESEND = "/auth/verify-email/resend"
+CLINICAL_DIABETES = "/clinical/diabetes"
+CLINICAL_GENITAL_ABNORMALITIES = "/clinical/genital-abnormalities"
+CLINICAL_HYPOMAGNESEMIA = "/clinical/hypomagnesemia"
+CLINICAL_KIDNEY_MORPHOLOGY = "/clinical/kidney-morphology"
+CLINICAL_LIVER_ABNORMALITIES = "/clinical/liver-abnormalities"
+CLINICAL_MULTISYSTEM_INVOLVEMENT = "/clinical/multisystem-involvement"
+CLINICAL_PANCREATIC_ABNORMALITIES = "/clinical/pancreatic-abnormalities"
+CLINICAL_RENAL_INSUFFICIENCY = "/clinical/renal-insufficiency"
+COMMENTS = "/comments"
+COMMENTS_BY_COMMENT_ID = "/comments/{comment_id}"
+COMMENTS_BY_COMMENT_ID_EDITS = "/comments/{comment_id}/edits"
+COMMENTS_BY_COMMENT_ID_RESOLVE = "/comments/{comment_id}/resolve"
+COMMENTS_BY_COMMENT_ID_UNRESOLVE = "/comments/{comment_id}/unresolve"
+HPO_AUTOCOMPLETE = "/hpo/autocomplete"
+HPO_COMMON_TERMS = "/hpo/common-terms"
+HPO_SEARCH = "/hpo/search"
+HPO_TERM_BY_TERM_ID = "/hpo/term/{term_id}"
+HPO_VALIDATE = "/hpo/validate"
+INFO = "/info"
+ONTOLOGY_HPO_AUTOCOMPLETE = "/ontology/hpo/autocomplete"
+ONTOLOGY_HPO_GROUPED = "/ontology/hpo/grouped"
+ONTOLOGY_VOCABULARIES_ALLELIC_STATE = "/ontology/vocabularies/allelic-state"
+ONTOLOGY_VOCABULARIES_EVIDENCE_CODE = "/ontology/vocabularies/evidence-code"
+ONTOLOGY_VOCABULARIES_INTERPRETATION_STATUS = (
+    "/ontology/vocabularies/interpretation-status"
+)
+ONTOLOGY_VOCABULARIES_PROGRESS_STATUS = "/ontology/vocabularies/progress-status"
+ONTOLOGY_VOCABULARIES_SEX = "/ontology/vocabularies/sex"
+PHENOPACKETS = "/phenopackets/"
+PHENOPACKETS_AGGREGATE_AGE_OF_ONSET = "/phenopackets/aggregate/age-of-onset"
+PHENOPACKETS_AGGREGATE_ALL_VARIANTS = "/phenopackets/aggregate/all-variants"
+PHENOPACKETS_AGGREGATE_BY_DISEASE = "/phenopackets/aggregate/by-disease"
+PHENOPACKETS_AGGREGATE_BY_FEATURE = "/phenopackets/aggregate/by-feature"
+PHENOPACKETS_AGGREGATE_KIDNEY_STAGES = "/phenopackets/aggregate/kidney-stages"
+PHENOPACKETS_AGGREGATE_PUBLICATIONS_BY_TYPE = (
+    "/phenopackets/aggregate/publications-by-type"
+)
+PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE = (
+    "/phenopackets/aggregate/publications-timeline"
+)
+PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE_DATA = (
+    "/phenopackets/aggregate/publications-timeline-data"
+)
+PHENOPACKETS_AGGREGATE_PUBLICATION_TYPES = "/phenopackets/aggregate/publication-types"
+PHENOPACKETS_AGGREGATE_SEX_DISTRIBUTION = "/phenopackets/aggregate/sex-distribution"
+PHENOPACKETS_AGGREGATE_SUMMARY = "/phenopackets/aggregate/summary"
+PHENOPACKETS_AGGREGATE_SURVIVAL_DATA = "/phenopackets/aggregate/survival-data"
+PHENOPACKETS_AGGREGATE_VARIANT_PATHOGENICITY = (
+    "/phenopackets/aggregate/variant-pathogenicity"
+)
+PHENOPACKETS_AGGREGATE_VARIANT_TYPES = "/phenopackets/aggregate/variant-types"
+PHENOPACKETS_BATCH = "/phenopackets/batch"
+PHENOPACKETS_BY_PHENOPACKET_ID = "/phenopackets/{phenopacket_id}"
+PHENOPACKETS_BY_PHENOPACKET_ID_AUDIT = "/phenopackets/{phenopacket_id}/audit"
+PHENOPACKETS_BY_PHENOPACKET_ID_REVISIONS = "/phenopackets/{phenopacket_id}/revisions"
+PHENOPACKETS_BY_PHENOPACKET_ID_REVISIONS_BY_REVISION_ID = (
+    "/phenopackets/{phenopacket_id}/revisions/{revision_id}"
+)
+PHENOPACKETS_BY_PHENOPACKET_ID_TIMELINE = "/phenopackets/{phenopacket_id}/timeline"
+PHENOPACKETS_BY_PHENOPACKET_ID_TRANSITIONS = (
+    "/phenopackets/{phenopacket_id}/transitions"
+)
+PHENOPACKETS_BY_PUBLICATION_BY_PMID = "/phenopackets/by-publication/{pmid}"
+PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID = "/phenopackets/by-variant/{variant_id}"
+PHENOPACKETS_COMPARE_VARIANT_TYPES = "/phenopackets/compare/variant-types"
+PHENOPACKETS_SEARCH = "/phenopackets/search"
+PHENOPACKETS_SEARCH_FACETS = "/phenopackets/search/facets"
+PUBLICATIONS = "/publications/"
+PUBLICATIONS_BY_PMID_METADATA = "/publications/{pmid}/metadata"
+PUBLICATIONS_SYNC = "/publications/sync"
+REFERENCE_GENES = "/reference/genes"
+REFERENCE_GENES_BY_SYMBOL = "/reference/genes/{symbol}"
+REFERENCE_GENES_BY_SYMBOL_DOMAINS = "/reference/genes/{symbol}/domains"
+REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS = "/reference/genes/{symbol}/transcripts"
+REFERENCE_GENOMES = "/reference/genomes"
+REFERENCE_REGIONS_BY_REGION = "/reference/regions/{region}"
+SEARCH_AUTOCOMPLETE = "/search/autocomplete"
+SEARCH_GLOBAL = "/search/global"
+SEO_SITEMAP_INDEX_XML = "/seo/sitemap-index.xml"
+SEO_SITEMAP_PHENOPACKETS_XML = "/seo/sitemap-phenopackets.xml"
+SEO_SITEMAP_PUBLICATIONS_XML = "/seo/sitemap-publications.xml"
+SEO_SITEMAP_STATIC_XML = "/seo/sitemap-static.xml"
+SEO_SITEMAP_VARIANTS_XML = "/seo/sitemap-variants.xml"
+USERS_MENTIONABLE = "/users/mentionable"
+VARIANTS_ANNOTATE = "/variants/annotate"
+VARIANTS_RECODE = "/variants/recode"
+VARIANTS_RECODE_BATCH = "/variants/recode/batch"
+VARIANTS_SUGGEST_BY_PARTIAL_NOTATION = "/variants/suggest/{partial_notation}"
+VARIANTS_VALIDATE = "/variants/validate"
+
+ALL_PATHS: tuple[str, ...] = (
+    ADMIN_REFERENCE_STATUS,
+    ADMIN_STATISTICS,
+    ADMIN_STATUS,
+    ADMIN_SYNC_GENES,
+    ADMIN_SYNC_GENES_STATUS,
+    ADMIN_SYNC_PUBLICATIONS,
+    ADMIN_SYNC_PUBLICATIONS_STATUS,
+    ADMIN_SYNC_REFERENCE_INIT,
+    ADMIN_SYNC_VARIANTS,
+    ADMIN_SYNC_VARIANTS_STATUS,
+    AUTH_CHANGE_PASSWORD,
+    AUTH_INVITE_ACCEPT_BY_TOKEN,
+    AUTH_LOGIN,
+    AUTH_LOGOUT,
+    AUTH_ME,
+    AUTH_PASSWORD_RESET_CONFIRM_BY_TOKEN,
+    AUTH_PASSWORD_RESET_REQUEST,
+    AUTH_REFRESH,
+    AUTH_ROLES,
+    AUTH_USERS,
+    AUTH_USERS_BY_USER_ID,
+    AUTH_USERS_BY_USER_ID_UNLOCK,
+    AUTH_USERS_INVITE,
+    AUTH_VERIFY_EMAIL_BY_TOKEN,
+    AUTH_VERIFY_EMAIL_RESEND,
+    CLINICAL_DIABETES,
+    CLINICAL_GENITAL_ABNORMALITIES,
+    CLINICAL_HYPOMAGNESEMIA,
+    CLINICAL_KIDNEY_MORPHOLOGY,
+    CLINICAL_LIVER_ABNORMALITIES,
+    CLINICAL_MULTISYSTEM_INVOLVEMENT,
+    CLINICAL_PANCREATIC_ABNORMALITIES,
+    CLINICAL_RENAL_INSUFFICIENCY,
+    COMMENTS,
+    COMMENTS_BY_COMMENT_ID,
+    COMMENTS_BY_COMMENT_ID_EDITS,
+    COMMENTS_BY_COMMENT_ID_RESOLVE,
+    COMMENTS_BY_COMMENT_ID_UNRESOLVE,
+    HPO_AUTOCOMPLETE,
+    HPO_COMMON_TERMS,
+    HPO_SEARCH,
+    HPO_TERM_BY_TERM_ID,
+    HPO_VALIDATE,
+    INFO,
+    ONTOLOGY_HPO_AUTOCOMPLETE,
+    ONTOLOGY_HPO_GROUPED,
+    ONTOLOGY_VOCABULARIES_ALLELIC_STATE,
+    ONTOLOGY_VOCABULARIES_EVIDENCE_CODE,
+    ONTOLOGY_VOCABULARIES_INTERPRETATION_STATUS,
+    ONTOLOGY_VOCABULARIES_PROGRESS_STATUS,
+    ONTOLOGY_VOCABULARIES_SEX,
+    PHENOPACKETS,
+    PHENOPACKETS_AGGREGATE_AGE_OF_ONSET,
+    PHENOPACKETS_AGGREGATE_ALL_VARIANTS,
+    PHENOPACKETS_AGGREGATE_BY_DISEASE,
+    PHENOPACKETS_AGGREGATE_BY_FEATURE,
+    PHENOPACKETS_AGGREGATE_KIDNEY_STAGES,
+    PHENOPACKETS_AGGREGATE_PUBLICATIONS_BY_TYPE,
+    PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE,
+    PHENOPACKETS_AGGREGATE_PUBLICATIONS_TIMELINE_DATA,
+    PHENOPACKETS_AGGREGATE_PUBLICATION_TYPES,
+    PHENOPACKETS_AGGREGATE_SEX_DISTRIBUTION,
+    PHENOPACKETS_AGGREGATE_SUMMARY,
+    PHENOPACKETS_AGGREGATE_SURVIVAL_DATA,
+    PHENOPACKETS_AGGREGATE_VARIANT_PATHOGENICITY,
+    PHENOPACKETS_AGGREGATE_VARIANT_TYPES,
+    PHENOPACKETS_BATCH,
+    PHENOPACKETS_BY_PHENOPACKET_ID,
+    PHENOPACKETS_BY_PHENOPACKET_ID_AUDIT,
+    PHENOPACKETS_BY_PHENOPACKET_ID_REVISIONS,
+    PHENOPACKETS_BY_PHENOPACKET_ID_REVISIONS_BY_REVISION_ID,
+    PHENOPACKETS_BY_PHENOPACKET_ID_TIMELINE,
+    PHENOPACKETS_BY_PHENOPACKET_ID_TRANSITIONS,
+    PHENOPACKETS_BY_PUBLICATION_BY_PMID,
+    PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID,
+    PHENOPACKETS_COMPARE_VARIANT_TYPES,
+    PHENOPACKETS_SEARCH,
+    PHENOPACKETS_SEARCH_FACETS,
+    PUBLICATIONS,
+    PUBLICATIONS_BY_PMID_METADATA,
+    PUBLICATIONS_SYNC,
+    REFERENCE_GENES,
+    REFERENCE_GENES_BY_SYMBOL,
+    REFERENCE_GENES_BY_SYMBOL_DOMAINS,
+    REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS,
+    REFERENCE_GENOMES,
+    REFERENCE_REGIONS_BY_REGION,
+    SEARCH_AUTOCOMPLETE,
+    SEARCH_GLOBAL,
+    SEO_SITEMAP_INDEX_XML,
+    SEO_SITEMAP_PHENOPACKETS_XML,
+    SEO_SITEMAP_PUBLICATIONS_XML,
+    SEO_SITEMAP_STATIC_XML,
+    SEO_SITEMAP_VARIANTS_XML,
+    USERS_MENTIONABLE,
+    VARIANTS_ANNOTATE,
+    VARIANTS_RECODE,
+    VARIANTS_RECODE_BATCH,
+    VARIANTS_SUGGEST_BY_PARTIAL_NOTATION,
+    VARIANTS_VALIDATE,
+)
