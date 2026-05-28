@@ -225,6 +225,11 @@ def build_http_app(settings: Settings | None = None) -> Starlette:
     settings = settings or get_settings()
     mcp = build_app(settings)
     app = mcp.http_app(
+        # Mount the streamable-HTTP endpoint at the root so clients connect to
+        # the bare subdomain (https://mcp.hnf1b.org) instead of the redundant
+        # ".../mcp" suffix. The ``/health`` custom route still resolves because
+        # FastMCP registers custom routes ahead of the transport mount.
+        path="/",
         stateless_http=True,
         json_response=True,
         middleware=[
@@ -245,6 +250,9 @@ def main() -> None:
         transport="http",
         host=settings.host,
         port=settings.port,
+        # Serve the MCP endpoint at the root path (see build_http_app). This is
+        # the production entrypoint (console script ``hnf1b-mcp``).
+        path="/",
         stateless_http=True,
         json_response=True,
         middleware=[
