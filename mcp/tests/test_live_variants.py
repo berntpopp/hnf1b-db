@@ -79,4 +79,8 @@ async def test_live_consequence_post_filter():
     assert len(rows) > 0
     for row in rows:
         assert row["consequence"] == "Missense"
-    assert result["filtered_count"] == len(rows)
+    # filtered_count is the TOTAL post-filtered match count across all pages;
+    # the returned page is bounded by page_size, so it may be a proper subset.
+    assert result["filtered_count"] == result["total"]
+    assert len(rows) <= result["page_size"]
+    assert result["filtered_count"] >= len(rows)
