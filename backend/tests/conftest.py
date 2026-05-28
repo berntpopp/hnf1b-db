@@ -561,6 +561,47 @@ async def published_record(db_session, admin_user):
 
 
 @pytest_asyncio.fixture
+async def clone_in_progress_record(db_session, published_record, curator_user):
+    """A published record with an active clone-to-draft edit.
+
+    Exercises ``PhenopacketStateService.edit_record`` against a published
+    record so that the §6.1 clone-to-draft path runs. Post-conditions:
+
+    - ``record.phenopacket`` (the working copy) holds the NEW content with
+      ``"_secret_working_copy": True`` and subject id ``"LEAKED-DRAFT-SUBJECT"``
+      — this must NOT leak to the public.
+    - ``record.state`` is still ``'published'`` and
+      ``head_published_revision_id`` is set (head swap has not happened).
+    - The head revision's ``content_jsonb`` is the OLD published content with
+      no leak markers (this is what the public must see).
+
+    Returns a dict with keys ``record``, ``old_content``, ``new_content``.
+    """
+    from app.phenopackets.services.state_service import PhenopacketStateService
+
+    old_content = dict(published_record.phenopacket)  # snapshot of public copy
+    new_content = {
+        **old_content,
+        "subject": {"id": "LEAKED-DRAFT-SUBJECT"},
+        "_secret_working_copy": True,
+    }
+    svc = PhenopacketStateService(db_session)
+    await svc.edit_record(
+        published_record.id,
+        new_content=new_content,
+        change_reason="curator edit in progress",
+        expected_revision=published_record.revision,
+        actor=curator_user,
+    )
+    await db_session.refresh(published_record)
+    return {
+        "record": published_record,
+        "old_content": old_content,
+        "new_content": new_content,
+    }
+
+
+@pytest_asyncio.fixture
 async def seeded_system_user(db_session):
     """Create (or return) the ``system`` user used by migration 3 as actor.
 
