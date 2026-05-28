@@ -323,6 +323,18 @@ class PhenopacketRevision(Base):
     actor: Mapped["User"] = relationship("User", foreign_keys=[actor_id], viewonly=True)
 
 
+# The relationships above reference ``User`` by string name. SQLAlchemy resolves
+# those names against the declarative registry at mapper-configuration time
+# (first ORM query), so the ``User`` class must already be imported by then.
+# The ``TYPE_CHECKING`` import alone is not enough — it never runs at runtime.
+# Without this line, configuring the ``Phenopacket`` mapper before any module
+# that imports ``User`` raises ``InvalidRequestError: expression 'User' failed
+# to locate a name``. Importing here (after every model above is defined, to
+# avoid a circular import via ``app.database``) guarantees registration.
+# See https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html
+from app.models.user import User  # noqa: E402,F401
+
+
 # Pydantic Schemas for API
 class OntologyClass(BaseModel):
     """Ontology term reference."""
