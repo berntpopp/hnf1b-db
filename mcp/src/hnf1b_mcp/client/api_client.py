@@ -1,4 +1,5 @@
 """Read-only httpx client restricted to the endpoint allowlist, with a TTL cache."""
+
 from __future__ import annotations
 
 import json

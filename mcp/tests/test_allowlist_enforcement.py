@@ -15,6 +15,7 @@ Denied paths exercised:
   - ``/dev/reset``                     (dev-only route)
   - ``/hpo/search``                    (legacy HPO OLS proxy)
 """
+
 from __future__ import annotations
 
 import re
@@ -76,7 +77,10 @@ _PHENOPACKET_RECORD: dict[str, Any] = {
         "subject": {"id": "pp-001", "sex": "MALE"},
         "diseases": [{"term": {"id": "OMIM:137920", "label": "HNF1B disease"}}],
         "phenotypicFeatures": [
-            {"type": {"id": "HP:0000083", "label": "Renal insufficiency"}, "excluded": False}
+            {
+                "type": {"id": "HP:0000083", "label": "Renal insufficiency"},
+                "excluded": False,
+            }
         ],
         "measurements": [],
         "interpretations": [],
@@ -138,9 +142,7 @@ _TRANSCRIPTS_RESP: list[dict[str, Any]] = [
 ]
 
 _DOMAINS_RESP: dict[str, Any] = {
-    "domains": [
-        {"name": "POU Homeodomain", "start": 200, "end": 280}
-    ]
+    "domains": [{"name": "POU Homeodomain", "start": 200, "end": 280}]
 }
 
 _PUBLICATIONS_RESP: dict[str, Any] = {
@@ -362,7 +364,9 @@ async def test_find_individuals_by_phenotype_uses_allowlisted_paths() -> None:
     """find_individuals_by_phenotype flow hits /phenopackets/search then /phenopackets/batch."""
     stub = StubClient()
     # Direct service calls for the two legs: discovery + batch
-    search_resp = await stub.get("/phenopackets/search", params={"hpo_id": "HP:0000083"})
+    search_resp = await stub.get(
+        "/phenopackets/search", params={"hpo_id": "HP:0000083"}
+    )
     ids = [item["id"] for item in search_resp.get("data", []) if item.get("id")]
     if ids:
         await stub.get("/phenopackets/batch", params={"phenopacket_ids": ",".join(ids)})
@@ -429,7 +433,8 @@ async def test_get_publication_citing_individuals_uses_allowlisted_paths() -> No
     """get_publication_citing_individuals() uses /phenopackets/by-publication/{pmid}."""
     stub = StubClient()
     result = await get_publication_citing_individuals(
-        stub, pmid="12345678"  # type: ignore[arg-type]
+        stub,
+        pmid="12345678",  # type: ignore[arg-type]
     )
     assert "/phenopackets/by-publication/12345678" in stub.recorded_paths
     assert result["total"] == 2

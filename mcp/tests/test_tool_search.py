@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.tools.search — the hnf1b_search MCP tool."""
+
 from __future__ import annotations
 
 import httpx
@@ -100,9 +101,7 @@ async def test_search_types_filter():
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_search", {"query": "HNF1B", "types": ["variant"]}
-    )
+    r = await mcp.call_tool("hnf1b_search", {"query": "HNF1B", "types": ["variant"]})
     sc = r.structured_content
     assert all(h["type"] == "variant" for h in sc["hits"])
     await c.aclose()
@@ -158,9 +157,7 @@ async def test_search_invalid_type_returns_error_envelope():
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_search", {"query": "HNF1B", "types": ["bogus"]}
-    )
+    r = await mcp.call_tool("hnf1b_search", {"query": "HNF1B", "types": ["bogus"]})
     sc = r.structured_content
     assert sc.get("is_error") is True
     # Error code is nested under the "error" key in the envelope.

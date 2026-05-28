@@ -1,4 +1,5 @@
 """Uniform tool execution wrapper: timing, meta, data_class, error envelopes."""
+
 from __future__ import annotations
 
 import time

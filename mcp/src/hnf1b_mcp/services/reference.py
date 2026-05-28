@@ -1,4 +1,5 @@
 """Reference-data service: gene context from /reference/genes/{symbol}."""
+
 from __future__ import annotations
 
 from typing import Any

@@ -1,4 +1,5 @@
 """Variant service: browse all-variants and fetch carrier IDs by variant."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -162,11 +163,7 @@ async def search_variants(
 
     data: list[dict[str, Any]] = raw.get("data") or []
     meta: dict[str, Any] = raw.get("meta") or {}
-    total: int = (
-        meta.get("total")
-        or meta.get("pagination", {}).get("total")
-        or 0
-    )
+    total: int = meta.get("total") or meta.get("pagination", {}).get("total") or 0
 
     return {
         "variants": [_shape_variant(item) for item in data],
@@ -200,9 +197,7 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
     )
 
     carriers: list[str] = [
-        record["phenopacket_id"]
-        for record in (raw or [])
-        if "phenopacket_id" in record
+        record["phenopacket_id"] for record in (raw or []) if "phenopacket_id" in record
     ]
 
     return {

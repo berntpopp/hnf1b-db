@@ -12,6 +12,7 @@ keyed on global / per-tool counters with INCR+EXPIRE semantics.  The Redis
 path is optional — the in-process path is always available and is the
 default.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,8 @@ HEAVY_TOOLS: frozenset[str] = frozenset(
 # Default per-tool budgets (tokens refilled at 1 token/second each)
 # These are deliberately generous to avoid throttling in normal interactive
 # or test use.  Production deployments can lower them via Settings.
-DEFAULT_TOOL_CAPACITY: float = 30.0    # standard tool burst budget
-HEAVY_TOOL_CAPACITY: float = 10.0     # heavy tool burst budget
+DEFAULT_TOOL_CAPACITY: float = 30.0  # standard tool burst budget
+HEAVY_TOOL_CAPACITY: float = 10.0  # heavy tool burst budget
 
 
 class _TokenBucket:

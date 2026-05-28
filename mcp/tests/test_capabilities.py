@@ -1,4 +1,5 @@
 """Tests for capabilities and resources services."""
+
 from hnf1b_mcp.services.capabilities import get_capabilities
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 
@@ -8,7 +9,12 @@ def test_capabilities_shape():
     assert "canonical_workflows" in cap
     assert "tools" in cap and len(cap["tools"]) >= 10
     assert cap["citation_contract"]
-    assert set(cap["error_codes"]) == {"invalid_input","not_found","ambiguous_query","temporarily_unavailable"}
+    assert set(cap["error_codes"]) == {
+        "invalid_input",
+        "not_found",
+        "ambiguous_query",
+        "temporarily_unavailable",
+    }
     assert "research use only" in cap["safety"]["disclaimer"].lower()
     assert "not instructions" in cap["safety"]["injection_notice"].lower()
     assert cap["data_classes"]

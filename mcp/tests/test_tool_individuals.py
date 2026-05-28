@@ -1,4 +1,5 @@
 """Tests for the individuals tool registration and behavior."""
+
 from __future__ import annotations
 
 import httpx
@@ -22,7 +23,10 @@ _PHENOPACKET_X: dict = {
         "id": "X",
         "subject": {"id": "X", "sex": "MALE"},
         "phenotypicFeatures": [
-            {"type": {"id": "HP:0000083", "label": "Renal insufficiency"}, "excluded": False},
+            {
+                "type": {"id": "HP:0000083", "label": "Renal insufficiency"},
+                "excluded": False,
+            },
         ],
         "measurements": [],
         "diseases": [{"term": {"id": "OMIM:137920", "label": "HNF1B-related disease"}}],
@@ -38,9 +42,15 @@ _PHENOPACKET_X: dict = {
                             "variantInterpretation": {
                                 "variationDescriptor": {
                                     "id": "var-1",
-                                    "geneContext": {"geneId": "HGNC:11630", "symbol": "HNF1B"},
+                                    "geneContext": {
+                                        "geneId": "HGNC:11630",
+                                        "symbol": "HNF1B",
+                                    },
                                     "expressions": [
-                                        {"syntax": "hgvs.c", "value": "NM_000458.4:c.544C>T"}
+                                        {
+                                            "syntax": "hgvs.c",
+                                            "value": "NM_000458.4:c.544C>T",
+                                        }
                                     ],
                                 }
                             },
@@ -214,9 +224,7 @@ async def test_get_individual_include_variants_false():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individual_not_found_returns_error_envelope():
-    respx.get(f"{BASE}/phenopackets/MISSING").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{BASE}/phenopackets/MISSING").mock(return_value=httpx.Response(404))
     client = ApiClient(base_url=BASE)
     mcp = FastMCP("test")
     register(mcp, client)
@@ -270,9 +278,7 @@ async def test_get_individuals_sex_filter_passed():
     mcp = FastMCP("test")
     register(mcp, client)
 
-    r = await mcp.call_tool(
-        "hnf1b_get_individuals", {"sex": "FEMALE", "page_size": 10}
-    )
+    r = await mcp.call_tool("hnf1b_get_individuals", {"sex": "FEMALE", "page_size": 10})
     sc = r.structured_content
 
     assert sc["data_class"] == "curated_hnf1b_evidence"
@@ -361,19 +367,23 @@ async def test_find_individuals_by_phenotype_dedupes_ids():
         return_value=httpx.Response(
             200,
             json={
-                "results": [_PHENOPACKET_A, _PHENOPACKET_B, {
-                    "id": "pp-C",
-                    "phenopacket_id": "C",
-                    "phenopacket": {
-                        "id": "C",
-                        "subject": {"id": "C", "sex": "MALE"},
-                        "phenotypicFeatures": [],
-                        "measurements": [],
-                        "diseases": [],
-                        "interpretations": [],
-                        "metaData": {"externalReferences": []},
+                "results": [
+                    _PHENOPACKET_A,
+                    _PHENOPACKET_B,
+                    {
+                        "id": "pp-C",
+                        "phenopacket_id": "C",
+                        "phenopacket": {
+                            "id": "C",
+                            "subject": {"id": "C", "sex": "MALE"},
+                            "phenotypicFeatures": [],
+                            "measurements": [],
+                            "diseases": [],
+                            "interpretations": [],
+                            "metaData": {"externalReferences": []},
+                        },
                     },
-                }],
+                ],
             },
         )
     )

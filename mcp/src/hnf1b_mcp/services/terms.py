@@ -1,4 +1,5 @@
 """Local/DB-backed ontology and controlled-vocabulary resolution."""
+
 from __future__ import annotations
 
 from typing import Any

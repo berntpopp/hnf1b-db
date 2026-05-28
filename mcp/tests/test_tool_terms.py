@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.tools.terms — the hnf1b_resolve_terms MCP tool."""
+
 from __future__ import annotations
 
 import httpx
@@ -158,9 +159,7 @@ async def test_sex_vocab_data_class() -> None:
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"}
-    )
+    r = await mcp.call_tool("hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"})
     sc = r.structured_content
     assert sc["data_class"] == "external_reference_identifier"
     await c.aclose()
@@ -176,9 +175,7 @@ async def test_sex_vocab_matches_list() -> None:
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"}
-    )
+    r = await mcp.call_tool("hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"})
     sc = r.structured_content
     matches = sc["matches"]
     assert isinstance(matches, list)
@@ -196,9 +193,7 @@ async def test_sex_vocab_match_fields() -> None:
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"}
-    )
+    r = await mcp.call_tool("hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"})
     sc = r.structured_content
     first = sc["matches"][0]
     assert first["id"] == "MALE"
@@ -216,9 +211,7 @@ async def test_sex_vocab_meta_present() -> None:
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"}
-    )
+    r = await mcp.call_tool("hnf1b_resolve_terms", {"text": "", "vocabulary": "sex"})
     sc = r.structured_content
     assert "meta" in sc
     await c.aclose()

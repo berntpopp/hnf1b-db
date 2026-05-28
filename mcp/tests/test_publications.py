@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.services.publications (TDD)."""
+
 from __future__ import annotations
 
 import httpx
@@ -58,9 +59,21 @@ _PUBS_RESPONSE = {
 
 _BY_PUB_RESPONSE = {
     "data": [
-        {"id": "PP001", "type": "Phenopacket", "attributes": {"phenopacket_id": "PP001"}},
-        {"id": "PP002", "type": "Phenopacket", "attributes": {"phenopacket_id": "PP002"}},
-        {"id": "PP003", "type": "Phenopacket", "attributes": {"phenopacket_id": "PP003"}},
+        {
+            "id": "PP001",
+            "type": "Phenopacket",
+            "attributes": {"phenopacket_id": "PP001"},
+        },
+        {
+            "id": "PP002",
+            "type": "Phenopacket",
+            "attributes": {"phenopacket_id": "PP002"},
+        },
+        {
+            "id": "PP003",
+            "type": "Phenopacket",
+            "attributes": {"phenopacket_id": "PP003"},
+        },
     ],
     "meta": {"total": 3},
 }
@@ -154,8 +167,15 @@ async def test_list_publications_item_fields():
     await c.aclose()
 
     pub = result["publications"][0]
-    for key in ("pmid", "recommended_citation", "date_confidence", "journal", "year",
-                "phenopacket_count", "uri"):
+    for key in (
+        "pmid",
+        "recommended_citation",
+        "date_confidence",
+        "journal",
+        "year",
+        "phenopacket_count",
+        "uri",
+    ):
         assert key in pub, f"missing key: {key}"
 
 
@@ -172,8 +192,12 @@ async def test_list_publications_passes_page_params():
 
     assert route.called
     request = route.calls.last.request
-    assert b"page%5Bnumber%5D=2" in request.url.query or "page[number]=2" in str(request.url)
-    assert b"page%5Bsize%5D=10" in request.url.query or "page[size]=10" in str(request.url)
+    assert b"page%5Bnumber%5D=2" in request.url.query or "page[number]=2" in str(
+        request.url
+    )
+    assert b"page%5Bsize%5D=10" in request.url.query or "page[size]=10" in str(
+        request.url
+    )
 
 
 @pytest.mark.asyncio

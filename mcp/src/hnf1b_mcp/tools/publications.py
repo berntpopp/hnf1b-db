@@ -1,4 +1,5 @@
 """MCP tool: hnf1b_get_publications — publications list and reverse lookup."""
+
 from __future__ import annotations
 
 from typing import Any

@@ -54,9 +54,7 @@ async def test_repository_search_text_query_uses_head_content(
 ):
     """Full-text/ILIKE query must not match on the leaked working-copy marker."""
     repo = PhenopacketSearchRepository(db_session)
-    rows = await repo.search(
-        query="_secret_working_copy", is_curator=False, limit=100
-    )
+    rows = await repo.search(query="_secret_working_copy", is_curator=False, limit=100)
     serialized = json.dumps(rows, default=str)
     assert "_secret_working_copy" not in serialized
     assert "LEAKED-DRAFT-SUBJECT" not in serialized

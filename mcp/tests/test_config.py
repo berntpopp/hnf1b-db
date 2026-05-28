@@ -10,6 +10,7 @@ def test_defaults(monkeypatch):
     assert s.mode_char_budgets["compact"] == 12000
     assert "claude.ai" in " ".join(s.allowed_origins) or s.allowed_origins == ["*"]
 
+
 def test_env_override(monkeypatch):
     monkeypatch.setenv("HNF1B_MCP_API_BASE_URL", "http://hnf1b_api:8000/api/v2")
     assert Settings().api_base_url == "http://hnf1b_api:8000/api/v2"

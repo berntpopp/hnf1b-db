@@ -1,4 +1,5 @@
 """MCP tools: hnf1b_search_variants and hnf1b_get_variant."""
+
 from __future__ import annotations
 
 from typing import Any

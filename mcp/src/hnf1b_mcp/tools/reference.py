@@ -1,4 +1,5 @@
 """MCP tool: hnf1b_get_gene_context — gene reference data from HNF1B-db."""
+
 from __future__ import annotations
 
 from typing import Any

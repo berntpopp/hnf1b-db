@@ -1,4 +1,5 @@
 """MCP tool: hnf1b_get_statistics — aggregate statistics over HNF1B phenopackets."""
+
 from __future__ import annotations
 
 from typing import Any, Literal

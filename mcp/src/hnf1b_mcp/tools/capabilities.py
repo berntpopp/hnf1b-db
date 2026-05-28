@@ -1,4 +1,5 @@
 """Tool module: hnf1b_get_capabilities — server discovery and metadata."""
+
 from __future__ import annotations
 
 from typing import Any

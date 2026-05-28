@@ -2,6 +2,7 @@
 
 Content is fetched later via the typed get_* tools.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -44,19 +45,19 @@ def _derive_uri(item_id: str) -> tuple[str, str]:
         McpToolError: If the id prefix is not recognised.
     """
     if item_id.startswith("pp_"):
-        rest = item_id[len("pp_"):]
+        rest = item_id[len("pp_") :]
         return "individual", f"hnf1b://individual/{rest}"
     if item_id.startswith("var_"):
-        rest = item_id[len("var_"):]
+        rest = item_id[len("var_") :]
         return "variant", f"hnf1b://variant/{rest}"
     if item_id.startswith("pub_"):
-        rest = item_id[len("pub_"):]
+        rest = item_id[len("pub_") :]
         # ``rest`` may already carry the ``PMID:`` prefix (e.g. ``pub_PMID:123``);
         # normalise to a single canonical ``PMID:`` so the URI is not doubled.
-        bare = rest[len("PMID:"):] if rest.startswith("PMID:") else rest
+        bare = rest[len("PMID:") :] if rest.startswith("PMID:") else rest
         return "publication", f"hnf1b://publication/PMID:{bare}"
     if item_id.startswith("gene_"):
-        rest = item_id[len("gene_"):]
+        rest = item_id[len("gene_") :]
         return "gene", f"hnf1b://gene/{rest}"
     # Unknown prefix — best-effort passthrough; type is unknown.
     return "unknown", f"hnf1b://unknown/{item_id}"

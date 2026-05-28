@@ -772,15 +772,11 @@ class TestGlobalSearchVisibility:
             },
         )
         await db_session.commit()
-        await db_session.execute(
-            text("REFRESH MATERIALIZED VIEW global_search_index")
-        )
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 
         try:
-            r = await async_client.get(
-                "/api/v2/search/global", params={"q": marker}
-            )
+            r = await async_client.get("/api/v2/search/global", params={"q": marker})
             assert r.status_code == 200
             ids = {item["id"] for item in r.json().get("results", [])}
             assert "pp_wave-a-draft-leak" not in ids
@@ -803,9 +799,7 @@ class TestGlobalSearchVisibility:
         self, async_client, db_session: AsyncSession, clone_in_progress_record
     ):
         """A published-but-mid-edit record must surface head content, not the leak."""
-        await db_session.execute(
-            text("REFRESH MATERIALIZED VIEW global_search_index")
-        )
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 
         try:

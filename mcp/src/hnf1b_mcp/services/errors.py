@@ -1,4 +1,5 @@
 """Typed tool-result error taxonomy for the MCP server."""
+
 from __future__ import annotations
 
 from typing import Any

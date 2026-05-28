@@ -1,4 +1,5 @@
 """Server capabilities descriptor for the HNF1B MCP server."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -131,9 +132,7 @@ _CITATION_CONTRACT: str = (
 )
 
 _DATA_CLASSES: dict[str, str] = {
-    DataClass.CURATED: (
-        "Data manually curated from published HNF1B case series."
-    ),
+    DataClass.CURATED: ("Data manually curated from published HNF1B case series."),
     DataClass.DERIVED: (
         "Computed or aggregated results derived from curated data "
         "(statistics, cohort summaries)."
@@ -143,8 +142,7 @@ _DATA_CLASSES: dict[str, str] = {
         "(HPO IDs, OMIM numbers, PubMed IDs)."
     ),
     DataClass.OPERATIONAL: (
-        "Server-internal metadata (pagination tokens, schema versions, "
-        "timestamps)."
+        "Server-internal metadata (pagination tokens, schema versions, timestamps)."
     ),
 }
 

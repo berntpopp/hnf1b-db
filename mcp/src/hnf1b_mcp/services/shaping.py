@@ -1,4 +1,5 @@
 """Token-cost controls: response modes, char budgets, meta block."""
+
 from __future__ import annotations
 
 import json

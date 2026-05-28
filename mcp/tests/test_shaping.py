@@ -10,6 +10,7 @@ def test_resolve_mode_invalid():
     import pytest
 
     from hnf1b_mcp.services.errors import McpToolError
+
     with pytest.raises(McpToolError):
         resolve_mode("gigantic")
 

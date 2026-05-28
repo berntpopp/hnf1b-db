@@ -6,6 +6,7 @@ PubMed fetch + DB write and is denied by the allowlist).  Use only:
 - ``GET /publications/``   – paginated list
 - ``GET /phenopackets/by-publication/{pmid}``  – reverse discovery lookup
 """
+
 from __future__ import annotations
 
 from typing import Any

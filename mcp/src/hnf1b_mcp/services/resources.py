@@ -1,4 +1,5 @@
 """Static resource loader for packaged Markdown documentation."""
+
 from __future__ import annotations
 
 import importlib.resources
@@ -28,8 +29,7 @@ def load_resource(uri: str) -> str:
     if uri not in RESOURCE_URIS:
         raise McpToolError(
             "not_found",
-            f"Unknown resource URI: {uri!r}. "
-            f"Available URIs: {sorted(RESOURCE_URIS)}",
+            f"Unknown resource URI: {uri!r}. Available URIs: {sorted(RESOURCE_URIS)}",
         )
     filename = RESOURCE_URIS[uri]
     resource_pkg = importlib.resources.files("hnf1b_mcp.resources")

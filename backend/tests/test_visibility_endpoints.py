@@ -326,11 +326,7 @@ async def test_by_variant_returns_head_published(
             {
                 "diagnosis": {
                     "genomicInterpretations": [
-                        {
-                            "variantInterpretation": {
-                                "variationDescriptor": {"id": vid}
-                            }
-                        }
+                        {"variantInterpretation": {"variationDescriptor": {"id": vid}}}
                     ]
                 }
             }

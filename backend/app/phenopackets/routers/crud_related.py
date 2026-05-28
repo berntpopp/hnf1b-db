@@ -262,9 +262,7 @@ async def get_by_publication(
 
     if has_variants is not None:
         if has_variants:
-            query += (
-                " AND jsonb_array_length(r.content_jsonb->'interpretations') > 0"
-            )
+            query += " AND jsonb_array_length(r.content_jsonb->'interpretations') > 0"
         else:
             query += (
                 " AND (r.content_jsonb->'interpretations' IS NULL OR "

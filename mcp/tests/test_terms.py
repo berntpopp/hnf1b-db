@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.services.terms – resolve_terms."""
+
 from __future__ import annotations
 
 import httpx
@@ -212,7 +213,12 @@ async def test_resolve_terms_vocab_no_text_returns_all_capped() -> None:
 @respx.mock
 async def test_resolve_terms_interpretation_status_accepted() -> None:
     respx.get(f"{BASE}/ontology/vocabularies/interpretation-status").mock(
-        return_value=httpx.Response(200, json={"items": [{"id": "CAUSATIVE", "label": "Causative", "description": ""}]})
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [{"id": "CAUSATIVE", "label": "Causative", "description": ""}]
+            },
+        )
     )
     c = ApiClient(base_url=BASE)
     result = await resolve_terms(c, text="", vocabulary="interpretation-status")
@@ -226,7 +232,9 @@ async def test_resolve_terms_interpretation_status_accepted() -> None:
 @respx.mock
 async def test_resolve_terms_allelic_state_accepted() -> None:
     respx.get(f"{BASE}/ontology/vocabularies/allelic-state").mock(
-        return_value=httpx.Response(200, json={"items": [{"id": "GENO:0000135", "label": "heterozygous"}]})
+        return_value=httpx.Response(
+            200, json={"items": [{"id": "GENO:0000135", "label": "heterozygous"}]}
+        )
     )
     c = ApiClient(base_url=BASE)
     result = await resolve_terms(c, text="", vocabulary="allelic-state")

@@ -11,7 +11,9 @@ BASE = "http://api.test/api/v2"
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_allowed_returns_json():
-    respx.get(f"{BASE}/phenopackets/X").mock(return_value=httpx.Response(200, json={"id": "X"}))
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json={"id": "X"})
+    )
     c = ApiClient(base_url=BASE)
     assert (await c.get("/phenopackets/X"))["id"] == "X"
     await c.aclose()
@@ -40,7 +42,8 @@ async def test_404_maps_to_not_found():
 @respx.mock
 async def test_cache_hit_skips_second_call():
     route = respx.get(f"{BASE}/phenopackets/aggregate/summary").mock(
-        return_value=httpx.Response(200, json={"total_phenopackets": 1}))
+        return_value=httpx.Response(200, json={"total_phenopackets": 1})
+    )
     c = ApiClient(base_url=BASE, cache_ttl=60)
     await c.get("/phenopackets/aggregate/summary")
     await c.get("/phenopackets/aggregate/summary")

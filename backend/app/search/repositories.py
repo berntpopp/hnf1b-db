@@ -308,9 +308,7 @@ class PhenopacketSearchRepository:
 
         # HPO filter
         if filters.get("hpo_id"):
-            conditions.append(
-                f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
-            )
+            conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": filters["hpo_id"]}}])
 
         # Sex filter
@@ -439,9 +437,7 @@ class PhenopacketSearchRepository:
             params["query_like"] = f"%{query}%"
 
         if filters.get("hpo_id"):
-            conditions.append(
-                f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
-            )
+            conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": filters["hpo_id"]}}])
 
         if filters.get("sex"):

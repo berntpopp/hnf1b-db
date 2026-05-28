@@ -1,4 +1,5 @@
 """MCP tool: hnf1b_resolve_terms — ontology and controlled-vocabulary resolution."""
+
 from __future__ import annotations
 
 from typing import Any, Literal

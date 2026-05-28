@@ -1,4 +1,5 @@
 """FastMCP server entry point for the HNF1B-db MCP server."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable

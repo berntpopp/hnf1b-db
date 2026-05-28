@@ -1,4 +1,5 @@
 """Data-class taxonomy tags attached to every payload."""
+
 from __future__ import annotations
 
 

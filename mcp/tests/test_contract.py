@@ -4,6 +4,7 @@ These verify that the curated MCP surface (allowlist + variant vocabularies +
 key response models) stays in lockstep with the generated contract, which is in
 turn generated from the committed backend OpenAPI snapshot. Any drift fails here.
 """
+
 from __future__ import annotations
 
 import re
@@ -66,11 +67,7 @@ def test_no_silent_gaps_every_generated_path_decided() -> None:
 
 def test_allowed_and_denied_are_mutually_exclusive() -> None:
     """No generated path may be simultaneously allowed and denied."""
-    overlap = [
-        t
-        for t in ALL_PATHS
-        if is_allowed(_probe(t)) and is_denied(_probe(t))
-    ]
+    overlap = [t for t in ALL_PATHS if is_allowed(_probe(t)) and is_denied(_probe(t))]
     assert not overlap, f"paths both allowed and denied: {overlap}"
 
 

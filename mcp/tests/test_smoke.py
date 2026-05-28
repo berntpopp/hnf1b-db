@@ -7,6 +7,7 @@ Run on demand with:
 Excluded from the default CI run via:
     uv run pytest -m "not smoke"
 """
+
 from __future__ import annotations
 
 import pytest

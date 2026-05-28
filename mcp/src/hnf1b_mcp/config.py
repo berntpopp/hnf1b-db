@@ -1,4 +1,5 @@
 """Runtime configuration for the HNF1B MCP server."""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -20,11 +21,15 @@ class Settings(BaseSettings):
     protocol_version: str = "2025-11-25"
     default_response_mode: str = "compact"
     mode_char_budgets: dict[str, int] = {
-        "minimal": 4000, "compact": 12000, "standard": 24000, "full": 48000,
+        "minimal": 4000,
+        "compact": 12000,
+        "standard": 24000,
+        "full": 48000,
     }
     max_response_chars_cap: int = 80000
     allowed_origins: Annotated[list[str], NoDecode] = [
-        "https://claude.ai", "https://claude.com",
+        "https://claude.ai",
+        "https://claude.com",
     ]
     redis_url: str | None = None
     rate_limit_global_rps: float = 10.0

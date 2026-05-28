@@ -1,4 +1,5 @@
 """Service functions for retrieving and shaping individual phenopacket records."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -199,9 +200,7 @@ async def get_individuals(
     if ids is not None:
         # Batch endpoint: GET /phenopackets/batch?phenopacket_ids=a,b,c
         params: dict[str, Any] = {"phenopacket_ids": ",".join(ids)}
-        batch_resp: dict[str, Any] = await client.get(
-            PHENOPACKETS_BATCH, params=params
-        )
+        batch_resp: dict[str, Any] = await client.get(PHENOPACKETS_BATCH, params=params)
         records: list[dict[str, Any]] = batch_resp.get("results", [])
         for record in records:
             individuals.append(_shape_individual(record))

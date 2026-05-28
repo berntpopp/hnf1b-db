@@ -62,7 +62,9 @@ def test_openapi_snapshot_matches_live() -> None:
     )
 
 
-def _resolve_enum(schema: Dict[str, Any], components: Dict[str, Any]) -> Optional[List[Any]]:
+def _resolve_enum(
+    schema: Dict[str, Any], components: Dict[str, Any]
+) -> Optional[List[Any]]:
     """Resolve a param schema (incl. Optional / $ref) to its enum list, if any."""
     if "enum" in schema:
         return schema["enum"]
@@ -93,13 +95,14 @@ def test_variant_vocab_params_are_enums() -> None:
     }
 
     for name, expected_values in expected.items():
-        assert name in params_by_name, f"Missing query param {name!r} on {ALL_VARIANTS_PATH}"
+        assert name in params_by_name, (
+            f"Missing query param {name!r} on {ALL_VARIANTS_PATH}"
+        )
         enum_values = _resolve_enum(params_by_name[name]["schema"], components)
         assert enum_values is not None, (
             f"Param {name!r} is no longer an enum in the OpenAPI schema; "
             "it must stay enum-typed for the DRY vocabulary contract."
         )
         assert enum_values == expected_values, (
-            f"Enum values for {name!r} drifted: "
-            f"{enum_values!r} != {expected_values!r}"
+            f"Enum values for {name!r} drifted: {enum_values!r} != {expected_values!r}"
         )

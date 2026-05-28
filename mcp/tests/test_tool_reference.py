@@ -1,4 +1,5 @@
 """Tests for the hnf1b_get_gene_context tool registration and behavior."""
+
 from __future__ import annotations
 
 import httpx

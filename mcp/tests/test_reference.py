@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.services.reference – get_gene_context."""
+
 from __future__ import annotations
 
 import httpx
@@ -225,9 +226,7 @@ async def test_both_flags_false_returns_gene_only() -> None:
     )
 
     c = ApiClient(base_url=BASE)
-    result = await get_gene_context(
-        c, include_transcripts=False, include_domains=False
-    )
+    result = await get_gene_context(c, include_transcripts=False, include_domains=False)
     await c.aclose()
 
     assert "transcripts" not in result

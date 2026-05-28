@@ -1,4 +1,5 @@
 """Tests for the hnf1b_get_publications tool registration and behaviour."""
+
 from __future__ import annotations
 
 import httpx
@@ -252,9 +253,7 @@ async def test_reverse_lookup_path_citing_individuals() -> None:
         return_value=httpx.Response(200, json=_BY_PUB_RESPONSE)
     )
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool(
-        "hnf1b_get_publications", {"citing_pmid": "123"}
-    )
+    r = await mcp.call_tool("hnf1b_get_publications", {"citing_pmid": "123"})
     await client.aclose()
 
     sc = r.structured_content
@@ -270,9 +269,7 @@ async def test_reverse_lookup_path_data_class() -> None:
         return_value=httpx.Response(200, json=_BY_PUB_RESPONSE)
     )
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool(
-        "hnf1b_get_publications", {"citing_pmid": "123"}
-    )
+    r = await mcp.call_tool("hnf1b_get_publications", {"citing_pmid": "123"})
     await client.aclose()
 
     sc = r.structured_content
@@ -287,9 +284,7 @@ async def test_reverse_lookup_path_total() -> None:
         return_value=httpx.Response(200, json=_BY_PUB_RESPONSE)
     )
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool(
-        "hnf1b_get_publications", {"citing_pmid": "123"}
-    )
+    r = await mcp.call_tool("hnf1b_get_publications", {"citing_pmid": "123"})
     await client.aclose()
 
     sc = r.structured_content
@@ -321,9 +316,7 @@ async def test_reverse_lookup_pmid_prefix_stripped() -> None:
         return_value=httpx.Response(200, json=_BY_PUB_RESPONSE)
     )
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool(
-        "hnf1b_get_publications", {"citing_pmid": "PMID:123"}
-    )
+    r = await mcp.call_tool("hnf1b_get_publications", {"citing_pmid": "PMID:123"})
     await client.aclose()
 
     sc = r.structured_content

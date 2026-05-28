@@ -3,6 +3,7 @@
 All endpoints live under ``/phenopackets/aggregate/`` and are published-only
 (safe, read-only).  The public entry-point is :func:`get_statistics`.
 """
+
 from __future__ import annotations
 
 import json
@@ -200,9 +201,7 @@ async def get_statistics(
     # fall back to any list-valued key in result_data when known keys absent
     effective_list_keys = [k for k in list_keys if k in result_data]
     if not effective_list_keys:
-        effective_list_keys = [
-            k for k, v in result_data.items() if isinstance(v, list)
-        ]
+        effective_list_keys = [k for k, v in result_data.items() if isinstance(v, list)]
 
     # We need to account for the wrapper overhead ("metric" key etc.).
     wrapper_overhead = len(json.dumps({"metric": metric, "result": None}))

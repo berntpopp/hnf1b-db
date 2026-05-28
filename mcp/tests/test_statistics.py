@@ -1,4 +1,5 @@
 """Tests for services/statistics.py — Task 1f."""
+
 from __future__ import annotations
 
 import httpx
@@ -144,9 +145,7 @@ async def test_survival_happy_path():
         )
     )
     c = ApiClient(base_url=BASE)
-    result = await get_statistics(
-        c, metric="survival", comparison="variant_type"
-    )
+    result = await get_statistics(c, metric="survival", comparison="variant_type")
     await c.aclose()
 
     assert result["metric"] == "survival"

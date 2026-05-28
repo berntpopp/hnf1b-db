@@ -1,4 +1,5 @@
 """MCP tool: hnf1b_search — unified discovery search over HNF1B-db entities."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -55,9 +56,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             ``label``, and ``uri``.
         """
         resolved_types: tuple[str, ...] = (
-            tuple(types)
-            if types
-            else ("individual", "variant", "publication")
+            tuple(types) if types else ("individual", "variant", "publication")
         )
         return await run_tool(
             lambda: search_service.search(

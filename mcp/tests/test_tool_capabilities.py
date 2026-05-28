@@ -1,4 +1,5 @@
 """Tests for the hnf1b_get_capabilities tool registration and behavior."""
+
 import pytest
 from fastmcp import FastMCP
 

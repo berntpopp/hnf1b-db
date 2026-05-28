@@ -88,9 +88,7 @@ async def search_phenopackets(
 
     # Structured filters
     if hpo_id:
-        where_conditions.append(
-            f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
-        )
+        where_conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
         params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
     if sex:
         where_conditions.append("p.subject_sex = :sex")
@@ -300,9 +298,7 @@ async def get_search_facets(
         params["search_query"] = q
 
     if hpo_id:
-        where_conditions.append(
-            f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
-        )
+        where_conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
         params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
 
     if sex:
@@ -338,9 +334,7 @@ async def get_search_facets(
     where_clause = f"WHERE {' AND '.join(where_conditions)}"
 
     # Get sex distribution (don't apply sex filter for sex facet)
-    sex_where = " AND ".join(
-        [c for c in where_conditions if "p.subject_sex" not in c]
-    )
+    sex_where = " AND ".join([c for c in where_conditions if "p.subject_sex" not in c])
     sex_query = f"""
         SELECT p.subject_sex AS value, COUNT(*) AS count
         {from_phenopackets}

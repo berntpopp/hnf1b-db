@@ -1,4 +1,5 @@
 """Tests for hnf1b_mcp.services.search."""
+
 from __future__ import annotations
 
 import httpx

@@ -3,6 +3,7 @@
 All tests are pure in-process and require no Redis or external services.
 The clock is injected to ensure fully deterministic behaviour.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -18,6 +19,7 @@ from hnf1b_mcp.server_ratelimit import (
 # ---------------------------------------------------------------------------
 # _TokenBucket unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestTokenBucket:
     def test_full_bucket_allows_first_request(self):
@@ -84,6 +86,7 @@ class TestTokenBucket:
 # RateLimiter — global bucket
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiterGlobal:
     def test_allow_within_global_budget(self):
         clock_val = [0.0]
@@ -131,11 +134,12 @@ class TestRateLimiterGlobal:
 # RateLimiter — per-tool budgets
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiterPerTool:
     def test_per_tool_blocks_independently(self):
         clock_val = [0.0]
         limiter = RateLimiter(
-            global_rps=1000.0,   # large — never the bottleneck here
+            global_rps=1000.0,  # large — never the bottleneck here
             tool_capacity=3.0,
             heavy_tool_capacity=3.0,
             clock=lambda: clock_val[0],
@@ -160,9 +164,7 @@ class TestRateLimiterPerTool:
         )
         heavy_tool = next(iter(HEAVY_TOOLS))
         # Drain heavy tool budget.
-        heavy_allowed = sum(
-            1 for _ in range(20) if limiter.allow(heavy_tool)
-        )
+        heavy_allowed = sum(1 for _ in range(20) if limiter.allow(heavy_tool))
         assert heavy_allowed == int(heavy_cap)
 
         # A standard tool still has a larger budget.
@@ -173,9 +175,7 @@ class TestRateLimiterPerTool:
             heavy_tool_capacity=heavy_cap,
             clock=lambda: clock_val[0],
         )
-        standard_allowed = sum(
-            1 for _ in range(50) if limiter2.allow("hnf1b_search")
-        )
+        standard_allowed = sum(1 for _ in range(50) if limiter2.allow("hnf1b_search"))
         assert standard_allowed == int(standard_cap)
         assert heavy_allowed < standard_allowed
 
@@ -202,6 +202,7 @@ class TestRateLimiterPerTool:
 # ---------------------------------------------------------------------------
 # RateLimiter — no-Redis path
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimiterNoRedis:
     def test_works_without_redis_url(self):
@@ -231,6 +232,7 @@ class TestRateLimiterNoRedis:
 # Module singleton helpers
 # ---------------------------------------------------------------------------
 
+
 class TestLimiterSingleton:
     def test_set_and_get_limiter(self):
         original = get_limiter()
@@ -253,6 +255,7 @@ class TestLimiterSingleton:
 # ---------------------------------------------------------------------------
 # Default limits are generous enough for tests
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultLimitsAreGenerousEnough:
     def test_default_global_rps_is_high(self):

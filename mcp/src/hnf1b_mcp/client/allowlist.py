@@ -8,6 +8,7 @@ allows exists in ``hnf1b_mcp.contract._generated_paths.ALL_PATHS`` and that ever
 generated path is either allowed here or explicitly denied — forcing an explicit
 allow/deny decision whenever the backend adds a route.
 """
+
 from __future__ import annotations
 
 import re
@@ -42,30 +43,36 @@ _RULES: list[tuple[re.Pattern[str], bool]] = [
 # are allowlisted above. Only side-effecting / privileged / out-of-scope paths are
 # denied. Every backend route NOT in _RULES above is denied here explicitly so the
 # contract test can prove there are no silent gaps (see tests/test_contract.py).
-_DENY = [re.compile(p) for p in (
-    # Privileged / side-effecting (original guards).
-    r"^/publications/[^/]+/metadata$", r"^/admin", r"^/auth", r"^/dev",
-    # Live PubMed fetch + DB write.
-    r"^/publications/sync$",
-    # Clinical aggregation routes — not part of the curated MCP statistics surface.
-    r"^/clinical/",
-    # Curation collaboration surface (comments, edits, resolve) — write/privileged.
-    r"^/comments",
-    # Duplicate / legacy HPO routes — MCP uses /ontology/hpo/* only.
-    r"^/hpo/",
-    # Build/version info — not data.
-    r"^/info$",
-    # Per-phenopacket workflow/audit/revision routes — curation internals.
-    r"^/phenopackets/[^/]+/(audit|revisions|timeline|transitions)(/|$)",
-    # Statistical-comparison endpoint — not in the curated metric set.
-    r"^/phenopackets/compare/",
-    # SEO sitemaps — XML, not data.
-    r"^/seo/",
-    # User directory — privileged.
-    r"^/users/",
-    # Variant annotation / recoding / validation — live external tooling, writes.
-    r"^/variants/",
-)]
+_DENY = [
+    re.compile(p)
+    for p in (
+        # Privileged / side-effecting (original guards).
+        r"^/publications/[^/]+/metadata$",
+        r"^/admin",
+        r"^/auth",
+        r"^/dev",
+        # Live PubMed fetch + DB write.
+        r"^/publications/sync$",
+        # Clinical aggregation routes — not part of the curated MCP statistics surface.
+        r"^/clinical/",
+        # Curation collaboration surface (comments, edits, resolve) — write/privileged.
+        r"^/comments",
+        # Duplicate / legacy HPO routes — MCP uses /ontology/hpo/* only.
+        r"^/hpo/",
+        # Build/version info — not data.
+        r"^/info$",
+        # Per-phenopacket workflow/audit/revision routes — curation internals.
+        r"^/phenopackets/[^/]+/(audit|revisions|timeline|transitions)(/|$)",
+        # Statistical-comparison endpoint — not in the curated metric set.
+        r"^/phenopackets/compare/",
+        # SEO sitemaps — XML, not data.
+        r"^/seo/",
+        # User directory — privileged.
+        r"^/users/",
+        # Variant annotation / recoding / validation — live external tooling, writes.
+        r"^/variants/",
+    )
+]
 
 ALLOWED = [r.pattern for r, _ in _RULES]
 

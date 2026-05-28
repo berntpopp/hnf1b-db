@@ -1,4 +1,5 @@
 """Tests for services/individuals.py — get_individual and get_individuals."""
+
 from __future__ import annotations
 
 import httpx
@@ -30,14 +31,30 @@ _PHENOPACKET_X: dict = {
             "timeAtLastEncounter": {"age": {"iso8601duration": "P30Y"}},
         },
         "phenotypicFeatures": [
-            {"type": {"id": "HP:0000083", "label": "Renal insufficiency"}, "excluded": False},
+            {
+                "type": {"id": "HP:0000083", "label": "Renal insufficiency"},
+                "excluded": False,
+            },
             {"type": {"id": "HP:0000107", "label": "Renal cysts"}, "excluded": False},
         ],
         "measurements": [
-            {"assay": {"id": "LOINC:2160-0", "label": "Creatinine"}, "value": {"quantity": {"value": 1.2, "unit": {"id": "UCUM:mg/dL", "label": "mg/dL"}}}}
+            {
+                "assay": {"id": "LOINC:2160-0", "label": "Creatinine"},
+                "value": {
+                    "quantity": {
+                        "value": 1.2,
+                        "unit": {"id": "UCUM:mg/dL", "label": "mg/dL"},
+                    }
+                },
+            }
         ],
         "diseases": [
-            {"term": {"id": "OMIM:137920", "label": "HNF1B-related disease"}, "onset": {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}}
+            {
+                "term": {"id": "OMIM:137920", "label": "HNF1B-related disease"},
+                "onset": {
+                    "ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}
+                },
+            }
         ],
         "interpretations": [
             {
@@ -51,12 +68,26 @@ _PHENOPACKET_X: dict = {
                             "variantInterpretation": {
                                 "variationDescriptor": {
                                     "id": "var-1",
-                                    "geneContext": {"geneId": "HGNC:11630", "symbol": "HNF1B"},
-                                    "vcfRecord": {"chrom": "17", "pos": "36099020", "ref": "C", "alt": "T"},
+                                    "geneContext": {
+                                        "geneId": "HGNC:11630",
+                                        "symbol": "HNF1B",
+                                    },
+                                    "vcfRecord": {
+                                        "chrom": "17",
+                                        "pos": "36099020",
+                                        "ref": "C",
+                                        "alt": "T",
+                                    },
                                     "expressions": [
-                                        {"syntax": "hgvs.c", "value": "NM_000458.4:c.544C>T"}
+                                        {
+                                            "syntax": "hgvs.c",
+                                            "value": "NM_000458.4:c.544C>T",
+                                        }
                                     ],
-                                    "allelicState": {"id": "GENO:0000135", "label": "heterozygous"},
+                                    "allelicState": {
+                                        "id": "GENO:0000135",
+                                        "label": "heterozygous",
+                                    },
                                 }
                             },
                         }
@@ -231,9 +262,7 @@ async def test_get_individual_include_publications_false_omits_key():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_individual_not_found_raises():
-    respx.get(f"{BASE}/phenopackets/MISSING").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{BASE}/phenopackets/MISSING").mock(return_value=httpx.Response(404))
     c = ApiClient(base_url=BASE)
     from hnf1b_mcp.services.errors import McpToolError
 

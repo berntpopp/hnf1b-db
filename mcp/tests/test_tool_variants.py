@@ -1,4 +1,5 @@
 """Tests for the hnf1b_search_variants and hnf1b_get_variant tool registration."""
+
 from __future__ import annotations
 
 import httpx
