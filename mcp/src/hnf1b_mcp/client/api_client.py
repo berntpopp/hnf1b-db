@@ -8,8 +8,85 @@ from typing import Any
 
 import httpx
 
+from ..contract import (
+    MOLECULAR_CONSEQUENCE_VALUES,
+    PROTEIN_DOMAIN_VALUES,
+    VARIANT_CLASSIFICATION_VALUES,
+    VARIANT_TYPE_VALUES,
+)
 from ..services.errors import McpToolError
 from .allowlist import assert_allowed
+
+#: Map of upstream query-parameter names → the contract enum that constrains
+#: them. Used to surface ``allowed`` values in 422 error envelopes so a calling
+#: LLM can self-correct in a single retry.
+_FIELD_ALLOWED: dict[str, list[str]] = {
+    "classification": sorted(VARIANT_CLASSIFICATION_VALUES),
+    "consequence": sorted(MOLECULAR_CONSEQUENCE_VALUES),
+    "variant_type": sorted(VARIANT_TYPE_VALUES),
+    "domain": sorted(PROTEIN_DOMAIN_VALUES),
+}
+
+
+def _build_422_error(resp: httpx.Response) -> McpToolError:
+    """Translate an upstream 422 into an actionable ``invalid_input`` error.
+
+    Parses the FastAPI validation body
+    (``{"detail":[{"loc":[...],"msg":"...","input":...}]}``) to name the
+    offending field and value, attaching ``field``, ``allowed`` (when the field
+    maps to a known contract enum), ``hint``, and the raw ``upstream_detail`` so
+    a consuming model can correct its call without fetching raw schemas.
+
+    Args:
+        resp: The 422 :class:`httpx.Response` returned by the upstream API.
+
+    Returns:
+        A populated :class:`McpToolError` with code ``invalid_input``.
+    """
+    try:
+        body: Any = resp.json()
+    except (json.JSONDecodeError, ValueError):
+        body = None
+
+    detail = body.get("detail") if isinstance(body, dict) else None
+
+    if isinstance(detail, list) and detail and isinstance(detail[0], dict):
+        first = detail[0]
+        loc = first.get("loc") or []
+        field = str(loc[-1]) if loc else "unknown"
+        upstream_msg = str(first.get("msg") or "value not permitted by the data API")
+        bad_value = first.get("input")
+        allowed = _FIELD_ALLOWED.get(field)
+
+        if bad_value is not None:
+            message = f"invalid value {bad_value!r} for '{field}': {upstream_msg}"
+        else:
+            message = f"invalid value for '{field}': {upstream_msg}"
+
+        if allowed is not None:
+            hint = f"use one of the allowed values for '{field}'"
+        else:
+            hint = (
+                "check the parameter against hnf1b_get_capabilities filterable_fields"
+            )
+
+        return McpToolError(
+            "invalid_input",
+            message,
+            field=field,
+            allowed=allowed,
+            hint=hint,
+            upstream_detail=detail,
+        )
+
+    # Unparseable / non-standard body: still surface *something* actionable.
+    return McpToolError(
+        "invalid_input",
+        "the data API rejected the request parameters",
+        field="unknown",
+        hint="check parameters against hnf1b_get_capabilities filterable_fields",
+        upstream_detail=detail if detail is not None else body,
+    )
 
 
 class ApiClient:
@@ -68,7 +145,7 @@ class ApiClient:
         if resp.status_code == 404:
             raise McpToolError("not_found", f"resource not found: {path}")
         if resp.status_code == 422:
-            raise McpToolError("invalid_input", "upstream rejected parameters")
+            raise _build_422_error(resp)
         if resp.status_code >= 500:
             raise McpToolError("temporarily_unavailable", "upstream API unavailable")
         resp.raise_for_status()
