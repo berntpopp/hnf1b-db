@@ -145,18 +145,24 @@ async def get_phenopackets_by_variant(
     ``PhenopacketResponse`` Pydantic model here because several
     callers only need the embedded phenopacket JSON.
     """
-    # Public endpoint — apply public visibility filter (I3 + I7)
+    # Public endpoint — apply public visibility filter (I3 + I7).
+    #
+    # Visibility fix (Wave A): source content from the head-published revision
+    # (``r.content_jsonb``), never the working copy ``p.phenopacket`` which may
+    # hold an unpublished clone-to-draft edit. Both the EXISTS match predicate
+    # and the returned payload use the head revision content.
     query = text(
         """
-    SELECT id, phenopacket_id, version, phenopacket,
-           created_at, updated_at, schema_version
+    SELECT p.id, p.phenopacket_id, p.version, r.content_jsonb AS phenopacket,
+           p.created_at, p.updated_at, p.schema_version
     FROM phenopackets p
+    JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
     WHERE p.deleted_at IS NULL
       AND p.state = 'published'
       AND p.head_published_revision_id IS NOT NULL
       AND EXISTS (
         SELECT 1
-        FROM jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+        FROM jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
              jsonb_array_elements(
                  interp->'diagnosis'->'genomicInterpretations'
              ) as gi
@@ -229,16 +235,21 @@ async def get_by_publication(
     # SECURITY: Cap limit to prevent excessive data exposure
     limit = min(limit, 500)
 
-    # Public endpoint — apply public visibility filter (I3 + I7)
+    # Public endpoint — apply public visibility filter (I3 + I7).
+    #
+    # Visibility fix (Wave A): source content from the head-published revision
+    # (``r.content_jsonb``), never the working copy ``p.phenopacket``. Both the
+    # PMID match predicate and the returned payload read the head content.
     query = """
         SELECT
-            phenopacket_id,
-            phenopacket
-        FROM phenopackets
-        WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
-        AND deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
+            p.phenopacket_id,
+            r.content_jsonb AS phenopacket
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+        WHERE r.content_jsonb->'metaData'->'externalReferences' @> :pmid_filter
+        AND p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
     """
 
     pmid_filter = json.dumps([{"id": pmid}])
@@ -246,36 +257,41 @@ async def get_by_publication(
     params = {"pmid_filter": pmid_filter, "skip": skip, "limit": limit}
 
     if sex:
-        query += " AND subject_sex = :sex"
+        query += " AND p.subject_sex = :sex"
         params["sex"] = sex
 
     if has_variants is not None:
         if has_variants:
-            query += " AND jsonb_array_length(phenopacket->'interpretations') > 0"
+            query += (
+                " AND jsonb_array_length(r.content_jsonb->'interpretations') > 0"
+            )
         else:
             query += (
-                " AND (phenopacket->'interpretations' IS NULL OR "
-                "jsonb_array_length(phenopacket->'interpretations') = 0)"
+                " AND (r.content_jsonb->'interpretations' IS NULL OR "
+                "jsonb_array_length(r.content_jsonb->'interpretations') = 0)"
             )
 
     count_query = """
         SELECT COUNT(*)
-        FROM phenopackets
-        WHERE phenopacket->'metaData'->'externalReferences' @> :pmid_filter
-        AND deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+        WHERE r.content_jsonb->'metaData'->'externalReferences' @> :pmid_filter
+        AND p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
     """
 
     if sex:
-        count_query += " AND subject_sex = :sex"
+        count_query += " AND p.subject_sex = :sex"
     if has_variants is not None:
         if has_variants:
-            count_query += " AND jsonb_array_length(phenopacket->'interpretations') > 0"
+            count_query += (
+                " AND jsonb_array_length(r.content_jsonb->'interpretations') > 0"
+            )
         else:
             count_query += (
-                " AND (phenopacket->'interpretations' IS NULL OR "
-                "jsonb_array_length(phenopacket->'interpretations') = 0)"
+                " AND (r.content_jsonb->'interpretations' IS NULL OR "
+                "jsonb_array_length(r.content_jsonb->'interpretations') = 0)"
             )
 
     try:
@@ -288,7 +304,7 @@ async def get_by_publication(
                 detail=f"No phenopackets found citing publication {pmid}",
             )
 
-        query += " ORDER BY phenopacket_id LIMIT :limit OFFSET :skip"
+        query += " ORDER BY p.phenopacket_id LIMIT :limit OFFSET :skip"
 
         result = await db.execute(text(query), params)
         rows = result.fetchall()

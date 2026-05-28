@@ -304,3 +304,131 @@ async def test_search_returns_head_published_not_working_copy(
     pid = clone_in_progress_record["record"].phenopacket_id
     ids = {item.get("id") for item in r.json().get("data", [])}
     assert pid in ids  # still visible, just with old content
+
+
+# ---------------------------------------------------------------------------
+# Wave A Task A2: by-variant / by-publication must show head-published content
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_by_variant_returns_head_published(
+    async_client, db_session, curator_user, admin_user
+):
+    from app.phenopackets.models import Phenopacket, PhenopacketRevision
+    from app.phenopackets.services.state_service import PhenopacketStateService
+
+    vid = "var-leak-test-1"
+    content = {
+        "id": "pp-var-leak",
+        "subject": {"id": "PUBLISHED-SUBJECT"},
+        "interpretations": [
+            {
+                "diagnosis": {
+                    "genomicInterpretations": [
+                        {
+                            "variantInterpretation": {
+                                "variationDescriptor": {"id": vid}
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+    }
+    pp = Phenopacket(
+        phenopacket_id="pp-var-leak",
+        phenopacket=content,
+        state="published",
+        revision=1,
+        created_by_id=admin_user.id,
+    )
+    db_session.add(pp)
+    await db_session.flush()
+    rev = PhenopacketRevision(
+        record_id=pp.id,
+        revision_number=1,
+        state="published",
+        content_jsonb=content,
+        change_reason="init",
+        actor_id=admin_user.id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+    pp.head_published_revision_id = rev.id
+    await db_session.commit()
+
+    svc = PhenopacketStateService(db_session)
+    leak = {**content, "subject": {"id": "LEAKED-SUBJECT"}}
+    await svc.edit_record(
+        pp.id,
+        new_content=leak,
+        change_reason="edit",
+        expected_revision=pp.revision,
+        actor=curator_user,
+    )
+    await db_session.commit()
+
+    r = await async_client.get(f"/api/v2/phenopackets/by-variant/{vid}")
+    assert r.status_code == 200
+    assert "LEAKED-SUBJECT" not in r.text
+    assert "PUBLISHED-SUBJECT" in r.text
+
+
+@pytest.mark.asyncio
+async def test_by_publication_returns_head_published(
+    async_client, db_session, curator_user, admin_user
+):
+    from app.phenopackets.models import Phenopacket, PhenopacketRevision
+    from app.phenopackets.services.state_service import PhenopacketStateService
+
+    pmid = "PMID:11111111"
+    content = {
+        "id": "pp-pub-leak",
+        "subject": {"id": "PUBLISHED-SUBJECT-PUB"},
+        "interpretations": [],
+        "metaData": {"externalReferences": [{"id": pmid}]},
+    }
+    pp = Phenopacket(
+        phenopacket_id="pp-pub-leak",
+        phenopacket=content,
+        state="published",
+        revision=1,
+        created_by_id=admin_user.id,
+    )
+    db_session.add(pp)
+    await db_session.flush()
+    rev = PhenopacketRevision(
+        record_id=pp.id,
+        revision_number=1,
+        state="published",
+        content_jsonb=content,
+        change_reason="init",
+        actor_id=admin_user.id,
+        from_state=None,
+        to_state="published",
+        is_head_published=True,
+    )
+    db_session.add(rev)
+    await db_session.flush()
+    pp.head_published_revision_id = rev.id
+    await db_session.commit()
+
+    svc = PhenopacketStateService(db_session)
+    leak = {**content, "subject": {"id": "LEAKED-SUBJECT-PUB"}}
+    await svc.edit_record(
+        pp.id,
+        new_content=leak,
+        change_reason="edit",
+        expected_revision=pp.revision,
+        actor=curator_user,
+    )
+    await db_session.commit()
+
+    r = await async_client.get("/api/v2/phenopackets/by-publication/11111111")
+    assert r.status_code == 200
+    assert "LEAKED-SUBJECT-PUB" not in r.text
+    assert "PUBLISHED-SUBJECT-PUB" in r.text
