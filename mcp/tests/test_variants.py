@@ -212,6 +212,46 @@ async def test_search_variants_passes_filters():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_variants_translates_and_echoes_sort():
+    """A row-name sort key is translated to the backend token and echoed."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, sort="-carrier_count")
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    # carrier_count -> individualCount (the only token the backend honors here).
+    assert sent_params["sort"] == "-individualCount"
+    assert result["_meta"]["applied_sort"] == "-individualCount"
+    assert result["_meta"]["ignored_params"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_unsortable_field_disclosed_not_silent():
+    """A non-sortable field is NOT forwarded and is disclosed in meta."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, sort="label")
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    assert "sort" not in sent_params  # not silently sent as an ignored key
+    assert result["_meta"]["applied_sort"] is None
+    assert result["_meta"]["ignored_params"] == ["sort"]
+    assert "sort_note" in result["_meta"]
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_variants_page_size_capped_at_500():
     """search_variants caps page_size at 500."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(

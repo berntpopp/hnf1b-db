@@ -38,7 +38,11 @@ def _map_vocab_item(item: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Normalised ``{id, label, description}`` dict.
     """
-    id_val = str(item.get("id") or item.get("code") or "")
+    # ``value``-keyed vocabularies (sex, interpretation-status, progress-status)
+    # carry their canonical token in ``value`` and a Title-cased display string
+    # in ``label`` — fall back to ``value`` for the id so the returned id is the
+    # token the filter params expect (e.g. sex -> "MALE", not "").
+    id_val = str(item.get("id") or item.get("code") or item.get("value") or "")
     label_val = str(item.get("label") or item.get("value") or "")
     desc_val = str(item.get("description") or "")
     return {"id": id_val, "label": label_val, "description": desc_val}

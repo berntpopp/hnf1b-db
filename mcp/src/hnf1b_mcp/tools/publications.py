@@ -32,6 +32,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         year: int | None = None,
         has_doi: bool | None = None,
         page_size: int = 25,
+        sort: str | None = None,
         citing_pmid: str | None = None,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
@@ -56,23 +57,33 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 when ``False``, return only those without.  ``None`` disables
                 the filter.
             page_size: Number of publications per page (default 25, max 1000).
+            sort: Optional ordering — a field name optionally ``-``-prefixed for
+                descending. Allowed: ``phenopacket_count`` (default,
+                most-cited first), ``year``, ``pmid``, ``title``, ``journal``,
+                ``first_added``. The applied ordering is echoed as
+                ``applied_sort``.
             citing_pmid: Bare PMID (digits) or ``"PMID:NNN"`` prefixed string.
                 When provided, performs a reverse lookup — returns the list of
                 phenopacket IDs that cite this publication.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+                In ``minimal``/``compact`` the redundant ``journal``/``year``/
+                ``date_confidence`` fields (already inside
+                ``recommended_citation``) are omitted; ``standard``/``full``
+                include them.
 
         Returns:
             When ``citing_pmid`` is given: a dict with keys ``pmid``,
             ``citing_individuals`` (list of phenopacket ID strings),
             ``total``, ``data_class``, and ``meta``.
 
-            Otherwise: a dict with keys ``publications`` (list of shaped
-            publication records with ``pmid``, ``recommended_citation``,
-            ``date_confidence``, ``journal``, ``year``,
-            ``phenopacket_count``, and ``uri``), ``total``, ``page``,
-            ``page_size``, ``data_class``, and ``meta``.
+            Otherwise: a dict with keys ``publications`` (shaped records with
+            ``pmid``, ``recommended_citation``, ``phenopacket_count``, ``uri``,
+            plus ``journal``/``year``/``date_confidence`` in standard/full),
+            ``total``, ``page``, ``page_size``, ``applied_sort``,
+            ``data_class``, and ``meta``.
         """
+        mode = resolve_mode(response_mode)
 
         async def handler() -> dict[str, Any]:
             if citing_pmid is not None:
@@ -90,10 +101,12 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 q=q,
                 filters=filters or None,
                 page_size=page_size,
+                sort=sort,
+                response_mode=mode,
             )
 
         return await run_tool(
             handler,
             data_class=DataClass.CURATED,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )

@@ -29,6 +29,49 @@ _VALID_DOMAIN = frozenset(PROTEIN_DOMAIN_VALUES)
 _MAX_PAGE_SIZE = 500
 _GENE_SYMBOL = "HNF1B"
 
+# Translate MCP-friendly sort keys (the field names this server returns in each
+# row) to the backend all-variants sort tokens it actually honors. Keys the
+# backend does not support (e.g. ``label``, ``consequence``) are reported as
+# ignored in meta rather than silently dropped — an unknown sort key otherwise
+# falls back to the default order, looking like a no-op.
+_SORT_FIELD_TRANSLATION: dict[str, str] = {
+    "carrier_count": "individualCount",
+    "classification": "classificationVerdict",
+    "structural_type": "variant_type",
+    "variant_id": "variant_id",
+    "transcript": "transcript",
+    "protein": "protein",
+    "hg38": "hg38",
+    "simple_id": "simple_id",
+    # accept backend tokens verbatim too
+    "individualCount": "individualCount",
+    "classificationVerdict": "classificationVerdict",
+    "variant_type": "variant_type",
+}
+
+
+def _translate_sort(sort: str | None) -> tuple[str | None, list[str]]:
+    """Map an MCP-friendly sort expression to the backend token.
+
+    Args:
+        sort: A sort expression, optionally ``-``-prefixed for descending
+            (e.g. ``-carrier_count``), or ``None``.
+
+    Returns:
+        ``(backend_sort, ignored_params)`` — *backend_sort* is the translated
+        expression to forward (or ``None`` when the field is not sortable
+        server-side), and *ignored_params* is ``["sort"]`` when the requested
+        sort could not be honored, else ``[]``.
+    """
+    if not sort:
+        return None, []
+    descending = sort.startswith("-")
+    field = sort[1:] if descending else sort
+    backend_field = _SORT_FIELD_TRANSLATION.get(field)
+    if backend_field is None:
+        return None, ["sort"]
+    return (f"-{backend_field}" if descending else backend_field), []
+
 # Per-mode field policies (Anthropic: smallest high-signal payload).  Fields not
 # listed for a mode are dropped from each row.  ``gene_symbol`` is always hoisted
 # to the response header when invariant, and ``uri`` is dropped in
@@ -241,8 +284,9 @@ async def search_variants(
         params["consequence"] = consequence
     if domain is not None:
         params["domain"] = domain
-    if sort is not None:
-        params["sort"] = sort
+    backend_sort, ignored_sort = _translate_sort(sort)
+    if backend_sort is not None:
+        params["sort"] = backend_sort
 
     raw: dict[str, Any] = await client.get(
         PHENOPACKETS_AGGREGATE_ALL_VARIANTS, params=params
@@ -316,6 +360,22 @@ async def search_variants(
         symbols = {row.get("gene_symbol") for row in shaped_full}
         if symbols and symbols <= {_GENE_SYMBOL}:
             result["gene_symbol_all"] = _GENE_SYMBOL
+
+    # Make sort handling visible: echo the sort actually applied server-side and
+    # name any parameter that was requested but could not be honored. An LLM
+    # cannot self-correct on a silently-dropped argument.
+    if sort is not None:
+        sort_meta: dict[str, Any] = {
+            "applied_sort": backend_sort,
+            "ignored_params": ignored_sort,
+        }
+        if ignored_sort:
+            sort_meta["sort_note"] = (
+                f"sort={sort!r} is not sortable server-side; default order"
+                " (carrier_count desc) was used. Sortable fields: "
+                f"{sorted(_SORT_FIELD_TRANSLATION)}"
+            )
+        result["_meta"] = sort_meta
 
     return result
 
