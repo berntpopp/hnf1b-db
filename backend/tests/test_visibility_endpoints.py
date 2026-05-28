@@ -432,3 +432,25 @@ async def test_by_publication_returns_head_published(
     assert r.status_code == 200
     assert "LEAKED-SUBJECT-PUB" not in r.text
     assert "PUBLISHED-SUBJECT-PUB" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Wave A Task A5: regression sweep across public read paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v2/phenopackets/search",
+        "/api/v2/phenopackets/",
+    ],
+)
+async def test_no_public_path_leaks_working_copy(
+    async_client, clone_in_progress_record, path
+):
+    r = await async_client.get(path)
+    assert r.status_code == 200
+    assert "_secret_working_copy" not in r.text
+    assert "LEAKED-DRAFT-SUBJECT" not in r.text
