@@ -35,9 +35,7 @@ DEFAULT_CSP = (
 # (e.g. one rendered while a deploy changed the CSP, or fetched during a
 # container restart) and keep serving it — surfacing as Swagger's
 # "Failed to fetch /api/v2/openapi.json". no-store forces a fresh fetch.
-NO_STORE_PATHS = frozenset(
-    {"/api/v2/docs", "/api/v2/redoc", "/api/v2/openapi.json"}
-)
+NO_STORE_PATHS = frozenset({"/api/v2/docs", "/api/v2/redoc", "/api/v2/openapi.json"})
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
