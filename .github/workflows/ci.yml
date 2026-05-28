@@ -361,9 +361,13 @@ jobs:
       working-directory: mcp
       run: uv run mypy src/
 
-    - name: Run unit tests (pytest, no smoke)
+    - name: Run unit tests (pytest, no smoke/live)
       working-directory: mcp
-      run: uv run pytest --cov=hnf1b_mcp -m "not smoke"
+      # 'live' golden tests require a running API+DB stack; 'smoke' needs the
+      # full server. Both are excluded from unit CI (run them against a live
+      # stack). Note: an explicit -m here overrides pyproject addopts, so we
+      # must spell out both exclusions.
+      run: uv run pytest --cov=hnf1b_mcp -m "not smoke and not live"
 
     # Contract-drift guard: regenerate _generated_paths.py and
     # _generated_enums.py from the committed OpenAPI snapshot and fail if the
