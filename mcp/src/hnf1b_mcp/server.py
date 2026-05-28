@@ -2,8 +2,18 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Any
 
+import mcp.types as mt
 from fastmcp import FastMCP
+from fastmcp.server.middleware import (
+    CallNext,
+    MiddlewareContext,
+)
+from fastmcp.server.middleware import (
+    Middleware as FastMCPMiddleware,
+)
+from fastmcp.tools.base import ToolResult
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -13,6 +23,7 @@ from starlette.types import ASGIApp
 
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.config import Settings, get_settings
+from hnf1b_mcp.server_ratelimit import RateLimiter, set_limiter
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 from hnf1b_mcp.tools import register_all
 
@@ -60,6 +71,60 @@ def is_origin_allowed(origin: str | None, allowed_origins: list[str]) -> bool:
     if origin is None:
         return True
     return origin in allowed_origins
+
+
+class RateLimitMiddleware(FastMCPMiddleware):
+    """FastMCP middleware that enforces per-tool rate limits.
+
+    Intercepts ``tools/call`` messages and checks the injected
+    :class:`~hnf1b_mcp.server_ratelimit.RateLimiter`.  When the limiter
+    returns ``False`` (budget exhausted) the middleware returns a
+    ``temporarily_unavailable`` error result without calling downstream
+    handlers.
+
+    Args:
+        limiter: The :class:`~hnf1b_mcp.server_ratelimit.RateLimiter`
+            instance to consult for each tool invocation.
+    """
+
+    def __init__(self, limiter: RateLimiter) -> None:
+        """Store the limiter.
+
+        Args:
+            limiter: The rate-limiter to use for all tool calls.
+        """
+        self._limiter = limiter
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext[mt.CallToolRequestParams],
+        call_next: CallNext[mt.CallToolRequestParams, ToolResult],
+    ) -> ToolResult:
+        """Check rate limit before forwarding to the tool handler.
+
+        Args:
+            context: The middleware context carrying the tool call parameters.
+            call_next: The downstream handler to invoke when allowed.
+
+        Returns:
+            A ``temporarily_unavailable`` :class:`~fastmcp.tools.base.ToolResult`
+            when the budget is exhausted, otherwise the downstream result.
+        """
+        tool_name: str = context.message.name
+        if not self._limiter.allow(tool_name):
+            error_payload: dict[str, Any] = {
+                "schema_version": "1.0",
+                "error": {
+                    "code": "temporarily_unavailable",
+                    "message": (
+                        f"Rate limit exceeded for tool '{tool_name}'. "
+                        "Please retry after a short delay."
+                    ),
+                },
+                "is_error": True,
+            }
+            return ToolResult(content=error_payload)
+        return await call_next(context)
 
 
 class OriginValidationMiddleware(BaseHTTPMiddleware):
@@ -119,7 +184,15 @@ def build_app(settings: Settings | None = None) -> FastMCP:
         cache_ttl=settings.cache_ttl_default_seconds,
     )
 
+    # Build rate limiter and register it as the module singleton.
+    limiter = RateLimiter.from_settings_params(
+        global_rps=settings.rate_limit_global_rps,
+        redis_url=settings.redis_url,
+    )
+    set_limiter(limiter)
+
     mcp = FastMCP("HNF1B-db", instructions=SERVER_INSTRUCTIONS)
+    mcp.add_middleware(RateLimitMiddleware(limiter))
     register_all(mcp, client)
 
     def _make_resource(resource_uri: str) -> Callable[[], str]:
