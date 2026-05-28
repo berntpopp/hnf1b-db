@@ -318,10 +318,222 @@ class TestConsequenceFiltering:
         assert len(filtered) == 2
 
 
-# Integration tests would go here (requires database setup)
-# Example:
-# @pytest.mark.asyncio
-# async def test_variant_search_endpoint():
-#     """Test the full /aggregate/all-variants endpoint."""
-#     # Would require FastAPI TestClient and database fixture
-#     pass
+ALL_VARIANTS_PATH = "/api/v2/phenopackets/aggregate/all-variants"
+
+
+def _transitions_url(phenopacket_id: str) -> str:
+    return f"/api/v2/phenopackets/{phenopacket_id}/transitions"
+
+
+def _variant_phenopacket_payload(
+    pid: str,
+    var_id: str,
+    *,
+    hgvs_c: str,
+    hgvs_p: str | None,
+    pos: str,
+) -> dict:
+    """Build a minimal published-able phenopacket carrying one variant.
+
+    The expressions drive ``compute_molecular_consequence`` (HGVS fallback),
+    which is the value the all-variants endpoint renders and now filters on.
+    """
+    expressions = [{"syntax": "hgvs.c", "value": hgvs_c}]
+    if hgvs_p is not None:
+        expressions.append({"syntax": "hgvs.p", "value": hgvs_p})
+    return {
+        "phenopacket": {
+            "id": pid,
+            "subject": {"id": "s", "sex": "MALE"},
+            "phenotypicFeatures": [],
+            "interpretations": [
+                {
+                    "id": "interp-1",
+                    "progressStatus": "SOLVED",
+                    "diagnosis": {
+                        "disease": {"id": "MONDO:0000001", "label": "test"},
+                        "genomicInterpretations": [
+                            {
+                                "subjectOrBiosampleId": "s",
+                                "interpretationStatus": "PATHOGENIC",
+                                "variantInterpretation": {
+                                    "acmgPathogenicityClassification": "PATHOGENIC",
+                                    "variationDescriptor": {
+                                        "id": var_id,
+                                        "label": var_id,
+                                        "geneContext": {
+                                            "valueId": "HGNC:11621",
+                                            "symbol": "HNF1B",
+                                        },
+                                        "expressions": expressions,
+                                        "vcfRecord": {
+                                            "chrom": "17",
+                                            "pos": pos,
+                                            "ref": "A",
+                                            "alt": "G",
+                                        },
+                                    },
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
+            "metaData": {
+                "created": "2026-04-11T00:00:00Z",
+                "createdBy": "pytest",
+                "resources": [
+                    {
+                        "id": "hp",
+                        "name": "Human Phenotype Ontology",
+                        "url": "http://purl.obolibrary.org/obo/hp.owl",
+                        "version": "2024-01-01",
+                        "namespacePrefix": "HP",
+                        "iriPrefix": "http://purl.obolibrary.org/obo/HP_",
+                    }
+                ],
+            },
+        }
+    }
+
+
+async def _create_and_publish(async_client, admin_headers, payload, pid) -> None:
+    resp = await async_client.post(
+        "/api/v2/phenopackets/", json=payload, headers=admin_headers
+    )
+    assert resp.status_code == 200, resp.text
+    rev = resp.json()["revision"]
+    for to_state in ("in_review", "approved", "published"):
+        r = await async_client.post(
+            _transitions_url(pid),
+            json={"to_state": to_state, "reason": f"test: {to_state}", "revision": rev},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, f"transition to {to_state} failed: {r.text}"
+        rev = r.json()["phenopacket"]["revision"]
+
+
+@pytest.mark.asyncio
+class TestAllVariantsConsequenceFilter:
+    """Regression: the ``consequence`` filter must honor the displayed value.
+
+    Previously ``consequence=Missense`` was silently ignored because the SQL
+    builder keyed on coarse categories (missense/lof/...) that never matched the
+    enum display values (``Missense``/``Splice Donor``/...). The endpoint now
+    post-filters on the computed ``molecular_consequence`` so every returned row
+    matches the request and ``totalRecords`` reflects the filtered count.
+    """
+
+    async def _seed(self, async_client, admin_headers) -> None:
+        # Missense: p.Arg177Cys
+        await _create_and_publish(
+            async_client,
+            admin_headers,
+            _variant_phenopacket_payload(
+                "consq-missense-001",
+                "consq-var-missense",
+                hgvs_c="NM_000458.4:c.529C>T",
+                hgvs_p="NP_000449.3:p.Arg177Cys",
+                pos="36000001",
+            ),
+            "consq-missense-001",
+        )
+        # Nonsense: p.Arg177Ter
+        await _create_and_publish(
+            async_client,
+            admin_headers,
+            _variant_phenopacket_payload(
+                "consq-nonsense-001",
+                "consq-var-nonsense",
+                hgvs_c="NM_000458.4:c.529C>T",
+                hgvs_p="NP_000449.3:p.Arg177Ter",
+                pos="36000002",
+            ),
+            "consq-nonsense-001",
+        )
+        # Splice Donor: c.544+1G>T (no protein notation)
+        await _create_and_publish(
+            async_client,
+            admin_headers,
+            _variant_phenopacket_payload(
+                "consq-splice-001",
+                "consq-var-splice",
+                hgvs_c="NM_000458.4:c.544+1G>T",
+                hgvs_p=None,
+                pos="36000003",
+            ),
+            "consq-splice-001",
+        )
+
+    async def test_missense_returns_only_missense_rows(
+        self, async_client, admin_headers
+    ):
+        """consequence=Missense returns ONLY rows whose computed value is Missense."""
+        await self._seed(async_client, admin_headers)
+
+        resp = await async_client.get(
+            ALL_VARIANTS_PATH,
+            params={"consequence": "Missense", "page[size]": 100},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        rows = body["data"]
+
+        # Core invariant: every returned row matches the requested consequence.
+        assert len(rows) >= 1, "expected at least the seeded Missense variant"
+        assert all(r["molecular_consequence"] == "Missense" for r in rows), [
+            r["molecular_consequence"] for r in rows
+        ]
+        # The seeded missense variant must be present...
+        ids = {r["variant_id"] for r in rows}
+        assert "consq-var-missense" in ids
+        # ...and the non-missense seeds must NOT leak through.
+        assert "consq-var-nonsense" not in ids
+        assert "consq-var-splice" not in ids
+
+        # totalRecords reflects the filtered count (== number of matching rows
+        # when they fit on one page).
+        assert body["meta"]["page"]["totalRecords"] == len(rows)
+
+    async def test_unmatched_consequence_returns_zero_rows(
+        self, async_client, admin_headers
+    ):
+        """A consequence with no matching data returns 0 rows (not all rows).
+
+        This is the heart of the bug: before the fix the filter was ignored, so
+        an unmatched consequence returned the entire unfiltered dataset.
+        """
+        await self._seed(async_client, admin_headers)
+
+        # None of the seeded variants are in-frame deletions.
+        resp = await async_client.get(
+            ALL_VARIANTS_PATH,
+            params={"consequence": "In-frame Deletion", "page[size]": 100},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["data"] == []
+        assert body["meta"]["page"]["totalRecords"] == 0
+
+    async def test_splice_donor_filter_isolates_splice_rows(
+        self, async_client, admin_headers
+    ):
+        """consequence=Splice Donor returns only the splice-donor variant."""
+        await self._seed(async_client, admin_headers)
+
+        resp = await async_client.get(
+            ALL_VARIANTS_PATH,
+            params={"consequence": "Splice Donor", "page[size]": 100},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        rows = body["data"]
+        assert all(r["molecular_consequence"] == "Splice Donor" for r in rows)
+        ids = {r["variant_id"] for r in rows}
+        assert "consq-var-splice" in ids
+        assert "consq-var-missense" not in ids
+        assert "consq-var-nonsense" not in ids
+        assert body["meta"]["page"]["totalRecords"] == len(rows)

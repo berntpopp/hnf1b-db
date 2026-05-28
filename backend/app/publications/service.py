@@ -15,7 +15,7 @@ Note:
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiohttp
@@ -26,6 +26,21 @@ from app.core.config import settings
 from app.core.patterns import normalize_pmid
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_age_days(fetched_at: datetime) -> int:
+    """Return whole days between ``fetched_at`` and now, timezone-safe.
+
+    ``publication_metadata.fetched_at`` is a ``timestamptz`` column, so values
+    read back from PostgreSQL are timezone-aware (UTC). Subtracting such a value
+    from a naive ``datetime.now()`` raises ``TypeError: can't subtract
+    offset-naive and offset-aware datetimes``. We normalise any naive input to
+    UTC (covering legacy rows or SQLite-backed tests) and compare against an
+    aware "now", per the modern ``datetime.now(timezone.utc)`` best practice.
+    """
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - fetched_at).days
 
 
 def _get_rate_limit() -> int:
@@ -146,7 +161,7 @@ async def get_publication_metadata(
             f"Cache hit for {pmid}",
             extra={
                 "pmid": pmid,
-                "cache_age_days": (datetime.now() - cached["fetched_at"]).days,
+                "cache_age_days": _cache_age_days(cached["fetched_at"]),
             },
         )
         return cached
@@ -302,7 +317,7 @@ async def _fetch_from_pubmed(pmid: str) -> dict:
                     "doi": _extract_doi(pub_data),
                     "abstract": _extract_abstract(pub_data),
                     "data_source": "PubMed",
-                    "fetched_at": datetime.now(),
+                    "fetched_at": datetime.now(timezone.utc),
                 }
 
                 logger.info(

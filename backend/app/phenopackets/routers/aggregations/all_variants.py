@@ -21,6 +21,12 @@ from app.phenopackets.variant_search_validation import (
     validate_search_query,
     validate_variant_type,
 )
+from app.phenopackets.variant_vocab import (
+    MolecularConsequence,
+    ProteinDomain,
+    VariantClassification,
+    VariantType,
+)
 from app.utils.audit_logger import log_variant_search
 from app.utils.pagination import build_offset_response
 
@@ -29,12 +35,13 @@ from .variant_query_builder import VariantQueryBuilder
 router = APIRouter()
 
 
-# HNF1B protein domain boundaries from UniProt P35680
+# HNF1B protein domain boundaries from UniProt P35680.
+# Keyed by ProteinDomain member values so the domain vocabulary is single-sourced.
 DOMAIN_BOUNDARIES = {
-    "Dimerization Domain": (1, 31),
-    "POU-Specific Domain": (8, 173),
-    "POU Homeodomain": (232, 305),
-    "Transactivation Domain": (314, 557),
+    ProteinDomain.DIMERIZATION.value: (1, 31),
+    ProteinDomain.POU_SPECIFIC.value: (8, 173),
+    ProteinDomain.POU_HOMEODOMAIN.value: (232, 305),
+    ProteinDomain.TRANSACTIVATION.value: (314, 557),
 }
 
 # Map frontend field names to SQL column names for sorting
@@ -64,17 +71,17 @@ async def aggregate_all_variants(
         None,
         description="Search in HGVS notations, variant ID, or genomic coordinates",
     ),
-    variant_type: Optional[str] = Query(
+    variant_type: Optional[VariantType] = Query(
         None, description="Filter by variant type (SNV, deletion, etc.)"
     ),
-    classification: Optional[str] = Query(
+    classification: Optional[VariantClassification] = Query(
         None, description="Filter by ACMG classification"
     ),
     gene: Optional[str] = Query(None, description="Filter by gene symbol"),
-    consequence: Optional[str] = Query(
+    consequence: Optional[MolecularConsequence] = Query(
         None, description="Filter by molecular consequence"
     ),
-    domain: Optional[str] = Query(
+    domain: Optional[ProteinDomain] = Query(
         None, description="Filter by protein domain (e.g., 'POU-Specific Domain')"
     ),
     pathogenicity: Optional[str] = Query(
@@ -108,14 +115,21 @@ async def aggregate_all_variants(
     # HTTP caching: 5 minutes for variant data
     response.headers["Cache-Control"] = "public, max-age=300"
 
+    # Coerce enum params to their string values so downstream validation, the
+    # query builder, and asyncpg receive plain strings (never Enum instances).
+    variant_type_value = variant_type.value if variant_type else None
+    classification_value = classification.value if classification else None
+    consequence_value = consequence.value if consequence else None
+    domain_value = domain.value if domain else None
+
     # Input validation (security layer)
     validated_query = validate_search_query(query)
-    validated_variant_type = validate_variant_type(variant_type)
+    validated_variant_type = validate_variant_type(variant_type_value)
     validated_gene = validate_gene(gene)
-    validated_consequence = validate_molecular_consequence(consequence)
+    validated_consequence = validate_molecular_consequence(consequence_value)
 
     # Handle legacy 'pathogenicity' parameter
-    classification_param = classification or pathogenicity
+    classification_param = classification_value or pathogenicity
     validated_classification = validate_classification(classification_param)
 
     # Build query using fluent builder pattern
@@ -129,10 +143,17 @@ async def aggregate_all_variants(
         builder.with_classification(validated_classification)
     if validated_gene:
         builder.with_gene_filter(validated_gene)
-    if validated_consequence:
-        builder.with_consequence(validated_consequence)
-    if domain and domain in DOMAIN_BOUNDARIES:
-        start_pos, end_pos = DOMAIN_BOUNDARIES[domain]
+    # NOTE: ``consequence`` is intentionally NOT pushed into the SQL builder.
+    # The displayed ``molecular_consequence`` is derived at serialization time by
+    # ``compute_molecular_consequence`` (VEP-first, HGVS fallback). The builder's
+    # ``with_consequence`` keys (lof/missense/splicing/...) are a separate,
+    # lower-fidelity SQL heuristic whose categories do not match the display
+    # vocabulary (Missense/Frameshift/Splice Donor/...), so filtering there
+    # silently disagreed with the value shown to the user. Instead we post-filter
+    # the computed consequence below so every returned row matches the request and
+    # ``meta.page.totalRecords`` reflects the true filtered count.
+    if domain_value and domain_value in DOMAIN_BOUNDARIES:
+        start_pos, end_pos = DOMAIN_BOUNDARIES[domain_value]
         builder.with_domain_filter(start_pos, end_pos)
 
     # Build ORDER BY clause
@@ -149,20 +170,32 @@ async def aggregate_all_variants(
 
     order_by = f"{sort_field} {sort_direction}, variant_id ASC"
 
-    # Execute single query with window function for count
-    query_sql, params = builder.build(
-        order_by=order_by,
-        limit=page_size,
-        offset=(page_number - 1) * page_size,
-    )
+    offset = (page_number - 1) * page_size
+
+    # When a molecular-consequence filter is active we cannot paginate in SQL,
+    # because the consequence is computed in Python at serialization time. We
+    # therefore fetch the full ordered result set (the variant dataset is small,
+    # ~200 rows), compute the consequence per row, post-filter, then paginate the
+    # filtered list in Python so ``meta.page.totalRecords`` and the returned page
+    # both reflect the true filtered count. Without a consequence filter we keep
+    # the original SQL LIMIT/OFFSET fast path unchanged.
+    if validated_consequence:
+        query_sql, params = builder.build(
+            order_by=order_by,
+            limit=10000,
+            offset=0,
+        )
+    else:
+        query_sql, params = builder.build(
+            order_by=order_by,
+            limit=page_size,
+            offset=offset,
+        )
     result = await db.execute(text(query_sql), params)
     rows = list(result.fetchall())
 
-    # Extract total count from window function (same for all rows)
-    total_count = rows[0].total_count if rows else 0
-
-    # Build response data
-    variants = [
+    # Build response rows (with computed molecular_consequence).
+    all_variants = [
         {
             "simple_id": f"Var{row.simple_id}",
             "variant_id": row.variant_id,
@@ -184,6 +217,22 @@ async def aggregate_all_variants(
         }
         for row in rows
     ]
+
+    if validated_consequence:
+        # Post-filter on the displayed value so the contract holds: every
+        # returned row's molecular_consequence equals the requested value.
+        all_variants = [
+            v
+            for v in all_variants
+            if v["molecular_consequence"] == validated_consequence
+        ]
+        total_count = len(all_variants)
+        # Paginate the filtered list in Python (SQL already applied ORDER BY).
+        variants = all_variants[offset : offset + page_size]
+    else:
+        # Total comes from the SQL window function (same for all rows).
+        total_count = rows[0].total_count if rows else 0
+        variants = all_variants
 
     # Audit logging (GDPR compliance)
     log_variant_search(
@@ -210,8 +259,8 @@ async def aggregate_all_variants(
         filters["gene"] = validated_gene
     if validated_consequence:
         filters["consequence"] = validated_consequence
-    if domain:
-        filters["domain"] = domain
+    if domain_value:
+        filters["domain"] = domain_value
 
     # Build JSON:API offset response
     base_url = str(request.url.path)

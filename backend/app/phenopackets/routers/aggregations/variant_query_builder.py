@@ -273,8 +273,19 @@ class VariantQueryBuilder:
     def with_consequence(self, consequence: str) -> "VariantQueryBuilder":
         """Add molecular consequence filter.
 
+        Accepts the coarse SQL-heuristic keys in ``_CONSEQUENCE_CLAUSES``
+        (``lof``/``missense``/``splicing``/``inframe``/``other``); any other
+        value is a no-op.
+
+        WARNING: These coarse categories do NOT correspond to the display
+        vocabulary returned by ``compute_molecular_consequence``
+        (``Missense``/``Frameshift``/``Splice Donor``/...). The
+        ``/aggregate/all-variants`` endpoint therefore does NOT use this method
+        for its ``consequence`` filter; it post-filters on the computed display
+        value instead so the filter and the rendered value never disagree.
+
         Args:
-            consequence: The molecular consequence to filter by
+            consequence: The coarse consequence key to filter by
 
         Returns:
             Self for method chaining

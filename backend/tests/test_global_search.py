@@ -736,3 +736,81 @@ class TestSearchEndpoints:
         data = response.json()
         assert data["page"] == 2
         assert data["page_size"] == 5
+
+
+# ============================================================================
+# Wave A Task A4: global_search_index MV must gate on published state +
+# source head-published content (not the working copy).
+# ============================================================================
+
+
+class TestGlobalSearchVisibility:
+    """The global_search_index MV must never surface drafts or working copies."""
+
+    @pytest.mark.asyncio
+    async def test_global_search_excludes_draft_records(
+        self, async_client, db_session: AsyncSession
+    ):
+        """A draft phenopacket must not appear in /search/global results."""
+        marker = "draftleaksubjectwavea"
+        await db_session.execute(
+            text("""
+            INSERT INTO phenopackets (
+                id, phenopacket_id, phenopacket, subject_id, state, revision
+            )
+            VALUES (
+                gen_random_uuid(), :pid, CAST(:pp AS jsonb), :subj, 'draft', 1
+            )
+            ON CONFLICT (phenopacket_id) DO NOTHING
+            """),
+            {
+                "pid": "wave-a-draft-leak",
+                "pp": json.dumps(
+                    {"id": "wave-a-draft-leak", "subject": {"id": marker}}
+                ),
+                "subj": marker,
+            },
+        )
+        await db_session.commit()
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            r = await async_client.get("/api/v2/search/global", params={"q": marker})
+            assert r.status_code == 200
+            ids = {item["id"] for item in r.json().get("results", [])}
+            assert "pp_wave-a-draft-leak" not in ids
+            assert marker not in r.text.lower()
+        finally:
+            await db_session.execute(
+                text(
+                    "DELETE FROM phenopackets "
+                    "WHERE phenopacket_id = 'wave-a-draft-leak'"
+                )
+            )
+            await db_session.commit()
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_global_search_clone_in_progress_uses_head_content(
+        self, async_client, db_session: AsyncSession, clone_in_progress_record
+    ):
+        """A published-but-mid-edit record must surface head content, not the leak."""
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            r = await async_client.get(
+                "/api/v2/search/global", params={"q": "LEAKED-DRAFT-SUBJECT"}
+            )
+            assert r.status_code == 200
+            assert "LEAKED-DRAFT-SUBJECT" not in r.text
+        finally:
+            # Restore the MV to a clean state for subsequent tests.
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()

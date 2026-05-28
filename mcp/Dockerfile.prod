@@ -1,0 +1,92 @@
+# mcp/Dockerfile.prod
+# syntax=docker/dockerfile:1.11
+# Production Dockerfile for HNF1B MCP Server
+# Based on uv best practices: https://docs.astral.sh/uv/guides/integration/docker/
+
+# ============================================================================
+# ARGUMENTS
+# ============================================================================
+ARG PYTHON_VERSION=3.12
+ARG DEBIAN_VERSION=bookworm
+ARG UV_VERSION=0.5.10
+
+# ============================================================================
+# STAGE 1: Build dependencies
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS builder
+
+# Install uv - PIN TO SPECIFIC VERSION for reproducible builds
+COPY --from=ghcr.io/astral-sh/uv:0.5.10 /uv /uvx /bin/
+
+WORKDIR /app
+
+# Phase 1: Install dependencies only (better layer caching)
+# This layer is cached when only code changes, not dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
+
+# Copy application source and lock file
+COPY src ./src
+COPY pyproject.toml uv.lock ./
+
+# Phase 2: Install project (runs when code changes)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# ============================================================================
+# STAGE 2: Production runtime
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS production
+
+# OCI standard labels
+LABEL org.opencontainers.image.title="HNF1B MCP Server" \
+      org.opencontainers.image.description="Read-only MCP server exposing HNF1B-db public data to LLMs" \
+      org.opencontainers.image.vendor="HNF1B Database" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/berntpopp/hnf1b-db"
+
+# Install runtime dependencies and apply security updates
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /root/.cache \
+    # Security: Remove setuid/setgid bits
+    && find /usr -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Security: Create non-root user (UID 10001 to avoid host conflicts)
+RUN groupadd -r -g 10001 hnf1b && \
+    useradd -r -u 10001 -g hnf1b -d /app -s /sbin/nologin hnf1b
+
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder --chown=hnf1b:hnf1b /app/.venv /app/.venv
+
+# Copy application source
+COPY --from=builder --chown=hnf1b:hnf1b /app/src /app/src
+
+# Set environment - include UV optimizations for faster startup
+ENV PATH="/app/.venv/bin:$PATH" \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="/app/src"
+
+# Switch to non-root user
+USER hnf1b:hnf1b
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8788/health || exit 1
+
+EXPOSE 8788
+
+# Run the MCP server via the installed console script
+CMD ["hnf1b-mcp"]

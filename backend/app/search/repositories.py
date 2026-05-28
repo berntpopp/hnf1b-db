@@ -273,42 +273,63 @@ class PhenopacketSearchRepository:
 
         filters = filters or {}
         params: dict[str, Any] = {"limit": limit + 1}  # +1 to detect more pages
-        # Visibility filter: curators see draft+published; anonymous sees published only
+        # Visibility filter: curators see draft+published; anonymous sees published
+        # only. Visibility fix (Wave A): the public branch sources JSONB content
+        # from the head-published revision (``r.content_jsonb``), never the working
+        # copy ``p.phenopacket`` (which may hold an unpublished clone-to-draft edit).
+        #
+        # FTS draft-leak fix (Copilot HIGH): ``p.search_vector`` is derived from the
+        # mutable working copy, so the public branch matches/ranks against a tsvector
+        # computed from the head-published content at query time. The curator branch
+        # keeps using the precomputed ``p.search_vector``.
+        content_col = "p.phenopacket" if is_curator else "r.content_jsonb"
+        search_tsvector = (
+            "p.search_vector"
+            if is_curator
+            else "to_tsvector('simple', r.content_jsonb::text)"
+        )
         if is_curator:
-            conditions = ["deleted_at IS NULL", "state != 'archived'"]
+            from_clause = "FROM phenopackets p"
+            conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
         else:
+            from_clause = (
+                "FROM phenopackets p"
+                " JOIN phenopacket_revisions r"
+                " ON r.id = p.head_published_revision_id"
+            )
             conditions = [
-                "deleted_at IS NULL",
-                "state = 'published'",
-                "head_published_revision_id IS NOT NULL",
+                "p.deleted_at IS NULL",
+                "p.state = 'published'",
+                "p.head_published_revision_id IS NOT NULL",
             ]
         select_extra = ""
 
         # Full-text search using 'simple' config for scientific notation
         if query:
             select_extra = (
-                ", ts_rank(search_vector, plainto_tsquery('simple', :query)) AS rank"
+                f", ts_rank({search_tsvector},"
+                " plainto_tsquery('simple', :query)) AS rank"
             )
             conditions.append(
-                "(search_vector @@ plainto_tsquery('simple', :query) "
-                "OR phenopacket::text ILIKE :query_like)"
+                f"({search_tsvector} @@ plainto_tsquery('simple', :query) "
+                f"OR {content_col}::text ILIKE :query_like)"
             )
             params["query"] = query
             params["query_like"] = f"%{query}%"
 
         # HPO filter
         if filters.get("hpo_id"):
-            conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+            conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": filters["hpo_id"]}}])
 
         # Sex filter
         if filters.get("sex"):
-            conditions.append("subject_sex = :sex")
+            conditions.append("p.subject_sex = :sex")
             params["sex"] = filters["sex"]
 
         # Gene filter
         if filters.get("gene"):
-            conditions.append("phenopacket->'interpretations' @> :gene_filter")
+            conditions.append(f"{content_col}->'interpretations' @> :gene_filter")
             params["gene_filter"] = json.dumps(
                 [
                     {
@@ -332,7 +353,9 @@ class PhenopacketSearchRepository:
             pmid = filters["pmid"]
             if not pmid.startswith("PMID:"):
                 pmid = f"PMID:{pmid}"
-            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+            pmid_cond = (
+                f"{content_col}->'metaData'->'externalReferences' @> :pmid_filter"
+            )
             conditions.append(pmid_cond)
             params["pmid_filter"] = json.dumps([{"id": pmid}])
 
@@ -343,13 +366,13 @@ class PhenopacketSearchRepository:
             if cursor_created_at and cursor_id:
                 if is_backward:
                     conditions.append("""(
-                        created_at > :cursor_created_at
-                        OR (created_at = :cursor_created_at AND id > :cursor_id)
+                        p.created_at > :cursor_created_at
+                        OR (p.created_at = :cursor_created_at AND p.id > :cursor_id)
                     )""")
                 else:
                     conditions.append("""(
-                        created_at < :cursor_created_at
-                        OR (created_at = :cursor_created_at AND id < :cursor_id)
+                        p.created_at < :cursor_created_at
+                        OR (p.created_at = :cursor_created_at AND p.id < :cursor_id)
                     )""")
                 params["cursor_created_at"] = cursor_created_at
                 params["cursor_id"] = str(cursor_id)
@@ -358,16 +381,17 @@ class PhenopacketSearchRepository:
 
         # Order by
         if query:
-            order_by = "ORDER BY rank DESC, created_at DESC, id DESC"
+            order_by = "ORDER BY rank DESC, p.created_at DESC, p.id DESC"
         else:
-            order_by = "ORDER BY created_at DESC, id DESC"
+            order_by = "ORDER BY p.created_at DESC, p.id DESC"
 
         if is_backward:
             order_by = order_by.replace("DESC", "ASC")
 
         sql = text(f"""
-            SELECT id, phenopacket_id, phenopacket, created_at{select_extra}
-            FROM phenopackets
+            SELECT p.id, p.phenopacket_id, {content_col} AS phenopacket,
+                   p.created_at{select_extra}
+            {from_clause}
             WHERE {where_clause}
             {order_by}
             LIMIT :limit
@@ -396,34 +420,51 @@ class PhenopacketSearchRepository:
 
         filters = filters or {}
         params: dict[str, Any] = {}
-        # Visibility filter for count: same branching as search()
+        # Visibility filter for count: same branching as search(). Visibility fix
+        # (Wave A): the public branch joins the head revision and matches on
+        # ``r.content_jsonb`` so a mid-edit working copy never affects the count.
+        #
+        # FTS draft-leak fix (Copilot HIGH): the public branch matches on a tsvector
+        # computed from the head-published content, not the mutable ``p.search_vector``.
+        content_col = "p.phenopacket" if is_curator else "r.content_jsonb"
+        search_tsvector = (
+            "p.search_vector"
+            if is_curator
+            else "to_tsvector('simple', r.content_jsonb::text)"
+        )
         if is_curator:
-            conditions = ["deleted_at IS NULL", "state != 'archived'"]
+            from_clause = "FROM phenopackets p"
+            conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
         else:
+            from_clause = (
+                "FROM phenopackets p"
+                " JOIN phenopacket_revisions r"
+                " ON r.id = p.head_published_revision_id"
+            )
             conditions = [
-                "deleted_at IS NULL",
-                "state = 'published'",
-                "head_published_revision_id IS NOT NULL",
+                "p.deleted_at IS NULL",
+                "p.state = 'published'",
+                "p.head_published_revision_id IS NOT NULL",
             ]
 
         if query:
             conditions.append(
-                "(search_vector @@ plainto_tsquery('simple', :query) "
-                "OR phenopacket::text ILIKE :query_like)"
+                f"({search_tsvector} @@ plainto_tsquery('simple', :query) "
+                f"OR {content_col}::text ILIKE :query_like)"
             )
             params["query"] = query
             params["query_like"] = f"%{query}%"
 
         if filters.get("hpo_id"):
-            conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+            conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": filters["hpo_id"]}}])
 
         if filters.get("sex"):
-            conditions.append("subject_sex = :sex")
+            conditions.append("p.subject_sex = :sex")
             params["sex"] = filters["sex"]
 
         if filters.get("gene"):
-            conditions.append("phenopacket->'interpretations' @> :gene_filter")
+            conditions.append(f"{content_col}->'interpretations' @> :gene_filter")
             params["gene_filter"] = json.dumps(
                 [
                     {
@@ -446,13 +487,15 @@ class PhenopacketSearchRepository:
             pmid = filters["pmid"]
             if not pmid.startswith("PMID:"):
                 pmid = f"PMID:{pmid}"
-            pmid_cond = "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+            pmid_cond = (
+                f"{content_col}->'metaData'->'externalReferences' @> :pmid_filter"
+            )
             conditions.append(pmid_cond)
             params["pmid_filter"] = json.dumps([{"id": pmid}])
 
         where_clause = " AND ".join(conditions)
 
-        count_sql = f"SELECT COUNT(*) FROM phenopackets WHERE {where_clause}"
+        count_sql = f"SELECT COUNT(*) {from_clause} WHERE {where_clause}"
         sql = text(count_sql)
         result = await self.db.execute(sql, params)
         return result.scalar() or 0

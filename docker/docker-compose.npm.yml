@@ -13,7 +13,8 @@
 # NPM Configuration:
 # - Create proxy host for hnf1b.org → hnf1b_frontend:80
 # - Create proxy host for api.hnf1b.org → hnf1b_api:8000
-# - Enable SSL with Let's Encrypt for both
+# - Create proxy host for mcp.hnf1b.org → hnf1b_mcp:8788 (proxy_buffering off, timeouts ≥300s)
+# - Enable SSL with Let's Encrypt for all three
 #
 # Prerequisites:
 # 1. Create .env.docker from .env.docker.example with production values
@@ -134,6 +135,63 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+
+    # SECURITY: Drop all capabilities
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # ============================================
+  # MCP Server (Production)
+  # ============================================
+  hnf1b_mcp:
+    build:
+      context: ../mcp
+      dockerfile: Dockerfile.prod
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+
+    env_file:
+      - ../.env.docker
+
+    # PRODUCTION: No exposed ports - NPM handles routing
+    ports: []
+
+    # Override container name for production
+    container_name: hnf1b_mcp_npm
+
+    # SECURITY: Run as non-root
+    user: "10001:10001"
+
+    # SECURITY: Read-only filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,size=100M,mode=1777
+
+    # Production environment
+    environment:
+      HNF1B_MCP_ALLOWED_ORIGINS: ${HNF1B_MCP_ALLOWED_ORIGINS:-https://claude.ai,https://claude.com}
+
+    # Connect to NPM network
+    networks:
+      - hnf1b_internal
+      - npm_proxy_network
+
+    # Production healthcheck with curl
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8788/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    # SECURITY: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
     # SECURITY: Drop all capabilities
     cap_drop:

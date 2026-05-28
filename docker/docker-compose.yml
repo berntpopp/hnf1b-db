@@ -125,6 +125,40 @@ services:
         max-file: "5"
 
   # ============================================
+  # MCP Server
+  # ============================================
+  hnf1b_mcp:
+    build:
+      context: ../mcp
+      dockerfile: Dockerfile
+    image: hnf1b-db/mcp:${IMAGE_TAG:-latest}
+    container_name: hnf1b_mcp
+    restart: unless-stopped
+    environment:
+      HNF1B_MCP_API_BASE_URL: http://hnf1b_api:8000/api/v2
+      HNF1B_MCP_PORT: 8788
+      HNF1B_MCP_REDIS_URL: redis://hnf1b_cache:6379/1
+      HNF1B_MCP_ALLOWED_ORIGINS: ${HNF1B_MCP_ALLOWED_ORIGINS:-https://claude.ai,https://claude.com}
+    ports:
+      - "${MCP_PORT_HOST:-8788}:8788"
+    depends_on:
+      hnf1b_api:
+        condition: service_healthy
+    networks:
+      - hnf1b_internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8788/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================
   # Vue.js Frontend
   # ============================================
   hnf1b_frontend:

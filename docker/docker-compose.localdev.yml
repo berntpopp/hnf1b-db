@@ -1,0 +1,23 @@
+# Local-dev override: run API + MCP as containers ATTACHED to the already-running
+# dev database/cache (compose project "hnf1b-dev", network "hnf1b_network").
+# db/cache are NOT managed here — bring api+mcp up with `--no-deps` so the
+# existing database is left completely untouched.
+#
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.localdev.yml \
+#     --env-file backend/.env up -d --no-deps --build hnf1b_api hnf1b_mcp
+#
+networks:
+  hnf1b_internal:
+    external: true
+    name: hnf1b_network
+
+services:
+  hnf1b_api:
+    environment:
+      ENVIRONMENT: development
+      ENABLE_DEV_AUTH: "true"
+    ports:
+      - "8000:8000"
+  hnf1b_mcp:
+    ports:
+      - "8788:8788"
