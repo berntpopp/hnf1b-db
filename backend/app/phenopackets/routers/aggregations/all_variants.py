@@ -143,8 +143,15 @@ async def aggregate_all_variants(
         builder.with_classification(validated_classification)
     if validated_gene:
         builder.with_gene_filter(validated_gene)
-    if validated_consequence:
-        builder.with_consequence(validated_consequence)
+    # NOTE: ``consequence`` is intentionally NOT pushed into the SQL builder.
+    # The displayed ``molecular_consequence`` is derived at serialization time by
+    # ``compute_molecular_consequence`` (VEP-first, HGVS fallback). The builder's
+    # ``with_consequence`` keys (lof/missense/splicing/...) are a separate,
+    # lower-fidelity SQL heuristic whose categories do not match the display
+    # vocabulary (Missense/Frameshift/Splice Donor/...), so filtering there
+    # silently disagreed with the value shown to the user. Instead we post-filter
+    # the computed consequence below so every returned row matches the request and
+    # ``meta.page.totalRecords`` reflects the true filtered count.
     if domain_value and domain_value in DOMAIN_BOUNDARIES:
         start_pos, end_pos = DOMAIN_BOUNDARIES[domain_value]
         builder.with_domain_filter(start_pos, end_pos)
@@ -163,20 +170,32 @@ async def aggregate_all_variants(
 
     order_by = f"{sort_field} {sort_direction}, variant_id ASC"
 
-    # Execute single query with window function for count
-    query_sql, params = builder.build(
-        order_by=order_by,
-        limit=page_size,
-        offset=(page_number - 1) * page_size,
-    )
+    offset = (page_number - 1) * page_size
+
+    # When a molecular-consequence filter is active we cannot paginate in SQL,
+    # because the consequence is computed in Python at serialization time. We
+    # therefore fetch the full ordered result set (the variant dataset is small,
+    # ~200 rows), compute the consequence per row, post-filter, then paginate the
+    # filtered list in Python so ``meta.page.totalRecords`` and the returned page
+    # both reflect the true filtered count. Without a consequence filter we keep
+    # the original SQL LIMIT/OFFSET fast path unchanged.
+    if validated_consequence:
+        query_sql, params = builder.build(
+            order_by=order_by,
+            limit=10000,
+            offset=0,
+        )
+    else:
+        query_sql, params = builder.build(
+            order_by=order_by,
+            limit=page_size,
+            offset=offset,
+        )
     result = await db.execute(text(query_sql), params)
     rows = list(result.fetchall())
 
-    # Extract total count from window function (same for all rows)
-    total_count = rows[0].total_count if rows else 0
-
-    # Build response data
-    variants = [
+    # Build response rows (with computed molecular_consequence).
+    all_variants = [
         {
             "simple_id": f"Var{row.simple_id}",
             "variant_id": row.variant_id,
@@ -198,6 +217,22 @@ async def aggregate_all_variants(
         }
         for row in rows
     ]
+
+    if validated_consequence:
+        # Post-filter on the displayed value so the contract holds: every
+        # returned row's molecular_consequence equals the requested value.
+        all_variants = [
+            v
+            for v in all_variants
+            if v["molecular_consequence"] == validated_consequence
+        ]
+        total_count = len(all_variants)
+        # Paginate the filtered list in Python (SQL already applied ORDER BY).
+        variants = all_variants[offset : offset + page_size]
+    else:
+        # Total comes from the SQL window function (same for all rows).
+        total_count = rows[0].total_count if rows else 0
+        variants = all_variants
 
     # Audit logging (GDPR compliance)
     log_variant_search(
