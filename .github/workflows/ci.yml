@@ -100,7 +100,20 @@ jobs:
         ADMIN_PASSWORD: test-admin-password-ci-2026
       run: |
         cd backend
-        uv run pytest -m "not benchmark" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
+        uv run pytest -m "not benchmark and not network" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
+
+    - name: Validate curated HPO labels against live ontology (network)
+      # Guard against the hpo_terms_lookup labels drifting from the authoritative
+      # HPO ontology (the root cause of the HP:0033133 opposite-meaning error).
+      # Transient API outages skip rather than fail; only a real mismatch is red.
+      env:
+        ENVIRONMENT: development
+        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+        JWT_SECRET: test-secret-key-for-ci
+        ADMIN_PASSWORD: test-admin-password-ci-2026
+      run: |
+        cd backend
+        uv run pytest -m network -v
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v6
