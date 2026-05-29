@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from hnf1b_mcp.config import Settings
@@ -181,10 +183,14 @@ _IDENTIFIERS: dict[str, str] = {
 }
 
 _CITATION_CONTRACT: str = (
-    "Every response includes a recommended_citation field that should be "
-    "pasted verbatim when citing retrieved data. Publication records carry a "
-    "date_confidence flag (verified | unverified) indicating whether the "
-    "publication year is confirmed from the source record."
+    "Publication and evidence payloads include a recommended_citation field that "
+    "must be pasted verbatim when citing them — this covers hnf1b_get_publications "
+    "and the publications embedded in individual records. Other record types "
+    "(variants, individuals, statistics) do NOT carry a recommended_citation; "
+    "cite them by their stable identifier (phenopacket_id, variant_id) plus the "
+    "recommended_citation of any publication they reference. Publication records "
+    "also carry a date_confidence flag (verified | unverified) indicating whether "
+    "the publication year is confirmed from the source record."
 )
 
 _DATA_CLASSES: dict[str, str] = {
@@ -257,8 +263,10 @@ def _filterable_fields() -> dict[str, Any]:
                 "hint": (
                     "prefix with '-' for descending; default '-carrier_count' "
                     "(most common first), so the first row IS the top variant by "
-                    "carrier count. Echoed as applied_sort; carrier_count is on "
-                    "every row, so ties are visible without an extra call."
+                    "carrier count. Echoed as applied_sort in your public "
+                    "vocabulary. carrier_count is on every row, so ties are "
+                    "visible without an extra call; ties break by variant_id asc, "
+                    "so ordering within a tie is deterministic across calls."
                 ),
             },
         },
@@ -331,11 +339,12 @@ def get_capabilities() -> dict[str, Any]:
     Returns:
         A dictionary containing canonical workflows, tool inventory,
         filterable-field enums, payload modes, pagination limits, citation
-        contract, error codes, data-class taxonomy, v1 exclusions, and safety
-        notices.
+        contract, error codes, data-class taxonomy, v1 exclusions, safety
+        notices, and a content ``capabilities_version`` hash a warm client can
+        compare to skip re-fetching an unchanged descriptor.
     """
     settings = Settings()
-    return {
+    descriptor: dict[str, Any] = {
         "canonical_workflows": _CANONICAL_WORKFLOWS,
         "tools": _TOOLS,
         "filterable_fields": _filterable_fields(),
@@ -345,9 +354,24 @@ def get_capabilities() -> dict[str, Any]:
         },
         "limits": _LIMITS,
         "identifiers": _IDENTIFIERS,
+        "pagination_semantics": (
+            "List/search 'total' is the full count AFTER all filters are applied "
+            "server-side (post-filter), so 'total' and 'has_more' stay trustworthy "
+            "across pages — never just the current page's count. "
+            "hnf1b_search_variants also returns filtered_count (== total) when a "
+            "consequence filter is active."
+        ),
         "citation_contract": _CITATION_CONTRACT,
         "error_codes": sorted(ERROR_CODES),
         "data_classes": _DATA_CLASSES,
         "exclusions": _EXCLUSIONS,
         "safety": _SAFETY,
     }
+    # Deterministic content hash so a warm client can detect "nothing changed"
+    # and skip re-fetching the (~9k char) descriptor. Stable across calls until
+    # the descriptor content itself changes (no timestamps / non-determinism).
+    digest = hashlib.sha256(
+        json.dumps(descriptor, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    descriptor["capabilities_version"] = f"sha256:{digest[:16]}"
+    return descriptor

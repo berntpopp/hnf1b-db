@@ -261,7 +261,7 @@ async def test_search_variants_no_filter_omits_filter_meta():
 @pytest.mark.asyncio
 @respx.mock
 async def test_search_variants_translates_and_echoes_sort():
-    """A row-name sort key is translated to the backend token and echoed."""
+    """Sort is translated to the backend token but echoed in the PUBLIC token."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
         return_value=httpx.Response(
             200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
@@ -272,10 +272,30 @@ async def test_search_variants_translates_and_echoes_sort():
     await client.aclose()
 
     sent_params = dict(route.calls[0].request.url.params)
-    # carrier_count -> individualCount (the only token the backend honors here).
+    # Wire: carrier_count -> individualCount (the token the backend honors).
     assert sent_params["sort"] == "-individualCount"
-    assert result["_meta"]["applied_sort"] == "-individualCount"
+    # Echo: the caller's public vocabulary, never the internal column name.
+    assert result["_meta"]["applied_sort"] == "-carrier_count"
     assert result["_meta"]["ignored_params"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_sort_alias_echoes_public_token():
+    """A backend-token alias is accepted but echoed normalized to public form."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, sort="-individualCount")
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    assert sent_params["sort"] == "-individualCount"
+    # Even when the caller used the internal alias, the echo is the public token.
+    assert result["_meta"]["applied_sort"] == "-carrier_count"
 
 
 @pytest.mark.asyncio

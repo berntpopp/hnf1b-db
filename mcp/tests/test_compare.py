@@ -62,6 +62,34 @@ async def test_compare_phenotypes_tabulates_by_group():
     assert hp2["ga4gh:VA.B"] == {"observed": 1, "excluded": 0, "unknown": 0}
     # ranked by total observed (HP:1 total 2 > HP:2 total 1)
     assert result["features"][0]["hpo_id"] == "HP:1"
+    # full result set fit within top_n=10, so nothing is hidden.
+    assert result["total_distinct_features"] == 2
+    assert result["returned_features"] == 2
+    assert result["top_n"] == 10
+    assert result["has_more"] is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compare_phenotypes_truncation_is_transparent():
+    """top_n smaller than the distinct-feature count exposes has_more, not a silent cut."""
+    respx.get(f"{BASE}/phenopackets/by-variant/ga4gh:VA.A").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                _carrier("p1", [("HP:1", "F1", False), ("HP:2", "F2", False)]),
+            ],
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await compare_phenotypes(c, ["ga4gh:VA.A"], top_n=1)
+    await c.aclose()
+
+    assert result["total_distinct_features"] == 2
+    assert result["returned_features"] == 1
+    assert result["top_n"] == 1
+    assert result["has_more"] is True
+    assert len(result["features"]) == 1
 
 
 @pytest.mark.asyncio

@@ -356,6 +356,41 @@ async def test_get_individuals_by_ids_uses_batch():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_get_individuals_batch_applies_sex_filter():
+    """The sex filter is HONORED on an explicit ids batch and echoed in _meta."""
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A, _BATCH_ITEM_B])
+    )
+    c = ApiClient(base_url=BASE)
+    # A is FEMALE, B is MALE — filtering to MALE must drop A.
+    result = await get_individuals(c, ids=["A", "B"], filters={"sex": "MALE"})
+    await c.aclose()
+
+    assert {i["phenopacket_id"] for i in result["individuals"]} == {"B"}
+    assert result["total"] == 1
+    # not_found stays existence-based, not "filtered out".
+    assert result["not_found"] == []
+    assert result["_meta"]["applied_filters"] == {"sex": "MALE"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_sex_filter_no_match():
+    """A batch filtered to a sex none of the records have returns total 0."""
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_B])  # B is MALE
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, ids=["B"], filters={"sex": "FEMALE"})
+    await c.aclose()
+
+    assert result["individuals"] == []
+    assert result["total"] == 0
+    assert result["_meta"]["applied_filters"] == {"sex": "FEMALE"}
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_get_individuals_batch_reports_not_found():
     """A requested id the batch endpoint does not return appears in not_found."""
     respx.get(f"{BASE}/phenopackets/batch").mock(

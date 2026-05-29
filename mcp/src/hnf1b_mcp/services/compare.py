@@ -145,14 +145,21 @@ async def compare_phenotypes(
 
     features.sort(key=lambda f: f["total_observed"], reverse=True)
     total_distinct = len(features)
+    shown = features[:top_n]
 
     return {
         "groups": groups,
-        "features": features[:top_n],
+        "features": shown,
         "total_distinct_features": total_distinct,
+        # Make truncation explicit so the caller knows how many features are
+        # hidden and can widen top_n to retrieve them — never a silent cut.
+        "returned_features": len(shown),
+        "top_n": top_n,
+        "has_more": total_distinct > len(shown),
         "note": (
             "Per-group counts: observed (HPO present), excluded (confirmed"
             " absent), unknown (carrier did not report the term). Ranked by"
-            " total observed across groups; truncated to top_n."
+            " total observed across groups; the top top_n of"
+            " total_distinct_features are returned — see has_more/top_n."
         ),
     }
