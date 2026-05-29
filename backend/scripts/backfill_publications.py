@@ -92,8 +92,10 @@ async def main(
     rag = settings.publications_rag
     print("=" * 80)
     print("Publication Full-Text Backfill")
-    print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}  Force: {force}  "
-          f"Embeddings: {embeddings}  Limit: {limit or 'all'}")
+    print(
+        f"Mode: {'DRY RUN' if dry_run else 'LIVE'}  Force: {force}  "
+        f"Embeddings: {embeddings}  Limit: {limit or 'all'}"
+    )
     print("=" * 80)
 
     async with async_session_maker() as db:
@@ -104,7 +106,9 @@ async def main(
         if not force:
             fresh = await _fresh_pmids(db, rag.fulltext_staleness_days)
             to_process = [p for p in all_pmids if p not in fresh]
-            print(f"Skipping {len(fresh)} fetched within {rag.fulltext_staleness_days}d")
+            print(
+                f"Skipping {len(fresh)} fetched within {rag.fulltext_staleness_days}d"
+            )
 
         to_process = sorted(to_process, key=lambda p: int(p) if p.isdigit() else 0)
         if limit:
@@ -147,8 +151,10 @@ async def main(
                 dim=rag.embedding_dim,
             )
             if provider is None:
-                print("\nEmbeddings requested but sentence-transformers is not "
-                      "installed (install the [rag] extra). Skipping.")
+                print(
+                    "\nEmbeddings requested but sentence-transformers is not "
+                    "installed (install the [rag] extra). Skipping."
+                )
             else:
                 print(f"\nEmbedding passages with {provider.model_name}...")
                 embedded = await backfill_embeddings(
@@ -161,10 +167,18 @@ async def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backfill publication full text")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be processed")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be processed"
+    )
     parser.add_argument("--limit", type=int, help="Process at most N publications")
-    parser.add_argument("--force", action="store_true", help="Ignore the staleness window")
-    parser.add_argument("--embeddings", action="store_true", help="Also backfill embeddings (needs [rag])")
+    parser.add_argument(
+        "--force", action="store_true", help="Ignore the staleness window"
+    )
+    parser.add_argument(
+        "--embeddings",
+        action="store_true",
+        help="Also backfill embeddings (needs [rag])",
+    )
     args = parser.parse_args()
 
     try:

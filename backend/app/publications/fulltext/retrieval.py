@@ -314,7 +314,11 @@ async def search_passages(
         qvec = (await provider.embed([query], is_query=True))[0]  # type: ignore[union-attr]
         embedding_dim = len(qvec)
         dense_rows = await _dense_candidates(
-            db, qvec, model_name=model_name, pmids=pmids, sections=sections,
+            db,
+            qvec,
+            model_name=model_name,
+            pmids=pmids,
+            sections=sections,
             limit=dense_limit,
         )
         dense_ids = [r.passage_id for r in dense_rows]

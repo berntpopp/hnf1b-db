@@ -130,11 +130,15 @@ def build_fetchers(
 
     async def _fetch_fulltext(pmid: str) -> Optional[FullTextResult]:
         bioc = await fetch_bioc(
-            pmid, session=session, base_url=apis.pubtator3.base_url,
+            pmid,
+            session=session,
+            base_url=apis.pubtator3.base_url,
             timeout=apis.pubtator3.timeout_seconds,
         )
         is_oa, raw_license = await fetch_europepmc_core(
-            pmid, session=session, base_url=apis.europepmc.base_url,
+            pmid,
+            session=session,
+            base_url=apis.europepmc.base_url,
             timeout=apis.europepmc.timeout_seconds,
         )
         if bioc is not None and bioc.sections:
@@ -151,20 +155,29 @@ def build_fetchers(
         pmcid = (bioc.pmcid if bioc else None) or await _resolve_one_pmcid(pmid)
         if pmcid and is_oa:
             jats = await fetch_jats(
-                pmcid, "PMC", session=session, base_url=apis.europepmc.base_url,
+                pmcid,
+                "PMC",
+                session=session,
+                base_url=apis.europepmc.base_url,
                 timeout=apis.europepmc.timeout_seconds,
             )
             if jats:
                 return FullTextResult(
                     pmid=f"PMID:{pmid.replace('PMID:', '')}",
-                    pmcid=pmcid, license=raw_license, is_open_access=is_oa,
-                    sections=jats, source="europe_pmc_jats",
+                    pmcid=pmcid,
+                    license=raw_license,
+                    is_open_access=is_oa,
+                    sections=jats,
+                    source="europe_pmc_jats",
                 )
         # No body anywhere — still surface pmcid/license/OA so metadata records them.
         return FullTextResult(
             pmid=f"PMID:{pmid.replace('PMID:', '')}",
-            pmcid=pmcid, license=raw_license, is_open_access=is_oa,
-            sections=(), source="pubtator_full_bioc",
+            pmcid=pmcid,
+            license=raw_license,
+            is_open_access=is_oa,
+            sections=(),
+            source="pubtator_full_bioc",
         )
 
     return PublicationFetchers(
@@ -203,8 +216,11 @@ def build_passage_rows(
     seq = 0
     for raw in sections:
         for chunk in chunk_section(
-            raw.section, raw.text, max_tokens=max_tokens,
-            overlap_tokens=overlap_tokens, tokenizer=active,
+            raw.section,
+            raw.text,
+            max_tokens=max_tokens,
+            overlap_tokens=overlap_tokens,
+            tokenizer=active,
         ):
             idx = per_section_idx.get(raw.section, 0)
             per_section_idx[raw.section] = idx + 1
@@ -283,14 +299,22 @@ async def process_publication(
     outcome.license_skipped = had_body and decision.coverage != "full_text"
 
     passages = build_passage_rows(
-        normalized, decision.sections, max_tokens=chunk_max_tokens,
-        overlap_tokens=chunk_overlap_tokens, tokenizer=tokenizer,
+        normalized,
+        decision.sections,
+        max_tokens=chunk_max_tokens,
+        overlap_tokens=chunk_overlap_tokens,
+        tokenizer=tokenizer,
     )
     source = decision.source or "pubtator_full_bioc"
     passages = [
         PassageRow(
-            pmid=p.pmid, passage_id=p.passage_id, section=p.section, seq=p.seq,
-            text=p.text, char_count=p.char_count, token_count=p.token_count,
+            pmid=p.pmid,
+            passage_id=p.passage_id,
+            section=p.section,
+            seq=p.seq,
+            text=p.text,
+            char_count=p.char_count,
+            token_count=p.token_count,
             source=source,
         )
         for p in passages
@@ -299,8 +323,12 @@ async def process_publication(
     if ensure_metadata:
         await persistence.ensure_metadata_row(db, normalized)
     await persistence.update_metadata_coverage(
-        db, normalized, abstract=abstract_text, coverage=decision.coverage,
-        license=decision.license, pmcid=decision.pmcid,
+        db,
+        normalized,
+        abstract=abstract_text,
+        coverage=decision.coverage,
+        license=decision.license,
+        pmcid=decision.pmcid,
         fulltext_fetched_at=datetime.now(timezone.utc),
     )
     outcome.passages_written = await persistence.replace_passages(
@@ -373,7 +401,10 @@ async def sync_publications(
                 except Exception as exc:  # noqa: BLE001 - placeholder row covers this
                     logger.warning("base metadata ensure failed for %s: %s", pmid, exc)
             outcome = await process_publication(
-                db, pmid, fetchers=fetchers, allowed_licenses=allowed_licenses,
+                db,
+                pmid,
+                fetchers=fetchers,
+                allowed_licenses=allowed_licenses,
                 chunk_max_tokens=chunk_max_tokens,
                 chunk_overlap_tokens=chunk_overlap_tokens,
             )
@@ -427,8 +458,12 @@ async def backfill_embeddings(
         vectors = await provider.embed([text for _, _, text in batch], is_query=False)
         for (passage_id, pmid, passage_text), vector in zip(batch, vectors):
             await persistence.upsert_embedding(
-                db, passage_id=passage_id, pmid=pmid, model_name=model_name,
-                embedding=vector, text_hash=hash_text(passage_text),
+                db,
+                passage_id=passage_id,
+                pmid=pmid,
+                model_name=model_name,
+                embedding=vector,
+                text_hash=hash_text(passage_text),
             )
         await db.commit()
         embedded += len(batch)

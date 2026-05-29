@@ -102,9 +102,7 @@ class FakeEmbeddingProvider:
     the fake model has no query-side prompt.
     """
 
-    def __init__(
-        self, dim: int = 384, model_name: str = "fake-deterministic"
-    ) -> None:
+    def __init__(self, dim: int = 384, model_name: str = "fake-deterministic") -> None:
         """Initialize the fake provider.
 
         Args:
@@ -248,9 +246,7 @@ class SentenceTransformerEmbeddingProvider:
 def get_embedding_provider(
     *,
     model_name: str = "BAAI/bge-small-en-v1.5",
-    query_prefix: str = (
-        "Represent this sentence for searching relevant passages: "
-    ),
+    query_prefix: str = ("Represent this sentence for searching relevant passages: "),
     batch_size: int = 32,
     dim: int = 384,
 ) -> EmbeddingProvider | None:

@@ -13,12 +13,26 @@ from app.publications.fulltext.types import PassageRow
 
 PMID = "PMID:5"
 _PASSAGES = [
-    PassageRow(PMID, "PMID:5:methods:0", "methods", 0,
-               "HNF1B sequencing in a cystic kidney disease cohort", 50, 8,
-               "pubtator_full_bioc"),
-    PassageRow(PMID, "PMID:5:results:0", "results", 1,
-               "renal cysts and diabetes mellitus were frequent", 47, 7,
-               "pubtator_full_bioc"),
+    PassageRow(
+        PMID,
+        "PMID:5:methods:0",
+        "methods",
+        0,
+        "HNF1B sequencing in a cystic kidney disease cohort",
+        50,
+        8,
+        "pubtator_full_bioc",
+    ),
+    PassageRow(
+        PMID,
+        "PMID:5:results:0",
+        "results",
+        1,
+        "renal cysts and diabetes mellitus were frequent",
+        47,
+        7,
+        "pubtator_full_bioc",
+    ),
 ]
 
 
@@ -36,7 +50,8 @@ async def _seed(db):
 async def test_passages_endpoint_returns_ranked_hits(async_client, db_session):
     await _seed(db_session)
     resp = await async_client.get(
-        "/api/v2/publications/passages", params={"q": "cystic kidney", "rerank": "lexical"}
+        "/api/v2/publications/passages",
+        params={"q": "cystic kidney", "rerank": "lexical"},
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -78,7 +93,9 @@ async def test_passages_brief_mode_has_snippet(async_client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_passages_rrf_degrades_to_lexical_without_embeddings(async_client, db_session):
+async def test_passages_rrf_degrades_to_lexical_without_embeddings(
+    async_client, db_session
+):
     await _seed(db_session)
     resp = await async_client.get(
         "/api/v2/publications/passages", params={"q": "kidney", "rerank": "rrf"}

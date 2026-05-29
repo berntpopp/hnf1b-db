@@ -80,9 +80,7 @@ def test_is_license_allowed_none_token_not_open_access():
 
 
 def test_is_license_allowed_open_access_but_no_pmc_oa():
-    assert (
-        is_license_allowed(None, is_open_access=True, allowed=("CC-BY",)) is False
-    )
+    assert is_license_allowed(None, is_open_access=True, allowed=("CC-BY",)) is False
 
 
 def test_full_text_kept_when_oa_and_ccby():
@@ -124,9 +122,7 @@ def test_license_gate_keeps_body_when_oa_and_pmc_oa_allowed():
 
 def test_license_gate_drops_body_to_title_only_when_no_abstract():
     ft = _fulltext(license="CC-BY-NC-ND", is_open_access=False)
-    decision = classify_coverage(
-        abstract=None, fulltext=ft, allowed_licenses=ALLOWED
-    )
+    decision = classify_coverage(abstract=None, fulltext=ft, allowed_licenses=ALLOWED)
     assert decision.coverage == "title_only"
     assert decision.sections == ()
     assert decision.license == "CC-BY-NC-ND"
@@ -134,9 +130,7 @@ def test_license_gate_drops_body_to_title_only_when_no_abstract():
 
 
 def test_no_abstract_no_fulltext_title_only():
-    decision = classify_coverage(
-        abstract=None, fulltext=None, allowed_licenses=ALLOWED
-    )
+    decision = classify_coverage(abstract=None, fulltext=None, allowed_licenses=ALLOWED)
     assert decision.coverage == "title_only"
     assert decision.sections == ()
     assert decision.license is None
@@ -145,9 +139,7 @@ def test_no_abstract_no_fulltext_title_only():
 
 
 def test_empty_abstract_no_fulltext_title_only():
-    decision = classify_coverage(
-        abstract="", fulltext=None, allowed_licenses=ALLOWED
-    )
+    decision = classify_coverage(abstract="", fulltext=None, allowed_licenses=ALLOWED)
     assert decision.coverage == "title_only"
 
 

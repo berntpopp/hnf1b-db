@@ -85,8 +85,12 @@ async def search_publication_passages(
     rerank: str = Query("rrf", description="rrf | lexical | off"),
     mode: str = Query("full", description="full | brief | ids_only"),
     limit: int = Query(10, ge=1, le=100, description="Max passages to return"),
-    snippet_chars: int = Query(240, ge=40, le=2000, description="Brief-mode snippet length"),
-    max_chars: Optional[int] = Query(None, ge=100, description="Full-mode total char budget"),
+    snippet_chars: int = Query(
+        240, ge=40, le=2000, description="Brief-mode snippet length"
+    ),
+    max_chars: Optional[int] = Query(
+        None, ge=100, description="Full-mode total char budget"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> PassagesResponse:
     """Retrieve ranked publication passages for a query."""

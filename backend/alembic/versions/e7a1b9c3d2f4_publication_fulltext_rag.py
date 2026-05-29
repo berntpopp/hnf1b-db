@@ -32,12 +32,16 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     # --- extend publication_metadata ---------------------------------------
-    op.execute("ALTER TABLE publication_metadata ADD COLUMN IF NOT EXISTS pmcid VARCHAR(20)")
+    op.execute(
+        "ALTER TABLE publication_metadata ADD COLUMN IF NOT EXISTS pmcid VARCHAR(20)"
+    )
     op.execute(
         "ALTER TABLE publication_metadata "
         "ADD COLUMN IF NOT EXISTS coverage VARCHAR(20) NOT NULL DEFAULT 'title_only'"
     )
-    op.execute("ALTER TABLE publication_metadata ADD COLUMN IF NOT EXISTS license VARCHAR(50)")
+    op.execute(
+        "ALTER TABLE publication_metadata ADD COLUMN IF NOT EXISTS license VARCHAR(50)"
+    )
     op.execute(
         "ALTER TABLE publication_metadata "
         "ADD COLUMN IF NOT EXISTS fulltext_fetched_at TIMESTAMPTZ"
@@ -114,8 +118,12 @@ def downgrade() -> None:
     """Drop the full-text RAG schema (leaves the vector extension in place)."""
     op.execute("DROP TABLE IF EXISTS publication_fulltext_embeddings;")
     op.execute("DROP TABLE IF EXISTS publication_fulltext;")
-    op.execute("ALTER TABLE publication_metadata DROP CONSTRAINT IF EXISTS valid_coverage;")
-    op.execute("ALTER TABLE publication_metadata DROP COLUMN IF EXISTS fulltext_fetched_at;")
+    op.execute(
+        "ALTER TABLE publication_metadata DROP CONSTRAINT IF EXISTS valid_coverage;"
+    )
+    op.execute(
+        "ALTER TABLE publication_metadata DROP COLUMN IF EXISTS fulltext_fetched_at;"
+    )
     op.execute("ALTER TABLE publication_metadata DROP COLUMN IF EXISTS license;")
     op.execute("ALTER TABLE publication_metadata DROP COLUMN IF EXISTS coverage;")
     op.execute("ALTER TABLE publication_metadata DROP COLUMN IF EXISTS pmcid;")

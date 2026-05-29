@@ -288,9 +288,38 @@ async def _auth_headers_map(admin_headers):
     return {"admin": admin_headers}
 
 
+@pytest.fixture
+async def _seed_reference_data(db_session):
+    """Seed the GRCh38 genome + HNF1B gene chain so the environment-dependent
+    baselines (``reference_genes``, ``search_autocomplete``) are deterministic.
+
+    Historically these baselines passed only because *other* tests (the admin
+    reference-init route) seeded this data earlier in the session and the
+    ``genes`` / ``reference_genomes`` tables are not truncated between tests.
+    Under ``pytest-xdist`` each worker owns an isolated database, so that
+    cross-test leakage no longer reaches the worker running these baselines and
+    ``GET /api/v2/reference/genes`` would 500 with "No default genome
+    configured". Seeding here makes the tests hermetic in both serial and
+    parallel runs. ``initialize_reference_data`` is idempotent and uses only
+    hardcoded HNF1B data (no network).
+
+    The ``search_autocomplete`` baseline reads the ``global_search_index``
+    materialized view rather than the ``genes`` table directly, so the view is
+    refreshed (non-concurrently — transaction-safe and no unique-index
+    requirement) after seeding so the HNF1B gene is discoverable.
+    """
+    from app.reference.service import initialize_reference_data
+    from app.search.mv_refresh import refresh_global_search_index
+
+    await initialize_reference_data(db_session)
+    await refresh_global_search_index(db_session, concurrently=False)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("spec", AFFECTED_ENDPOINTS, ids=lambda s: s[0])
-async def test_capture_baseline(async_client, _auth_headers_map, spec):
+async def test_capture_baseline(
+    async_client, _auth_headers_map, _seed_reference_data, spec
+):
     """Capture current response as baseline. Skipped unless
     ``WAVE4_CAPTURE_BASELINE=1`` is set in the environment.
     """
@@ -307,7 +336,9 @@ async def test_capture_baseline(async_client, _auth_headers_map, spec):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("spec", AFFECTED_ENDPOINTS, ids=lambda s: s[0])
-async def test_verify_baseline(async_client, _auth_headers_map, spec):
+async def test_verify_baseline(
+    async_client, _auth_headers_map, _seed_reference_data, spec
+):
     """Verify that the current endpoint response matches the captured
     baseline. Any endpoint without a captured baseline is skipped so the
     suite is forgiving to partial captures.

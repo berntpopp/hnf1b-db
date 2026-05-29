@@ -121,9 +121,7 @@ class PassagesMeta(BaseModel):
     mode: str = Field(..., description="Text mode: full | brief | ids_only")
     rerank_used: str = Field(..., description="Rerank strategy actually applied")
     total: int = Field(..., description="Number of passages returned")
-    lexical_candidate_count: int = Field(
-        ..., description="Lexical-leg candidate count"
-    )
+    lexical_candidate_count: int = Field(..., description="Lexical-leg candidate count")
     dense_candidate_count: int = Field(..., description="Dense-leg candidate count")
     embedding_dim: Optional[int] = Field(
         default=None, description="Dense embedding dim, if used"

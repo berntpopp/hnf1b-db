@@ -27,7 +27,9 @@ def test_empty_or_whitespace_returns_empty(text: str) -> None:
 
 def test_short_text_single_chunk_exact_slice() -> None:
     text = "Short methods paragraph, with caps."
-    chunks = chunk_section("methods", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK)
+    chunks = chunk_section(
+        "methods", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK
+    )
     assert len(chunks) == 1
     chunk = chunks[0]
     assert isinstance(chunk, Chunk)
@@ -44,7 +46,9 @@ def test_short_text_single_chunk_exact_slice() -> None:
 
 def test_text_with_exactly_max_tokens_single_chunk() -> None:
     text = " ".join(f"w{i}" for i in range(10))
-    chunks = chunk_section("results", text, max_tokens=10, overlap_tokens=2, tokenizer=TOK)
+    chunks = chunk_section(
+        "results", text, max_tokens=10, overlap_tokens=2, tokenizer=TOK
+    )
     assert len(chunks) == 1
     assert chunks[0].token_count == 10
 
@@ -98,7 +102,9 @@ def test_long_text_windowing_overlap_and_offset_recovery() -> None:
         assert len(shared) == overlap_tokens
         # The shared tokens are the suffix of A and the prefix of B; verify the
         # overlapping text region matches between the two recovered substrings.
-        overlap_text_a = text[spans[(a_idx + 1) * step][0] : spans[a_idx * step + a.token_count - 1][1]]
+        overlap_text_a = text[
+            spans[(a_idx + 1) * step][0] : spans[a_idx * step + a.token_count - 1][1]
+        ]
         assert overlap_text_a in a.text
         assert overlap_text_a in b.text
 
@@ -108,7 +114,9 @@ def test_long_text_windowing_overlap_and_offset_recovery() -> None:
 
 def test_punctuation_and_case_preserved() -> None:
     text = "HNF1B, the Hepatocyte Nuclear Factor-1B; causes RCAD! (Renal Cysts)."
-    chunks = chunk_section("abstract", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK)
+    chunks = chunk_section(
+        "abstract", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK
+    )
     assert len(chunks) == 1
     recovered = chunks[0].text
     # Caps survive.
@@ -127,7 +135,9 @@ def test_punctuation_and_case_preserved() -> None:
 
 def test_leading_trailing_whitespace_trimmed_to_token_span() -> None:
     text = "   leading and trailing spaces   "
-    chunks = chunk_section("intro", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK)
+    chunks = chunk_section(
+        "intro", text, max_tokens=510, overlap_tokens=50, tokenizer=TOK
+    )
     assert len(chunks) == 1
     # Recovered slice starts at first token, ends at last token (no padding ws).
     assert chunks[0].text == "leading and trailing spaces"
@@ -136,7 +146,9 @@ def test_leading_trailing_whitespace_trimmed_to_token_span() -> None:
 def test_overlap_zero_is_contiguous_no_shared_tokens() -> None:
     n = 25
     text = " ".join(f"w{i}" for i in range(n))
-    chunks = chunk_section("results", text, max_tokens=10, overlap_tokens=0, tokenizer=TOK)
+    chunks = chunk_section(
+        "results", text, max_tokens=10, overlap_tokens=0, tokenizer=TOK
+    )
     # step == max_tokens == 10 -> ceil(25/10) windows = 3.
     assert len(chunks) == 3
     assert [c.token_count for c in chunks] == [10, 10, 5]

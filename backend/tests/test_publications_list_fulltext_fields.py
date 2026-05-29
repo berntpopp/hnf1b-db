@@ -82,7 +82,9 @@ async def _seed_published_pub_with_coverage(db_session, *, pmid, actor_id):
 
 
 @pytest.mark.asyncio
-async def test_list_endpoint_exposes_coverage_fields(async_client, db_session, admin_user):
+async def test_list_endpoint_exposes_coverage_fields(
+    async_client, db_session, admin_user
+):
     await _seed_published_pub_with_coverage(
         db_session, pmid="PMID:32574212", actor_id=admin_user.id
     )
@@ -98,7 +100,9 @@ async def test_list_endpoint_exposes_coverage_fields(async_client, db_session, a
 
 
 @pytest.mark.asyncio
-async def test_list_endpoint_defaults_when_no_metadata(async_client, db_session, admin_user):
+async def test_list_endpoint_defaults_when_no_metadata(
+    async_client, db_session, admin_user
+):
     """A cited PMID with no metadata row defaults to title_only / no full text."""
     ppid = "PUB-COV-NOMETA"
     pp_json = {

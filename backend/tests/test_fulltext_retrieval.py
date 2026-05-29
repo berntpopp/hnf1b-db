@@ -16,18 +16,46 @@ from app.publications.fulltext.types import PassageRow
 PMID = "PMID:1"
 
 _PASSAGES = [
-    PassageRow(PMID, "PMID:1:methods:0", "methods", 0,
-               "HNF1B targeted sequencing in a cystic kidney disease cohort", 58, 9,
-               "pubtator_full_bioc"),
-    PassageRow(PMID, "PMID:1:results:0", "results", 1,
-               "renal cysts and maturity onset diabetes were observed", 53, 8,
-               "pubtator_full_bioc"),
-    PassageRow(PMID, "PMID:1:discussion:0", "discussion", 2,
-               "the phenotype frequently includes hypomagnesemia and hyperuricemia", 66, 8,
-               "pubtator_full_bioc"),
-    PassageRow(PMID, "PMID:1:abstract:0", "abstract", 3,
-               "HNF1B variants cause cystic kidney disease and diabetes", 55, 8,
-               "pubtator_full_bioc"),
+    PassageRow(
+        PMID,
+        "PMID:1:methods:0",
+        "methods",
+        0,
+        "HNF1B targeted sequencing in a cystic kidney disease cohort",
+        58,
+        9,
+        "pubtator_full_bioc",
+    ),
+    PassageRow(
+        PMID,
+        "PMID:1:results:0",
+        "results",
+        1,
+        "renal cysts and maturity onset diabetes were observed",
+        53,
+        8,
+        "pubtator_full_bioc",
+    ),
+    PassageRow(
+        PMID,
+        "PMID:1:discussion:0",
+        "discussion",
+        2,
+        "the phenotype frequently includes hypomagnesemia and hyperuricemia",
+        66,
+        8,
+        "pubtator_full_bioc",
+    ),
+    PassageRow(
+        PMID,
+        "PMID:1:abstract:0",
+        "abstract",
+        3,
+        "HNF1B variants cause cystic kidney disease and diabetes",
+        55,
+        8,
+        "pubtator_full_bioc",
+    ),
 ]
 
 
@@ -44,8 +72,11 @@ async def _seed(db, *, with_embeddings=False):
         vectors = await provider.embed([p.text for p in _PASSAGES])
         for passage, vector in zip(_PASSAGES, vectors):
             await persistence.upsert_embedding(
-                db, passage_id=passage.passage_id, pmid=PMID,
-                model_name=provider.model_name, embedding=vector,
+                db,
+                passage_id=passage.passage_id,
+                pmid=PMID,
+                model_name=provider.model_name,
+                embedding=vector,
                 text_hash=hash_text(passage.text),
             )
     await db.commit()
@@ -103,7 +134,9 @@ async def test_pmid_filter_excludes_others(db_session):
 @pytest.mark.asyncio
 async def test_ids_only_mode_omits_text(db_session):
     await _seed(db_session)
-    result = await search_passages(db_session, "kidney", mode="ids_only", rerank="lexical")
+    result = await search_passages(
+        db_session, "kidney", mode="ids_only", rerank="lexical"
+    )
     assert result.passages
     assert all(p.text is None and p.snippet is None for p in result.passages)
 
@@ -111,7 +144,9 @@ async def test_ids_only_mode_omits_text(db_session):
 @pytest.mark.asyncio
 async def test_brief_mode_sets_snippet(db_session):
     await _seed(db_session)
-    result = await search_passages(db_session, "cystic kidney", mode="brief", rerank="lexical")
+    result = await search_passages(
+        db_session, "cystic kidney", mode="brief", rerank="lexical"
+    )
     assert result.passages
     assert all(p.text is None for p in result.passages)
     assert any(p.snippet for p in result.passages)
@@ -121,8 +156,12 @@ async def test_brief_mode_sets_snippet(db_session):
 async def test_full_mode_max_chars_truncates(db_session):
     await _seed(db_session)
     result = await search_passages(
-        db_session, "kidney diabetes cysts hypomagnesemia HNF1B", rerank="lexical",
-        mode="full", limit=10, max_chars=60,
+        db_session,
+        "kidney diabetes cysts hypomagnesemia HNF1B",
+        rerank="lexical",
+        mode="full",
+        limit=10,
+        max_chars=60,
     )
     # First passage always included; budget then stops further ones.
     assert len(result.passages) == 1
@@ -139,8 +178,13 @@ async def test_rrf_uses_dense_leg_with_embeddings(db_session):
     # is covered by the rrf unit tests). With boosts off, the exact-text passage
     # — nearest dense neighbour AND a top lexical hit — must rank first.
     result = await search_passages(
-        db_session, "renal cysts and maturity onset diabetes were observed",
-        rerank="rrf", provider=provider, mode="full", limit=10, section_boosts={},
+        db_session,
+        "renal cysts and maturity onset diabetes were observed",
+        rerank="rrf",
+        provider=provider,
+        mode="full",
+        limit=10,
+        section_boosts={},
     )
     assert result.rerank_used == "rrf"
     assert result.dense_candidate_count > 0
@@ -162,7 +206,9 @@ async def test_rrf_falls_back_to_lexical_without_provider(db_session):
 async def test_rrf_falls_back_when_no_embeddings_stored(db_session):
     await _seed(db_session, with_embeddings=False)
     provider = FakeEmbeddingProvider(dim=384)
-    result = await search_passages(db_session, "kidney", rerank="rrf", provider=provider)
+    result = await search_passages(
+        db_session, "kidney", rerank="rrf", provider=provider
+    )
     assert result.rerank_used == "lexical"
     assert any("no embeddings" in note for note in result.notes)
 

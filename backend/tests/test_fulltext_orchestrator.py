@@ -20,17 +20,28 @@ from app.publications.fulltext.types import AbstractResult, FullTextResult, RawS
 ALLOWED = ["CC0", "CC-BY", "CC-BY-NC", "PMC-OA"]
 
 _BODY = (
-    RawSection("methods", "We performed HNF1B targeted next generation sequencing "
-               "in a cohort of children with cystic kidney disease.", 0),
-    RawSection("results", "Renal cysts and maturity onset diabetes of the young "
-               "were the most frequent findings in carriers.", 1),
+    RawSection(
+        "methods",
+        "We performed HNF1B targeted next generation sequencing "
+        "in a cohort of children with cystic kidney disease.",
+        0,
+    ),
+    RawSection(
+        "results",
+        "Renal cysts and maturity onset diabetes of the young "
+        "were the most frequent findings in carriers.",
+        1,
+    ),
 )
 
 
 def _fetchers(abstract_text, fulltext):
     async def fa(pmid):
-        return AbstractResult(f"PMID:{pmid.replace('PMID:', '')}", abstract_text) \
-            if abstract_text is not None else None
+        return (
+            AbstractResult(f"PMID:{pmid.replace('PMID:', '')}", abstract_text)
+            if abstract_text is not None
+            else None
+        )
 
     async def ff(pmid):
         return fulltext
@@ -41,8 +52,10 @@ def _fetchers(abstract_text, fulltext):
 async def _coverage(db, pmid):
     row = (
         await db.execute(
-            text("SELECT coverage, abstract, license, pmcid FROM publication_metadata "
-                 "WHERE pmid=:p"),
+            text(
+                "SELECT coverage, abstract, license, pmcid FROM publication_metadata "
+                "WHERE pmid=:p"
+            ),
             {"p": pmid},
         )
     ).first()
@@ -77,7 +90,9 @@ async def test_full_text_path_persists_passages(db_session):
 @pytest.mark.asyncio
 async def test_license_gate_drops_body(db_session):
     # Non-OA + a license outside the allow-set -> body dropped, abstract kept.
-    ft = FullTextResult("PMID:11", "PMC11", "cc by-nc-nd", False, _BODY, "pubtator_full_bioc")
+    ft = FullTextResult(
+        "PMID:11", "PMC11", "cc by-nc-nd", False, _BODY, "pubtator_full_bioc"
+    )
     fetchers = _fetchers("Has an abstract.", ft)
     outcome = await process_publication(
         db_session, "11", fetchers=fetchers, allowed_licenses=ALLOWED
@@ -127,8 +142,10 @@ async def test_passage_ids_unique_across_repeated_sections(db_session):
         r.passage_id
         for r in (
             await db_session.execute(
-                text("SELECT passage_id FROM publication_fulltext WHERE pmid='PMID:14' "
-                     "ORDER BY seq")
+                text(
+                    "SELECT passage_id FROM publication_fulltext WHERE pmid='PMID:14' "
+                    "ORDER BY seq"
+                )
             )
         ).fetchall()
     ]
@@ -157,7 +174,10 @@ async def test_sync_publications_aggregates_and_degrades_fetch_failures(
 
     monkeypatch.setattr(orchestrator, "build_fetchers", fake_build)
     counts = await orchestrator.sync_publications(
-        db_session, ["20", "21", "99"], session=None, allowed_licenses=ALLOWED,
+        db_session,
+        ["20", "21", "99"],
+        session=None,
+        allowed_licenses=ALLOWED,
         rate_limit_delay=0,
     )
     assert counts.processed == 3  # all completed (99 degraded to title_only)
@@ -185,7 +205,10 @@ async def test_sync_publications_isolates_hard_errors(db_session, monkeypatch):
     monkeypatch.setattr(orchestrator, "build_fetchers", fake_build)
     monkeypatch.setattr(orchestrator, "process_publication", flaky)
     counts = await orchestrator.sync_publications(
-        db_session, ["20", "99", "21"], session=None, allowed_licenses=ALLOWED,
+        db_session,
+        ["20", "99", "21"],
+        session=None,
+        allowed_licenses=ALLOWED,
         rate_limit_delay=0,
     )
     assert counts.errors == 1
@@ -201,7 +224,9 @@ async def test_backfill_embeddings_idempotent(db_session):
     provider = FakeEmbeddingProvider(dim=384)
     embedded = await backfill_embeddings(db_session, provider, batch_size=8)
     assert embedded >= 2
-    stored = await persistence.count_embeddings(db_session, model_name=provider.model_name)
+    stored = await persistence.count_embeddings(
+        db_session, model_name=provider.model_name
+    )
     assert stored == embedded
     # Re-run: nothing stale -> zero new embeddings.
     again = await backfill_embeddings(db_session, provider, batch_size=8)

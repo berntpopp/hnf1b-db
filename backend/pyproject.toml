@@ -63,6 +63,7 @@ test = [
     "pytest==9.0.3",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
     "pytest-cov==7.1.0",
+    "pytest-xdist>=3.6.0",  # Parallel test execution with per-worker DB isolation
     "tqdm>=4.67.3",
     "types-tqdm>=4.66.0",  # Type stubs for tqdm
 ]

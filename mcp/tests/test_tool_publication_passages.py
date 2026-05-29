@@ -95,7 +95,9 @@ async def test_registers_with_readonly_hint() -> None:
 async def test_data_class_is_curated() -> None:
     _mock_both()
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool("hnf1b_get_publication_passages", {"query": "cystic kidney"})
+    r = await mcp.call_tool(
+        "hnf1b_get_publication_passages", {"query": "cystic kidney"}
+    )
     await client.aclose()
     assert r.structured_content["data_class"] == DataClass.CURATED
 
@@ -105,7 +107,9 @@ async def test_data_class_is_curated() -> None:
 async def test_passage_has_citation_and_snippet() -> None:
     _mock_both()
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool("hnf1b_get_publication_passages", {"query": "cystic kidney"})
+    r = await mcp.call_tool(
+        "hnf1b_get_publication_passages", {"query": "cystic kidney"}
+    )
     await client.aclose()
     sc = r.structured_content
     assert sc["passages"]
@@ -137,7 +141,9 @@ async def test_compact_mode_omits_score_but_full_includes_it() -> None:
 async def test_meta_surfaces_retrieval_diagnostics() -> None:
     _mock_both()
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool("hnf1b_get_publication_passages", {"query": "cystic kidney"})
+    r = await mcp.call_tool(
+        "hnf1b_get_publication_passages", {"query": "cystic kidney"}
+    )
     await client.aclose()
     meta = r.structured_content["meta"]
     assert meta["rerank_used"] == "rrf"
