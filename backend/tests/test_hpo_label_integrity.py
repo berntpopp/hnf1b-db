@@ -36,13 +36,25 @@ async def _authoritative_label(client: httpx.AsyncClient, hpo_id: str) -> str | 
 
 @pytest.mark.asyncio
 async def test_curated_hpo_labels_match_authoritative_ontology(db_session):
-    """Each curated HP:* label equals the authoritative HPO term name."""
+    """Each curated HP:* label equals the authoritative HPO term name.
+
+    Scoped to ``recommendation IS NOT NULL`` so only the *canonical curated seed*
+    rows are validated. Every seeded row carries the full phenotype metadata
+    (category/recommendation/group); bare ``(hpo_id, label, phenopacket_count)``
+    rows inserted by other tests' fixtures (e.g. test_ontology_autocomplete) have
+    those columns NULL. The shared CI test database exempts this static lookup
+    table from inter-test truncation, so without this scope a leaked fixture row
+    would make the guard fail on synthetic data instead of the real seed.
+    """
     rows = (
         await db_session.execute(
-            text("SELECT hpo_id, label FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:%'")
+            text(
+                "SELECT hpo_id, label FROM hpo_terms_lookup "
+                "WHERE hpo_id LIKE 'HP:%' AND recommendation IS NOT NULL"
+            )
         )
     ).all()
-    assert rows, "hpo_terms_lookup has no HP:* rows — is the table seeded?"
+    assert rows, "hpo_terms_lookup has no curated HP:* rows — is the table seeded?"
 
     mismatches: list[str] = []
     checked = 0
