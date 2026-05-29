@@ -24,7 +24,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Correct the POU-Specific domain start from 8 to 90 (UniProt P35680)."""
     op.execute(
-        "UPDATE protein_domains SET \"start\" = 90 "
+        'UPDATE protein_domains SET "start" = 90 '
         "WHERE name = 'POU-Specific Domain' AND \"start\" = 8;"
     )
 
@@ -32,6 +32,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Restore the previous start=8 value."""
     op.execute(
-        "UPDATE protein_domains SET \"start\" = 8 "
+        'UPDATE protein_domains SET "start" = 8 '
         "WHERE name = 'POU-Specific Domain' AND \"start\" = 90;"
     )

@@ -72,6 +72,7 @@ def _translate_sort(sort: str | None) -> tuple[str | None, list[str]]:
         return None, ["sort"]
     return (f"-{backend_field}" if descending else backend_field), []
 
+
 # Per-mode field policies (Anthropic: smallest high-signal payload).  Fields not
 # listed for a mode are dropped from each row.  ``gene_symbol`` is always hoisted
 # to the response header when invariant, and ``uri`` is dropped in

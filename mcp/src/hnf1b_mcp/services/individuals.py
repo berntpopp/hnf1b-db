@@ -70,9 +70,7 @@ def _project_individual(record: dict[str, Any], mode: str) -> dict[str, Any]:
     return {key: value for key, value in record.items() if key in allowed}
 
 
-def _select_fields(
-    record: dict[str, Any], fields: list[str] | None
-) -> dict[str, Any]:
+def _select_fields(record: dict[str, Any], fields: list[str] | None) -> dict[str, Any]:
     """Keep only caller-requested top-level *fields* (plus id/uri for chaining).
 
     Explicit field projection — the highest-leverage token control for

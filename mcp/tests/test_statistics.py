@@ -183,10 +183,18 @@ async def test_variant_types_labels_instance_unit_and_rounds_percentage():
         return_value=httpx.Response(
             200,
             json=[
-                {"label": "Copy Number Loss", "count": 389,
-                 "percentage": 45.023148148148145, "details": None},
-                {"label": "SNV", "count": 302,
-                 "percentage": 34.9537037037037, "details": None},
+                {
+                    "label": "Copy Number Loss",
+                    "count": 389,
+                    "percentage": 45.023148148148145,
+                    "details": None,
+                },
+                {
+                    "label": "SNV",
+                    "count": 302,
+                    "percentage": 34.9537037037037,
+                    "details": None,
+                },
             ],
         )
     )
@@ -233,19 +241,28 @@ async def test_invalid_count_mode_raises():
 async def test_survival_budget_preserves_all_arms_by_downsampling():
     """Over budget, survival down-samples curves but keeps every arm."""
     long_curve = [
-        {"time": i / 10, "survival_probability": 1.0 - i / 1000,
-         "ci_lower": 0.9, "ci_upper": 1.0, "at_risk": 200 - i,
-         "events": 1, "censored": 0}
+        {
+            "time": i / 10,
+            "survival_probability": 1.0 - i / 1000,
+            "ci_lower": 0.9,
+            "ci_upper": 1.0,
+            "at_risk": 200 - i,
+            "events": 1,
+            "censored": 0,
+        }
         for i in range(400)
     ]
     payload = {
         "comparison_type": "pathogenicity",
         "endpoint": "renal",
         "groups": [
-            {"name": "P/LP", "n": 255, "events": 109,
-             "survival_data": list(long_curve)},
-            {"name": "VUS", "n": 80, "events": 20,
-             "survival_data": list(long_curve)},
+            {
+                "name": "P/LP",
+                "n": 255,
+                "events": 109,
+                "survival_data": list(long_curve),
+            },
+            {"name": "VUS", "n": 80, "events": 20, "survival_data": list(long_curve)},
         ],
         "statistical_tests": {"logrank_p": 0.01},
     }

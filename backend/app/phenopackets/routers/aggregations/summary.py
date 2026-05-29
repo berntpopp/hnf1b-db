@@ -17,6 +17,7 @@ from .common import (
     select,
     text,
 )
+from .sql_fragments.ctes import synthetic_exclusion
 
 router = APIRouter()
 
@@ -30,19 +31,26 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         - total_phenopackets: Total number of phenopackets
         - with_variants: Phenopackets containing interpretations
         - distinct_hpo_terms: Number of unique HPO terms used
-        - distinct_publications: Number of unique publication references
+        - distinct_publications: Unique PMID-prefixed publication references only
+          (matches GET /publications/.total)
+        - distinct_sources: Unique external references of ANY kind (PMIDs plus
+          internal/non-PMID cohort sources); >= distinct_publications
         - distinct_variants: Number of unique genetic variants
         - male: Number of male subjects
         - female: Number of female subjects
         - unknown_sex: Number of subjects with unknown sex
+
+    All counts exclude synthetic e2e-* fixtures.
     """
     # All summary queries apply the public visibility filter (I3 + I7):
     # deleted_at IS NULL, state='published', head_published_revision_id IS NOT NULL
 
     # Synthetic-record exclusion (defense-in-depth): e2e-* fixtures must never
     # inflate cohort aggregates. The single-record read keeps them; aggregates
-    # do not. See sql_fragments.ctes.synthetic_exclusion.
-    _NO_E2E = "AND phenopacket_id NOT LIKE 'e2e-%'"
+    # do not. Derived from the shared synthetic_exclusion() helper (no inline
+    # drift); the unqualified form matches these alias-less FROM phenopackets
+    # subqueries.
+    _NO_E2E = f"AND {synthetic_exclusion('')}"
 
     # 1. Total phenopackets (published only, excluding synthetic fixtures)
     total_result = await db.execute(

@@ -573,9 +573,7 @@ async def test_get_individual_splits_observed_and_excluded_features() -> None:
             ],
         },
     }
-    respx.get(f"{BASE}/phenopackets/Y").mock(
-        return_value=httpx.Response(200, json=pp)
-    )
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
     respx.get(f"{BASE}/publications/").mock(
         return_value=httpx.Response(200, json={"data": [], "meta": {}})
     )

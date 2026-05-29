@@ -82,9 +82,7 @@ async def get_gene_context(
         missing.append("transcripts")
     if include_domains and not result.get("domains"):
         missing.append("domains")
-    if not any(
-        gene_obj.get(k) for k in ("hgnc_id", "ncbi_gene_id", "omim_id")
-    ):
+    if not any(gene_obj.get(k) for k in ("hgnc_id", "ncbi_gene_id", "omim_id")):
         missing.append("cross_references")
     if missing:
         result["reference_data_status"] = (

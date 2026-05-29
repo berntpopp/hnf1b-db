@@ -277,7 +277,9 @@ async def test_search_variants_consequence_filtered_server_side():
             200,
             json={
                 "data": [VARIANT_1],  # server already filtered to Missense
-                "meta": {"page": {"totalRecords": 1, "totalPages": 1, "currentPage": 1}},
+                "meta": {
+                    "page": {"totalRecords": 1, "totalPages": 1, "currentPage": 1}
+                },
             },
         )
     )
@@ -321,7 +323,9 @@ async def test_search_variants_consequence_pagination_trusts_server():
             200,
             json={
                 "data": [_make_missense(1), _make_missense(2)],
-                "meta": {"page": {"totalRecords": 5, "totalPages": 3, "currentPage": 1}},
+                "meta": {
+                    "page": {"totalRecords": 5, "totalPages": 3, "currentPage": 1}
+                },
             },
         )
     )
