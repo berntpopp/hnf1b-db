@@ -309,12 +309,16 @@ class PublicationsRagConfig(BaseModel):
     )
     embedding_batch_size: int = 32
     # Reciprocal Rank Fusion constant and per-section additive rank boosts.
+    # Boosts are deliberately small relative to a single RRF term (1/(k+rank)
+    # ≈ 0.016 at k=60, rank 1): they are tie-breaker nudges that float
+    # high-signal sections up among comparable hits, never overriding strong
+    # lexical/dense agreement.
     rrf_k: int = 60
     section_boosts: dict[str, float] = {
-        "abstract": 0.10,
-        "results": 0.05,
-        "discussion": 0.05,
-        "conclusion": 0.05,
+        "abstract": 0.006,
+        "results": 0.004,
+        "discussion": 0.003,
+        "conclusion": 0.003,
     }
     # Chunking window (token-based, section-bounded, char-offset recovery).
     chunk_max_tokens: int = 510

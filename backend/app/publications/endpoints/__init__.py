@@ -6,23 +6,25 @@ Wave 4. Exposes a single aggregated ``router`` mounted at
 
 Routes, grouped by file:
 
-- ``metadata_route``  → ``GET /{pmid}/metadata``
 - ``list_route``      → ``GET /``
+- ``passages_route``  → ``GET /passages``
+- ``metadata_route``  → ``GET /{pmid}/metadata``
 - ``sync_route``      → ``POST /sync``
 
-The HTTP surface is byte-identical to the pre-Wave-4 flat module;
-``app.main`` continues to call
-``app.include_router(publication_endpoints.router)`` unchanged.
+``passages_route`` is included before ``metadata_route`` so the literal
+``/passages`` path is matched ahead of the ``/{pmid}/metadata`` template.
 """
 
 from fastapi import APIRouter
 
 from .list_route import router as _list_router
 from .metadata_route import router as _metadata_router
+from .passages_route import router as _passages_router
 from .sync_route import router as _sync_router
 
 router = APIRouter(prefix="/api/v2/publications", tags=["publications"])
 router.include_router(_list_router)
+router.include_router(_passages_router)
 router.include_router(_metadata_router)
 router.include_router(_sync_router)
 

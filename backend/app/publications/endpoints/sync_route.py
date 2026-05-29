@@ -4,23 +4,20 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
+import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
+from app.core.config import settings
 from app.database import async_session_maker, get_db
-from app.publications.service import (
-    PubMedAPIError,
-    PubMedNotFoundError,
-    PubMedRateLimitError,
-    PubMedTimeoutError,
-    get_publication_metadata,
+from app.publications.fulltext.orchestrator import (
+    sync_publications as run_publication_sync,
 )
+from app.publications.service import get_publication_metadata
 
 from .schemas import SyncResponse
 
@@ -30,19 +27,18 @@ router = APIRouter(tags=["publications"])
 
 
 async def _sync_publications_background() -> None:
-    """Background task to sync all publication metadata from PubMed.
+    """Background task to sync publication abstracts + open-access full text.
 
     Opens its own database session via ``async_session_maker`` — the
-    request-scoped session from ``Depends(get_db)`` is closed by the
-    time ``BackgroundTasks`` fires, so reusing it would fail on the
-    first query. Mirrors the admin sync service pattern.
+    request-scoped session from ``Depends(get_db)`` is closed by the time
+    ``BackgroundTasks`` fires, so reusing it would fail on the first query.
 
-    1. Get all unique PMIDs from phenopackets
-    2. Filter out already-stored entries
-    3. Batch fetch from PubMed (respecting rate limits)
-    4. Store permanently in publication_metadata table
+    1. Get all unique PMIDs referenced by published phenopackets.
+    2. Ensure base citation metadata (title/authors/...) via the PubMed service.
+    3. Fetch abstracts (efetch) + license-gated open-access full text, chunk
+       into passages, and persist — with per-PMID error isolation.
     """
-    logger.info("Starting background publication sync")
+    logger.info("Starting background publication full-text sync")
 
     async with async_session_maker() as db:
         query = text("""
@@ -54,47 +50,36 @@ async def _sync_publications_background() -> None:
         """)
         result = await db.execute(query)
         all_pmids = [row.pmid for row in result.fetchall()]
-
         logger.info("Found %s unique PMIDs in phenopackets", len(all_pmids))
 
-        stored_query = text("""
-            SELECT REPLACE(pmid, 'PMID:', '') as pmid
-            FROM publication_metadata
-        """)
-        stored_result = await db.execute(stored_query)
-        stored_pmids = {row.pmid for row in stored_result.fetchall()}
+        async def _ensure_metadata(pmid: str) -> None:
+            # Populate title/authors/journal/year/doi via the existing PubMed
+            # (esummary) service; process_publication then fills abstract +
+            # coverage. Cached PMIDs are not re-fetched.
+            await get_publication_metadata(pmid, db, fetched_by="sync")
 
-        to_fetch = [pmid for pmid in all_pmids if pmid not in stored_pmids]
+        async with aiohttp.ClientSession() as session:
+            counts = await run_publication_sync(
+                db,
+                all_pmids,
+                session=session,
+                allowed_licenses=settings.publications_rag.allowed_licenses,
+                chunk_max_tokens=settings.publications_rag.chunk_max_tokens,
+                chunk_overlap_tokens=settings.publications_rag.chunk_overlap_tokens,
+                abstract_api_key=settings.PUBMED_API_KEY,
+                ensure_metadata=_ensure_metadata,
+            )
 
         logger.info(
-            "Need to fetch %s PMIDs (%s already stored)",
-            len(to_fetch),
-            len(stored_pmids),
+            "Publication full-text sync complete",
+            extra={
+                "processed": counts.processed,
+                "abstracts_fetched": counts.abstracts_fetched,
+                "full_text_fetched": counts.full_text_fetched,
+                "license_skipped": counts.license_skipped,
+                "errors": counts.errors,
+            },
         )
-
-        fetched = 0
-        errors = 0
-
-        for pmid in to_fetch:
-            try:
-                await get_publication_metadata(pmid, db, fetched_by="sync")
-                fetched += 1
-                if fetched % 10 == 0:
-                    logger.info("Synced %s/%s publications", fetched, len(to_fetch))
-            except (
-                PubMedAPIError,
-                PubMedTimeoutError,
-                PubMedRateLimitError,
-                PubMedNotFoundError,
-                SQLAlchemyError,
-            ) as exc:
-                errors += 1
-                logger.warning("Failed to fetch %s: %s", pmid, exc)
-
-            # Rate limiting: 3 req/sec without API key = ~333ms between requests.
-            await asyncio.sleep(0.35)
-
-        logger.info("Sync complete: %s fetched, %s errors", fetched, errors)
 
 
 @router.post(
