@@ -128,7 +128,10 @@ jobs:
           JWT_SECRET: test-secret-key-for-ci
           ADMIN_PASSWORD: test-admin-password-ci-2026
         working-directory: backend
-        run: uv run pytest -m "not benchmark and not network" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
+        # -n auto: pytest-xdist spawns one worker per core; each worker creates
+        # and Alembic-migrates its own isolated DB (see backend/conftest.py).
+        # pytest-cov auto-combines per-worker coverage data.
+        run: uv run pytest -n auto --dist loadgroup -m "not benchmark and not network" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
 
       - name: Validate curated HPO labels against live ontology (network)
         # Guard against the hpo_terms_lookup labels drifting from the
@@ -229,7 +232,8 @@ jobs:
         # full server. Both are excluded from unit CI. An explicit -m here
         # overrides pyproject addopts, so both exclusions are spelled out.
         working-directory: mcp
-        run: uv run pytest --cov=hnf1b_mcp -m "not smoke and not live"
+        # -n auto: mcp tests are isolated (no shared DB), so xdist is a free win.
+        run: uv run pytest -n auto --cov=hnf1b_mcp -m "not smoke and not live"
 
       - name: Contract drift guard (paths + enums)
         # Regenerate the deterministic, zero-dependency contract artifacts and
