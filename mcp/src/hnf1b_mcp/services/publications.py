@@ -176,6 +176,54 @@ async def list_publications(
     }
 
 
+async def build_pmid_citation_map(client: ApiClient) -> dict[str, dict[str, Any]]:
+    """Return a ``bare_pmid -> {recommended_citation, date_confidence, …}`` map.
+
+    Fetches the local publication cache once (cached by the API client's TTL) so
+    embedded publication references inside individual records can be enriched to
+    the SAME verified citation/date_confidence that ``hnf1b_get_publications``
+    reports — eliminating the inconsistency where an inline ref showed
+    ``unverified`` while the list showed ``verified``.
+
+    Args:
+        client: An :class:`~hnf1b_mcp.client.api_client.ApiClient` instance.
+
+    Returns:
+        Mapping of bare PMID (digits) to enrichment fields.
+    """
+    body: dict[str, Any] = await client.get(
+        PUBLICATIONS,
+        params={
+            "page[number]": 1,
+            "page[size]": 1000,
+            "sort": DEFAULT_PUBLICATION_SORT,
+        },
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for item in body.get("data") or []:
+        pmid = str(item.get("pmid") or "")
+        bare = _strip_pmid_prefix(pmid)
+        if not bare:
+            continue
+        citation_info = build_citation(
+            {
+                "pmid": pmid,
+                "title": item.get("title"),
+                "authors": item.get("authors"),
+                "journal": item.get("journal"),
+                "year": item.get("year"),
+                "doi": item.get("doi"),
+            }
+        )
+        out[bare] = {
+            "recommended_citation": citation_info["recommended_citation"],
+            "date_confidence": citation_info["date_confidence"],
+            "journal": item.get("journal"),
+            "year": item.get("year"),
+        }
+    return out
+
+
 async def get_publication_citing_individuals(
     client: ApiClient,
     pmid: str,

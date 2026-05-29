@@ -34,6 +34,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         include_measurements: bool = True,
         include_publications: bool = True,
         response_mode: str | None = None,
+        fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve the full phenopacket record for a single individual.
 
@@ -58,16 +59,23 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 Defaults to ``True``.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+            fields: Optional explicit top-level field allow-list (e.g.
+                ``["variants"]``) for precise token control; applied on top of
+                the mode. ``phenopacket_id`` and ``uri`` are always kept.
 
         Returns:
             A dict with keys ``phenopacket_id``, ``subject``, ``diseases``,
-            ``uri``, and conditionally ``phenotypic_features``, ``variants``,
+            ``uri``, and conditionally ``phenotypic_features`` (observed),
+            ``excluded_features``, ``feature_counts``, ``variants``,
             ``measurements``, ``publications``, plus ``data_class`` and
             ``meta``. ``response_mode`` genuinely trims the field set:
             ``minimal`` = id + subject + uri; ``compact`` adds diseases /
-            phenotypes / variants; ``standard`` adds publications; ``full``
-            adds measurements and everything else. ``include_*`` flags are
-            explicit opt-outs applied on top of the mode.
+            observed phenotypes / variants / feature_counts; ``standard`` adds
+            publications + excluded_features; ``full`` adds measurements and
+            everything else. ``include_*`` flags are explicit opt-outs applied
+            on top of the mode. Embedded publications carry the same
+            verified ``recommended_citation`` / ``date_confidence`` as
+            ``hnf1b_get_publications``.
         """
         mode = resolve_mode(response_mode)
         return await run_tool(
@@ -79,6 +87,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 include_measurements=include_measurements,
                 include_publications=include_publications,
                 response_mode=mode,
+                fields=fields,
             ),
             data_class=DataClass.CURATED,
             response_mode=mode,
@@ -96,6 +105,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         expand: bool = False,
         dedupe_publications: bool = False,
         response_mode: str | None = None,
+        fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve a list of HNF1B-db individuals by IDs or with optional filters.
 
@@ -123,6 +133,13 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``publication_refs`` (PMID strings).  Defaults to ``False``.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+                The mode's char budget is ENFORCED on the batch: the
+                individuals list is trimmed to fit (with a ``meta.truncated``
+                signal), so a ``minimal`` batch is genuinely small.
+            fields: Optional explicit top-level field allow-list applied to
+                every record (e.g. ``["variants"]`` to enumerate variant ids
+                without phenotypes/measurements). Highest-leverage token control
+                for slicing tasks. ``phenopacket_id``/``uri`` are always kept.
 
         Returns:
             A dict with keys ``individuals``, ``total``, ``page_size``, and —
@@ -149,6 +166,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 expand=expand,
                 dedupe_publications=dedupe_publications,
                 response_mode=mode,
+                fields=fields,
             ),
             data_class=DataClass.CURATED,
             response_mode=mode,
