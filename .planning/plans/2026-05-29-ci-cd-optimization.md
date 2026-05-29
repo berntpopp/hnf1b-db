@@ -952,6 +952,34 @@ git add backend/conftest.py
 git commit -m "test(backend): Alembic-migrated per-worker DB + Redis isolation for pytest-xdist"
 ```
 
+### Task 6b: Fix cross-test-state dependency exposed by per-worker DB isolation
+
+> **Discovered during Task 7 validation (systematic-debugging).** Enabling xdist
+> surfaced a *pre-existing* test-isolation bug (not an xdist bug):
+> `tests/test_http_surface_baseline.py::test_verify_baseline[reference_genes]`
+> and `[search_autocomplete]` depended on reference data (`reference_genomes` +
+> `genes`) seeded by *another* test (the admin reference-init route) earlier in
+> the session and persisted because those tables are **not** in the
+> mutable-truncation list. With per-worker isolated DBs, that leakage no longer
+> reaches the worker running these baselines → `GET /api/v2/reference/genes`
+> 500s ("No default genome configured") and `search_autocomplete` returns empty.
+>
+> **Evidence chain:** serial full-suite on a *fresh migration-only* DB = 1379
+> passed (genes seeded mid-run 0→1 by the producer); the same endpoint serially
+> against an empty DB 500s → confirmed empty-DB-driven, not parallelism.
+>
+> **Fix (hermetic, root-cause):** add a `_seed_reference_data` fixture to
+> `test_http_surface_baseline.py` that calls the idempotent, network-free
+> `initialize_reference_data(db_session)` and then
+> `refresh_global_search_index(db_session, concurrently=False)` (autocomplete
+> reads the `global_search_index` materialized view, not the `genes` table), and
+> depend the two parametrized baseline tests on it. Makes the baselines
+> deterministic under both serial and parallel execution; no production code or
+> migration changes.
+>
+> Validated: baseline file under `-n 2` (fresh worker DBs) → 14 passed, 0 failed;
+> full suite `-n 4 --cov` (fresh worker DBs) → green, coverage ≥ 70.
+
 ### Task 7: Enable xdist in the `backend` and `mcp` CI jobs
 
 **Files:**
@@ -1014,6 +1042,19 @@ Expected: backend + mcp green; coverage uploaded (pytest-cov auto-combines xdist
 ## Phase 3 — Docker → GHCR build/publish workflow
 
 ### Task 8: Add `docker.yml` build/publish matrix
+
+> **Execution correction (validated by actionlint):** the single-job design
+> below is INVALID on two counts and was implemented as a **two-job split**
+> instead:
+> 1. `matrix.*` is NOT available in a job-level `if:` (evaluated before matrix
+>    expansion) — per-image gating moved to a step-level `id: gate` output.
+> 2. GitHub Actions forbids expressions in `permissions:` — so
+>    `packages: ${{ ... 'write' || 'read' }}` is illegal. PR-read-only vs
+>    publish-write is therefore split into `build-validate`
+>    (`if: pull_request`, `permissions: contents: read`, `push: false`, no
+>    login) and `publish` (`if: != pull_request`,
+>    `permissions: { contents: read, packages: write }`, login + `push: true`).
+> The committed `.github/workflows/docker.yml` reflects this corrected design.
 
 **Files:**
 - Create: `.github/workflows/docker.yml`
