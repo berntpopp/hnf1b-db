@@ -58,6 +58,7 @@ async def aggregate_by_feature(
                 label=row["label"] or row["hpo_id"],
                 count=int(row["present_count"]),
                 percentage=row["percentage"],
+                hpo_id=row["hpo_id"],
                 details={
                     "hpo_id": row["hpo_id"],
                     "present_count": int(row["present_count"]),
@@ -84,10 +85,13 @@ async def aggregate_by_feature(
     total_phenopackets = total_phenopackets_result.scalar() or 0
 
     # Query to get both present and absent counts for each HPO term
+    # GROUP BY the HPO id only (not id+label): the same HPO id can appear with
+    # multiple label spellings, which previously produced duplicate rows (one a
+    # zero-count ghost). MIN(label) picks a single canonical label per id.
     query = """
     SELECT
         feature->'type'->>'id' as hpo_id,
-        feature->'type'->>'label' as label,
+        MIN(feature->'type'->>'label') as label,
         SUM(CASE WHEN NOT COALESCE((feature->>'excluded')::boolean, false)
             THEN 1 ELSE 0 END) as present_count,
         SUM(CASE WHEN COALESCE((feature->>'excluded')::boolean, false)
@@ -101,8 +105,7 @@ async def aggregate_by_feature(
         AND head_published_revision_id IS NOT NULL
         AND phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
-        feature->'type'->>'id',
-        feature->'type'->>'label'
+        feature->'type'->>'id'
     ORDER BY
         present_count DESC
     """
@@ -119,6 +122,7 @@ async def aggregate_by_feature(
             label=row["label"] or row["hpo_id"],
             count=int(row["present_count"]),
             percentage=row["percentage"],
+            hpo_id=row["hpo_id"],
             details={
                 "hpo_id": row["hpo_id"],
                 "present_count": int(row["present_count"]),
