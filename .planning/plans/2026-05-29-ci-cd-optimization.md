@@ -170,10 +170,15 @@ runs:
         for g in ${{ inputs.groups }}; do
           groups="$groups --group $g"
         done
-        uv sync --frozen $groups
+        uv sync $groups
 ```
 
-> Note: `--frozen` matches the lockfile-pinned dev workflow. If a clean checkout lacks an up-to-date lock the job fails loudly (correct — lockfiles are committed). The original CI used bare `uv sync`; `--frozen` is stricter and safe because `uv.lock` is committed.
+> Note: bare `uv sync` (no `--frozen`) deliberately matches the existing CI. The
+> committed `backend/uv.lock` at branch point is slightly out of sync with
+> `pyproject.toml` (lock pins `ruff==0.15.14`, pyproject pins `==0.15.15`), so
+> `--frozen` would fail the resolve check on a clean checkout. Bare `uv sync`
+> auto-reconciles, exactly as the pre-rewrite CI did. (Phase 2 `uv lock`
+> canonicalizes the lockfile when it adds `pytest-xdist`.)
 
 - [ ] **Step 2: Lint the action YAML**
 
