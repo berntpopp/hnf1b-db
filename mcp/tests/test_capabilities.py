@@ -41,7 +41,7 @@ def test_capabilities_filterable_fields_present():
     }
 
     sv = ff["hnf1b_search_variants"]
-    # Exactly the real filter params — no invented hgvs_c / acmg_class.
+    # Exactly the real filter/sort params — no invented hgvs_c / acmg_class.
     assert set(sv) == {
         "classification",
         "consequence",
@@ -49,7 +49,10 @@ def test_capabilities_filterable_fields_present():
         "domain",
         "gene",
         "query",
+        "sort",
     }
+    # sort defaults to most-common-first so "top variant" needs no extra call.
+    assert "carrier_count" in sv["sort"]["values"]
     assert sv["classification"]["values"] == list(VARIANT_CLASSIFICATION_VALUES)
     assert sv["consequence"]["values"] == list(MOLECULAR_CONSEQUENCE_VALUES)
     assert sv["variant_type"]["values"] == list(VARIANT_TYPE_VALUES)

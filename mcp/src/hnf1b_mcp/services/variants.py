@@ -34,16 +34,27 @@ _GENE_SYMBOL = "HNF1B"
 # backend does not support (e.g. ``label``, ``consequence``) are reported as
 # ignored in meta rather than silently dropped — an unknown sort key otherwise
 # falls back to the default order, looking like a no-op.
-_SORT_FIELD_TRANSLATION: dict[str, str] = {
+# Canonical, agent-facing sortable fields for variant search: the MCP-friendly
+# name -> the backend ORDER BY token it maps to. This is the single source of
+# truth; capabilities advertises exactly these keys (see capabilities.py) so the
+# documented sort vocabulary can never drift from what the tool actually honors.
+VARIANT_SORT_FIELDS: dict[str, str] = {
     "carrier_count": "individualCount",
     "classification": "classificationVerdict",
     "structural_type": "variant_type",
     "variant_id": "variant_id",
+    "simple_id": "simple_id",
     "transcript": "transcript",
     "protein": "protein",
     "hg38": "hg38",
-    "simple_id": "simple_id",
-    # accept backend tokens verbatim too
+}
+
+# The accepted translation set is the canonical fields plus the raw backend
+# tokens accepted verbatim (defensive: a caller that read a backend token
+# elsewhere still gets a correct sort). Built from VARIANT_SORT_FIELDS so the two
+# stay in lockstep.
+_SORT_FIELD_TRANSLATION: dict[str, str] = {
+    **VARIANT_SORT_FIELDS,
     "individualCount": "individualCount",
     "classificationVerdict": "classificationVerdict",
     "variant_type": "variant_type",
@@ -225,6 +236,12 @@ async def search_variants(
     this function forwards the filter and trusts the server's data and totals.
     When *consequence* is set, ``filtered_count`` (== ``total``) is included.
 
+    When any filter is active, the result's ``_meta`` carries a machine-readable
+    ``applied_filters`` dict (the exact predicates honored) and
+    ``filter_mode == "server"`` so a caller can programmatically confirm the
+    filter was applied server-side against the honest cross-page total — without
+    parsing prose. These fields surface in the wrapped ``meta`` block.
+
     Args:
         client: Authenticated :class:`ApiClient` instance.
         query: Free-text search query forwarded to the API.
@@ -331,21 +348,46 @@ async def search_variants(
         if symbols and symbols <= {_GENE_SYMBOL}:
             result["gene_symbol_all"] = _GENE_SYMBOL
 
-    # Make sort handling visible: echo the sort actually applied server-side and
-    # name any parameter that was requested but could not be honored. An LLM
-    # cannot self-correct on a silently-dropped argument.
+    # Make the server's filtering and sorting machine-readable so an agent never
+    # has to parse prose to learn what was applied. Every filter listed below is
+    # a real server-side query predicate evaluated against an honest
+    # meta.page.totalRecords (the consequence filter is applied pre-pagination by
+    # the all-variants endpoint), so filter_mode is "server": pagination totals
+    # and has_more stay trustworthy across pages. These two keys are emitted only
+    # when at least one filter is active — an unfiltered browse needs neither.
+    extra_meta: dict[str, Any] = {}
+    applied_filters: dict[str, Any] = {}
+    if query is not None:
+        applied_filters["query"] = query
+    if variant_type is not None:
+        applied_filters["variant_type"] = variant_type
+    if classification is not None:
+        applied_filters["classification"] = classification
+    if gene is not None:
+        applied_filters["gene"] = gene
+    if consequence is not None:
+        applied_filters["consequence"] = consequence
+    if domain is not None:
+        applied_filters["domain"] = domain
+    if applied_filters:
+        extra_meta["applied_filters"] = applied_filters
+        extra_meta["filter_mode"] = "server"
+
+    # Echo the sort actually applied server-side and name any parameter that was
+    # requested but could not be honored. An LLM cannot self-correct on a
+    # silently-dropped argument.
     if sort is not None:
-        sort_meta: dict[str, Any] = {
-            "applied_sort": backend_sort,
-            "ignored_params": ignored_sort,
-        }
+        extra_meta["applied_sort"] = backend_sort
+        extra_meta["ignored_params"] = ignored_sort
         if ignored_sort:
-            sort_meta["sort_note"] = (
+            extra_meta["sort_note"] = (
                 f"sort={sort!r} is not sortable server-side; default order"
                 " (carrier_count desc) was used. Sortable fields: "
                 f"{sorted(_SORT_FIELD_TRANSLATION)}"
             )
-        result["_meta"] = sort_meta
+
+    if extra_meta:
+        result["_meta"] = extra_meta
 
     return result
 

@@ -212,6 +212,54 @@ async def test_search_variants_passes_filters():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_variants_echoes_applied_filters_and_server_mode():
+    """Active filters are echoed in _meta with filter_mode == 'server'.
+
+    An agent can then programmatically confirm which predicates were honored and
+    that they were applied server-side against an honest cross-page total — the
+    machine-readable replacement for parsing a prose filter note.
+    """
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 88}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(
+        client,
+        consequence="Missense",
+        classification="PATHOGENIC",
+    )
+    await client.aclose()
+
+    assert result["_meta"]["filter_mode"] == "server"
+    assert result["_meta"]["applied_filters"] == {
+        "consequence": "Missense",
+        "classification": "PATHOGENIC",
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_no_filter_omits_filter_meta():
+    """An unfiltered browse emits neither applied_filters nor filter_mode."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client)
+    await client.aclose()
+
+    # No filters and no sort -> no _meta channel at all.
+    meta = result.get("_meta", {})
+    assert "applied_filters" not in meta
+    assert "filter_mode" not in meta
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_variants_translates_and_echoes_sort():
     """A row-name sort key is translated to the backend token and echoed."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
