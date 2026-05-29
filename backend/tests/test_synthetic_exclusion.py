@@ -104,3 +104,43 @@ async def test_summary_publications_pmid_only_sources_all(
     body = r.json()
     assert body["distinct_publications"] == 1  # PMID only
     assert body["distinct_sources"] == 2  # PMID + OMIM
+
+
+@pytest.mark.asyncio
+async def test_phenotype_search_excludes_negated_by_default(
+    async_client, db_session, admin_user
+):
+    """HPO search must not match features annotated excluded=true by default."""
+    await _insert_published(
+        db_session,
+        admin_user,
+        "neg-rec-1",
+        {
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}, "excluded": True}
+            ]
+        },
+    )
+    await _insert_published(
+        db_session,
+        admin_user,
+        "pos-rec-1",
+        {
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}}
+            ]
+        },
+    )
+
+    # Default: present-only — the excluded:true record must NOT match.
+    r = await async_client.get("/api/v2/phenopackets/search?hpo_id=HP:0000107")
+    ids = {i["id"] for i in r.json().get("data", [])}
+    assert "pos-rec-1" in ids
+    assert "neg-rec-1" not in ids
+
+    # Opt-in: include_excluded=true also returns the negated record.
+    r2 = await async_client.get(
+        "/api/v2/phenopackets/search?hpo_id=HP:0000107&include_excluded=true"
+    )
+    ids2 = {i["id"] for i in r2.json().get("data", [])}
+    assert {"pos-rec-1", "neg-rec-1"} <= ids2

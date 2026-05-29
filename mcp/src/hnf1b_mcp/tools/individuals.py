@@ -179,6 +179,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     async def hnf1b_find_individuals_by_phenotype(
         hpo_ids: list[str],
         page_size: int = 25,
+        include_excluded: bool = False,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Cohort discovery: find individuals sharing one or more HPO phenotype terms.
@@ -195,6 +196,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 individual matches if it carries *any* of the supplied terms.
             page_size: Maximum number of individuals to return in the final
                 result page.  Defaults to 25.
+            include_excluded: When ``False`` (default) a term matches only when
+                it is PRESENT (``excluded=false``); confirmed-absent annotations
+                (``excluded=true``) are NOT treated as matches. Set ``True`` to
+                also match explicitly-excluded features.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
 
@@ -222,7 +227,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             ids: list[str] = []
             cursor: str | None = None
             for _ in range(_MAX_PAGES):
-                params: dict[str, Any] = {"hpo_id": hpo_id, "page[size]": _PAGE}
+                params: dict[str, Any] = {
+                    "hpo_id": hpo_id,
+                    "page[size]": _PAGE,
+                    "include_excluded": include_excluded,
+                }
                 if cursor:
                     params["page[after]"] = cursor
                 resp: dict[str, Any] = await client.get(  # type: ignore[union-attr]
