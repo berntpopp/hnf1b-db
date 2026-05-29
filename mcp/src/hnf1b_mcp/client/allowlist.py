@@ -30,6 +30,8 @@ _RULES: list[tuple[re.Pattern[str], bool]] = [
     (re.compile(r"^/reference/genes/[^/]+/(domains|transcripts)$"), False),
     (re.compile(r"^/reference/regions/[^/]+$"), False),
     (re.compile(r"^/publications/?$"), False),
+    # Read-only hybrid passage retrieval over license-gated open-access full text.
+    (re.compile(r"^/publications/passages/?$"), False),
     (re.compile(r"^/ontology/hpo/autocomplete$"), False),
     (re.compile(r"^/ontology/hpo/grouped$"), False),
     (re.compile(r"^/ontology/vocabularies/[a-z-]+$"), False),

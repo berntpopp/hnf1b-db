@@ -118,6 +118,10 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
     * ``variant_annotations`` — managed by raw SQL migration
       ``7b2a3c4d5e6f_add_variant_annotations_table`` and populated via
       the VEP annotation pipeline.
+    * ``publication_fulltext`` / ``publication_fulltext_embeddings`` —
+      managed by raw SQL migration ``e7a1b9c3d2f4_publication_fulltext_rag``
+      and populated via the publication full-text backfill (the latter holds a
+      pgvector ``vector(384)`` column SQLAlchemy does not model).
     * ``hpo_terms_lookup`` — populated by HPO ingestion jobs
       (``0bd1567a483c_add_phenotype_metadata_to_hpo_lookup`` and
       ``93b3e6984a6c_fix_hpo_lookup_table_repopulation``).
@@ -139,6 +143,8 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "interpretation_status_values",
         "progress_status_values",
         "publication_metadata",
+        "publication_fulltext",
+        "publication_fulltext_embeddings",
         "sex_values",
         "variant_annotations",
     }:
