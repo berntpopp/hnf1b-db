@@ -1,0 +1,174 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  changes:
+    name: Detect changed images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docker_backend: ${{ steps.filter.outputs.docker_backend }}
+      docker_frontend: ${{ steps.filter.outputs.docker_frontend }}
+      docker_mcp: ${{ steps.filter.outputs.docker_mcp }}
+      docker_config: ${{ steps.filter.outputs.docker_config }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4
+        id: filter
+        with:
+          filters: |
+            docker_backend:
+              - 'backend/**'
+            docker_frontend:
+              - 'frontend/**'
+            docker_mcp:
+              - 'mcp/**'
+            docker_config:
+              - 'docker/**'
+              - '.env.docker.example'
+
+  # PR validation: build only, read-only token, no GHCR login, no push.
+  # permissions cannot be expressions, so PR-read-only vs publish-write is split
+  # into two jobs gated by github.event_name.
+  build-validate:
+    name: Build (validate) ${{ matrix.image }} image
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: backend
+            dockerfile: backend/Dockerfile.prod
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile.prod
+          - image: mcp
+            context: mcp
+            dockerfile: mcp/Dockerfile.prod
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Decide whether to build this image
+        id: gate
+        # matrix + needs are available at step level (not at job-level if:).
+        run: |
+          echo "build=${{ needs.changes.outputs.docker_config == 'true' || needs.changes.outputs[format('docker_{0}', matrix.image)] == 'true' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: meta
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}
+          tags: |
+            type=sha
+            type=ref,event=pr
+
+      - name: Set up Buildx
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Build (no push)
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # Harmless for backend/mcp (their Dockerfiles ignore unknown args);
+          # supplies the production value the frontend Dockerfile.prod expects.
+          build-args: |
+            VITE_API_URL=/api/v2
+
+  # Publish: push to main or v* tags. Only this job gets packages: write.
+  # On tags, all three images build for a coherent release set; otherwise gate
+  # per image (or when shared docker config changes).
+  publish:
+    name: Publish ${{ matrix.image }} image
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: backend
+            dockerfile: backend/Dockerfile.prod
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile.prod
+          - image: mcp
+            context: mcp
+            dockerfile: mcp/Dockerfile.prod
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Decide whether to publish this image
+        id: gate
+        run: |
+          echo "build=${{ startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.docker_config == 'true' || needs.changes.outputs[format('docker_{0}', matrix.image)] == 'true' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up Buildx
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Build and push
+        if: ${{ steps.gate.outputs.build == 'true' }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          build-args: |
+            VITE_API_URL=/api/v2
