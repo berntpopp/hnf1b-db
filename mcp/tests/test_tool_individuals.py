@@ -166,6 +166,43 @@ async def test_get_individual_happy_path():
 
 
 @pytest.mark.asyncio
+async def test_find_by_phenotype_rejects_malformed_hpo_id():
+    """A non-HPO-ID string returns invalid_input, not a misleading total:0."""
+    mcp = FastMCP("test")
+    register(mcp, ApiClient(base_url=BASE))
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype", {"hpo_ids": ["renal cyst"]}
+    )
+    sc = r.structured_content
+    assert sc["is_error"] is True
+    assert sc["error"]["code"] == "invalid_input"
+    assert sc["error"]["field"] == "hpo_ids"
+    # The hint must route the agent to the resolver, not leave it guessing.
+    assert "resolve" in sc["error"]["hint"].lower()
+
+
+@pytest.mark.asyncio
+async def test_find_by_phenotype_accepts_valid_hpo_id_shape():
+    """A well-formed HP:####### id passes validation (reaches the search call)."""
+    mcp = FastMCP("test")
+    with respx.mock:
+        respx.get(f"{BASE}/phenopackets/search").mock(
+            return_value=httpx.Response(
+                200, json={"data": [], "meta": {"page": {"hasNextPage": False}}}
+            )
+        )
+        register(mcp, ApiClient(base_url=BASE))
+        r = await mcp.call_tool(
+            "hnf1b_find_individuals_by_phenotype", {"hpo_ids": ["HP:0000107"]}
+        )
+    sc = r.structured_content
+    # Valid shape, no matches -> a real empty cohort (total 0), NOT invalid_input.
+    assert sc.get("is_error") is not True
+    assert sc["total"] == 0
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_get_individual_subject_and_uri():
     respx.get(f"{BASE}/phenopackets/X").mock(

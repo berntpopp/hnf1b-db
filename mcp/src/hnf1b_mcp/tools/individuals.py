@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastmcp import FastMCP
 
 from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.contract import SexFilter
 from hnf1b_mcp.services import individuals as individuals_service
 from hnf1b_mcp.services.dataclass import DataClass
+from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.safe_tool import run_tool
 from hnf1b_mcp.services.shaping import resolve_mode
+
+# Canonical HPO term-ID shape: "HP:" + exactly 7 digits (e.g. HP:0000107).
+_HPO_ID_RE = re.compile(r"^HP:\d{7}$")
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -99,7 +105,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     )
     async def hnf1b_get_individuals(
         ids: list[str] | None = None,
-        sex: str | None = None,
+        sex: SexFilter | None = None,
         has_variants: bool | None = None,
         page_size: int = 25,
         expand: bool = False,
@@ -116,13 +122,15 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         discover individuals sharing a given HPO term before fetching them.
 
         Args:
-            ids: Optional list of phenopacket IDs for batch retrieval.  When
-                supplied, ``sex`` and ``has_variants`` filters are ignored.
-            sex: Filter by biological sex — e.g. ``"MALE"`` or ``"FEMALE"``.
-                Applied only when ``ids`` is not provided.
+            ids: Optional list of phenopacket IDs for batch retrieval.  The
+                ``sex`` / ``has_variants`` filters are applied to the batch too
+                (and echoed in ``meta.applied_filters``), so a filtered id set is
+                never silently returned unfiltered.
+            sex: Filter by biological sex — one of ``"MALE"`` or ``"FEMALE"``.
+                An invalid value returns an ``invalid_input`` error. Applied in
+                both the batch (``ids``) and discovery paths.
             has_variants: Filter to individuals with (``True``) or without
-                (``False``) recorded variants.  Applied only when ``ids`` is
-                not provided.
+                (``False``) recorded variants.  Applied in both paths.
             page_size: Maximum number of results per page (discovery endpoint
                 only).  Defaults to 25.
             expand: When ``True`` and using the discovery endpoint, fetch each
@@ -209,8 +217,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             individuals, not the returned page), ``returned`` (page size
             actually returned), ``has_more`` (whether ``total`` exceeds the
             page), ``match_mode`` (``"any"``), ``hpo_ids`` (echoed), plus
-            ``page_size``, ``data_class`` and ``meta``. An empty/invalid HPO set
-            returns ``total: 0`` (never the whole cohort).
+            ``page_size``, ``data_class`` and ``meta``. A malformed HPO ID (not
+            ``HP:`` + 7 digits) returns an ``invalid_input`` error (with a hint to
+            resolve free text via ``hnf1b_resolve_terms``), distinct from a real
+            empty cohort which returns ``total: 0``.
         """
         resolved = resolve_mode(response_mode)
         # Cap on cursor pages per HPO term so an honest total cannot trigger an
@@ -250,6 +260,22 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             return ids, True  # page cap hit
 
         async def handler() -> dict[str, Any]:
+            # Validate HPO ID shape FIRST so a malformed term (e.g. "renal cyst")
+            # returns invalid_input — never total:0, which is indistinguishable
+            # from a real empty cohort and would read as a confident wrong answer.
+            malformed = [h for h in hpo_ids if not _HPO_ID_RE.match(h)]
+            if malformed:
+                raise McpToolError(
+                    "invalid_input",
+                    f"not valid HPO term IDs: {malformed}. Expected 'HP:' + 7"
+                    " digits (e.g. 'HP:0000107').",
+                    field="hpo_ids",
+                    hint=(
+                        "resolve free-text phenotypes to HPO IDs first via"
+                        " hnf1b_resolve_terms(text=..., vocabulary='hpo')"
+                    ),
+                )
+
             seen: dict[str, None] = {}
             capped = False
             for hpo_id in hpo_ids:

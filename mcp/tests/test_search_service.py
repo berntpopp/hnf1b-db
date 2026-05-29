@@ -424,3 +424,43 @@ async def test_search_hits_carry_resolve_with():
     assert by_type["variant"]["resolve_with"]["tool"] == "hnf1b_get_variant"
     assert by_type["variant"]["resolve_with"]["value"] == "HNF1B:c.494G>A"
     assert by_type["gene"]["resolve_with"]["tool"] == "hnf1b_get_gene_context"
+
+
+_PUB_ONLY_RESPONSE = {
+    "results": [
+        {"id": "pub_12345678", "label": "Smith et al. 2020", "type": "publication"},
+        {"id": "pub_22222222", "label": "Doe et al. 2021", "type": "publication"},
+    ]
+}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_publication_only_emits_phenotype_hint():
+    """A phenotype-ish query matching only publications nudges to the HPO path."""
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_PUB_ONLY_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    # Default types include individual + variant, but only publications matched.
+    result = await search(c, query="renal cysts and diabetes")
+    await c.aclose()
+
+    assert set(result["counts"]) == {"publication"}
+    assert "phenotype_hint" in result
+    assert "hnf1b_resolve_terms" in result["phenotype_hint"]
+    assert "hnf1b_find_individuals_by_phenotype" in result["phenotype_hint"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_with_individual_hits_omits_phenotype_hint():
+    """The nudge is suppressed when individuals/variants are among the hits."""
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_SEARCH_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await search(c, query="HNF1B")
+    await c.aclose()
+
+    assert "phenotype_hint" not in result

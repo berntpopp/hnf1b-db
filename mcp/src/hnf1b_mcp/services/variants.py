@@ -60,6 +60,14 @@ _SORT_FIELD_TRANSLATION: dict[str, str] = {
     "variant_type": "variant_type",
 }
 
+# Reverse map: backend ORDER BY token -> canonical public field. Used to echo
+# ``applied_sort`` in the CALLER's vocabulary (e.g. ``-carrier_count``), never
+# the internal column name (``-individualCount``). An echo field exists to
+# confirm what the server did, so it must speak the public token the caller used.
+_BACKEND_TO_PUBLIC: dict[str, str] = {
+    backend: public for public, backend in VARIANT_SORT_FIELDS.items()
+}
+
 
 def _translate_sort(sort: str | None) -> tuple[str | None, list[str]]:
     """Map an MCP-friendly sort expression to the backend token.
@@ -82,6 +90,30 @@ def _translate_sort(sort: str | None) -> tuple[str | None, list[str]]:
     if backend_field is None:
         return None, ["sort"]
     return (f"-{backend_field}" if descending else backend_field), []
+
+
+def _public_sort(sort: str | None) -> str | None:
+    """Return the canonical *public* form of a honored sort, else ``None``.
+
+    Normalizes both public keys and accepted backend-token aliases to the public
+    vocabulary (e.g. ``-carrier_count`` and ``-individualCount`` both echo back as
+    ``-carrier_count``). ``None`` when the field is not sortable server-side.
+
+    Args:
+        sort: A sort expression, optionally ``-``-prefixed for descending.
+
+    Returns:
+        The public canonical sort token, or ``None`` when not honored.
+    """
+    if not sort:
+        return None
+    descending = sort.startswith("-")
+    field = sort[1:] if descending else sort
+    backend_field = _SORT_FIELD_TRANSLATION.get(field)
+    if backend_field is None:
+        return None
+    public = _BACKEND_TO_PUBLIC.get(backend_field, field)
+    return f"-{public}" if descending else public
 
 
 # Per-mode field policies (Anthropic: smallest high-signal payload).  Fields not
@@ -373,17 +405,19 @@ async def search_variants(
         extra_meta["applied_filters"] = applied_filters
         extra_meta["filter_mode"] = "server"
 
-    # Echo the sort actually applied server-side and name any parameter that was
-    # requested but could not be honored. An LLM cannot self-correct on a
-    # silently-dropped argument.
+    # Echo the sort actually applied in the CALLER's public vocabulary (never the
+    # internal column name) and name any parameter that was requested but could
+    # not be honored. An LLM cannot self-correct on a silently-dropped argument,
+    # and a leaked internal token (``-individualCount``) erodes trust in the one
+    # field whose job is to confirm what the server did.
     if sort is not None:
-        extra_meta["applied_sort"] = backend_sort
+        extra_meta["applied_sort"] = _public_sort(sort)
         extra_meta["ignored_params"] = ignored_sort
         if ignored_sort:
             extra_meta["sort_note"] = (
                 f"sort={sort!r} is not sortable server-side; default order"
-                " (carrier_count desc) was used. Sortable fields: "
-                f"{sorted(_SORT_FIELD_TRANSLATION)}"
+                " (carrier_count desc, then variant_id asc) was used. Sortable"
+                f" fields: {sorted(VARIANT_SORT_FIELDS)}"
             )
 
     if extra_meta:

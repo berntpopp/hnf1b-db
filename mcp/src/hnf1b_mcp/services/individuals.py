@@ -50,6 +50,30 @@ _INDIVIDUAL_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
 _ALWAYS_KEEP = ("phenopacket_id", "uri")
 
 
+def _matches_filters(individual: dict[str, Any], filters: dict[str, Any]) -> bool:
+    """Return whether a shaped individual satisfies the active ``sex``/``has_variants``.
+
+    Used to apply filters to an explicit ``ids`` batch so the filter is honored
+    rather than silently ignored (the batch endpoint does not filter). Operates
+    on the fully-shaped record (subject + variants present before projection).
+
+    Args:
+        individual: A shaped individual dict (subject + variants present).
+        filters: Active filter dict, e.g. ``{"sex": "MALE", "has_variants": True}``.
+
+    Returns:
+        ``True`` when the record matches every active filter.
+    """
+    sex = filters.get("sex")
+    if sex is not None and individual.get("subject", {}).get("sex") != sex:
+        return False
+    has_variants = filters.get("has_variants")
+    if has_variants is not None:
+        if bool(individual.get("variants")) != bool(has_variants):
+            return False
+    return True
+
+
 def _project_individual(record: dict[str, Any], mode: str) -> dict[str, Any]:
     """Project a shaped individual down to the fields allowed by *mode*.
 
@@ -345,11 +369,18 @@ async def get_individuals(
                 "phenopacket": phenopacket_content,
             }
             individuals.append(_shape_individual(record))
-        total = len(individuals)
         # Surface which requested IDs the batch endpoint did not return, so a
         # caller can distinguish "does not exist" from a silently-dropped id.
+        # Computed BEFORE filtering: not_found means "absent", not "filtered out".
         returned_ids = {ind.get("phenopacket_id") for ind in individuals}
         not_found = [i for i in ids if i not in returned_ids]
+        # Apply sex/has_variants to the explicit batch so the filter is HONORED,
+        # not silently ignored (the batch endpoint itself does not filter). The
+        # applied filters are echoed in meta so the result is never a confident
+        # wrong answer.
+        if filters:
+            individuals = [i for i in individuals if _matches_filters(i, filters)]
+        total = len(individuals)
     else:
         # Discovery list endpoint
         # Response: {data:[ITEM,...], meta:{page:{totalRecords:N}}, links:{}}
@@ -428,6 +459,12 @@ async def get_individuals(
     if ids is not None:
         result["requested"] = len(ids)
         result["not_found"] = not_found
+
+    # Echo any active filters so an agent can confirm what was applied (the
+    # batch path applies them client-side; the discovery path forwards them to
+    # the API). Makes "filtered cohort" results self-describing, never silent.
+    if filters:
+        result["_meta"] = {"applied_filters": dict(filters)}
 
     # Enforce the advertised char budget on the (potentially large) batch: trim
     # the individuals list to the mode ceiling rather than overflowing it.

@@ -126,7 +126,11 @@ class RateLimitMiddleware(FastMCPMiddleware):
                 },
                 "is_error": True,
             }
-            return ToolResult(content=error_payload)
+            # Return the envelope as STRUCTURED output: the tools declare an
+            # output schema, so a result that carries only unstructured content
+            # is rejected by FastMCP ("outputSchema defined but no structured
+            # output returned"). structured_content makes it a clean tool result.
+            return ToolResult(structured_content=error_payload)
         return await call_next(context)
 
 
@@ -217,7 +221,12 @@ class ErrorEnvelopeMiddleware(FastMCPMiddleware):
             return await call_next(context)
         except ValidationError as exc:
             envelope = _validation_error_envelope(exc, context.message.name)
-            return ToolResult(content=envelope)
+            # Must be structured_content (not content): the tools declare an
+            # output schema, so an envelope returned as bare content fails
+            # FastMCP output validation and surfaces the opaque "outputSchema
+            # defined but no structured output returned" string instead of the
+            # actionable invalid_input envelope (this is the bug this maps away).
+            return ToolResult(structured_content=envelope)
 
 
 class OriginValidationMiddleware(BaseHTTPMiddleware):

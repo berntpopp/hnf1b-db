@@ -10,11 +10,26 @@ from hnf1b_mcp.services.capabilities import get_capabilities
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 
 
+def test_capabilities_version_present_and_deterministic():
+    """A content hash is exposed and stable across calls (warm-client skip)."""
+    cap = get_capabilities()
+    assert cap["capabilities_version"].startswith("sha256:")
+    assert cap["capabilities_version"] == get_capabilities()["capabilities_version"]
+
+
+def test_capabilities_citation_contract_scoped_to_publications():
+    """The citation claim is scoped, not the falsified universal 'every response'."""
+    contract = get_capabilities()["citation_contract"].lower()
+    assert "publication and evidence payloads" in contract
+    assert "every response includes a recommended_citation" not in contract
+
+
 def test_capabilities_shape():
     cap = get_capabilities()
     assert "canonical_workflows" in cap
     assert "tools" in cap and len(cap["tools"]) >= 10
     assert cap["citation_contract"]
+    assert cap["pagination_semantics"]
     assert set(cap["error_codes"]) == {
         "invalid_input",
         "not_found",

@@ -229,9 +229,26 @@ async def search(
         hits.append(hit)
         counts[norm_type] = counts.get(norm_type, 0) + 1
 
-    return {
+    result: dict[str, Any] = {
         "query": query.strip(),
         "hits": hits,
         "counts": counts,
         "guidance": _GUIDANCE,
     }
+
+    # When a query matched ONLY publications while individuals/variants were also
+    # requested, a free-text phenotype phrase likely matched publication text but
+    # not the cohort. Nudge toward the HPO-precise path so the agent does not
+    # mistake "publications only" for "no individuals have this phenotype".
+    if (
+        hits
+        and set(counts) <= {"publication"}
+        and ({"individual", "variant"} & set(types))
+    ):
+        result["phenotype_hint"] = (
+            "Only publications matched. If this is a phenotype query, resolve it"
+            " to HPO IDs via hnf1b_resolve_terms(text=..., vocabulary='hpo'),"
+            " then call hnf1b_find_individuals_by_phenotype(hpo_ids=[...])."
+        )
+
+    return result
