@@ -15,6 +15,7 @@ from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import ERROR_CODES
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
+from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
 
 _TOOLS: list[dict[str, str]] = [
     {
@@ -248,6 +249,17 @@ def _filterable_fields() -> dict[str, Any]:
             "query": {
                 "type": "string",
                 "hint": "free-text HGVS / coords / id",
+            },
+            "sort": {
+                # Derived from the tool's own sort map so the advertised
+                # vocabulary can never drift from what is actually honored.
+                "values": list(VARIANT_SORT_FIELDS),
+                "hint": (
+                    "prefix with '-' for descending; default '-carrier_count' "
+                    "(most common first), so the first row IS the top variant by "
+                    "carrier count. Echoed as applied_sort; carrier_count is on "
+                    "every row, so ties are visible without an extra call."
+                ),
             },
         },
         "hnf1b_resolve_terms": {
