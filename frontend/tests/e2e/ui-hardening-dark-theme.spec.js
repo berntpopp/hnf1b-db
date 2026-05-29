@@ -1,4 +1,48 @@
 import { test, expect } from '@playwright/test';
+import { apiLogin, primeAuthSession } from './helpers/auth';
+
+const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
+const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
+
+/**
+ * Create a fresh phenopacket via the API and return its id.
+ *
+ * The hero-section assertions only need a phenopacket *detail* page to render;
+ * they don't depend on the record's workflow state. We use an ``e2e-`` id (the
+ * standard test-fixture prefix) and reach the detail page directly by id —
+ * synthetic ``e2e-*`` rows are excluded from the public list/search but the
+ * single-record GET still serves them, so list visibility is irrelevant here.
+ */
+async function seedPhenopacket(request, token) {
+  const recordId = `e2e-dark-theme-${Date.now()}`;
+  const resp = await request.post(`${API_BASE}/phenopackets/`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      phenopacket: {
+        id: recordId,
+        subject: { id: `subject-${recordId}`, sex: 'UNKNOWN_SEX' },
+        metaData: {
+          created: new Date().toISOString(),
+          createdBy: 'e2e-dark-theme-test',
+          resources: [
+            {
+              id: 'hp',
+              name: 'Human Phenotype Ontology',
+              namespacePrefix: 'HP',
+              url: 'http://purl.obolibrary.org/obo/hp.owl',
+              version: '2024-01-01',
+              iriPrefix: 'http://purl.obolibrary.org/obo/HP_',
+            },
+          ],
+          phenopacketSchemaVersion: '2.0',
+        },
+      },
+    },
+  });
+  expect(resp.ok(), `Create failed: ${await resp.text()}`).toBeTruthy();
+  return recordId;
+}
 
 /**
  * Parse an "rgb(r, g, b)" or "rgba(r, g, b, a)" string into [r, g, b].
@@ -33,13 +77,18 @@ function contrastRatio(rgb1, rgb2) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-test('PagePhenopacket hero-section uses dark gradient under v-theme--dark', async ({ page }) => {
-  await page.goto('/phenopackets');
-  await page.waitForLoadState('networkidle');
-  const firstChip = page.locator('table a.v-chip').first();
-  await firstChip.waitFor({ state: 'visible' });
-  await firstChip.click();
-  await page.waitForLoadState('networkidle');
+test('PagePhenopacket hero-section uses dark gradient under v-theme--dark', async ({
+  page,
+  request,
+}) => {
+  // Seed our own record and navigate straight to its detail page. Synthetic
+  // e2e-* fixtures are filtered out of the public /phenopackets list, so we
+  // can't rely on clicking a row there (the list is empty in CI, whose only
+  // data is e2e fixtures). Prime an admin session so the draft detail loads.
+  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const recordId = await seedPhenopacket(request, adminTokens.accessToken);
+  await primeAuthSession(page, adminTokens);
+  await page.goto(`/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
 
   // Force dark theme. Vuetify adds v-theme--light / v-theme--dark to
   // <html> via its theme provider; override directly for the test.

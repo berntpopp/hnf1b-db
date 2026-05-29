@@ -20,6 +20,17 @@
             ],
             "title": "Details"
           },
+          "hpo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hpo Id"
+          },
           "label": {
             "title": "Label",
             "type": "string"
@@ -6617,7 +6628,7 @@
     },
     "/api/v2/phenopackets/aggregate/summary": {
       "get": {
-        "description": "Get lightweight summary statistics for home page.\n\nReturns:\n    Dictionary with counts:\n    - total_phenopackets: Total number of phenopackets\n    - with_variants: Phenopackets containing interpretations\n    - distinct_hpo_terms: Number of unique HPO terms used\n    - distinct_publications: Number of unique publication references\n    - distinct_variants: Number of unique genetic variants\n    - male: Number of male subjects\n    - female: Number of female subjects\n    - unknown_sex: Number of subjects with unknown sex",
+        "description": "Get lightweight summary statistics for home page.\n\nReturns:\n    Dictionary with counts:\n    - total_phenopackets: Total number of phenopackets\n    - with_variants: Phenopackets containing interpretations\n    - distinct_hpo_terms: Number of unique HPO terms used\n    - distinct_publications: Unique PMID-prefixed publication references only\n      (matches GET /publications/.total)\n    - distinct_sources: Unique external references of ANY kind (PMIDs plus\n      internal/non-PMID cohort sources); >= distinct_publications\n    - distinct_variants: Number of unique genetic variants\n    - male: Number of male subjects\n    - female: Number of female subjects\n    - unknown_sex: Number of subjects with unknown sex\n\nAll counts exclude synthetic e2e-* fixtures.",
         "operationId": "get_summary_statistics_api_v2_phenopackets_aggregate_summary_get",
         "responses": {
           "200": {
@@ -7154,6 +7165,18 @@
               ],
               "description": "Filter by HPO term ID",
               "title": "Hpo Id"
+            }
+          },
+          {
+            "description": "When False (default) an HPO match requires the feature to be PRESENT (excluded=false); when True, also match features annotated excluded=true (confirmed-absent).",
+            "in": "query",
+            "name": "include_excluded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "When False (default) an HPO match requires the feature to be PRESENT (excluded=false); when True, also match features annotated excluded=true (confirmed-absent).",
+              "title": "Include Excluded",
+              "type": "boolean"
             }
           },
           {
