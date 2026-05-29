@@ -29,6 +29,7 @@ _EXPECTED_TOOLS = {
     "hnf1b_get_publications",
     "hnf1b_get_statistics",
     "hnf1b_resolve_terms",
+    "hnf1b_compare_phenotypes",
 }
 
 _EXPECTED_RESOURCES = {
@@ -46,8 +47,8 @@ async def test_client_pings():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_eleven_hnf1b_tools():
-    """list_tools exposes exactly the 11 hnf1b_* tools."""
+async def test_list_tools_returns_all_hnf1b_tools():
+    """list_tools exposes exactly the expected hnf1b_* tool set."""
     async with Client(build_app()) as client:
         tools = await client.list_tools()
 
@@ -102,7 +103,7 @@ async def test_call_capabilities_returns_valid_payload():
     assert sc["data_class"] == "operational_metadata"
     assert "meta" in sc
     assert "tools" in sc
-    assert len(sc["tools"]) == 11
+    assert len(sc["tools"]) == 12
 
     # .data is the convenience alias
     assert result.data is not None

@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.tools import (
     capabilities,
+    compare,
     individuals,
     publications,
     reference,
@@ -25,6 +26,7 @@ _MODULES = (
     publications,
     statistics,
     terms,
+    compare,
 )
 
 

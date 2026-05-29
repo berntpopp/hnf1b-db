@@ -15,6 +15,7 @@
 | `hnf1b_get_publications` | List cached publications (keyword `q`, `year`, `has_doi`; `sort`), OR reverse-lookup the individuals citing one publication via `citing_pmid`. Returns `recommended_citation` strings. |
 | `hnf1b_get_statistics` | Return one aggregate cohort `metric` (variant counts by ACMG class, phenotype frequency, survival, etc.). Supports `dry_run=True` to preview payload cost. |
 | `hnf1b_resolve_terms` | Resolve free text to HPO terms (autocomplete) or list a controlled vocabulary (sex, allelic-state, evidence-code, …). Returns `{id, label, description}` entries. |
+| `hnf1b_compare_phenotypes` | Genotype-phenotype analytics: compare HPO phenotype frequencies (observed/excluded/unknown) across the carrier cohorts of up to 10 variants in a single call. |
 
 ## Canonical Workflows
 

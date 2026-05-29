@@ -109,6 +109,14 @@ _TOOLS: list[dict[str, str]] = [
             "'hpo'>. Returns matching {id, label, description} entries."
         ),
     },
+    {
+        "name": "hnf1b_compare_phenotypes",
+        "summary": (
+            "Genotype-phenotype analytics: compare HPO phenotype frequencies "
+            "(observed/excluded/unknown) across the carrier cohorts of up to 10 "
+            "variants in one call — no manual carrier fan-out or hand-tally."
+        ),
+    },
 ]
 
 _CANONICAL_WORKFLOWS: list[str] = [
@@ -132,6 +140,11 @@ _CANONICAL_WORKFLOWS: list[str] = [
         "hnf1b_resolve_terms(text=..., vocabulary='hpo') "
         "→ hnf1b_find_individuals_by_phenotype(hpo_ids=[...]) "
         "→ hnf1b_get_individual(phenopacket_id=...)"
+    ),
+    (
+        "Compare phenotypes across variants: "
+        "hnf1b_search_variants(...) → hnf1b_compare_phenotypes("
+        "variant_ids=[...]) for per-group observed/excluded/unknown HPO counts"
     ),
 ]
 
