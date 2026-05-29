@@ -28,8 +28,11 @@ check-env:  ## Verify virtual environment integrity
 	@echo "✅ Dependencies OK"
 	@echo "✅ Environment is healthy"
 
-test: check-env  ## Run tests (excluding benchmarks)
-	uv run pytest -m "not benchmark"
+test: check-env  ## Run tests (excluding benchmarks and live-network guards)
+	uv run pytest -m "not benchmark and not network"
+
+test-network: check-env  ## Run live-network guard tests (hits external APIs, e.g. HPO ontology)
+	uv run pytest -m network -v
 
 test-all: check-env  ## Run all tests including benchmarks
 	uv run pytest

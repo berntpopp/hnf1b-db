@@ -171,7 +171,7 @@ class HPOTermsConfig(BaseModel):
         "HP:0000107",  # Renal cyst
         "HP:0000122",  # Unilateral renal agenesis
         "HP:0012210",  # Abnormal renal morphology
-        "HP:0033133",  # Renal cortical hyperechogenicity
+        "HP:0033133",  # Renal cortical hypoechogeneity
         "HP:0000108",  # Multiple glomerular cysts
         "HP:0001970",  # Oligomeganephronia
     ]
