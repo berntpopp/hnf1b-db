@@ -1,0 +1,524 @@
+{
+ "PubTator3": [
+  {
+   "_id": "32574212|PMC7310724",
+   "id": "7310724",
+   "pmid": "32574212",
+   "pmcid": "PMC7310724",
+   "passages": [
+    {
+     "infons": {
+      "section_type": "TITLE",
+      "type": "front"
+     },
+     "offset": 0,
+     "text": "Results of targeted next-generation sequencing in children with cystic kidney diseases often change the clinical diagnosis"
+    },
+    {
+     "infons": {
+      "section_type": "ABSTRACT",
+      "type": "abstract"
+     },
+     "offset": 123,
+     "text": "Cystic kidney diseases are a very heterogeneous group of chronic kidney diseases. The diagnosis is usually based on clinical and ultrasound characteristics and the final diagnosis is often difficult to be made. Next-generation sequencing (NGS) may help the clinicians to find the correct final diagnosis. The aim of our study was to test the diagnostic yield of NGS and its ability to improve the diagnosis precision in a heterogeneous group of children with cystic kidney diseases. Next-generation sequencing of genes responsible for the formation of cystic kidneys was performed in 31 unrelated pat"
+    },
+    {
+     "infons": {
+      "section_type": "INTRO",
+      "type": "title_1"
+     },
+     "offset": 1962,
+     "text": "Introduction"
+    },
+    {
+     "infons": {
+      "section_type": "INTRO",
+      "type": "paragraph"
+     },
+     "offset": 1975,
+     "text": "Cystic kidney diseases (CKD) are a very heterogeneous group of chronic kidney diseases that in pediatric patients comprise mostly inherited kidney diseases, such as autosomal recessive polycystic kidney disease (ARPKD), nephronophthisis (NPHP), renal cysts and diabetes syndrome (RCAD) or autosomal dominant polycystic kidney disease (ADPKD). In contrary to children, in adults the most common cystic kidney disease are simple renal cysts or acquired renal cystic disease. The diagnosis is usually based only on clinical and ultrasound characteristics and the final diagnosis is often difficult to be"
+    },
+    {
+     "infons": {
+      "section_type": "INTRO",
+      "type": "paragraph"
+     },
+     "offset": 2582,
+     "text": "In the last decade, next-generation sequencing becomes the method of choice, allowing simultaneous mutational analysis of panel of genes that can be especially useful in genetic diagnosis of young patients with unclear or doubtful phenotype, in etiologically complex syndromes, or in differential diagnosis of phenotypically overlapping syndromes. In very rare cases a combination of mutations in two genes (digenic disease), can be found in children with severe neonatal clinical phenotype. Therefore, NGS may help the clinicians to make the correct final diagnosis in children with different types "
+    },
+    {
+     "infons": {
+      "section_type": "INTRO",
+      "type": "paragraph"
+     },
+     "offset": 3243,
+     "text": "The aim of our study was to test the diagnostic yield of NGS and its ability to improve the diagnosis precision in a heterogeneous group of children with clinically diagnosed cystic kidney diseases."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "title_1"
+     },
+     "offset": 3442,
+     "text": "Materials and methods"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "title_2"
+     },
+     "offset": 3464,
+     "text": "Patients and samples"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 3485,
+     "text": "Altogether, there were 31 patients with clinical diagnosis of different cystic kidney diseases-ARPKD, ADPKD, NPHP, RCAD syndrome and Bardet-Biedl syndrome. The group of patients was gathered at the Department of Pediatrics of Motol University Hospital in Prague between 2013 and 2018. The characterization of the group (age of disease manifestation, type of disease and sex distribution) is summarized in Table 1."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_title_caption"
+     },
+     "offset": 3901,
+     "text": "Cohort characterization."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table"
+     },
+     "offset": 3926,
+     "text": "Clinical diagnosis % cases    ARPKD 65 20    ADPKD (VEO) 19 6    RCAD syndrome 10 3    NPHP 3 1    Bardet-Biedl syndrome 3 1   Age of disease manifestation    Neonatal (prenatal) 48 15    Infantile 26 8    Childhood 26 8   Sex distribution    Male 58 18    Female 42 13   "
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_footnote"
+     },
+     "offset": 4199,
+     "text": "ADPKD (VEO), autosomal dominant polycystic kidney disease with very early onset; ARPKD, autosomal recessive polycystic kidney disease; NPHP, nephronophthisis; RCAD, renal cysts and diabetes syndrome."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 4399,
+     "text": "Clinical diagnosis of ARPKD was based on the fulfillment of established clinical criteria of ARPKD including 1) typical kidney involvement on ultrasound (enlarged hyperechogenic kidneys with bilateral poor corticomedullary differentiation), with or without 2) liver involvement (congenital hepatic fibrosis, ductal plate malformation) and 3) normal renal US of both parents consistent with autosomal-recessive inheritance."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 4822,
+     "text": "Clinical diagnosis of ADPKD was based on the presence of one or more kidney cysts in one/both kidneys with or without positive family history of ADPKD and was mostly based on expert opinion as no consensus diagnostic criteria were stated for children under the age of 15. Retrospective evaluation shows that diagnosis of ADPKD in our patients followed the international consensus statement for radiological criteria for children and young people published in 2019, where 1) findings of one or more kidney cysts in children under 15 years with a positive family history of ADPKD are highly suggestive "
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 5535,
+     "text": "The clinical diagnosis of nephronophthisis was based on the clinical finding of 1) polyuria/ polydipsia or 2) renal concentrating defect or 3) biopsy findings of chronic interstitial nephritis or US findings of normal sized hyperechogenic kidneys, all together with compatible autosomal recessive inheritance. Nephronophthisis was also kept as a differential diagnosis in patients with kidney involvement and liver fibrosis. Nevertheless, in majority of cases diagnosis of ARPKD was left as a clinical diagnosis of first choice due to the rareness of NPHP, liver fibrosis in limited number of patient"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 6223,
+     "text": "Clinical diagnosis of renal cysts and diabetes syndrome (RCAD)-HNF1B nephropathy was mainly based on the presence of cystic kidney dysplasia with/without MODY and/or hypomagnesemia and/or pancreatic malformation, together with presence of other distinctive features described in detail in."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 6515,
+     "text": "Clinical diagnosis of Bardet-Biedl syndrome was in our group of patients (patient n.25) based on the presence of cystic kidney disease, obesity, polydactyly and cognitive impairment as described among other features in."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 6735,
+     "text": "Hypertension was defined as blood pressure >=95th percentile and/or use of antihypertensive drugs at the time of NGS. Glomerular filtration rate was measured as estimated glomerular filtration rate according to Schwartz formula."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 6965,
+     "text": "All children with severe cystic kidney disease or systematic disease with presence of cysts treated in the Department of Pediatrics of Motol University Hospital between 2013 and 2018 were included in our group of patients. Cases of typical ADPKD phenotype with mild manifestation and positive family history of the disease, as well as patients whose parents/legal guardians did not give informed consent, were excluded from the study."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 7400,
+     "text": "Detailed clinical, laboratory and ultrasound information of patients are summarized in Table 2."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_title_caption"
+     },
+     "offset": 7496,
+     "text": "Clinical data of patients."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table"
+     },
+     "offset": 7523,
+     "text": "Patient Age at diagnosis Parental renal ultrasound Renal phenotype Hepatic phenotype HTN eGFR (ml/min/ 1.73 m2) Extra-renal/hepatic phenotype Clinical diagnosis   1 Neonatal Normal Enlarged kidneys with multiple cysts Hepatomegaly, periportal fibrosis (US) Yes 25 Eyes (COMA) ARPKD   2 Neonatal Normal Enlarged kidneys with multiple cysts Normal Yes N/A (RRT since 12.9 years of age) No ADPKD-VEO   3 Infantile (6 months) Normal Enlarged kidneys with multiple cysts Hepatomegaly, periportal fibrosis (US) Yes 73 No ARPKD   4 Neonatal Normal Enlarged kidneys with multiple cysts Hepatomegaly, periport"
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_footnote"
+     },
+     "offset": 11942,
+     "text": "ADPKD, autosomal dominant polycystic kidney disease; ARPKD, autosomal recessive polycystic kidney disease; BBS, Bardet-Biedl syndrome; CHF, congenital hepatic fibrosis; COMA, congenital oculomotor apraxia; eGFR, estimated glomerular filtration rate (at time of NGS) according to Schwartz formula; HTN, arterial hypertension; MRKH, Mayer-Rokitansky-Kuster-Hauser syndrome; NPHP, nephronophthisis; RCAD, renal cysts and diabetes syndrome; RDS, respiratory distress syndrome; RRT, renal replacement therapy; US, ultrasound; VEO, very early onset."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 12486,
+     "text": "The study was approved by the Ethics Committee of General University Hospital in Prague and all patients/legal guardians were consulted by geneticist prior to molecular-genetic analysis and gave written informed consent for genetic testing."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "title_2"
+     },
+     "offset": 12727,
+     "text": "Molecular-genetic analysis"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "title_3"
+     },
+     "offset": 12754,
+     "text": "Next-generation sequencing"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 12781,
+     "text": "Two types of NGS library preparation were used within the project. For panel sequencing, target enrichment method with The SeqCap  EZ probe pool (Roche Sequencing Solutions) has been chosen. The full list of genes contained in the analyzed panel is in S1 Table (panel version 1) and S2 Table (panel version 2). The selection of genes contained in both panels reflected recommendations for ARPKD differential diagnosis presented in, systematic review of literature and demands of collaborating nephrologists and pediatricians. Both panels included genes associated with polycystic kidneys as well as o"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 15021,
+     "text": "The bioinformatic analysis was provided by in-house bioinformatic pipeline. The analysis included detection of single-nucleotide polymorphisms (SNPs), small insertions and deletions and, in the case of panel sequencing, copy-number variants (CNV)."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 15269,
+     "text": "First, the quality of the FASTQ files created by MiSeq Reporter was evaluated using FastQC v0.11.5 (Babraham Institute). In the second step, cutting off the adapter (TruSeq3-PE-2) sequences (and PCR primers in case of PKD1 sequencing) and quality check of the reads and their trimming was provided by Trimmomatic 0.36. The trimmed reads were again quality-checked with FastQC and mapped to reference genome with bwa.kit 0.7.12 (https://github.com/lh3/bwa/tree/master/bwakit). The hs38DH genome provided by bwa.kit was used. Mapped reads were cleaned up and sorted using samtools fixmate and samtools "
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 16618,
+     "text": "The variant prioritization was composed of automatic filtration (point 1 and 2) followed by evaluation by molecular geneticist in cooperation with nephrologist (points 3-5):"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 16794,
+     "text": "The variant causes change on protein level (i.e. nonsynonymous sequence changes in exons) or the variant is in the intronic region in the donor (+1, +2, +4, +5) or acceptor (-1, -2) splite site."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 16989,
+     "text": "The variant has a population frequency (of European descend) lower than 0.1. 1000 Genome Project EUR population and Exome Aggregation Consortium (ExAC) was used for the assessment."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 17170,
+     "text": "Evaluation of the variant based on in silico prediction by programs: SIFT, PolyPhen-2, LRT, MutationTaster (http://www.mutationtaster.org/), MutationAssessor, FATHMM, PROVEAN, CADD, ensemble scores MetaSVM, and conservation scores."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 17402,
+     "text": "The consultation of variant with VarSome search engine containing data retrieved from archive of clinically relevant interpretations of variants ClinVar, protein database Uniprot etc., and reports of variant pathogenicity using automated classifier evaluating variants according to the ACMG guidelines. Consultation of variant with Human Gene Mutation Database Professional (HGMD) and specialized mutation databases: Mutation Database Autosomal Recessive Polycystic Kidney Disease (ARPKD/PKHD1, http://www.humgen.rwth-aachen.de/) and Autosomal Dominant Polycystic Kidney Disease Mutation Database: PK"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 18031,
+     "text": "The consultation with attending nephrologist regarding the possible pathogenic effect of detected variants with uncertain significance on patient phenotype."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 18188,
+     "text": "If available, analysis of variant segregation in family members. In case of recessive inheritance, analysis of variation in proband's parents to determine trans localization in the patient."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 18380,
+     "text": "The copy-number variant calling was done using CNVkit 0.8.6.dev0 in all samples analyzed with panel sequencing."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 18492,
+     "text": "Patients 1-24 had had mutational analysis of the PKHD1 gene done within our previous project. These patients were either clinically suspected to have ARPKD or had neonatal/infantile onset of the disease. The sequencing method, data analysis and variant classification used in this project were in detail described previously. The definitive results (two causal mutation in the PKHD1 gene) of patients 3-5 and 7 were already published and discussed in. The patients with definitive genetic diagnosis provided by previous sequencing of PKHD1 gene alone (e.g. two probable causal mutations found within "
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "title_3"
+     },
+     "offset": 19364,
+     "text": "MLPA"
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 19369,
+     "text": "MLPA (Multiplex Ligation-dependent Probe Amplification) analysis was used for detection of large genome rearrangements. MLPA of PKHD1 and HNF1B followed the genetic analysis of the PKHD1 gene in patients in whom no/one mutation in PKHD1 was found. The kits used for MLPA analysis were SALSA MLPA P341 PKHD1 mix 1, P342-PKHD1 mix 2 and SALSA MLPA P241 MODY Mix 1 (MRC Holland). The generated data were analyzed by Coffalyser.Net (MRC Holland)."
+    },
+    {
+     "infons": {
+      "section_type": "METHODS",
+      "type": "paragraph"
+     },
+     "offset": 19812,
+     "text": "The MLPA analysis was also applied in patient 29 to confirm the complete deletion of both alleles of NPHP1 gene found by panel sequencing. The kit used for the analysis was SALSA MLPA P387 NPHP1."
+    },
+    {
+     "infons": {
+      "section_type": "RESULTS",
+      "type": "title_1"
+     },
+     "offset": 20008,
+     "text": "Results"
+    },
+    {
+     "infons": {
+      "section_type": "RESULTS",
+      "type": "paragraph"
+     },
+     "offset": 20016,
+     "text": "The group of 31 patients formed by patients from Motol University Hospital gathered between years 2013 and 2018 was analyzed within our project. The underlying pathogenic variants were detected in 71% of patients (n = 22), no or only one (in case of suspected disease with autosomal recessive inheritance) pathogenic variant was found in 29% of patients (n = 9) (Table 3). The result of NGS correlated with the clinical diagnosis made before the NGS analysis in 55% of patients (n = 17), in the remaining 14 children (45%) the result of NGS did not confirm the clinical diagnosis or diagnosed another"
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_title_caption"
+     },
+     "offset": 21099,
+     "text": "Summary of variants identified in the patients."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table"
+     },
+     "offset": 21147,
+     "text": "Patient Gene DNA sequence change Predicted change on protein level dbSNP ID Prediction of pathogenity Inheritance Clinical diagnosis Genetic diagnosis Agreement of clinical and genetic diagnosis   1 TMEM67 NM_153704.6:c.1843T>C p.(Cys615Arg) rs201893408 Likely Pathogenic P ARPKD NPHP11 No   TMEM67 NM_153704.6:c.1843T>C p.(Cys615Arg) rs201893408 Likely Pathogenic M   2 PKD1 NM_001009944.3:c.6965C>T p.(Thr2322Met) rs564570407 -- -- ADPKD-VEO Unknown No   NEK8 NM_178170.3:c.133C>T p.(Arg45Trp) rs1567759130 -- --   COQ8B NM_024876.4:c.767C>A p.(Ala256Glu) rs201827222 -- --   3 PKHD1a NM_138694.4:c"
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_footnote"
+     },
+     "offset": 25883,
+     "text": "ADPKD, autosomal dominant polycystic kidney disease; ARPKD, autosomal recessive polycystic kidney disease; BBS, Bardet-Biedl syndrome; M, maternal; MRKH, Mayer-Rokitansky-Kuster-Hauser syndrome; NPHP, nephronophthisis; P, paternal; RCAD, renal cysts and diabetes syndrome; VEO, very early onset."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_footnote"
+     },
+     "offset": 26179,
+     "text": "Pathogenicity predictions was generated by VarSome according to the ACMG guidelines. Additional variants without clear significance on phenotype are in italics."
+    },
+    {
+     "infons": {
+      "section_type": "TABLE",
+      "type": "table_footnote"
+     },
+     "offset": 26340,
+     "text": "a The results were already published in "
+    },
+    {
+     "infons": {
+      "section_type": "RESULTS",
+      "type": "paragraph"
+     },
+     "offset": 26381,
+     "text": "In patients without a yield by sequencing of PKHD1 and those with childhood onset, without a clinical suspicion of ARPKD, a panel sequencing and sequencing of the PKD1 gene yielded the diagnosis in 57% patients (12 of 21). The most common unexpected findings were changes in nephronophthisis (NPHP) genes in children with clinically suspected ARPKD (n = 4). The most common incorrect clinical diagnosis was ARPKD (n = 10) with four patients having genetically proven NPHP, one ADPKD de novo and further five patients having no definitive genetic diagnosis."
+    },
+    {
+     "infons": {
+      "section_type": "RESULTS",
+      "type": "paragraph"
+     },
+     "offset": 26938,
+     "text": "Overall, 24 pathogenic or probably pathogenic SNP variants were detected in the PKHD1 gene (14 patients), 8 variants in the TMEM67 gene (4 patients), 4 variants in the PKD1 gene (4 patients), 1 variant in HNF1B (1 patient) and 2 variants in BBS1 (1 patient). Moreover, whole gene deletion was detected in heterozygous (HNF1B gene) and homozygous (NPHP1 gene) state in two patients."
+    },
+    {
+     "infons": {
+      "section_type": "RESULTS",
+      "type": "paragraph"
+     },
+     "offset": 27320,
+     "text": "The molecular genetic data of patients are summarized in Table 3."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "title_1"
+     },
+     "offset": 27386,
+     "text": "Discussion"
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 27397,
+     "text": "Sequencing analysis performed in 31 pediatric patients with suspected cystic kidney diseases detected causal variant in 71% (n = 22) of patients. This roughly correlates with results presented by Bullich et al. where targeted sequencing of 140 genes associated with formation of cystic or glomerular nephropathies yielded the diagnosis in 81% of prenatally and 71% postnatally presented pediatric patients with CKD. In two patients, whole gene deletion of HFN1B and NPHP1 was detected. In both genes, whole gene deletions are the most common variants described in literature."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 27973,
+     "text": "NGS confirmed the clinical diagnosis in 55% (n = 17) patients and did not confirm or changed the clinical diagnosis in 45% (n = 14) of them. The most common clinical diagnosis that had to be changed thanks to the NGS results was ARPKD. Four children (patients 1, 14, 20 and 24) with a clinical diagnosis of ARPKD was diagnosed as having genetically NPHP11 and one patient (28) de novo ADPKD. The clinical and ultrasound picture of ARPKD and NPHP can be similar making the differential diagnosis difficult mainly in children with non-neonatal manifestation in ARPKD and in absence of extra-renal/hepat"
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 29011,
+     "text": "In 9 patients, the genetic diagnosis remained unknown after NGS analysis. Some of these patients manifested with untypical clinical picture of the disease (patient n. 2, 26 and 31) or had another clinical diagnosis discovered during follow-up (patient n.8 - bilateral blastema nephroblastoma, patient n. 10:Mayer-Rokitansky-Kuster-Hauser syndrome). In three children (15%) with clinically diagnosed ARPKD only one pathogenic variant in the PKHD1 gene was found. These findings are in concordance with literature, as single heterozygous PKHD1 variant was detected in 36% of 164 ARPKD patients in study"
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 30103,
+     "text": "No or partial genetic findings in some patients could be caused by several reasons:"
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 30187,
+     "text": "Mutations in other ciliopathic genes which were not in our NGS ciliopathy panel (e.g. DZIP1L, CEP83, or many other genes that are gradually described in literature as causing ciliopathies) could cause the phenotype of cystic kidney disease in unresolved patients."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 30451,
+     "text": "Furthermore, the causal pathogenic variant could be located in sequences that were not (or poorly) covered by genetic analysis, e.g. regulatory regions in deep intronic sequences, untranslated regions of genes, first exons of genes or even promotor regions, that are especially important for genes coding transcription factors whose function strongly relates to expression level. Also, the causing variant could have been filtered out as variant of unknown significance (VUS) as its function is yet unknown or could have been missed by bioinformatic processing."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 31013,
+     "text": "Moreover, a combination of heterozygous mutations in two different ciliopathic recessive (or dominant) genes could theoretically cause a severe cystic kidney disease phenotype as an oligogenic inheritance where variants in different genes modify final phenotype (\"mutational load\" hypothesis) was already described in ciliopathies (reviewed in), as well as in severe forms of PKD. Although, we did find some suspected combinations of variants in some of our patients (e.g. 22, 26) we could not confirm the possible effect of these variants on final phenotype of a child."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 31588,
+     "text": "Another possibility for the discrepancy between clinical and genetic diagnosis is that the cystic kidney disease in a given child is non-inherited (acquired, mainly solitary cysts) which is however very rare in pediatric patients especially if manifested in neonatal/infant age."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 31867,
+     "text": "Extra-renal manifestations, such as eye or CNS abnormalities were the best clues for the correct clinical diagnosis of patients with non-ADPKD cystic kidney diseases. Nystagmus, COMA, polydactyly, autism or mental retardation lead to suspicion of NPHP or BBS in several of our patients (Table 2). Therefore, the extra-renal findings are very important in making the correct diagnosis and they should be sought in all children with cystic kidney disease."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 32321,
+     "text": "The strengths of our study are a very well clinical and ultrasound characterization of the patients, the long-term follow-up and the high number of ciliopathy genes in our panel. The genetic diagnosis consisted of several methods of sequencing and CNV detection and thus provided reliable results. We are aware of the limitations of our study:the low number of patients, single-center study, lack of some non-ciliopathy genes in our panel and lack of whole-exome sequencing in the genetically unresolved patients."
+    },
+    {
+     "infons": {
+      "section_type": "DISCUSS",
+      "type": "paragraph"
+     },
+     "offset": 32837,
+     "text": "In conclusions, our study demonstrated that the next-generation sequencing method facilitates molecular analysis of different types of cystic kidney diseases and enables precise genetic diagnosis. Its results changed the clinical diagnosis in number of the children. The correct final genetic diagnoses enable better management of children with different forms of cystic kidney diseases and provide efficient genetic counseling."
+    },
+    {
+     "infons": {
+      "section_type": "SUPPL",
+      "type": "title_1"
+     },
+     "offset": 33266,
+     "text": "Supporting information"
+    }
+   ]
+  }
+ ]
+}

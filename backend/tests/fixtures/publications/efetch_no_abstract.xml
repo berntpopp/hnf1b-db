@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<PubmedArticleSet>
+<PubmedArticle><MedlineCitation Status="MEDLINE" Owner="NLM"><PMID Version="1">9876543</PMID>
+<Article PubModel="Print"><ArticleTitle>A 1990 case letter with no abstract.</ArticleTitle>
+<AuthorList><Author><LastName>Doe</LastName><ForeName>Jane</ForeName></Author></AuthorList>
+</Article></MedlineCitation></PubmedArticle>
+</PubmedArticleSet>

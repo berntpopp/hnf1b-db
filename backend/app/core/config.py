@@ -103,12 +103,63 @@ class PubmedApiConfig(BaseModel):
     version: str = "2.0"
 
 
+class EfetchApiConfig(BaseModel):
+    """NCBI E-utilities ``efetch`` configuration.
+
+    ``efetch`` (not ``esummary``) is the endpoint that returns abstract text.
+    Requests are POSTed in batches of up to ``batch_size`` PMIDs as
+    ``retmode=xml`` and parsed for ``<Abstract><AbstractText>`` nodes.
+    """
+
+    base_url: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    timeout_seconds: int = 30
+    batch_size: int = 100
+
+
+class PubTator3ApiConfig(BaseModel):
+    """PubTator3 BioC full-text export configuration."""
+
+    base_url: str = (
+        "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
+        "publications/export/biocjson"
+    )
+    timeout_seconds: int = 60
+    requests_per_second: float = 2.5
+
+
+class EuropePmcApiConfig(BaseModel):
+    """EuropePMC REST configuration (license + JATS full-text fallback)."""
+
+    base_url: str = "https://www.ebi.ac.uk/europepmc/webservices/rest"
+    timeout_seconds: int = 30
+    requests_per_second: float = 1.0
+
+
+class PmcIdConverterApiConfig(BaseModel):
+    """PMC ID-converter configuration (PMID -> PMCID resolution).
+
+    Note: the legacy ``/pmc/utils/idconv/v1.0/`` endpoint now 301-redirects to
+    the ``pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/`` host; we point at
+    the current location directly to avoid the redirect hop.
+    """
+
+    base_url: str = "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/"
+    timeout_seconds: int = 30
+    batch_size: int = 200
+    tool: str = "hnf1b-db"
+    email: str = "noreply@hnf1b-db.org"
+
+
 class ExternalApisConfig(BaseModel):
     """External API configurations."""
 
     vep: VepApiConfig = VepApiConfig()
     ols: OlsApiConfig = OlsApiConfig()
     pubmed: PubmedApiConfig = PubmedApiConfig()
+    efetch: EfetchApiConfig = EfetchApiConfig()
+    pubtator3: PubTator3ApiConfig = PubTator3ApiConfig()
+    europepmc: EuropePmcApiConfig = EuropePmcApiConfig()
+    idconv: PmcIdConverterApiConfig = PmcIdConverterApiConfig()
 
 
 class DatabaseConfig(BaseModel):
@@ -235,6 +286,44 @@ class EmailConfig(BaseModel):
     retry_backoff_factor: float = 2.0
 
 
+class PublicationsRagConfig(BaseModel):
+    """Configuration for publication abstracts, full text, and hybrid retrieval.
+
+    The retrieval stack mirrors the genereviews-link / pubtator-link sibling
+    MCP servers: lexical FTS (always on) + optional pgvector semantic search
+    fused with Reciprocal Rank Fusion. Embeddings are an optional dependency
+    (``sentence-transformers`` via the ``[rag]`` extra); when absent the lexical
+    path degrades gracefully and a ``FakeEmbeddingProvider`` powers tests.
+    """
+
+    # License gate: body passages are stored only when the publication's
+    # normalized license is in this allow-set (fail-closed otherwise).
+    allowed_licenses: List[str] = ["CC0", "CC-BY", "CC-BY-NC", "PMC-OA"]
+    # Re-fetch full text/abstracts older than this (idempotent backfill).
+    fulltext_staleness_days: int = 180
+    # Embedding model + runtime parameters.
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dim: int = 384
+    embedding_query_prefix: str = (
+        "Represent this sentence for searching relevant passages: "
+    )
+    embedding_batch_size: int = 32
+    # Reciprocal Rank Fusion constant and per-section additive rank boosts.
+    rrf_k: int = 60
+    section_boosts: dict[str, float] = {
+        "abstract": 0.10,
+        "results": 0.05,
+        "discussion": 0.05,
+        "conclusion": 0.05,
+    }
+    # Chunking window (token-based, section-bounded, char-offset recovery).
+    chunk_max_tokens: int = 510
+    chunk_overlap_tokens: int = 50
+    # Default candidate pool sizes for the two retrieval legs before fusion.
+    lexical_candidate_limit: int = 50
+    dense_candidate_limit: int = 50
+
+
 class YamlConfig(BaseModel):
     """Complete YAML configuration structure."""
 
@@ -247,6 +336,7 @@ class YamlConfig(BaseModel):
     hpo_terms: HPOTermsConfig = HPOTermsConfig()
     security: SecurityConfig = SecurityConfig()
     email: EmailConfig = EmailConfig()
+    publications_rag: PublicationsRagConfig = PublicationsRagConfig()
 
 
 def load_yaml_config() -> YamlConfig:
@@ -534,6 +624,11 @@ class Settings(BaseSettings):
     def email(self) -> EmailConfig:
         """Access email configuration."""
         return self.yaml.email
+
+    @property
+    def publications_rag(self) -> PublicationsRagConfig:
+        """Access publication full-text / RAG configuration."""
+        return self.yaml.publications_rag
 
     @property
     def resolved_email_backend(self) -> str:
