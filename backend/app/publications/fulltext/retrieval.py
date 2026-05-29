@@ -108,8 +108,13 @@ async def _dense_candidates(
     pmids: Optional[Sequence[str]],
     sections: Optional[Sequence[str]],
     limit: int,
-) -> list[str]:
-    """Return passage_ids ordered by cosine distance to *qvec* (best-first)."""
+) -> list[Any]:
+    """Return rows (passage_id, section) ordered by cosine distance (best-first).
+
+    The ``section`` is returned alongside so section boosts can be applied to
+    dense-only passages too (those not present in the lexical leg), before the
+    full passage rows are materialized.
+    """
     params: dict[str, Any] = {
         "model": model_name,
         "qvec": to_vector_literal(qvec),
@@ -117,7 +122,7 @@ async def _dense_candidates(
     }
     filter_sql, params = _apply_filters(params, pmids, sections)
     sql = (
-        "SELECT e.passage_id "
+        "SELECT e.passage_id, f.section "
         "FROM publication_fulltext_embeddings e "
         "JOIN publication_fulltext f "
         "  ON f.pmid = e.pmid AND f.passage_id = e.passage_id "
@@ -127,7 +132,7 @@ async def _dense_candidates(
     )
     stmt = _with_filter_bindparams(text(sql), pmids, sections)
     result = await db.execute(stmt, params)
-    return [row.passage_id for row in result.fetchall()]
+    return list(result.fetchall())
 
 
 def _apply_filters(
@@ -242,7 +247,10 @@ async def search_passages(
         limit: Maximum number of passages to return.
         snippet_chars: Target snippet length for ``brief`` mode.
         max_chars: Total character budget for ``full`` mode text; when exceeded
-            the result is truncated and ``truncated`` is set.
+            the result is truncated and ``truncated`` is set. The top-ranked
+            passage is always returned even if it alone exceeds the budget (so a
+            query never yields an empty result when a match exists); a
+            diagnostic note is added in that case.
         provider: Embedding provider for the dense leg; ``None`` disables it.
         rrf_k: RRF constant (defaults to config).
         section_boosts: Section boost map (defaults to config).
@@ -271,7 +279,9 @@ async def search_passages(
     # query embedding, so the active provider's model name is authoritative;
     # fall back to an explicit override or the configured default.
     if model_name is None:
-        model_name = provider.model_name if provider is not None else cfg.embedding_model
+        model_name = (
+            provider.model_name if provider is not None else cfg.embedding_model
+        )
 
     notes: list[str] = []
 
@@ -288,6 +298,11 @@ async def search_passages(
     embedding_dim: Optional[int] = None
     rerank_used = rerank
 
+    # Section lookup for boosts — seeded from the lexical leg and extended with
+    # the dense leg below so dense-ONLY passages are boosted too (the dense query
+    # returns each candidate's section for exactly this reason).
+    section_by_id: dict[str, str] = {r.passage_id: r.section for r in lexical_rows}
+
     want_dense = rerank == "rrf"
     if want_dense and provider is None:
         rerank_used = "lexical"
@@ -298,20 +313,20 @@ async def search_passages(
     elif want_dense:
         qvec = (await provider.embed([query], is_query=True))[0]  # type: ignore[union-attr]
         embedding_dim = len(qvec)
-        dense_ids = await _dense_candidates(
+        dense_rows = await _dense_candidates(
             db, qvec, model_name=model_name, pmids=pmids, sections=sections,
             limit=dense_limit,
         )
+        dense_ids = [r.passage_id for r in dense_rows]
         dense_rank = {pid: i + 1 for i, pid in enumerate(dense_ids)}
+        for r in dense_rows:
+            section_by_id.setdefault(r.passage_id, r.section)
 
     # --- fuse ---
     if rerank_used == "off":
         ordered_ids = lexical_ids
         scores = {pid: float(len(lexical_ids) - i) for i, pid in enumerate(lexical_ids)}
     else:
-        section_by_id = {pid: rows_by_id[pid].section for pid in rows_by_id}
-        # dense-only ids need a section lookup too (filled after row fetch below);
-        # fuse on ids first, then materialize.
         fused = rrf_fuse(
             lexical_ids,
             dense_ids if rerank_used == "rrf" else [],
@@ -337,10 +352,21 @@ async def search_passages(
         if len(passages) >= limit:
             truncated = True
             break
+        # full-mode char budget: stop once adding this passage would exceed
+        # max_chars. The TOP-ranked passage is always returned even if it alone
+        # exceeds the budget, so a query never yields an empty result when a
+        # match exists (the caller sees truncated=True + a diagnostic note).
         if mode == "full" and max_chars is not None and passages:
             if used_chars + row.char_count > max_chars:
                 truncated = True
                 break
+        if (
+            mode == "full"
+            and max_chars is not None
+            and not passages
+            and row.char_count > max_chars
+        ):
+            notes.append("top passage exceeds max_chars; returned in full anyway")
         passage = _row_to_passage(row, scores.get(pid, 0.0))
         passage.lexical_rank = lexical_rank.get(pid)
         passage.dense_rank = dense_rank.get(pid)
