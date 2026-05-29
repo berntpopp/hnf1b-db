@@ -212,6 +212,46 @@ async def test_search_variants_passes_filters():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_variants_translates_and_echoes_sort():
+    """A row-name sort key is translated to the backend token and echoed."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, sort="-carrier_count")
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    # carrier_count -> individualCount (the only token the backend honors here).
+    assert sent_params["sort"] == "-individualCount"
+    assert result["_meta"]["applied_sort"] == "-individualCount"
+    assert result["_meta"]["ignored_params"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_unsortable_field_disclosed_not_silent():
+    """A non-sortable field is NOT forwarded and is disclosed in meta."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client, sort="label")
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    assert "sort" not in sent_params  # not silently sent as an ignored key
+    assert result["_meta"]["applied_sort"] is None
+    assert result["_meta"]["ignored_params"] == ["sort"]
+    assert "sort_note" in result["_meta"]
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_variants_page_size_capped_at_500():
     """search_variants caps page_size at 500."""
     route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
@@ -230,16 +270,16 @@ async def test_search_variants_page_size_capped_at_500():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_search_variants_consequence_post_filter():
-    """Consequence filter post-filters rows client-side (upstream bug)."""
-    # Upstream ignores ?consequence= and returns mixed rows; the MCP must
-    # filter so only matching rows are returned.
-    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+async def test_search_variants_consequence_filtered_server_side():
+    """Consequence is forwarded to the server, whose filtered data/total is trusted."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
         return_value=httpx.Response(
             200,
             json={
-                "data": [VARIANT_1, VARIANT_2],  # Missense + Frameshift
-                "meta": {"page": {"totalRecords": 198}},
+                "data": [VARIANT_1],  # server already filtered to Missense
+                "meta": {
+                    "page": {"totalRecords": 1, "totalPages": 1, "currentPage": 1}
+                },
             },
         )
     )
@@ -247,12 +287,13 @@ async def test_search_variants_consequence_post_filter():
     result = await search_variants(client, consequence="Missense")
     await client.aclose()
 
+    # consequence is forwarded for server-side filtering (no client shim).
+    assert dict(route.calls[0].request.url.params)["consequence"] == "Missense"
     variants = result["variants"]
     assert len(variants) == 1
     assert variants[0]["consequence"] == "Missense"
-    assert result["filtered_count"] == 1
     assert result["total"] == 1
-    assert "consequence_filter_note" in result
+    assert result["filtered_count"] == 1  # == server-side filtered total
 
 
 # Missense variant template — cloned N times for pagination test.
@@ -274,68 +315,35 @@ def _make_missense(n: int) -> dict:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_search_variants_consequence_respects_pagination():
-    """Consequence post-filter must honour the caller's page / page_size."""
-    # 5 Missense rows returned by the API (upstream ignores ?consequence=)
-    missense_rows = [_make_missense(i) for i in range(1, 6)]
-    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+async def test_search_variants_consequence_pagination_trusts_server():
+    """Pagination is server-driven: MCP forwards page params and trusts totals."""
+    # Server returns the requested page (2 of 5 filtered rows) with honest meta.
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
         return_value=httpx.Response(
             200,
             json={
-                "data": missense_rows,
-                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
+                "data": [_make_missense(1), _make_missense(2)],
+                "meta": {
+                    "page": {"totalRecords": 5, "totalPages": 3, "currentPage": 1}
+                },
             },
         )
     )
     client = ApiClient(base_url=BASE)
-    # Request page 1 with page_size=2 → should get first 2 of 5 matching rows.
     result = await search_variants(client, consequence="Missense", page=1, page_size=2)
     await client.aclose()
 
+    sent = dict(route.calls[0].request.url.params)
+    assert sent["page[number]"] == "1"
+    assert sent["page[size]"] == "2"
+    assert sent["consequence"] == "Missense"
     assert result["total"] == 5
     assert result["filtered_count"] == 5
     assert result["page"] == 1
     assert result["page_size"] == 2
-    assert len(result["variants"]) == 2
-    assert result["total_pages"] == 3  # ceil(5/2)
+    assert len(result["variants"]) == 2  # the server's page, trusted as-is
+    assert result["total_pages"] == 3
     assert result["has_more"] is True
-    assert "consequence_filter_note" in result
-
-    # Request page 2 → next 2 rows.
-    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "data": missense_rows,
-                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
-            },
-        )
-    )
-    client2 = ApiClient(base_url=BASE)
-    result2 = await search_variants(client2, consequence="Missense", page=2, page_size=2)
-    await client2.aclose()
-
-    assert result2["page"] == 2
-    assert len(result2["variants"]) == 2
-    assert result2["has_more"] is True  # page 2 < 3
-
-    # Request page 3 → last 1 row.
-    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "data": missense_rows,
-                "meta": {"page": {"totalRecords": 5, "totalPages": 1, "currentPage": 1}},
-            },
-        )
-    )
-    client3 = ApiClient(base_url=BASE)
-    result3 = await search_variants(client3, consequence="Missense", page=3, page_size=2)
-    await client3.aclose()
-
-    assert result3["page"] == 3
-    assert len(result3["variants"]) == 1
-    assert result3["has_more"] is False
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         include_measurements: bool = True,
         include_publications: bool = True,
         response_mode: str | None = None,
+        fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve the full phenopacket record for a single individual.
 
@@ -58,13 +59,25 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 Defaults to ``True``.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+            fields: Optional explicit top-level field allow-list (e.g.
+                ``["variants"]``) for precise token control; applied on top of
+                the mode. ``phenopacket_id`` and ``uri`` are always kept.
 
         Returns:
             A dict with keys ``phenopacket_id``, ``subject``, ``diseases``,
-            ``uri``, and conditionally ``phenotypic_features``, ``variants``,
+            ``uri``, and conditionally ``phenotypic_features`` (observed),
+            ``excluded_features``, ``feature_counts``, ``variants``,
             ``measurements``, ``publications``, plus ``data_class`` and
-            ``meta``.
+            ``meta``. ``response_mode`` genuinely trims the field set:
+            ``minimal`` = id + subject + uri; ``compact`` adds diseases /
+            observed phenotypes / variants / feature_counts; ``standard`` adds
+            publications + excluded_features; ``full`` adds measurements and
+            everything else. ``include_*`` flags are explicit opt-outs applied
+            on top of the mode. Embedded publications carry the same
+            verified ``recommended_citation`` / ``date_confidence`` as
+            ``hnf1b_get_publications``.
         """
+        mode = resolve_mode(response_mode)
         return await run_tool(
             lambda: individuals_service.get_individual(
                 client,  # type: ignore[arg-type]
@@ -73,9 +86,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 include_variants=include_variants,
                 include_measurements=include_measurements,
                 include_publications=include_publications,
+                response_mode=mode,
+                fields=fields,
             ),
             data_class=DataClass.CURATED,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )
 
     @mcp.tool(
@@ -90,6 +105,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         expand: bool = False,
         dedupe_publications: bool = False,
         response_mode: str | None = None,
+        fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve a list of HNF1B-db individuals by IDs or with optional filters.
 
@@ -117,11 +133,22 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``publication_refs`` (PMID strings).  Defaults to ``False``.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+                The mode's char budget is ENFORCED on the batch: the
+                individuals list is trimmed to fit (with a ``meta.truncated``
+                signal), so a ``minimal`` batch is genuinely small.
+            fields: Optional explicit top-level field allow-list applied to
+                every record (e.g. ``["variants"]`` to enumerate variant ids
+                without phenotypes/measurements). Highest-leverage token control
+                for slicing tasks. ``phenopacket_id``/``uri`` are always kept.
 
         Returns:
-            A dict with keys ``individuals``, ``total``, ``page_size``, and
-            optionally ``publications`` (when ``dedupe_publications=True``),
-            plus ``data_class`` and ``meta``.
+            A dict with keys ``individuals``, ``total``, ``page_size``, and —
+            when ``ids`` was supplied — ``requested`` (count) and ``not_found``
+            (the requested ids the batch endpoint did not return, so missing
+            ids are never silently dropped). Also ``publications`` when
+            ``dedupe_publications=True``, plus ``data_class`` and ``meta``.
+            ``minimal``/``compact``/``standard`` modes return progressively
+            smaller per-record field sets; ``full`` returns every field.
         """
         filters: dict[str, Any] = {}
         if sex is not None:
@@ -129,6 +156,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         if has_variants is not None:
             filters["has_variants"] = has_variants
 
+        mode = resolve_mode(response_mode)
         return await run_tool(
             lambda: individuals_service.get_individuals(
                 client,  # type: ignore[arg-type]
@@ -137,9 +165,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 page_size=page_size,
                 expand=expand,
                 dedupe_publications=dedupe_publications,
+                response_mode=mode,
+                fields=fields,
             ),
             data_class=DataClass.CURATED,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )
 
     @mcp.tool(
@@ -149,6 +179,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     async def hnf1b_find_individuals_by_phenotype(
         hpo_ids: list[str],
         page_size: int = 25,
+        include_excluded: bool = False,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Cohort discovery: find individuals sharing one or more HPO phenotype terms.
@@ -161,38 +192,108 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
         Args:
             hpo_ids: One or more HPO term IDs (e.g. ``["HP:0000083",
-                "HP:0000107"]``).  Results are the union of all matching
-                individuals across all supplied terms.
+                "HP:0000107"]``).  Match semantics are **OR / union**: an
+                individual matches if it carries *any* of the supplied terms.
             page_size: Maximum number of individuals to return in the final
-                result.  Defaults to 25.
+                result page.  Defaults to 25.
+            include_excluded: When ``False`` (default) a term matches only when
+                it is PRESENT (``excluded=false``); confirmed-absent annotations
+                (``excluded=true``) are NOT treated as matches. Set ``True`` to
+                also match explicitly-excluded features.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
 
         Returns:
-            A dict with keys ``individuals``, ``total``, ``page_size``,
-            ``data_class``, and ``meta``.
+            A dict with keys ``individuals`` (the first ``page_size`` of the
+            matched cohort), ``total`` (the **full** count of matched
+            individuals, not the returned page), ``returned`` (page size
+            actually returned), ``has_more`` (whether ``total`` exceeds the
+            page), ``match_mode`` (``"any"``), ``hpo_ids`` (echoed), plus
+            ``page_size``, ``data_class`` and ``meta``. An empty/invalid HPO set
+            returns ``total: 0`` (never the whole cohort).
         """
         resolved = resolve_mode(response_mode)
+        # Cap on cursor pages per HPO term so an honest total cannot trigger an
+        # unbounded crawl. 100 ids/page × 50 pages = 5 000 — far above the cohort.
+        _PAGE = 100
+        _MAX_PAGES = 50
 
-        async def handler() -> dict[str, Any]:
-            seen: dict[str, None] = {}
-            for hpo_id in hpo_ids:
+        async def _collect_matches(hpo_id: str) -> tuple[list[str], bool]:
+            """Enumerate every published phenopacket_id matching one HPO term.
+
+            Follows the cursor (``page[after]``) until the backend reports no
+            next page or the page cap is hit. Returns ``(ids, capped)``.
+            """
+            ids: list[str] = []
+            cursor: str | None = None
+            for _ in range(_MAX_PAGES):
+                params: dict[str, Any] = {
+                    "hpo_id": hpo_id,
+                    "page[size]": _PAGE,
+                    "include_excluded": include_excluded,
+                }
+                if cursor:
+                    params["page[after]"] = cursor
                 resp: dict[str, Any] = await client.get(  # type: ignore[union-attr]
-                    "/phenopackets/search",
-                    params={"hpo_id": hpo_id},
+                    "/phenopackets/search", params=params
                 )
                 for item in resp.get("data", []):
                     item_id: str = item.get("id", "")
-                    if item_id and item_id not in seen:
+                    if item_id:
+                        ids.append(item_id)
+                page_meta = (resp.get("meta") or {}).get("page") or {}
+                if not page_meta.get("hasNextPage"):
+                    return ids, False
+                cursor = page_meta.get("endCursor")
+                if not cursor:
+                    return ids, False
+            return ids, True  # page cap hit
+
+        async def handler() -> dict[str, Any]:
+            seen: dict[str, None] = {}
+            capped = False
+            for hpo_id in hpo_ids:
+                matched, term_capped = await _collect_matches(hpo_id)
+                capped = capped or term_capped
+                for item_id in matched:
+                    if item_id not in seen:
                         seen[item_id] = None
             merged_ids = list(seen.keys())
+            total = len(merged_ids)
+            has_more = total > page_size
+
             if not merged_ids:
-                return {"individuals": [], "total": 0, "page_size": page_size}
-            return await individuals_service.get_individuals(
+                return {
+                    "individuals": [],
+                    "total": 0,
+                    "page_size": page_size,
+                    "has_more": False,
+                    "match_mode": "any",
+                    "hpo_ids": list(hpo_ids),
+                }
+
+            result = await individuals_service.get_individuals(
                 client,  # type: ignore[arg-type]
                 ids=merged_ids[:page_size],
                 page_size=page_size,
+                response_mode=resolved,
             )
+            # The batch call reports the size of the returned page; overwrite
+            # with the true union count and surface OR (union) match semantics.
+            result["returned"] = len(result.get("individuals", []))
+            result["total"] = total
+            result["has_more"] = has_more
+            result["match_mode"] = "any"
+            result["hpo_ids"] = list(hpo_ids)
+            if capped:
+                result["_meta"] = {
+                    "total_is_capped": True,
+                    "note": (
+                        f"match enumeration stopped at {_MAX_PAGES * _PAGE} per"
+                        " HPO term; total is a lower bound"
+                    ),
+                }
+            return result
 
         return await run_tool(
             handler,

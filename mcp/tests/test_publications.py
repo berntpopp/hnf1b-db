@@ -94,7 +94,7 @@ async def test_list_publications_verified_citation():
         return_value=httpx.Response(200, json=_PUBS_RESPONSE)
     )
     c = ApiClient(base_url=BASE)
-    result = await list_publications(c)
+    result = await list_publications(c, response_mode="full")
     await c.aclose()
 
     pub = next(p for p in result["publications"] if p["pmid"] == "PMID:1001")
@@ -112,7 +112,7 @@ async def test_list_publications_unverified_citation():
         return_value=httpx.Response(200, json=_PUBS_RESPONSE)
     )
     c = ApiClient(base_url=BASE)
-    result = await list_publications(c)
+    result = await list_publications(c, response_mode="full")
     await c.aclose()
 
     pub = next(p for p in result["publications"] if p["pmid"] == "PMID:1002")
@@ -141,13 +141,13 @@ async def test_list_publications_uri_shape():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_publications_item_fields():
-    """Each publication carries the required flat fields."""
+async def test_list_publications_item_fields_full_mode():
+    """In full mode each publication carries every structured field."""
     respx.get(f"{BASE}/publications/").mock(
         return_value=httpx.Response(200, json=_PUBS_RESPONSE)
     )
     c = ApiClient(base_url=BASE)
-    result = await list_publications(c)
+    result = await list_publications(c, response_mode="full")
     await c.aclose()
 
     pub = result["publications"][0]
@@ -161,6 +161,40 @@ async def test_list_publications_item_fields():
         "uri",
     ):
         assert key in pub, f"missing key: {key}"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_compact_trims_redundant_citation_fields():
+    """Compact omits journal/year/date_confidence (already in the citation)."""
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await list_publications(c, response_mode="compact")
+    await c.aclose()
+
+    pub = result["publications"][0]
+    assert set(pub) == {"pmid", "recommended_citation", "phenopacket_count", "uri"}
+    # default ordering is surfaced, never undocumented.
+    assert result["applied_sort"] == "-phenopacket_count"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_forwards_sort_and_defaults():
+    """Sort is forwarded; default is -phenopacket_count and is echoed."""
+    route = respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    default_result = await list_publications(c)
+    await list_publications(c, sort="year")
+    await c.aclose()
+
+    assert default_result["applied_sort"] == "-phenopacket_count"
+    assert "sort=-phenopacket_count" in str(route.calls[0].request.url)
+    assert "sort=year" in str(route.calls[1].request.url)
 
 
 @pytest.mark.asyncio

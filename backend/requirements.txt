@@ -50,10 +50,6 @@ charset-normalizer==3.4.7
     # via requests
 click==8.3.3
     # via uvicorn
-colorama==0.4.6
-    # via
-    #   click
-    #   uvicorn
 dnspython==2.8.0
     # via email-validator
 email-validator==2.3.0
@@ -203,12 +199,12 @@ typing-inspection==0.4.2
     #   fastapi
     #   pydantic
     #   pydantic-settings
-tzdata==2026.2
-    # via pandas
 urllib3==2.7.0
     # via requests
 uvicorn==0.46.0
     # via hnf1b-api (pyproject.toml)
+uvloop==0.22.1
+    # via uvicorn
 watchfiles==1.1.1
     # via uvicorn
 websockets==16.0

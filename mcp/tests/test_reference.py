@@ -233,3 +233,39 @@ async def test_both_flags_false_returns_gene_only() -> None:
     assert "domains" not in result
     assert result["gene"]["symbol"] == "HNF1B"
     assert result["uri"] == "hnf1b://gene/HNF1B"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_unseeded_reference_data_is_disclosed() -> None:
+    """Empty transcripts/domains + null xrefs surface a data-status note."""
+    symbol = "HNF1B"
+    respx.get(f"{BASE}/reference/genes/{symbol}").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "symbol": symbol,
+                "name": "HNF1 homeobox B",
+                "chromosome": "17",
+                "hgnc_id": None,
+                "ncbi_gene_id": None,
+                "omim_id": None,
+                "transcripts": [],
+            },
+        )
+    )
+    respx.get(f"{BASE}/reference/genes/{symbol}/transcripts").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/reference/genes/{symbol}/domains").mock(
+        return_value=httpx.Response(200, json={"domains": []})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_gene_context(c)
+    await c.aclose()
+
+    assert "reference_data_status" in result
+    note = result["reference_data_status"]
+    assert "transcripts" in note and "domains" in note and "cross_references" in note
+    # The note must NOT claim none exist — it must point at seeding.
+    assert "unseeded" in note

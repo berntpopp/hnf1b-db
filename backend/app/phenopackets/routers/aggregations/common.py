@@ -136,6 +136,8 @@ def calculate_percentages(
                 f"{count_key!r}; available keys: {sorted(data.keys())}"
             )
         count_value = int(data[count_key])
-        data["percentage"] = (count_value / total * 100) if total > 0 else 0.0
+        # Round to 2 dp — avoid false precision / token-wasting float tails
+        # (e.g. 45.023148148148145) in every aggregation percentage.
+        data["percentage"] = round(count_value / total * 100, 2) if total > 0 else 0.0
         result.append(data)
     return result

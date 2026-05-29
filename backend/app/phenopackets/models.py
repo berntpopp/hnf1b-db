@@ -654,6 +654,7 @@ class AggregationResult(BaseModel):
     label: str
     count: int
     percentage: Optional[float] = None
+    hpo_id: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
 
 

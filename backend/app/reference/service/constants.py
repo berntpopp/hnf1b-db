@@ -27,7 +27,10 @@ HNF1B_DOMAINS = [
     {
         "name": "POU-Specific Domain",
         "short_name": "POU-S",
-        "start": 8,
+        # UniProt P35680: the POU-specific domain spans aa 90–173. The former
+        # start=8 conflated the upstream dimerization region and disagreed with
+        # the survival-analysis domain table (which uses 90–173).
+        "start": 90,
         "end": 173,
         "function": "DNA binding (part 1)",
         "pfam_id": "PF00157",

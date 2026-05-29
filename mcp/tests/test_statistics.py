@@ -168,3 +168,120 @@ async def test_publications_timeline_metric():
     result = await get_statistics(c, metric="publications_timeline")
     await c.aclose()
     assert result["metric"] == "publications_timeline"
+
+
+# ---------------------------------------------------------------------------
+# M8: variant-metric unit labeling, percentage rounding, count_mode, survival
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_variant_types_labels_instance_unit_and_rounds_percentage():
+    """variant_types is labeled as per-carrier instances; % noise is rounded."""
+    respx.get(f"{BASE}/phenopackets/aggregate/variant-types").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "label": "Copy Number Loss",
+                    "count": 389,
+                    "percentage": 45.023148148148145,
+                    "details": None,
+                },
+                {
+                    "label": "SNV",
+                    "count": 302,
+                    "percentage": 34.9537037037037,
+                    "details": None,
+                },
+            ],
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, "variant_types", response_mode="full")
+    await c.aclose()
+
+    assert result["unit"] == "variant_instances_per_carrier"
+    assert "distinct" in result["unit_note"]
+    rows = result["result"]["raw"]
+    assert rows[0]["percentage"] == 45.02  # rounded, no float tail
+    assert rows[1]["percentage"] == 34.95
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_variant_types_unique_count_mode_forwarded_and_labeled():
+    """count_mode=unique is forwarded and the unit flips to distinct_variants."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/variant-types").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(
+        c, "variant_types", count_mode="unique", response_mode="full"
+    )
+    await c.aclose()
+
+    assert dict(route.calls[0].request.url.params)["count_mode"] == "unique"
+    assert result["unit"] == "distinct_variants"
+
+
+@pytest.mark.asyncio
+async def test_invalid_count_mode_raises():
+    c = ApiClient(base_url=BASE)
+    with pytest.raises(McpToolError) as exc:
+        await get_statistics(c, "variant_types", count_mode="bogus")
+    await c.aclose()
+    assert exc.value.code == "invalid_input"
+    assert exc.value.details.get("argument") == "count_mode"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_survival_budget_preserves_all_arms_by_downsampling():
+    """Over budget, survival down-samples curves but keeps every arm."""
+    long_curve = [
+        {
+            "time": i / 10,
+            "survival_probability": 1.0 - i / 1000,
+            "ci_lower": 0.9,
+            "ci_upper": 1.0,
+            "at_risk": 200 - i,
+            "events": 1,
+            "censored": 0,
+        }
+        for i in range(400)
+    ]
+    payload = {
+        "comparison_type": "pathogenicity",
+        "endpoint": "renal",
+        "groups": [
+            {
+                "name": "P/LP",
+                "n": 255,
+                "events": 109,
+                "survival_data": list(long_curve),
+            },
+            {"name": "VUS", "n": 80, "events": 20, "survival_data": list(long_curve)},
+        ],
+        "statistical_tests": {"logrank_p": 0.01},
+    }
+    respx.get(f"{BASE}/phenopackets/aggregate/survival-data").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(
+        c, "survival", comparison="pathogenicity", response_mode="minimal"
+    )
+    await c.aclose()
+
+    groups = result["result"]["groups"]
+    # Both arms survive; statistical_tests still present.
+    assert {g["name"] for g in groups} == {"P/LP", "VUS"}
+    assert "statistical_tests" in result["result"]
+    # Curves were down-sampled (fewer points than the original 400).
+    assert all(len(g["survival_data"]) < 400 for g in groups)
+    # The service signals truncation via _dropped (run_tool turns it into
+    # meta.truncated + meta.dropped_summary at the tool boundary).
+    assert "arms_preserved" in result["_dropped"]
+    assert result["_dropped"]["arms_preserved"] == 2

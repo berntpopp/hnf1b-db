@@ -25,14 +25,22 @@ async def run_tool(
         env["is_error"] = True
         return env
     elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+    # Internal channel keys a service may attach for the wrapper to consume:
+    #   _dropped — dropped_summary from apply_budget (signals truncation)
+    #   _meta    — extra meta fields to surface (applied_sort, ignored_params,
+    #              total_available_chars, …) so no server behavior stays silent.
     dropped = result.pop("_dropped", None)
+    extra_meta = result.pop("_meta", None)
+    # Attach data_class before measuring so effective_chars reflects the real
+    # serialized payload (everything except the self-referential meta block).
+    result["data_class"] = data_class
     effective_chars = len(json.dumps(result, default=str))
     meta = build_meta(
         response_mode=response_mode,
         effective_chars=effective_chars,
         dropped=dropped,
+        extra=extra_meta,
     )
     meta["elapsed_ms"] = elapsed_ms
-    result["data_class"] = data_class
     result["meta"] = meta
     return result

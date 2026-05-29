@@ -29,7 +29,10 @@ async def test_live_list_publications_citation_populated() -> None:
     """Every record from the real API has a non-empty pmid and recommended_citation."""
     c = ApiClient(base_url=LIVE_BASE)
     try:
-        result = await list_publications(c, page_size=3)
+        # full mode so the structured journal/year fields are present (they are
+        # intentionally trimmed in minimal/compact, where the citation string
+        # already embeds them).
+        result = await list_publications(c, page_size=3, response_mode="full")
     except httpx.ConnectError:
         pytest.skip("Local API stack not reachable — skipping live test")
     finally:

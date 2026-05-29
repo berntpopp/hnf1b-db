@@ -63,6 +63,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             A dict with keys ``gene``, optionally ``transcripts`` and
             ``domains``, ``uri``, ``data_class``, and ``meta``.
         """
+        mode = resolve_mode(response_mode)
         return await run_tool(
             lambda: reference_service.get_gene_context(
                 client,  # type: ignore[arg-type]
@@ -70,7 +71,8 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 genome_build=genome_build,
                 include_transcripts=include_transcripts,
                 include_domains=include_domains,
+                response_mode=mode,
             ),
             data_class=DataClass.EXTERNAL_REF,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )

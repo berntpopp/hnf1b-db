@@ -43,6 +43,17 @@ _SEX_VOCAB_RESP = {
     ]
 }
 
+# The REAL backend sex vocabulary is ``value``-keyed (no ``id`` column), with a
+# Title-cased ``label``. The mapper must fall back to ``value`` for the id so
+# the returned id is the "MALE"/"FEMALE" token the get_individuals(sex=…) filter
+# expects — not an empty string.
+_SEX_VOCAB_RESP_VALUE_KEYED = {
+    "data": [
+        {"value": "MALE", "label": "Male", "description": "Biological male"},
+        {"value": "FEMALE", "label": "Female", "description": "Biological female"},
+    ]
+}
+
 
 # ---------------------------------------------------------------------------
 # HPO autocomplete tests
@@ -159,6 +170,22 @@ async def test_resolve_terms_sex_vocab_maps_id_label_description() -> None:
     assert first["id"] == "MALE"
     assert first["label"] == "Male"
     assert first["description"] == "Biological male"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_resolve_terms_sex_value_keyed_id_falls_back_to_value() -> None:
+    """Real backend sex rows are value-keyed; id must be the token, not ''."""
+    respx.get(f"{BASE}/ontology/vocabularies/sex").mock(
+        return_value=httpx.Response(200, json=_SEX_VOCAB_RESP_VALUE_KEYED)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await resolve_terms(c, text="", vocabulary="sex")
+    await c.aclose()
+
+    ids = [m["id"] for m in result["matches"]]
+    assert ids == ["MALE", "FEMALE"]  # usable directly as get_individuals(sex=…)
+    assert result["matches"][0]["label"] == "Male"
 
 
 @pytest.mark.asyncio

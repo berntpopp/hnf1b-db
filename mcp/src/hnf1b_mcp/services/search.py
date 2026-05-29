@@ -17,50 +17,87 @@ _VALID_TYPES = frozenset({"individual", "variant", "publication", "gene"})
 # Default types returned when the caller does not specify.
 _DEFAULT_TYPES = ("individual", "variant", "publication")
 
-# Map from search result type → backend type token (for single-type queries).
+# Map from MCP-friendly type name → the backend ``type`` token used by the
+# global-search materialized view. The MV stores capitalized tokens
+# (``Phenopacket``/``Variant``/``Publication``/``Gene``) and filters with an
+# exact equality match, so a lowercase token would silently match zero rows.
 _TYPE_TOKEN: dict[str, str] = {
-    "individual": "individual",
-    "variant": "variant",
-    "publication": "publication",
-    "gene": "gene",
+    "individual": "Phenopacket",
+    "variant": "Variant",
+    "publication": "Publication",
+    "gene": "Gene",
 }
 
 _GUIDANCE = (
-    "Call hnf1b_get_individual / hnf1b_get_variant / hnf1b_get_publications"
-    " for authoritative content."
+    "Each hit carries a 'resolve_with' object naming the exact tool and"
+    " argument to fetch authoritative content for that id — call it verbatim"
+    " (the chain is never severed)."
 )
 
 
-def _derive_uri(item_id: str) -> tuple[str, str]:
-    """Return (normalised_type, uri) derived from a prefixed search result id.
+def _derive_uri(item_id: str) -> tuple[str, str, dict[str, str] | None]:
+    """Derive (normalised_type, uri, resolve_with) from a prefixed result id.
+
+    The third element is an explicit handoff descriptor naming the tool and
+    argument a caller should use to fetch authoritative content for the hit,
+    eliminating any ambiguity about which id form the detail tool accepts.
 
     Args:
-        item_id: The prefixed result id, e.g. ``pp_001``, ``var_HNF1B:c.1A>T``,
-            ``pub_12345678``, or ``gene_HNF1B``.
+        item_id: The prefixed result id, e.g. ``pp_001``,
+            ``var_ga4gh:VA.xxx``, ``pub_12345678``, or ``gene_HNF1B``.
 
     Returns:
-        A tuple of (normalised_type, uri_string).
-
-    Raises:
-        McpToolError: If the id prefix is not recognised.
+        A tuple of ``(normalised_type, uri, resolve_with)`` where
+        *resolve_with* is ``{"tool", "argument", "value"}`` or ``None`` for an
+        unknown id form.
     """
     if item_id.startswith("pp_"):
         rest = item_id[len("pp_") :]
-        return "individual", f"hnf1b://individual/{rest}"
+        return (
+            "individual",
+            f"hnf1b://individual/{rest}",
+            {
+                "tool": "hnf1b_get_individual",
+                "argument": "phenopacket_id",
+                "value": rest,
+            },
+        )
     if item_id.startswith("var_"):
         rest = item_id[len("var_") :]
-        return "variant", f"hnf1b://variant/{rest}"
+        # ``rest`` is the resolvable GA4GH VRS / CNV descriptor id that
+        # hnf1b_get_variant accepts directly.
+        return (
+            "variant",
+            f"hnf1b://variant/{rest}",
+            {"tool": "hnf1b_get_variant", "argument": "variant_id", "value": rest},
+        )
     if item_id.startswith("pub_"):
         rest = item_id[len("pub_") :]
         # ``rest`` may already carry the ``PMID:`` prefix (e.g. ``pub_PMID:123``);
         # normalise to a single canonical ``PMID:`` so the URI is not doubled.
         bare = rest[len("PMID:") :] if rest.startswith("PMID:") else rest
-        return "publication", f"hnf1b://publication/PMID:{bare}"
+        return (
+            "publication",
+            f"hnf1b://publication/PMID:{bare}",
+            {
+                "tool": "hnf1b_get_publications",
+                "argument": "citing_pmid",
+                "value": bare,
+            },
+        )
     if item_id.startswith("gene_"):
         rest = item_id[len("gene_") :]
-        return "gene", f"hnf1b://gene/{rest}"
+        return (
+            "gene",
+            f"hnf1b://gene/{rest}",
+            {
+                "tool": "hnf1b_get_gene_context",
+                "argument": "gene_symbol",
+                "value": rest,
+            },
+        )
     # Unknown prefix — best-effort passthrough; type is unknown.
-    return "unknown", f"hnf1b://unknown/{item_id}"
+    return "unknown", f"hnf1b://unknown/{item_id}", None
 
 
 def _extract_results(raw: Any) -> list[dict[str, Any]]:
@@ -174,21 +211,22 @@ async def search(
         if not item_id:
             continue
 
-        norm_type, uri = _derive_uri(item_id)
+        norm_type, uri, resolve_with = _derive_uri(item_id)
 
         # Filter to requested types only.
         if norm_type not in requested:
             continue
 
         label: str = str(item.get("label") or item_id)
-        hits.append(
-            {
-                "type": norm_type,
-                "id": item_id,
-                "label": label,
-                "uri": uri,
-            }
-        )
+        hit: dict[str, Any] = {
+            "type": norm_type,
+            "id": item_id,
+            "label": label,
+            "uri": uri,
+        }
+        if resolve_with is not None:
+            hit["resolve_with"] = resolve_with
+        hits.append(hit)
         counts[norm_type] = counts.get(norm_type, 0) + 1
 
     return {

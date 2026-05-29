@@ -25,6 +25,14 @@ async def search_phenopackets(
     request: Request,
     q: Optional[str] = Query(None, description="Full-text search query"),
     hpo_id: Optional[str] = Query(None, description="Filter by HPO term ID"),
+    include_excluded: bool = Query(
+        False,
+        description=(
+            "When False (default) an HPO match requires the feature to be "
+            "PRESENT (excluded=false); when True, also match features annotated "
+            "excluded=true (confirmed-absent)."
+        ),
+    ),
     sex: Optional[str] = Query(None, description="Filter by subject sex"),
     gene: Optional[str] = Query(None, description="Filter by gene symbol"),
     pmid: Optional[str] = Query(None, description="Filter by publication PMID"),
@@ -78,11 +86,15 @@ async def search_phenopackets(
             "FROM phenopackets p"
             " JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id"
         )
-        # Anonymous / viewer: public filter — published rows only (I3 + I7)
+        # Anonymous / viewer: public filter — published rows only (I3 + I7),
+        # excluding synthetic e2e-* fixtures from public discovery/search
+        # (single-record GET is unaffected, so the e2e lifecycle self-check
+        # still works).
         where_conditions = [
             "p.deleted_at IS NULL",
             "p.state = 'published'",
             "p.head_published_revision_id IS NOT NULL",
+            "p.phenopacket_id NOT LIKE 'e2e-%'",
         ]
     else:
         from_clause = "FROM phenopackets p"
@@ -103,8 +115,23 @@ async def search_phenopackets(
 
     # Structured filters
     if hpo_id:
-        where_conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
-        params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
+        if include_excluded:
+            # Match the term whether present or explicitly excluded.
+            where_conditions.append(
+                f"{content_col}->'phenotypicFeatures' @> :hpo_filter"
+            )
+            params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
+        else:
+            # Present-only (excluded=false/absent): a plain JSONB containment
+            # would also match excluded=true (confirmed-absent) features and
+            # silently mix presence with negation. Require a non-excluded match.
+            where_conditions.append(
+                "EXISTS (SELECT 1 FROM jsonb_array_elements("
+                f"{content_col}->'phenotypicFeatures') AS pf "
+                "WHERE pf->'type'->>'id' = :hpo_id_val "
+                "AND NOT COALESCE((pf->>'excluded')::boolean, false))"
+            )
+            params["hpo_id_val"] = hpo_id
     if sex:
         where_conditions.append("p.subject_sex = :sex")
         params["sex"] = sex

@@ -143,11 +143,40 @@ class ApiClient:
         except httpx.HTTPError as e:
             raise McpToolError("temporarily_unavailable", "upstream API error") from e
         if resp.status_code == 404:
-            raise McpToolError("not_found", f"resource not found: {path}")
+            # Domain-framed message only — never echo the internal API route
+            # (path leakage). Callers that can name the resource (e.g.
+            # get_variant) raise their own more specific not_found upstream.
+            raise McpToolError(
+                "not_found",
+                "the requested record was not found",
+                hint=(
+                    "verify the identifier via hnf1b_search or"
+                    " hnf1b_resolve_terms before fetching"
+                ),
+            )
         if resp.status_code == 422:
             raise _build_422_error(resp)
         if resp.status_code >= 500:
             raise McpToolError("temporarily_unavailable", "upstream API unavailable")
+        # Map any remaining 4xx (400/401/403/405/409/429/…) into the clean
+        # envelope so a rejected request (e.g. a bad sort/filter value that the
+        # backend 400s on) never escapes as an uncaught httpx.HTTPStatusError.
+        # 400/409 = caller-correctable (invalid_input); other 4xx are treated as
+        # transiently unavailable for this read-only public surface.
+        if 400 <= resp.status_code < 500:
+            if resp.status_code in (400, 409):
+                raise McpToolError(
+                    "invalid_input",
+                    "the data API rejected the request parameters",
+                    hint=(
+                        "check the parameter values against"
+                        " hnf1b_get_capabilities filterable_fields"
+                    ),
+                )
+            raise McpToolError(
+                "temporarily_unavailable",
+                "the data API rejected the request",
+            )
         resp.raise_for_status()
         data = resp.json()
         self._cache[key] = (now + self._cache_ttl, data)

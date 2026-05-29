@@ -383,12 +383,44 @@ def test_pub_uri_not_double_prefixed():
     from hnf1b_mcp.services.search import _derive_uri
 
     # id already carrying PMID: must not become PMID:PMID:
-    assert _derive_uri("pub_PMID:30666461") == (
-        "publication",
-        "hnf1b://publication/PMID:30666461",
-    )
+    norm_type, uri, resolve_with = _derive_uri("pub_PMID:30666461")
+    assert (norm_type, uri) == ("publication", "hnf1b://publication/PMID:30666461")
+    assert resolve_with == {
+        "tool": "hnf1b_get_publications",
+        "argument": "citing_pmid",
+        "value": "30666461",
+    }
     # bare numeric id still gets a single PMID: prefix
-    assert _derive_uri("pub_30666461") == (
-        "publication",
-        "hnf1b://publication/PMID:30666461",
+    norm_type2, uri2, _ = _derive_uri("pub_30666461")
+    assert (norm_type2, uri2) == ("publication", "hnf1b://publication/PMID:30666461")
+
+
+def test_single_type_token_is_backend_capitalized():
+    """Single-type search must send the MV's capitalized token, not lowercase."""
+    from hnf1b_mcp.services.search import _TYPE_TOKEN
+
+    assert _TYPE_TOKEN["individual"] == "Phenopacket"
+    assert _TYPE_TOKEN["variant"] == "Variant"
+    assert _TYPE_TOKEN["publication"] == "Publication"
+    assert _TYPE_TOKEN["gene"] == "Gene"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_hits_carry_resolve_with():
+    """Each typed hit carries an explicit tool+argument handoff descriptor."""
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_SEARCH_RESPONSE)
     )
+    c = ApiClient(base_url=BASE)
+    result = await search(
+        c, query="HNF1B", types=("individual", "variant", "publication", "gene")
+    )
+    await c.aclose()
+
+    by_type = {h["type"]: h for h in result["hits"]}
+    assert by_type["individual"]["resolve_with"]["tool"] == "hnf1b_get_individual"
+    assert by_type["individual"]["resolve_with"]["value"] == "001"
+    assert by_type["variant"]["resolve_with"]["tool"] == "hnf1b_get_variant"
+    assert by_type["variant"]["resolve_with"]["value"] == "HNF1B:c.494G>A"
+    assert by_type["gene"]["resolve_with"]["tool"] == "hnf1b_get_gene_context"

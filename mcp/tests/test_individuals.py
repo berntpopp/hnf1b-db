@@ -192,8 +192,11 @@ async def test_get_individual_shaped_fields_present():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X")
+    result = await get_individual(c, "X", response_mode="full")
     await c.aclose()
 
     assert result["phenopacket_id"] == "X"
@@ -214,6 +217,9 @@ async def test_get_individual_uri_correct():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
     result = await get_individual(c, "X")
     await c.aclose()
@@ -227,8 +233,11 @@ async def test_get_individual_publication_has_recommended_citation():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X")
+    result = await get_individual(c, "X", response_mode="full")
     await c.aclose()
 
     # Only PMID references should be included (not OMIM:137920)
@@ -245,6 +254,9 @@ async def test_get_individual_include_variants_false_omits_key():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
     result = await get_individual(c, "X", include_variants=False)
     await c.aclose()
@@ -257,6 +269,9 @@ async def test_get_individual_include_variants_false_omits_key():
 async def test_get_individual_include_phenotypes_false_omits_key():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
     )
     c = ApiClient(base_url=BASE)
     result = await get_individual(c, "X", include_phenotypes=False)
@@ -271,8 +286,13 @@ async def test_get_individual_include_measurements_false_omits_key():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X", include_measurements=False)
+    result = await get_individual(
+        c, "X", include_measurements=False, response_mode="full"
+    )
     await c.aclose()
 
     assert "measurements" not in result
@@ -284,8 +304,13 @@ async def test_get_individual_include_publications_false_omits_key():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
     )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
     c = ApiClient(base_url=BASE)
-    result = await get_individual(c, "X", include_publications=False)
+    result = await get_individual(
+        c, "X", include_publications=False, response_mode="full"
+    )
     await c.aclose()
 
     assert "publications" not in result
@@ -324,6 +349,54 @@ async def test_get_individuals_by_ids_uses_batch():
     assert len(result["individuals"]) == 2
     ids = {ind["phenopacket_id"] for ind in result["individuals"]}
     assert ids == {"A", "B"}
+    # Batch requests echo coverage so missing ids are never silently dropped.
+    assert result["requested"] == 2
+    assert result["not_found"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_reports_not_found():
+    """A requested id the batch endpoint does not return appears in not_found."""
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[_BATCH_ITEM_A])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, ids=["A", "DOES-NOT-EXIST"])
+    await c.aclose()
+
+    assert result["requested"] == 2
+    assert result["not_found"] == ["DOES-NOT-EXIST"]
+    assert {i["phenopacket_id"] for i in result["individuals"]} == {"A"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_response_mode_trims():
+    """minimal/compact return strictly smaller field sets than full (H3)."""
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json=_PHENOPACKET_X)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    minimal = await get_individual(c, "X", response_mode="minimal")
+    compact = await get_individual(c, "X", response_mode="compact")
+    full = await get_individual(c, "X", response_mode="full")
+    await c.aclose()
+
+    assert set(minimal) == {"phenopacket_id", "subject", "uri"}
+    # compact carries phenotypes/variants but drops the heavy measurements +
+    # the redundant publications block.
+    assert "phenotypic_features" in compact
+    assert "variants" in compact
+    assert "measurements" not in compact
+    assert "publications" not in compact
+    # full keeps everything.
+    assert "measurements" in full
+    assert "publications" in full
+    assert len(set(full)) > len(set(compact)) > len(set(minimal))
 
 
 @pytest.mark.asyncio
@@ -458,3 +531,118 @@ async def test_get_individuals_dedupe_publications():
     for ind in result["individuals"]:
         assert "publication_refs" in ind
         assert "publications" not in ind
+
+
+# ---------------------------------------------------------------------------
+# Field projection, excluded-feature split, citation enrichment, batch budget
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_fields_projection() -> None:
+    """fields=["variants"] returns only variants (+ always-kept id/uri)."""
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json=_PHENOPACKET_X)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "X", response_mode="full", fields=["variants"])
+    await c.aclose()
+
+    assert set(result) == {"phenopacket_id", "uri", "variants"}
+    assert result["variants"][0]["gene"] == "HNF1B"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_splits_observed_and_excluded_features() -> None:
+    """phenotypic_features = observed only; excluded_features + counts separate."""
+    pp = {
+        "phenopacket_id": "Y",
+        "phenopacket": {
+            "subject": {"id": "Y", "sex": "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                {
+                    "type": {"id": "HP:0000822", "label": "Hypertension"},
+                    "excluded": True,
+                },
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "Y", response_mode="full")
+    await c.aclose()
+
+    assert [f["id"] for f in result["phenotypic_features"]] == ["HP:0000107"]
+    assert [f["id"] for f in result["excluded_features"]] == ["HP:0000822"]
+    assert result["feature_counts"] == {"observed": 1, "excluded": 1}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_enriches_embedded_citation() -> None:
+    """Embedded PMID refs inherit the verified citation from the publication cache."""
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json=_PHENOPACKET_X)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "pmid": "PMID:12345678",
+                        "title": "HNF1B paper",
+                        "authors": "Doe J",
+                        "journal": "Kidney Int",
+                        "year": 2021,
+                    }
+                ],
+                "meta": {},
+            },
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "X", response_mode="full")
+    await c.aclose()
+
+    pub = next(p for p in result["publications"] if p["pmid"] == "12345678")
+    assert pub["date_confidence"] == "verified"
+    assert "2021" in pub["recommended_citation"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_budget_enforced() -> None:
+    """A minimal batch is trimmed to the mode char budget (not overflowed)."""
+    # 80 records, each carrying a chunky subject so the raw batch far exceeds the
+    # 4 000-char minimal budget.
+    big = [
+        {
+            "phenopacket_id": f"pp-{i}",
+            "phenopacket": {
+                "subject": {"id": f"pp-{i}", "sex": "UNKNOWN_SEX", "pad": "x" * 80}
+            },
+        }
+        for i in range(80)
+    ]
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=big)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(
+        c, ids=[f"pp-{i}" for i in range(80)], response_mode="minimal"
+    )
+    await c.aclose()
+
+    # Trimmed to fit the budget → fewer than 80 returned, with a drop signal.
+    assert len(result["individuals"]) < 80
+    assert result["_dropped"]["dropped_records"] > 0

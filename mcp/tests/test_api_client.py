@@ -127,3 +127,27 @@ async def test_422_unparseable_body_falls_back():
     assert err.details["field"] == "unknown"
     assert err.details["hint"]
     await c.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_maps_400_to_invalid_input():
+    """A non-404/422 4xx (e.g. 400 bad param) becomes a clean invalid_input."""
+    respx.get(f"{BASE}/phenopackets/").mock(return_value=httpx.Response(400))
+    c = ApiClient(base_url=BASE)
+    with pytest.raises(McpToolError) as exc:
+        await c.get("/phenopackets/")
+    await c.aclose()
+    assert exc.value.code == "invalid_input"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_maps_other_4xx_to_temporarily_unavailable():
+    """A 403 maps to temporarily_unavailable (never an uncaught HTTPStatusError)."""
+    respx.get(f"{BASE}/phenopackets/").mock(return_value=httpx.Response(403))
+    c = ApiClient(base_url=BASE)
+    with pytest.raises(McpToolError) as exc:
+        await c.get("/phenopackets/")
+    await c.aclose()
+    assert exc.value.code == "temporarily_unavailable"

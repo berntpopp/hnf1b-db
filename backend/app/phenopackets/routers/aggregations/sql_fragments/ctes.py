@@ -17,6 +17,36 @@ Extracted during Wave 4 from ``aggregations/sql_fragments.py``.
 from __future__ import annotations
 
 # =============================================================================
+# Synthetic-record exclusion (defense-in-depth).
+#
+# End-to-end (Playwright) tests create real phenopackets with an ``e2e-`` id
+# prefix and may leave them in a ``published`` state if teardown is skipped.
+# Aggregate and discovery/search endpoints must not count or surface those
+# fixtures, otherwise every cohort statistic is inflated by test data. The
+# single-record GET ``/phenopackets/{id}`` is deliberately NOT filtered so the
+# e2e lifecycle self-check (which reads its own record by id) still works.
+#
+# ``{alias}`` lets callers qualify the column when a table alias is in scope.
+# =============================================================================
+
+SYNTHETIC_ID_PREFIX = "e2e-"
+
+
+def synthetic_exclusion(alias: str = "p") -> str:
+    """Return the SQL clause excluding synthetic (``e2e-``) phenopacket rows.
+
+    Args:
+        alias: Table alias for the ``phenopackets`` row (default ``p``); pass
+            ``""`` for an unqualified ``phenopacket_id`` column.
+
+    Returns:
+        A ``phenopacket_id NOT LIKE 'e2e-%'`` clause, qualified by *alias*.
+    """
+    col = f"{alias}.phenopacket_id" if alias else "phenopacket_id"
+    return f"{col} NOT LIKE '{SYNTHETIC_ID_PREFIX}%'"
+
+
+# =============================================================================
 # Public visibility filter fragment (I3 + I7 + I1 invariants).
 #
 # Every public endpoint that touches the ``phenopackets`` table must embed
@@ -28,6 +58,7 @@ PUBLIC_FILTER_FRAGMENT = (
     "p.deleted_at IS NULL"
     "\n      AND p.state = 'published'"
     "\n      AND p.head_published_revision_id IS NOT NULL"
+    f"\n      AND {synthetic_exclusion('p')}"
 )
 
 # =============================================================================
