@@ -2,20 +2,65 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, refactor--* ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+      docker_backend: ${{ steps.filter.outputs.docker_backend }}
+      docker_frontend: ${{ steps.filter.outputs.docker_frontend }}
+      docker_mcp: ${{ steps.filter.outputs.docker_mcp }}
+      docker_config: ${{ steps.filter.outputs.docker_config }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            mcp:
+              - 'mcp/**'
+            docker_backend:
+              - 'backend/Dockerfile*'
+              - 'backend/.dockerignore'
+            docker_frontend:
+              - 'frontend/Dockerfile*'
+              - 'frontend/.dockerignore'
+            docker_mcp:
+              - 'mcp/Dockerfile*'
+              - 'mcp/.dockerignore'
+            docker_config:
+              - 'docker/**'
+              - '.env.docker.example'
+            ci:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+
+  backend:
+    name: Backend (lint / typecheck / tests)
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     services:
@@ -32,7 +77,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
       redis:
         image: redis:7-alpine
         ports:
@@ -44,167 +88,164 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-      with:
-        enable-cache: true
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          working-directory: backend
+          groups: dev test
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
+      - name: Run database migrations
+        env:
+          # ENVIRONMENT=development lets the backend job bypass the Wave 5c
+          # production-only validators (email backend, AUTH_COOKIE_SECURE).
+          # CI is not production; the validators are still exercised by
+          # dedicated unit tests in backend/tests/test_config_*.py.
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+          JWT_SECRET: test-secret-key-for-ci
+          ADMIN_PASSWORD: test-admin-password-ci-2026
+        working-directory: backend
+        run: uv run alembic upgrade head
 
-    - name: Install dependencies
-      run: |
-        cd backend
-        uv sync --group dev --group test
+      - name: Run linting (ruff check)
+        working-directory: backend
+        run: uv run ruff check .
 
-    - name: Run database migrations
-      env:
-        # ENVIRONMENT=development lets the test job bypass the Wave 5c
-        # production-only validators (email backend, AUTH_COOKIE_SECURE).
-        # CI is not production; the validators are still exercised by
-        # dedicated unit tests in backend/tests/test_config_*.py.
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
-        JWT_SECRET: test-secret-key-for-ci
-        ADMIN_PASSWORD: test-admin-password-ci-2026
-      run: |
-        cd backend
-        uv run alembic upgrade head
+      - name: Run format check (ruff format)
+        working-directory: backend
+        run: uv run ruff format --check .
 
-    # Quality checks - must match `make check` exactly for 1-to-1 compatibility
-    # Commands: check-env lint typecheck test
+      - name: Run type checking (mypy)
+        working-directory: backend
+        run: uv run mypy app/ migration/
 
-    - name: Run linting (ruff check)
-      run: |
-        cd backend
-        uv run ruff check .
+      - name: Run tests (pytest, coverage, no network)
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+          JWT_SECRET: test-secret-key-for-ci
+          ADMIN_PASSWORD: test-admin-password-ci-2026
+        working-directory: backend
+        run: uv run pytest -m "not benchmark and not network" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
 
-    - name: Run type checking (mypy)
-      run: |
-        cd backend
-        uv run mypy app/ migration/
+      - name: Validate curated HPO labels against live ontology (network)
+        # Guard against the hpo_terms_lookup labels drifting from the
+        # authoritative HPO ontology. Runs serially (no xdist) so the network
+        # guard is never folded into the coverage run. Transient API outages
+        # skip rather than fail; only a real mismatch is red.
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+          JWT_SECRET: test-secret-key-for-ci
+          ADMIN_PASSWORD: test-admin-password-ci-2026
+        working-directory: backend
+        run: uv run pytest -m network -v
 
-    - name: Run tests (pytest)
-      env:
-        # ENVIRONMENT=development lets the test job bypass the Wave 5c
-        # production-only validators (email backend, AUTH_COOKIE_SECURE).
-        # CI is not production; the validators are still exercised by
-        # dedicated unit tests in backend/tests/test_config_*.py.
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
-        JWT_SECRET: test-secret-key-for-ci
-        ADMIN_PASSWORD: test-admin-password-ci-2026
-      run: |
-        cd backend
-        uv run pytest -m "not benchmark and not network" --cov=app --cov=migration --cov-report=xml --cov-report=term-missing
-
-    - name: Validate curated HPO labels against live ontology (network)
-      # Guard against the hpo_terms_lookup labels drifting from the authoritative
-      # HPO ontology (the root cause of the HP:0033133 opposite-meaning error).
-      # Transient API outages skip rather than fail; only a real mismatch is red.
-      env:
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
-        JWT_SECRET: test-secret-key-for-ci
-        ADMIN_PASSWORD: test-admin-password-ci-2026
-      run: |
-        cd backend
-        uv run pytest -m network -v
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v6
-      with:
-        files: ./backend/coverage.xml
-        fail_ci_if_error: false
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6
+        with:
+          files: ./backend/coverage.xml
+          fail_ci_if_error: false
 
   frontend:
-    runs-on: ubuntu-latest
+    name: Frontend (test / lint / format / build)
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.docker_frontend == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
-
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Install dependencies
-      run: |
-        cd frontend
-        npm ci
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
-    # Quality checks - must match `make check` for 1-to-1 compatibility
-    # Commands: test lint:check format:check
+      - name: Run tests (vitest)
+        working-directory: frontend
+        run: npm test
 
-    - name: Run tests (vitest)
-      run: |
-        cd frontend
-        npm test
+      - name: Run linting (eslint)
+        working-directory: frontend
+        run: npm run lint:check
 
-    - name: Run linting (eslint)
-      run: |
-        cd frontend
-        npm run lint:check
+      - name: Run format check (prettier, src + tests)
+        # Covers BOTH src/ and tests/ — the frontend package.json format:check
+        # script is src-only, so this explicit invocation closes the tests/
+        # Prettier coverage gap previously owned by the pre-commit job.
+        working-directory: frontend
+        run: npx prettier --check "{src,tests}/**/*.{js,jsx,vue,json,css,scss,md}"
 
-    - name: Run format check (prettier)
-      run: |
-        cd frontend
-        npm run format:check
+      - name: Build production bundle
+        working-directory: frontend
+        run: npm run build
 
-    - name: Build production bundle (Wave 5a Layer 5 pre-requisite)
-      run: |
-        cd frontend
-        npm run build
+      - name: Verify no dev-auth strings in production bundle
+        # Needs the dist/ build artifact, so it lives here (not in
+        # prod-config-guards). Triggered on frontend OR frontend-Dockerfile
+        # changes via this job's `if:`.
+        working-directory: frontend
+        run: |
+          if grep -rqE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' 2>/dev/null; then
+            echo "::error::dev-auth strings leaked into production bundle"
+            grep -rnE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' || true
+            exit 1
+          fi
+          echo "dev-auth strings are NOT in the production bundle"
 
-    - name: Verify no dev-auth strings in production bundle (Wave 5a Layer 5)
-      run: |
-        cd frontend
-        if grep -rqE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' 2>/dev/null; then
-          echo "::error::dev-auth strings leaked into production bundle — check Task 11 DCE gating"
-          grep -rnE "dev/login-as|DevQuickLogin|dev-admin|dev-curator|dev-viewer" dist/ --include='*.js' --include='*.css' || true
-          exit 1
-        fi
-        echo "dev-auth strings are NOT in the production bundle — Layer 5 green"
+  mcp:
+    name: MCP server (lint / typecheck / unit tests / contract drift)
+    needs: changes
+    if: ${{ needs.changes.outputs.mcp == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-    - name: Verify ENABLE_DEV_AUTH not truthy in prod compose (Wave 5a Layer 5)
-      run: |
-        # Catch every YAML-truthy spelling: mapping form, list form,
-        # bare or quoted (single or double), and all common YAML 1.1 truthy
-        # spellings (true/True/TRUE/yes/Yes/YES/on/On/ON/1). If any matches,
-        # the prod compose has dev-auth turned on — refuse the build.
-        if grep -Eq "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH[[:space:]]*[:=][[:space:]]*['\"]?(true|True|TRUE|yes|Yes|YES|on|On|ON|1)['\"]?[[:space:]]*$" docker/docker-compose.npm.yml; then
-          echo "::error::ENABLE_DEV_AUTH must not be truthy in docker/docker-compose.npm.yml"
-          grep -nE "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH" docker/docker-compose.npm.yml || true
-          exit 1
-        fi
-        echo "ENABLE_DEV_AUTH is not truthy in docker/docker-compose.npm.yml — Layer 5 green"
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          working-directory: mcp
+          groups: dev
 
-    - name: Verify ENVIRONMENT=production in prod compose (Wave 5a Layer 5)
-      run: |
-        if ! grep -Eq "^\s*(-\s*)?ENVIRONMENT\s*[:=]\s*production" docker/docker-compose.npm.yml; then
-          echo "::error::docker/docker-compose.npm.yml must set ENVIRONMENT=production explicitly"
-          exit 1
-        fi
-        echo "ENVIRONMENT=production is pinned in docker/docker-compose.npm.yml — Layer 5 green"
+      - name: Run linting (ruff check)
+        working-directory: mcp
+        run: uv run ruff check .
 
-  e2e-tests:
+      - name: Run type checking (mypy)
+        working-directory: mcp
+        run: uv run mypy src/
+
+      - name: Run unit tests (pytest, no smoke/live)
+        # 'live' golden tests require a running API+DB stack; 'smoke' needs the
+        # full server. Both are excluded from unit CI. An explicit -m here
+        # overrides pyproject addopts, so both exclusions are spelled out.
+        working-directory: mcp
+        run: uv run pytest --cov=hnf1b_mcp -m "not smoke and not live"
+
+      - name: Contract drift guard (paths + enums)
+        # Regenerate the deterministic, zero-dependency contract artifacts and
+        # fail if the committed copies are stale. _generated_models.py is
+        # intentionally excluded (needs datamodel-codegen from PyPI; flaky).
+        working-directory: mcp
+        run: |
+          uv run python scripts/gen_contract.py
+          git diff --exit-code -- src/hnf1b_mcp/contract/_generated_paths.py src/hnf1b_mcp/contract/_generated_enums.py
+
+  e2e:
     name: E2E tests (Playwright)
-    needs: frontend
-    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
-
-    # Wave 6 Task 1: spin up Postgres + Redis + backend + frontend and run
-    # the Playwright suite in tests/e2e/. The existing specs assume the
-    # frontend is served on :5173 (Vite dev server) and the backend on
-    # :8000. Playwright's webServer block in playwright.config.js starts
-    # Vite; we start the backend via uvicorn as a background step.
 
     services:
       postgres:
@@ -220,7 +261,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
       redis:
         image: redis:7-alpine
         ports:
@@ -232,218 +272,164 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-      with:
-        enable-cache: true
+      - name: Setup uv + Python
+        uses: ./.github/actions/setup-uv-python
+        with:
+          working-directory: backend
+          groups: dev test
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
+      - name: Run backend migrations
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
+          ADMIN_PASSWORD: ci_test_admin_password_2026
+        working-directory: backend
+        run: uv run alembic upgrade head
 
-    - name: Install backend dependencies
-      run: |
-        cd backend
-        uv sync --group dev --group test
+      - name: Seed admin user (required for E2E auth)
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
+          ADMIN_USERNAME: admin
+          ADMIN_EMAIL: admin@hnf1b-db.local
+          ADMIN_PASSWORD: ci_test_admin_password_2026
+        working-directory: backend
+        run: uv run python scripts/create_admin_user.py
 
-    - name: Run backend migrations
-      env:
-        # ENVIRONMENT=development lets the e2e-tests job bypass the Wave 5c
-        # production-only validators (email backend, AUTH_COOKIE_SECURE).
-        # CI is not production; the validators are still exercised by
-        # dedicated unit tests in backend/tests/test_config_*.py.
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
-        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
-        ADMIN_PASSWORD: ci_test_admin_password_2026
-      run: |
-        cd backend
-        uv run alembic upgrade head
+      - name: Start backend
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
+          ADMIN_PASSWORD: ci_test_admin_password_2026
+          REDIS_URL: redis://localhost:6379/0
+        working-directory: backend
+        run: |
+          nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health >/dev/null 2>&1 || \
+               curl -fsS http://localhost:8000/ >/dev/null 2>&1; then
+              echo "backend is up"; break
+            fi
+            echo "waiting for backend... ($i)"; sleep 2
+          done
 
-    - name: Seed admin user (required for E2E auth)
-      env:
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
-        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
-        ADMIN_USERNAME: admin
-        ADMIN_EMAIL: admin@hnf1b-db.local
-        ADMIN_PASSWORD: ci_test_admin_password_2026
-      run: |
-        cd backend
-        uv run python scripts/create_admin_user.py
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-    - name: Start backend
-      env:
-        ENVIRONMENT: development
-        DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_phenopackets_test
-        JWT_SECRET: ${{ secrets.JWT_SECRET || 'CI_TEST_ONLY_NOT_A_REAL_SECRET_DO_NOT_REUSE_0000000000000000' }}
-        ADMIN_PASSWORD: ci_test_admin_password_2026
-        REDIS_URL: redis://localhost:6379/0
-      run: |
-        cd backend
-        nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
-        # Wait until /health (or root) responds
-        for i in $(seq 1 30); do
-          if curl -fsS http://localhost:8000/health >/dev/null 2>&1 || \
-             curl -fsS http://localhost:8000/ >/dev/null 2>&1; then
-            echo "backend is up"
-            break
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        env:
+          VITE_API_URL: http://localhost:8000/api/v2
+          CI: "true"
+          E2E_ADMIN_USERNAME: admin
+          E2E_ADMIN_PASSWORD: ci_test_admin_password_2026
+        working-directory: frontend
+        run: npx playwright test
+
+      - name: Upload backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: backend-log
+          path: /tmp/backend.log
+          if-no-files-found: ignore
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  prod-config-guards:
+    name: Production config guards
+    needs: changes
+    if: ${{ needs.changes.outputs.docker_config == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Verify ENABLE_DEV_AUTH not truthy in prod compose
+        # Catch every YAML-truthy spelling (mapping or list form, bare or
+        # quoted). Moved out of the frontend job so Docker/compose-only PRs
+        # still get this guard.
+        run: |
+          if grep -Eq "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH[[:space:]]*[:=][[:space:]]*['\"]?(true|True|TRUE|yes|Yes|YES|on|On|ON|1)['\"]?[[:space:]]*$" docker/docker-compose.npm.yml; then
+            echo "::error::ENABLE_DEV_AUTH must not be truthy in docker/docker-compose.npm.yml"
+            grep -nE "^[[:space:]]*(-[[:space:]]*)?ENABLE_DEV_AUTH" docker/docker-compose.npm.yml || true
+            exit 1
           fi
-          echo "waiting for backend... ($i)"
-          sleep 2
-        done
+          echo "ENABLE_DEV_AUTH is not truthy in docker/docker-compose.npm.yml"
 
-    - name: Install frontend dependencies
-      run: |
-        cd frontend
-        npm ci
+      - name: Verify ENVIRONMENT=production in prod compose
+        run: |
+          if ! grep -Eq "^\s*(-\s*)?ENVIRONMENT\s*[:=]\s*production" docker/docker-compose.npm.yml; then
+            echo "::error::docker/docker-compose.npm.yml must set ENVIRONMENT=production explicitly"
+            exit 1
+          fi
+          echo "ENVIRONMENT=production is pinned in docker/docker-compose.npm.yml"
 
-    - name: Install Playwright browsers
-      run: |
-        cd frontend
-        npx playwright install --with-deps chromium
-
-    - name: Run E2E tests
-      env:
-        VITE_API_URL: http://localhost:8000/api/v2
-        CI: "true"
-        # Credentials for state-machine E2E specs (Wave 7/D.1)
-        E2E_ADMIN_USERNAME: admin
-        E2E_ADMIN_PASSWORD: ci_test_admin_password_2026
-      run: |
-        cd frontend
-        npx playwright test
-
-    - name: Upload backend log on failure
-      if: failure()
-      uses: actions/upload-artifact@v7
-      with:
-        name: backend-log
-        path: /tmp/backend.log
-        if-no-files-found: ignore
-
-    - name: Upload Playwright report
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: playwright-report
-        path: frontend/playwright-report/
-        if-no-files-found: ignore
-        retention-days: 7
-
-  mcp:
-    name: MCP server (lint / typecheck / unit tests / contract drift)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    # No DB services needed: unit tests are isolated; smoke tests (marked
-    # "smoke") require a live stack and are excluded via -m "not smoke".
-
+  hygiene:
+    name: Hygiene (pre-commit upstream hooks + grep guards)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-      with:
-        enable-cache: true
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.12'
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
+      - name: Install pre-commit
+        run: pip install pre-commit
 
-    - name: Install MCP dependencies
-      working-directory: mcp
-      run: uv sync --group dev
+      - name: Run pre-commit (skip heavy lint/typecheck — covered by backend/frontend jobs)
+        # The five language:system hooks below need the uv/node toolchains and
+        # duplicate coverage now owned by the backend job (ruff check, ruff
+        # format --check, mypy) and the frontend job (eslint, prettier over
+        # src+tests). SKIP keeps this job a no-bootstrap hygiene gate that still
+        # runs the upstream pre-commit-hooks and the local grep guards.
+        env:
+          SKIP: backend-ruff-check,backend-ruff-format,backend-mypy,frontend-eslint,frontend-prettier
+        run: pre-commit run --all-files --show-diff-on-failure --config .pre-commit-config.yaml
 
-    - name: Run linting (ruff check)
-      working-directory: mcp
-      run: uv run ruff check .
-
-    - name: Run type checking (mypy)
-      working-directory: mcp
-      run: uv run mypy src/
-
-    - name: Run unit tests (pytest, no smoke/live)
-      working-directory: mcp
-      # 'live' golden tests require a running API+DB stack; 'smoke' needs the
-      # full server. Both are excluded from unit CI (run them against a live
-      # stack). Note: an explicit -m here overrides pyproject addopts, so we
-      # must spell out both exclusions.
-      run: uv run pytest --cov=hnf1b_mcp -m "not smoke and not live"
-
-    # Contract-drift guard: regenerate _generated_paths.py and
-    # _generated_enums.py from the committed OpenAPI snapshot and fail if the
-    # committed copies are stale.
-    #
-    # We intentionally run only `uv run python scripts/gen_contract.py` here
-    # rather than the full `make contract` target.  The full target also runs
-    # `uvx datamodel-codegen` to regenerate _generated_models.py, which
-    # requires downloading the datamodel-code-generator package from PyPI at
-    # CI time and has caused flaky runs in the past (network timeouts, codegen
-    # output varying across OS/locale).  The paths + enums modules are
-    # generated by a pure-Python, zero-dependency script that is fully
-    # deterministic (sorted keys, no timestamps); those are the files most
-    # likely to drift when the OpenAPI snapshot is updated without re-running
-    # `make contract`.  _generated_models.py is covered by local `make
-    # contract` in developer workflow and the pre-commit hook.
-    - name: Contract drift guard (paths + enums)
-      working-directory: mcp
-      run: |
-        uv run python scripts/gen_contract.py
-        git diff --exit-code -- src/hnf1b_mcp/contract/_generated_paths.py src/hnf1b_mcp/contract/_generated_enums.py
-
-  pre-commit:
-    name: pre-commit hygiene gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    # Wave 5b Task 1: runs the .pre-commit-config.yaml check bundle on
-    # every push so developers who forgot `pre-commit install` locally
-    # still get caught here. Closes Wave 5a exit note follow-up #10.
-
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [changes, backend, frontend, mcp, e2e, prod-config-guards, hygiene]
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-      with:
-        enable-cache: true
-
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install backend dependencies
-      run: |
-        cd backend
-        uv sync --group dev --group test
-
-    - name: Install frontend dependencies
-      run: |
-        cd frontend
-        npm ci
-
-    - name: Install pre-commit
-      run: pip install pre-commit
-
-    - name: Run pre-commit on all files
-      run: pre-commit run --all-files --show-diff-on-failure --config .pre-commit-config.yaml
+      - name: Verify no required job failed or was cancelled
+        # The single required status check. Conditional jobs that were skipped
+        # report 'skipped' (allowed); only 'failure'/'cancelled' fail the gate.
+        run: |
+          results='${{ join(needs.*.result, ',') }}'
+          echo "Job results: $results"
+          IFS=',' read -ra arr <<< "$results"
+          for r in "${arr[@]}"; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::A required job reported '$r'"
+              exit 1
+            fi
+          done
+          echo "All required jobs succeeded or were skipped."
