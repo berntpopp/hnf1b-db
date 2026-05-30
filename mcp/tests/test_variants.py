@@ -11,6 +11,8 @@ import respx
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.variants import (
+    CARRIER_COUNT_BASIS,
+    CARRIER_COUNT_NOTE,
     VARIANT_SORT_FIELDS,
     VariantSort,
     get_variant,
@@ -676,3 +678,58 @@ async def test_search_variants_accepts_variant_sort_member() -> None:
     assert sent_params["sort"] == "-individualCount"
     assert result["_meta"]["applied_sort"] == "-carrier_count"
     assert result["_meta"]["ignored_params"] == []
+
+
+# ---------------------------------------------------------------------------
+# carrier_count basis descriptor (self-documenting "common" ambiguity)
+# ---------------------------------------------------------------------------
+
+
+def test_carrier_count_basis_constants() -> None:
+    """The shared basis string + note are defined once and are unambiguous.
+
+    They must state that carrier_count counts DISTINCT CARRIER INDIVIDUALS
+    (phenopackets), NOT reports/observations and NOT publications — so an
+    evaluator never has to guess what "most common variant" means.
+    """
+    assert CARRIER_COUNT_BASIS == "distinct_carrier_individuals"
+    note = CARRIER_COUNT_NOTE.lower()
+    assert "distinct" in note
+    assert "individual" in note or "phenopacket" in note
+    assert "report" in note
+    assert "publication" in note
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_meta_carries_carrier_count_basis() -> None:
+    """search_variants meta states what carrier_count counts, even unfiltered."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await search_variants(client)
+    await client.aclose()
+
+    meta = result["_meta"]
+    assert meta["carrier_count_basis"] == "distinct_carrier_individuals"
+    assert meta["carrier_count_note"] == CARRIER_COUNT_NOTE
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_meta_carries_carrier_count_basis() -> None:
+    """get_variant meta states what carrier_count counts (distinct individuals)."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=CARRIER_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="full")
+    await client.aclose()
+
+    meta = result["_meta"]
+    assert meta["carrier_count_basis"] == "distinct_carrier_individuals"
+    assert meta["carrier_count_note"] == CARRIER_COUNT_NOTE

@@ -228,3 +228,26 @@ async def test_get_variant_happy_path():
     assert sc["uri"] == "hnf1b://variant/HNF1B:c.494G>A"
     assert sc["data_provenance"] == "curated HNF1B-db variant record"
     assert "note" in sc
+    # The wrapped meta states what carrier_count counts, so "most common" is
+    # never ambiguous (distinct carrier individuals, not reports/publications).
+    assert sc["meta"]["carrier_count_basis"] == "distinct_carrier_individuals"
+    assert "publication" in sc["meta"]["carrier_count_note"].lower()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_meta_documents_carrier_count_basis():
+    """The wrapped search_variants meta documents the carrier_count basis."""
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool("hnf1b_search_variants", {})
+    await client.aclose()
+
+    sc = r.structured_content
+    assert sc["meta"]["carrier_count_basis"] == "distinct_carrier_individuals"
+    assert "publication" in sc["meta"]["carrier_count_note"].lower()

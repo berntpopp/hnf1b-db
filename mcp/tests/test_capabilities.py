@@ -58,7 +58,8 @@ def test_capabilities_filterable_fields_present():
     }
 
     sv = ff["hnf1b_search_variants"]
-    # Exactly the real filter/sort params — no invented hgvs_c / acmg_class.
+    # Exactly the real filter/sort params plus the carrier_count field-semantics
+    # note — no invented hgvs_c / acmg_class.
     assert set(sv) == {
         "classification",
         "consequence",
@@ -67,6 +68,7 @@ def test_capabilities_filterable_fields_present():
         "gene",
         "query",
         "sort",
+        "carrier_count",
     }
     # sort defaults to most-common-first so "top variant" needs no extra call.
     assert "carrier_count" in sv["sort"]["values"]
@@ -83,6 +85,15 @@ def test_capabilities_filterable_fields_present():
     # 'Missense' is the capitalized consequence value, not a variant_type.
     assert "Missense" in sv["consequence"]["values"]
     assert "Missense" not in sv["variant_type"]["values"]
+
+    # carrier_count semantics are discoverable from capabilities, so "most
+    # common variant" is never ambiguous: it counts distinct carrier
+    # individuals (phenopackets), not reports/observations or publications.
+    cc = sv["carrier_count"]
+    assert cc["basis"] == "distinct_carrier_individuals"
+    cc_hint = cc["hint"].lower()
+    assert "individual" in cc_hint or "phenopacket" in cc_hint
+    assert "publication" in cc_hint
 
     # resolve_terms exposes the vocabulary enum.
     assert "hpo" in ff["hnf1b_resolve_terms"]["vocabulary"]["values"]

@@ -31,6 +31,22 @@ _VALID_DOMAIN = frozenset(PROTEIN_DOMAIN_VALUES)
 _MAX_PAGE_SIZE = 500
 _GENE_SYMBOL = "HNF1B"
 
+# Self-documenting basis for the ``carrier_count`` field, mirroring the
+# statistics tool's ``unit`` + ``unit_note`` pattern. carrier_count is the
+# backend ``phenopacket_count`` == COUNT(DISTINCT phenopacket_id), i.e. the
+# number of DISTINCT CARRIER INDIVIDUALS for a variant — NOT a count of
+# reports/observations and NOT a count of distinct publications. Defined once
+# here and reused by both variant tools (in their response meta) and the
+# capabilities descriptor, so the documented semantics can never drift between
+# them and an evaluator never has to guess what "most common variant" means.
+CARRIER_COUNT_BASIS = "distinct_carrier_individuals"
+CARRIER_COUNT_NOTE = (
+    "carrier_count counts DISTINCT carrier individuals (phenopackets) for the"
+    " variant — NOT reports/observations and NOT distinct publications. Sorting"
+    " by carrier_count therefore ranks variants by how many individuals carry"
+    " them."
+)
+
 # Translate MCP-friendly sort keys (the field names this server returns in each
 # row) to the backend all-variants sort tokens it actually honors. Keys the
 # backend does not support (e.g. ``label``, ``consequence``) are reported as
@@ -491,7 +507,14 @@ async def search_variants(
     # the all-variants endpoint), so filter_mode is "server": pagination totals
     # and has_more stay trustworthy across pages. These two keys are emitted only
     # when at least one filter is active — an unfiltered browse needs neither.
-    extra_meta: dict[str, Any] = {}
+    # Always state what carrier_count counts (distinct carrier individuals), so
+    # an agent sorting by carrier_count never has to guess whether "common" means
+    # distinct individuals, reports, or publications. Flat in meta (not per-row)
+    # to keep token cost constant. Mirrors the statistics tool's unit/unit_note.
+    extra_meta: dict[str, Any] = {
+        "carrier_count_basis": CARRIER_COUNT_BASIS,
+        "carrier_count_note": CARRIER_COUNT_NOTE,
+    }
     applied_filters: dict[str, Any] = {}
     if query is not None:
         applied_filters["query"] = query
@@ -652,11 +675,18 @@ async def get_variant(
     # page carriers.
     budget = Settings().mode_char_budgets.get(response_mode, 12000)
     result, dropped = apply_budget(result, budget, ["carriers"])
+    # Always document what carrier_count counts (distinct carrier individuals),
+    # flat in meta (not per-row), mirroring search_variants and the statistics
+    # tool's unit/unit_note — so "carrier_count" is never read as a count of
+    # reports or publications. Truncation signals are merged in when present.
+    extra_meta: dict[str, Any] = {
+        "carrier_count_basis": CARRIER_COUNT_BASIS,
+        "carrier_count_note": CARRIER_COUNT_NOTE,
+    }
     if dropped:
         result["_dropped"] = dropped
-        result["_meta"] = {
-            "carriers_truncated": True,
-            "carriers_returned": len(result["carriers"]),
-            "carrier_count": carrier_count,
-        }
+        extra_meta["carriers_truncated"] = True
+        extra_meta["carriers_returned"] = len(result["carriers"])
+        extra_meta["carrier_count"] = carrier_count
+    result["_meta"] = extra_meta
     return result

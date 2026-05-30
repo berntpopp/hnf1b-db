@@ -80,6 +80,9 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``-carrier_count`` lists the most common variants first); no
                 prefix means ascending.  The honored sort is echoed back in
                 ``meta.applied_sort`` using this same public vocabulary.
+                ``carrier_count`` counts DISTINCT carrier individuals
+                (phenopackets) for the variant — NOT reports/observations or
+                distinct publications (see ``meta.carrier_count_basis``).
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
@@ -132,6 +135,9 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         ``carrier_count`` — together with the list of ``carriers``
         (phenopacket IDs). Pass those ``carriers`` IDs to
         ``hnf1b_get_individuals`` for per-carrier phenotype detail.
+        ``carrier_count`` counts DISTINCT carrier individuals (phenopackets) for
+        the variant — NOT reports/observations or distinct publications (see
+        ``meta.carrier_count_basis``).
 
         Args:
             variant_id: The variant identifier as returned by

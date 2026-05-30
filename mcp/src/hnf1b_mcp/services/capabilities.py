@@ -17,7 +17,11 @@ from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import ERROR_CODES
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
-from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
+from hnf1b_mcp.services.variants import (
+    CARRIER_COUNT_BASIS,
+    CARRIER_COUNT_NOTE,
+    VARIANT_SORT_FIELDS,
+)
 
 _TOOLS: list[dict[str, str]] = [
     {
@@ -283,6 +287,15 @@ def _filterable_fields() -> dict[str, Any]:
                     "visible without an extra call; ties break by variant_id asc, "
                     "so ordering within a tie is deterministic across calls."
                 ),
+            },
+            # Field-semantics note (not a filter): documents what carrier_count
+            # counts so "most common variant" is unambiguous. Mirrors the
+            # count_mode hint style and the variant tools' response meta
+            # carrier_count_basis; sourced from the single CARRIER_COUNT_*
+            # constants so the advert can never drift from the live meta.
+            "carrier_count": {
+                "basis": CARRIER_COUNT_BASIS,
+                "hint": CARRIER_COUNT_NOTE,
             },
         },
         "hnf1b_resolve_terms": {
