@@ -31,6 +31,55 @@ _VALID_DOMAIN = frozenset(PROTEIN_DOMAIN_VALUES)
 _MAX_PAGE_SIZE = 500
 _GENE_SYMBOL = "HNF1B"
 
+# Number of carrier IDs returned by default (include_carriers=False) for any
+# response whose full carrier set exceeds this. A heavily-carried variant (the
+# recurrent 17q12 deletion carries ~379 individuals ≈ 7.5 KB of bare IDs) would
+# otherwise dump the ENTIRE list in compact/standard with no opt-out, blowing
+# the token budget the rest of the server respects. The caller recovers the
+# full set via include_carriers=True or hnf1b_find_individuals_by_phenotype.
+_CARRIER_SAMPLE_SIZE = 10
+_CARRIERS_NOTE = (
+    "Showing the first {sample} of {total} carrier ids. To get all carriers,"
+    " re-call hnf1b_get_variant with include_carriers=true, or use"
+    " hnf1b_find_individuals_by_phenotype for the matched cohort with phenotype"
+    " detail."
+)
+
+
+def _summarize_carriers(
+    carriers: list[str], total: int, *, sample_size: int = _CARRIER_SAMPLE_SIZE
+) -> tuple[list[str], dict[str, Any]]:
+    """Down-sample a carrier-id list to a bounded sample with a meta signal.
+
+    The reusable carrier-shaping pattern: when *carriers* exceeds *sample_size*,
+    return only the first *sample_size* ids plus a machine-readable meta block
+    (``carriers_total`` / ``carriers_returned`` / ``carriers_truncated`` /
+    ``carriers_note``) that tells the agent the omission happened and exactly how
+    to recover the full set. When the list already fits, it is returned whole
+    with an empty signal so the caller never emits a spurious truncation flag.
+
+    Args:
+        carriers: The full list of carrier ids (or whatever subset was fetched).
+        total: The authoritative total carrier count (== ``carrier_count``);
+            used for the ``carriers_total`` signal and the note, which may exceed
+            ``len(carriers)`` if the upstream fetch itself was bounded.
+        sample_size: Maximum number of ids to keep (default
+            :data:`_CARRIER_SAMPLE_SIZE`).
+
+    Returns:
+        ``(sampled, signal)`` — *sampled* is the (possibly shortened) id list and
+        *signal* is the meta dict to merge (empty when no truncation occurred).
+    """
+    if len(carriers) <= sample_size:
+        return carriers, {}
+    sampled = carriers[:sample_size]
+    return sampled, {
+        "carriers_total": total,
+        "carriers_returned": len(sampled),
+        "carriers_truncated": True,
+        "carriers_note": _CARRIERS_NOTE.format(sample=len(sampled), total=total),
+    }
+
 # Self-documenting basis for the ``carrier_count`` field, mirroring the
 # statistics tool's ``unit`` + ``unit_note`` pattern. carrier_count is the
 # backend ``phenopacket_count`` == COUNT(DISTINCT phenopacket_id), i.e. the
@@ -554,7 +603,11 @@ async def search_variants(
 
 
 async def get_variant(
-    client: ApiClient, variant_id: str, *, response_mode: str = "compact"
+    client: ApiClient,
+    variant_id: str,
+    *,
+    response_mode: str = "compact",
+    include_carriers: bool = False,
 ) -> dict[str, Any]:
     """Fetch the FULL authoritative record for a single variant.
 
@@ -564,25 +617,43 @@ async def get_variant(
     dataset is small ~200 rows), and (2) merging the carrier phenopacket IDs
     from ``/phenopackets/by-variant/{id}``.
 
+    Carrier token discipline (applies in EVERY response mode):
+
+    * ``include_carriers=False`` (default) — the ``carriers`` list is
+      SUMMARIZED to the first :data:`_CARRIER_SAMPLE_SIZE` ids. A heavily-carried
+      variant (e.g. the recurrent 17q12 deletion carries ~379 individuals) would
+      otherwise dump the entire id list (~7.5 KB) with no opt-out. The full
+      ``carrier_count`` is always kept, and when the full set exceeds the sample
+      the response meta carries ``carriers_total`` (== carrier_count),
+      ``carriers_returned``, ``carriers_truncated: true``, and a ``carriers_note``
+      telling the caller how to recover the rest (``include_carriers=true`` or
+      ``hnf1b_find_individuals_by_phenotype``).
+    * ``include_carriers=True`` — the FULL carriers list is returned, still
+      bounded by the response mode's char budget; if it must be trimmed to fit,
+      ``carriers_truncated`` + a ``dropped_summary`` are emitted (mode-independent).
+
+    Narrower modes additionally trim the SCALAR field set per the per-mode policy
+    (full keeps every field, including ``data_provenance`` + ``note``).
+    ``carrier_count`` (the true total) is always preserved unchanged.
+
     Args:
         client: Authenticated :class:`ApiClient` instance.
         variant_id: The canonical variant identifier (e.g.
             ``"var:HNF1B:17:36459258-37832869:DEL"``) or the friendly
             ``simple_id`` (e.g. ``"Var6"``).
         response_mode: One of ``minimal``/``compact``/``standard``/``full``;
-            controls how much of the record is returned. Narrower modes trim the
-            scalar field set per the per-mode policy (full keeps every field,
-            including ``data_provenance`` + ``note``), AND bound the carriers
-            list size. ``carrier_count`` (the true total) is always preserved;
-            only the ``carriers`` list is trimmed to fit the mode's char budget,
-            with a truncation signal.
+            controls the scalar field set and the carrier char budget.
+        include_carriers: When ``False`` (default) the ``carriers`` list is
+            summarized to a small sample (see above) in every mode; when ``True``
+            the full list is returned, budget-bounded with a truncation signal.
 
     Returns:
         A dict with the full variant record: ``variant_id``, ``simple_id``,
         ``label``, ``gene_symbol``, ``classification``, ``consequence``,
         ``structural_type``, ``hg38``, ``transcript``, ``protein``,
-        ``carrier_count``, ``carriers`` (phenopacket ID list), ``uri``,
-        ``data_provenance``, and ``note``.
+        ``carrier_count``, ``carriers`` (phenopacket ID list — a bounded sample
+        unless ``include_carriers=True``), ``uri``, ``data_provenance``, and
+        ``note``.
 
     Raises:
         McpToolError: ``not_found`` if no variant matches *variant_id*;
@@ -663,30 +734,44 @@ async def get_variant(
     # standard == full for most variants.
     result = _project_variant_detail(result, response_mode)
 
-    # Enforce the response_mode char budget. A high-carrier variant (e.g. the
-    # recurrent 17q12 deletion has ~379 carriers ≈ 7.8 KB) otherwise blows the
-    # minimal (4 KB) / compact (12 KB) budget — the documented response_mode knob
-    # was previously a no-op here. ``carriers`` is always present (it is in
-    # _DETAIL_ALWAYS, so it survives the projection above in every mode), so this
-    # step genuinely trims the carriers LIST contents down to the mode's char
-    # budget — a real trim in minimal/compact, not a no-op. ``carrier_count``
-    # stays accurate; only the ``carriers`` list shrinks, with a machine-readable
-    # truncation signal so the omission is never silent and the caller can still
-    # page carriers.
-    budget = Settings().mode_char_budgets.get(response_mode, 12000)
-    result, dropped = apply_budget(result, budget, ["carriers"])
     # Always document what carrier_count counts (distinct carrier individuals),
     # flat in meta (not per-row), mirroring search_variants and the statistics
     # tool's unit/unit_note — so "carrier_count" is never read as a count of
-    # reports or publications. Truncation signals are merged in when present.
+    # reports or publications. Carrier truncation signals are merged in below.
     extra_meta: dict[str, Any] = {
         "carrier_count_basis": CARRIER_COUNT_BASIS,
         "carrier_count_note": CARRIER_COUNT_NOTE,
     }
-    if dropped:
-        result["_dropped"] = dropped
-        extra_meta["carriers_truncated"] = True
-        extra_meta["carriers_returned"] = len(result["carriers"])
-        extra_meta["carrier_count"] = carrier_count
+
+    # Carrier token discipline — mode-INDEPENDENT (no minimal-only special case).
+    # carrier_count (the true total) is preserved in every branch; only the
+    # ``carriers`` LIST is bounded.
+    if not include_carriers:
+        # DEFAULT: summarize to a bounded sample regardless of mode. A
+        # heavily-carried variant (~379 ids ≈ 7.5 KB) otherwise dumped the entire
+        # list in compact/standard with no opt-out, blowing the token budget the
+        # rest of the server respects. The full set is recoverable via
+        # include_carriers=True or hnf1b_find_individuals_by_phenotype (named in
+        # the carriers_note). Reuses _summarize_carriers — the shared
+        # sample/signal helper get_publications.citing_individuals will adopt next.
+        result["carriers"], carrier_signal = _summarize_carriers(
+            result["carriers"], carrier_count
+        )
+        extra_meta.update(carrier_signal)
+    else:
+        # include_carriers=True: return the FULL list, but still bounded by the
+        # response mode's char budget so an enormous carrier set can never blow
+        # the budget. ``carriers`` is always present (it is in _DETAIL_ALWAYS, so
+        # it survives the projection above in every mode), so this genuinely trims
+        # the LIST. ``carrier_count`` stays accurate; the truncation signal +
+        # dropped_summary fire in ANY mode when a trim happens.
+        budget = Settings().mode_char_budgets.get(response_mode, 12000)
+        result, dropped = apply_budget(result, budget, ["carriers"])
+        if dropped:
+            result["_dropped"] = dropped
+            extra_meta["carriers_truncated"] = True
+            extra_meta["carriers_total"] = carrier_count
+            extra_meta["carriers_returned"] = len(result["carriers"])
+
     result["_meta"] = extra_meta
     return result

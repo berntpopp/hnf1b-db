@@ -11,6 +11,7 @@ import respx
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.variants import (
+    _CARRIER_SAMPLE_SIZE,
     CARRIER_COUNT_BASIS,
     CARRIER_COUNT_NOTE,
     VARIANT_SORT_FIELDS,
@@ -537,11 +538,13 @@ async def test_get_variant_by_simple_id_resolves_carriers_via_canonical_id():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_get_variant_trims_carriers_to_budget_in_minimal_mode():
-    """A high-carrier variant must respect the minimal char budget.
+async def test_get_variant_trims_carriers_to_budget_when_included():
+    """include_carriers=True still respects the char budget in ANY mode.
 
     carrier_count stays the true total; the carriers LIST is trimmed with a
-    machine-readable truncation signal so the omission is never silent.
+    machine-readable truncation signal AND a dropped_summary so the omission is
+    never silent — and this now fires in minimal mode (mode-independent), not
+    only there.
     """
     many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
     respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
@@ -551,20 +554,28 @@ async def test_get_variant_trims_carriers_to_budget_in_minimal_mode():
         return_value=httpx.Response(200, json=many)
     )
     client = ApiClient(base_url=BASE)
-    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="minimal")
+    result = await get_variant(
+        client, "HNF1B:c.494G>A", response_mode="minimal", include_carriers=True
+    )
     await client.aclose()
 
     assert result["carrier_count"] == 400  # true total preserved
     assert len(result["carriers"]) < 400  # list trimmed to fit the budget
     assert result["_meta"]["carriers_truncated"] is True
-    assert result["_meta"]["carrier_count"] == 400
+    assert result["_meta"]["carriers_total"] == 400
     assert result["_dropped"]["dropped_records"] > 0
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_get_variant_full_mode_keeps_all_carriers():
-    """Full mode (48 KB budget) keeps the entire carriers list untrimmed."""
+async def test_get_variant_summarizes_carriers_by_default_in_compact():
+    """DEFAULT (include_carriers=False) compact mode samples carriers, not dumps.
+
+    Core regression: a heavily-carried variant previously dumped ALL carrier IDs
+    in compact/standard with NO signal. Now the default returns at most
+    _CARRIER_SAMPLE_SIZE carriers and flags carriers_truncated/carriers_total in
+    meta, pointing the agent at the full set.
+    """
     many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
     respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
         return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
@@ -573,11 +584,111 @@ async def test_get_variant_full_mode_keeps_all_carriers():
         return_value=httpx.Response(200, json=many)
     )
     client = ApiClient(base_url=BASE)
-    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="full")
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="compact")
+    await client.aclose()
+
+    assert result["carrier_count"] == 400  # true total preserved
+    assert len(result["carriers"]) == _CARRIER_SAMPLE_SIZE
+    meta = result["_meta"]
+    assert meta["carriers_truncated"] is True
+    assert meta["carriers_total"] == 400
+    assert meta["carriers_returned"] == _CARRIER_SAMPLE_SIZE
+    assert "carriers_note" in meta
+    # The pointer names the recovery path: include_carriers or the phenotype tool.
+    note = meta["carriers_note"]
+    assert "include_carriers" in note
+    assert "hnf1b_find_individuals_by_phenotype" in note
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_summarizes_carriers_by_default_in_standard():
+    """DEFAULT standard mode also samples carriers with the truncation signal."""
+    many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=many)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="standard")
+    await client.aclose()
+
+    assert result["carrier_count"] == 400
+    assert len(result["carriers"]) == _CARRIER_SAMPLE_SIZE
+    assert result["_meta"]["carriers_truncated"] is True
+    assert result["_meta"]["carriers_total"] == 400
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_carrier_count_unchanged_across_modes():
+    """carrier_count is the true total in EVERY mode, regardless of sampling."""
+    many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=many)
+    )
+    c = ApiClient(base_url=BASE)
+    counts = []
+    for mode in ("minimal", "compact", "standard", "full"):
+        r = await get_variant(c, "HNF1B:c.494G>A", response_mode=mode)
+        counts.append(r["carrier_count"])
+    await c.aclose()
+
+    assert counts == [400, 400, 400, 400]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_full_list_via_include_carriers():
+    """include_carriers=True returns the FULL carriers list (budget permitting)."""
+    many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=many)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(
+        client, "HNF1B:c.494G>A", response_mode="full", include_carriers=True
+    )
     await client.aclose()
 
     assert len(result["carriers"]) == 400
     assert "_dropped" not in result
+    # Not truncated: the full set fit, so no summarize-default signal either.
+    assert "carriers_truncated" not in result["_meta"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_small_carrier_set_not_flagged_truncated():
+    """A variant with <= sample-size carriers shows all and is NOT flagged.
+
+    Default mode must not over-signal: when the full carrier set fits the sample
+    it is returned whole with no carriers_truncated/carriers_total in meta.
+    """
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=CARRIER_RESPONSE)  # 2 carriers
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="compact")
+    await client.aclose()
+
+    assert result["carriers"] == ["pp-001", "pp-002"]  # all shown
+    assert result["carrier_count"] == 2
+    meta = result["_meta"]
+    assert "carriers_truncated" not in meta
+    assert "carriers_total" not in meta
+    assert "carriers_note" not in meta
 
 
 @pytest.mark.asyncio

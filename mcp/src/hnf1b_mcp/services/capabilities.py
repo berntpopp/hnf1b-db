@@ -18,6 +18,7 @@ from hnf1b_mcp.services.errors import ERROR_CODES
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
 from hnf1b_mcp.services.variants import (
+    _CARRIER_SAMPLE_SIZE,
     CARRIER_COUNT_BASIS,
     CARRIER_COUNT_NOTE,
     VARIANT_SORT_FIELDS,
@@ -76,8 +77,11 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_get_variant",
         "summary": (
-            "Given a variant_id, return the carrier phenopacket IDs for that "
-            "variant (a discovery endpoint). Pass the returned ids to "
+            "Given a variant_id, return the variant record plus a SAMPLE of "
+            "carrier phenopacket IDs (a discovery endpoint). carrier_count is "
+            "the true total; by default at most 10 carrier ids are returned in "
+            "every mode (carriers_truncated signalled in meta). Pass "
+            "include_carriers=true for the full list, or the returned ids to "
             "hnf1b_get_individuals for authoritative per-carrier detail."
         ),
     },
@@ -296,6 +300,23 @@ def _filterable_fields() -> dict[str, Any]:
             "carrier_count": {
                 "basis": CARRIER_COUNT_BASIS,
                 "hint": CARRIER_COUNT_NOTE,
+            },
+        },
+        "hnf1b_get_variant": {
+            "include_carriers": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    f"carriers are summarized by default: at most "
+                    f"{_CARRIER_SAMPLE_SIZE} carrier ids are returned in EVERY "
+                    "response mode (carrier_count stays the true total). When the "
+                    "full set is larger, meta carries carriers_total / "
+                    "carriers_returned / carriers_truncated / carriers_note. Set "
+                    "include_carriers=true for the full list (still bounded by the "
+                    "response-mode char budget), or use "
+                    "hnf1b_find_individuals_by_phenotype for the matched cohort "
+                    "with phenotype detail."
+                ),
             },
         },
         "hnf1b_resolve_terms": {

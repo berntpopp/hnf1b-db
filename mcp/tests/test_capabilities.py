@@ -49,6 +49,7 @@ def test_capabilities_filterable_fields_present():
     ff = cap["filterable_fields"]
     assert set(ff) == {
         "hnf1b_search_variants",
+        "hnf1b_get_variant",
         "hnf1b_resolve_terms",
         "hnf1b_get_statistics",
         "hnf1b_get_publications",
@@ -56,6 +57,15 @@ def test_capabilities_filterable_fields_present():
         "hnf1b_get_individuals",
         "hnf1b_find_individuals_by_phenotype",
     }
+
+    # get_variant advertises the carrier-summarization opt-out so the
+    # summarized-by-default behavior is discoverable from capabilities.
+    gv = ff["hnf1b_get_variant"]
+    assert gv["include_carriers"]["type"] == "boolean"
+    assert gv["include_carriers"]["default"] is False
+    gv_hint = gv["include_carriers"]["hint"].lower()
+    assert "carriers_truncated" in gv_hint
+    assert "hnf1b_find_individuals_by_phenotype" in gv_hint
 
     sv = ff["hnf1b_search_variants"]
     # Exactly the real filter/sort params plus the carrier_count field-semantics

@@ -126,18 +126,29 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     async def hnf1b_get_variant(
         variant_id: str,
         response_mode: str | None = None,
+        include_carriers: bool = False,
     ) -> dict[str, Any]:
         """Fetch the full authoritative record for a single HNF1B variant.
 
         Returns the complete curated variant record — ``classification``
         (pathogenicity), molecular ``consequence``, ``label``, ``hg38``,
         ``transcript``, ``protein``, ``structural_type``, ``gene_symbol`` and
-        ``carrier_count`` — together with the list of ``carriers``
-        (phenopacket IDs). Pass those ``carriers`` IDs to
-        ``hnf1b_get_individuals`` for per-carrier phenotype detail.
-        ``carrier_count`` counts DISTINCT carrier individuals (phenopackets) for
-        the variant — NOT reports/observations or distinct publications (see
-        ``meta.carrier_count_basis``).
+        ``carrier_count`` — together with a ``carriers`` list of phenopacket IDs.
+        Pass those ``carriers`` IDs to ``hnf1b_get_individuals`` for per-carrier
+        phenotype detail. ``carrier_count`` counts DISTINCT carrier individuals
+        (phenopackets) for the variant — NOT reports/observations or distinct
+        publications (see ``meta.carrier_count_basis``).
+
+        Carriers are SUMMARIZED by default to bound token cost: a heavily-carried
+        variant can have hundreds of carrier IDs. By default (and in EVERY
+        response mode) at most 10 carrier IDs are returned; ``carrier_count``
+        stays the true total, and when the full set is larger the ``meta`` block
+        carries ``carriers_total``, ``carriers_returned``, ``carriers_truncated``,
+        and a ``carriers_note`` naming how to get the rest. Set
+        ``include_carriers=True`` to return the full list (still bounded by the
+        response-mode char budget, with the same truncation signal if it must be
+        trimmed). For the matched cohort WITH phenotype detail, use
+        ``hnf1b_find_individuals_by_phenotype`` instead.
 
         Args:
             variant_id: The variant identifier as returned by
@@ -147,6 +158,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
+            include_carriers: When ``False`` (default) the ``carriers`` list is
+                summarized to at most 10 IDs (in every mode) with a
+                ``carriers_truncated`` meta signal; when ``True`` the full
+                carriers list is returned, bounded by the response-mode char
+                budget.
 
         Returns:
             A dict with keys ``variant_id``, ``simple_id``, ``label``,
@@ -161,6 +177,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 client,  # type: ignore[arg-type]
                 variant_id,
                 response_mode=mode,
+                include_carriers=include_carriers,
             ),
             data_class=DataClass.CURATED,
             response_mode=mode,
