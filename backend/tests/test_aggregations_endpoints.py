@@ -209,3 +209,95 @@ class TestPublicationsTimelineYearCorrectness:
         # (proving a non-empty timeline) and the import year must never leak in.
         assert {2008, 2017}.issubset(years), resp.json()
         assert 2026 not in years, resp.json()
+
+
+@pytest.mark.asyncio
+class TestKidneyStagesStandaloneFeatures:
+    """B1: CKD stages are standalone HPO features, not 'Stage' modifiers.
+
+    The old query keyed on HP:0012622 + a ``modifier`` label LIKE '%Stage%', a
+    shape the cohort never uses, so /kidney-stages returned [] even when staged
+    CKD was present (and surfaced via /by-feature). The fix aggregates the
+    standalone CKD-stage HPO terms (settings.hpo_terms.ckd_stages).
+    """
+
+    async def _seed_published_with_features(
+        self, db_session, admin_user, phenopacket_id: str, features: list[dict]
+    ) -> None:
+        from app.phenopackets.models import Phenopacket, PhenopacketRevision
+
+        content = {"id": phenopacket_id, "phenotypicFeatures": features}
+        pp = Phenopacket(
+            phenopacket_id=phenopacket_id,
+            phenopacket=content,
+            state="published",
+            revision=1,
+            created_by_id=admin_user.id,
+        )
+        db_session.add(pp)
+        await db_session.flush()
+        rev = PhenopacketRevision(
+            record_id=pp.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=content,
+            change_reason="init",
+            actor_id=admin_user.id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()
+        pp.head_published_revision_id = rev.id
+
+    async def test_kidney_stages_counts_standalone_stage_features(
+        self, async_client: AsyncClient, db_session, admin_user
+    ) -> None:
+        """kidney-stages counts present standalone CKD-stage features, not modifiers."""
+        # Two carriers record Stage 3 CKD (HP:0012625) as a present feature; one
+        # records it excluded (must NOT count). One records Stage 4 (HP:0012626).
+        await self._seed_published_with_features(
+            db_session,
+            admin_user,
+            "ckd-stage3-a",
+            [{"type": {"id": "HP:0012625", "label": "Stage 3 chronic kidney disease"}}],
+        )
+        await self._seed_published_with_features(
+            db_session,
+            admin_user,
+            "ckd-stage3-b",
+            [{"type": {"id": "HP:0012625", "label": "Stage 3 chronic kidney disease"}}],
+        )
+        await self._seed_published_with_features(
+            db_session,
+            admin_user,
+            "ckd-stage3-excluded",
+            [
+                {
+                    "type": {
+                        "id": "HP:0012625",
+                        "label": "Stage 3 chronic kidney disease",
+                    },
+                    "excluded": True,
+                }
+            ],
+        )
+        await self._seed_published_with_features(
+            db_session,
+            admin_user,
+            "ckd-stage4-a",
+            [{"type": {"id": "HP:0012626", "label": "Stage 4 chronic kidney disease"}}],
+        )
+        await db_session.commit()
+
+        resp = await async_client.get("/api/v2/phenopackets/aggregate/kidney-stages")
+        assert resp.status_code == 200, resp.text
+        rows = resp.json()
+        by_id = {row["hpo_id"]: row for row in rows}
+        # The metric is no longer silently empty.
+        assert rows, rows
+        # Stage 3 present in 2 carriers (excluded one not counted).
+        assert by_id["HP:0012625"]["count"] == 2
+        # Stage 4 present in 1.
+        assert by_id["HP:0012626"]["count"] == 1

@@ -369,7 +369,9 @@ async def get_individuals(
 
     Args:
         client: Authenticated ApiClient instance.
-        ids: Optional list of phenopacket IDs for batch retrieval.
+        ids: Optional list of phenopacket IDs for batch retrieval. Results are
+            returned in this exact order (the batch endpoint's own order is not
+            preserved), so a caller may correlate by position.
         filters: Optional filter dict; keys become ``filter[key]`` params.
         page_size: Number of results per page (discovery endpoint only).
         expand: If True and using discovery, fetch each record in full.
@@ -414,6 +416,14 @@ async def get_individuals(
                 "phenopacket": phenopacket_content,
             }
             individuals.append(_shape_individual(record))
+        # B4: re-emit in the caller's requested `ids` order. The batch endpoint
+        # returns records in its own (DB) order, so [65, 99, 160] could come back
+        # [160, 65, 99] — silently wrong for any caller correlating by position.
+        # Each record self-identifies, so map by phenopacket_id and rebuild in
+        # request order; ids the endpoint did not return are simply absent (and
+        # captured in not_found below). Consistent with find_individuals_by_phenotype.
+        by_id = {ind.get("phenopacket_id"): ind for ind in individuals}
+        individuals = [by_id[i] for i in ids if i in by_id]
         # Surface which requested IDs the batch endpoint did not return, so a
         # caller can distinguish "does not exist" from a silently-dropped id.
         # Computed BEFORE filtering: not_found means "absent", not "filtered out".

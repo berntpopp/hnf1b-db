@@ -9,8 +9,9 @@ from fastmcp import FastMCP
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import publication_passages as passages_service
 from hnf1b_mcp.services.dataclass import DataClass
+from hnf1b_mcp.services.publication_passages import PassageMode, RerankMode
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -27,6 +28,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Search Publication Passages (RAG)",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -34,10 +36,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         query: str,
         pmids: list[str] | None = None,
         sections: list[str] | None = None,
-        mode: str = "brief",
-        rerank: str = "rrf",
+        mode: PassageMode = "brief",
+        rerank: RerankMode = "rrf",
         limit: int = 8,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Retrieve ranked passages from publication full text for a query (RAG).
 

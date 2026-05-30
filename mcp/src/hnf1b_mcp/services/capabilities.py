@@ -16,6 +16,7 @@ from hnf1b_mcp.contract import (
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import ERROR_CODES
 from hnf1b_mcp.services.publications import PUBLICATION_SORT_FIELDS
+from hnf1b_mcp.services.resources import load_resource
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
 from hnf1b_mcp.services.variants import (
@@ -25,12 +26,15 @@ from hnf1b_mcp.services.variants import (
     VARIANT_SORT_FIELDS,
 )
 
+_TOOL_GUIDE_URI = "hnf1b://schema/tool-guide"
+
 _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_get_capabilities",
         "summary": (
             "Return server capabilities, tool inventory, filterable-field "
-            "enums, payload modes, limits, citation contract, and error codes."
+            "enums, payload modes, limits, citation contract, error codes, "
+            "resource versions, and descriptor size metadata."
         ),
     },
     {
@@ -469,20 +473,37 @@ def _filterable_fields() -> dict[str, Any]:
     }
 
 
+def _content_version(body: str) -> str:
+    """Return the short sha256 content-version token used in descriptors."""
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:16]}"
+
+
 def get_capabilities() -> dict[str, Any]:
     """Return a complete capabilities descriptor for the HNF1B MCP server.
 
     Returns:
         A dictionary containing canonical workflows, tool inventory,
         filterable-field enums, payload modes, pagination limits, citation
-        contract, error codes, data-class taxonomy, v1 exclusions, safety
-        notices, and a content ``capabilities_version`` hash a warm client can
-        compare to skip re-fetching an unchanged descriptor.
+        contract, error codes, data-class taxonomy, v1 exclusions, packaged
+        resource versions, safety notices, and content hashes a warm client can
+        compare to skip re-fetching unchanged content. ``descriptor_chars`` is
+        an approximate serialized size of the returned descriptor: it includes
+        ``capabilities_version`` but necessarily excludes its own
+        self-referential size field.
     """
     settings = Settings()
+    tool_guide_version = _content_version(load_resource(_TOOL_GUIDE_URI))
     descriptor: dict[str, Any] = {
         "canonical_workflows": _CANONICAL_WORKFLOWS,
         "tools": _TOOLS,
+        "resources": {
+            "tool_guide": {
+                "uri": _TOOL_GUIDE_URI,
+                "version": tool_guide_version,
+            }
+        },
+        "tool_guide_version": tool_guide_version,
         "filterable_fields": _filterable_fields(),
         "payload_modes": {
             mode: {"char_budget": budget}
@@ -504,10 +525,12 @@ def get_capabilities() -> dict[str, Any]:
         "safety": _SAFETY,
     }
     # Deterministic content hash so a warm client can detect "nothing changed"
-    # and skip re-fetching the (~9k char) descriptor. Stable across calls until
-    # the descriptor content itself changes (no timestamps / non-determinism).
-    digest = hashlib.sha256(
-        json.dumps(descriptor, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()
-    descriptor["capabilities_version"] = f"sha256:{digest[:16]}"
+    # and skip re-fetching the descriptor. Stable across calls until the
+    # descriptor content itself changes (no timestamps / non-determinism).
+    descriptor["capabilities_version"] = _content_version(
+        json.dumps(descriptor, sort_keys=True, default=str)
+    )
+    descriptor["descriptor_chars"] = len(
+        json.dumps(descriptor, sort_keys=True, default=str)
+    )
     return descriptor

@@ -25,6 +25,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
         annotations={
             "title": "HNF1B: Capabilities & Tool Inventory",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -41,9 +42,12 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
         `filterable_fields`, so many valid calls can be built without a cold
         capabilities load. A
         warm client should compare the returned `capabilities_version` content
-        hash and skip re-fetching this ~11k-char descriptor when it is
-        unchanged.  No arguments are required and no API call is made — the
-        response is assembled from server-local data.
+        hash and skip re-fetching this descriptor when it is unchanged. It can
+        also compare `tool_guide_version` before re-reading the tool-guide
+        resource and inspect `descriptor_chars` (echoed as
+        `meta.descriptor_chars`) for the current serialized descriptor size. No
+        arguments are required and no API call is made — the response is
+        assembled from server-local data.
 
         Returns:
             A dict with keys ``canonical_workflows``, ``tools``,
@@ -51,13 +55,16 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
             enum values — read this to construct valid calls), ``payload_modes``,
             ``limits``, ``identifiers`` (the canonical id form per record type),
             ``pagination_semantics``, ``citation_contract``, ``error_codes``,
-            ``data_classes``, ``exclusions``, ``safety``, ``capabilities_version``
-            (a content hash a warm client can compare to skip re-fetching),
+            ``data_classes``, ``exclusions``, ``safety``, ``resources``,
+            ``tool_guide_version``, ``capabilities_version`` (a content hash a
+            warm client can compare to skip re-fetching), ``descriptor_chars``,
             ``data_class``, and ``meta``.
         """
 
         async def handler() -> dict[str, Any]:
-            return get_capabilities()
+            descriptor = get_capabilities()
+            descriptor["_meta"] = {"descriptor_chars": descriptor["descriptor_chars"]}
+            return descriptor
 
         return await run_tool(
             handler, data_class=DataClass.OPERATIONAL, response_mode="compact"

@@ -10,7 +10,7 @@ from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import terms as terms_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -28,6 +28,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Resolve HPO / Vocabulary Terms",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -42,7 +43,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             "evidence-code",
         ] = "hpo",
         limit: int = 10,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Resolve ontology or controlled-vocabulary terms against the HNF1B-db API.
 

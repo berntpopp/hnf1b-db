@@ -39,8 +39,9 @@ Workflow primer:
      session (tool inventory, payload modes, pagination limits, citation
      contract) but is OPTIONAL: tools with enum-constrained filters advertise
      them in `filterable_fields`, so many valid calls can be constructed
-     directly. The descriptor is ~11k chars; a warm client should compare the
-     `capabilities_version` content hash and skip re-fetching it when unchanged.
+     directly. A warm client should compare the `capabilities_version` content
+     hash and skip re-fetching it when unchanged; see `meta.descriptor_chars`
+     for the current serialized descriptor size.
   2. Use `hnf1b_search` or `hnf1b_resolve_terms` to resolve free-text into
      stable identifiers (individuals, variants, publications, HPO terms).
   3. Fetch detail with `hnf1b_get_individual`, `hnf1b_get_variant`,

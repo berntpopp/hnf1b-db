@@ -327,3 +327,193 @@ async def test_count_mode_ignored_for_non_variant_metric_signals():
     result = await get_statistics(c, metric="summary", count_mode="unique")
     await c.aclose()
     assert "count_mode" in result["_meta"]["ignored_params"]
+
+
+# ---------------------------------------------------------------------------
+# B3: by_feature prevalence derived from details + annotation-share unit_note
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_by_feature_adds_prevalence_from_details():
+    """Percentage is annotation-share; prevalence is derived from row details."""
+    respx.get(f"{BASE}/phenopackets/aggregate/by-feature").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "label": "Renal cysts",
+                    "count": 100,
+                    "percentage": 11.9,
+                    "hpo_id": "HP:0000107",
+                    "details": {
+                        "hpo_id": "HP:0000107",
+                        "present_count": 100,
+                        "absent_count": 24,
+                        "not_reported_count": 100,
+                    },
+                }
+            ],
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="by_feature", response_mode="full")
+    await c.aclose()
+
+    row = result["result"]["raw"][0]
+    # prevalence_among_cohort = 100/(100+24+100) = 44.64 (the clinically correct figure)
+    assert row["prevalence_among_cohort"] == 44.64
+    # prevalence_among_reported = 100/(100+24)
+    assert row["prevalence_among_reported"] == round(100 / 124 * 100, 2)
+    # percentage (annotation-share) is left untouched (no breaking rename).
+    assert row["percentage"] == 11.9
+    assert result["unit"] == "annotation_share_pct"
+    assert "prevalence_among_cohort" in result["unit_note"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_by_feature_missing_details_no_prevalence_no_crash():
+    respx.get(f"{BASE}/phenopackets/aggregate/by-feature").mock(
+        return_value=httpx.Response(
+            200, json=[{"label": "X", "count": 5, "percentage": 1.0, "hpo_id": "HP:1"}]
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="by_feature", response_mode="full")
+    await c.aclose()
+    row = result["result"]["raw"][0]
+    assert "prevalence_among_cohort" not in row
+
+
+# ---------------------------------------------------------------------------
+# B5: publications_timeline unit_note reconciling cumulative > total
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_publications_timeline_has_unit_note():
+    respx.get(f"{BASE}/phenopackets/aggregate/publications-timeline").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "year": 2018,
+                    "count": 400,
+                    "cumulative": 400,
+                    "publications": ["PMID:1"],
+                },
+                {
+                    "year": 2019,
+                    "count": 491,
+                    "cumulative": 891,
+                    "publications": ["PMID:2"],
+                },
+            ],
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="publications_timeline")
+    await c.aclose()
+    assert result["unit"] == "phenopackets_per_publication_year"
+    assert "cumulative" in result["unit_note"]
+    # the unbounded PMID array is still replaced by a count
+    row = result["result"]["raw"][1]
+    assert row["publication_count"] == 1
+    assert "publications" not in row
+    # raw cumulative is preserved (just explained)
+    assert row["cumulative"] == 891
+
+
+# ---------------------------------------------------------------------------
+# B1: kidney_stages empty result emits guidance instead of a silent dead end
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_kidney_stages_empty_emits_guidance_meta():
+    respx.get(f"{BASE}/phenopackets/aggregate/kidney-stages").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="kidney_stages")
+    await c.aclose()
+    assert result["result"]["raw"] == []
+    assert "empty_result" in result["_meta"]
+    assert "by_feature" in result["_meta"]["empty_result"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_kidney_stages_nonempty_no_guidance():
+    respx.get(f"{BASE}/phenopackets/aggregate/kidney-stages").mock(
+        return_value=httpx.Response(
+            200, json=[{"label": "Stage 3", "count": 116, "percentage": 30.0}]
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="kidney_stages")
+    await c.aclose()
+    assert result["result"]["raw"][0]["count"] == 116
+    assert "empty_result" not in result.get("_meta", {})
+
+
+# ---------------------------------------------------------------------------
+# B6: degenerate Kaplan-Meier terminal CI is nulled MCP-side (defense-in-depth)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_survival_nulls_degenerate_terminal_ci():
+    respx.get(f"{BASE}/phenopackets/aggregate/survival-data").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "groups": [
+                    {
+                        "name": "P/LP",
+                        "survival_data": [
+                            {
+                                "time": 0.0,
+                                "survival_probability": 1.0,
+                                "ci_lower": 1.0,
+                                "ci_upper": 1.0,
+                                "at_risk": 10,
+                            },
+                            {
+                                "time": 30.0,
+                                "survival_probability": 0.5,
+                                "ci_lower": 0.2,
+                                "ci_upper": 0.8,
+                                "at_risk": 4,
+                            },
+                            {
+                                "time": 94.0,
+                                "survival_probability": 0.0,
+                                "ci_lower": 1.0,
+                                "ci_upper": 1.0,
+                                "at_risk": 1,
+                            },
+                        ],
+                    }
+                ]
+            },
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="survival", comparison="pathogenicity")
+    await c.aclose()
+
+    points = result["result"]["groups"][0]["survival_data"]
+    # The legitimate S=1.0 anchor keeps its [1,1] interval.
+    assert points[0]["ci_lower"] == 1.0 and points[0]["ci_upper"] == 1.0
+    # A healthy interior point is untouched.
+    assert points[1]["ci_lower"] == 0.2
+    # The degenerate terminal point (S=0 with [1,1]) is nulled.
+    assert points[-1]["survival_probability"] == 0.0
+    assert points[-1]["ci_lower"] is None and points[-1]["ci_upper"] is None
+    assert "ci_note" in result["result"]

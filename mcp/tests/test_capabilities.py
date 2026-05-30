@@ -1,5 +1,10 @@
 """Tests for capabilities and resources services."""
 
+import hashlib
+import json
+import re
+from pathlib import Path
+
 from hnf1b_mcp.contract import (
     MOLECULAR_CONSEQUENCE_VALUES,
     PROTEIN_DOMAIN_VALUES,
@@ -11,12 +16,49 @@ from hnf1b_mcp.services.publications import PUBLICATION_SORT_FIELDS
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
 
+TOOL_GUIDE_URI = "hnf1b://schema/tool-guide"
+
 
 def test_capabilities_version_present_and_deterministic():
     """A content hash is exposed and stable across calls (warm-client skip)."""
     cap = get_capabilities()
     assert cap["capabilities_version"].startswith("sha256:")
     assert cap["capabilities_version"] == get_capabilities()["capabilities_version"]
+
+
+def test_capabilities_descriptor_chars_is_computed_size():
+    cap = get_capabilities()
+    descriptor_chars = cap["descriptor_chars"]
+    descriptor_without_size = dict(cap)
+    descriptor_without_size.pop("descriptor_chars")
+    expected = len(json.dumps(descriptor_without_size, sort_keys=True, default=str))
+    assert descriptor_chars == expected
+
+
+def test_tool_guide_version_is_content_hash_and_advertised():
+    cap = get_capabilities()
+    guide_body = load_resource(TOOL_GUIDE_URI)
+    expected = hashlib.sha256(guide_body.encode("utf-8")).hexdigest()[:16]
+    expected_version = f"sha256:{expected}"
+    assert cap["tool_guide_version"] == expected_version
+    assert cap["resources"]["tool_guide"] == {
+        "uri": TOOL_GUIDE_URI,
+        "version": expected_version,
+    }
+
+
+def test_capabilities_descriptor_size_is_not_hardcoded_in_source():
+    source_root = Path(__file__).resolve().parents[1] / "src" / "hnf1b_mcp"
+    stale_size = re.compile(r"~(?:9|11)k(?:[- ]?chars?)?", re.IGNORECASE)
+    offenders: list[str] = []
+    for path in source_root.rglob("*.py"):
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if stale_size.search(line):
+                rel = path.relative_to(source_root)
+                offenders.append(f"{rel}:{line_number}: {line.strip()}")
+    assert offenders == []
 
 
 def test_capabilities_citation_contract_scoped_to_publications():
@@ -168,5 +210,5 @@ def test_capabilities_workflows_use_real_param_names():
 
 def test_resource_uris_and_load():
     assert "hnf1b://schema/overview" in RESOURCE_URIS
-    assert "hnf1b://schema/tool-guide" in RESOURCE_URIS
+    assert TOOL_GUIDE_URI in RESOURCE_URIS
     assert len(load_resource("hnf1b://schema/overview")) > 100

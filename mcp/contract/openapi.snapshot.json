@@ -6722,7 +6722,7 @@
     },
     "/api/v2/phenopackets/aggregate/kidney-stages": {
       "get": {
-        "description": "Get distribution of kidney disease stages.",
+        "description": "Get distribution of kidney disease stages.\n\nThe cohort encodes CKD stages as STANDALONE HPO feature terms (HP:0012623\nStage 1 \u2026 HP:0003774 Stage 5, plus HP:0012622 unspecified CKD) \u2014 NOT as a\n``Stage`` modifier on a single CKD feature. This aggregates the present\noccurrences of those terms (``settings.hpo_terms.ckd_stages``), using the same\npresent-count semantics as /by-feature so the two reconcile. ``percentage`` is\neach stage's share of all staged-CKD annotations.",
         "operationId": "aggregate_kidney_stages_api_v2_phenopackets_aggregate_kidney_stages_get",
         "responses": {
           "200": {

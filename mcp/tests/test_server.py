@@ -8,6 +8,7 @@ from hnf1b_mcp.server import (
     build_http_app,
     is_origin_allowed,
 )
+from hnf1b_mcp.services.resources import load_resource
 
 
 def test_instructions_have_safety():
@@ -21,7 +22,7 @@ def test_instructions_capabilities_is_advisory_not_mandatory():
 
     The server ships a `capabilities_version` content hash (warm-skip) and every
     tool advertises its filterable-field enums, so a client can build valid calls
-    without a mandatory ~11k-char capabilities fetch. Lock that the primer says so.
+    without a mandatory full capabilities fetch. Lock that the primer says so.
     """
     s = SERVER_INSTRUCTIONS.lower()
     # Advisory framing: recommended/optional, not "call first" prescriptively.
@@ -30,6 +31,7 @@ def test_instructions_capabilities_is_advisory_not_mandatory():
     assert "call `hnf1b_get_capabilities` first" not in s
     # The warm-skip affordance must be surfaced, alongside the per-tool enums.
     assert "capabilities_version" in s
+    assert "descriptor_chars" in s
     assert "filterable_fields" in s
 
 
@@ -40,6 +42,15 @@ async def test_app_exposes_tools_and_resources():
     assert "hnf1b_get_capabilities" in names
     resources = await mcp.list_resources()
     assert any("schema/overview" in str(r.uri) for r in resources)
+
+
+@pytest.mark.asyncio
+async def test_tool_guide_has_section_for_each_registered_tool():
+    mcp = build_app()
+    names = {t.name for t in await mcp.list_tools()}
+    guide = load_resource("hnf1b://schema/tool-guide")
+    missing = sorted(name for name in names if f"### `{name}`" not in guide)
+    assert missing == []
 
 
 def test_origin_helper():

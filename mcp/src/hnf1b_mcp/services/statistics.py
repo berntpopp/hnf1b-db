@@ -56,6 +56,42 @@ def _round_percentages(obj: Any) -> Any:
     return obj
 
 
+def _null_degenerate_survival_ci(result_data: dict[str, Any]) -> bool:
+    """Null any impossible Kaplan-Meier CI (lower bound above the estimate).
+
+    B6 defense-in-depth: when survival drops to exactly 0 the backend skips the
+    log-log CI math and ships the initialized ``[1.0, 1.0]`` interval alongside
+    ``survival_probability: 0`` — an interval that does not contain its own point
+    estimate. A CI whose lower bound exceeds the estimate is impossible, so null
+    both bounds. The legitimate ``S == 1.0`` anchor (``[1, 1]`` around 1.0) is
+    left untouched (its lower bound is not greater than the estimate). Guarding
+    MCP-side too means a stale hosted backend cannot resurface the artifact.
+
+    Args:
+        result_data: The survival payload (with ``groups[].survival_data``).
+
+    Returns:
+        ``True`` when at least one point's CI was nulled.
+    """
+    fixed = False
+    groups = result_data.get("groups")
+    if not isinstance(groups, list):
+        return False
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        for point in group.get("survival_data") or []:
+            if not isinstance(point, dict):
+                continue
+            estimate = point.get("survival_probability")
+            lower = point.get("ci_lower")
+            if estimate is not None and lower is not None and lower > estimate:
+                point["ci_lower"] = None
+                point["ci_upper"] = None
+                fixed = True
+    return fixed
+
+
 def _downsample(points: list[Any], keep: int) -> list[Any]:
     """Uniformly down-sample a time-series, always retaining first and last.
 
@@ -333,11 +369,49 @@ async def get_statistics(
                     row["publication_count"] = len(row["publications"])
                     row.pop("publications", None)
 
+    if metric == "by_feature":
+        # B3: the backend `percentage` is annotation-SHARE (present_count divided
+        # by the sum of present_counts across ALL features — it sums to ~100% over
+        # rows), NOT cohort prevalence. An LLM reading "Renal cysts 11.9%" as
+        # prevalence is clinically wrong (the real figure is ~44.6%). The honest
+        # numerators/denominators are already in each row's `details`, so derive
+        # the two prevalence figures here (additive — `percentage` is untouched so
+        # the REST/frontend contract does not break).
+        rows = result_data.get("raw")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                details = row.get("details")
+                if (
+                    not isinstance(details, dict)
+                    or details.get("present_count") is None
+                ):
+                    continue
+                present = int(details.get("present_count") or 0)
+                absent = int(details.get("absent_count") or 0)
+                not_reported = int(details.get("not_reported_count") or 0)
+                cohort = present + absent + not_reported
+                reported = present + absent
+                if cohort > 0:
+                    row["prevalence_among_cohort"] = round(100 * present / cohort, 2)
+                if reported > 0:
+                    row["prevalence_among_reported"] = round(
+                        100 * present / reported, 2
+                    )
+
     # We need to account for the wrapper overhead ("metric" key etc.).
     wrapper_overhead = len(json.dumps({"metric": metric, "result": None}))
     inner_budget = max(max_chars - wrapper_overhead, 1)
 
     if metric == "survival":
+        # B6 guard: scrub impossible terminal CIs before shaping (see helper).
+        if _null_degenerate_survival_ci(result_data):
+            result_data["ci_note"] = (
+                "One or more terminal points had an impossible confidence interval"
+                " (lower bound above the survival estimate — a last-event"
+                " artifact); their ci_lower/ci_upper were set to null."
+            )
         # Preserve every comparison arm; down-sample curves to fit the budget.
         shaped_result, dropped = _shape_survival(result_data, inner_budget)
     else:
@@ -371,17 +445,63 @@ async def get_statistics(
                 " count_mode='unique' for a distribution over distinct variants."
             )
 
+    # B3: label what by_feature's fields mean so an annotation-share is never read
+    # as cohort prevalence. `percentage` (kept as-is) is annotation-share;
+    # `prevalence_among_cohort`/`prevalence_among_reported` (added above) are the
+    # clinical figures.
+    if metric == "by_feature":
+        out["unit"] = "annotation_share_pct"
+        out["unit_note"] = (
+            "percentage is each feature's share of all PRESENT annotations (sums"
+            " to ~100% across features) — NOT cohort prevalence. Use"
+            " prevalence_among_cohort = present/(present+absent+not_reported) for"
+            " the clinical prevalence, or prevalence_among_reported ="
+            " present/(present+absent). Raw counts are in each row's details."
+        )
+
+    # B5: reconcile the timeline counters. cumulative is a running SUM of the
+    # per-year count, and a phenopacket cited by publications from >1 year is
+    # counted in EACH year, so cumulative can legitimately exceed
+    # total_phenopackets (~864). Without this note the >total figure reads as a bug.
+    if metric == "publications_timeline":
+        out["unit"] = "phenopackets_per_publication_year"
+        out["unit_note"] = (
+            "count = distinct phenopackets linked to a publication of that year;"
+            " a phenopacket cited across multiple years is counted in EACH, so"
+            " cumulative (a running sum of count) can exceed total_phenopackets"
+            " (~864) — it is not a distinct running total. publication_count ="
+            " distinct PMIDs that year (list them via hnf1b_get_publications"
+            "(year=...))."
+        )
+
+    # Collect any meta signals into a single merged block (run_tool hoists _meta).
+    meta_signals: dict[str, Any] = {}
+
     # Surface a count_mode that was accepted (valid value) but does not apply to
     # this metric, so it is never silently ignored.
     if count_mode is not None and metric not in _VARIANT_INSTANCE_METRICS:
-        out["_meta"] = {
-            "ignored_params": {
-                "count_mode": (
-                    "count_mode applies only to "
-                    f"{sorted(_VARIANT_INSTANCE_METRICS)}; ignored for {metric!r}"
-                )
-            }
+        meta_signals["ignored_params"] = {
+            "count_mode": (
+                "count_mode applies only to "
+                f"{sorted(_VARIANT_INSTANCE_METRICS)}; ignored for {metric!r}"
+            )
         }
+
+    # B1: kidney_stages is correctly wired, but the backend SQL scopes CKD stages
+    # to a modifier the cohort does not use, so it can come back empty. An empty
+    # advertised metric must never be a silent dead-end — point the caller at the
+    # data that does exist instead of leaving a bare {"raw": []}.
+    if metric == "kidney_stages" and isinstance(upstream, list) and not upstream:
+        meta_signals["empty_result"] = (
+            "kidney_stages returned no rows. CKD stages may be recorded as"
+            " standalone HPO features rather than CKD-stage modifiers on this"
+            " backend — try metric='by_feature' (filter labels containing"
+            " 'Stage'), or hnf1b_find_individuals_by_phenotype with a CKD-stage"
+            " HPO id."
+        )
+
+    if meta_signals:
+        out["_meta"] = meta_signals
 
     if dropped is not None:
         out["_dropped"] = dropped

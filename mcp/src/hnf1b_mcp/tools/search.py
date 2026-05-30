@@ -10,7 +10,7 @@ from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import search as search_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -28,6 +28,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Search HNF1B-db (Discovery)",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -35,7 +36,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         query: str,
         types: list[str] | None = None,
         limit: int = 10,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Unified discovery search — returns typed ID hits.
 
@@ -51,8 +52,12 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``individual``, ``variant``, ``publication``, ``gene``.
                 Defaults to ``["individual", "variant", "publication"]``.
             limit: Maximum number of results to return (≥ 1).  Defaults to 10.
-            response_mode: Response verbosity — one of ``minimal``,
-                ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
+                This is the control for response size — use it to widen/narrow
+                the hit list.
+            response_mode: Accepted for interface consistency with the other
+                tools, but it does NOT change this tool's output — search hits are
+                already minimal ``{type, id, label, uri, score}`` records. Use
+                ``limit`` to control how many are returned.
 
         Returns:
             A dict with keys ``query``, ``hits``, ``counts``, ``guidance``,

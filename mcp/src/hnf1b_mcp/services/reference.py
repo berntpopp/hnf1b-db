@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from ..client.api_client import ApiClient
 from ..config import Settings
@@ -15,6 +15,14 @@ from .errors import McpToolError
 from .shaping import apply_budget
 
 _HARD_CAP = 80_000
+
+#: Genome assemblies the gene-context tool advertises. Constrains the param to a
+#: schema-visible enum and — unlike before — rejects an unknown build at
+#: validation time instead of silently forwarding it to the backend (which
+#: defaults to GRCh38 for any value, masking the typo). Kept in lockstep with
+#: :data:`GENOME_BUILDS` by a drift-guard test.
+GENOME_BUILDS = ("GRCh38", "GRCh37")
+GenomeBuild = Literal["GRCh38", "GRCh37"]
 
 # Internal DB artifacts an LLM never needs. Stripped from every mode EXCEPT
 # ``full`` (full = complete provenance record). A row ``id`` is a server-internal
@@ -93,7 +101,18 @@ async def get_gene_context(
         - ``domains`` – list of protein-domain dicts (only when
           *include_domains* is ``True``).
         - ``uri`` – a stable ``hnf1b://gene/{gene_symbol}`` identifier.
+
+    Raises:
+        McpToolError: ``invalid_input`` when *genome_build* is not one of
+            :data:`GENOME_BUILDS`; ``not_found`` when the gene is absent.
     """
+    if genome_build not in GENOME_BUILDS:
+        raise McpToolError(
+            "invalid_input",
+            f"genome_build must be one of {list(GENOME_BUILDS)}",
+            argument="genome_build",
+            choices=list(GENOME_BUILDS),
+        )
     params: dict[str, Any] = {"genome_build": genome_build}
 
     try:

@@ -401,6 +401,79 @@ def _project_row(row: dict[str, Any], mode: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Shared variant-id resolution (used by get_variant AND compare_phenotypes)
+# ---------------------------------------------------------------------------
+
+
+async def build_variant_id_index(
+    client: ApiClient,
+) -> dict[str, dict[str, Any]]:
+    """Map every accepted variant-id form to its full aggregate row.
+
+    Pages the all-variants aggregate endpoint once (~200 rows; the
+    :class:`ApiClient` 300 s cache means a sibling call in the same window — e.g.
+    ``get_variant`` — reuses the warm fetch) and indexes each row under BOTH its
+    canonical ``variant_id`` and the friendly ``str(simple_id)`` (e.g. ``"Var6"``).
+    The single source of truth for "does this id name a real variant, and what is
+    its canonical id" — shared by :func:`get_variant` and
+    :func:`~hnf1b_mcp.services.compare.compare_phenotypes` so both accept a
+    ``simple_id`` and resolve it to the same canonical id (drift-guarded by tests).
+
+    Args:
+        client: Authenticated :class:`ApiClient` instance.
+
+    Returns:
+        ``{accepted_id: row}`` where *accepted_id* is the canonical ``variant_id``
+        or ``str(simple_id)``; the canonical key wins on collision.
+    """
+    listing: dict[str, Any] = await client.get(
+        PHENOPACKETS_AGGREGATE_ALL_VARIANTS,
+        params={"page[number]": 1, "page[size]": _MAX_PAGE_SIZE},
+    )
+    rows: list[dict[str, Any]] = listing.get("data") or []
+    index: dict[str, dict[str, Any]] = {}
+    for item in rows:
+        vid = item.get("variant_id")
+        if not vid:
+            continue
+        index[vid] = item
+        sid = item.get("simple_id")
+        if sid is not None:
+            index.setdefault(str(sid), item)
+    return index
+
+
+async def resolve_variant_ids(
+    client: ApiClient, raw_ids: list[str]
+) -> tuple[dict[str, str], list[str]]:
+    """Resolve caller-supplied variant ids (canonical OR ``simple_id``) to canonical.
+
+    Thin convenience wrapper over :func:`build_variant_id_index`.
+
+    Args:
+        client: Authenticated :class:`ApiClient` instance.
+        raw_ids: The caller-supplied ids (any mix of canonical / ``simple_id``).
+
+    Returns:
+        ``(canonical_by_input, unmatched)`` — *canonical_by_input* maps each
+        resolvable input id to its canonical ``variant_id`` (input order is the
+        caller's responsibility); *unmatched* lists well-formed ids that name no
+        known variant (a typo / stale id), so a caller can distinguish them from a
+        real variant with zero carriers.
+    """
+    index = await build_variant_id_index(client)
+    canonical_by_input: dict[str, str] = {}
+    unmatched: list[str] = []
+    for rid in raw_ids:
+        row = index.get(rid) or index.get(str(rid))
+        if row is not None:
+            canonical_by_input[rid] = row["variant_id"]
+        else:
+            unmatched.append(rid)
+    return canonical_by_input, unmatched
+
+
+# ---------------------------------------------------------------------------
 # Public service functions
 # ---------------------------------------------------------------------------
 
@@ -662,22 +735,12 @@ async def get_variant(
         McpToolError: ``not_found`` if no variant matches *variant_id*;
             ``temporarily_unavailable`` on upstream errors.
     """
-    listing: dict[str, Any] = await client.get(
-        PHENOPACKETS_AGGREGATE_ALL_VARIANTS,
-        params={"page[number]": 1, "page[size]": _MAX_PAGE_SIZE},
-    )
-    rows: list[dict[str, Any]] = listing.get("data") or []
     # Accept either the canonical variant_id (GA4GH VRS / CNV descriptor) or the
-    # friendly simple_id (e.g. "Var6") shown in list payloads.
-    match: dict[str, Any] | None = next(
-        (
-            item
-            for item in rows
-            if item.get("variant_id") == variant_id
-            or str(item.get("simple_id")) == variant_id
-        ),
-        None,
-    )
+    # friendly simple_id (e.g. "Var6") shown in list payloads. The lookup is the
+    # SAME shared index compare_phenotypes uses, so both tools accept a simple_id
+    # and resolve it to one canonical id (drift-guarded by tests).
+    index = await build_variant_id_index(client)
+    match: dict[str, Any] | None = index.get(variant_id) or index.get(str(variant_id))
     if match is None:
         raise McpToolError(
             "not_found",

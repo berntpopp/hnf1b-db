@@ -239,16 +239,44 @@ async def test_params_forwarded() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_invalid_mode_returns_error_envelope() -> None:
+async def test_invalid_mode_rejected_by_schema_enum() -> None:
+    """B7: ``mode`` is a Literal, so a typo is rejected at the schema boundary.
+
+    The PassageMode enum makes FastMCP reject an out-of-set value during input
+    validation (naming the allowed values), instead of forwarding it to the
+    service guard — the whole point of promoting the param to an enum.
+    """
+    import pydantic_core
+
     _mock_both()
     mcp, client = _make_mcp_and_client()
-    r = await mcp.call_tool(
-        "hnf1b_get_publication_passages", {"query": "x", "mode": "bogus"}
-    )
+    with pytest.raises(pydantic_core.ValidationError) as excinfo:
+        await mcp.call_tool(
+            "hnf1b_get_publication_passages", {"query": "x", "mode": "bogus"}
+        )
     await client.aclose()
-    sc = r.structured_content
-    assert sc.get("is_error") is True
-    assert sc["error"]["code"] == "invalid_input"
+    # The validation error advertises the allowed values so a caller self-corrects.
+    assert "brief" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_invalid_mode_service_guard_still_returns_envelope() -> None:
+    """Defense-in-depth: the runtime guard still yields the invalid_input envelope.
+
+    A client that does not validate against the schema (or a direct service
+    call) is still protected by the service-level check — Literal is a ``str``
+    subtype, so the two compose.
+    """
+    from hnf1b_mcp.services import publication_passages as passages_service
+    from hnf1b_mcp.services.errors import McpToolError
+
+    _mock_both()
+    mcp, client = _make_mcp_and_client()
+    with pytest.raises(McpToolError) as excinfo:
+        await passages_service.get_publication_passages(client, query="x", mode="bogus")
+    await client.aclose()
+    assert excinfo.value.code == "invalid_input"
 
 
 @pytest.mark.asyncio
