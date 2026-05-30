@@ -17,6 +17,8 @@ durable reference documentation only.
 - `archive/reviews/` — historical reviews, exit notes, and retrospectives
 - `archive/codebase/` — archived codebase-analysis snapshots from the prior GSD planning era
 - `archive/tracking/` — historical issue trackers, TODOs, and migration-era planning
+- `archive/handoffs/` — completed or superseded continuation handoffs
+- `archive/pr-bodies/` — historical PR body drafts retained for audit context
 
 ## Filing Rules
 
@@ -36,3 +38,4 @@ durable reference documentation only.
 
 - The April 10 roadmap and the April 12-17 implementation specs/plans were implemented or superseded and have been archived.
 - The former `codebase/*.md` snapshots were archived as GSD-era planning material.
+- The MCP server launch, 9/10 remediation, and 10/10 QA follow-up planning artifacts are complete as of PR #335 and have been archived.
