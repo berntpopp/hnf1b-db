@@ -814,3 +814,116 @@ class TestGlobalSearchVisibility:
                 text("REFRESH MATERIALIZED VIEW global_search_index")
             )
             await db_session.commit()
+
+
+# ============================================================================
+# Workstream C: individuals must be searchable by phenotype/disease free text.
+# The global_search_index phenopacket branch must fold disease term labels and
+# non-excluded phenotypicFeatures labels into its search_vector so that
+# /search/global (and the MCP hnf1b_search tool that consumes it) returns
+# ``pp_`` hits for queries like "renal cysts" / "diabetes".
+# ============================================================================
+
+
+class TestGlobalSearchPhenotypeText:
+    """The global_search_index must match individuals by clinical free text."""
+
+    @pytest.mark.asyncio
+    async def test_global_search_matches_individual_by_phenotype_text(
+        self, async_client, db_session: AsyncSession, published_record
+    ):
+        """A published individual must be findable by its disease term label."""
+        await db_session.execute(
+            text(
+                "UPDATE phenopacket_revisions SET content_jsonb = "
+                "jsonb_set(content_jsonb, '{diseases}', "
+                '\'[{"term": {"id": "MONDO:0011593", '
+                '"label": "Renal cysts and diabetes syndrome"}}]\'::jsonb) '
+                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
+                "WHERE phenopacket_id = :pid)"
+            ),
+            {"pid": published_record.phenopacket_id},
+        )
+        await db_session.commit()
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            resp = await async_client.get(
+                "/api/v2/search/global",
+                params={"q": "renal cysts", "page_size": 20},
+            )
+            assert resp.status_code == 200, resp.text
+            ids = [r["id"] for r in resp.json()["results"]]
+            assert any(i.startswith("pp_") for i in ids), resp.json()
+        finally:
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_global_search_phenotypic_features_weight_c_and_excluded(
+        self, async_client, db_session: AsyncSession, published_record
+    ):
+        """Weight-C phenotypicFeatures are searchable; excluded ones are not.
+
+        Covers two facets of the MV enrichment that the disease-label test
+        (weight B) does not exercise:
+
+        * the ``phenotypicFeatures`` label fold at weight 'C' — a NON-excluded
+          feature must be findable via /search/global, and
+        * the ``WHERE COALESCE((pf->>'excluded')::boolean, false) = false``
+          filter — an EXCLUDED feature must NOT leak into the search_vector.
+
+        The two HPO labels ("Pancreatic hypoplasia" vs "Hyperuricemia") share
+        no search tokens with each other or with the seeded subject/phenopacket
+        id ("wave7-published-1"), so each assertion is unambiguous on a fresh
+        test DB whose only published phenopacket row is this one. The query
+        tokens "hypoplasia" / "hyperuricemia" are chosen so they survive the
+        ``english`` stemming used to build the weight-C lexemes and therefore
+        match the ``simple``-config OR-prefix tsquery the route emits (the same
+        constraint that makes the sibling test use "renal", not "cysts").
+        """
+        await db_session.execute(
+            text(
+                "UPDATE phenopacket_revisions SET content_jsonb = "
+                "jsonb_set(content_jsonb, '{phenotypicFeatures}', "
+                '\'[{"type": {"id": "HP:0012736", '
+                '"label": "Pancreatic hypoplasia"}}, '
+                '{"type": {"id": "HP:0002149", '
+                '"label": "Hyperuricemia"}, "excluded": true}]\'::jsonb) '
+                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
+                "WHERE phenopacket_id = :pid)"
+            ),
+            {"pid": published_record.phenopacket_id},
+        )
+        await db_session.commit()
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            # Weight-C path: the NON-excluded feature label is findable.
+            resp = await async_client.get(
+                "/api/v2/search/global",
+                params={"q": "hypoplasia", "page_size": 20},
+            )
+            assert resp.status_code == 200, resp.text
+            ids = [r["id"] for r in resp.json()["results"]]
+            assert any(i.startswith("pp_") for i in ids), resp.json()
+
+            # Excluded filter: the EXCLUDED feature label is NOT findable.
+            # Without the migration's ``WHERE ... excluded ... = false`` guard
+            # this query WOULD return a pp_ hit, so the assertion guards it.
+            resp = await async_client.get(
+                "/api/v2/search/global",
+                params={"q": "hyperuricemia", "page_size": 20},
+            )
+            assert resp.status_code == 200, resp.text
+            ids = [r["id"] for r in resp.json()["results"]]
+            assert not any(i.startswith("pp_") for i in ids), resp.json()
+        finally:
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
