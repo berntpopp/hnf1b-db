@@ -12,11 +12,14 @@ from __future__ import annotations
 from typing import Any
 
 from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.config import Settings
 from hnf1b_mcp.contract._generated_paths import (
     PHENOPACKETS_BY_PUBLICATION_BY_PMID,
     PUBLICATIONS,
 )
 from hnf1b_mcp.services.citation import build_citation
+from hnf1b_mcp.services.errors import McpToolError
+from hnf1b_mcp.services.shaping import apply_budget
 
 
 def _strip_pmid_prefix(raw: str) -> str:
@@ -26,9 +29,11 @@ def _strip_pmid_prefix(raw: str) -> str:
         raw: A PMID string, possibly prefixed with ``"PMID:"``.
 
     Returns:
-        The bare PMID without the ``"PMID:"`` prefix.
+        The bare PMID without a leading ``"PMID:"`` prefix.
     """
-    return raw.replace("PMID:", "")
+    # Strip only a LEADING prefix (the documented intent); ``replace`` would
+    # corrupt any value that legitimately contained the substring elsewhere.
+    return raw.removeprefix("PMID:")
 
 
 def _shape_publication(
@@ -78,10 +83,22 @@ def _shape_publication(
         "phenopacket_count": item.get("phenopacket_count"),
         "uri": uri,
     }
+    # Full-text coverage flags are tiny and high-signal — they tell an agent
+    # whether hnf1b_get_publication_passages can retrieve body text for this
+    # publication — so they ride along in every mode.
+    coverage = item.get("coverage")
+    if coverage is not None:
+        shaped["coverage"] = coverage
+        shaped["has_full_text"] = coverage == "full_text"
     if response_mode in ("standard", "full"):
         shaped["date_confidence"] = citation_info["date_confidence"]
         shaped["journal"] = item.get("journal")
         shaped["year"] = item.get("year")
+        # The abstract is large (~1.5 KB); include it only in the verbose tiers
+        # where the caller has opted into richer-but-fewer records.
+        abstract = item.get("abstract")
+        if abstract:
+            shaped["abstract"] = abstract
     return shaped
 
 
@@ -130,6 +147,19 @@ async def list_publications(
         ``applied_sort`` (the ordering actually in effect).
     """
     effective_size = min(page_size, 1000)
+    # Validate the sort field client-side so a typo returns an actionable
+    # invalid_input error instead of an opaque upstream 422 / a silent default.
+    if sort is not None:
+        bare_field = sort[1:] if sort.startswith("-") else sort
+        if bare_field not in PUBLICATION_SORT_FIELDS:
+            raise McpToolError(
+                "invalid_input",
+                f"sort field {bare_field!r} is not sortable; "
+                f"choose one of {list(PUBLICATION_SORT_FIELDS)} "
+                "(optionally '-'-prefixed for descending)",
+                argument="sort",
+                choices=list(PUBLICATION_SORT_FIELDS),
+            )
     applied_sort = sort or DEFAULT_PUBLICATION_SORT
 
     params: dict[str, Any] = {
@@ -167,13 +197,24 @@ async def list_publications(
         page_meta.get("pageSize") or meta.get("page_size") or effective_size
     )
 
-    return {
+    result: dict[str, Any] = {
         "publications": publications,
         "total": total,
         "page": current_page,
         "page_size": current_size,
         "applied_sort": applied_sort,
     }
+
+    # Enforce the response_mode char budget on the publications list. A full page
+    # (up to 1000) — and especially standard/full pages carrying abstracts —
+    # otherwise dwarfs the mode budget (minimal returned ~46 KB vs the 4 KB cap).
+    # ``total`` stays the true server count; only the returned slice is trimmed,
+    # with a machine-readable truncation signal.
+    budget = Settings().mode_char_budgets.get(response_mode, 12000)
+    result, dropped = apply_budget(result, budget, ["publications"])
+    if dropped:
+        result["_dropped"] = dropped
+    return result
 
 
 async def build_pmid_citation_map(client: ApiClient) -> dict[str, dict[str, Any]]:

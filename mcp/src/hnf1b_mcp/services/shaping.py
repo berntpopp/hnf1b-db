@@ -42,6 +42,8 @@ def apply_budget(
     payload: dict[str, Any],
     max_chars: int,
     list_keys: list[str],
+    *,
+    keep_min: int = 0,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Trim the largest list fields until payload fits max_chars.
 
@@ -49,6 +51,11 @@ def apply_budget(
         payload: The data dict to potentially trim.
         max_chars: Maximum allowed serialized character count.
         list_keys: Keys in *payload* whose list values may be trimmed.
+        keep_min: Minimum number of items to retain in EACH trimmed list, even
+            when a single item already exceeds ``max_chars``. Guards the
+            "never empty when a real match exists" contract — e.g. a retrieval
+            endpoint must still return its top-ranked hit (with a truncation
+            signal) rather than an empty list. Defaults to 0 (unbounded trim).
 
     Returns:
         A tuple of (shaped_payload, dropped_summary) where dropped_summary
@@ -60,7 +67,7 @@ def apply_budget(
     shaped: dict[str, Any] = dict(payload)
     for key in list_keys:
         items = list(shaped.get(key, []))
-        while items and _size(shaped) > max_chars:
+        while len(items) > keep_min and _size(shaped) > max_chars:
             items.pop()
             dropped += 1
             shaped[key] = items

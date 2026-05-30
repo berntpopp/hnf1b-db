@@ -146,7 +146,10 @@ async def get_publication_passages(
         "passages": passages,
         "total": len(passages),
     }
-    result, dropped = apply_budget(result, budget, ["passages"])
+    # keep_min=1: the backend guarantees a non-empty result when a match exists,
+    # so never let client-side budget trimming pop the sole top-ranked passage to
+    # an empty list (a single long full-text passage can exceed minimal's 4 KB).
+    result, dropped = apply_budget(result, budget, ["passages"], keep_min=1)
     if dropped:
         result["_dropped"] = dropped
         result["total"] = len(result["passages"])

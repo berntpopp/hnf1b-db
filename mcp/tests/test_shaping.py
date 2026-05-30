@@ -22,6 +22,25 @@ def test_apply_budget_trims_lists():
     assert len(shaped["items"]) < 1000
 
 
+def test_apply_budget_keep_min_never_empties_a_match():
+    # A single item already exceeds the budget; keep_min=1 must retain it (with a
+    # truncation signal) rather than pop the list to empty.
+    payload = {"items": [{"text": "x" * 5000}, {"text": "y" * 5000}]}
+    shaped, dropped = apply_budget(
+        payload, max_chars=100, list_keys=["items"], keep_min=1
+    )
+    assert len(shaped["items"]) == 1  # the top item survives
+    assert dropped["dropped_records"] == 1
+
+
+def test_apply_budget_keep_min_default_zero_can_empty():
+    # Default keep_min=0 preserves the prior unbounded-trim behaviour.
+    payload = {"items": [{"text": "x" * 5000}]}
+    shaped, dropped = apply_budget(payload, max_chars=100, list_keys=["items"])
+    assert shaped["items"] == []
+    assert dropped["dropped_records"] == 1
+
+
 def test_build_meta_echoes_mode():
     m = build_meta(response_mode="compact", effective_chars=123, dropped=None)
     assert m["response_mode"] == "compact"

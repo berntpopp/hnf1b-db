@@ -7,6 +7,7 @@ import pytest
 import respx
 
 from hnf1b_mcp.client.api_client import ApiClient
+from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.publications import (
     get_publication_citing_individuals,
     list_publications,
@@ -328,3 +329,109 @@ async def test_get_publication_citing_individuals_never_calls_metadata():
     await c.aclose()
 
     assert route.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Full-text coverage flags + abstract (mode-gated)
+# ---------------------------------------------------------------------------
+
+_PUB_WITH_COVERAGE = {
+    "pmid": "PMID:2001",
+    "title": "HNF1B full-text study",
+    "authors": "Doe A",
+    "journal": "J Nephrol",
+    "year": 2021,
+    "doi": "10.1/x",
+    "phenopacket_count": 9,
+    "coverage": "full_text",
+    "abstract": "A long abstract about cystic kidney disease and HNF1B carriers.",
+}
+_COVERAGE_RESPONSE = {
+    "data": [_PUB_WITH_COVERAGE],
+    "meta": {"page": {"totalRecords": 1, "currentPage": 1, "pageSize": 25}},
+}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_exposes_coverage_flags_every_mode():
+    """coverage/has_full_text ride along in every mode; abstract only standard+."""
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_COVERAGE_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    compact = (await list_publications(c, response_mode="compact"))["publications"][0]
+    full = (await list_publications(c, response_mode="full"))["publications"][0]
+    await c.aclose()
+
+    # Tiny high-signal flags present in compact.
+    assert compact["coverage"] == "full_text"
+    assert compact["has_full_text"] is True
+    assert "abstract" not in compact  # large field withheld in compact
+    # The full abstract appears in the verbose tier.
+    assert full["coverage"] == "full_text"
+    assert "cystic kidney disease" in full["abstract"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_invalid_sort_raises_invalid_input():
+    """An unknown sort field returns an actionable invalid_input error."""
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    with pytest.raises(McpToolError) as exc:
+        await list_publications(c, sort="bogus_field")
+    await c.aclose()
+    assert exc.value.code == "invalid_input"
+    assert exc.value.details.get("argument") == "sort"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_descending_sort_validates_bare_field():
+    """A '-'-prefixed valid field passes validation and is forwarded."""
+    route = respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await list_publications(c, sort="-year")
+    await c.aclose()
+    assert result["applied_sort"] == "-year"
+    assert dict(route.calls[0].request.url.params)["sort"] == "-year"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_enforces_char_budget():
+    """A large page in minimal mode is trimmed to the budget with a signal."""
+    big = [
+        {
+            "pmid": f"PMID:{i}",
+            "title": "T",
+            "authors": "A B",
+            "journal": "J",
+            "year": 2020,
+            "doi": f"10.1/{i}",
+            "phenopacket_count": 1,
+        }
+        for i in range(300)
+    ]
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": big,
+                "meta": {
+                    "page": {"totalRecords": 300, "currentPage": 1, "pageSize": 300}
+                },
+            },
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await list_publications(c, response_mode="minimal")
+    await c.aclose()
+    assert result["total"] == 300  # true count preserved
+    assert len(result["publications"]) < 300  # trimmed to fit 4 KB
+    assert result["_dropped"]["dropped_records"] > 0

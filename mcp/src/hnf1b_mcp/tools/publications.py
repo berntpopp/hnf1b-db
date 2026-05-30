@@ -73,8 +73,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
                 In ``minimal``/``compact`` the redundant ``journal``/``year``/
                 ``date_confidence`` fields (already inside
-                ``recommended_citation``) are omitted; ``standard``/``full``
-                include them.
+                ``recommended_citation``) and the large ``abstract`` are omitted;
+                ``standard``/``full`` include them. The mode's char budget is
+                enforced on the list (with a ``meta.truncated`` signal), so a
+                page never exceeds the budget.
 
         Returns:
             When ``citing_pmid`` is given: a dict with keys ``pmid``,
@@ -83,9 +85,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
             Otherwise: a dict with keys ``publications`` (shaped records with
             ``pmid``, ``recommended_citation``, ``phenopacket_count``, ``uri``,
-            plus ``journal``/``year``/``date_confidence`` in standard/full),
-            ``total``, ``page``, ``page_size``, ``applied_sort``,
-            ``data_class``, and ``meta``.
+            and the ``coverage``/``has_full_text`` full-text flags in every
+            mode, plus ``journal``/``year``/``date_confidence`` and the full
+            ``abstract`` in standard/full), ``total``, ``page``, ``page_size``,
+            ``applied_sort``, ``data_class``, and ``meta``.
         """
         mode = resolve_mode(response_mode)
 

@@ -93,7 +93,8 @@ _TOOLS: list[dict[str, str]] = [
             "`has_doi`; sort via `sort`, default most-cited first), OR reverse-"
             "lookup the individuals citing one publication via `citing_pmid`. "
             "Returns recommended_citation strings, plus `coverage`/"
-            "`has_full_text` flags and `abstract` from compact mode upward."
+            "`has_full_text` flags (every mode) and the full `abstract` from "
+            "standard mode upward."
         ),
     },
     {
