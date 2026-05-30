@@ -5,6 +5,7 @@
         docker-dev docker-dev-bg docker-health docker-ps docker-db-migrate docker-db-init docker-db-backup \
         docker-shell-api docker-shell-db docker-import-full docker-import-test \
         publications-sync publications-sync-dry publications-sync-test docker-publications-sync \
+        publications-backfill publications-backfill-dry publications-backfill-test publications-backfill-embeddings \
         variants-sync variants-sync-dry variants-sync-test docker-variants-sync \
         reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync \
         dev-seed-users
@@ -193,6 +194,18 @@ publications-sync-dry:  ## Dry run - shows what would be fetched without changes
 
 publications-sync-test:  ## Sync first 10 publications (for testing)
 	cd backend && uv run python scripts/sync_publication_metadata.py --limit 10
+
+publications-backfill:  ## Backfill abstracts + open-access full-text passages
+	cd backend && uv run python scripts/backfill_publications.py
+
+publications-backfill-dry:  ## Dry run - shows which publications would be backfilled
+	cd backend && uv run python scripts/backfill_publications.py --dry-run
+
+publications-backfill-test:  ## Backfill first 10 publications (for testing)
+	cd backend && uv run python scripts/backfill_publications.py --limit 10
+
+publications-backfill-embeddings:  ## Backfill full text AND embeddings (needs [rag] extra)
+	cd backend && uv run --extra rag python scripts/backfill_publications.py --embeddings
 
 # Variant Annotation Sync Commands (Fetch VEP annotations for unique variants)
 variants-sync:  ## Sync all variant annotations from VEP

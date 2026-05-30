@@ -39,6 +39,16 @@ dependencies = [
     "aiosmtplib>=5.1.0",
 ]
 
+[project.optional-dependencies]
+# Optional semantic-search stack for publication full-text RAG. NOT installed
+# in CI (the unit + integration lanes use a deterministic FakeEmbeddingProvider
+# and exercise the dense/RRF path with pgvector-inserted fake vectors). Install
+# with `uv sync --extra rag` (or `pip install .[rag]`) to enable real
+# BAAI/bge-small-en-v1.5 embeddings in production/backfill.
+rag = [
+    "sentence-transformers>=3.0.0",
+]
+
 
 [dependency-groups]
 dev = [
@@ -81,6 +91,12 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["ga4gh.*", "bioutils.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional [rag] extra — not installed in CI. The embedding provider lazy-imports
+# these behind a capability check, so missing stubs/imports must not fail typecheck.
+module = ["sentence_transformers.*", "tokenizers.*", "transformers.*", "torch.*"]
 ignore_missing_imports = true
 # NOTE: ga4gh.vrs and bioutils libraries do not include type annotations (no py.typed marker)
 # and have no published type stubs on PyPI (verified 2025-01-06).

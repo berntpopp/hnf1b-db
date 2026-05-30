@@ -127,6 +127,9 @@ _MUTABLE_TABLES: tuple[str, ...] = (
     "phenopacket_revisions",
     "phenopackets",
     "variant_annotations",
+    # publication full-text RAG (children before parent for CASCADE order)
+    "publication_fulltext_embeddings",
+    "publication_fulltext",
     "publication_metadata",
     "users",
 )

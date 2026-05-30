@@ -53,6 +53,8 @@ _RAW_SQL_TABLES = {
     "interpretation_status_values",
     "progress_status_values",
     "publication_metadata",
+    "publication_fulltext",
+    "publication_fulltext_embeddings",
     "sex_values",
     "variant_annotations",
 }

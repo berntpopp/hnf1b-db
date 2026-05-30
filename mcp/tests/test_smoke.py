@@ -27,6 +27,7 @@ _EXPECTED_TOOLS = {
     "hnf1b_get_variant",
     "hnf1b_get_gene_context",
     "hnf1b_get_publications",
+    "hnf1b_get_publication_passages",
     "hnf1b_get_statistics",
     "hnf1b_resolve_terms",
     "hnf1b_compare_phenotypes",
@@ -70,6 +71,22 @@ async def test_all_tools_have_read_only_hint():
 
 
 @pytest.mark.asyncio
+async def test_all_tools_have_display_title():
+    """Every tool carries a non-empty human-readable title (2025 ToolAnnotations).
+
+    The title is the spec-blessed display name a client shows instead of the raw
+    ``hnf1b_*`` identifier; this guards against a new tool regressing the set.
+    """
+    async with Client(build_app()) as client:
+        tools = await client.list_tools()
+
+    for tool in tools:
+        assert tool.annotations is not None, f"{tool.name} has no annotations"
+        title = tool.annotations.title
+        assert title and title.strip(), f"{tool.name} has no display title"
+
+
+@pytest.mark.asyncio
 async def test_sample_tool_has_open_world_hint_false():
     """hnf1b_get_capabilities has openWorldHint=False (sample check)."""
     async with Client(build_app()) as client:
@@ -103,7 +120,7 @@ async def test_call_capabilities_returns_valid_payload():
     assert sc["data_class"] == "operational_metadata"
     assert "meta" in sc
     assert "tools" in sc
-    assert len(sc["tools"]) == 12
+    assert len(sc["tools"]) == 13
 
     # .data is the convenience alias
     assert result.data is not None

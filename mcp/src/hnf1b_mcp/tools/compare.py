@@ -24,7 +24,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_compare_phenotypes",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Compare Phenotypes Across Variants",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_compare_phenotypes(
         variant_ids: list[str],

@@ -92,7 +92,20 @@ _TOOLS: list[dict[str, str]] = [
             "List cached publications (filter by keyword `q`, `year`, "
             "`has_doi`; sort via `sort`, default most-cited first), OR reverse-"
             "lookup the individuals citing one publication via `citing_pmid`. "
-            "Returns recommended_citation strings."
+            "Returns recommended_citation strings, plus `coverage`/"
+            "`has_full_text` flags (every mode) and the full `abstract` from "
+            "standard mode upward."
+        ),
+    },
+    {
+        "name": "hnf1b_get_publication_passages",
+        "summary": (
+            "Hybrid RAG retrieval over publication full text: rank stored, "
+            "license-gated open-access passages for a free-text `query` "
+            "(lexical FTS fused with optional semantic search). Filter by "
+            "`pmids`/`sections`; choose `mode` (brief|full|ids_only) and "
+            "`rerank` (rrf|lexical|off). Each hit carries a stable `passage_id` "
+            "and the publication's recommended_citation."
         ),
     },
     {
@@ -172,8 +185,10 @@ _IDENTIFIERS: dict[str, str] = {
     "variant": (
         "canonical variant_id is the GA4GH VRS descriptor ('ga4gh:VA.…') or the "
         "CNV form ('var:HNF1B:17:START-END:DEL'); pass either to "
-        "hnf1b_get_variant. 'simple_id' (e.g. 'Var6') is a display ordinal, not "
-        "a lookup key."
+        "hnf1b_get_variant. The friendly 'simple_id' (e.g. 'Var6') is ALSO "
+        "accepted by hnf1b_get_variant, but it is an unstable display ordinal "
+        "(it can shift as the variant set changes), so prefer the canonical "
+        "variant_id for durable references."
     ),
     "publication": "PMID (bare digits or 'PMID:NNN').",
     "resolution": (
@@ -311,6 +326,35 @@ def _filterable_fields() -> dict[str, Any]:
                 "hint": "reverse lookup: individuals citing this PMID",
             },
             "q": {"type": "string", "hint": "free-text keyword filter"},
+        },
+        "hnf1b_get_publication_passages": {
+            "query": {"type": "string", "hint": "required free-text search query"},
+            "pmids": {
+                "type": "list[string]",
+                "hint": "restrict to these PMIDs (prefixed or bare)",
+            },
+            "sections": {
+                "type": "list[string]",
+                "values": [
+                    "title",
+                    "abstract",
+                    "intro",
+                    "methods",
+                    "results",
+                    "discussion",
+                    "conclusion",
+                    "table",
+                ],
+                "hint": "restrict to these canonical sections",
+            },
+            "mode": {
+                "values": ["brief", "full", "ids_only"],
+                "hint": "passage text shaping; default 'brief' (snippet)",
+            },
+            "rerank": {
+                "values": ["rrf", "lexical", "off"],
+                "hint": "rrf fuses lexical+semantic when embeddings exist",
+            },
         },
         "hnf1b_get_individuals": {
             "sex": {

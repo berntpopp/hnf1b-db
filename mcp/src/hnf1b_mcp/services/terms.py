@@ -100,8 +100,18 @@ async def resolve_terms(
             argument="vocabulary",
             choices=_VALID_VOCABULARIES,
         )
+    if limit < 1:
+        # A non-positive limit is silently misinterpreted by the upstream HPO
+        # autocomplete (and would yield an empty controlled-vocab slice); fail
+        # fast with an actionable error instead, mirroring the other tools.
+        raise McpToolError(
+            "invalid_input",
+            "limit must be >= 1",
+            argument="limit",
+        )
 
     matches: list[dict[str, Any]]
+    total_before_cap: int | None = None
 
     if vocabulary == "hpo":
         data = await client.get(
@@ -123,10 +133,19 @@ async def resolve_terms(
                 or lower in m["label"].lower()
                 or lower in m["description"].lower()
             ]
+        total_before_cap = len(mapped)
         matches = mapped[:limit]
 
-    return {
+    result: dict[str, Any] = {
         "query": text,
         "vocabulary": vocabulary,
         "matches": matches,
     }
+    # Make the controlled-vocab cap visible so a caller never mistakes a
+    # ``limit``-truncated list for the full vocabulary.
+    if total_before_cap is not None and total_before_cap > len(matches):
+        result["_meta"] = {
+            "total_matches": total_before_cap,
+            "returned": len(matches),
+        }
+    return result

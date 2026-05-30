@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client.api_client import ApiClient
+from ..config import Settings
 from ..contract import (
     MOLECULAR_CONSEQUENCE_VALUES,
     PROTEIN_DOMAIN_VALUES,
@@ -16,6 +17,7 @@ from ..contract._generated_paths import (
     PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID,
 )
 from .errors import McpToolError
+from .shaping import apply_budget
 
 # ---------------------------------------------------------------------------
 # Valid enum values — sourced from the generated API contract (DRY Layer 2).
@@ -426,7 +428,9 @@ async def search_variants(
     return result
 
 
-async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
+async def get_variant(
+    client: ApiClient, variant_id: str, *, response_mode: str = "compact"
+) -> dict[str, Any]:
     """Fetch the FULL authoritative record for a single variant.
 
     Enriches the variant by (1) paging through the all-variants aggregate
@@ -437,8 +441,13 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
 
     Args:
         client: Authenticated :class:`ApiClient` instance.
-        variant_id: The exact variant identifier (e.g.
-            ``"var:HNF1B:17:36459258-37832869:DEL"``).
+        variant_id: The canonical variant identifier (e.g.
+            ``"var:HNF1B:17:36459258-37832869:DEL"``) or the friendly
+            ``simple_id`` (e.g. ``"Var6"``).
+        response_mode: Verbosity tier bounding the carrier-list size — one of
+            ``minimal``/``compact``/``standard``/``full``. ``carrier_count`` (the
+            true total) is always preserved; only the ``carriers`` list is
+            trimmed to fit the mode's char budget, with a truncation signal.
 
     Returns:
         A dict with the full variant record: ``variant_id``, ``simple_id``,
@@ -474,8 +483,16 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
             field="variant_id",
         )
 
+    # Resolve the canonical id from the matched aggregate row BEFORE the
+    # by-variant fetch. The caller may have passed the friendly simple_id (e.g.
+    # "Var1"), but /phenopackets/by-variant/{id} only honors the canonical
+    # variant_id — interpolating the raw caller value there returns 200 [] for a
+    # simple_id, leaving carriers empty while carrier_count falls back to the
+    # aggregate count (a silent disagreement that breaks the documented
+    # carriers -> hnf1b_get_individuals workflow).
+    shaped = _shape_variant(match)
     raw_carriers: list[dict[str, Any]] = await client.get(
-        PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID.format(variant_id=variant_id)
+        PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID.format(variant_id=shaped["variant_id"])
     )
     carriers: list[str] = [
         record["phenopacket_id"]
@@ -483,12 +500,11 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
         if "phenopacket_id" in record
     ]
 
-    shaped = _shape_variant(match)
     # carrier_count from the live by-variant call is authoritative when present;
     # fall back to the aggregate phenopacket_count.
     carrier_count = len(carriers) if carriers else shaped.get("carrier_count") or 0
 
-    return {
+    result: dict[str, Any] = {
         "variant_id": shaped["variant_id"],
         "simple_id": shaped.get("simple_id"),
         "label": shaped.get("label"),
@@ -508,3 +524,20 @@ async def get_variant(client: ApiClient, variant_id: str) -> dict[str, Any]:
             " authoritative per-carrier phenotype detail."
         ),
     }
+
+    # Enforce the response_mode char budget. A high-carrier variant (e.g. the
+    # recurrent 17q12 deletion has ~379 carriers ≈ 7.8 KB) otherwise blows the
+    # minimal (4 KB) / compact (12 KB) budget — the documented response_mode knob
+    # was previously a no-op here. ``carrier_count`` stays accurate; only the
+    # ``carriers`` list is trimmed, with a machine-readable truncation signal so
+    # the omission is never silent and the caller can still page carriers.
+    budget = Settings().mode_char_budgets.get(response_mode, 12000)
+    result, dropped = apply_budget(result, budget, ["carriers"])
+    if dropped:
+        result["_dropped"] = dropped
+        result["_meta"] = {
+            "carriers_truncated": True,
+            "carriers_returned": len(result["carriers"]),
+            "carrier_count": carrier_count,
+        }
+    return result

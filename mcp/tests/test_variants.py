@@ -498,6 +498,78 @@ async def test_get_variant_returns_full_record():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_get_variant_by_simple_id_resolves_carriers_via_canonical_id():
+    """A simple_id lookup must fetch carriers under the CANONICAL variant_id.
+
+    Regression: the carrier endpoint was previously called with the raw caller
+    input, so a simple_id ("var-1") hit /by-variant/var-1 (-> 200 []), leaving
+    carriers empty while carrier_count fell back to the aggregate count. Only the
+    canonical route is mocked here, so any call to /by-variant/var-1 would raise.
+    """
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=CARRIER_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "var-1")  # friendly simple_id
+    await client.aclose()
+
+    assert result["variant_id"] == "HNF1B:c.494G>A"
+    assert result["simple_id"] == "var-1"
+    # Carriers resolved (not the empty/fallback path) and count agrees.
+    assert result["carriers"] == ["pp-001", "pp-002"]
+    assert result["carrier_count"] == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_trims_carriers_to_budget_in_minimal_mode():
+    """A high-carrier variant must respect the minimal char budget.
+
+    carrier_count stays the true total; the carriers LIST is trimmed with a
+    machine-readable truncation signal so the omission is never silent.
+    """
+    many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=many)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="minimal")
+    await client.aclose()
+
+    assert result["carrier_count"] == 400  # true total preserved
+    assert len(result["carriers"]) < 400  # list trimmed to fit the budget
+    assert result["_meta"]["carriers_truncated"] is True
+    assert result["_meta"]["carrier_count"] == 400
+    assert result["_dropped"]["dropped_records"] > 0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_full_mode_keeps_all_carriers():
+    """Full mode (48 KB budget) keeps the entire carriers list untrimmed."""
+    many = [{"phenopacket_id": f"phenopacket-{i}"} for i in range(400)]
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=many)
+    )
+    client = ApiClient(base_url=BASE)
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="full")
+    await client.aclose()
+
+    assert len(result["carriers"]) == 400
+    assert "_dropped" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_get_variant_not_found_when_no_match():
     """get_variant raises not_found when no variant matches the id."""
     respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(

@@ -18,7 +18,9 @@ services:
   # PostgreSQL Database (Development)
   # ============================================
   postgres:
-    image: postgres:15-alpine
+    # pgvector image (pg15) — provides the `vector` extension for the
+    # publication full-text RAG semantic index.
+    image: pgvector/pgvector:pg15
     container_name: hnf1b_db
     restart: unless-stopped
     environment:

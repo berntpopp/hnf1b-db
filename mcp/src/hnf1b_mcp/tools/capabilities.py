@@ -22,7 +22,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
 
     @mcp.tool(
         name="hnf1b_get_capabilities",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "HNF1B: Capabilities & Tool Inventory",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_capabilities() -> dict[str, Any]:
         """Return server capabilities, tool inventory, and operational metadata.
@@ -38,8 +42,12 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
 
         Returns:
             A dict with keys ``canonical_workflows``, ``tools``,
-            ``payload_modes``, ``limits``, ``citation_contract``,
-            ``error_codes``, ``data_classes``, ``exclusions``, ``safety``,
+            ``filterable_fields`` (per-tool valid filter params + their allowed
+            enum values — read this to construct valid calls), ``payload_modes``,
+            ``limits``, ``identifiers`` (the canonical id form per record type),
+            ``pagination_semantics``, ``citation_contract``, ``error_codes``,
+            ``data_classes``, ``exclusions``, ``safety``, ``capabilities_version``
+            (a content hash a warm client can compare to skip re-fetching),
             ``data_class``, and ``meta``.
         """
 

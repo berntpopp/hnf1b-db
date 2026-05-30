@@ -285,3 +285,45 @@ async def test_survival_budget_preserves_all_arms_by_downsampling():
     # meta.truncated + meta.dropped_summary at the tool boundary).
     assert "arms_preserved" in result["_dropped"]
     assert result["_dropped"]["arms_preserved"] == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_publications_timeline_bounds_pmid_array():
+    """Each year row's inline PMID list is replaced by a publication_count.
+
+    The unbounded per-row PMID array (~137 PMIDs) otherwise blows the budget and
+    apply_budget can only pop whole rows.
+    """
+    respx.get(f"{BASE}/phenopackets/aggregate/publications-timeline").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "year": 2020,
+                    "count": 800,
+                    "publications": [f"PMID:{i}" for i in range(137)],
+                }
+            ],
+        )
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="publications_timeline")
+    await c.aclose()
+    row = result["result"]["raw"][0]
+    assert "publications" not in row  # unbounded array removed
+    assert row["publication_count"] == 137
+    assert row["count"] == 800  # the phenopacket count is untouched
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_count_mode_ignored_for_non_variant_metric_signals():
+    """count_mode on a non-variant metric is surfaced via meta.ignored_params."""
+    respx.get(f"{BASE}/phenopackets/aggregate/summary").mock(
+        return_value=httpx.Response(200, json={"total_phenopackets": 42})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_statistics(c, metric="summary", count_mode="unique")
+    await c.aclose()
+    assert "count_mode" in result["_meta"]["ignored_params"]

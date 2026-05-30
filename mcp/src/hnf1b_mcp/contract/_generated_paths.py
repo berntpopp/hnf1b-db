@@ -102,6 +102,7 @@ PHENOPACKETS_SEARCH = "/phenopackets/search"
 PHENOPACKETS_SEARCH_FACETS = "/phenopackets/search/facets"
 PUBLICATIONS = "/publications/"
 PUBLICATIONS_BY_PMID_METADATA = "/publications/{pmid}/metadata"
+PUBLICATIONS_PASSAGES = "/publications/passages"
 PUBLICATIONS_SYNC = "/publications/sync"
 REFERENCE_GENES = "/reference/genes"
 REFERENCE_GENES_BY_SYMBOL = "/reference/genes/{symbol}"
@@ -204,6 +205,7 @@ ALL_PATHS: tuple[str, ...] = (
     PHENOPACKETS_SEARCH_FACETS,
     PUBLICATIONS,
     PUBLICATIONS_BY_PMID_METADATA,
+    PUBLICATIONS_PASSAGES,
     PUBLICATIONS_SYNC,
     REFERENCE_GENES,
     REFERENCE_GENES_BY_SYMBOL,

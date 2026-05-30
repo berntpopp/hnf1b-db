@@ -15,7 +15,10 @@ services:
   # PostgreSQL Database
   # ============================================
   hnf1b_db:
-    image: postgres:15-alpine
+    # pgvector image (pg15 base) — provides the `vector` extension required by
+    # the publication full-text RAG semantic index. Drop-in compatible with the
+    # previous postgres:15-alpine data directory (same PG major version).
+    image: pgvector/pgvector:pg15
     container_name: hnf1b_db
     restart: unless-stopped
     environment:

@@ -1400,6 +1400,205 @@
         "title": "PageMeta",
         "type": "object"
       },
+      "PassageHit": {
+        "description": "A single ranked passage returned by the passage-retrieval endpoint.",
+        "properties": {
+          "char_count": {
+            "description": "Character length of the stored passage",
+            "title": "Char Count",
+            "type": "integer"
+          },
+          "dense_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1-based dense-leg rank",
+            "title": "Dense Rank"
+          },
+          "lexical_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1-based lexical-leg rank",
+            "title": "Lexical Rank"
+          },
+          "passage_id": {
+            "description": "Stable passage identifier / citation anchor",
+            "title": "Passage Id",
+            "type": "string"
+          },
+          "pmid": {
+            "description": "PubMed ID in PMID: form",
+            "title": "Pmid",
+            "type": "string"
+          },
+          "score": {
+            "description": "Fused relevance score (higher is better)",
+            "title": "Score",
+            "type": "number"
+          },
+          "section": {
+            "description": "Canonical section label",
+            "title": "Section",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Global passage order within the publication",
+            "title": "Seq",
+            "type": "integer"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highlighted snippet (brief mode)",
+            "title": "Snippet"
+          },
+          "source": {
+            "description": "Passage provenance",
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full passage text (full mode)",
+            "title": "Text"
+          },
+          "token_count": {
+            "description": "Token count of the stored passage",
+            "title": "Token Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passage_id",
+          "pmid",
+          "section",
+          "seq",
+          "score",
+          "source",
+          "char_count",
+          "token_count"
+        ],
+        "title": "PassageHit",
+        "type": "object"
+      },
+      "PassagesMeta": {
+        "description": "Diagnostics for a passage-retrieval response.",
+        "properties": {
+          "dense_candidate_count": {
+            "description": "Dense-leg candidate count",
+            "title": "Dense Candidate Count",
+            "type": "integer"
+          },
+          "embedding_dim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dense embedding dim, if used",
+            "title": "Embedding Dim"
+          },
+          "lexical_candidate_count": {
+            "description": "Lexical-leg candidate count",
+            "title": "Lexical Candidate Count",
+            "type": "integer"
+          },
+          "mode": {
+            "description": "Text mode: full | brief | ids_only",
+            "title": "Mode",
+            "type": "string"
+          },
+          "notes": {
+            "description": "Diagnostic notes",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "query": {
+            "description": "The query that was executed",
+            "title": "Query",
+            "type": "string"
+          },
+          "rerank_used": {
+            "description": "Rerank strategy actually applied",
+            "title": "Rerank Used",
+            "type": "string"
+          },
+          "total": {
+            "description": "Number of passages returned",
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "description": "Whether results were budget-truncated",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query",
+          "mode",
+          "rerank_used",
+          "total",
+          "lexical_candidate_count",
+          "dense_candidate_count"
+        ],
+        "title": "PassagesMeta",
+        "type": "object"
+      },
+      "PassagesResponse": {
+        "description": "Ranked passages plus retrieval diagnostics.",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/PassagesMeta",
+            "description": "Retrieval diagnostics"
+          },
+          "passages": {
+            "description": "Ranked passages, best first",
+            "items": {
+              "$ref": "#/components/schemas/PassageHit"
+            },
+            "title": "Passages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "passages",
+          "meta"
+        ],
+        "title": "PassagesResponse",
+        "type": "object"
+      },
       "PasswordChange": {
         "description": "Password change request.",
         "properties": {
@@ -2543,8 +2742,20 @@
         "type": "object"
       },
       "SyncResponse": {
-        "description": "Response for sync operation.",
+        "description": "Response for sync operation.\n\nThe endpoint returns immediately with the pre-sync counts\n(``total_pmids``/``already_stored``/``to_fetch``); the per-publication\nfetch counts (abstracts/full text/license-skipped/errors) are produced by\nthe background task and the backfill script and surface in logs / the\nscript summary. They are included here as optional fields for synchronous\ncallers (e.g. the backfill script's structured summary).",
         "properties": {
+          "abstracts_fetched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Abstracts stored",
+            "title": "Abstracts Fetched"
+          },
           "already_stored": {
             "anyOf": [
               {
@@ -2556,6 +2767,42 @@
             ],
             "description": "PMIDs already stored",
             "title": "Already Stored"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-publication failures",
+            "title": "Errors"
+          },
+          "full_text_fetched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full-text pubs stored",
+            "title": "Full Text Fetched"
+          },
+          "license_skipped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Body dropped by license gate",
+            "title": "License Skipped"
           },
           "message": {
             "description": "Human-readable message",
@@ -8028,6 +8275,160 @@
           }
         },
         "summary": "List publications with offset pagination",
+        "tags": [
+          "publications",
+          "publications"
+        ]
+      }
+    },
+    "/api/v2/publications/passages": {
+      "get": {
+        "description": "Rank stored open-access passages for a free-text query using hybrid retrieval:\n    PostgreSQL full-text search (always) fused with optional pgvector semantic\n    search via Reciprocal Rank Fusion.\n\n    **Read-only and public.** Returns license-gated open-access passages only.\n\n    - `q`: free-text query (required).\n    - `pmids`: comma-separated PMID filter (prefixed or bare).\n    - `sections`: comma-separated canonical section filter\n      (title, abstract, intro, methods, results, discussion, conclusion, table).\n    - `rerank`: `rrf` (lexical+dense when embeddings exist), `lexical`, or `off`.\n    - `mode`: `full` (passage text, budgeted by `max_chars`), `brief`\n      (highlighted snippet), or `ids_only`.\n    - `limit`, `snippet_chars`, `max_chars`: result sizing / token budgeting.\n\n    Each hit carries a stable `passage_id` to cite. The response `meta` block\n    reports which rerank strategy actually ran and candidate counts.",
+        "operationId": "search_publication_passages_api_v2_publications_passages_get",
+        "parameters": [
+          {
+            "description": "Free-text query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Free-text query",
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated PMID filter",
+            "in": "query",
+            "name": "pmids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated PMID filter",
+              "title": "Pmids"
+            }
+          },
+          {
+            "description": "Comma-separated section filter",
+            "in": "query",
+            "name": "sections",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated section filter",
+              "title": "Sections"
+            }
+          },
+          {
+            "description": "rrf | lexical | off",
+            "in": "query",
+            "name": "rerank",
+            "required": false,
+            "schema": {
+              "default": "rrf",
+              "description": "rrf | lexical | off",
+              "title": "Rerank",
+              "type": "string"
+            }
+          },
+          {
+            "description": "full | brief | ids_only",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "full",
+              "description": "full | brief | ids_only",
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max passages to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Max passages to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Brief-mode snippet length",
+            "in": "query",
+            "name": "snippet_chars",
+            "required": false,
+            "schema": {
+              "default": 240,
+              "description": "Brief-mode snippet length",
+              "maximum": 2000,
+              "minimum": 40,
+              "title": "Snippet Chars",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Full-mode total char budget",
+            "in": "query",
+            "name": "max_chars",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 100,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Full-mode total char budget",
+              "title": "Max Chars"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassagesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hybrid passage retrieval over publication full text (RAG)",
         "tags": [
           "publications",
           "publications"

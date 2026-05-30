@@ -65,7 +65,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        # pgvector image so `alembic upgrade head` can CREATE EXTENSION vector
+        # for the publication full-text RAG migration.
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: hnf1b_user
           POSTGRES_PASSWORD: hnf1b_pass
@@ -253,7 +255,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15-alpine
+        # pgvector image so `alembic upgrade head` can CREATE EXTENSION vector
+        # for the publication full-text RAG migration.
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: hnf1b_user
           POSTGRES_PASSWORD: hnf1b_pass

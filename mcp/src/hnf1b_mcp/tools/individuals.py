@@ -31,7 +31,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_individual",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Get HNF1B Individual (phenopacket)",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_individual(
         phenopacket_id: str,
@@ -101,7 +105,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_individuals",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Get/List HNF1B Individuals",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_individuals(
         ids: list[str] | None = None,
@@ -182,7 +190,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_find_individuals_by_phenotype",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Find Individuals by HPO Phenotype",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_find_individuals_by_phenotype(
         hpo_ids: list[str],
@@ -292,6 +304,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 return {
                     "individuals": [],
                     "total": 0,
+                    "returned": 0,
                     "page_size": page_size,
                     "has_more": False,
                     "match_mode": "any",

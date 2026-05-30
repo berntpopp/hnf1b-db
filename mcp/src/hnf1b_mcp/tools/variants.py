@@ -30,7 +30,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_search_variants",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Search HNF1B Variants",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_search_variants(
         query: str | None = None,
@@ -103,7 +107,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_variant",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Get HNF1B Variant",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_variant(
         variant_id: str,
@@ -134,11 +142,13 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             ``carrier_count``, ``carriers``, ``uri``, ``data_provenance``,
             ``note``, ``data_class``, and ``meta``.
         """
+        mode = resolve_mode(response_mode)
         return await run_tool(
             lambda: variants_service.get_variant(
                 client,  # type: ignore[arg-type]
                 variant_id,
+                response_mode=mode,
             ),
             data_class=DataClass.CURATED,
-            response_mode=resolve_mode(response_mode),
+            response_mode=mode,
         )

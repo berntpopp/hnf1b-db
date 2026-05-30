@@ -176,6 +176,10 @@ async def list_publications(
         pm.journal,
         pm.year,
         pm.doi,
+        pm.abstract,
+        pm.coverage,
+        pm.pmcid,
+        pm.license,
         pc.phenopacket_count,
         pc.first_added
     FROM pub_counts pc
@@ -251,6 +255,7 @@ async def list_publications(
     # Build response rows.
     data = []
     for row in rows:
+        coverage = row.coverage or "title_only"
         data.append(
             {
                 "pmid": row.pmid,
@@ -261,6 +266,11 @@ async def list_publications(
                 "doi": row.doi,
                 "phenopacket_count": row.phenopacket_count,
                 "first_added": row.first_added.isoformat() if row.first_added else None,
+                "abstract": row.abstract,
+                "coverage": coverage,
+                "pmcid": row.pmcid,
+                "license": row.license,
+                "has_full_text": coverage == "full_text",
             }
         )
 

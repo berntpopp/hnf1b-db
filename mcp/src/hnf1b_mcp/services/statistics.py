@@ -321,6 +321,18 @@ async def get_statistics(
     # Kill percentage float noise (e.g. 45.023148… -> 45.02) everywhere.
     result_data = _round_percentages(result_data)
 
+    if metric == "publications_timeline":
+        # Each year row inlines its full PMID list (~137 PMIDs ≈ 2.5 KB), which
+        # apply_budget cannot trim (it only pops whole rows). Replace the
+        # unbounded array with a count so the metric fits its budget; a caller
+        # wanting the PMIDs uses hnf1b_get_publications(year=...).
+        rows = result_data.get("raw")
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and isinstance(row.get("publications"), list):
+                    row["publication_count"] = len(row["publications"])
+                    row.pop("publications", None)
+
     # We need to account for the wrapper overhead ("metric" key etc.).
     wrapper_overhead = len(json.dumps({"metric": metric, "result": None}))
     inner_budget = max(max_chars - wrapper_overhead, 1)
@@ -358,6 +370,18 @@ async def get_statistics(
                 " the carrier total, ~864), NOT distinct variants (~198). Pass"
                 " count_mode='unique' for a distribution over distinct variants."
             )
+
+    # Surface a count_mode that was accepted (valid value) but does not apply to
+    # this metric, so it is never silently ignored.
+    if count_mode is not None and metric not in _VARIANT_INSTANCE_METRICS:
+        out["_meta"] = {
+            "ignored_params": {
+                "count_mode": (
+                    "count_mode applies only to "
+                    f"{sorted(_VARIANT_INSTANCE_METRICS)}; ignored for {metric!r}"
+                )
+            }
+        }
 
     if dropped is not None:
         out["_dropped"] = dropped
