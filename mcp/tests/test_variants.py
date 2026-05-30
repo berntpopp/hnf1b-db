@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
 import httpx
 import pytest
 import respx
 
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services.errors import McpToolError
-from hnf1b_mcp.services.variants import get_variant, search_variants
+from hnf1b_mcp.services.variants import (
+    VARIANT_SORT_FIELDS,
+    VariantSort,
+    get_variant,
+    search_variants,
+)
 
 BASE = "http://api.test/api/v2"
 
@@ -622,3 +629,50 @@ async def test_get_variant_not_found_when_no_match():
     err = exc_info.value
     assert err.code == "not_found"
     assert err.details.get("field") == "variant_id"
+
+
+# ---------------------------------------------------------------------------
+# VariantSort enum drift guard
+# ---------------------------------------------------------------------------
+
+
+def test_variant_sort_enum_matches_sort_fields() -> None:
+    """The VariantSort Literal must stay in lockstep with VARIANT_SORT_FIELDS.
+
+    Every member is one of the canonical sort fields, optionally ``-``-prefixed
+    for descending. Stripping the prefix must yield EXACTLY the keys of
+    VARIANT_SORT_FIELDS — so editing one without the other fails fast here
+    rather than silently shipping a sort vocabulary the tool cannot honor.
+    """
+    members = set(get_args(VariantSort))
+    # Each public field appears in both directions: bare (asc) and '-' (desc).
+    expected: set[str] = set()
+    for field in VARIANT_SORT_FIELDS:
+        expected.add(field)
+        expected.add(f"-{field}")
+    assert members == expected
+    # The set of fields stripped of '-' equals the sort-field keys exactly.
+    stripped = {m[1:] if m.startswith("-") else m for m in members}
+    assert stripped == set(VARIANT_SORT_FIELDS)
+    # No invented keys (e.g. 'position') leaked in.
+    assert "position" not in stripped
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_accepts_variant_sort_member() -> None:
+    """A typed VariantSort member is honored and echoed as applied_sort."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(
+            200, json={"data": [], "meta": {"page": {"totalRecords": 0}}}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    sort_value: VariantSort = "-carrier_count"
+    result = await search_variants(client, sort=sort_value)
+    await client.aclose()
+
+    sent_params = dict(route.calls[0].request.url.params)
+    assert sent_params["sort"] == "-individualCount"
+    assert result["_meta"]["applied_sort"] == "-carrier_count"
+    assert result["_meta"]["ignored_params"] == []

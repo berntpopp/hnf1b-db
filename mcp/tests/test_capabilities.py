@@ -8,6 +8,7 @@ from hnf1b_mcp.contract import (
 )
 from hnf1b_mcp.services.capabilities import get_capabilities
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
+from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
 
 
 def test_capabilities_version_present_and_deterministic():
@@ -69,6 +70,12 @@ def test_capabilities_filterable_fields_present():
     }
     # sort defaults to most-common-first so "top variant" needs no extra call.
     assert "carrier_count" in sv["sort"]["values"]
+    # The advertised sort vocabulary is exactly the canonical sortable fields,
+    # so a consuming LLM can self-describe a valid sort without guessing — and
+    # the advert can never drift from what the tool actually honors.
+    assert sv["sort"]["values"] == list(VARIANT_SORT_FIELDS)
+    # The direction syntax must be documented so '-carrier_count' is not a guess.
+    assert "descending" in sv["sort"]["hint"].lower()
     assert sv["classification"]["values"] == list(VARIANT_CLASSIFICATION_VALUES)
     assert sv["consequence"]["values"] == list(MOLECULAR_CONSEQUENCE_VALUES)
     assert sv["variant_type"]["values"] == list(VARIANT_TYPE_VALUES)

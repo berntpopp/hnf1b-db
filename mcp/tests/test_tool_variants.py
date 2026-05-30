@@ -164,6 +164,32 @@ async def test_search_variants_with_filters():
     assert sent_params["page[size]"] == "10"
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_variants_typed_sort_echoes_applied_sort():
+    """A typed VariantSort value is honored and echoed back as applied_sort."""
+    route = respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_search_variants", {"sort": "-carrier_count"}
+    )
+    await client.aclose()
+
+    # Wire: the public token is translated to the backend ORDER BY token.
+    sent_params = dict(route.calls[0].request.url.params)
+    assert sent_params["sort"] == "-individualCount"
+
+    # Echo: the caller's public vocabulary confirms what the server did.
+    sc = r.structured_content
+    assert sc["meta"]["applied_sort"] == "-carrier_count"
+    assert sc["meta"]["ignored_params"] == []
+
+
 # ---------------------------------------------------------------------------
 # hnf1b_get_variant — authoritative full record
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from ..client.api_client import ApiClient
 from ..config import Settings
@@ -50,6 +50,36 @@ VARIANT_SORT_FIELDS: dict[str, str] = {
     "protein": "protein",
     "hg38": "hg38",
 }
+
+# Self-describing sort vocabulary for the search_variants tool. Each canonical
+# field above appears in BOTH directions: bare = ascending, ``-``-prefixed =
+# descending. A typed Literal makes the tool's sort param exactly as
+# self-describing as its enum filters, so an agent never has to guess
+# ``-carrier_count`` and confirm it worked only by reading meta.applied_sort.
+#
+# mypy requires Literal members to be spelled out (it cannot derive them from
+# VARIANT_SORT_FIELDS at type-check time), so the two are kept in lockstep by a
+# drift-guard test (test_variants.py::test_variant_sort_enum_matches_sort_fields)
+# that fails fast if either is edited without the other. This is an MCP-local
+# type, NOT part of the generated backend contract.
+VariantSort = Literal[
+    "carrier_count",
+    "-carrier_count",
+    "classification",
+    "-classification",
+    "structural_type",
+    "-structural_type",
+    "variant_id",
+    "-variant_id",
+    "simple_id",
+    "-simple_id",
+    "transcript",
+    "-transcript",
+    "protein",
+    "-protein",
+    "hg38",
+    "-hg38",
+]
 
 # The accepted translation set is the canonical fields plus the raw backend
 # tokens accepted verbatim (defensive: a caller that read a backend token
@@ -358,7 +388,13 @@ async def search_variants(
             ``"Transactivation Domain"``.
         page: 1-based page number (default 1).
         page_size: Number of results per page (default 25, capped at 500).
-        sort: Optional sort expression forwarded as-is to the API.
+        sort: Optional MCP-friendly sort expression (a key of
+            :data:`VARIANT_SORT_FIELDS`, optionally ``-``-prefixed for
+            descending). Translated to the backend ORDER BY token and echoed
+            back in the public vocabulary as ``applied_sort``; a field the
+            backend cannot sort on is reported in ``ignored_params`` rather than
+            silently dropped (see :data:`VariantSort` for the typed tool-facing
+            enum).
         response_mode: One of ``minimal``, ``compact``, ``standard``, ``full``
             (default ``compact``).  Controls the per-row field set.
 

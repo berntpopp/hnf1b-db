@@ -16,6 +16,7 @@ from hnf1b_mcp.services import variants as variants_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
 from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.variants import VariantSort
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -45,7 +46,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         domain: ProteinDomain | None = None,
         page: int = 1,
         page_size: int = 25,
-        sort: str | None = None,
+        sort: VariantSort | None = None,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Browse HNF1B variant records with optional filters.
@@ -72,7 +73,13 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``"POU Homeodomain"``, or ``"Transactivation Domain"``.
             page: 1-based page number (default 1).
             page_size: Number of results per page (default 25, capped at 500).
-            sort: Optional sort expression forwarded as-is to the API.
+            sort: Sort the result set by one of the sortable fields:
+                ``carrier_count``, ``classification``, ``structural_type``,
+                ``variant_id``, ``simple_id``, ``transcript``, ``protein``, or
+                ``hg38``.  A leading ``-`` means descending (e.g.
+                ``-carrier_count`` lists the most common variants first); no
+                prefix means ascending.  The honored sort is echoed back in
+                ``meta.applied_sort`` using this same public vocabulary.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
