@@ -43,6 +43,18 @@ _SEX_VOCAB_RESP = {
     ]
 }
 
+_HPO_AUTOCOMPLETE_RESP_SCORED = {
+    "data": [
+        {
+            "hpo_id": "HP:0000107",
+            "label": "Renal cyst",
+            "description": "Fluid-filled sacs in the kidney.",
+            "similarity_score": 0.9,
+            "phenopacket_count": 42,
+        },
+    ]
+}
+
 
 # ---------------------------------------------------------------------------
 # Registration / annotation tests
@@ -141,6 +153,26 @@ async def test_hpo_match_id_value() -> None:
     sc = r.structured_content
     assert sc["matches"][0]["id"] == "HP:0000083"
     assert sc["matches"][0]["label"] == "Renal insufficiency"
+    await c.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+@pytest.mark.parametrize("mode", ["minimal", "compact", "standard", "full"])
+async def test_hpo_score_survives_response_mode(mode: str) -> None:
+    """The HPO relevance score forwards through the tool in every response mode."""
+    respx.get(f"{BASE}/ontology/hpo/autocomplete").mock(
+        return_value=httpx.Response(200, json=_HPO_AUTOCOMPLETE_RESP_SCORED)
+    )
+    c = ApiClient(base_url=BASE)
+    mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
+    register(mcp, c)
+    r = await mcp.call_tool(
+        "hnf1b_resolve_terms", {"text": "renal cyst", "response_mode": mode}
+    )
+    sc = r.structured_content
+    assert sc["matches"][0]["id"] == "HP:0000107"
+    assert sc["matches"][0]["score"] == 0.9
     await c.aclose()
 
 

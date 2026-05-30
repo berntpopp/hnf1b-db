@@ -144,7 +144,9 @@ _TOOLS: list[dict[str, str]] = [
         "summary": (
             "Resolve free text against a controlled vocabulary. Call with "
             "text=<query> and vocabulary=<one of the allowed names, default "
-            "'hpo'>. Returns matching {id, label, description} entries."
+            "'hpo'>. Returns matching {id, label, description} entries; HPO "
+            "hits also carry a numeric 'score' (relevance, higher = better) "
+            "for ranking."
         ),
     },
     {
