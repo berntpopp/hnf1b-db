@@ -12,6 +12,7 @@ from pydantic import AwareDatetime, BaseModel, EmailStr, Field, RootModel
 class AggregationResult(BaseModel):
     count: Annotated[int, Field(title="Count")]
     details: Annotated[Optional[dict[str, Any]], Field(title="Details")] = None
+    hpo_id: Annotated[Optional[str], Field(title="Hpo Id")] = None
     label: Annotated[str, Field(title="Label")]
     percentage: Annotated[Optional[float], Field(title="Percentage")] = None
 
@@ -284,6 +285,94 @@ class PageMeta(BaseModel):
     pageSize: Annotated[int, Field(ge=1, le=1000, title="Pagesize")]
     totalPages: Annotated[int, Field(ge=0, title="Totalpages")]
     totalRecords: Annotated[int, Field(ge=0, title="Totalrecords")]
+
+
+class PassageHit(BaseModel):
+    char_count: Annotated[
+        int,
+        Field(description="Character length of the stored passage", title="Char Count"),
+    ]
+    dense_rank: Annotated[
+        Optional[int], Field(description="1-based dense-leg rank", title="Dense Rank")
+    ] = None
+    lexical_rank: Annotated[
+        Optional[int],
+        Field(description="1-based lexical-leg rank", title="Lexical Rank"),
+    ] = None
+    passage_id: Annotated[
+        str,
+        Field(
+            description="Stable passage identifier / citation anchor",
+            title="Passage Id",
+        ),
+    ]
+    pmid: Annotated[str, Field(description="PubMed ID in PMID: form", title="Pmid")]
+    score: Annotated[
+        float,
+        Field(description="Fused relevance score (higher is better)", title="Score"),
+    ]
+    section: Annotated[
+        str, Field(description="Canonical section label", title="Section")
+    ]
+    seq: Annotated[
+        int,
+        Field(description="Global passage order within the publication", title="Seq"),
+    ]
+    snippet: Annotated[
+        Optional[str],
+        Field(description="Highlighted snippet (brief mode)", title="Snippet"),
+    ] = None
+    source: Annotated[str, Field(description="Passage provenance", title="Source")]
+    text: Annotated[
+        Optional[str], Field(description="Full passage text (full mode)", title="Text")
+    ] = None
+    token_count: Annotated[
+        int, Field(description="Token count of the stored passage", title="Token Count")
+    ]
+
+
+class PassagesMeta(BaseModel):
+    dense_candidate_count: Annotated[
+        int,
+        Field(description="Dense-leg candidate count", title="Dense Candidate Count"),
+    ]
+    embedding_dim: Annotated[
+        Optional[int],
+        Field(description="Dense embedding dim, if used", title="Embedding Dim"),
+    ] = None
+    lexical_candidate_count: Annotated[
+        int,
+        Field(
+            description="Lexical-leg candidate count", title="Lexical Candidate Count"
+        ),
+    ]
+    mode: Annotated[
+        str, Field(description="Text mode: full | brief | ids_only", title="Mode")
+    ]
+    notes: Annotated[
+        Optional[list[str]], Field(description="Diagnostic notes", title="Notes")
+    ] = None
+    query: Annotated[
+        str, Field(description="The query that was executed", title="Query")
+    ]
+    rerank_used: Annotated[
+        str, Field(description="Rerank strategy actually applied", title="Rerank Used")
+    ]
+    total: Annotated[
+        int, Field(description="Number of passages returned", title="Total")
+    ]
+    truncated: Annotated[
+        Optional[bool],
+        Field(description="Whether results were budget-truncated", title="Truncated"),
+    ] = False
+
+
+class PassagesResponse(BaseModel):
+    meta: Annotated[PassagesMeta, Field(description="Retrieval diagnostics")]
+    passages: Annotated[
+        list[PassageHit],
+        Field(description="Ranked passages, best first", title="Passages"),
+    ]
 
 
 class PasswordChange(BaseModel):
@@ -655,8 +744,22 @@ class SyncProgressResponse(BaseModel):
 
 
 class SyncResponse(BaseModel):
+    abstracts_fetched: Annotated[
+        Optional[int], Field(description="Abstracts stored", title="Abstracts Fetched")
+    ] = None
     already_stored: Annotated[
         Optional[int], Field(description="PMIDs already stored", title="Already Stored")
+    ] = None
+    errors: Annotated[
+        Optional[int], Field(description="Per-publication failures", title="Errors")
+    ] = None
+    full_text_fetched: Annotated[
+        Optional[int],
+        Field(description="Full-text pubs stored", title="Full Text Fetched"),
+    ] = None
+    license_skipped: Annotated[
+        Optional[int],
+        Field(description="Body dropped by license gate", title="License Skipped"),
     ] = None
     message: Annotated[
         str, Field(description="Human-readable message", title="Message")
