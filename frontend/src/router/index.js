@@ -116,7 +116,7 @@ const routes = [
     path: '/mcp',
     name: 'McpAccess',
     component: () => import(/* webpackChunkName: "mcp-access" */ '../views/McpAccess.vue'),
-    meta: { title: 'MCP Access' },
+    meta: { title: 'Connect an AI Agent' },
   },
   {
     path: '/login',

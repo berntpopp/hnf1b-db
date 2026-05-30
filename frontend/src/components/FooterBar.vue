@@ -192,6 +192,19 @@ const refreshHealth = async () => {
   await healthService.checkBackendHealth();
 };
 
+// Keep the API docs link last among external links so the internal MCP button
+// (rendered immediately after the external-link loop) is always adjacent to it,
+// regardless of footerConfig.json ordering.
+const sortApiDocsLast = (links) => {
+  const apiIndex = links.findIndex((link) => link.id === 'api-docs');
+  if (apiIndex === -1) {
+    return links;
+  }
+  const reordered = [...links];
+  reordered.push(reordered.splice(apiIndex, 1)[0]);
+  return reordered;
+};
+
 const loadFooterConfig = async () => {
   const rawApi = import.meta.env.VITE_API_URL || '';
   const isProd = import.meta.env.PROD === true;
@@ -212,13 +225,15 @@ const loadFooterConfig = async () => {
     const response = await fetch('/config/footerConfig.json');
     const config = await response.json();
 
-    footerLinks.value = config
-      .filter((link) => link.enabled)
-      .map((link) => ({
-        ...link,
-        url: link.url === '__API_DOCS_URL__' ? apiDocsUrl : link.url,
-      }))
-      .filter((link) => link.url); // drop entries with null URL (unconfigured API docs)
+    footerLinks.value = sortApiDocsLast(
+      config
+        .filter((link) => link.enabled)
+        .map((link) => ({
+          ...link,
+          url: link.url === '__API_DOCS_URL__' ? apiDocsUrl : link.url,
+        }))
+        .filter((link) => link.url) // drop entries with null URL (unconfigured API docs)
+    );
 
     window.logService.info('Footer configuration loaded', {
       linksCount: footerLinks.value.length,
@@ -229,7 +244,7 @@ const loadFooterConfig = async () => {
       path: '/config/footerConfig.json',
     });
     // Fallback to default links; API docs entry is filtered if unconfigured.
-    footerLinks.value = [
+    footerLinks.value = sortApiDocsLast([
       {
         id: 'github',
         title: 'GitHub Repository',
@@ -242,7 +257,6 @@ const loadFooterConfig = async () => {
         icon: 'mdi-creative-commons',
         url: 'https://creativecommons.org/licenses/by/4.0/',
       },
-      // API docs is last so the internal MCP button renders next to it.
       ...(apiDocsUrl
         ? [
             {
@@ -253,7 +267,7 @@ const loadFooterConfig = async () => {
             },
           ]
         : []),
-    ];
+    ]);
   }
 };
 

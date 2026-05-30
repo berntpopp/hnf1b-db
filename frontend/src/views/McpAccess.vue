@@ -18,10 +18,10 @@
           <v-avatar color="teal" size="80" class="mb-4">
             <v-icon size="48" color="white">mdi-robot-outline</v-icon>
           </v-avatar>
-          <h1 class="text-h3 font-weight-bold text-grey-darken-3 mb-2">
+          <h1 class="text-h3 font-weight-bold text-high-emphasis mb-2">
             Connect an AI Agent (MCP)
           </h1>
-          <p class="text-h6 text-grey-darken-1">
+          <p class="text-h6 text-medium-emphasis">
             Query HNF1B-db from Claude, ChatGPT, and coding agents over the Model Context Protocol
           </p>
         </div>
@@ -35,8 +35,8 @@
 
         <!-- What you get -->
         <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-teal-lighten-5">
-            <v-icon left color="teal">mdi-database-search-outline</v-icon>
+          <v-card-title class="card-band">
+            <v-icon color="teal" class="mr-2">mdi-database-search-outline</v-icon>
             What you get
           </v-card-title>
           <v-card-text class="pa-6">
@@ -46,7 +46,7 @@
               variants, pull gene context and statistics, and cite publications — all without any
               write access.
             </p>
-            <p class="text-body-2 text-grey-darken-1 mb-0">
+            <p class="text-body-2 text-medium-emphasis mb-0">
               Public — no sign-in or API key required. Research use only; not clinical decision
               support.
             </p>
@@ -55,8 +55,8 @@
 
         <!-- Server address -->
         <v-card class="mb-6" elevation="2">
-          <v-card-title class="bg-teal-lighten-5">
-            <v-icon left color="teal">mdi-link-variant</v-icon>
+          <v-card-title class="card-band">
+            <v-icon color="teal" class="mr-2">mdi-link-variant</v-icon>
             Server address
           </v-card-title>
           <v-card-text class="pa-6">
@@ -72,14 +72,14 @@
                 Copy
               </v-btn>
             </div>
-            <p class="text-body-2 text-grey-darken-1 mt-3 mb-0">
+            <p class="text-body-2 text-medium-emphasis mt-3 mb-0">
               Transport: MCP Streamable HTTP. Use this same address in every client below.
             </p>
           </v-card-text>
         </v-card>
 
         <!-- Per-client instructions -->
-        <h2 class="text-h5 font-weight-bold text-grey-darken-3 mb-4">How to connect</h2>
+        <h2 class="text-h5 font-weight-bold text-high-emphasis mb-4">How to connect</h2>
         <v-row>
           <v-col v-for="client in clients" :key="client.id" cols="12" md="6">
             <v-card class="h-100 d-flex flex-column" elevation="2">
@@ -102,7 +102,7 @@
                     @click="copy(client.snippet, `${client.name} configuration`)"
                   />
                 </div>
-                <p v-if="client.note" class="text-caption text-grey-darken-1 mt-2 mb-0">
+                <p v-if="client.note" class="text-caption text-medium-emphasis mt-2 mb-0">
                   {{ client.note }}
                 </p>
               </v-card-text>
@@ -116,7 +116,7 @@
           lists every available tool and how to use it.
         </v-alert>
 
-        <p class="text-caption text-grey mt-4 mb-0">
+        <p class="text-caption text-medium-emphasis mt-4 mb-0">
           New to MCP? See the
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
             Model Context Protocol
@@ -127,7 +127,7 @@
     </v-row>
 
     <!-- Copy confirmation -->
-    <v-snackbar v-model="snackbar" :timeout="2000" color="success">
+    <v-snackbar v-model="snackbar" :timeout="2000" :color="snackbarSuccess ? 'success' : 'error'">
       {{ snackbarMessage }}
     </v-snackbar>
   </v-container>
@@ -190,52 +190,66 @@ const clients = [
     icon: 'mdi-code-braces',
     color: 'indigo-darken-1',
     steps: [
-      'Run the command below, or add the table to ~/.codex/config.toml by hand.',
+      'Add the table below to ~/.codex/config.toml (or run the shortcut command).',
       'Verify with “codex mcp list”, then start Codex.',
       'If it does not connect, update Codex to the latest release first.',
     ],
     snippet:
-      'codex mcp add hnf1b-db --url https://mcp.hnf1b.org/mcp\n\n# or in ~/.codex/config.toml:\n[mcp_servers.hnf1b-db]\nurl = "https://mcp.hnf1b.org/mcp"',
+      '# ~/.codex/config.toml\n[mcp_servers.hnf1b-db]\nurl = "https://mcp.hnf1b.org/mcp"\n\n# or, on current Codex releases:\ncodex mcp add hnf1b-db --url https://mcp.hnf1b.org/mcp',
     note: 'Remote Streamable-HTTP servers are first-class in current Codex releases.',
   },
 ];
 
 // Copy confirmation snackbar state.
 const snackbar = ref(false);
+const snackbarSuccess = ref(true);
 const snackbarMessage = ref('');
 
+const showSnackbar = (message, success) => {
+  snackbarMessage.value = message;
+  snackbarSuccess.value = success;
+  snackbar.value = true;
+};
+
 /**
- * Copy text to the clipboard and show a confirmation snackbar.
- * Mirrors the established clipboard pattern used in PageVariant.vue.
+ * Copy text to the clipboard and surface the outcome via the snackbar.
+ * Uses the async Clipboard API (available in secure contexts); failures and
+ * unsupported environments report an error rather than failing silently.
  */
 const copy = (text, label) => {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard
       .writeText(text)
       .then(() => {
-        snackbarMessage.value = `${label} copied to clipboard`;
-        snackbar.value = true;
+        showSnackbar(`${label} copied to clipboard`, true);
         window.logService.debug('MCP page clipboard copy', { label });
       })
       .catch((err) => {
-        snackbarMessage.value = 'Failed to copy to clipboard';
-        snackbar.value = true;
+        showSnackbar('Failed to copy — select and copy manually', false);
         window.logService.warn('MCP page clipboard copy failed', {
           label,
           error: err.message,
         });
       });
+  } else {
+    showSnackbar('Copying is unavailable — select and copy manually', false);
+    window.logService.warn('MCP page clipboard API unavailable', { label });
   }
 };
 </script>
 
 <style scoped>
+/* Theme-aware "code surface": faint on-surface tint that follows light/dark. */
+.card-band {
+  background-color: rgba(var(--v-theme-primary), 0.08);
+}
+
 .endpoint-code {
   padding: 0.35rem 0.6rem;
-  border: 1px solid #cfd8e3;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 6px;
-  background: #f6f8fb;
-  color: #102033;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgb(var(--v-theme-on-surface));
   font-size: 0.95rem;
   word-break: break-all;
 }
@@ -254,10 +268,10 @@ const copy = (text, label) => {
   overflow-x: auto;
   margin: 0;
   padding: 0.75rem 2.25rem 0.75rem 0.85rem;
-  border: 1px solid #cfd8e3;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 6px;
-  background: #f6f8fb;
-  color: #102033;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgb(var(--v-theme-on-surface));
   font-size: 0.82rem;
   line-height: 1.45;
   white-space: pre;

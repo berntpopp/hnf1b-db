@@ -84,8 +84,8 @@ describe('FooterBar API docs link (M10)', () => {
   it('omits the API docs link when VITE_API_URL is unset in prod build', async () => {
     await withEnv({ PROD: true, VITE_API_URL: '' }, async () => {
       mockFetchConfig([
-        { enabled: true, id: 'api', label: 'API', url: '__API_DOCS_URL__' },
-        { enabled: true, id: 'gh', label: 'GitHub', url: 'https://github.com/x/y' },
+        { enabled: true, id: 'api-docs', title: 'API Documentation', url: '__API_DOCS_URL__' },
+        { enabled: true, id: 'gh', title: 'GitHub', url: 'https://github.com/x/y' },
       ]);
       const wrapper = mount(makeAppWrapper(), {
         global: { plugins: [vuetify, pinia] },
@@ -103,7 +103,9 @@ describe('FooterBar API docs link (M10)', () => {
 
   it('includes the API docs link when VITE_API_URL is set', async () => {
     await withEnv({ PROD: true, VITE_API_URL: 'https://api.example.com/api/v2' }, async () => {
-      mockFetchConfig([{ enabled: true, id: 'api', label: 'API', url: '__API_DOCS_URL__' }]);
+      mockFetchConfig([
+        { enabled: true, id: 'api-docs', title: 'API Documentation', url: '__API_DOCS_URL__' },
+      ]);
       const wrapper = mount(makeAppWrapper(), {
         global: { plugins: [vuetify, pinia] },
       });
@@ -115,7 +117,9 @@ describe('FooterBar API docs link (M10)', () => {
 
   it('falls back to localhost in dev when VITE_API_URL is unset', async () => {
     await withEnv({ PROD: false, VITE_API_URL: '' }, async () => {
-      mockFetchConfig([{ enabled: true, id: 'api', label: 'API', url: '__API_DOCS_URL__' }]);
+      mockFetchConfig([
+        { enabled: true, id: 'api-docs', title: 'API Documentation', url: '__API_DOCS_URL__' },
+      ]);
       const wrapper = mount(makeAppWrapper(), {
         global: { plugins: [vuetify, pinia] },
       });
@@ -125,15 +129,38 @@ describe('FooterBar API docs link (M10)', () => {
     });
   });
 
-  it('renders an internal MCP access link (next to the API docs link)', async () => {
-    mockFetchConfig([{ enabled: true, id: 'api', label: 'API', url: 'https://x.test/docs' }]);
+  it('renders the internal MCP access link immediately after the API docs link', async () => {
+    // api-docs is listed in the MIDDLE here; the component must still force it
+    // last so the hardcoded MCP button stays adjacent to it.
+    mockFetchConfig([
+      { enabled: true, id: 'gh', title: 'GitHub', icon: 'mdi-github', url: 'https://x.test/gh' },
+      {
+        enabled: true,
+        id: 'api-docs',
+        title: 'API Documentation',
+        icon: 'mdi-api',
+        url: 'https://x.test/docs',
+      },
+      {
+        enabled: true,
+        id: 'license',
+        title: 'License',
+        icon: 'mdi-creative-commons',
+        url: 'https://x.test/license',
+      },
+    ]);
     const wrapper = mount(makeAppWrapper(), {
       global: { plugins: [vuetify, pinia] },
     });
     await new Promise((r) => setTimeout(r, 20));
-    // The MCP button is an internal route button (not a config-driven external
-    // link), identified by its icon and aria-label.
-    expect(wrapper.html()).toContain('mdi-robot-outline');
+
+    // The MCP button is an internal route button (not config-driven).
     expect(wrapper.find('[aria-label="MCP access"]').exists()).toBe(true);
+
+    const html = wrapper.html();
+    // api-docs forced last among external links (after license)...
+    expect(html.indexOf('mdi-api')).toBeGreaterThan(html.indexOf('mdi-creative-commons'));
+    // ...and the MCP button renders immediately after the API docs link.
+    expect(html.indexOf('mdi-robot-outline')).toBeGreaterThan(html.indexOf('mdi-api'));
   });
 });
