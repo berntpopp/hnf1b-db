@@ -95,6 +95,20 @@ _PHENOPACKET_B: dict = {
     },
 }
 
+_PHENOPACKET_C: dict = {
+    "id": "pp-C",
+    "phenopacket_id": "C",
+    "phenopacket": {
+        "id": "C",
+        "subject": {"id": "C", "sex": "MALE"},
+        "phenotypicFeatures": [],
+        "measurements": [],
+        "diseases": [],
+        "interpretations": [],
+        "metaData": {"externalReferences": []},
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Registration tests
 # ---------------------------------------------------------------------------
@@ -644,4 +658,391 @@ async def test_find_by_phenotype_all_matched_reports_empty_unmatched():
 
     assert sc["total"] >= 1
     assert sc["unmatched_hpo_ids"] == []
+    await client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# match_mode: "any" (union) vs "all" (intersection)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_match_mode_any_is_union():
+    # term A matches {A, B, C}; term B matches {B, C, D}; UNION = {A,B,C,D}.
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(
+                200, json={"data": [{"id": "A"}, {"id": "B"}, {"id": "C"}]}
+            )
+        return httpx.Response(
+            200, json={"data": [{"id": "B"}, {"id": "C"}, {"id": "D"}]}
+        )
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    _PHENOPACKET_A,
+                    _PHENOPACKET_B,
+                    _PHENOPACKET_C,
+                    {
+                        "id": "pp-D",
+                        "phenopacket_id": "D",
+                        "phenopacket": {
+                            "id": "D",
+                            "subject": {"id": "D", "sex": "MALE"},
+                            "phenotypicFeatures": [],
+                            "measurements": [],
+                            "diseases": [],
+                            "interpretations": [],
+                            "metaData": {"externalReferences": []},
+                        },
+                    },
+                ]
+            },
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083", "HP:0000107"], "match_mode": "any"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "any"
+    assert sc["total"] == 4
+    ids = {ind["phenopacket_id"] for ind in sc["individuals"]}
+    assert ids == {"A", "B", "C", "D"}
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_match_mode_all_is_intersection():
+    # term A matches {1,2,3} == {A,B,C}; term B matches {2,3,4} == {B,C,D};
+    # INTERSECTION = {B, C}. Order must follow first-seen input order.
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(
+                200, json={"data": [{"id": "A"}, {"id": "B"}, {"id": "C"}]}
+            )
+        return httpx.Response(
+            200, json={"data": [{"id": "B"}, {"id": "C"}, {"id": "D"}]}
+        )
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(
+            200, json={"results": [_PHENOPACKET_B, _PHENOPACKET_C]}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083", "HP:0000107"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    assert sc["total"] == 2
+    ids = {ind["phenopacket_id"] for ind in sc["individuals"]}
+    assert ids == {"B", "C"}
+    # A (only in term A) and D (only in term B) must be excluded.
+    assert "A" not in ids
+    assert "D" not in ids
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_match_mode_all_one_unmatched_term_empty():
+    # term A matches {A}; term B (HP:9999999) matches nothing.
+    # Under "all" the intersection MUST be empty and the term flagged unmatched.
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(200, json={"data": [{"id": "A"}]})
+        return httpx.Response(200, json={"data": []})
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000107", "HP:9999999"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    assert sc["total"] == 0
+    assert sc["individuals"] == []
+    assert sc["unmatched_hpo_ids"] == ["HP:9999999"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_single_term_any_equals_all():
+    # With a single term, "any" and "all" must yield identical cohorts.
+    respx.get(f"{BASE}/phenopackets/search").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": "A"}, {"id": "B"}]})
+    )
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(
+            200, json={"results": [_PHENOPACKET_A, _PHENOPACKET_B]}
+        )
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r_all = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083"], "match_mode": "all"},
+    )
+    sc_all = r_all.structured_content
+    assert sc_all["match_mode"] == "all"
+    assert sc_all["total"] == 2
+    assert {i["phenopacket_id"] for i in sc_all["individuals"]} == {"A", "B"}
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_all_intra_term_dupes_dont_satisfy_intersection():
+    # term A returns A TWICE (duplicate within its own pages) and nothing else;
+    # term B returns only B. Naive per-occurrence counting would count A twice
+    # and falsely satisfy a 2-term intersection. Correct intersection = {} .
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(200, json={"data": [{"id": "A"}, {"id": "A"}]})
+        return httpx.Response(200, json={"data": [{"id": "B"}]})
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083", "HP:0000107"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    # A appeared twice under ONE term but is absent from term B; B appeared under
+    # ONE term only. Intersection across BOTH terms is empty.
+    assert sc["total"] == 0
+    assert sc["individuals"] == []
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_all_repeated_input_term_keeps_match():
+    # A caller repeats the SAME term: ["HP:0000107", "HP:0000107"]. There is one
+    # DISTINCT term, so the intersection threshold is 1 and any individual that
+    # carries it must be kept. A naive per-occurrence count would increment the
+    # term to 2 (> the distinct threshold of 1) and WRONGLY drop the true match.
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(200, json={"data": [{"id": "A"}]})
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json={"results": [_PHENOPACKET_A]})
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000107", "HP:0000107"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    # One distinct term matched {A}; the cohort must be {A}, NOT empty.
+    assert sc["total"] == 1
+    assert {i["phenopacket_id"] for i in sc["individuals"]} == {"A"}
+    assert sc["unmatched_hpo_ids"] == []
+    # The repeated term must be enumerated exactly once (no redundant backend
+    # fetch for the duplicate input term).
+    assert call_count == 1
+    await client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Page-cap caveat: capping must surface total_is_capped + the under-inclusive
+# "all"-mode warning on BOTH the populated AND the empty return paths.
+# ---------------------------------------------------------------------------
+
+
+def _full_page_always_next(page: int, end_cursor: str = "next") -> dict:
+    """A search page that is always full and always reports hasNextPage.
+
+    Returning *page* full ids with ``hasNextPage: true`` on every call drives
+    ``_collect_matches`` to its ``_MAX_PAGES`` cap deterministically.
+    """
+    return {
+        "data": [{"id": f"id-{i:04d}"} for i in range(page)],
+        "meta": {"page": {"hasNextPage": True, "endCursor": end_cursor}},
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_all_capped_nonempty_surfaces_caveat():
+    """Capped + NON-empty "all" intersection → total_is_capped + caveat present.
+
+    Both terms always return the SAME full page of ids (id-0000..id-0099) and
+    always report hasNextPage, so every term hits the page cap (capped=True)
+    yet the intersection across the two terms is non-empty.
+    """
+    from hnf1b_mcp.tools import individuals as individuals_mod
+
+    page = individuals_mod._PAGE
+    results = [
+        {
+            "id": f"pp-id-{i:04d}",
+            "phenopacket_id": f"id-{i:04d}",
+            "phenopacket": {
+                "id": f"id-{i:04d}",
+                "subject": {"id": f"id-{i:04d}", "sex": "MALE"},
+                "phenotypicFeatures": [],
+                "measurements": [],
+                "diseases": [],
+                "interpretations": [],
+                "metaData": {"externalReferences": []},
+            },
+        }
+        for i in range(page)
+    ]
+
+    respx.get(f"{BASE}/phenopackets/search").mock(
+        return_value=httpx.Response(200, json=_full_page_always_next(page))
+    )
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json={"results": results})
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083", "HP:0000107"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    # Both terms enumerate the same ids -> intersection is non-empty.
+    assert sc["total"] > 0
+    # _meta is hoisted into meta by run_tool; the capped signal must be present.
+    assert sc["meta"]["total_is_capped"] is True
+    assert "under-inclusive" in sc["meta"]["note"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_all_capped_empty_still_surfaces_caveat():
+    """Finding-1 regression guard: capping-induced EMPTY "all" cohort.
+
+    The two terms return DISJOINT full pages and both always report
+    hasNextPage, so each term hits the page cap (capped=True) and the
+    intersection is empty. The empty-cohort return path MUST still carry
+    total_is_capped + the under-inclusive caveat — otherwise a capping-induced
+    empty reads as a confident "0 individuals carry all these terms".
+    """
+    from hnf1b_mcp.tools import individuals as individuals_mod
+
+    page = individuals_mod._PAGE
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        # Disjoint per-term id namespaces keyed off the queried HPO term, so the
+        # two terms never share an id and the per-id count never reaches the
+        # distinct-term threshold of 2 (intersection stays empty). hasNextPage is
+        # always true, so each term hits the page cap (capped=True).
+        term = request.url.params.get("hpo_id", "")
+        data = [{"id": f"{term}-{i:04d}"} for i in range(page)]
+        return httpx.Response(
+            200,
+            json={
+                "data": data,
+                "meta": {"page": {"hasNextPage": True, "endCursor": "next"}},
+            },
+        )
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083", "HP:0000107"], "match_mode": "all"},
+    )
+    sc = r.structured_content
+
+    assert sc["match_mode"] == "all"
+    # Disjoint per-term sets -> intersection empty.
+    assert sc["total"] == 0
+    assert sc["individuals"] == []
+    # The empty path must STILL flag the capping + under-inclusive caveat.
+    assert sc["meta"]["total_is_capped"] is True
+    assert "under-inclusive" in sc["meta"]["note"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_match_mode_defaults_to_any():
+    # No match_mode supplied → default "any"; returned field echoes "any".
+    respx.get(f"{BASE}/phenopackets/search").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": "A"}]})
+    )
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json={"results": [_PHENOPACKET_A]})
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083"]},
+    )
+    sc = r.structured_content
+    assert sc["match_mode"] == "any"
     await client.aclose()

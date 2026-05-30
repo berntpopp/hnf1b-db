@@ -66,10 +66,12 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_find_individuals_by_phenotype",
         "summary": (
-            "Find individuals carrying ANY of a set of HPO term IDs (OR/union "
-            "match) via `hpo_ids`. Returns the matched cohort with the FULL "
-            "match `total` and `has_more`. Caller supplies exact HPO IDs; v1 "
-            "does not resolve free text (use hnf1b_resolve_terms first)."
+            "Find individuals by a set of HPO term IDs via `hpo_ids`, combined "
+            "by `match_mode`: 'any' (default, OR/union — carries any term) or "
+            "'all' (AND/intersection — carries every term). Returns the matched "
+            "cohort with the FULL match `total` and `has_more`. Caller supplies "
+            "exact HPO IDs; v1 does not resolve free text (use "
+            "hnf1b_resolve_terms first)."
         ),
     },
     {
@@ -446,8 +448,21 @@ def _filterable_fields() -> dict[str, Any]:
             "hpo_ids": {
                 "type": "list[string]",
                 "hint": (
-                    "exact HPO IDs (e.g. ['HP:0000107']); OR/union match. "
-                    "Resolve free text via hnf1b_resolve_terms first."
+                    "exact HPO IDs (e.g. ['HP:0000107']). Combined per "
+                    "match_mode (default OR/union). Resolve free text via "
+                    "hnf1b_resolve_terms first."
+                ),
+            },
+            "match_mode": {
+                "values": ["any", "all"],
+                "default": "any",
+                "hint": (
+                    "how multiple hpo_ids combine: 'any' (default) = OR/union "
+                    "(carries any term); 'all' = AND/intersection (carries every "
+                    "distinct term). Caveat for 'all': per-term enumeration is "
+                    "page-capped, so if _meta.total_is_capped is set the "
+                    "intersection may be under-inclusive (a true match can be "
+                    "excluded) — treat the 'all' cohort as a lower bound."
                 ),
             },
         },

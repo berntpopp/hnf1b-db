@@ -94,6 +94,16 @@ def test_capabilities_filterable_fields_present():
     assert gp["sort"]["values"] == list(PUBLICATION_SORT_FIELDS)
     assert "descending" in gp["sort"]["hint"].lower()
 
+    # find_individuals_by_phenotype advertises match_mode so the AND/intersection
+    # capability is discoverable alongside the default OR/union semantics.
+    fp = ff["hnf1b_find_individuals_by_phenotype"]
+    assert fp["match_mode"]["values"] == ["any", "all"]
+    fp_hint = fp["match_mode"]["hint"].lower()
+    assert "union" in fp_hint
+    assert "intersection" in fp_hint
+    # The capping caveat for the AND path must be surfaced in the advert.
+    assert "cap" in fp_hint
+
     sv = ff["hnf1b_search_variants"]
     # Exactly the real filter/sort params plus the carrier_count field-semantics
     # note — no invented hgvs_c / acmg_class.
