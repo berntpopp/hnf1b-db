@@ -34,6 +34,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Search HNF1B Variants",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -120,6 +121,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Get HNF1B Variant",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )

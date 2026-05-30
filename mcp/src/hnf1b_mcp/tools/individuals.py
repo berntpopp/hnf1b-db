@@ -41,6 +41,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Get HNF1B Individual (phenopacket)",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -123,6 +124,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Get/List HNF1B Individuals",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
@@ -208,6 +210,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         annotations={
             "title": "Find Individuals by HPO Phenotype",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )

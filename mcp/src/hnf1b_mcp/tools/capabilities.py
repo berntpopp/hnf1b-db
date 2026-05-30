@@ -25,6 +25,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
         annotations={
             "title": "HNF1B: Capabilities & Tool Inventory",
             "readOnlyHint": True,
+            "idempotentHint": True,
             "openWorldHint": False,
         },
     )
