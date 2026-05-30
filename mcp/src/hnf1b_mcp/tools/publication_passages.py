@@ -65,9 +65,9 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 back to lexical otherwise), ``lexical``, or ``off``.
             limit: Maximum passages to return (default 8).
             response_mode: Token budget / verbosity — one of ``minimal``,
-                ``compact`` (default), ``standard``, ``full``.
-                ``standard``/``full`` also include per-passage ``score``,
-                ``seq``, and ``source``.
+                ``compact`` (default), ``standard``, ``full``. Every mode
+                includes the per-passage relevance ``score``;
+                ``standard``/``full`` add ``seq`` and ``source``.
 
         Returns:
             A dict with ``query``, ``passages`` (each with ``passage_id``,
