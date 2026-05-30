@@ -4,7 +4,7 @@
 
 | Tool | Purpose |
 |---|---|
-| `hnf1b_get_capabilities` | Retrieve server capabilities, limits, error codes, and this guide. Recommended (not required) for cold-session orientation; per-tool `filterable_fields` let clients build valid calls directly, and a warm client can compare `capabilities_version` to skip re-fetching. |
+| `hnf1b_get_capabilities` | Retrieve server capabilities, limits, error codes, and this guide. Recommended (not required) for cold-session orientation; per-tool `filterable_fields` let clients build valid calls directly, and a warm client can compare `capabilities_version` and `tool_guide_version` before re-fetching. |
 | `hnf1b_search` | Unified free-text discovery across individuals, variants, and publications (and genes). Returns typed ID hits; each hit carries a `resolve_with` object naming the exact tool + argument to fetch its content. |
 | `hnf1b_get_individual` | Retrieve the full phenopacket record for a single individual by `phenopacket_id`. |
 | `hnf1b_get_individuals` | Retrieve multiple phenopacket records in one call given a list of `phenopacket_id` values (batch fetch). |
@@ -13,9 +13,78 @@
 | `hnf1b_get_variant` | Retrieve the full record for a single variant by `variant_id`, including all associated interpretation details. |
 | `hnf1b_get_gene_context` | Return the HNF1B gene reference record: genomic coordinates, cross-references (HGNC/NCBI/OMIM), transcript IDs, and annotated protein domains. |
 | `hnf1b_get_publications` | List cached publications (keyword `q`, `year`, `has_doi`; `sort`), OR reverse-lookup the individuals citing one publication via `citing_pmid`. Returns `recommended_citation` strings. |
+| `hnf1b_get_publication_passages` | Hybrid RAG retrieval over cached abstracts and license-gated open-access full-text passages. Returns passage IDs, section labels, snippets/text by mode, and citation metadata. |
 | `hnf1b_get_statistics` | Return one aggregate cohort `metric` (variant counts by ACMG class, phenotype frequency, survival, etc.). Supports `dry_run=True` to preview payload cost. |
 | `hnf1b_resolve_terms` | Resolve free text to HPO terms (autocomplete) or list a controlled vocabulary (sex, allelic-state, evidence-code, …). Returns `{id, label, description}` entries. |
 | `hnf1b_compare_phenotypes` | Genotype-phenotype analytics: compare HPO phenotype frequencies (observed/excluded/unknown) across the carrier cohorts of up to 10 variants in a single call. |
+
+## Tool Reference
+
+### `hnf1b_get_capabilities`
+
+Use for server-local discovery: available tools, enum-constrained filters,
+payload-mode budgets, safety/citation contracts, resource versions, and
+descriptor size metadata.
+
+### `hnf1b_search`
+
+Use for broad free-text discovery across individuals, variants, publications,
+and genes. Hits include a `resolve_with` handoff that names the follow-up tool,
+argument, and value.
+
+### `hnf1b_get_individual`
+
+Use when you already have one `phenopacket_id` and need the individual
+phenopacket detail, including observed and excluded phenotype assertions.
+
+### `hnf1b_get_individuals`
+
+Use to batch-fetch multiple phenopacket records from an ordered `ids` list.
+
+### `hnf1b_find_individuals_by_phenotype`
+
+Use when you have exact HPO IDs and want the matching cohort by `match_mode`
+(`any` union or `all` intersection).
+
+### `hnf1b_search_variants`
+
+Use to browse variants with server-side filtering and sorting by classification,
+consequence, type, domain, gene, query text, or carrier count.
+
+### `hnf1b_get_variant`
+
+Use when you have a canonical `variant_id` or accepted `simple_id` and need the
+variant record plus carrier counts and sampled carrier IDs.
+
+### `hnf1b_get_gene_context`
+
+Use for HNF1B reference context: coordinates, external references, transcripts,
+protein domains, and optional exon details.
+
+### `hnf1b_get_publications`
+
+Use to list cached publications or reverse-lookup the individuals citing one
+publication via `citing_pmid`.
+
+### `hnf1b_get_publication_passages`
+
+Use to retrieve ranked publication passages for a query, optionally filtered by
+PMID or section and shaped by `mode` and `rerank`.
+
+### `hnf1b_get_statistics`
+
+Use for one aggregate cohort statistic at a time. Call with `dry_run=True` to
+preview the metric and expected payload before fetching the data.
+
+### `hnf1b_resolve_terms`
+
+Use to resolve free text into controlled-vocabulary entries, especially HPO IDs
+before phenotype searches.
+
+### `hnf1b_compare_phenotypes`
+
+Use for genotype-phenotype comparison across carrier cohorts for up to 10
+variants, including observed, excluded, unknown, and recorded-rate fields.
 
 ## Canonical Workflows
 
