@@ -113,6 +113,12 @@ const routes = [
     meta: { title: 'FAQ' },
   },
   {
+    path: '/mcp',
+    name: 'McpAccess',
+    component: () => import(/* webpackChunkName: "mcp-access" */ '../views/McpAccess.vue'),
+    meta: { title: 'MCP Access' },
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import(/* webpackChunkName: "login" */ '../views/Login.vue'),
