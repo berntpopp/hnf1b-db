@@ -23,6 +23,20 @@ make backend
 make frontend
 ```
 
+### Or: run the entire stack in Docker
+
+```bash
+cp .env.docker.example .env.docker   # then set ENVIRONMENT=development + ADMIN_PASSWORD
+make dev-up                          # builds + starts db, cache, api, mcp, frontend
+# API http://localhost:8000 · Docs /docs · MCP http://localhost:8788/health · Frontend http://localhost:3000
+make dev-down                        # stop (preserves the postgres volume)
+```
+
+`make dev-up` loads `.env.docker` (`--env-file`) and uses the
+`pgvector/pgvector:pg15` database; the API container auto-applies Alembic
+migrations on startup. Once healthy, populate the publication RAG corpus with
+`make publications-backfill`.
+
 See [docs/deployment/docker.md](docs/deployment/docker.md) for full Docker
 deployment instructions (including production with Nginx Proxy Manager).
 
