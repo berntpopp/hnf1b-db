@@ -10,7 +10,7 @@ and the retrieval diagnostics surfaced via ``_meta``.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, Literal, Optional, Sequence
 
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.config import Settings
@@ -23,6 +23,12 @@ from hnf1b_mcp.services.shaping import apply_budget
 API_MODES = ("brief", "full", "ids_only")
 #: Rerank strategies accepted by the backend endpoint.
 RERANK_MODES = ("rrf", "lexical", "off")
+
+#: Schema-visible enums for the ``mode`` / ``rerank`` tool params. Kept in
+#: lockstep with :data:`API_MODES` / :data:`RERANK_MODES` by a drift-guard test;
+#: the runtime ``_validate_*`` guards stay as defense-in-depth (Literal ⊂ str).
+PassageMode = Literal["brief", "full", "ids_only"]
+RerankMode = Literal["rrf", "lexical", "off"]
 
 #: Snippet length requested from the backend, sized to the response mode.
 _SNIPPET_BY_MODE: dict[str, int] = {

@@ -9,8 +9,9 @@ from fastmcp import FastMCP
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import reference as reference_service
 from hnf1b_mcp.services.dataclass import DataClass
+from hnf1b_mcp.services.reference import GenomeBuild
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -33,11 +34,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     )
     async def hnf1b_get_gene_context(
         gene_symbol: str = "HNF1B",
-        genome_build: str = "GRCh38",
+        genome_build: GenomeBuild = "GRCh38",
         include_transcripts: bool = True,
         include_domains: bool = True,
         include_exons: bool = False,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Return gene reference data including transcripts and protein domains.
 

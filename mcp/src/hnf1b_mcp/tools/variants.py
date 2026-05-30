@@ -15,7 +15,7 @@ from hnf1b_mcp.contract import (
 from hnf1b_mcp.services import variants as variants_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 from hnf1b_mcp.services.variants import VariantSort
 
 
@@ -47,7 +47,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         page: int = 1,
         page_size: int = 25,
         sort: VariantSort | None = None,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Browse HNF1B variant records with optional filters.
 
@@ -125,7 +125,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     )
     async def hnf1b_get_variant(
         variant_id: str,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
         include_carriers: bool = False,
     ) -> dict[str, Any]:
         """Fetch the full authoritative record for a single HNF1B variant.

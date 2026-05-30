@@ -11,7 +11,7 @@ from hnf1b_mcp.services import publications as publications_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.publications import PublicationSort
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -40,7 +40,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         sort: PublicationSort | None = None,
         citing_pmid: str | None = None,
         include_citing_individuals: bool = False,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Browse and search the local HNF1B publication cache.
 

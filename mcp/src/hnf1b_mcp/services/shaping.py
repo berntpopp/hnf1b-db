@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from .errors import McpToolError
 
@@ -11,6 +11,15 @@ _T = TypeVar("_T")
 
 MODES = ("minimal", "compact", "standard", "full")
 DEFAULT_MODE = "compact"
+
+#: Schema-visible enum for the ``response_mode`` parameter shared by every tool.
+#: Typing a tool param with this Literal makes the four valid values appear in
+#: the tool's JSON input schema (so a client/agent can autocomplete and a typo is
+#: rejected at validation time), instead of an opaque ``string``. Kept in lockstep
+#: with :data:`MODES` by a drift-guard test (``set(get_args(ResponseMode)) ==
+#: set(MODES)``); ``resolve_mode`` remains the runtime guard (Literal is a ``str``
+#: subtype, so the two compose).
+ResponseMode = Literal["minimal", "compact", "standard", "full"]
 
 # Default cap for an inline id list (carrier ids, citing-individual ids, …) shown
 # without an explicit opt-in. A heavily-populated list (e.g. the recurrent 17q12

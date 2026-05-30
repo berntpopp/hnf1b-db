@@ -10,7 +10,7 @@ from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import search as search_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -35,7 +35,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         query: str,
         types: list[str] | None = None,
         limit: int = 10,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Unified discovery search — returns typed ID hits.
 

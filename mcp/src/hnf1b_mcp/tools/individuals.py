@@ -13,7 +13,7 @@ from hnf1b_mcp.services import individuals as individuals_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.safe_tool import run_tool
-from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.shaping import ResponseMode, resolve_mode
 
 # Canonical HPO term-ID shape: "HP:" + exactly 7 digits (e.g. HP:0000107).
 _HPO_ID_RE = re.compile(r"^HP:\d{7}$")
@@ -50,7 +50,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         include_variants: bool = True,
         include_measurements: bool = True,
         include_publications: bool = True,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
         fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve the full phenopacket record for a single individual.
@@ -133,7 +133,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         page_size: int = 25,
         expand: bool = False,
         dedupe_publications: bool = False,
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
         fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve a list of HNF1B-db individuals by IDs or with optional filters.
@@ -216,7 +216,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         page_size: int = 25,
         include_excluded: bool = False,
         match_mode: Literal["any", "all"] = "any",
-        response_mode: str | None = None,
+        response_mode: ResponseMode | None = None,
     ) -> dict[str, Any]:
         """Cohort discovery: find individuals sharing one or more HPO phenotype terms.
 
