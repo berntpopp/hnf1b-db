@@ -328,6 +328,11 @@ async def search_passages(
     dense_rank: dict[str, int] = {}
     embedding_dim: Optional[int] = None
     rerank_used = rerank
+    # The dense (semantic) leg is operational for this query IFF a provider is
+    # present AND embeddings are stored for the configured model. This travels in
+    # the response meta so an operator can see at a glance that an advertised
+    # "hybrid" run silently degraded to lexical-only.
+    embeddings_available = False
 
     # Section lookup for boosts — seeded from the lexical leg and extended with
     # the dense leg below so dense-ONLY passages are boosted too (the dense query
@@ -335,13 +340,27 @@ async def search_passages(
     section_by_id: dict[str, str] = {r.passage_id: r.section for r in lexical_rows}
 
     want_dense = rerank == "rrf"
-    if want_dense and provider is None:
-        rerank_used = "lexical"
-        notes.append("dense disabled: no embedding provider available")
-    elif want_dense and not await _embeddings_present(db, model_name):
-        rerank_used = "lexical"
-        notes.append("dense disabled: no embeddings stored for model")
-    elif want_dense:
+    if want_dense:
+        # Probe BOTH causes independently so the notes can distinguish
+        # provider-missing / embeddings-missing / both. The presence probe is a
+        # cheap ``LIMIT 1`` existence check; without it the provider-missing
+        # branch would mask whether embeddings ALSO exist, leaving an operator
+        # unable to tell what to fix.
+        has_provider = provider is not None
+        has_embeddings = await _embeddings_present(db, model_name)
+        embeddings_available = has_provider and has_embeddings
+        if not embeddings_available:
+            rerank_used = "lexical"
+            if not has_provider:
+                notes.append("dense disabled: no embedding provider available")
+            if not has_embeddings:
+                notes.append("dense disabled: no embeddings stored for model")
+            elif not has_provider:
+                # Provider missing but embeddings DO exist: surface that the data
+                # is there, so the fix is "install the embedding stack", not
+                # "backfill embeddings".
+                notes.append("dense disabled: embeddings present, provider missing")
+    if want_dense and embeddings_available:
         qvec = (await provider.embed([query], is_query=True))[0]  # type: ignore[union-attr]
         embedding_dim = len(qvec)
         dense_rows = await _dense_candidates(
@@ -419,6 +438,7 @@ async def search_passages(
         lexical_candidate_count=len(lexical_ids),
         dense_candidate_count=len(dense_ids),
         embedding_dim=embedding_dim,
+        embeddings_available=embeddings_available,
         truncated=truncated,
         notes=tuple(notes),
     )

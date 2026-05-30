@@ -102,7 +102,10 @@ async def test_passages_rrf_degrades_to_lexical_without_embeddings(
     )
     assert resp.status_code == 200
     # No embedding provider in CI -> dense disabled, reported as lexical.
-    assert resp.json()["meta"]["rerank_used"] == "lexical"
+    meta = resp.json()["meta"]
+    assert meta["rerank_used"] == "lexical"
+    # The silent hybrid->lexical degradation must be explicit in meta.
+    assert meta["embeddings_available"] is False
 
 
 @pytest.mark.asyncio

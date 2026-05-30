@@ -161,6 +161,9 @@ async def get_publication_passages(
         "lexical_candidate_count": api_meta.get("lexical_candidate_count"),
         "dense_candidate_count": api_meta.get("dense_candidate_count"),
         "embedding_dim": api_meta.get("embedding_dim"),
+        # Explicit so an MCP client can see when an advertised "hybrid" retrieval
+        # silently ran lexical-only (no embedding stack in the deployment).
+        "embeddings_available": api_meta.get("embeddings_available", False),
         "retrieval_truncated": api_meta.get("truncated"),
     }
     return result

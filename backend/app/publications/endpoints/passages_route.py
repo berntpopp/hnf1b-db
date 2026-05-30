@@ -151,6 +151,7 @@ async def search_publication_passages(
             lexical_candidate_count=result.lexical_candidate_count,
             dense_candidate_count=result.dense_candidate_count,
             embedding_dim=result.embedding_dim,
+            embeddings_available=result.embeddings_available,
             truncated=result.truncated,
             notes=list(result.notes),
         ),

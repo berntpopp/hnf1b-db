@@ -1525,6 +1525,12 @@
             "description": "Dense embedding dim, if used",
             "title": "Embedding Dim"
           },
+          "embeddings_available": {
+            "default": false,
+            "description": "Whether the dense (semantic) leg was operational for this query (provider present AND embeddings stored); False means 'hybrid' silently degraded to lexical-only",
+            "title": "Embeddings Available",
+            "type": "boolean"
+          },
           "lexical_candidate_count": {
             "description": "Lexical-leg candidate count",
             "title": "Lexical Candidate Count",

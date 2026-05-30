@@ -228,6 +228,11 @@ class RetrievalResult:
         lexical_candidate_count: Candidates pulled by the lexical leg.
         dense_candidate_count: Candidates pulled by the dense leg (0 if disabled).
         embedding_dim: Embedding dimension when dense was used, else ``None``.
+        embeddings_available: Whether the dense (semantic) leg was actually
+            operational for this query — ``True`` IFF an embedding provider was
+            present AND embeddings are stored for the configured model. ``False``
+            otherwise (no provider, no stored embeddings, or a non-``rrf``
+            request), making a silent "hybrid"->lexical degradation explicit.
         truncated: Whether results were cut to satisfy ``max_chars``/``limit``.
         notes: Human-readable diagnostics (e.g. dense fallback reason).
     """
@@ -237,6 +242,7 @@ class RetrievalResult:
     lexical_candidate_count: int = 0
     dense_candidate_count: int = 0
     embedding_dim: Optional[int] = None
+    embeddings_available: bool = False
     truncated: bool = False
     notes: tuple[str, ...] = ()
 

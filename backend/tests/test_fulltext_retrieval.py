@@ -286,6 +286,89 @@ async def test_rrf_falls_back_when_no_embeddings_stored(db_session):
 
 
 @pytest.mark.asyncio
+async def test_embeddings_available_false_without_provider(db_session):
+    """The live deployment state (no provider): embeddings_available is False.
+
+    Even when embedding rows ARE stored for the configured model, a missing
+    provider means the dense leg cannot run, so hybrid silently degrades to
+    lexical. ``embeddings_available`` must report False so that degradation is
+    unmissable; the probe note must distinguish the *provider-missing* cause
+    (embeddings present, install the stack) from a *embeddings-missing* one.
+    """
+    from app.core.config import get_settings
+
+    # Stored embeddings exist UNDER THE CONFIGURED MODEL, but no provider is
+    # supplied — so the probe (which keys on the configured model) sees them.
+    cfg_model = get_settings().publications_rag.embedding_model
+    await _seed(db_session)
+    provider = FakeEmbeddingProvider(dim=384, model_name=cfg_model)
+    vectors = await provider.embed([p.text for p in _PASSAGES])
+    for passage, vector in zip(_PASSAGES, vectors):
+        await persistence.upsert_embedding(
+            db_session,
+            passage_id=passage.passage_id,
+            pmid=PMID,
+            model_name=cfg_model,
+            embedding=vector,
+            text_hash=hash_text(passage.text),
+        )
+    await db_session.commit()
+
+    result = await search_passages(db_session, "kidney", rerank="rrf", provider=None)
+    assert result.rerank_used == "lexical"
+    assert result.embeddings_available is False
+    # The probe distinguishes causes: provider missing, embeddings present.
+    assert any("no embedding provider" in note for note in result.notes)
+    assert any("embeddings present" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_embeddings_available_false_without_provider_or_embeddings(db_session):
+    """Both provider AND embeddings missing: embeddings_available False, both noted."""
+    await _seed(db_session, with_embeddings=False)
+    result = await search_passages(db_session, "kidney", rerank="rrf", provider=None)
+    assert result.embeddings_available is False
+    assert any("no embedding provider" in note for note in result.notes)
+    assert any("no embeddings stored" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_embeddings_available_false_when_no_embeddings_stored(db_session):
+    """Provider present but no stored embeddings: embeddings_available is False."""
+    await _seed(db_session, with_embeddings=False)
+    provider = FakeEmbeddingProvider(dim=384)
+    result = await search_passages(
+        db_session, "kidney", rerank="rrf", provider=provider
+    )
+    assert result.rerank_used == "lexical"
+    assert result.embeddings_available is False
+
+
+@pytest.mark.asyncio
+async def test_embeddings_available_true_when_dense_operational(db_session):
+    """Provider present AND embeddings stored: the dense leg runs, flag is True."""
+    await _seed(db_session, with_embeddings=True)
+    provider = FakeEmbeddingProvider(dim=384)
+    result = await search_passages(
+        db_session,
+        "renal cysts and maturity onset diabetes were observed",
+        rerank="rrf",
+        provider=provider,
+        section_boosts={},
+    )
+    assert result.rerank_used == "rrf"
+    assert result.embeddings_available is True
+
+
+@pytest.mark.asyncio
+async def test_embeddings_available_false_for_lexical_only_mode(db_session):
+    """A lexical-only request never claims dense availability, even with embeddings."""
+    await _seed(db_session, with_embeddings=True)
+    result = await search_passages(db_session, "kidney", rerank="lexical")
+    assert result.embeddings_available is False
+
+
+@pytest.mark.asyncio
 async def test_min_lex_score_floor_drops_weak_only_matches(db_session, monkeypatch):
     """A query that matches only via the weak OR-recall leg is filtered by the floor.
 
