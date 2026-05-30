@@ -68,14 +68,33 @@ docker compose version    # Docker Compose V2
 git clone https://github.com/berntpopp/hnf1b-db.git
 cd hnf1b-db
 
-# Start all services with data import
-ENABLE_DATA_IMPORT=true docker compose -f docker/docker-compose.yml up -d --build
+# Configure the docker env (REQUIRED). At minimum set:
+#   ENVIRONMENT=development     (relaxes the prod SMTP/TLS/cookie validators)
+#   ADMIN_PASSWORD=<strong>     (no default — the app refuses to boot if empty)
+cp .env.docker.example .env.docker
+$EDITOR .env.docker
+
+# Build + start the whole stack (db, cache, api, mcp, frontend)
+make dev-up
+# equivalently:
+#   docker compose -f docker/docker-compose.yml --env-file .env.docker up -d --build
 
 # Watch logs
 docker compose -f docker/docker-compose.yml logs -f
 ```
 
-The first startup with `ENABLE_DATA_IMPORT=true` will:
+> **Why `--env-file` / `ENVIRONMENT=development` are required.** The base compose
+> is production-oriented: `ENVIRONMENT` defaults to `production`, where the Wave 5c
+> fail-closed validators require real SMTP, secure cookies, and a non-empty
+> `ADMIN_PASSWORD`. `make dev-up` loads `.env.docker` so those values are present;
+> set `ENVIRONMENT=development` there to boot locally without SMTP/TLS.
+>
+> The API container runs `alembic upgrade head` automatically on startup; the DB
+> image is `pgvector/pgvector:pg15` (provides the `vector` extension for the
+> publication RAG index). To populate the publication full-text RAG corpus on an
+> existing DB, run `make publications-backfill`.
+
+A first startup with `ENABLE_DATA_IMPORT=true` (set in `.env.docker`) will:
 1. Run database migrations
 2. Create admin user (if credentials provided)
 3. Initialize reference data (GRCh38 + HNF1B)
@@ -176,21 +195,24 @@ cp .env.docker.example .env.docker
 
 ### Local Development
 
-For development with ports exposed:
+For development with ports exposed (requires `.env.docker` with
+`ENVIRONMENT=development` + `ADMIN_PASSWORD`; see Quick Start above):
 
 ```bash
-# Start services
-docker compose -f docker/docker-compose.yml up -d --build
+# Start services (loads .env.docker via --env-file)
+make dev-up
+# equivalently:
+#   docker compose -f docker/docker-compose.yml --env-file .env.docker up -d --build
 
-# With data import
-ENABLE_DATA_IMPORT=true docker compose -f docker/docker-compose.yml up -d --build
+# Stop services (preserves volumes)
+make dev-down
 
-# Stop services
-docker compose -f docker/docker-compose.yml down
-
-# Stop and remove volumes (clean reset)
-docker compose -f docker/docker-compose.yml down -v
+# Stop and remove volumes (CLEAN RESET — destroys all DB data)
+docker compose -f docker/docker-compose.yml --env-file .env.docker down -v
 ```
+
+> Omitting `--env-file` (or leaving `ENVIRONMENT` unset) boots the stack in
+> production mode, where the API refuses to start with an empty `ADMIN_PASSWORD`.
 
 ### Production with NPM
 

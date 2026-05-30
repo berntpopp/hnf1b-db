@@ -119,17 +119,19 @@ hybrid-down:  ## Stop PostgreSQL and Redis services
 	$(DOCKER_COMPOSE) -f $(COMPOSE_DEV) down
 
 # Full Docker Development Commands
-dev-up:  ## Start full stack in Docker (with ports exposed)
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) up -d --build
+dev-up:  ## Start full stack in Docker (with ports exposed). Needs .env.docker (see .env.docker.example; set ENVIRONMENT=development).
+	@test -f $(ENV_FILE) || { echo "❌ $(ENV_FILE) not found. Run: cp .env.docker.example $(ENV_FILE) and set ENVIRONMENT=development + ADMIN_PASSWORD"; exit 1; }
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) --env-file $(ENV_FILE) up -d --build
 	@echo ""
 	@echo "✅ Full stack started!"
 	@echo "  Frontend: http://localhost:3000"
 	@echo "  Backend API: http://localhost:8000"
 	@echo "  API Docs: http://localhost:8000/docs"
+	@echo "  MCP: http://localhost:8788/health"
 	@echo ""
 
-dev-down:  ## Stop all Docker services
-	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) down
+dev-down:  ## Stop all Docker services (preserves volumes)
+	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) --env-file $(ENV_FILE) down
 
 dev-logs:  ## Show Docker logs
 	$(DOCKER_COMPOSE) -f $(COMPOSE_BASE) logs -f
