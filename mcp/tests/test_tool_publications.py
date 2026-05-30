@@ -305,9 +305,7 @@ async def test_reverse_lookup_pmid_prefix_stripped() -> None:
     assert sc["total"] == 3
 
 
-_MANY_CITING = [
-    {"phenopacket_id": f"PP{i:03d}", "phenopacket": {}} for i in range(75)
-]
+_MANY_CITING = [{"phenopacket_id": f"PP{i:03d}", "phenopacket": {}} for i in range(75)]
 
 
 @pytest.mark.asyncio

@@ -175,9 +175,7 @@ async def test_search_variants_typed_sort_echoes_applied_sort():
     mcp = FastMCP("test")
     register(mcp, client)
 
-    r = await mcp.call_tool(
-        "hnf1b_search_variants", {"sort": "-carrier_count"}
-    )
+    r = await mcp.call_tool("hnf1b_search_variants", {"sort": "-carrier_count"})
     await client.aclose()
 
     # Wire: the public token is translated to the backend ORDER BY token.

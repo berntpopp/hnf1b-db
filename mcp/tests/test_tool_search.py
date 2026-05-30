@@ -191,9 +191,7 @@ async def test_search_score_survives_response_mode(mode):
     c = ApiClient(base_url=BASE)
     mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
     register(mcp, c)
-    r = await mcp.call_tool(
-        "hnf1b_search", {"query": "HNF1B", "response_mode": mode}
-    )
+    r = await mcp.call_tool("hnf1b_search", {"query": "HNF1B", "response_mode": mode})
     sc = r.structured_content
     by_id = {h["id"]: h for h in sc["hits"]}
     assert by_id["pp_HNF1B-1"]["score"] == 1.0

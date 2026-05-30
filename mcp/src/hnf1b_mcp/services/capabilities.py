@@ -323,7 +323,7 @@ def _filterable_fields() -> dict[str, Any]:
                 "type": "boolean",
                 "default": False,
                 "hint": (
-                    f"carriers are summarized by default: at most "
+                    "carriers are summarized by default: at most "
                     f"{_CARRIER_SAMPLE_SIZE} carrier ids are returned in EVERY "
                     "response mode (carrier_count stays the true total). When the "
                     "full set is larger, meta carries carriers_total / "
@@ -390,7 +390,7 @@ def _filterable_fields() -> dict[str, Any]:
                 "type": "boolean",
                 "default": False,
                 "hint": (
-                    f"citing_pmid reverse lookup only: citing_individuals are "
+                    "citing_pmid reverse lookup only: citing_individuals are "
                     f"summarized by default to at most {_CARRIER_SAMPLE_SIZE} ids "
                     "in EVERY response mode (total stays the true citing count). "
                     "When the full set is larger, meta carries "

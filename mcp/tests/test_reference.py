@@ -408,6 +408,36 @@ async def test_include_exons_true_returns_exon_array() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+@pytest.mark.parametrize("mode", ["compact", "standard"])
+async def test_include_exons_in_llm_mode_strips_exon_noise(mode: str) -> None:
+    """include_exons=True in a non-full mode scrubs each exon's internal UUID/timestamps.
+
+    Exercises the ``elif not is_full and isinstance(...)`` branch in
+    ``_shape_gene_context``: the per-exon ``id``/``created_at``/``updated_at``
+    are dropped while the biologically useful fields (exon_number, coordinates)
+    survive.
+    """
+    _mock_all()
+    c = ApiClient(base_url=BASE)
+    result = await get_gene_context(c, include_exons=True, response_mode=mode)
+    await c.aclose()
+
+    canonical = result["transcripts"][0]
+    assert canonical["transcript_id"] == "ENST00000372566"
+    exons = canonical["exons"]
+    assert [e["exon_number"] for e in exons] == [1, 2]
+    for exon in exons:
+        # Internal provenance is scrubbed in LLM modes...
+        assert _NOISE_KEYS.isdisjoint(exon), f"exon leaks {_NOISE_KEYS & set(exon)}"
+        # ...but the useful coordinate fields are kept.
+        assert "exon_number" in exon
+        assert "start" in exon
+        assert "end" in exon
+        assert "chromosome" in exon
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_full_mode_preserves_provenance() -> None:
     """Full mode keeps the internal id/created_at/updated_at provenance fields."""
     _mock_all()

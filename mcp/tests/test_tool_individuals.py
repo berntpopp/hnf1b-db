@@ -255,9 +255,7 @@ async def test_get_individual_compact_marks_excluded_features():
             ],
         },
     }
-    respx.get(f"{BASE}/phenopackets/Y").mock(
-        return_value=httpx.Response(200, json=pp)
-    )
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
     client = ApiClient(base_url=BASE)
     mcp = FastMCP("test")
     register(mcp, client)
@@ -289,9 +287,7 @@ async def test_get_individual_long_excluded_list_signal_in_meta():
             ],
         },
     }
-    respx.get(f"{BASE}/phenopackets/Z").mock(
-        return_value=httpx.Response(200, json=pp)
-    )
+    respx.get(f"{BASE}/phenopackets/Z").mock(return_value=httpx.Response(200, json=pp))
     client = ApiClient(base_url=BASE)
     mcp = FastMCP("test")
     register(mcp, client)
@@ -333,9 +329,7 @@ async def test_get_individual_fields_projection_preserves_truncation_signal():
             ],
         },
     }
-    respx.get(f"{BASE}/phenopackets/Z").mock(
-        return_value=httpx.Response(200, json=pp)
-    )
+    respx.get(f"{BASE}/phenopackets/Z").mock(return_value=httpx.Response(200, json=pp))
     client = ApiClient(base_url=BASE)
     mcp = FastMCP("test")
     register(mcp, client)
