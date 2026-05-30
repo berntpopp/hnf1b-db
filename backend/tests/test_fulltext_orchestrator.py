@@ -89,7 +89,9 @@ async def test_full_text_path_persists_passages(db_session):
 
 @pytest.mark.asyncio
 async def test_license_gate_drops_body(db_session):
-    # Non-OA + a license outside the allow-set -> body dropped, abstract kept.
+    # Non-OA + a license outside the allow-set -> licensed body dropped, but the
+    # abstract is kept AND stored as a retrievable passage so the publication is
+    # still searchable via the passages / RAG endpoint.
     ft = FullTextResult(
         "PMID:11", "PMC11", "cc by-nc-nd", False, _BODY, "pubtator_full_bioc"
     )
@@ -99,13 +101,45 @@ async def test_license_gate_drops_body(db_session):
     )
     assert outcome.coverage == "abstract_only"
     assert outcome.license_skipped is True
-    assert outcome.passages_written == 0
-    n = (
+    rows = (
         await db_session.execute(
-            text("SELECT COUNT(*) FROM publication_fulltext WHERE pmid='PMID:11'")
+            text(
+                "SELECT section, source FROM publication_fulltext WHERE pmid='PMID:11'"
+            )
         )
-    ).scalar()
-    assert n == 0
+    ).fetchall()
+    # The licensed body was dropped; only the abstract survives, as an
+    # efetch-sourced abstract passage.
+    assert rows, "abstract must remain retrievable even when the body is gated"
+    assert {r.section for r in rows} == {"abstract"}
+    assert {r.source for r in rows} == {"pubmed_efetch_abstract"}
+    assert outcome.passages_written == len(rows)
+
+
+@pytest.mark.asyncio
+async def test_abstract_only_stored_as_passage_when_no_full_text(db_session):
+    # No open-access full text at all, but an abstract exists -> the abstract is
+    # chunked into publication_fulltext so abstract-only pubs (~half the corpus)
+    # are not invisible to hybrid retrieval.
+    outcome = await process_publication(
+        db_session,
+        "15",
+        fetchers=_fetchers("Cystic kidney disease in HNF1B carriers.", None),
+        allowed_licenses=ALLOWED,
+    )
+    assert outcome.coverage == "abstract_only"
+    assert outcome.passages_written >= 1
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT section, source, text FROM publication_fulltext "
+                "WHERE pmid='PMID:15' ORDER BY seq"
+            )
+        )
+    ).fetchall()
+    assert rows[0].section == "abstract"
+    assert rows[0].source == "pubmed_efetch_abstract"
+    assert "Cystic kidney disease" in rows[0].text
 
 
 @pytest.mark.asyncio

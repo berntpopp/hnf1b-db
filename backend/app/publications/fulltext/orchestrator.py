@@ -44,6 +44,7 @@ from app.publications.fulltext.types import (
     AbstractResult,
     FullTextResult,
     PassageRow,
+    RawSection,
     make_passage_id,
 )
 
@@ -298,27 +299,50 @@ async def process_publication(
     outcome.full_text_fetched = decision.coverage == "full_text"
     outcome.license_skipped = had_body and decision.coverage != "full_text"
 
-    passages = build_passage_rows(
+    body_rows = build_passage_rows(
         normalized,
         decision.sections,
         max_tokens=chunk_max_tokens,
         overlap_tokens=chunk_overlap_tokens,
         tokenizer=tokenizer,
     )
-    source = decision.source or "pubtator_full_bioc"
-    passages = [
-        PassageRow(
-            pmid=p.pmid,
-            passage_id=p.passage_id,
-            section=p.section,
-            seq=p.seq,
-            text=p.text,
-            char_count=p.char_count,
-            token_count=p.token_count,
-            source=source,
+    body_source = decision.source or "pubtator_full_bioc"
+
+    # Ensure the abstract itself is a retrieval-ready passage even when there is
+    # no license-permitted full-text body (abstract_only publications). Without
+    # this, ~half the corpus would carry an abstract in publication_metadata yet
+    # be invisible to the passages / RAG endpoint, which searches only
+    # publication_fulltext. Skip when the body already contributed an abstract
+    # section (full_text via PubTator BioC) to avoid storing it twice.
+    abstract_rows: list[PassageRow] = []
+    if abstract_text and not any(r.section == "abstract" for r in body_rows):
+        abstract_rows = build_passage_rows(
+            normalized,
+            [RawSection(section="abstract", text=abstract_text, order=0)],
+            max_tokens=chunk_max_tokens,
+            overlap_tokens=chunk_overlap_tokens,
+            tokenizer=tokenizer,
         )
-        for p in passages
-    ]
+
+    # Merge with the abstract first (document order) and assign a stable global
+    # ``seq`` plus the correct per-row provenance across the combined set.
+    passages: list[PassageRow] = []
+    for seq, (row, source) in enumerate(
+        [(r, "pubmed_efetch_abstract") for r in abstract_rows]
+        + [(r, body_source) for r in body_rows]
+    ):
+        passages.append(
+            PassageRow(
+                pmid=row.pmid,
+                passage_id=row.passage_id,
+                section=row.section,
+                seq=seq,
+                text=row.text,
+                char_count=row.char_count,
+                token_count=row.token_count,
+                source=source,
+            )
+        )
 
     if ensure_metadata:
         await persistence.ensure_metadata_row(db, normalized)

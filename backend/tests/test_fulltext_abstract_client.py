@@ -58,6 +58,37 @@ def test_parse_batch_publication_types():
     assert "Case Reports" in types
 
 
+def test_parse_recovers_from_nlm_named_entities():
+    """NLM named entities (&alpha;, &beta;, &deg;) must not abort the batch parse.
+
+    The PubMed DTD defines hundreds of named entities (Greek letters, math
+    symbols) that are pervasive in genetics abstracts. We never load that DTD,
+    so a strict parser raises on the first one and drops EVERY abstract in the
+    request. The recovering parser must keep all articles and unescape the
+    entity to its Unicode character.
+    """
+    xml = (
+        '<?xml version="1.0"?>'
+        "<PubmedArticleSet>"
+        "<PubmedArticle><MedlineCitation><PMID>1</PMID><Article>"
+        "<Abstract><AbstractText>TGF-&beta; at 37&deg;C in HNF1&alpha; carriers."
+        "</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle>"
+        "<PubmedArticle><MedlineCitation><PMID>2</PMID><Article>"
+        "<Abstract><AbstractText>Plain abstract.</AbstractText></Abstract>"
+        "</Article></MedlineCitation></PubmedArticle>"
+        "</PubmedArticleSet>"
+    )
+    results = parse_efetch_xml(xml)
+    # The entity in article 1 did NOT abort the whole-batch parse.
+    assert set(results) == {"PMID:1", "PMID:2"}
+    text = results["PMID:1"].text
+    assert text is not None
+    # Entities resolved to Unicode, not left as literal "&beta;".
+    assert "β" in text and "α" in text and "°" in text
+    assert "&beta;" not in text
+    assert results["PMID:2"].text == "Plain abstract."
+
+
 def test_parse_single_32574212_has_abstract():
     results = parse_efetch_xml(_read("efetch_32574212.xml"))
     assert "PMID:32574212" in results
@@ -91,8 +122,9 @@ def test_parse_empty_set_returns_empty_dict():
 
 
 class _FakeResponse:
-    def __init__(self, text: str):
+    def __init__(self, text: str, status: int = 200):
         self._text = text
+        self.status = status
 
     async def __aenter__(self):
         return self
@@ -105,13 +137,14 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    def __init__(self, text: str):
+    def __init__(self, text: str, status: int = 200):
         self._text = text
+        self.status = status
         self.calls: list[dict] = []
 
     def post(self, url, *, data, timeout):
         self.calls.append({"url": url, "data": data, "timeout": timeout})
-        return _FakeResponse(self._text)
+        return _FakeResponse(self._text, self.status)
 
 
 @pytest.mark.asyncio
@@ -170,3 +203,19 @@ async def test_fetch_abstracts_empty_input_skips_io():
     )
     assert results == {}
     assert session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_abstracts_skips_batch_on_http_error():
+    """A 429/5xx response must NOT be parsed as XML (which would silently mark
+    every PMID in the batch as having no abstract); the batch is skipped.
+    """
+    session = _FakeSession("Too Many Requests", status=429)
+    results = await fetch_abstracts(
+        ["30791938", "10484768"],
+        session=session,
+        base_url="https://example.test/efetch.fcgi",
+    )
+    assert results == {}
+    # The request was still attempted (one batch), just not parsed.
+    assert len(session.calls) == 1

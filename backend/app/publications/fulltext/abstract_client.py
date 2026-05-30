@@ -12,6 +12,8 @@ The async wrapper performs I/O and is integration-tested by the orchestrator.
 
 from __future__ import annotations
 
+import html
+import logging
 from typing import TYPE_CHECKING, Optional, Union
 
 from lxml import etree  # type: ignore[import-untyped]
@@ -22,6 +24,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     import aiohttp
+
+logger = logging.getLogger(__name__)
 
 #: Blank-line separator between abstract blocks (kept out of docstrings to
 #: avoid a literal escape sequence triggering the pydocstyle D301 rule).
@@ -58,12 +62,14 @@ def _extract_abstract_text(article: etree._Element) -> Optional[str]:
     """
     blocks: list[str] = []
     for node in article.iterfind(".//Abstract/AbstractText"):
-        text = "".join(node.itertext()).strip()
+        # html.unescape resolves any NLM named entity (e.g. &alpha;, &deg;) that
+        # the recovering parser left as literal text — see parse_efetch_xml.
+        text = html.unescape("".join(node.itertext())).strip()
         if not text:
             continue
         label = node.get("Label")
         if label:
-            blocks.append(f"{label.strip()}: {text}")
+            blocks.append(f"{html.unescape(label).strip()}: {text}")
         else:
             blocks.append(text)
     if not blocks:
@@ -83,7 +89,7 @@ def _extract_publication_types(article: etree._Element) -> tuple[str, ...]:
     """
     types: list[str] = []
     for node in article.iterfind(".//PublicationTypeList/PublicationType"):
-        text = "".join(node.itertext()).strip()
+        text = html.unescape("".join(node.itertext())).strip()
         if text:
             types.append(text)
     return tuple(types)
@@ -103,7 +109,18 @@ def parse_efetch_xml(xml: Union[bytes, str]) -> dict[str, AbstractResult]:
         without a parseable ``MedlineCitation/PMID`` are skipped.
     """
     payload = xml.encode("utf-8") if isinstance(xml, str) else xml
-    root = etree.fromstring(payload)
+    # NLM efetch documents reference named entities (e.g. ``&alpha;``, ``&deg;``)
+    # defined only in the external PubMed DTD, which we deliberately never load
+    # (offline; no network in the request path). A strict parse raises
+    # ``XMLSyntaxError`` on the FIRST such entity and loses the ENTIRE batch —
+    # up to 100 abstracts per efetch request. ``recover=True`` parses past them
+    # (leaving the literal ``&name;`` in text), which the extractors then
+    # ``html.unescape`` back to the intended Unicode character. A fresh parser
+    # per call keeps this safe under asyncio/to_thread concurrency.
+    parser = etree.XMLParser(recover=True, resolve_entities=False)
+    root = etree.fromstring(payload, parser=parser)
+    if root is None:  # catastrophically malformed input — nothing to parse
+        return {}
 
     results: dict[str, AbstractResult] = {}
     for article in root.iterfind(".//PubmedArticle"):
@@ -183,6 +200,17 @@ async def fetch_abstracts(
             data=params,
             timeout=timeout,
         ) as response:
+            # Guard against parsing a 429/5xx error body as if it were efetch
+            # XML (which would silently mark every PMID in the batch as having
+            # no abstract). Skip the batch and let the orchestrator's degrade
+            # path record the absence honestly.
+            if response.status >= 400:
+                logger.warning(
+                    "efetch returned HTTP %s for %d ids; skipping batch",
+                    response.status,
+                    len(batch),
+                )
+                continue
             xml = await response.text()
         merged.update(parse_efetch_xml(xml))
     return merged
