@@ -9,6 +9,30 @@ import pytest
 from app.core.config import EmailConfig, Settings, YamlConfig
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_config_env(monkeypatch):
+    """Isolate these Settings-construction tests from ambient env and .env.
+
+    These tests assert production fail-closed behaviour by passing
+    ``environment="production"`` explicitly. A developer's local ``backend/.env``
+    (or a leaked process env var) carrying ``ENABLE_DEV_AUTH=true`` would trip
+    the dev-auth defense validator *before* the email/cookie validators run,
+    masking the behaviour under test. Clear the dev/email/cookie vars the tests
+    drive themselves; this pairs with ``_env_file=None`` at each construction
+    (which blocks the on-disk ``.env``) for full hermeticity.
+    """
+    for var in (
+        "ENABLE_DEV_AUTH",
+        "ENVIRONMENT",
+        "EMAIL_BACKEND",
+        "SMTP_HOST",
+        "SMTP_USERNAME",
+        "SMTP_PASSWORD",
+        "AUTH_COOKIE_SECURE",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+
 def _build_settings_with_stub_yaml(
     *,
     env_override: str | None,
@@ -37,7 +61,7 @@ def _build_settings_with_stub_yaml(
         kwargs["EMAIL_BACKEND"] = env_override
 
     with patch("app.core.config.load_yaml_config", return_value=yaml_cfg):
-        return Settings(**kwargs)
+        return Settings(_env_file=None, **kwargs)  # type: ignore[call-arg]
 
 
 def test_email_backend_env_overrides_yaml_console_in_production():
@@ -62,6 +86,7 @@ def test_yaml_smtp_default_without_smtp_host_also_fails_closed():
     with pytest.raises(ValueError, match="SMTP_HOST"):
         with patch("app.core.config.load_yaml_config", return_value=yaml_cfg):
             Settings(
+                _env_file=None,  # type: ignore[call-arg]
                 JWT_SECRET="test-secret-key-abc123",
                 ADMIN_PASSWORD="TestAdminPass!2026",
                 environment="production",
@@ -74,6 +99,7 @@ def test_email_backend_env_override_smtp_requires_smtp_host():
     """EMAIL_BACKEND=smtp without SMTP_HOST must fail-closed (validator runs after override)."""
     with pytest.raises(ValueError, match="SMTP_HOST"):
         Settings(
+            _env_file=None,  # type: ignore[call-arg]
             JWT_SECRET="test-secret-key-abc123",
             ADMIN_PASSWORD="TestAdminPass!2026",
             environment="production",
