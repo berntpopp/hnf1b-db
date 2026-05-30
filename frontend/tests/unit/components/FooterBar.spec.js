@@ -124,4 +124,16 @@ describe('FooterBar API docs link (M10)', () => {
       expect(hrefs).toContain('http://localhost:8000/api/v2/docs');
     });
   });
+
+  it('renders an internal MCP access link (next to the API docs link)', async () => {
+    mockFetchConfig([{ enabled: true, id: 'api', label: 'API', url: 'https://x.test/docs' }]);
+    const wrapper = mount(makeAppWrapper(), {
+      global: { plugins: [vuetify, pinia] },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    // The MCP button is an internal route button (not a config-driven external
+    // link), identified by its icon and aria-label.
+    expect(wrapper.html()).toContain('mdi-robot-outline');
+    expect(wrapper.find('[aria-label="MCP access"]').exists()).toBe(true);
+  });
 });

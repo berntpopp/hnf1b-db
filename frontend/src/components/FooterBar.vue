@@ -77,6 +77,27 @@
         <v-icon size="small">{{ link.icon }}</v-icon>
       </v-btn>
 
+      <!-- MCP Access (internal page) — sits next to the API docs link -->
+      <v-tooltip
+        location="top"
+        text="Connect an AI agent (MCP)"
+        aria-label="Connect an AI agent (MCP)"
+      >
+        <template #activator="{ props }">
+          <v-btn
+            v-bind="props"
+            to="/mcp"
+            icon
+            variant="text"
+            size="small"
+            class="mx-1"
+            aria-label="MCP access"
+          >
+            <v-icon size="small">mdi-robot-outline</v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
       <!-- Log Viewer Toggle -->
       <v-btn
         icon="mdi-text-box-search-outline"
@@ -215,6 +236,13 @@ const loadFooterConfig = async () => {
         icon: 'mdi-github',
         url: 'https://github.com/berntpopp/hnf1b-db',
       },
+      {
+        id: 'license',
+        title: 'CC BY 4.0 License',
+        icon: 'mdi-creative-commons',
+        url: 'https://creativecommons.org/licenses/by/4.0/',
+      },
+      // API docs is last so the internal MCP button renders next to it.
       ...(apiDocsUrl
         ? [
             {
@@ -225,12 +253,6 @@ const loadFooterConfig = async () => {
             },
           ]
         : []),
-      {
-        id: 'license',
-        title: 'CC BY 4.0 License',
-        icon: 'mdi-creative-commons',
-        url: 'https://creativecommons.org/licenses/by/4.0/',
-      },
     ];
   }
 };
