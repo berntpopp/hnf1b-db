@@ -170,6 +170,72 @@ _ROW_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
 }
 
 
+# Scalar field policy for the single-variant detail payload (get_variant), by
+# response mode. Mirrors get_individual's _INDIVIDUAL_FIELDS_BY_MODE and the
+# sibling search_variants._ROW_FIELDS_BY_MODE in this file so the documented
+# response_mode knob actually trims the field set — without it a low-carrier
+# variant (already under the smallest char budget) returned an identical payload
+# for minimal/compact/standard/full because only the carriers LIST was
+# budget-trimmed.
+#
+# Design (honoring the established get_variant contract — see test_variants.py /
+# test_tool_variants.py): ``_DETAIL_ALWAYS`` are the identity + summary keys plus
+# the chainable ``carriers`` list, kept in EVERY mode so the documented
+# carriers -> hnf1b_get_individuals workflow and the carriers char-budget trim
+# (which operates on the carriers list in any mode) keep working. The tiers form
+# a STRICT ladder so the knob can never silently re-collapse:
+#   * minimal  = identity + interpretation (classification/consequence) only;
+#   * compact  = + gene_symbol + structural_type;
+#   * standard = + the genomic-coordinate block (hg38/transcript/protein);
+#   * full     = keep-all (() == keep every field), which additionally surfaces
+#                the provenance prose (data_provenance + note).
+# This yields minimal(8) ⊊ compact(10) ⊊ standard(13) ⊊ full(15), matching the
+# get_individual and search_variants ladders.
+_DETAIL_ALWAYS = (
+    "variant_id",
+    "simple_id",
+    "label",
+    "uri",
+    "carrier_count",
+    "carriers",
+)
+_DETAIL_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
+    "minimal": _DETAIL_ALWAYS + ("classification", "consequence"),
+    "compact": _DETAIL_ALWAYS
+    + ("classification", "consequence", "gene_symbol", "structural_type"),
+    "standard": _DETAIL_ALWAYS
+    + (
+        "classification",
+        "consequence",
+        "gene_symbol",
+        "structural_type",
+        "hg38",
+        "transcript",
+        "protein",
+    ),
+    "full": (),  # () == keep every field (adds data_provenance + note)
+}
+
+
+def _project_variant_detail(result: dict[str, Any], mode: str) -> dict[str, Any]:
+    """Trim the detail dict to the field set allowed for ``mode`` (full keeps all).
+
+    Args:
+        result: The fully-built single-variant detail dict (output of
+            :func:`get_variant` before budgeting).
+        mode: One of ``minimal``, ``compact``, ``standard``, ``full``.
+
+    Returns:
+        A new dict containing only the keys permitted in *mode*; ``full`` (or an
+        unknown mode) returns the dict unchanged.
+    """
+    allowed = _DETAIL_FIELDS_BY_MODE.get(mode, ())
+    if not allowed:
+        return result
+    keep = set(allowed) | set(_DETAIL_ALWAYS)
+    return {k: v for k, v in result.items() if k in keep}
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -444,10 +510,13 @@ async def get_variant(
         variant_id: The canonical variant identifier (e.g.
             ``"var:HNF1B:17:36459258-37832869:DEL"``) or the friendly
             ``simple_id`` (e.g. ``"Var6"``).
-        response_mode: Verbosity tier bounding the carrier-list size — one of
-            ``minimal``/``compact``/``standard``/``full``. ``carrier_count`` (the
-            true total) is always preserved; only the ``carriers`` list is
-            trimmed to fit the mode's char budget, with a truncation signal.
+        response_mode: One of ``minimal``/``compact``/``standard``/``full``;
+            controls how much of the record is returned. Narrower modes trim the
+            scalar field set per the per-mode policy (full keeps every field,
+            including ``data_provenance`` + ``note``), AND bound the carriers
+            list size. ``carrier_count`` (the true total) is always preserved;
+            only the ``carriers`` list is trimmed to fit the mode's char budget,
+            with a truncation signal.
 
     Returns:
         A dict with the full variant record: ``variant_id``, ``simple_id``,
@@ -525,12 +594,26 @@ async def get_variant(
         ),
     }
 
+    # Project the SCALAR field set to the requested mode first. Narrower modes
+    # graduate the scalar coordinate fields and drop the provenance prose
+    # (data_provenance + note); the identity/summary keys AND the chainable
+    # ``carriers`` list (all in _DETAIL_ALWAYS) are retained in EVERY mode. This
+    # is what makes a low-carrier variant — already under the smallest budget —
+    # return a genuinely smaller payload for narrower modes. Without it the
+    # budget step below (which only trims the carriers LIST) left minimal ==
+    # standard == full for most variants.
+    result = _project_variant_detail(result, response_mode)
+
     # Enforce the response_mode char budget. A high-carrier variant (e.g. the
     # recurrent 17q12 deletion has ~379 carriers ≈ 7.8 KB) otherwise blows the
     # minimal (4 KB) / compact (12 KB) budget — the documented response_mode knob
-    # was previously a no-op here. ``carrier_count`` stays accurate; only the
-    # ``carriers`` list is trimmed, with a machine-readable truncation signal so
-    # the omission is never silent and the caller can still page carriers.
+    # was previously a no-op here. ``carriers`` is always present (it is in
+    # _DETAIL_ALWAYS, so it survives the projection above in every mode), so this
+    # step genuinely trims the carriers LIST contents down to the mode's char
+    # budget — a real trim in minimal/compact, not a no-op. ``carrier_count``
+    # stays accurate; only the ``carriers`` list shrinks, with a machine-readable
+    # truncation signal so the omission is never silent and the caller can still
+    # page carriers.
     budget = Settings().mode_char_budgets.get(response_mode, 12000)
     result, dropped = apply_budget(result, budget, ["carriers"])
     if dropped:

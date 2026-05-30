@@ -475,7 +475,9 @@ async def test_get_variant_returns_full_record():
         return_value=httpx.Response(200, json=CARRIER_RESPONSE)
     )
     client = ApiClient(base_url=BASE)
-    result = await get_variant(client, "HNF1B:c.494G>A")
+    # full mode == keep-all, so the complete authoritative record (including the
+    # genomic-coordinate block + provenance prose) is returned.
+    result = await get_variant(client, "HNF1B:c.494G>A", response_mode="full")
     await client.aclose()
 
     assert result["variant_id"] == "HNF1B:c.494G>A"
@@ -566,6 +568,43 @@ async def test_get_variant_full_mode_keeps_all_carriers():
 
     assert len(result["carriers"]) == 400
     assert "_dropped" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_variant_minimal_has_fewer_fields_than_full():
+    """The scalar field set forms a STRICT ladder minimal ⊊ compact ⊊ standard ⊊ full.
+
+    response_mode previously only trimmed the carriers LIST, so a low-carrier
+    variant returned an identical field set for every mode. The per-mode scalar
+    projection must make each tier a genuinely smaller subset of the next; the
+    strict-subset chain is the load-bearing regression guard against re-collapse
+    (the "response_mode is inert" bug this task fixes). minimal keeps identity +
+    interpretation; the coordinate block (hg38/transcript/protein) lands in
+    standard; the provenance prose (data_provenance/note) is full-only.
+    """
+    respx.get(f"{BASE}/phenopackets/aggregate/all-variants").mock(
+        return_value=httpx.Response(200, json=ALL_VARIANTS_RESPONSE)
+    )
+    respx.get(f"{BASE}/phenopackets/by-variant/HNF1B:c.494G>A").mock(
+        return_value=httpx.Response(200, json=CARRIER_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    minimal = set(await get_variant(c, "HNF1B:c.494G>A", response_mode="minimal"))
+    compact = set(await get_variant(c, "HNF1B:c.494G>A", response_mode="compact"))
+    standard = set(await get_variant(c, "HNF1B:c.494G>A", response_mode="standard"))
+    full = set(await get_variant(c, "HNF1B:c.494G>A", response_mode="full"))
+    await c.aclose()
+
+    # Strict ladder: each tier is a proper subset of the next.
+    assert minimal < compact < standard < full
+    assert {"variant_id", "label", "classification", "carrier_count"} <= minimal
+    # The genomic-coordinate block lands in standard, not compact.
+    assert {"hg38", "transcript", "protein"} <= standard
+    assert "hg38" not in compact
+    # Provenance prose is full-only.
+    assert "data_provenance" not in standard and "note" not in standard
+    assert "data_provenance" in full and "note" in full
 
 
 @pytest.mark.asyncio

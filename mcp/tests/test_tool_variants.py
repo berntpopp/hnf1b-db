@@ -183,7 +183,11 @@ async def test_get_variant_happy_path():
     mcp = FastMCP("test")
     register(mcp, client)
 
-    r = await mcp.call_tool("hnf1b_get_variant", {"variant_id": "HNF1B:c.494G>A"})
+    # full mode == keep-all, so the data_provenance/note prose is present.
+    r = await mcp.call_tool(
+        "hnf1b_get_variant",
+        {"variant_id": "HNF1B:c.494G>A", "response_mode": "full"},
+    )
     await client.aclose()
 
     sc = r.structured_content
