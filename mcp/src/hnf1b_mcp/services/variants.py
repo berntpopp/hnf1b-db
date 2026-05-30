@@ -547,8 +547,8 @@ async def search_variants(
                 f" fields: {sorted(VARIANT_SORT_FIELDS)}"
             )
 
-    if extra_meta:
-        result["_meta"] = extra_meta
+    # extra_meta always carries the carrier_count basis, so it is never empty.
+    result["_meta"] = extra_meta
 
     return result
 

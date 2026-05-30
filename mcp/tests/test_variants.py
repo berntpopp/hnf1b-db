@@ -261,7 +261,8 @@ async def test_search_variants_no_filter_omits_filter_meta():
     result = await search_variants(client)
     await client.aclose()
 
-    # No filters and no sort -> no _meta channel at all.
+    # No filters/sort -> _meta carries only the carrier_count basis,
+    # never applied_filters/filter_mode.
     meta = result.get("_meta", {})
     assert "applied_filters" not in meta
     assert "filter_mode" not in meta
