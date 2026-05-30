@@ -117,3 +117,95 @@ class TestAggregationTimelineEndpoints:
 
         body = response.json()
         assert isinstance(body, list)
+
+
+@pytest.mark.asyncio
+class TestPublicationsTimelineYearCorrectness:
+    """Regression: timeline must bucket by publication_metadata.year, not created_at."""
+
+    async def _seed_published_phenopacket_citing(
+        self, db_session, admin_user, phenopacket_id: str, pmid: str
+    ) -> None:
+        """Insert a published phenopacket whose externalReferences cite ``pmid``.
+
+        The timeline only counts PMIDs cited by a *published* phenopacket
+        (``state='published'`` AND ``head_published_revision_id IS NOT NULL``),
+        so we mirror the ``published_record`` conftest fixture: insert the
+        phenopacket, flush to get its id, create the head revision, then point
+        ``head_published_revision_id`` at it. Without this the timeline would
+        be empty and the regression assertion would pass trivially.
+        """
+        from app.phenopackets.models import Phenopacket, PhenopacketRevision
+
+        content = {
+            "id": phenopacket_id,
+            "metaData": {
+                "externalReferences": [
+                    {"id": pmid, "description": "no year in this string"}
+                ]
+            },
+        }
+        pp = Phenopacket(
+            phenopacket_id=phenopacket_id,
+            phenopacket=content,
+            state="published",
+            revision=1,
+            created_by_id=admin_user.id,
+        )
+        db_session.add(pp)
+        await db_session.flush()
+
+        rev = PhenopacketRevision(
+            record_id=pp.id,
+            revision_number=1,
+            state="published",
+            content_jsonb=content,
+            change_reason="init",
+            actor_id=admin_user.id,
+            from_state=None,
+            to_state="published",
+            is_head_published=True,
+        )
+        db_session.add(rev)
+        await db_session.flush()
+
+        pp.head_published_revision_id = rev.id
+
+    async def test_timeline_buckets_by_real_publication_year(
+        self, async_client: AsyncClient, db_session, admin_user
+    ) -> None:
+        """Seeded publications must bucket by their real metadata year, never the import year."""
+        from sqlalchemy import text as _text
+
+        # Two cached publications with distinct, non-current years.
+        # ``authors`` is NOT NULL in the schema, so we pass an empty JSON array.
+        await db_session.execute(
+            _text(
+                "INSERT INTO publication_metadata (pmid, title, authors, year) "
+                "VALUES "
+                "('PMID:11111111', 'Old paper', '[]'::jsonb, 2008), "
+                "('PMID:22222222', 'Newer paper', '[]'::jsonb, 2017) "
+                "ON CONFLICT (pmid) DO UPDATE SET year = EXCLUDED.year"
+            )
+        )
+
+        # Attach the seeded PMIDs to published phenopackets so they are counted.
+        await self._seed_published_phenopacket_citing(
+            db_session, admin_user, "timeline-year-test-1", "PMID:11111111"
+        )
+        await self._seed_published_phenopacket_citing(
+            db_session, admin_user, "timeline-year-test-2", "PMID:22222222"
+        )
+        await db_session.commit()
+
+        resp = await async_client.get(
+            "/api/v2/phenopackets/aggregate/publications-timeline"
+        )
+        assert resp.status_code == 200, resp.text
+        years = {row["year"] for row in resp.json()}
+        # The bug bucketed everything under the import year (2026). The fix must
+        # surface each publication's real metadata year via the join to
+        # publication_metadata.year, so the seeded years must actually appear
+        # (proving a non-empty timeline) and the import year must never leak in.
+        assert {2008, 2017}.issubset(years), resp.json()
+        assert 2026 not in years, resp.json()
