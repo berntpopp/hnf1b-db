@@ -76,14 +76,22 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         Returns:
             A dict with keys ``phenopacket_id``, ``subject``, ``diseases``,
             ``uri``, and conditionally ``phenotypic_features`` (observed),
-            ``excluded_features``, ``feature_counts``, ``variants``,
-            ``measurements``, ``publications``, plus ``data_class`` and
-            ``meta``. ``response_mode`` genuinely trims the field set:
-            ``minimal`` = id + subject + uri; ``compact`` adds diseases /
-            observed phenotypes / variants / feature_counts; ``standard`` adds
-            publications + excluded_features; ``full`` adds measurements and
-            everything else. ``include_*`` flags are explicit opt-outs applied
-            on top of the mode. Embedded publications carry the same
+            ``excluded_features`` (EXCLUDED / confirmed-negative phenotypes —
+            clinically meaningful "ruled out" findings, distinct from simply
+            unmentioned), ``feature_counts``, ``variants``, ``measurements``,
+            ``publications``, plus ``data_class`` and ``meta``.
+            ``response_mode`` genuinely trims the field set: ``minimal`` =
+            id + subject + uri; ``compact`` adds diseases / observed phenotypes /
+            variants / feature_counts AND the ``excluded_features`` list (so a
+            negative finding is visible, not just counted); ``standard`` adds
+            publications; ``full`` adds measurements and everything else.
+            In ``compact``/``standard`` a long ``excluded_features`` list is
+            sampled to the first 10 (``feature_counts.excluded`` stays the true
+            total; ``meta`` then carries ``excluded_features_total`` /
+            ``excluded_features_returned`` / ``excluded_features_truncated`` /
+            ``excluded_features_note`` — recover the full list via
+            ``response_mode='full'``). ``include_*`` flags are explicit opt-outs
+            applied on top of the mode. Embedded publications carry the same
             verified ``recommended_citation`` / ``date_confidence`` as
             ``hnf1b_get_publications``.
         """

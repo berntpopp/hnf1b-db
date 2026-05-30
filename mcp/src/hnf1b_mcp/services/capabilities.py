@@ -47,7 +47,13 @@ _TOOLS: list[dict[str, str]] = [
         "name": "hnf1b_get_individual",
         "summary": (
             "Retrieve the full phenopacket record for a single individual "
-            "by phenopacket_id."
+            "by phenopacket_id. Returns observed phenotypes in "
+            "phenotypic_features AND the EXCLUDED (confirmed-negative, 'ruled "
+            "out') phenotypes in excluded_features — surfaced from compact mode "
+            "upward so a negative finding is visible, not just counted in "
+            "feature_counts. A long excluded list is sampled outside full mode "
+            "(excluded_features_truncated signalled in meta; feature_counts "
+            "stays the true total)."
         ),
     },
     {

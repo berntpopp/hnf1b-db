@@ -14,7 +14,7 @@ from ..contract._generated_paths import (
 from . import publications as publications_service
 from .citation import build_citation
 from .errors import McpToolError
-from .shaping import apply_budget
+from .shaping import DEFAULT_SAMPLE_SIZE, apply_budget, sample_with_signal
 
 # Per-mode field policy for a shaped individual record. ``full`` keeps every
 # field (identity projection); the narrower modes drop the largest sections so
@@ -27,6 +27,7 @@ _INDIVIDUAL_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
         "subject",
         "diseases",
         "phenotypic_features",
+        "excluded_features",
         "feature_counts",
         "variants",
         "publication_refs",
@@ -47,7 +48,22 @@ _INDIVIDUAL_FIELDS_BY_MODE: dict[str, tuple[str, ...]] = {
 }
 
 # Fields always kept so a projected record stays chainable/identifiable.
-_ALWAYS_KEEP = ("phenopacket_id", "uri")
+# ``_meta`` is an internal control channel (truncation signals, applied filters)
+# that ``run_tool`` pops and hoists into the public ``meta`` block; it must never
+# be projected away, or an explicit ``fields=`` request could silently strip a
+# truncation signal — making a sampled list look complete.
+_ALWAYS_KEEP = ("phenopacket_id", "uri", "_meta")
+
+# Modes where the inline ``excluded_features`` list is bounded to a sample so a
+# carrier with a long confirmed-negative panel cannot blow the token budget. The
+# count always survives in ``feature_counts`` and ``full`` keeps the entire list.
+_EXCLUDED_SAMPLE_MODES = ("compact", "standard")
+_EXCLUDED_SAMPLE_SIZE = DEFAULT_SAMPLE_SIZE
+_EXCLUDED_FEATURES_NOTE = (
+    "Showing the first {sample} of {total} EXCLUDED (confirmed-negative) features."
+    " For the complete excluded list, re-call hnf1b_get_individual with"
+    " response_mode='full'. feature_counts.excluded stays the true total."
+)
 
 
 def _matches_filters(individual: dict[str, Any], filters: dict[str, Any]) -> bool:
@@ -315,6 +331,23 @@ async def get_individual(
             enrichment = citation_map.get(pub.get("pmid", ""))
             if enrichment:
                 pub.update(enrichment)
+    # Bound the inline excluded-feature list in the LLM-facing modes so a carrier
+    # with a long confirmed-negative panel cannot blow the token budget. ``full``
+    # keeps the entire list; ``feature_counts.excluded`` is the authoritative
+    # total in every mode, and a truncation signal (excluded_features_total /
+    # _returned / _truncated / _note) is hoisted to _meta for run_tool to surface.
+    excluded = shaped.get("excluded_features")
+    if excluded is not None and response_mode in _EXCLUDED_SAMPLE_MODES:
+        sampled, signal = sample_with_signal(
+            excluded,
+            len(excluded),
+            key_prefix="excluded_features",
+            note=_EXCLUDED_FEATURES_NOTE,
+            sample_size=_EXCLUDED_SAMPLE_SIZE,
+        )
+        if signal:
+            shaped["excluded_features"] = sampled
+            shaped["_meta"] = {**shaped.get("_meta", {}), **signal}
     return _select_fields(shaped, fields)
 
 

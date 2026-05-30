@@ -240,6 +240,132 @@ async def test_get_individual_phenotypic_features_present():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_get_individual_compact_marks_excluded_features():
+    """Compact response shows excluded (confirmed-negative) features, not just a count."""
+    pp = {
+        "phenopacket_id": "Y",
+        "phenopacket": {
+            "subject": {"id": "Y", "sex": "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                {
+                    "type": {"id": "HP:0000819", "label": "Diabetes mellitus"},
+                    "excluded": True,
+                },
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Y").mock(
+        return_value=httpx.Response(200, json=pp)
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool("hnf1b_get_individual", {"phenopacket_id": "Y"})
+    sc = r.structured_content
+
+    assert [f["id"] for f in sc["phenotypic_features"]] == ["HP:0000107"]
+    assert [f["id"] for f in sc["excluded_features"]] == ["HP:0000819"]
+    assert sc["feature_counts"] == {"observed": 1, "excluded": 1}
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_long_excluded_list_signal_in_meta():
+    """A long excluded list surfaces a truncation signal in the tool meta block."""
+    excluded = [
+        {"type": {"id": f"HP:{i:07d}", "label": f"Excluded {i}"}, "excluded": True}
+        for i in range(25)
+    ]
+    pp = {
+        "phenopacket_id": "Z",
+        "phenopacket": {
+            "subject": {"id": "Z", "sex": "MALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                *excluded,
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Z").mock(
+        return_value=httpx.Response(200, json=pp)
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool("hnf1b_get_individual", {"phenopacket_id": "Z"})
+    sc = r.structured_content
+
+    assert len(sc["excluded_features"]) == 10
+    assert sc["feature_counts"] == {"observed": 1, "excluded": 25}
+    # The signal is hoisted into the meta block by run_tool, not left as _meta.
+    assert "_meta" not in sc
+    assert sc["meta"]["excluded_features_total"] == 25
+    assert sc["meta"]["excluded_features_truncated"] is True
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_fields_projection_preserves_truncation_signal():
+    """fields=["excluded_features"] must NOT silently strip the truncation signal.
+
+    Regression: _select_fields kept only ``set(fields) | _ALWAYS_KEEP``, which
+    did not include the internal ``_meta`` control channel. So an explicit
+    ``fields=["excluded_features"]`` on a record with a long (>10) excluded list
+    sampled the list to 10 but discarded the truncation signal before run_tool
+    could hoist it — a silent truncation. The signal must survive into meta.
+    """
+    excluded = [
+        {"type": {"id": f"HP:{i:07d}", "label": f"Excluded {i}"}, "excluded": True}
+        for i in range(25)
+    ]
+    pp = {
+        "phenopacket_id": "Z",
+        "phenopacket": {
+            "subject": {"id": "Z", "sex": "MALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                *excluded,
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Z").mock(
+        return_value=httpx.Response(200, json=pp)
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_get_individual",
+        {
+            "phenopacket_id": "Z",
+            "response_mode": "compact",
+            "fields": ["excluded_features"],
+        },
+    )
+    sc = r.structured_content
+
+    # The requested field is sampled to 10 (the bound still applies)...
+    assert len(sc["excluded_features"]) == 10
+    # ...and the projection kept it (plus the always-kept id/uri).
+    assert set(sc) >= {"phenopacket_id", "uri", "excluded_features"}
+    # The internal channel is hoisted, never leaked as a data field.
+    assert "_meta" not in sc
+    # The truncation signal SURVIVES the explicit fields projection.
+    assert sc["meta"]["excluded_features_total"] == 25
+    assert sc["meta"]["excluded_features_returned"] == 10
+    assert sc["meta"]["excluded_features_truncated"] is True
+    assert "excluded_features_note" in sc["meta"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_get_individual_include_variants_false():
     respx.get(f"{BASE}/phenopackets/X").mock(
         return_value=httpx.Response(200, json=_PHENOPACKET_X)
