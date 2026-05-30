@@ -57,7 +57,17 @@ def test_capabilities_filterable_fields_present():
         "hnf1b_get_publication_passages",
         "hnf1b_get_individuals",
         "hnf1b_find_individuals_by_phenotype",
+        "hnf1b_get_gene_context",
     }
+
+    # get_gene_context advertises the exon-gating opt-in so the summarized-by-
+    # default behavior (exon_count scalar, no exon array) is discoverable.
+    gc = ff["hnf1b_get_gene_context"]
+    assert gc["include_exons"]["type"] == "boolean"
+    assert gc["include_exons"]["default"] is False
+    gc_hint = gc["include_exons"]["hint"].lower()
+    assert "exon_count" in gc_hint
+    assert "exons" in gc_hint
 
     # get_variant advertises the carrier-summarization opt-out so the
     # summarized-by-default behavior is discoverable from capabilities.

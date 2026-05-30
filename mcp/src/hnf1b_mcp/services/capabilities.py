@@ -92,8 +92,11 @@ _TOOLS: list[dict[str, str]] = [
         "summary": (
             "Return the HNF1B gene reference record: genomic coordinates, "
             "cross-references (HGNC/NCBI/OMIM), transcripts, and annotated "
-            "protein domains. Emits reference_data_status when the backend's "
-            "reference tables are not seeded."
+            "protein domains. Summarized by default — internal ids/timestamps "
+            "stripped, transcripts de-duplicated, and the per-exon array gated "
+            "behind include_exons=true (exon_count is always kept). Emits "
+            "reference_data_status when the backend's reference tables are not "
+            "seeded."
         ),
     },
     {
@@ -321,6 +324,22 @@ def _filterable_fields() -> dict[str, Any]:
                     "response-mode char budget), or use "
                     "hnf1b_find_individuals_by_phenotype for the matched cohort "
                     "with phenotype detail."
+                ),
+            },
+        },
+        "hnf1b_get_gene_context": {
+            "include_exons": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    "transcripts are summarized by default: each ships its "
+                    "exon_count scalar but NOT the verbose per-exon coordinate "
+                    "array. Set include_exons=true to restore the full exons "
+                    "array. Outside full mode the gene/transcripts/domains/exons "
+                    "also drop internal id/created_at/updated_at, the gene's "
+                    "redundant nested transcript block is removed, and "
+                    "transcripts are de-duplicated by transcript_id — full mode "
+                    "returns the complete provenance record."
                 ),
             },
         },

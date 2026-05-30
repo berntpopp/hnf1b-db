@@ -36,6 +36,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         genome_build: str = "GRCh38",
         include_transcripts: bool = True,
         include_domains: bool = True,
+        include_exons: bool = False,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Return gene reference data including transcripts and protein domains.
@@ -47,6 +48,15 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
         The payload carries a stable ``hnf1b://gene/{gene_symbol}`` URI that
         can be used to anchor citations or cross-tool references.
+
+        Token discipline: outside ``full`` mode the payload is summarized — the
+        internal ``id``/``created_at``/``updated_at`` fields are stripped from
+        the gene, transcripts, domains, and exons; the gene's redundant nested
+        transcript block is always removed (the standalone ``transcripts`` list
+        is canonical); and transcripts are de-duplicated by ``transcript_id``.
+        By default each transcript ships its ``exon_count`` scalar but NOT the
+        full ``exons`` array; set ``include_exons=True`` to restore it. ``full``
+        mode returns the complete provenance record (ids, timestamps).
 
         Args:
             gene_symbol: HGNC gene symbol to look up.  Defaults to
@@ -60,12 +70,17 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             include_domains: When *True* (default), include the list of
                 annotated protein domains from
                 ``/reference/genes/{gene_symbol}/domains``.
+            include_exons: When *False* (default), omit each transcript's
+                ``exons`` array but keep the ``exon_count`` scalar. Set *True*
+                to return the full per-transcript exon coordinates.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
 
         Returns:
             A dict with keys ``gene``, optionally ``transcripts`` and
-            ``domains``, ``uri``, ``data_class``, and ``meta``.
+            ``domains``, ``uri``, ``data_class``, and ``meta``. Each transcript
+            carries ``exon_count``; the full ``exons`` array appears only when
+            ``include_exons=True``.
         """
         mode = resolve_mode(response_mode)
         return await run_tool(
@@ -75,6 +90,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 genome_build=genome_build,
                 include_transcripts=include_transcripts,
                 include_domains=include_domains,
+                include_exons=include_exons,
                 response_mode=mode,
             ),
             data_class=DataClass.EXTERNAL_REF,

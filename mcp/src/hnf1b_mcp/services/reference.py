@@ -16,6 +16,41 @@ from .shaping import apply_budget
 
 _HARD_CAP = 80_000
 
+# Internal DB artifacts an LLM never needs. Stripped from every mode EXCEPT
+# ``full`` (full = complete provenance record). A row ``id`` is a server-internal
+# UUID with zero research value; the stable, citable handle is the ``uri`` plus
+# the biological accessions (ensembl_id, transcript_id, pfam_id, …) which are
+# always kept. ``created_at``/``updated_at`` are seeding timestamps.
+_NOISE_FIELDS = ("id", "created_at", "updated_at")
+
+
+def _strip_noise(record: dict[str, Any]) -> dict[str, Any]:
+    """Return *record* without internal UUID/timestamp keys (non-mutating)."""
+    return {k: v for k, v in record.items() if k not in _NOISE_FIELDS}
+
+
+def _dedupe_transcripts(transcripts: list[Any]) -> list[dict[str, Any]]:
+    """Collapse the transcript list to one entry per stable ``transcript_id``.
+
+    The reference API can return the same transcript more than once (the gene
+    record embeds a transcripts block AND the standalone /transcripts endpoint
+    repeats it). Dedupe by ``transcript_id`` — the stable accession — keeping
+    first-seen order. Rows without a ``transcript_id`` are kept as-is (no stable
+    key to dedupe on).
+    """
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for tx in transcripts:
+        if not isinstance(tx, dict):
+            continue
+        key = tx.get("transcript_id")
+        if key is not None:
+            if key in seen:
+                continue
+            seen.add(key)
+        deduped.append(tx)
+    return deduped
+
 
 async def get_gene_context(
     client: ApiClient,
@@ -23,6 +58,7 @@ async def get_gene_context(
     genome_build: str = "GRCh38",
     include_transcripts: bool = True,
     include_domains: bool = True,
+    include_exons: bool = False,
     response_mode: str = "compact",
 ) -> dict[str, Any]:
     """Fetch gene context from the HNF1B-db reference API.
@@ -35,15 +71,25 @@ async def get_gene_context(
             list from ``/reference/genes/{gene_symbol}/transcripts``.
         include_domains: When *True*, fetch and include the protein-domain
             list from ``/reference/genes/{gene_symbol}/domains``.
+        include_exons: When *False* (default), each transcript's full ``exons``
+            array is dropped but the cheap ``exon_count`` scalar is kept. When
+            *True*, the per-transcript ``exons`` arrays are returned in full.
         response_mode: One of ``minimal``, ``compact``, ``standard``, ``full``;
-            controls the char budget used to trim transcripts/domains.
+            controls the char budget used to trim transcripts/domains, and
+            whether internal provenance (UUIDs/timestamps) is retained. Internal
+            ``id``/``created_at``/``updated_at`` fields are stripped from every
+            mode except ``full``; the gene's nested duplicate transcript block is
+            always removed (the standalone ``transcripts`` list is canonical).
 
     Returns:
         A plain dict with the following keys:
 
-        - ``gene`` – the full GeneDetailSchema dict.
-        - ``transcripts`` – list of transcript dicts (only when
-          *include_transcripts* is ``True``).
+        - ``gene`` – the GeneDetailSchema dict (internal id/timestamps stripped
+          outside ``full`` mode; its redundant nested ``transcripts`` block is
+          always removed).
+        - ``transcripts`` – de-duplicated list of transcript dicts (only when
+          *include_transcripts* is ``True``). Each carries ``exon_count``; the
+          full ``exons`` array is present only when *include_exons* is ``True``.
         - ``domains`` – list of protein-domain dicts (only when
           *include_domains* is ``True``).
         - ``uri`` – a stable ``hnf1b://gene/{gene_symbol}`` identifier.
@@ -66,16 +112,40 @@ async def get_gene_context(
             ) from exc
         raise
 
+    is_full = response_mode == "full"
+
+    # The gene record embeds a redundant nested transcripts block that the
+    # standalone /transcripts endpoint already returns in full — always drop it
+    # so the same data is not shipped twice. Outside full mode also strip the
+    # internal id/timestamp noise.
+    gene_shaped = dict(gene)
+    gene_shaped.pop("transcripts", None)
+    if not is_full:
+        gene_shaped = _strip_noise(gene_shaped)
+
     result: dict[str, Any] = {
-        "gene": gene,
+        "gene": gene_shaped,
         "uri": f"hnf1b://gene/{gene_symbol}",
     }
 
     if include_transcripts:
-        transcripts: list[Any] = await client.get(
+        raw_transcripts: list[Any] = await client.get(
             REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS.format(symbol=gene_symbol),
             params=params,
         )
+        transcripts: list[dict[str, Any]] = []
+        for tx in _dedupe_transcripts(raw_transcripts):
+            shaped_tx = tx if is_full else _strip_noise(tx)
+            if not include_exons:
+                # Drop the (verbose, UUID-heavy) exon array but keep the cheap
+                # exon_count scalar so the count stays available without the cost.
+                shaped_tx = {k: v for k, v in shaped_tx.items() if k != "exons"}
+            elif not is_full and isinstance(shaped_tx.get("exons"), list):
+                shaped_tx = {
+                    **shaped_tx,
+                    "exons": [_strip_noise(e) for e in shaped_tx["exons"]],
+                }
+            transcripts.append(shaped_tx)
         result["transcripts"] = transcripts
 
     if include_domains:
@@ -83,7 +153,10 @@ async def get_gene_context(
             REFERENCE_GENES_BY_SYMBOL_DOMAINS.format(symbol=gene_symbol),
             params=params,
         )
-        result["domains"] = domains_response.get("domains", [])
+        domains: list[Any] = domains_response.get("domains", [])
+        if not is_full:
+            domains = [_strip_noise(d) if isinstance(d, dict) else d for d in domains]
+        result["domains"] = domains
 
     # Distinguish "no reference data populated" from "this gene genuinely has
     # none". Empty transcripts/domains or null cross-refs almost always mean the
