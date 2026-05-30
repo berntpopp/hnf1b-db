@@ -271,6 +271,8 @@ async def test_get_individual_not_found_returns_error_envelope():
 
     assert sc.get("is_error") is True
     assert sc["error"]["code"] == "not_found"
+    assert sc["error"]["field"] == "phenopacket_id"
+    assert "MISSING" in sc["error"]["message"]
     await client.aclose()
 
 

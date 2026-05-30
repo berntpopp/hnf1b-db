@@ -289,7 +289,19 @@ async def get_publication_citing_individuals(
 
     # The endpoint returns a BARE JSON LIST, not a JSON:API envelope.
     # Shape: [{"phenopacket_id": "...", "phenopacket": {...}}, ...]
-    raw = await client.get(path)
+    try:
+        raw = await client.get(path)
+    except McpToolError as exc:
+        # The shared client raises a generic, value-less not_found on 404. Re-raise
+        # the rich form (field + offending pmid) to match get_variant, so callers
+        # learn WHICH pmid was missing. Any other error propagates unchanged.
+        if exc.code == "not_found":
+            raise McpToolError(
+                "not_found",
+                f"publication '{pmid}' not found",
+                field="citing_pmid",
+            ) from exc
+        raise
 
     # Normalise: the endpoint returns a bare list; client.get returns Any.
     items: list[dict[str, Any]]

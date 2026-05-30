@@ -303,3 +303,21 @@ async def test_reverse_lookup_pmid_prefix_stripped() -> None:
     # The pmid field echoes the original input, but the API was called without prefix
     assert "citing_individuals" in sc
     assert sc["total"] == 3
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_reverse_lookup_not_found_returns_rich_error_envelope() -> None:
+    """A 404 reverse lookup surfaces a rich not_found (field + pmid echoed)."""
+    respx.get(f"{BASE}/phenopackets/by-publication/999").mock(
+        return_value=httpx.Response(404)
+    )
+    mcp, client = _make_mcp_and_client()
+    r = await mcp.call_tool("hnf1b_get_publications", {"citing_pmid": "999"})
+    await client.aclose()
+
+    sc = r.structured_content
+    assert sc.get("is_error") is True
+    assert sc["error"]["code"] == "not_found"
+    assert sc["error"]["field"] == "citing_pmid"
+    assert "999" in sc["error"]["message"]
