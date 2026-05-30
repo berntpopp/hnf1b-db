@@ -19,7 +19,22 @@ from hnf1b_mcp.contract._generated_paths import (
 )
 from hnf1b_mcp.services.citation import build_citation
 from hnf1b_mcp.services.errors import McpToolError
-from hnf1b_mcp.services.shaping import apply_budget
+from hnf1b_mcp.services.shaping import apply_budget, sample_with_signal
+
+# Default cap on the inline ``citing_individuals`` id list returned by the
+# citing_pmid reverse lookup. A foundational publication is cited by many
+# individuals (~75 for the most-cited HNF1B paper); dumping the entire id list
+# uncapped in every response mode blew the token budget the rest of the server
+# respects. The full set is recoverable via include_citing_individuals=true (and
+# each id resolves to per-carrier phenotype detail via hnf1b_get_individuals /
+# the matched cohort via hnf1b_find_individuals_by_phenotype).
+_CITING_NOTE = (
+    "Showing the first {sample} of {total} citing-individual ids. To get all,"
+    " re-call hnf1b_get_publications with the same citing_pmid and"
+    " include_citing_individuals=true, then pass the ids to hnf1b_get_individuals"
+    " (or use hnf1b_find_individuals_by_phenotype for the matched cohort with"
+    " phenotype detail)."
+)
 
 
 def _strip_pmid_prefix(raw: str) -> str:
@@ -268,6 +283,9 @@ async def build_pmid_citation_map(client: ApiClient) -> dict[str, dict[str, Any]
 async def get_publication_citing_individuals(
     client: ApiClient,
     pmid: str,
+    *,
+    response_mode: str = "compact",
+    include_citing_individuals: bool = False,
 ) -> dict[str, Any]:
     """Return phenopacket IDs that cite a given publication (discovery only).
 
@@ -275,14 +293,42 @@ async def get_publication_citing_individuals(
     to discover which carrier records reference the publication.
     This is a discovery-only call; it NEVER hits the metadata endpoint.
 
+    Citing-individual token discipline (applies in EVERY response mode):
+
+    * ``include_citing_individuals=False`` (default) — the ``citing_individuals``
+      list is SUMMARIZED to the first :data:`DEFAULT_SAMPLE_SIZE` ids. A
+      foundational publication cited by many individuals (~75 for the most-cited
+      HNF1B paper) would otherwise dump the entire id list uncapped in
+      compact/standard with no opt-out, blowing the token budget. ``total``
+      always stays the true citing count, and when the full set exceeds the
+      sample the response meta carries ``citing_individuals_total`` (== total),
+      ``citing_individuals_returned``, ``citing_individuals_truncated: true``, and
+      a ``citing_individuals_note`` telling the caller how to recover the rest
+      (``include_citing_individuals=true`` /
+      ``hnf1b_find_individuals_by_phenotype``).
+    * ``include_citing_individuals=True`` — the FULL list is returned, still
+      bounded by the response mode's char budget; if it must be trimmed to fit,
+      ``citing_individuals_truncated`` + a ``dropped_summary`` are emitted (in
+      every mode).
+
     Args:
         client: An :class:`~hnf1b_mcp.client.api_client.ApiClient` instance.
         pmid: The bare PMID (digits only) or ``"PMID:NNN"`` prefixed string.
+        response_mode: One of ``minimal``/``compact``/``standard``/``full``;
+            controls the char budget applied when *include_citing_individuals*
+            is ``True``.
+        include_citing_individuals: When ``False`` (default) the
+            ``citing_individuals`` list is summarized to a small sample (see
+            above) in every mode; when ``True`` the full list is returned,
+            budget-bounded with a truncation signal.
 
     Returns:
         A plain dict with keys ``pmid`` (the input value),
-        ``citing_individuals`` (list of ``phenopacket_id`` strings),
-        and ``total`` (length of that list).
+        ``citing_individuals`` (list of ``phenopacket_id`` strings — a bounded
+        sample unless ``include_citing_individuals=True``), and ``total`` (the
+        true citing count, unaffected by sampling), plus the internal ``_meta``
+        (and ``_dropped`` when a budget trim occurred) channels the tool wrapper
+        consumes.
     """
     bare = _strip_pmid_prefix(pmid)
     path = PHENOPACKETS_BY_PUBLICATION_BY_PMID.format(pmid=bare)
@@ -319,8 +365,43 @@ async def get_publication_citing_individuals(
         if pid:
             citing.append(pid)
 
-    return {
+    total = len(citing)
+    result: dict[str, Any] = {
         "pmid": pmid,
         "citing_individuals": citing,
-        "total": len(citing),
+        "total": total,
     }
+    extra_meta: dict[str, Any] = {}
+
+    # Citing-individual token discipline — mode-INDEPENDENT. ``total`` (the true
+    # citing count) is preserved in every branch; only the inline id LIST is
+    # bounded, matching get_variant's carrier discipline (shared helper).
+    if not include_citing_individuals:
+        # DEFAULT: summarize to a bounded sample regardless of mode. Reuses the
+        # shared sample/signal helper get_variant.carriers also uses, so the two
+        # uncapped-id-list defects share one implementation.
+        result["citing_individuals"], citing_signal = sample_with_signal(
+            citing,
+            total,
+            key_prefix="citing_individuals",
+            note=_CITING_NOTE,
+        )
+        extra_meta.update(citing_signal)
+    else:
+        # include_citing_individuals=True: return the FULL list, but still bounded
+        # by the response mode's char budget so an enormous set can never blow the
+        # budget. ``total`` stays accurate; the truncation signal + dropped_summary
+        # fire in ANY mode when a trim happens.
+        budget = Settings().mode_char_budgets.get(response_mode, 12000)
+        result, dropped = apply_budget(result, budget, ["citing_individuals"])
+        if dropped:
+            result["_dropped"] = dropped
+            extra_meta["citing_individuals_truncated"] = True
+            extra_meta["citing_individuals_total"] = total
+            extra_meta["citing_individuals_returned"] = len(
+                result["citing_individuals"]
+            )
+
+    if extra_meta:
+        result["_meta"] = extra_meta
+    return result

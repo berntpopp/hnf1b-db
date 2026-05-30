@@ -102,7 +102,10 @@ _TOOLS: list[dict[str, str]] = [
             "lookup the individuals citing one publication via `citing_pmid`. "
             "Returns recommended_citation strings, plus `coverage`/"
             "`has_full_text` flags (every mode) and the full `abstract` from "
-            "standard mode upward."
+            "standard mode upward. The citing_pmid reverse lookup summarizes "
+            "citing_individuals to a SAMPLE (at most 10 ids, total stays the true "
+            "count; citing_individuals_truncated signalled in meta) unless "
+            "include_citing_individuals=true."
         ),
     },
     {
@@ -358,6 +361,22 @@ def _filterable_fields() -> dict[str, Any]:
             "citing_pmid": {
                 "type": "string",
                 "hint": "reverse lookup: individuals citing this PMID",
+            },
+            "include_citing_individuals": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    f"citing_pmid reverse lookup only: citing_individuals are "
+                    f"summarized by default to at most {_CARRIER_SAMPLE_SIZE} ids "
+                    "in EVERY response mode (total stays the true citing count). "
+                    "When the full set is larger, meta carries "
+                    "citing_individuals_total / citing_individuals_returned / "
+                    "citing_individuals_truncated / citing_individuals_note. Set "
+                    "include_citing_individuals=true for the full list (still "
+                    "bounded by the response-mode char budget), then pass the ids "
+                    "to hnf1b_get_individuals, or use "
+                    "hnf1b_find_individuals_by_phenotype for the matched cohort."
+                ),
             },
             "q": {"type": "string", "hint": "free-text keyword filter"},
         },

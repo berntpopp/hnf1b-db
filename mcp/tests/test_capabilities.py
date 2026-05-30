@@ -67,6 +67,15 @@ def test_capabilities_filterable_fields_present():
     assert "carriers_truncated" in gv_hint
     assert "hnf1b_find_individuals_by_phenotype" in gv_hint
 
+    # get_publications advertises the citing_individuals-summarization opt-out so
+    # the summarized-by-default reverse-lookup behavior is discoverable too.
+    gp = ff["hnf1b_get_publications"]
+    assert gp["include_citing_individuals"]["type"] == "boolean"
+    assert gp["include_citing_individuals"]["default"] is False
+    gp_hint = gp["include_citing_individuals"]["hint"].lower()
+    assert "citing_individuals_truncated" in gp_hint
+    assert "hnf1b_find_individuals_by_phenotype" in gp_hint
+
     sv = ff["hnf1b_search_variants"]
     # Exactly the real filter/sort params plus the carrier_count field-semantics
     # note — no invented hgvs_c / acmg_class.

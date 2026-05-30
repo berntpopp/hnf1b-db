@@ -3,12 +3,70 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, TypeVar
 
 from .errors import McpToolError
 
+_T = TypeVar("_T")
+
 MODES = ("minimal", "compact", "standard", "full")
 DEFAULT_MODE = "compact"
+
+# Default cap for an inline id list (carrier ids, citing-individual ids, …) shown
+# without an explicit opt-in. A heavily-populated list (e.g. the recurrent 17q12
+# deletion carries ~379 individuals ≈ 7.5 KB of bare ids, or a foundational
+# publication cited by ~75 individuals) would otherwise dump the ENTIRE list in
+# every response mode with no opt-out, blowing the token budget the rest of the
+# server respects. Callers recover the full set via the tool's include_* flag.
+DEFAULT_SAMPLE_SIZE = 10
+
+
+def sample_with_signal(
+    items: list[_T],
+    total: int,
+    *,
+    key_prefix: str,
+    note: str,
+    sample_size: int = DEFAULT_SAMPLE_SIZE,
+) -> tuple[list[_T], dict[str, Any]]:
+    """Down-sample an inline list to a bounded sample with a meta signal.
+
+    The reusable sample/signal pattern shared by every tool that ships an inline
+    id list (carrier ids, citing-individual ids, …): when *items* exceeds
+    *sample_size*, return only the first *sample_size* entries plus a
+    machine-readable meta block (``{key_prefix}_total`` / ``{key_prefix}_returned``
+    / ``{key_prefix}_truncated`` / ``{key_prefix}_note``) that tells the agent the
+    omission happened and exactly how to recover the full set. When the list
+    already fits (``len(items) <= sample_size``) it is returned whole with an
+    EMPTY signal, so the caller never emits a spurious truncation flag.
+
+    Args:
+        items: The full list of items (or whatever subset was fetched).
+        total: The authoritative total count; used for the ``{key_prefix}_total``
+            signal and the *note*, which may exceed ``len(items)`` if the upstream
+            fetch itself was bounded.
+        key_prefix: The meta-key prefix (e.g. ``"carriers"`` →
+            ``carriers_total``/``carriers_returned``/``carriers_truncated``/
+            ``carriers_note``).
+        note: The recovery-pointer prose. Supports ``{sample}``/``{total}``
+            ``str.format`` placeholders, filled with the sampled length and
+            *total*.
+        sample_size: Maximum number of entries to keep
+            (default :data:`DEFAULT_SAMPLE_SIZE`).
+
+    Returns:
+        ``(sampled, signal)`` — *sampled* is the (possibly shortened) list and
+        *signal* is the meta dict to merge (empty when no truncation occurred).
+    """
+    if len(items) <= sample_size:
+        return items, {}
+    sampled = items[:sample_size]
+    return sampled, {
+        f"{key_prefix}_total": total,
+        f"{key_prefix}_returned": len(sampled),
+        f"{key_prefix}_truncated": True,
+        f"{key_prefix}_note": note.format(sample=len(sampled), total=total),
+    }
 
 
 def resolve_mode(requested: str | None) -> str:

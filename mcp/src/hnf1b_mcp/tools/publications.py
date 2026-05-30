@@ -38,6 +38,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         page_size: int = 25,
         sort: str | None = None,
         citing_pmid: str | None = None,
+        include_citing_individuals: bool = False,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Browse and search the local HNF1B publication cache.
@@ -69,6 +70,16 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             citing_pmid: Bare PMID (digits) or ``"PMID:NNN"`` prefixed string.
                 When provided, performs a reverse lookup — returns the list of
                 phenopacket IDs that cite this publication.
+            include_citing_individuals: Only meaningful with ``citing_pmid``.
+                When ``False`` (default) the ``citing_individuals`` list is
+                summarized to the first 10 ids in EVERY mode (``total`` stays the
+                true count); when the full set is larger, meta carries
+                ``citing_individuals_total`` / ``citing_individuals_returned`` /
+                ``citing_individuals_truncated`` / ``citing_individuals_note``.
+                Set ``True`` for the full list (still bounded by the response-mode
+                char budget, with the truncation signal in every mode); pass the
+                ids to ``hnf1b_get_individuals``, or use
+                ``hnf1b_find_individuals_by_phenotype`` for the matched cohort.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
                 In ``minimal``/``compact`` the redundant ``journal``/``year``/
@@ -80,8 +91,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
         Returns:
             When ``citing_pmid`` is given: a dict with keys ``pmid``,
-            ``citing_individuals`` (list of phenopacket ID strings),
-            ``total``, ``data_class``, and ``meta``.
+            ``citing_individuals`` (a bounded sample of phenopacket ID strings
+            unless ``include_citing_individuals=True``), ``total`` (the true
+            citing count), ``data_class``, and ``meta`` (carrying the
+            ``citing_individuals_*`` truncation signals when the full set
+            exceeds the sample).
 
             Otherwise: a dict with keys ``publications`` (shaped records with
             ``pmid``, ``recommended_citation``, ``phenopacket_count``, ``uri``,
@@ -97,6 +111,8 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 return await publications_service.get_publication_citing_individuals(
                     client,  # type: ignore[arg-type]
                     citing_pmid,
+                    response_mode=mode,
+                    include_citing_individuals=include_citing_individuals,
                 )
             filters: dict[str, Any] = {}
             if year is not None:

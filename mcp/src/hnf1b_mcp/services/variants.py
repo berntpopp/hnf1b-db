@@ -17,7 +17,7 @@ from ..contract._generated_paths import (
     PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID,
 )
 from .errors import McpToolError
-from .shaping import apply_budget
+from .shaping import DEFAULT_SAMPLE_SIZE, apply_budget, sample_with_signal
 
 # ---------------------------------------------------------------------------
 # Valid enum values — sourced from the generated API contract (DRY Layer 2).
@@ -37,7 +37,9 @@ _GENE_SYMBOL = "HNF1B"
 # otherwise dump the ENTIRE list in compact/standard with no opt-out, blowing
 # the token budget the rest of the server respects. The caller recovers the
 # full set via include_carriers=True or hnf1b_find_individuals_by_phenotype.
-_CARRIER_SAMPLE_SIZE = 10
+# Sourced from the shared DEFAULT_SAMPLE_SIZE so the carrier sample stays in
+# lockstep with the citing-individuals sample (both use the same generic helper).
+_CARRIER_SAMPLE_SIZE = DEFAULT_SAMPLE_SIZE
 _CARRIERS_NOTE = (
     "Showing the first {sample} of {total} carrier ids. To get all carriers,"
     " re-call hnf1b_get_variant with include_carriers=true, or use"
@@ -51,12 +53,14 @@ def _summarize_carriers(
 ) -> tuple[list[str], dict[str, Any]]:
     """Down-sample a carrier-id list to a bounded sample with a meta signal.
 
-    The reusable carrier-shaping pattern: when *carriers* exceeds *sample_size*,
-    return only the first *sample_size* ids plus a machine-readable meta block
-    (``carriers_total`` / ``carriers_returned`` / ``carriers_truncated`` /
-    ``carriers_note``) that tells the agent the omission happened and exactly how
-    to recover the full set. When the list already fits, it is returned whole
-    with an empty signal so the caller never emits a spurious truncation flag.
+    Thin carrier-specific wrapper over the shared
+    :func:`~hnf1b_mcp.services.shaping.sample_with_signal`: when *carriers*
+    exceeds *sample_size*, return only the first *sample_size* ids plus a
+    machine-readable meta block (``carriers_total`` / ``carriers_returned`` /
+    ``carriers_truncated`` / ``carriers_note``) that tells the agent the omission
+    happened and exactly how to recover the full set. When the list already fits,
+    it is returned whole with an empty signal so the caller never emits a spurious
+    truncation flag.
 
     Args:
         carriers: The full list of carrier ids (or whatever subset was fetched).
@@ -70,15 +74,14 @@ def _summarize_carriers(
         ``(sampled, signal)`` — *sampled* is the (possibly shortened) id list and
         *signal* is the meta dict to merge (empty when no truncation occurred).
     """
-    if len(carriers) <= sample_size:
-        return carriers, {}
-    sampled = carriers[:sample_size]
-    return sampled, {
-        "carriers_total": total,
-        "carriers_returned": len(sampled),
-        "carriers_truncated": True,
-        "carriers_note": _CARRIERS_NOTE.format(sample=len(sampled), total=total),
-    }
+    return sample_with_signal(
+        carriers,
+        total,
+        key_prefix="carriers",
+        note=_CARRIERS_NOTE,
+        sample_size=sample_size,
+    )
+
 
 # Self-documenting basis for the ``carrier_count`` field, mirroring the
 # statistics tool's ``unit`` + ``unit_note`` pattern. carrier_count is the
