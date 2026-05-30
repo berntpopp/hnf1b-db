@@ -38,7 +38,8 @@ _TOOLS: list[dict[str, str]] = [
             "Unified free-text discovery across individuals, variants, and "
             "publications (default) — also genes. Returns typed ID hits; each "
             "hit carries a 'resolve_with' {tool, argument, value} naming exactly "
-            "how to fetch its authoritative content. Pass types=[...] to scope."
+            "how to fetch its authoritative content, plus a numeric 'score' "
+            "(relevance, higher = better) for ranking. Pass types=[...] to scope."
         ),
     },
     {

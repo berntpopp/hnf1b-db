@@ -182,6 +182,28 @@ async def test_search_query_echoed_in_result():
 
 @pytest.mark.asyncio
 @respx.mock
+@pytest.mark.parametrize("mode", ["compact", "standard"])
+async def test_search_score_survives_response_mode(mode):
+    """The relevance score forwards through the tool in every response mode."""
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_SEARCH_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    mcp: FastMCP = FastMCP("test")  # type: ignore[type-arg]
+    register(mcp, c)
+    r = await mcp.call_tool(
+        "hnf1b_search", {"query": "HNF1B", "response_mode": mode}
+    )
+    sc = r.structured_content
+    by_id = {h["id"]: h for h in sc["hits"]}
+    assert by_id["pp_HNF1B-1"]["score"] == 1.0
+    assert by_id["var_HNF1B:c.494G>A"]["score"] == 0.9
+    assert by_id["pub_12345678"]["score"] == 0.8
+    await c.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_guidance_present():
     respx.get(f"{BASE}/search/global").mock(
         return_value=httpx.Response(200, json={"results": []})

@@ -154,7 +154,9 @@ async def search(
         A plain dict with keys:
 
         - ``query``: The original query string.
-        - ``hits``: List of ``{type, id, label, uri}`` dicts.
+        - ``hits``: List of ``{type, id, label, uri}`` dicts; each hit also
+          carries a numeric ``score`` (relevance, 0–1, higher = better) when
+          the backend supplied one.
         - ``counts``: ``{type: count}`` for each type present in *hits*.
         - ``guidance``: Short string directing callers to typed get_* tools.
 
@@ -224,6 +226,12 @@ async def search(
             "label": label,
             "uri": uri,
         }
+        # Forward the backend's numeric relevance score (ts_rank / trigram
+        # similarity, 0–1, higher = better) verbatim so a client can rank
+        # strong vs. weak matches. Guarded so a missing score never crashes
+        # and never fabricates a misleading value.
+        if "score" in item:
+            hit["score"] = item["score"]
         if resolve_with is not None:
             hit["resolve_with"] = resolve_with
         hits.append(hit)
