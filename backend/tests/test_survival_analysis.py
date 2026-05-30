@@ -202,6 +202,25 @@ class TestCalculateKaplanMeier:
             # Lower should be <= upper
             assert point["ci_lower"] <= point["ci_upper"]
 
+    def test_confidence_interval_contains_estimate(self):
+        """Every point's CI must contain its own survival estimate (B6).
+
+        Guards the degenerate-terminal-point artifact: when survival drops to 0
+        the log-log CI is skipped, and the leftover initialized [1, 1] would be an
+        interval that does NOT contain the estimate (0).
+        """
+        # All-event data drives the final survival estimate to exactly 0.
+        data = [(10.0, True), (20.0, True), (30.0, True)]
+        result = calculate_kaplan_meier(data)
+
+        assert result[-1]["survival_probability"] == 0.0
+        for point in result:
+            s = point["survival_probability"]
+            # The interval must bracket its own point estimate.
+            assert point["ci_lower"] <= s <= point["ci_upper"], point
+        # Specifically, the terminal S=0 point must NOT carry the [1, 1] artifact.
+        assert not (result[-1]["ci_lower"] == 1.0 and result[-1]["ci_upper"] == 1.0)
+
     def test_at_risk_decreases(self):
         """Number at risk should decrease over time."""
         data = [(10.0, True), (20.0, True), (30.0, False), (40.0, True)]

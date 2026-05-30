@@ -97,42 +97,54 @@ async def aggregate_by_disease(
 async def aggregate_kidney_stages(
     db: AsyncSession = Depends(get_db),
 ):
-    """Get distribution of kidney disease stages."""
-    query = """
+    """Get distribution of kidney disease stages.
+
+    The cohort encodes CKD stages as STANDALONE HPO feature terms (HP:0012623
+    Stage 1 … HP:0003774 Stage 5, plus HP:0012622 unspecified CKD) — NOT as a
+    ``Stage`` modifier on a single CKD feature. This aggregates the present
+    occurrences of those terms (``settings.hpo_terms.ckd_stages``), using the same
+    present-count semantics as /by-feature so the two reconcile. ``percentage`` is
+    each stage's share of all staged-CKD annotations.
+    """
+    stage_ids: list[str] = settings.hpo_terms.ckd_stages
+    # Named placeholders (:stage_0 …) for the IN-list. The ids are server-side
+    # config constants, but parameterising keeps the query injection-safe.
+    placeholders = ", ".join(f":stage_{i}" for i in range(len(stage_ids)))
+    params = {f"stage_{i}": sid for i, sid in enumerate(stage_ids)}
+
+    query = f"""
     SELECT
-        modifier->>'label' as stage,
+        feature->'type'->>'id' as hpo_id,
+        MIN(feature->'type'->>'label') as label,
         COUNT(*) as count
     FROM
         phenopackets,
-        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature,
-        jsonb_array_elements(COALESCE(feature->'modifiers', '[]'::jsonb)) as modifier
+        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
     WHERE
         deleted_at IS NULL
         AND state = 'published'
         AND head_published_revision_id IS NOT NULL
         AND phenopacket_id NOT LIKE 'e2e-%'
-        AND feature->'type'->>'id' = :ckd_hpo
-        AND modifier->>'label' LIKE '%Stage%'
+        AND feature->'type'->>'id' IN ({placeholders})
+        AND NOT COALESCE((feature->>'excluded')::boolean, false)
     GROUP BY
-        modifier->>'label'
+        feature->'type'->>'id'
     ORDER BY
-        stage
+        hpo_id
     """
 
-    result = await db.execute(
-        text(query),
-        {"ckd_hpo": settings.hpo_terms.chronic_kidney_disease},
-    )
-    rows = result.fetchall()
+    result = await db.execute(text(query), params)
+    rows = result.mappings().all()
 
-    total = sum(int(row._mapping["count"]) for row in rows)
+    total = sum(int(row["count"]) for row in rows)
     rows_with_pct = calculate_percentages(rows, total=total)
 
     return [
         AggregationResult(
-            label=row["stage"],
+            label=row["label"] or row["hpo_id"],
             count=int(row["count"]),
             percentage=row["percentage"],
+            hpo_id=row["hpo_id"],
         )
         for row in rows_with_pct
     ]

@@ -208,7 +208,17 @@ def calculate_kaplan_meier(event_times: list[tuple[float, bool]]) -> list[dict]:
         ci_lower = 1.0
         ci_upper = 1.0
 
-        if survival_prob > 0 and survival_prob < 1 and greenwood_sum > 0:
+        if survival_prob <= 0:
+            # Survival has reached 0 (the final at-risk subject had an event). The
+            # log-log CI is undefined here, and leaving the initialized [1, 1]
+            # would ship an interval that does NOT contain its own point estimate
+            # (a degenerate last-event artifact). Collapse the interval to the
+            # estimate instead — [0, 0] — so the CI always contains S(t). (R's
+            # survfit returns NA; we keep a numeric bound so the API/chart contract
+            # stays float-only and the band converges cleanly to the endpoint.)
+            ci_lower = 0.0
+            ci_upper = 0.0
+        elif survival_prob < 1 and greenwood_sum > 0:
             se = survival_prob * math.sqrt(greenwood_sum)  # Standard error
             z = 1.96  # 95% CI
 
