@@ -289,3 +289,30 @@ async def test_resolve_terms_unknown_vocabulary_raises_invalid_input() -> None:
     assert err.details.get("argument") == "vocabulary"
     assert "choices" in err.details
     assert "hpo" in err.details["choices"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_terms_rejects_nonpositive_limit() -> None:
+    """A limit below 1 returns an actionable invalid_input error (no I/O)."""
+    c = ApiClient(base_url=BASE)
+    with pytest.raises(McpToolError) as exc_info:
+        await resolve_terms(c, text="renal", vocabulary="hpo", limit=0)
+    await c.aclose()
+    err = exc_info.value
+    assert err.code == "invalid_input"
+    assert err.details.get("argument") == "limit"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_resolve_terms_vocab_cap_emits_truncation_signal() -> None:
+    """A controlled-vocab list capped by limit surfaces total_matches/returned."""
+    respx.get(f"{BASE}/ontology/vocabularies/sex").mock(
+        return_value=httpx.Response(200, json=_SEX_VOCAB_RESP)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await resolve_terms(c, text="", vocabulary="sex", limit=2)
+    await c.aclose()
+    assert len(result["matches"]) == 2
+    assert result["_meta"]["total_matches"] == 3
+    assert result["_meta"]["returned"] == 2

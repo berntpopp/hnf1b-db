@@ -185,8 +185,10 @@ _IDENTIFIERS: dict[str, str] = {
     "variant": (
         "canonical variant_id is the GA4GH VRS descriptor ('ga4gh:VA.…') or the "
         "CNV form ('var:HNF1B:17:START-END:DEL'); pass either to "
-        "hnf1b_get_variant. 'simple_id' (e.g. 'Var6') is a display ordinal, not "
-        "a lookup key."
+        "hnf1b_get_variant. The friendly 'simple_id' (e.g. 'Var6') is ALSO "
+        "accepted by hnf1b_get_variant, but it is an unstable display ordinal "
+        "(it can shift as the variant set changes), so prefer the canonical "
+        "variant_id for durable references."
     ),
     "publication": "PMID (bare digits or 'PMID:NNN').",
     "resolution": (

@@ -10,6 +10,7 @@ from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import terms as terms_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
+from hnf1b_mcp.services.shaping import resolve_mode
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -41,6 +42,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             "evidence-code",
         ] = "hpo",
         limit: int = 10,
+        response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Resolve ontology or controlled-vocabulary terms against the HNF1B-db API.
 
@@ -66,11 +68,16 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``"allelic-state"``, ``"evidence-code"``.  Defaults to
                 ``"hpo"``.
             limit: Maximum number of matches to return (≥ 1).  Defaults to 10.
+                A value below 1 returns an ``invalid_input`` error.
+            response_mode: Response verbosity — one of ``minimal``, ``compact``,
+                ``standard``, ``full``.  Defaults to ``compact``.
 
         Returns:
             A dict with keys ``query``, ``vocabulary``, ``matches``,
             ``data_class``, and ``meta``.  Each match contains ``id``,
-            ``label``, and ``description``.
+            ``label``, and ``description``.  For a controlled vocabulary capped
+            by ``limit``, ``meta`` carries ``total_matches``/``returned`` so the
+            truncation is never silent.
         """
         return await run_tool(
             lambda: terms_service.resolve_terms(
@@ -80,5 +87,5 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 limit=limit,
             ),
             data_class=DataClass.EXTERNAL_REF,
-            response_mode="compact",
+            response_mode=resolve_mode(response_mode),
         )
