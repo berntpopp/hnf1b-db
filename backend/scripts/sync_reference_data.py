@@ -70,21 +70,12 @@ async def run_init(session: AsyncSession) -> bool:
     print("=" * 70)
     print()
 
-    # Check current status
-    status = await get_reference_data_status(session)
-    if status.has_grch38 and status.has_hnf1b:
-        print("Reference data already initialized:")
-        print("  - GRCh38 genome: Present")
-        print("  - HNF1B gene: Present")
-        print(f"  - Transcripts: {status.transcript_count}")
-        print(f"  - Exons: {status.exon_count}")
-        print(f"  - Protein domains: {status.domain_count}")
-        print()
-        print("No action needed.")
-        return True
-
-    # Run initialization
-    print("Creating reference data...")
+    # initialize_reference_data is idempotent and self-healing (each item is
+    # created only if missing, and the HNF1B gene's cross-refs are backfilled if
+    # absent), so run it UNCONDITIONALLY. The previous "skip when genome+gene
+    # exist" short-circuit left a partially-seeded DB stuck — e.g. a gene created
+    # by the chr17q12 region sync with no transcripts/exons/domains.
+    print("Ensuring reference data (idempotent)...")
     result = await initialize_reference_data(session)
 
     if result.errors > 0:
@@ -94,11 +85,17 @@ async def run_init(session: AsyncSession) -> bool:
                 print(f"  Error: {msg}")
         return False
 
+    status = await get_reference_data_status(session)
     print()
     print("Summary:")
-    print(f"  - Items created: {result.imported}")
+    print(f"  - Items created this run: {result.imported}")
+    print(f"  - GRCh38 genome: {'Present' if status.has_grch38 else 'MISSING'}")
+    print(f"  - HNF1B gene:    {'Present' if status.has_hnf1b else 'MISSING'}")
+    print(f"  - Transcripts:   {status.transcript_count}")
+    print(f"  - Exons:         {status.exon_count}")
+    print(f"  - Protein domains: {status.domain_count}")
     print()
-    print("Reference data initialized successfully!")
+    print("Reference data ensured.")
     return True
 
 
