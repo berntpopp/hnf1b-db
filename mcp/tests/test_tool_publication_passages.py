@@ -274,9 +274,7 @@ async def test_invalid_mode_service_guard_still_returns_envelope() -> None:
     _mock_both()
     mcp, client = _make_mcp_and_client()
     with pytest.raises(McpToolError) as excinfo:
-        await passages_service.get_publication_passages(
-            client, query="x", mode="bogus"
-        )
+        await passages_service.get_publication_passages(client, query="x", mode="bogus")
     await client.aclose()
     assert excinfo.value.code == "invalid_input"
 
