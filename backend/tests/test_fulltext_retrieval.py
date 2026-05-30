@@ -219,9 +219,9 @@ async def test_brief_snippet_carries_real_context_not_stub(db_session):
     snippet_min = result_min.passages[0].snippet
     assert snippet_min is not None
     plain_min = snippet_min.replace("<b>", "").replace("</b>", "")
-    assert (
-        len(plain_min.split()) >= 12
-    ), f"snippet at min budget collapsed to a stub: {snippet_min!r}"
+    assert len(plain_min.split()) >= 12, (
+        f"snippet at min budget collapsed to a stub: {snippet_min!r}"
+    )
 
 
 @pytest.mark.asyncio

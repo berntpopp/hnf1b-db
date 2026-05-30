@@ -225,9 +225,7 @@ async def _apply_brief_snippets(
     # GUARD: MaxWords must always exceed MinWords. The char budget can only push
     # MaxWords higher, never below the floor.
     max_words = max(min_words + _SNIPPET_WORD_MARGIN, snippet_chars // _CHARS_PER_WORD)
-    options = (
-        f"MaxFragments=2, MinWords={min_words}, MaxWords={max_words}, ShortWord=2"
-    )
+    options = f"MaxFragments=2, MinWords={min_words}, MaxWords={max_words}, ShortWord=2"
     stmt = text(
         "SELECT passage_id, ts_headline('english', text, "
         "websearch_to_tsquery('english', :qtext), :opts) AS snippet "
