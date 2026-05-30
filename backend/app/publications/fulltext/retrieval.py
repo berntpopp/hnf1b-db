@@ -35,6 +35,9 @@ VALID_RERANK = ("rrf", "lexical", "off")
 _ALNUM_RE = re.compile(r"[A-Za-z0-9]+")
 #: Approximate characters per token, used to size ``ts_headline`` snippets.
 _CHARS_PER_WORD = 6
+#: Words ``MaxWords`` must exceed ``MinWords`` by, so a fragment can grow with
+#: the char budget while the ``MaxWords >= MinWords`` invariant always holds.
+_SNIPPET_WORD_MARGIN = 5
 
 
 def _or_query(query: str) -> str:
@@ -200,11 +203,31 @@ async def _fetch_missing_rows(
 async def _apply_brief_snippets(
     db: AsyncSession, passages: list[RetrievedPassage], query: str, snippet_chars: int
 ) -> None:
-    """Populate ``snippet`` on each passage via ``ts_headline`` (in place)."""
+    """Populate ``snippet`` on each passage via ``ts_headline`` (in place).
+
+    Snippet quality fix: in Postgres fragment mode (``MaxFragments`` > 0),
+    ``MinWords`` is the floor on words per fragment. The prior value of 3 let a
+    sparse cover (one matching token in otherwise non-matching text) collapse to
+    a ~2-3 word stub (e.g. "that pathogenic HNF1B alterations were") — useless
+    context. We raise the floor to ``settings.publications_rag.snippet_min_words``
+    (default 15, Postgres's own ``MinWords`` default) so every fragment carries
+    real context.
+
+    ``MaxWords`` keeps the char-budget intent (larger ``snippet_chars`` -> more
+    words) but is GUARDED to always satisfy ``MaxWords >= MinWords``: it is at
+    least ``MinWords + _SNIPPET_WORD_MARGIN``. This holds even at the API minimum
+    ``snippet_chars`` (40 -> ~6 budget words), which would otherwise fall below
+    the raised floor and make Postgres reject/mis-handle the options.
+    """
     if not passages:
         return
-    max_words = max(5, snippet_chars // _CHARS_PER_WORD)
-    options = f"MaxFragments=2, MinWords=3, MaxWords={max_words}, ShortWord=2"
+    min_words = settings.publications_rag.snippet_min_words
+    # GUARD: MaxWords must always exceed MinWords. The char budget can only push
+    # MaxWords higher, never below the floor.
+    max_words = max(min_words + _SNIPPET_WORD_MARGIN, snippet_chars // _CHARS_PER_WORD)
+    options = (
+        f"MaxFragments=2, MinWords={min_words}, MaxWords={max_words}, ShortWord=2"
+    )
     stmt = text(
         "SELECT passage_id, ts_headline('english', text, "
         "websearch_to_tsquery('english', :qtext), :opts) AS snippet "

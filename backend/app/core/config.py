@@ -343,6 +343,22 @@ class PublicationsRagConfig(BaseModel):
             "separates them."
         ),
     )
+    # Brief-mode snippet floor (snippet-quality fix): the per-fragment word
+    # floor passed to ``ts_headline`` as ``MinWords``. Postgres collapses a
+    # sparse cover to a ~2-3 word stub when ``MinWords`` is tiny (the prior
+    # value was 3), producing useless snippets like "BACKGROUND: Maturity-onset".
+    # 15 matches Postgres's own ``MinWords`` default and guarantees a readable
+    # fragment. ``MaxWords`` is always computed to exceed this floor.
+    snippet_min_words: int = Field(
+        default=15,
+        ge=1,
+        description=(
+            "Minimum words per ``ts_headline`` fragment (Postgres ``MinWords``) "
+            "for brief-mode snippets. The prior value of 3 let sparse covers "
+            "collapse to 2-3 word stubs; 15 (Postgres's own default) guarantees "
+            "a contextful fragment. ``MaxWords`` is always sized above this floor."
+        ),
+    )
 
 
 class YamlConfig(BaseModel):

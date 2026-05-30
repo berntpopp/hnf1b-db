@@ -153,6 +153,78 @@ async def test_brief_mode_sets_snippet(db_session):
 
 
 @pytest.mark.asyncio
+async def test_brief_snippet_carries_real_context_not_stub(db_session):
+    """A sparse single-token match yields a contextful fragment, not a 2-3 word stub.
+
+    Regression for the ``MinWords=3`` bug: when the query match sits inside an
+    otherwise sparse cover (one matching token surrounded by non-matching text),
+    Postgres ``ts_headline`` with ``MinWords=3`` collapsed the fragment to a
+    ~2-5 word stub (e.g. "that pathogenic HNF1B alterations were"), which is
+    useless context. With a raised ``MinWords`` floor (~15, Postgres's own
+    default) the snippet carries a real, readable fragment.
+
+    Asserted at BOTH the brief-mode default ``snippet_chars`` and at the API
+    minimum (40) — the minimum must still produce a real fragment, never a
+    stub. The 12-word threshold fails under the old ``MinWords=3`` options
+    (which capped at ~5 words for ``snippet_chars=40``) and passes under the
+    fix.
+    """
+    sparse_pmid = "PMID:2"
+    sparse_passage = PassageRow(
+        sparse_pmid,
+        "PMID:2:abstract:0",
+        "abstract",
+        0,
+        (
+            "BACKGROUND Maturity onset diabetes of the young MODY is a "
+            "clinically and genetically heterogeneous group of monogenic "
+            "disorders. We sequenced a large cohort and identified that "
+            "pathogenic HNF1B alterations were a recurrent finding across "
+            "the screened probands in this study."
+        ),
+        250,
+        40,
+        "pubtator_full_bioc",
+    )
+    await persistence.ensure_metadata_row(db_session, sparse_pmid, title="Sparse pub")
+    await db_session.execute(
+        text("UPDATE publication_metadata SET coverage='full_text' WHERE pmid=:p"),
+        {"p": sparse_pmid},
+    )
+    await persistence.replace_passages(db_session, sparse_pmid, [sparse_passage])
+    await db_session.commit()
+
+    # Default snippet budget: snippet must be a real fragment, not a stub.
+    result = await search_passages(
+        db_session, "HNF1B", mode="brief", rerank="lexical", limit=10
+    )
+    assert result.passages
+    snippet = result.passages[0].snippet
+    assert snippet is not None
+    plain = snippet.replace("<b>", "").replace("</b>", "")
+    assert len(plain.split()) >= 12, f"snippet collapsed to a stub: {snippet!r}"
+
+    # API-minimum snippet budget (snippet_chars=40): the MaxWords >= MinWords
+    # guard must still yield a real fragment, not a stub. Under the old options
+    # this capped at ~5-6 words.
+    result_min = await search_passages(
+        db_session,
+        "HNF1B",
+        mode="brief",
+        rerank="lexical",
+        limit=10,
+        snippet_chars=40,
+    )
+    assert result_min.passages
+    snippet_min = result_min.passages[0].snippet
+    assert snippet_min is not None
+    plain_min = snippet_min.replace("<b>", "").replace("</b>", "")
+    assert (
+        len(plain_min.split()) >= 12
+    ), f"snippet at min budget collapsed to a stub: {snippet_min!r}"
+
+
+@pytest.mark.asyncio
 async def test_full_mode_max_chars_truncates(db_session):
     await _seed(db_session)
     result = await search_passages(
