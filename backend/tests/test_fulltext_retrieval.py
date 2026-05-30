@@ -214,6 +214,51 @@ async def test_rrf_falls_back_when_no_embeddings_stored(db_session):
 
 
 @pytest.mark.asyncio
+async def test_min_lex_score_floor_drops_weak_only_matches(db_session, monkeypatch):
+    """A query that matches only via the weak OR-recall leg is filtered by the floor.
+
+    The seeded corpus is the four ``_PASSAGES`` for ``PMID:1``. The ``strong``
+    query ("renal cysts diabetes") hits the results passage via the phrase leg
+    and scores ``ts_rank_cd`` ~0.3, well above the floor. The ``junk`` query
+    ("zqxjkv ... disease ... observed ...") shares only incidental single tokens
+    with the corpus and matches *exclusively* through the weak OR-recall
+    ``to_tsquery`` leg, which scores ~0.1 — so the floor (0.15) removes it.
+
+    The floor is applied to ``lex_score`` inside ``_lexical_candidates`` (before
+    RRF fusion), so a filtered junk query yields no candidates at all and the
+    fused result is empty. (The final ``.score`` on a returned passage is the
+    fused RRF score, not the raw lexical score, so the empty-list arm is the
+    load-bearing assertion here.)
+    """
+    await _seed(db_session)
+
+    # A strong query still returns its target above the floor.
+    strong = await search_passages(
+        db_session, query="renal cysts diabetes", rerank="lexical", limit=8
+    )
+    assert strong.passages
+    assert any(p.pmid == PMID for p in strong.passages)
+
+    # A query whose only overlap with the corpus is incidental common tokens
+    # ("disease", "observed") must return nothing once the floor is applied.
+    from app.core.config import get_settings
+
+    # Pin the floor the assertion depends on, independent of the config default.
+    monkeypatch.setattr(
+        get_settings().publications_rag, "min_lex_score", 0.15, raising=False
+    )
+    junk = await search_passages(
+        db_session,
+        query="zqxjkv unrelated disease was observed elsewhere",
+        rerank="lexical",
+        limit=8,
+    )
+    assert (
+        junk.passages == []
+    )  # floor applied pre-fusion drops the OR-recall-only candidates entirely
+
+
+@pytest.mark.asyncio
 async def test_invalid_rerank_and_mode_raise(db_session):
     with pytest.raises(ValueError):
         await search_passages(db_session, "x", rerank="bogus")

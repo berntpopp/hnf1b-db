@@ -326,6 +326,23 @@ class PublicationsRagConfig(BaseModel):
     # Default candidate pool sizes for the two retrieval legs before fusion.
     lexical_candidate_limit: int = 50
     dense_candidate_limit: int = 50
+    # Minimum lexical relevance floor (recall fix): the OR-recall ``to_tsquery``
+    # leg matches any passage sharing one English token with the query, so
+    # without a floor, gibberish-plus-common-words queries surface
+    # confident-looking passages. Candidates whose computed ``ts_rank_cd``
+    # ``lex_score`` falls below this are dropped before fusion.
+    min_lex_score: float = Field(
+        default=0.15,
+        ge=0.0,
+        description=(
+            "Minimum ts_rank_cd lexical score a passage must reach to be a "
+            "candidate. 0.0 disables the floor (legacy behavior). A small "
+            "positive value drops OR-recall-only noise: the weak "
+            "``to_tsquery`` leg scores incidental single-token overlaps at "
+            "~0.1 while phrase/websearch hits score >= 0.2, so 0.15 cleanly "
+            "separates them."
+        ),
+    )
 
 
 class YamlConfig(BaseModel):
