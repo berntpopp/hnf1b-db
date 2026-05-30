@@ -75,7 +75,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         - ``survival`` — Kaplan-Meier–style renal-survival data; requires
           *comparison* to be one of ``variant_type``, ``pathogenicity``,
           ``disease_subtype``, or ``protein_domain``.
-        - ``publications_timeline`` — publications per year timeline.
+        - ``publications_timeline`` — publications per year timeline. Each row
+          carries a ``publication_count`` (the inline PMID list is bounded out
+          for token efficiency); use ``hnf1b_get_publications(year=…)`` to list
+          the PMIDs for a year.
 
         Args:
             metric: The aggregate statistic to retrieve.
