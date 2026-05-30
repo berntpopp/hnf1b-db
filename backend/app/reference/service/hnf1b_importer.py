@@ -84,12 +84,35 @@ async def get_gene_by_symbol(
     return result.scalar_one_or_none()
 
 
+#: Authoritative HNF1B cross-references (curated seed). Kept as a constant so the
+#: create path and the self-heal path below can never drift.
+_HNF1B_GENE_XREFS: dict[str, str] = {
+    "ncbi_gene_id": "6928",
+    "hgnc_id": "HGNC:11630",
+    "omim_id": "189907",
+}
+
+
 async def import_hnf1b_gene(
     db: AsyncSession, genome_id: uuid.UUID
 ) -> tuple[Gene, bool]:
-    """Import or fetch the HNF1B gene row."""
+    """Import or fetch (and self-heal) the HNF1B gene row.
+
+    Idempotent. If the chr17q12 region sync (Ensembl) already created the HNF1B
+    row with only coordinates + ensembl_id, this backfills the authoritative
+    NCBI / HGNC / OMIM cross-references so ``get_gene_context`` never reports
+    degraded ``cross_references``. A fully-populated row is left untouched.
+    """
     existing = await get_gene_by_symbol(db, "HNF1B", genome_id)
     if existing:
+        healed = False
+        for attr, value in _HNF1B_GENE_XREFS.items():
+            if not getattr(existing, attr, None):
+                setattr(existing, attr, value)
+                healed = True
+        if healed:
+            await db.flush()
+            logger.info("Healed existing HNF1B gene cross-references (NCBI/HGNC/OMIM)")
         return existing, False
 
     gene = Gene(
@@ -102,9 +125,7 @@ async def import_hnf1b_gene(
         strand="-",
         genome_id=genome_id,
         ensembl_id="ENSG00000275410",
-        ncbi_gene_id="6928",
-        hgnc_id="HGNC:11630",
-        omim_id="189907",
+        **_HNF1B_GENE_XREFS,
         source="NCBI Gene",
         source_version="2025-01",
         source_url="https://www.ncbi.nlm.nih.gov/gene/6928",

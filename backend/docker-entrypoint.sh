@@ -74,9 +74,8 @@ run_data_import() {
     if [ "${ENABLE_DATA_IMPORT:-false}" = "true" ]; then
         log_info "Data import is ENABLED, checking configuration..."
 
-        # Step 1: Always initialize reference data first (GRCh38 + HNF1B)
-        # This is idempotent and required for proper gene/variant context
-        sync_reference_data
+        # Reference data is already ensured in main() on every start (idempotent),
+        # so it is not repeated here.
 
         # Note: GOOGLE_SHEETS_ID is optional - the migration script has a default value
         # If set, it will override the default. If not set, the hardcoded default is used.
@@ -113,22 +112,17 @@ run_data_import() {
     fi
 }
 
-# Initialize reference data (GRCh38 + HNF1B + transcript + domains)
+# Ensure reference data (GRCh38 + HNF1B + transcript + exons + domains).
+# The init script is idempotent and self-healing — it creates only what is
+# missing and backfills the HNF1B NCBI/HGNC/OMIM cross-references — so it is run
+# unconditionally rather than gated on a coarse "genome exists" check (which left
+# a partially-seeded DB, e.g. a region-synced gene with no transcripts/domains).
 sync_reference_data() {
-    log_info "Checking reference data..."
-
-    # Check if reference data is initialized (GRCh38 genome exists)
-    local genome_count=$(get_count genomes)
-
-    if [ "$genome_count" = "0" ]; then
-        log_info "Initializing reference data (GRCh38 + HNF1B + transcript + domains)..."
-        if python scripts/sync_reference_data.py --init; then
-            log_info "Reference data initialized successfully!"
-        else
-            log_warn "Reference data initialization failed, but continuing startup..."
-        fi
+    log_info "Ensuring reference data (GRCh38 + HNF1B transcript / exons / domains)..."
+    if python scripts/sync_reference_data.py --init; then
+        log_info "Reference data ensured."
     else
-        log_info "Reference data already initialized"
+        log_warn "Reference data init failed, but continuing startup..."
     fi
 }
 
@@ -205,6 +199,12 @@ main() {
 
     # Run migrations
     run_migrations || exit 1
+
+    # Ensure essential reference data (GRCh38 + HNF1B transcript / exons / protein
+    # domains + cross-references). Idempotent and self-healing, so it runs on
+    # EVERY start regardless of ENABLE_DATA_IMPORT — the gene/variant context the
+    # app contract depends on is always complete out of the box.
+    sync_reference_data
 
     # Create admin user
     create_admin_user

@@ -94,11 +94,13 @@ docker compose -f docker/docker-compose.yml logs -f
 > publication RAG index). To populate the publication full-text RAG corpus on an
 > existing DB, run `make publications-backfill`.
 
-A first startup with `ENABLE_DATA_IMPORT=true` (set in `.env.docker`) will:
+Every startup (regardless of `ENABLE_DATA_IMPORT`) will:
 1. Run database migrations
-2. Create admin user (if credentials provided)
-3. Initialize reference data (GRCh38 + HNF1B)
-4. Import phenopackets from Google Sheets
+2. Ensure reference data (GRCh38 + HNF1B transcript/exons/domains + cross-refs) — idempotent
+3. Create admin user (if credentials provided)
+
+A first startup additionally with `ENABLE_DATA_IMPORT=true` (set in `.env.docker`) will:
+4. Import phenopackets from Google Sheets (if the DB is empty)
 5. Sync publication metadata from PubMed
 6. Sync VEP variant annotations from Ensembl
 7. Sync chr17q12 region genes from Ensembl
@@ -246,42 +248,50 @@ Production overlay features:
 
 ### Sync Pipeline Overview
 
-When `ENABLE_DATA_IMPORT=true`, the container entrypoint executes a sync pipeline:
+The container entrypoint runs this pipeline on every start:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Container Startup Pipeline                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │  1. Wait for PostgreSQL                                              │
-│  2. Run Alembic migrations                                           │
-│  3. Create admin user (if credentials set)                           │
-│  4. ENABLE_DATA_IMPORT=true?                                         │
-│     ├── Initialize reference data (GRCh38 + HNF1B) ─────────────────│─► Idempotent
+│  2. Run Alembic migrations ─────────────────────────────────────────│─► Idempotent (every start)
+│  3. Ensure reference data (GRCh38 + HNF1B + transcript/exons/        │
+│     domains + cross-refs) ──────────────────────────────────────────│─► Idempotent (every start)
+│  4. Create admin user (if credentials set)                           │
+│  5. ENABLE_DATA_IMPORT=true?  (heavy / external — opt-in)           │
 │     ├── Import phenopackets (if empty) ─────────────────────────────│─► One-time
 │     ├── Sync publication metadata ──────────────────────────────────│─► Idempotent
 │     ├── Sync VEP annotations ───────────────────────────────────────│─► Idempotent
 │     └── Sync chr17q12 genes ────────────────────────────────────────│─► Idempotent
-│  5. Start uvicorn                                                    │
+│  6. Start uvicorn                                                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-All sync operations are **idempotent** (safe to run multiple times).
+Reference data is **essential static seed** the app contract depends on
+(`get_gene_context`), so it is initialized on **every** start regardless of
+`ENABLE_DATA_IMPORT`. The heavy/external syncs (phenopackets from Google Sheets,
+PubMed, Ensembl) remain behind `ENABLE_DATA_IMPORT=true`. All steps are
+**idempotent** (safe to run repeatedly).
 
 ### Reference Data Initialization
 
-Initializes core genomic reference data:
+Seeds (and self-heals) core genomic reference data on every container start:
 
 | Data | Description |
 |------|-------------|
 | GRCh38 Genome | Reference genome assembly |
-| HNF1B Gene | chr17:36,098,063-36,112,306 |
+| HNF1B Gene | chr17:36,098,063-36,112,306 + NCBI/HGNC/OMIM cross-refs |
 | NM_000458.4 Transcript | Canonical transcript |
 | Exon coordinates | 9 exons |
 | Protein domains | 4 domains from UniProt P35680 |
 
-**Trigger condition:** Runs if no genome assemblies exist.
+**Idempotency:** each item is created only if missing, and a gene left by the
+chr17q12 region sync without NCBI/HGNC/OMIM cross-references is **healed** (the
+init no longer short-circuits on a coarse "genome exists" check).
 
-**Script:** `backend/scripts/sync_reference_data.py --init`
+**Script:** `backend/scripts/sync_reference_data.py --init` (run manually with
+`make reference-init`).
 
 ### chr17q12 Genes Sync
 
