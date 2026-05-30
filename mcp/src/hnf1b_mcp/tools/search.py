@@ -25,7 +25,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_search",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Search HNF1B-db (Discovery)",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_search(
         query: str,

@@ -24,7 +24,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_resolve_terms",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Resolve HPO / Vocabulary Terms",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_resolve_terms(
         text: str,

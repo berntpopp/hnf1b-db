@@ -25,7 +25,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_gene_context",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Get HNF1B Gene Context",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_gene_context(
         gene_symbol: str = "HNF1B",

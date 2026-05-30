@@ -25,7 +25,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_publications",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Get HNF1B Publications",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_publications(
         q: str | None = None,

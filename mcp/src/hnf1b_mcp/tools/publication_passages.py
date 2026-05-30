@@ -24,7 +24,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
     @mcp.tool(
         name="hnf1b_get_publication_passages",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "Search Publication Passages (RAG)",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_publication_passages(
         query: str,

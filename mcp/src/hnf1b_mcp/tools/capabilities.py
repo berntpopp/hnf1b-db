@@ -22,7 +22,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
 
     @mcp.tool(
         name="hnf1b_get_capabilities",
-        annotations={"readOnlyHint": True, "openWorldHint": False},
+        annotations={
+            "title": "HNF1B: Capabilities & Tool Inventory",
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
     )
     async def hnf1b_get_capabilities() -> dict[str, Any]:
         """Return server capabilities, tool inventory, and operational metadata.
