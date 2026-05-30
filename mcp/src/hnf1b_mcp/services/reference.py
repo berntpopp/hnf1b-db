@@ -11,6 +11,7 @@ from ..contract._generated_paths import (
     REFERENCE_GENES_BY_SYMBOL_DOMAINS,
     REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS,
 )
+from .errors import McpToolError
 from .shaping import apply_budget
 
 _HARD_CAP = 80_000
@@ -49,9 +50,21 @@ async def get_gene_context(
     """
     params: dict[str, Any] = {"genome_build": genome_build}
 
-    gene: dict[str, Any] = await client.get(
-        REFERENCE_GENES_BY_SYMBOL.format(symbol=gene_symbol), params=params
-    )
+    try:
+        gene: dict[str, Any] = await client.get(
+            REFERENCE_GENES_BY_SYMBOL.format(symbol=gene_symbol), params=params
+        )
+    except McpToolError as exc:
+        # The shared client raises a generic, value-less not_found on 404. Re-raise
+        # the rich form (field + offending symbol) to match get_variant, so callers
+        # learn WHICH gene was missing. Any other error propagates unchanged.
+        if exc.code == "not_found":
+            raise McpToolError(
+                "not_found",
+                f"gene '{gene_symbol}' not found",
+                field="gene_symbol",
+            ) from exc
+        raise
 
     result: dict[str, Any] = {
         "gene": gene,

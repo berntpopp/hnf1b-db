@@ -89,27 +89,19 @@ async def get_publications_timeline(
         ]
     """
     # Public endpoint — apply public visibility filter (I3 + I7)
+    # Year comes from the publication_metadata cache (run `make publications-sync`).
+    # Publications without cached metadata have NULL year and are excluded.
     query = """
     WITH publication_years AS (
         SELECT
             p.phenopacket_id,
-            p.created_at,
             ext_ref->>'id' as pmid,
-            COALESCE(
-                NULLIF(
-                    regexp_replace(
-                        ext_ref->>'description',
-                        '.*[, ](\\d{4}).*',
-                        '\\1'
-                    ),
-                    ext_ref->>'description'
-                )::integer,
-                EXTRACT(YEAR FROM p.created_at)::integer
-            ) as pub_year
+            pm.year as pub_year
         FROM phenopackets p,
             jsonb_array_elements(
                 p.phenopacket->'metaData'->'externalReferences'
             ) as ext_ref
+        LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
         WHERE p.deleted_at IS NULL
           AND p.state = 'published'
           AND p.head_published_revision_id IS NOT NULL

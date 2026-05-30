@@ -231,3 +231,25 @@ async def test_response_mode_reflected_in_meta() -> None:
         assert sc["meta"]["response_mode"] == "full"
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_gene_context_not_found_returns_rich_error_envelope() -> None:
+    """A 404 gene fetch surfaces a rich not_found (field + gene symbol echoed)."""
+    respx.get(f"{BASE}/reference/genes/NOPE").mock(return_value=httpx.Response(404))
+    client = ApiClient(base_url=BASE)
+    try:
+        mcp = FastMCP("test")
+        register(mcp, client)
+        r = await mcp.call_tool(
+            "hnf1b_get_gene_context",
+            {"gene_symbol": "NOPE"},
+        )
+        sc = r.structured_content
+        assert sc.get("is_error") is True
+        assert sc["error"]["code"] == "not_found"
+        assert sc["error"]["field"] == "gene_symbol"
+        assert "NOPE" in sc["error"]["message"]
+    finally:
+        await client.aclose()

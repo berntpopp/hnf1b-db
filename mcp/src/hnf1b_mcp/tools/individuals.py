@@ -290,13 +290,21 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
             seen: dict[str, None] = {}
             capped = False
+            # Track per-term hits so a well-formed but unmatched HPO id (e.g.
+            # HP:9999999) is reported in unmatched_hpo_ids rather than silently
+            # vanishing into an empty cohort indistinguishable from a real match.
+            per_term_hit: dict[str, bool] = {}
             for hpo_id in hpo_ids:
                 matched, term_capped = await _collect_matches(hpo_id)
                 capped = capped or term_capped
+                per_term_hit[hpo_id] = per_term_hit.get(hpo_id, False) or bool(matched)
                 for item_id in matched:
                     if item_id not in seen:
                         seen[item_id] = None
             merged_ids = list(seen.keys())
+            # Deterministic input-order list of well-formed HPO ids that matched
+            # zero individuals. Always emitted on both return paths.
+            unmatched_hpo_ids = [h for h, hit in per_term_hit.items() if not hit]
             total = len(merged_ids)
             has_more = total > page_size
 
@@ -309,6 +317,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                     "has_more": False,
                     "match_mode": "any",
                     "hpo_ids": list(hpo_ids),
+                    "unmatched_hpo_ids": unmatched_hpo_ids,
                 }
 
             result = await individuals_service.get_individuals(
@@ -324,6 +333,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             result["has_more"] = has_more
             result["match_mode"] = "any"
             result["hpo_ids"] = list(hpo_ids)
+            # HPO-scoped key set explicitly so it is ALWAYS present and never
+            # collides with the batch-coverage `not_found` key get_individuals
+            # may set for missing phenopacket ids.
+            result["unmatched_hpo_ids"] = unmatched_hpo_ids
             if capped:
                 result["_meta"] = {
                     "total_is_capped": True,

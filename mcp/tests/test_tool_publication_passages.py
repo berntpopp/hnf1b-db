@@ -122,18 +122,24 @@ async def test_passage_has_citation_and_snippet() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_compact_mode_omits_score_but_full_includes_it() -> None:
+async def test_score_present_in_compact_seq_source_only_in_full() -> None:
     _mock_both()
     mcp, client = _make_mcp_and_client()
+
     compact = await mcp.call_tool(
-        "hnf1b_get_publication_passages", {"query": "x", "response_mode": "compact"}
+        "hnf1b_get_publication_passages", {"query": "renal cysts"}
     )
+    p0 = compact.structured_content["passages"][0]
+    assert "score" in p0  # caller can now judge relevance in the default mode
+    assert "seq" not in p0 and "source" not in p0  # still trimmed in compact
+
     full = await mcp.call_tool(
-        "hnf1b_get_publication_passages", {"query": "x", "response_mode": "full"}
+        "hnf1b_get_publication_passages",
+        {"query": "renal cysts", "response_mode": "full"},
     )
+    pf = full.structured_content["passages"][0]
+    assert "score" in pf and "seq" in pf and "source" in pf
     await client.aclose()
-    assert "score" not in compact.structured_content["passages"][0]
-    assert "score" in full.structured_content["passages"][0]
 
 
 @pytest.mark.asyncio

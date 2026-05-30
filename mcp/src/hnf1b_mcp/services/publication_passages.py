@@ -46,9 +46,10 @@ def _shape_passage(
         citation_map: ``bare_pmid -> {recommended_citation, ...}`` lookup.
 
     Returns:
-        A shaped passage dict carrying the ``passage_id`` citation anchor and
-        the publication's ``recommended_citation``; ``standard``/``full`` add
-        the relevance ``score``, ``seq``, and ``source``.
+        A shaped passage dict carrying the ``passage_id`` citation anchor, the
+        publication's ``recommended_citation``, and the relevance ``score``
+        (emitted in every mode); ``standard``/``full`` add ``seq`` and
+        ``source``.
     """
     pmid = str(passage.get("pmid") or "")
     bare = pmid.replace("PMID:", "")
@@ -66,8 +67,10 @@ def _shape_passage(
         shaped["text"] = text
     if snippet is not None:
         shaped["snippet"] = snippet
+    # Always visible: lets the caller judge relevance even in the default
+    # compact mode (near-zero scores flag weak RAG hits).
+    shaped["score"] = passage.get("score")
     if response_mode in ("standard", "full"):
-        shaped["score"] = passage.get("score")
         shaped["seq"] = passage.get("seq")
         shaped["source"] = passage.get("source")
     return shaped

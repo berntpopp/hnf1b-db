@@ -278,9 +278,21 @@ async def get_individual(
         A plain dict with shaped individual data, projected to *response_mode*
         and *fields*.
     """
-    record: dict[str, Any] = await client.get(
-        PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=phenopacket_id)
-    )
+    try:
+        record: dict[str, Any] = await client.get(
+            PHENOPACKETS_BY_PHENOPACKET_ID.format(phenopacket_id=phenopacket_id)
+        )
+    except McpToolError as exc:
+        # The shared client raises a generic, value-less not_found on 404. Re-raise
+        # the rich form (field + offending id) to match get_variant, so callers
+        # learn WHICH id was missing. Any other error propagates unchanged.
+        if exc.code == "not_found":
+            raise McpToolError(
+                "not_found",
+                f"individual '{phenopacket_id}' not found",
+                field="phenopacket_id",
+            ) from exc
+        raise
     shaped = _shape_individual(
         record,
         include_phenotypes=include_phenotypes,

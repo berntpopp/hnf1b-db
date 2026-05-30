@@ -85,14 +85,22 @@ async def _lexical_candidates(
 
     filter_sql, params = _apply_filters(params, pmids, sections)
 
+    # Lexical relevance floor (recall fix): the OR-recall ``to_tsquery`` leg
+    # matches any passage sharing one English token with the query, so without a
+    # floor weak-only hits look as confident as strong ones after RRF re-ranks by
+    # rank. Wrap the candidate selection in a CTE that computes ``lex_score`` and
+    # drop rows below the configured floor. ``min_lex_score == 0.0`` makes the
+    # predicate a no-op (legacy behavior preserved).
+    params["min_lex_score"] = float(settings.publications_rag.min_lex_score)
     sql = (
-        f"WITH q AS (SELECT {', '.join(q_ctes)}) "
-        "SELECT f.pmid, f.passage_id, f.section, f.seq, f.text, "
+        f"WITH q AS (SELECT {', '.join(q_ctes)}), "
+        "cand AS (SELECT f.pmid, f.passage_id, f.section, f.seq, f.text, "
         "f.char_count, f.token_count, f.source, "
         f"GREATEST({', '.join(select_rank)}) AS lex_score "
         "FROM publication_fulltext f, q "
-        f"WHERE {''.join(where)}{filter_sql} "
-        "ORDER BY lex_score DESC, f.pmid, f.seq "
+        f"WHERE {''.join(where)}{filter_sql}) "
+        "SELECT * FROM cand WHERE lex_score >= :min_lex_score "
+        "ORDER BY lex_score DESC, pmid, seq "
         "LIMIT :lex_limit"
     )
     stmt = _with_filter_bindparams(text(sql), pmids, sections)
