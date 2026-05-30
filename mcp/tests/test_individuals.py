@@ -888,3 +888,41 @@ async def test_get_individuals_batch_budget_enforced() -> None:
     # Trimmed to fit the budget → fewer than 80 returned, with a drop signal.
     assert len(result["individuals"]) < 80
     assert result["_dropped"]["dropped_records"] > 0
+
+
+# ---------------------------------------------------------------------------
+# B4: batch results follow the caller's requested id order
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_preserves_request_order():
+    """The batch endpoint's own order is normalized to the requested ids order."""
+    item_a = {"phenopacket_id": "A", "phenopacket": _PHENOPACKET_A["phenopacket"]}
+    item_b = {"phenopacket_id": "B", "phenopacket": _PHENOPACKET_B["phenopacket"]}
+    item_c = {"phenopacket_id": "C", "phenopacket": _PHENOPACKET_A["phenopacket"]}
+    # Backend returns a DIFFERENT order than requested.
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[item_c, item_a, item_b])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, ids=["A", "B", "C"])
+    await c.aclose()
+    assert [i["phenopacket_id"] for i in result["individuals"]] == ["A", "B", "C"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individuals_batch_order_with_not_found():
+    item_a = {"phenopacket_id": "A", "phenopacket": _PHENOPACKET_A["phenopacket"]}
+    item_b = {"phenopacket_id": "B", "phenopacket": _PHENOPACKET_B["phenopacket"]}
+    # MISSING is requested but not returned; A/B come back reversed.
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json=[item_b, item_a])
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individuals(c, ids=["A", "MISSING", "B"])
+    await c.aclose()
+    assert [i["phenopacket_id"] for i in result["individuals"]] == ["A", "B"]
+    assert result["not_found"] == ["MISSING"]
