@@ -26,9 +26,6 @@ from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.phenopackets.reviewer_mapper import ReviewerMapper
 
-# Load environment variables
-load_dotenv()
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -343,6 +340,12 @@ class DirectSheetsToPhenopackets:
 
 async def main():
     """Run the direct migration."""
+    # Load environment variables from .env when run as a CLI. This is kept out
+    # of module scope on purpose: importing this module (e.g. during test
+    # collection) must not mutate os.environ. See
+    # tests/test_migration_import_no_env_side_effects.py.
+    load_dotenv()
+
     # Get database URL from environment
     target_db = os.getenv(
         "DATABASE_URL",

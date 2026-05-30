@@ -46,6 +46,11 @@ def seed_safe_import_env(monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "validpassword")
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("AUTH_COOKIE_SECURE", "true")
+    # The production-validation tests below pass environment="production" while
+    # relying on enable_dev_auth defaulting to False. Clear any ambient
+    # ENABLE_DEV_AUTH so a leaked process env var cannot trip the dev-auth
+    # defense validator before the email/cookie validators under test run.
+    monkeypatch.delenv("ENABLE_DEV_AUTH", raising=False)
 
 
 def load_config_module():
