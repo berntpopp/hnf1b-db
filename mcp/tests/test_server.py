@@ -16,6 +16,23 @@ def test_instructions_have_safety():
     assert "research" in s
 
 
+def test_instructions_capabilities_is_advisory_not_mandatory():
+    """Step 1 must frame get_capabilities as advisory, not a mandatory cold load.
+
+    The server ships a `capabilities_version` content hash (warm-skip) and every
+    tool advertises its filterable-field enums, so a client can build valid calls
+    without a mandatory ~11k-char capabilities fetch. Lock that the primer says so.
+    """
+    s = SERVER_INSTRUCTIONS.lower()
+    # Advisory framing: recommended/optional, not "call first" prescriptively.
+    assert "recommended" in s
+    assert "optional" in s
+    assert "call `hnf1b_get_capabilities` first" not in s
+    # The warm-skip affordance must be surfaced, alongside the per-tool enums.
+    assert "capabilities_version" in s
+    assert "filterable_fields" in s
+
+
 @pytest.mark.asyncio
 async def test_app_exposes_tools_and_resources():
     mcp = build_app()

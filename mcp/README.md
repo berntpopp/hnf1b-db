@@ -21,7 +21,7 @@ and other MCP-compatible hosts) without granting the model any write access.
 
 | Tool | One-line purpose |
 |---|---|
-| `hnf1b_get_capabilities` | Return server capabilities, tool inventory, payload modes, limits, citation contract, and error codes. Call first in any new session. |
+| `hnf1b_get_capabilities` | Return server capabilities, tool inventory, payload modes, limits, citation contract, and error codes. Recommended (not required) for cold-session orientation; per-tool `filterable_fields` let clients build valid calls directly, and a warm client can compare `capabilities_version` to skip re-fetching. |
 | `hnf1b_search` | Search individuals by phenotype keywords, free text, or HPO term IDs. Returns paginated phenopacket IDs and summaries. |
 | `hnf1b_get_individual` | Retrieve the full phenopacket record for a single individual by `phenopacket_id`. |
 | `hnf1b_get_individuals` | Batch-fetch multiple phenopacket records in one call given a list of `phenopacket_id` values. |

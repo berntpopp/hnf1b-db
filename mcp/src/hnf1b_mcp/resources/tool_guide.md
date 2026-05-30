@@ -4,7 +4,7 @@
 
 | Tool | Purpose |
 |---|---|
-| `hnf1b_get_capabilities` | Retrieve server capabilities, limits, error codes, and this guide. Call first in any new session. |
+| `hnf1b_get_capabilities` | Retrieve server capabilities, limits, error codes, and this guide. Recommended (not required) for cold-session orientation; per-tool `filterable_fields` let clients build valid calls directly, and a warm client can compare `capabilities_version` to skip re-fetching. |
 | `hnf1b_search` | Unified free-text discovery across individuals, variants, and publications (and genes). Returns typed ID hits; each hit carries a `resolve_with` object naming the exact tool + argument to fetch its content. |
 | `hnf1b_get_individual` | Retrieve the full phenopacket record for a single individual by `phenopacket_id`. |
 | `hnf1b_get_individuals` | Retrieve multiple phenopacket records in one call given a list of `phenopacket_id` values (batch fetch). |
