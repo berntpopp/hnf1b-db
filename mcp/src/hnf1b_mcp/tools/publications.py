@@ -9,6 +9,7 @@ from fastmcp import FastMCP
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import publications as publications_service
 from hnf1b_mcp.services.dataclass import DataClass
+from hnf1b_mcp.services.publications import PublicationSort
 from hnf1b_mcp.services.safe_tool import run_tool
 from hnf1b_mcp.services.shaping import resolve_mode
 
@@ -36,7 +37,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         year: int | None = None,
         has_doi: bool | None = None,
         page_size: int = 25,
-        sort: str | None = None,
+        sort: PublicationSort | None = None,
         citing_pmid: str | None = None,
         include_citing_individuals: bool = False,
         response_mode: str | None = None,
@@ -62,11 +63,14 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 when ``False``, return only those without.  ``None`` disables
                 the filter.
             page_size: Number of publications per page (default 25, max 1000).
-            sort: Optional ordering — a field name optionally ``-``-prefixed for
-                descending. Allowed: ``phenopacket_count`` (default,
-                most-cited first), ``year``, ``pmid``, ``title``, ``journal``,
-                ``first_added``. The applied ordering is echoed as
-                ``applied_sort``.
+            sort: Sort the result set by one of the sortable fields:
+                ``phenopacket_count``, ``year``, ``pmid``, ``title``,
+                ``journal``, or ``first_added``. A leading ``-`` means
+                descending (e.g. ``-phenopacket_count`` lists the most-cited
+                publications first); no prefix means ascending. The default
+                when omitted is ``-phenopacket_count`` (most-cited first). The
+                honored ordering is echoed back in ``applied_sort`` using this
+                same public vocabulary.
             citing_pmid: Bare PMID (digits) or ``"PMID:NNN"`` prefixed string.
                 When provided, performs a reverse lookup — returns the list of
                 phenopacket IDs that cite this publication.

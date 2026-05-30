@@ -9,7 +9,7 @@ PubMed fetch + DB write and is denied by the allowlist).  Use only:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.config import Settings
@@ -120,6 +120,12 @@ def _shape_publication(
 #: Sort fields the backend publications list endpoint honors (``-`` prefix =
 #: descending). The backend default is ``-phenopacket_count`` (most-cited
 #: first), which we surface explicitly so the ordering is never undocumented.
+#: This is the single source of truth: it mirrors the backend whitelist
+#: ``PUBLICATION_SORT_FIELDS`` in
+#: ``backend/app/publications/endpoints/list_route.py`` exactly, and both the
+#: typed :data:`PublicationSort` enum below and the capabilities advert
+#: (see ``capabilities.py``) are derived from it so the documented sort
+#: vocabulary can never drift from what the tool actually honors.
 PUBLICATION_SORT_FIELDS: tuple[str, ...] = (
     "phenopacket_count",
     "year",
@@ -129,6 +135,33 @@ PUBLICATION_SORT_FIELDS: tuple[str, ...] = (
     "first_added",
 )
 DEFAULT_PUBLICATION_SORT = "-phenopacket_count"
+
+# Self-describing sort vocabulary for the get_publications tool. Each canonical
+# field above appears in BOTH directions: bare = ascending, ``-``-prefixed =
+# descending. A typed Literal makes the tool's sort param exactly as
+# self-describing as its enum filters, so a client that skips capabilities never
+# has to guess ``-year`` and confirm it worked only by reading applied_sort.
+#
+# mypy requires Literal members to be spelled out (it cannot derive them from
+# PUBLICATION_SORT_FIELDS at type-check time), so the two are kept in lockstep
+# by a drift-guard test
+# (test_publications.py::test_publication_sort_enum_matches_sort_fields) that
+# fails fast if either is edited without the other. This is an MCP-local type,
+# NOT part of the generated backend contract.
+PublicationSort = Literal[
+    "phenopacket_count",
+    "-phenopacket_count",
+    "year",
+    "-year",
+    "pmid",
+    "-pmid",
+    "title",
+    "-title",
+    "journal",
+    "-journal",
+    "first_added",
+    "-first_added",
+]
 
 
 async def list_publications(

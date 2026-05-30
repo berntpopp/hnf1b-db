@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
 import httpx
 import pytest
 import respx
@@ -9,6 +11,8 @@ import respx
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.publications import (
+    PUBLICATION_SORT_FIELDS,
+    PublicationSort,
     get_publication_citing_individuals,
     list_publications,
 )
@@ -538,3 +542,46 @@ async def test_list_publications_enforces_char_budget():
     assert result["total"] == 300  # true count preserved
     assert len(result["publications"]) < 300  # trimmed to fit 4 KB
     assert result["_dropped"]["dropped_records"] > 0
+
+
+# ---------------------------------------------------------------------------
+# PublicationSort enum drift guard (mirror of VariantSort)
+# ---------------------------------------------------------------------------
+
+
+def test_publication_sort_enum_matches_sort_fields() -> None:
+    """The PublicationSort Literal must stay in lockstep with PUBLICATION_SORT_FIELDS.
+
+    Every member is one of the canonical sort fields, optionally ``-``-prefixed
+    for descending. Stripping the prefix must yield EXACTLY the entries of
+    PUBLICATION_SORT_FIELDS — so editing one without the other fails fast here
+    rather than silently shipping a sort vocabulary the tool cannot honor.
+    """
+    members = set(get_args(PublicationSort))
+    # Each public field appears in both directions: bare (asc) and '-' (desc).
+    expected: set[str] = set()
+    for field in PUBLICATION_SORT_FIELDS:
+        expected.add(field)
+        expected.add(f"-{field}")
+    assert members == expected
+    # The set of fields stripped of '-' equals the sort-field entries exactly.
+    stripped = {m[1:] if m.startswith("-") else m for m in members}
+    assert stripped == set(PUBLICATION_SORT_FIELDS)
+    # No invented keys (e.g. 'date_added') leaked in.
+    assert "date_added" not in stripped
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_accepts_publication_sort_member() -> None:
+    """A typed PublicationSort member is honored and echoed as applied_sort."""
+    route = respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    sort_value: PublicationSort = "-year"
+    result = await list_publications(c, sort=sort_value)
+    await c.aclose()
+
+    assert result["applied_sort"] == "-year"
+    assert dict(route.calls[0].request.url.params)["sort"] == "-year"

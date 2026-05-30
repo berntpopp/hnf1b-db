@@ -7,6 +7,7 @@ from hnf1b_mcp.contract import (
     VARIANT_TYPE_VALUES,
 )
 from hnf1b_mcp.services.capabilities import get_capabilities
+from hnf1b_mcp.services.publications import PUBLICATION_SORT_FIELDS
 from hnf1b_mcp.services.resources import RESOURCE_URIS, load_resource
 from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
 
@@ -75,6 +76,13 @@ def test_capabilities_filterable_fields_present():
     gp_hint = gp["include_citing_individuals"]["hint"].lower()
     assert "citing_individuals_truncated" in gp_hint
     assert "hnf1b_find_individuals_by_phenotype" in gp_hint
+
+    # The advertised publication sort vocabulary is exactly the canonical
+    # sortable fields, sourced from the tool's own map so the advert can never
+    # drift from what the tool actually honors (mirrors the search_variants sort
+    # lock above).
+    assert gp["sort"]["values"] == list(PUBLICATION_SORT_FIELDS)
+    assert "descending" in gp["sort"]["hint"].lower()
 
     sv = ff["hnf1b_search_variants"]
     # Exactly the real filter/sort params plus the carrier_count field-semantics

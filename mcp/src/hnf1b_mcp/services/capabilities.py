@@ -15,6 +15,7 @@ from hnf1b_mcp.contract import (
 )
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import ERROR_CODES
+from hnf1b_mcp.services.publications import PUBLICATION_SORT_FIELDS
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
 from hnf1b_mcp.services.variants import (
@@ -346,14 +347,9 @@ def _filterable_fields() -> dict[str, Any]:
         },
         "hnf1b_get_publications": {
             "sort": {
-                "values": [
-                    "phenopacket_count",
-                    "year",
-                    "pmid",
-                    "title",
-                    "journal",
-                    "first_added",
-                ],
+                # Derived from the tool's own sort map so the advertised
+                # vocabulary can never drift from what is actually honored.
+                "values": list(PUBLICATION_SORT_FIELDS),
                 "hint": (
                     "prefix with '-' for descending; default '-phenopacket_count' "
                     "(most-cited first). Echoed as applied_sort."
