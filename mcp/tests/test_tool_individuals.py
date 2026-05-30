@@ -465,4 +465,63 @@ async def test_find_individuals_by_phenotype_empty_search_result():
 
     assert sc["data_class"] == "curated_hnf1b_evidence"
     assert sc["total"] == 0
+    # A well-formed-yet-unmatched HPO id must be flagged, not silently dropped.
+    assert sc["unmatched_hpo_ids"] == ["HP:9999999"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_reports_partial_unmatched():
+    # HP:0000107 (first call) matches A; HP:9999999 (second call) does not.
+    call_count = 0
+
+    def search_side_effect(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(200, json={"data": [{"id": "A"}]})
+        return httpx.Response(200, json={"data": []})
+
+    respx.get(f"{BASE}/phenopackets/search").mock(side_effect=search_side_effect)
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json={"results": [_PHENOPACKET_A]})
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000107", "HP:9999999"]},
+    )
+    sc = r.structured_content
+
+    assert sc["total"] >= 1
+    assert sc["unmatched_hpo_ids"] == ["HP:9999999"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_find_by_phenotype_all_matched_reports_empty_unmatched():
+    """The key is ALWAYS present; a fully-matched query reports an empty list."""
+    respx.get(f"{BASE}/phenopackets/search").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": "A"}]})
+    )
+    respx.get(f"{BASE}/phenopackets/batch").mock(
+        return_value=httpx.Response(200, json={"results": [_PHENOPACKET_A]})
+    )
+    client = ApiClient(base_url=BASE)
+    mcp = FastMCP("test")
+    register(mcp, client)
+
+    r = await mcp.call_tool(
+        "hnf1b_find_individuals_by_phenotype",
+        {"hpo_ids": ["HP:0000083"]},
+    )
+    sc = r.structured_content
+
+    assert sc["total"] >= 1
+    assert sc["unmatched_hpo_ids"] == []
     await client.aclose()
