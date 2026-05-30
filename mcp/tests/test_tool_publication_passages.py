@@ -57,8 +57,23 @@ _PASSAGES_RESPONSE = {
         "lexical_candidate_count": 3,
         "dense_candidate_count": 4,
         "embedding_dim": 384,
+        "embeddings_available": True,
         "truncated": False,
         "notes": [],
+    },
+}
+
+# A backend response where hybrid silently degraded to lexical (the common live
+# state): the dense leg could not run, so embeddings_available is False.
+_PASSAGES_RESPONSE_LEXICAL = {
+    "passages": _PASSAGES_RESPONSE["passages"],
+    "meta": {
+        **_PASSAGES_RESPONSE["meta"],
+        "rerank_used": "lexical",
+        "dense_candidate_count": 0,
+        "embedding_dim": None,
+        "embeddings_available": False,
+        "notes": ["dense disabled: no embedding provider available"],
     },
 }
 
@@ -156,6 +171,39 @@ async def test_meta_surfaces_retrieval_diagnostics() -> None:
     assert meta["lexical_candidate_count"] == 3
     assert meta["dense_candidate_count"] == 4
     assert meta["embedding_dim"] == 384
+    # The dense leg ran here, so the explicit availability flag is surfaced True.
+    assert meta["embeddings_available"] is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_meta_surfaces_embeddings_available_false_in_compact_and_standard() -> (
+    None
+):
+    """When hybrid silently degrades to lexical, meta.embeddings_available=False.
+
+    The flag must travel in every response mode so an MCP client can tell that
+    "hybrid" actually ran lexical-only (no embedding stack in the deployment).
+    """
+    respx.get(f"{BASE}/publications/passages").mock(
+        return_value=httpx.Response(200, json=_PASSAGES_RESPONSE_LEXICAL)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    mcp, client = _make_mcp_and_client()
+
+    compact = await mcp.call_tool(
+        "hnf1b_get_publication_passages", {"query": "cystic kidney"}
+    )
+    assert compact.structured_content["meta"]["embeddings_available"] is False
+
+    standard = await mcp.call_tool(
+        "hnf1b_get_publication_passages",
+        {"query": "cystic kidney", "response_mode": "standard"},
+    )
+    assert standard.structured_content["meta"]["embeddings_available"] is False
+    await client.aclose()
 
 
 @pytest.mark.asyncio

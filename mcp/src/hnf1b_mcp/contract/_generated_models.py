@@ -340,6 +340,13 @@ class PassagesMeta(BaseModel):
         Optional[int],
         Field(description="Dense embedding dim, if used", title="Embedding Dim"),
     ] = None
+    embeddings_available: Annotated[
+        Optional[bool],
+        Field(
+            description="Whether the dense (semantic) leg was operational for this query (provider present AND embeddings stored); False means 'hybrid' silently degraded to lexical-only",
+            title="Embeddings Available",
+        ),
+    ] = False
     lexical_candidate_count: Annotated[
         int,
         Field(

@@ -9,6 +9,7 @@ from fastmcp import FastMCP
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services import publications as publications_service
 from hnf1b_mcp.services.dataclass import DataClass
+from hnf1b_mcp.services.publications import PublicationSort
 from hnf1b_mcp.services.safe_tool import run_tool
 from hnf1b_mcp.services.shaping import resolve_mode
 
@@ -36,8 +37,9 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         year: int | None = None,
         has_doi: bool | None = None,
         page_size: int = 25,
-        sort: str | None = None,
+        sort: PublicationSort | None = None,
         citing_pmid: str | None = None,
+        include_citing_individuals: bool = False,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Browse and search the local HNF1B publication cache.
@@ -61,14 +63,27 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 when ``False``, return only those without.  ``None`` disables
                 the filter.
             page_size: Number of publications per page (default 25, max 1000).
-            sort: Optional ordering — a field name optionally ``-``-prefixed for
-                descending. Allowed: ``phenopacket_count`` (default,
-                most-cited first), ``year``, ``pmid``, ``title``, ``journal``,
-                ``first_added``. The applied ordering is echoed as
-                ``applied_sort``.
+            sort: Sort the result set by one of the sortable fields:
+                ``phenopacket_count``, ``year``, ``pmid``, ``title``,
+                ``journal``, or ``first_added``. A leading ``-`` means
+                descending (e.g. ``-phenopacket_count`` lists the most-cited
+                publications first); no prefix means ascending. The default
+                when omitted is ``-phenopacket_count`` (most-cited first). The
+                honored ordering is echoed back in ``applied_sort`` using this
+                same public vocabulary.
             citing_pmid: Bare PMID (digits) or ``"PMID:NNN"`` prefixed string.
                 When provided, performs a reverse lookup — returns the list of
                 phenopacket IDs that cite this publication.
+            include_citing_individuals: Only meaningful with ``citing_pmid``.
+                When ``False`` (default) the ``citing_individuals`` list is
+                summarized to the first 10 ids in EVERY mode (``total`` stays the
+                true count); when the full set is larger, meta carries
+                ``citing_individuals_total`` / ``citing_individuals_returned`` /
+                ``citing_individuals_truncated`` / ``citing_individuals_note``.
+                Set ``True`` for the full list (still bounded by the response-mode
+                char budget, with the truncation signal in every mode); pass the
+                ids to ``hnf1b_get_individuals``, or use
+                ``hnf1b_find_individuals_by_phenotype`` for the matched cohort.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
                 In ``minimal``/``compact`` the redundant ``journal``/``year``/
@@ -80,8 +95,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
 
         Returns:
             When ``citing_pmid`` is given: a dict with keys ``pmid``,
-            ``citing_individuals`` (list of phenopacket ID strings),
-            ``total``, ``data_class``, and ``meta``.
+            ``citing_individuals`` (a bounded sample of phenopacket ID strings
+            unless ``include_citing_individuals=True``), ``total`` (the true
+            citing count), ``data_class``, and ``meta`` (carrying the
+            ``citing_individuals_*`` truncation signals when the full set
+            exceeds the sample).
 
             Otherwise: a dict with keys ``publications`` (shaped records with
             ``pmid``, ``recommended_citation``, ``phenopacket_count``, ``uri``,
@@ -97,6 +115,8 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 return await publications_service.get_publication_citing_individuals(
                     client,  # type: ignore[arg-type]
                     citing_pmid,
+                    response_mode=mode,
+                    include_citing_individuals=include_citing_individuals,
                 )
             filters: dict[str, Any] = {}
             if year is not None:

@@ -305,6 +305,54 @@ async def test_reverse_lookup_pmid_prefix_stripped() -> None:
     assert sc["total"] == 3
 
 
+_MANY_CITING = [{"phenopacket_id": f"PP{i:03d}", "phenopacket": {}} for i in range(75)]
+
+
+@pytest.mark.asyncio
+@respx.mock
+@pytest.mark.parametrize("mode", ["compact", "standard"])
+async def test_reverse_lookup_summarizes_citing_individuals(mode: str) -> None:
+    """Reverse lookup caps citing_individuals to <=10 by default, signalled in meta.
+
+    The truncation signal must reach meta through the run_tool wrapper in compact
+    AND standard (the core regression: ~75 ids were shipped uncapped).
+    """
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=_MANY_CITING)
+    )
+    mcp, client = _make_mcp_and_client()
+    r = await mcp.call_tool(
+        "hnf1b_get_publications", {"citing_pmid": "123", "response_mode": mode}
+    )
+    await client.aclose()
+
+    sc = r.structured_content
+    assert sc["total"] == 75  # true count preserved
+    assert len(sc["citing_individuals"]) == 10
+    assert sc["meta"]["citing_individuals_truncated"] is True
+    assert sc["meta"]["citing_individuals_total"] == 75
+    assert sc["meta"]["citing_individuals_returned"] == 10
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_reverse_lookup_include_citing_individuals_full() -> None:
+    """include_citing_individuals=True surfaces the full list with no signal."""
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=_MANY_CITING)
+    )
+    mcp, client = _make_mcp_and_client()
+    r = await mcp.call_tool(
+        "hnf1b_get_publications",
+        {"citing_pmid": "123", "include_citing_individuals": True},
+    )
+    await client.aclose()
+
+    sc = r.structured_content
+    assert len(sc["citing_individuals"]) == 75
+    assert "citing_individuals_truncated" not in sc["meta"]
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_reverse_lookup_not_found_returns_rich_error_envelope() -> None:

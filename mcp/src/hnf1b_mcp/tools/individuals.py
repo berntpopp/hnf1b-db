@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 
@@ -17,6 +17,13 @@ from hnf1b_mcp.services.shaping import resolve_mode
 
 # Canonical HPO term-ID shape: "HP:" + exactly 7 digits (e.g. HP:0000107).
 _HPO_ID_RE = re.compile(r"^HP:\d{7}$")
+
+# Cap on cursor pages per HPO term in find_individuals_by_phenotype so an honest
+# total cannot trigger an unbounded crawl. 100 ids/page × 50 pages = 5 000 — far
+# above the cohort. Module-level so the bound is a single source of truth (and
+# testable).
+_PAGE = 100
+_MAX_PAGES = 50
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -76,14 +83,22 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         Returns:
             A dict with keys ``phenopacket_id``, ``subject``, ``diseases``,
             ``uri``, and conditionally ``phenotypic_features`` (observed),
-            ``excluded_features``, ``feature_counts``, ``variants``,
-            ``measurements``, ``publications``, plus ``data_class`` and
-            ``meta``. ``response_mode`` genuinely trims the field set:
-            ``minimal`` = id + subject + uri; ``compact`` adds diseases /
-            observed phenotypes / variants / feature_counts; ``standard`` adds
-            publications + excluded_features; ``full`` adds measurements and
-            everything else. ``include_*`` flags are explicit opt-outs applied
-            on top of the mode. Embedded publications carry the same
+            ``excluded_features`` (EXCLUDED / confirmed-negative phenotypes —
+            clinically meaningful "ruled out" findings, distinct from simply
+            unmentioned), ``feature_counts``, ``variants``, ``measurements``,
+            ``publications``, plus ``data_class`` and ``meta``.
+            ``response_mode`` genuinely trims the field set: ``minimal`` =
+            id + subject + uri; ``compact`` adds diseases / observed phenotypes /
+            variants / feature_counts AND the ``excluded_features`` list (so a
+            negative finding is visible, not just counted); ``standard`` adds
+            publications; ``full`` adds measurements and everything else.
+            In ``compact``/``standard`` a long ``excluded_features`` list is
+            sampled to the first 10 (``feature_counts.excluded`` stays the true
+            total; ``meta`` then carries ``excluded_features_total`` /
+            ``excluded_features_returned`` / ``excluded_features_truncated`` /
+            ``excluded_features_note`` — recover the full list via
+            ``response_mode='full'``). ``include_*`` flags are explicit opt-outs
+            applied on top of the mode. Embedded publications carry the same
             verified ``recommended_citation`` / ``date_confidence`` as
             ``hnf1b_get_publications``.
         """
@@ -200,26 +215,37 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         hpo_ids: list[str],
         page_size: int = 25,
         include_excluded: bool = False,
+        match_mode: Literal["any", "all"] = "any",
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Cohort discovery: find individuals sharing one or more HPO phenotype terms.
 
-        Queries the ``/phenopackets/search`` discovery endpoint for each
-        supplied HPO term ID, collects and deduplicates the matching phenopacket
-        IDs while preserving order, then fetches authoritative content for the
-        merged cohort via the batch endpoint.  Suitable for building HPO-matched
-        cohorts for downstream analysis.
+        Queries the ``/phenopackets/search`` discovery endpoint once per
+        supplied HPO term ID, collects the matching phenopacket IDs, then
+        aggregates them according to ``match_mode`` before fetching
+        authoritative content for the resulting cohort via the batch endpoint.
+        Suitable for building HPO-matched cohorts for downstream analysis.
 
         Args:
             hpo_ids: One or more HPO term IDs (e.g. ``["HP:0000083",
-                "HP:0000107"]``).  Match semantics are **OR / union**: an
-                individual matches if it carries *any* of the supplied terms.
+                "HP:0000107"]``).
             page_size: Maximum number of individuals to return in the final
                 result page.  Defaults to 25.
             include_excluded: When ``False`` (default) a term matches only when
                 it is PRESENT (``excluded=false``); confirmed-absent annotations
                 (``excluded=true``) are NOT treated as matches. Set ``True`` to
                 also match explicitly-excluded features.
+            match_mode: How per-term match sets are combined. ``"any"``
+                (default) = **OR / union**: an individual matches if it carries
+                *any* supplied term. ``"all"`` = **AND / intersection**: an
+                individual matches only if it carries *every* distinct supplied
+                term; with a single term the two modes are identical.
+                CAVEAT for ``"all"``: per-term enumeration is page-capped (see
+                ``_meta.total_is_capped``). If a term's match set was truncated
+                by the cap, the intersection may be **under-inclusive** — a true
+                match can be wrongly excluded because its id never appeared in
+                the capped page window. When ``capped`` is signalled, treat an
+                ``"all"`` cohort as a lower bound and re-run with narrower terms.
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to ``compact``.
 
@@ -228,17 +254,16 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             matched cohort), ``total`` (the **full** count of matched
             individuals, not the returned page), ``returned`` (page size
             actually returned), ``has_more`` (whether ``total`` exceeds the
-            page), ``match_mode`` (``"any"``), ``hpo_ids`` (echoed), plus
-            ``page_size``, ``data_class`` and ``meta``. A malformed HPO ID (not
-            ``HP:`` + 7 digits) returns an ``invalid_input`` error (with a hint to
-            resolve free text via ``hnf1b_resolve_terms``), distinct from a real
-            empty cohort which returns ``total: 0``.
+            page), ``match_mode`` (echoes the requested ``"any"``/``"all"``),
+            ``hpo_ids`` (echoed), ``unmatched_hpo_ids`` (well-formed terms that
+            matched zero individuals — under ``"all"`` any such term also forces
+            an empty intersection), plus ``page_size``, ``data_class`` and
+            ``meta``. A malformed HPO ID (not ``HP:`` + 7 digits) returns an
+            ``invalid_input`` error (with a hint to resolve free text via
+            ``hnf1b_resolve_terms``), distinct from a real empty cohort which
+            returns ``total: 0``.
         """
         resolved = resolve_mode(response_mode)
-        # Cap on cursor pages per HPO term so an honest total cannot trigger an
-        # unbounded crawl. 100 ids/page × 50 pages = 5 000 — far above the cohort.
-        _PAGE = 100
-        _MAX_PAGES = 50
 
         async def _collect_matches(hpo_id: str) -> tuple[list[str], bool]:
             """Enumerate every published phenopacket_id matching one HPO term.
@@ -288,37 +313,89 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                     ),
                 )
 
+            # First-seen-order union accumulator (preserves deterministic order
+            # of ids across all terms) and a per-id count of how many DISTINCT
+            # terms matched it (the basis for the AND/intersection path).
             seen: dict[str, None] = {}
+            term_count: dict[str, int] = {}
             capped = False
             # Track per-term hits so a well-formed but unmatched HPO id (e.g.
             # HP:9999999) is reported in unmatched_hpo_ids rather than silently
             # vanishing into an empty cohort indistinguishable from a real match.
             per_term_hit: dict[str, bool] = {}
-            for hpo_id in hpo_ids:
+            # Count DISTINCT supplied terms so the intersection threshold is the
+            # number of unique hpo_ids (a caller repeating a term must not lower
+            # the bar for "matched every term").
+            distinct_terms = len(set(hpo_ids))
+            # Iterate DISTINCT terms in first-seen order so each unique term
+            # increments term_count EXACTLY ONCE — a repeated input term must
+            # not inflate the count past `distinct_terms` and wrongly fail the
+            # `== distinct_terms` intersection keep-condition below. This also
+            # avoids a redundant backend `_collect_matches` call per duplicate.
+            for hpo_id in dict.fromkeys(hpo_ids):
                 matched, term_capped = await _collect_matches(hpo_id)
                 capped = capped or term_capped
                 per_term_hit[hpo_id] = per_term_hit.get(hpo_id, False) or bool(matched)
-                for item_id in matched:
+                # Dedupe WITHIN one term's pages before counting so a duplicate
+                # id inside a single term cannot inflate term_count and falsely
+                # satisfy the cross-term intersection.
+                for item_id in dict.fromkeys(matched):
                     if item_id not in seen:
                         seen[item_id] = None
-            merged_ids = list(seen.keys())
+                    term_count[item_id] = term_count.get(item_id, 0) + 1
+            if match_mode == "all":
+                # Keep only ids matched by EVERY distinct supplied term; iterate
+                # `seen` so first-seen input order is preserved.
+                merged_ids = [
+                    item_id
+                    for item_id in seen
+                    if term_count.get(item_id, 0) == distinct_terms
+                ]
+            else:
+                merged_ids = list(seen.keys())
             # Deterministic input-order list of well-formed HPO ids that matched
-            # zero individuals. Always emitted on both return paths.
+            # zero individuals. Always emitted on both return paths. Under "all"
+            # any such term also collapses the intersection to empty (correct).
             unmatched_hpo_ids = [h for h, hit in per_term_hit.items() if not hit]
             total = len(merged_ids)
             has_more = total > page_size
 
+            # Build the capped signal ONCE so BOTH return paths surface it
+            # identically. Capping most often makes the "all" intersection come
+            # back EMPTY (a true member's id fell outside the capped window for
+            # one term), so the empty path MUST carry the same caveat — otherwise
+            # a capping-induced empty reads as a confident "0 carry all terms".
+            capped_meta: dict[str, Any] | None = None
+            if capped:
+                note = (
+                    f"match enumeration stopped at {_MAX_PAGES * _PAGE} per HPO"
+                    " term; total is a lower bound"
+                )
+                if match_mode == "all":
+                    # Under intersection a capped (incomplete) per-term set can
+                    # WRONGLY exclude a true match, so the AND cohort may be
+                    # under-inclusive — flag it instead of silently dropping it.
+                    note += (
+                        ". Under match_mode='all' the intersection may be"
+                        " under-inclusive (a true match can be excluded if its id"
+                        " fell outside the capped page window)"
+                    )
+                capped_meta = {"total_is_capped": True, "note": note}
+
             if not merged_ids:
-                return {
+                empty: dict[str, Any] = {
                     "individuals": [],
                     "total": 0,
                     "returned": 0,
                     "page_size": page_size,
                     "has_more": False,
-                    "match_mode": "any",
+                    "match_mode": match_mode,
                     "hpo_ids": list(hpo_ids),
                     "unmatched_hpo_ids": unmatched_hpo_ids,
                 }
+                if capped_meta is not None:
+                    empty["_meta"] = capped_meta
+                return empty
 
             result = await individuals_service.get_individuals(
                 client,  # type: ignore[arg-type]
@@ -327,24 +404,19 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 response_mode=resolved,
             )
             # The batch call reports the size of the returned page; overwrite
-            # with the true union count and surface OR (union) match semantics.
+            # with the true aggregate count and surface the requested match
+            # semantics ("any" = union, "all" = intersection).
             result["returned"] = len(result.get("individuals", []))
             result["total"] = total
             result["has_more"] = has_more
-            result["match_mode"] = "any"
+            result["match_mode"] = match_mode
             result["hpo_ids"] = list(hpo_ids)
             # HPO-scoped key set explicitly so it is ALWAYS present and never
             # collides with the batch-coverage `not_found` key get_individuals
             # may set for missing phenopacket ids.
             result["unmatched_hpo_ids"] = unmatched_hpo_ids
-            if capped:
-                result["_meta"] = {
-                    "total_is_capped": True,
-                    "note": (
-                        f"match enumeration stopped at {_MAX_PAGES * _PAGE} per"
-                        " HPO term; total is a lower bound"
-                    ),
-                }
+            if capped_meta is not None:
+                result["_meta"] = capped_meta
             return result
 
         return await run_tool(

@@ -623,6 +623,213 @@ async def test_get_individual_splits_observed_and_excluded_features() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_get_individual_compact_surfaces_excluded_features() -> None:
+    """Compact must show WHICH features were excluded, not just the count (was hidden)."""
+    pp = {
+        "phenopacket_id": "Y",
+        "phenopacket": {
+            "subject": {"id": "Y", "sex": "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                {
+                    "type": {"id": "HP:0000819", "label": "Diabetes mellitus"},
+                    "excluded": True,
+                },
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "Y", response_mode="compact")
+    await c.aclose()
+
+    # Observed feature behavior unchanged.
+    assert [f["id"] for f in result["phenotypic_features"]] == ["HP:0000107"]
+    # The excluded (confirmed-negative) feature is now visible by label/id.
+    assert [f["id"] for f in result["excluded_features"]] == ["HP:0000819"]
+    # Counts always present.
+    assert result["feature_counts"] == {"observed": 1, "excluded": 1}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_standard_surfaces_excluded_features() -> None:
+    """Standard likewise surfaces the excluded list and feature_counts."""
+    pp = {
+        "phenopacket_id": "Y",
+        "phenopacket": {
+            "subject": {"id": "Y", "sex": "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                {
+                    "type": {"id": "HP:0000819", "label": "Diabetes mellitus"},
+                    "excluded": True,
+                },
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "Y", response_mode="standard")
+    await c.aclose()
+
+    assert [f["id"] for f in result["excluded_features"]] == ["HP:0000819"]
+    assert result["feature_counts"] == {"observed": 1, "excluded": 1}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_long_excluded_list_is_bounded() -> None:
+    """A long excluded list is sampled in compact with an _meta signal; counts intact."""
+    excluded = [
+        {"type": {"id": f"HP:{i:07d}", "label": f"Excluded {i}"}, "excluded": True}
+        for i in range(25)
+    ]
+    pp = {
+        "phenopacket_id": "Z",
+        "phenopacket": {
+            "subject": {"id": "Z", "sex": "MALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                *excluded,
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Z").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "Z", response_mode="compact")
+    await c.aclose()
+
+    # Bounded sample (10) but the count stays the true total (25).
+    assert len(result["excluded_features"]) == 10
+    assert result["feature_counts"] == {"observed": 1, "excluded": 25}
+    # The truncation signal is attached for the wrapper to surface in meta.
+    signal = result["_meta"]
+    assert signal["excluded_features_total"] == 25
+    assert signal["excluded_features_returned"] == 10
+    assert signal["excluded_features_truncated"] is True
+    assert "excluded_features_note" in signal
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_fields_projection_keeps_meta_signal() -> None:
+    """fields=["excluded_features"] must not strip the internal _meta channel.
+
+    Regression: _select_fields kept only ``set(fields) | _ALWAYS_KEEP``; without
+    ``_meta`` in that keep-set an explicit field projection silently discarded
+    the truncation signal, so run_tool had nothing to hoist into meta — a silent
+    truncation. ``_meta`` is an internal control channel and must survive.
+    """
+    excluded = [
+        {"type": {"id": f"HP:{i:07d}", "label": f"Excluded {i}"}, "excluded": True}
+        for i in range(25)
+    ]
+    pp = {
+        "phenopacket_id": "Z",
+        "phenopacket": {
+            "subject": {"id": "Z", "sex": "MALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                *excluded,
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Z").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(
+        c, "Z", response_mode="compact", fields=["excluded_features"]
+    )
+    await c.aclose()
+
+    # Projection kept the requested field (sampled to 10) + always-kept id/uri.
+    assert len(result["excluded_features"]) == 10
+    assert set(result) >= {"phenopacket_id", "uri", "excluded_features"}
+    # The internal _meta channel survived projection for run_tool to hoist.
+    signal = result["_meta"]
+    assert signal["excluded_features_total"] == 25
+    assert signal["excluded_features_returned"] == 10
+    assert signal["excluded_features_truncated"] is True
+    assert "excluded_features_note" in signal
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_fields_projection_no_spurious_meta() -> None:
+    """A short (<=10) excluded list under fields= emits NO _meta (no false signal)."""
+    pp = {
+        "phenopacket_id": "Y",
+        "phenopacket": {
+            "subject": {"id": "Y", "sex": "FEMALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                {
+                    "type": {"id": "HP:0000819", "label": "Diabetes mellitus"},
+                    "excluded": True,
+                },
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Y").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(
+        c, "Y", response_mode="compact", fields=["excluded_features"]
+    )
+    await c.aclose()
+
+    assert [f["id"] for f in result["excluded_features"]] == ["HP:0000819"]
+    # No truncation occurred, so no internal channel is attached.
+    assert "_meta" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_individual_full_keeps_entire_excluded_list() -> None:
+    """Full keeps the complete excluded list (no sampling) and emits no signal."""
+    excluded = [
+        {"type": {"id": f"HP:{i:07d}", "label": f"Excluded {i}"}, "excluded": True}
+        for i in range(25)
+    ]
+    pp = {
+        "phenopacket_id": "Z",
+        "phenopacket": {
+            "subject": {"id": "Z", "sex": "MALE"},
+            "phenotypicFeatures": [
+                {"type": {"id": "HP:0000107", "label": "Renal cysts"}},
+                *excluded,
+            ],
+        },
+    }
+    respx.get(f"{BASE}/phenopackets/Z").mock(return_value=httpx.Response(200, json=pp))
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "Z", response_mode="full")
+    await c.aclose()
+
+    assert len(result["excluded_features"]) == 25
+    assert result["feature_counts"] == {"observed": 1, "excluded": 25}
+    assert "_meta" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_get_individual_enriches_embedded_citation() -> None:
     """Embedded PMID refs inherit the verified citation from the publication cache."""
     respx.get(f"{BASE}/phenopackets/X").mock(

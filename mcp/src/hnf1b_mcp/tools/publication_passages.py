@@ -74,7 +74,8 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             ``pmid``, ``section``, ``recommended_citation``, and text/snippet),
             ``total``, ``data_class``, and ``meta`` (including ``rerank_used``,
             ``lexical_candidate_count``, ``dense_candidate_count``,
-            ``embedding_dim``).
+            ``embedding_dim``, and ``embeddings_available`` — ``False`` flags a
+            "hybrid" request that silently degraded to lexical-only).
         """
         rmode = resolve_mode(response_mode)
 

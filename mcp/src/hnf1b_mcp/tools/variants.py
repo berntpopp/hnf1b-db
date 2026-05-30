@@ -16,6 +16,7 @@ from hnf1b_mcp.services import variants as variants_service
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.safe_tool import run_tool
 from hnf1b_mcp.services.shaping import resolve_mode
+from hnf1b_mcp.services.variants import VariantSort
 
 
 def register(mcp: FastMCP, client: ApiClient | None) -> None:
@@ -45,7 +46,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         domain: ProteinDomain | None = None,
         page: int = 1,
         page_size: int = 25,
-        sort: str | None = None,
+        sort: VariantSort | None = None,
         response_mode: str | None = None,
     ) -> dict[str, Any]:
         """Browse HNF1B variant records with optional filters.
@@ -72,7 +73,16 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 ``"POU Homeodomain"``, or ``"Transactivation Domain"``.
             page: 1-based page number (default 1).
             page_size: Number of results per page (default 25, capped at 500).
-            sort: Optional sort expression forwarded as-is to the API.
+            sort: Sort the result set by one of the sortable fields:
+                ``carrier_count``, ``classification``, ``structural_type``,
+                ``variant_id``, ``simple_id``, ``transcript``, ``protein``, or
+                ``hg38``.  A leading ``-`` means descending (e.g.
+                ``-carrier_count`` lists the most common variants first); no
+                prefix means ascending.  The honored sort is echoed back in
+                ``meta.applied_sort`` using this same public vocabulary.
+                ``carrier_count`` counts DISTINCT carrier individuals
+                (phenopackets) for the variant — NOT reports/observations or
+                distinct publications (see ``meta.carrier_count_basis``).
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
@@ -116,15 +126,29 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
     async def hnf1b_get_variant(
         variant_id: str,
         response_mode: str | None = None,
+        include_carriers: bool = False,
     ) -> dict[str, Any]:
         """Fetch the full authoritative record for a single HNF1B variant.
 
         Returns the complete curated variant record — ``classification``
         (pathogenicity), molecular ``consequence``, ``label``, ``hg38``,
         ``transcript``, ``protein``, ``structural_type``, ``gene_symbol`` and
-        ``carrier_count`` — together with the list of ``carriers``
-        (phenopacket IDs). Pass those ``carriers`` IDs to
-        ``hnf1b_get_individuals`` for per-carrier phenotype detail.
+        ``carrier_count`` — together with a ``carriers`` list of phenopacket IDs.
+        Pass those ``carriers`` IDs to ``hnf1b_get_individuals`` for per-carrier
+        phenotype detail. ``carrier_count`` counts DISTINCT carrier individuals
+        (phenopackets) for the variant — NOT reports/observations or distinct
+        publications (see ``meta.carrier_count_basis``).
+
+        Carriers are SUMMARIZED by default to bound token cost: a heavily-carried
+        variant can have hundreds of carrier IDs. By default (and in EVERY
+        response mode) at most 10 carrier IDs are returned; ``carrier_count``
+        stays the true total, and when the full set is larger the ``meta`` block
+        carries ``carriers_total``, ``carriers_returned``, ``carriers_truncated``,
+        and a ``carriers_note`` naming how to get the rest. Set
+        ``include_carriers=True`` to return the full list (still bounded by the
+        response-mode char budget, with the same truncation signal if it must be
+        trimmed). For the matched cohort WITH phenotype detail, use
+        ``hnf1b_find_individuals_by_phenotype`` instead.
 
         Args:
             variant_id: The variant identifier as returned by
@@ -134,6 +158,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             response_mode: Response verbosity — one of ``minimal``,
                 ``compact``, ``standard``, ``full``.  Defaults to
                 ``compact``.
+            include_carriers: When ``False`` (default) the ``carriers`` list is
+                summarized to at most 10 IDs (in every mode) with a
+                ``carriers_truncated`` meta signal; when ``True`` the full
+                carriers list is returned, bounded by the response-mode char
+                budget.
 
         Returns:
             A dict with keys ``variant_id``, ``simple_id``, ``label``,
@@ -148,6 +177,7 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
                 client,  # type: ignore[arg-type]
                 variant_id,
                 response_mode=mode,
+                include_carriers=include_carriers,
             ),
             data_class=DataClass.CURATED,
             response_mode=mode,

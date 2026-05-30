@@ -17,6 +17,7 @@ BASE = "http://api.test/api/v2"
 # ---------------------------------------------------------------------------
 
 GENE_PAYLOAD = {
+    "id": "a09c8191-b0d5-4828-af87-042ddd7de013",
     "symbol": "HNF1B",
     "name": "HNF1 homeobox B",
     "chromosome": "17",
@@ -27,19 +28,37 @@ GENE_PAYLOAD = {
     "ncbi_gene_id": "6928",
     "hgnc_id": "HGNC:11617",
     "omim_id": "189907",
-    "transcripts": ["ENST00000372566"],
+    "created_at": "2026-04-17T09:48:44.742052Z",
+    "updated_at": "2026-05-30T08:45:48.940076Z",
+    "transcripts": [{"id": "799a1ceb", "transcript_id": "ENST00000372566"}],
 }
 
 TRANSCRIPTS_PAYLOAD = [
     {
+        "id": "799a1ceb-38a3-4f81-a158-1c086e7ee07a",
         "transcript_id": "ENST00000372566",
-        "biotype": "protein_coding",
-        "length": 2672,
+        "is_canonical": True,
+        "exon_count": 1,
+        "created_at": "2026-05-30T08:45:48.940076Z",
+        "updated_at": "2026-05-30T08:45:48.940076Z",
+        "exons": [
+            {
+                "id": "213003b6-2b0c-4d1d-b123-354f18afa16b",
+                "exon_number": 1,
+                "chromosome": "17",
+                "start": 36098063,
+                "end": 36098372,
+            }
+        ],
     },
     {
+        "id": "b1234567-0000-0000-0000-000000000000",
         "transcript_id": "ENST00000372567",
-        "biotype": "protein_coding",
-        "length": 1500,
+        "is_canonical": False,
+        "exon_count": 0,
+        "created_at": "2026-05-30T08:45:48.940076Z",
+        "updated_at": "2026-05-30T08:45:48.940076Z",
+        "exons": [],
     },
 ]
 
@@ -229,6 +248,49 @@ async def test_response_mode_reflected_in_meta() -> None:
         )
         sc = r.structured_content
         assert sc["meta"]["response_mode"] == "full"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_tool_default_strips_noise_and_gates_exons() -> None:
+    """Default compact call: no UUIDs/timestamps, no exon array, exon_count kept."""
+    _mock_all()
+    client = ApiClient(base_url=BASE)
+    try:
+        mcp = FastMCP("test")
+        register(mcp, client)
+        r = await mcp.call_tool("hnf1b_get_gene_context", {})
+        sc = r.structured_content
+
+        assert "id" not in sc["gene"]
+        assert "created_at" not in sc["gene"]
+        assert "transcripts" not in sc["gene"]  # nested duplicate gone
+        canonical = sc["transcripts"][0]
+        assert "id" not in canonical
+        assert "exons" not in canonical
+        assert canonical["exon_count"] == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_tool_include_exons_true_returns_exon_array() -> None:
+    """include_exons=True surfaces the full per-transcript exon array."""
+    _mock_all()
+    client = ApiClient(base_url=BASE)
+    try:
+        mcp = FastMCP("test")
+        register(mcp, client)
+        r = await mcp.call_tool(
+            "hnf1b_get_gene_context",
+            {"include_exons": True, "response_mode": "full"},
+        )
+        sc = r.structured_content
+        assert "exons" in sc["transcripts"][0]
+        assert sc["transcripts"][0]["exons"][0]["exon_number"] == 1
     finally:
         await client.aclose()
 

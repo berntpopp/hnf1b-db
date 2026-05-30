@@ -75,9 +75,11 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         Returns:
             A dict with keys ``query``, ``vocabulary``, ``matches``,
             ``data_class``, and ``meta``.  Each match contains ``id``,
-            ``label``, and ``description``.  For a controlled vocabulary capped
-            by ``limit``, ``meta`` carries ``total_matches``/``returned`` so the
-            truncation is never silent.
+            ``label``, and ``description``; HPO matches additionally carry a
+            numeric ``score`` (relevance, higher = better) when the backend
+            supplied one.  For a controlled vocabulary capped by ``limit``,
+            ``meta`` carries ``total_matches``/``returned`` so the truncation is
+            never silent.
         """
         return await run_tool(
             lambda: terms_service.resolve_terms(

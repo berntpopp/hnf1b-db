@@ -49,19 +49,28 @@ def _map_vocab_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _map_hpo_item(item: dict[str, Any]) -> dict[str, Any]:
-    """Map an HPO autocomplete API item to ``{id, label, description}``.
+    """Map an HPO autocomplete API item to ``{id, label, description[, score]}``.
 
     Args:
         item: A raw HPO item dict from the autocomplete endpoint.
 
     Returns:
-        Normalised ``{id, label, description}`` dict.
+        Normalised ``{id, label, description}`` dict.  When the backend supplied
+        a per-hit ``similarity_score`` (pg_trgm trigram similarity, 0–1, higher
+        = better), it is forwarded verbatim onto a ``score`` key so callers can
+        rank strong vs. weak HPO matches.
     """
-    return {
+    mapped: dict[str, Any] = {
         "id": str(item.get("hpo_id") or ""),
         "label": str(item.get("label") or ""),
         "description": str(item.get("description") or ""),
     }
+    # Forward the backend's numeric relevance score verbatim. Guarded so a
+    # missing score never crashes and never fabricates a misleading value
+    # (e.g. a 0 that would read as a real weak match). Mirrors hnf1b_search.
+    if "similarity_score" in item:
+        mapped["score"] = item["similarity_score"]
+    return mapped
 
 
 async def resolve_terms(
@@ -87,7 +96,9 @@ async def resolve_terms(
 
     Returns:
         ``{query, vocabulary, matches}`` where *matches* is a list of
-        ``{id, label, description}`` dicts.
+        ``{id, label, description}`` dicts.  For ``vocabulary="hpo"``, each
+        match also carries a numeric ``score`` (relevance, 0–1, higher =
+        better) when the backend supplied one.
 
     Raises:
         McpToolError: With code ``"invalid_input"`` if *vocabulary* is not

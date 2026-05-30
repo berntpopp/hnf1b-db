@@ -35,8 +35,12 @@ HNF1B-db MCP server — read-only access to curated HNF1B gene, variant,
 individual, and publication data for research.
 
 Workflow primer:
-  1. Call `hnf1b_get_capabilities` first to discover the tool inventory,
-     payload modes, pagination limits, and the citation contract.
+  1. `hnf1b_get_capabilities` is RECOMMENDED for orientation in a new/cold
+     session (tool inventory, payload modes, pagination limits, citation
+     contract) but is OPTIONAL: tools with enum-constrained filters advertise
+     them in `filterable_fields`, so many valid calls can be constructed
+     directly. The descriptor is ~11k chars; a warm client should compare the
+     `capabilities_version` content hash and skip re-fetching it when unchanged.
   2. Use `hnf1b_search` or `hnf1b_resolve_terms` to resolve free-text into
      stable identifiers (individuals, variants, publications, HPO terms).
   3. Fetch detail with `hnf1b_get_individual`, `hnf1b_get_variant`,

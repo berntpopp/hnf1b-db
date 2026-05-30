@@ -862,6 +862,118 @@ class TestGlobalSearchPhenotypeText:
             )
             await db_session.commit()
 
+    async def _mv_label_for(self, db_session: AsyncSession, phenopacket_id: str) -> str:
+        """Return the global_search_index ``label`` for a ``pp_`` row."""
+        row = await db_session.execute(
+            text("SELECT label FROM global_search_index WHERE id = :id"),
+            {"id": f"pp_{phenopacket_id}"},
+        )
+        return str(row.scalar_one())
+
+    @pytest.mark.asyncio
+    async def test_individual_label_uses_disease_when_present(
+        self, db_session: AsyncSession, published_record
+    ):
+        """An INDIVIDUAL hit's label is descriptive: ``Individual <id>: <disease>``.
+
+        Scenario (a): a phenopacket WITH a disease term. The label must start
+        with ``Individual <subject/phenopacket id>`` and include the disease
+        label so an LLM/consumer never sees a bare numeric id.
+        """
+        await db_session.execute(
+            text(
+                "UPDATE phenopacket_revisions SET content_jsonb = "
+                "jsonb_set(content_jsonb, '{diseases}', "
+                '\'[{"term": {"id": "MONDO:0011593", '
+                '"label": "Renal cysts and diabetes syndrome"}}]\'::jsonb) '
+                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
+                "WHERE phenopacket_id = :pid)"
+            ),
+            {"pid": published_record.phenopacket_id},
+        )
+        await db_session.commit()
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            label = await self._mv_label_for(
+                db_session, published_record.phenopacket_id
+            )
+            assert label.startswith(f"Individual {published_record.phenopacket_id}"), (
+                label
+            )
+            assert "Renal cysts and diabetes syndrome" in label, label
+        finally:
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_individual_label_falls_back_to_hpo_when_no_disease(
+        self, db_session: AsyncSession, published_record
+    ):
+        """Scenario (b): no disease but a non-excluded HPO feature → use HPO label.
+
+        The label must include the non-excluded phenotypicFeature label and
+        must NOT pick the excluded one.
+        """
+        await db_session.execute(
+            text(
+                "UPDATE phenopacket_revisions SET content_jsonb = "
+                "jsonb_set(content_jsonb, '{phenotypicFeatures}', "
+                '\'[{"type": {"id": "HP:0002149", '
+                '"label": "Hyperuricemia"}, "excluded": true}, '
+                '{"type": {"id": "HP:0012736", '
+                '"label": "Pancreatic hypoplasia"}}]\'::jsonb) '
+                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
+                "WHERE phenopacket_id = :pid)"
+            ),
+            {"pid": published_record.phenopacket_id},
+        )
+        await db_session.commit()
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            label = await self._mv_label_for(
+                db_session, published_record.phenopacket_id
+            )
+            assert label.startswith(f"Individual {published_record.phenopacket_id}"), (
+                label
+            )
+            assert "Pancreatic hypoplasia" in label, label
+            assert "Hyperuricemia" not in label, label
+        finally:
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_individual_label_bare_when_no_disease_or_phenotype(
+        self, db_session: AsyncSession, published_record
+    ):
+        """Scenario (c): neither disease nor HPO → label is ``Individual <id>``.
+
+        The ``published_record`` fixture seeds ``content_jsonb`` with no
+        ``diseases`` and no ``phenotypicFeatures``, so the label is the bare
+        prefixed form with no trailing separator.
+        """
+        await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+        await db_session.commit()
+
+        try:
+            label = await self._mv_label_for(
+                db_session, published_record.phenopacket_id
+            )
+            assert label == f"Individual {published_record.phenopacket_id}", label
+        finally:
+            await db_session.execute(
+                text("REFRESH MATERIALIZED VIEW global_search_index")
+            )
+            await db_session.commit()
+
     @pytest.mark.asyncio
     async def test_global_search_phenotypic_features_weight_c_and_excluded(
         self, async_client, db_session: AsyncSession, published_record

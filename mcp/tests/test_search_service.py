@@ -464,3 +464,64 @@ async def test_search_with_individual_hits_omits_phenotype_hint():
     await c.aclose()
 
     assert "phenotype_hint" not in result
+
+
+# ---------------------------------------------------------------------------
+# Relevance score forwarding — the backend computes a numeric score per hit
+# (ts_rank / trigram similarity, 0–1, higher = better). The MCP must forward
+# it verbatim so a client can rank strong vs. weak matches.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_hit_forwards_backend_score():
+    """A hit's backend ``score`` is forwarded verbatim onto the shaped hit."""
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_SEARCH_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await search(
+        c, query="HNF1B", types=("individual", "variant", "publication", "gene")
+    )
+    await c.aclose()
+
+    by_type = {h["type"]: h for h in result["hits"]}
+    assert by_type["individual"]["score"] == 0.95
+    assert by_type["variant"]["score"] == 0.88
+    assert by_type["publication"]["score"] == 0.75
+    assert by_type["gene"]["score"] == 0.70
+
+
+_NO_SCORE_RESPONSE = {
+    "results": [
+        {
+            "id": "pp_777",
+            "label": "Individual 777",
+            "type": "individual",
+            "subtype": None,
+            "extra_info": None,
+        }
+    ]
+}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_hit_without_score_omits_key():
+    """A hit lacking a backend ``score`` shapes cleanly with NO ``score`` key.
+
+    The forward must be guarded so a missing score never crashes and never
+    fabricates a value (e.g. a misleading 0).
+    """
+    respx.get(f"{BASE}/search/global").mock(
+        return_value=httpx.Response(200, json=_NO_SCORE_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await search(c, query="HNF1B", types=("individual",))
+    await c.aclose()
+
+    assert len(result["hits"]) == 1
+    hit = result["hits"][0]
+    assert hit["id"] == "pp_777"
+    assert "score" not in hit

@@ -57,7 +57,8 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         Returns:
             A dict with keys ``query``, ``hits``, ``counts``, ``guidance``,
             ``data_class``, and ``meta``.  Each hit contains ``type``, ``id``,
-            ``label``, and ``uri``.
+            ``label``, ``uri``, and a numeric ``score`` (relevance, higher =
+            better) when the backend supplied one.
         """
         resolved_types: tuple[str, ...] = (
             tuple(types) if types else ("individual", "variant", "publication")

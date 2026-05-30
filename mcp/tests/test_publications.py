@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import get_args
+
 import httpx
 import pytest
 import respx
@@ -9,6 +11,8 @@ import respx
 from hnf1b_mcp.client.api_client import ApiClient
 from hnf1b_mcp.services.errors import McpToolError
 from hnf1b_mcp.services.publications import (
+    PUBLICATION_SORT_FIELDS,
+    PublicationSort,
     get_publication_citing_individuals,
     list_publications,
 )
@@ -332,6 +336,109 @@ async def test_get_publication_citing_individuals_never_calls_metadata():
 
 
 # ---------------------------------------------------------------------------
+# citing_individuals summarization (default sample + opt-in full list)
+# ---------------------------------------------------------------------------
+
+# A foundational publication cited by many individuals — the uncapped-id-list
+# defect this fix closes (the most-cited HNF1B paper is cited by ~75 individuals).
+_MANY_CITING = [{"phenopacket_id": f"PP{i:03d}", "phenopacket": {}} for i in range(75)]
+
+
+@pytest.mark.asyncio
+@respx.mock
+@pytest.mark.parametrize("mode", ["compact", "standard"])
+async def test_citing_individuals_summarized_by_default(mode: str):
+    """DEFAULT: >10 citing individuals are sampled to <=10 with a meta signal.
+
+    Core regression: the citing_pmid reverse lookup previously shipped ~75
+    citing_individuals ids uncapped in compact/standard. The default now caps the
+    LIST to the shared sample size and flags it in meta — total stays the true
+    citing count.
+    """
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=_MANY_CITING)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_publication_citing_individuals(c, "123", response_mode=mode)
+    await c.aclose()
+
+    assert result["total"] == 75  # true count preserved
+    assert len(result["citing_individuals"]) == 10  # capped to the sample size
+    meta = result["_meta"]
+    assert meta["citing_individuals_truncated"] is True
+    assert meta["citing_individuals_total"] == 75
+    assert meta["citing_individuals_returned"] == 10
+    note = meta["citing_individuals_note"]
+    assert "include_citing_individuals" in note
+    assert "hnf1b_find_individuals_by_phenotype" in note
+    # No budget trim happened on the sample — the opt-in path owns _dropped.
+    assert "_dropped" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_citing_individuals_full_via_opt_in():
+    """include_citing_individuals=True returns the FULL list (budget permitting)."""
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=_MANY_CITING)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_publication_citing_individuals(
+        c, "123", response_mode="full", include_citing_individuals=True
+    )
+    await c.aclose()
+
+    assert result["total"] == 75
+    assert len(result["citing_individuals"]) == 75  # full set returned
+    # Full set fit the budget: no summarize-default signal and no budget trim.
+    assert "_meta" not in result or "citing_individuals_truncated" not in result.get(
+        "_meta", {}
+    )
+    assert "_dropped" not in result
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_citing_individuals_full_opt_in_budget_bounded():
+    """include_citing_individuals=True is still bounded by the mode char budget."""
+    huge = [
+        {"phenopacket_id": f"phenopacket-{i:05d}", "phenopacket": {}}
+        for i in range(4000)
+    ]
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=huge)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_publication_citing_individuals(
+        c, "123", response_mode="minimal", include_citing_individuals=True
+    )
+    await c.aclose()
+
+    assert result["total"] == 4000  # true count preserved
+    assert len(result["citing_individuals"]) < 4000  # trimmed to fit budget
+    assert result["_dropped"]["dropped_records"] > 0
+    assert result["_meta"]["citing_individuals_truncated"] is True
+    assert result["_meta"]["citing_individuals_total"] == 4000
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_citing_individuals_small_set_not_flagged():
+    """<=10 citing individuals: all returned, no truncation signal."""
+    respx.get(f"{BASE}/phenopackets/by-publication/123").mock(
+        return_value=httpx.Response(200, json=_BY_PUB_RESPONSE)  # 3 items
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_publication_citing_individuals(c, "123")
+    await c.aclose()
+
+    assert result["citing_individuals"] == ["PP001", "PP002", "PP003"]
+    assert result["total"] == 3
+    assert "_meta" not in result
+    assert "_dropped" not in result
+
+
+# ---------------------------------------------------------------------------
 # Full-text coverage flags + abstract (mode-gated)
 # ---------------------------------------------------------------------------
 
@@ -435,3 +542,46 @@ async def test_list_publications_enforces_char_budget():
     assert result["total"] == 300  # true count preserved
     assert len(result["publications"]) < 300  # trimmed to fit 4 KB
     assert result["_dropped"]["dropped_records"] > 0
+
+
+# ---------------------------------------------------------------------------
+# PublicationSort enum drift guard (mirror of VariantSort)
+# ---------------------------------------------------------------------------
+
+
+def test_publication_sort_enum_matches_sort_fields() -> None:
+    """The PublicationSort Literal must stay in lockstep with PUBLICATION_SORT_FIELDS.
+
+    Every member is one of the canonical sort fields, optionally ``-``-prefixed
+    for descending. Stripping the prefix must yield EXACTLY the entries of
+    PUBLICATION_SORT_FIELDS — so editing one without the other fails fast here
+    rather than silently shipping a sort vocabulary the tool cannot honor.
+    """
+    members = set(get_args(PublicationSort))
+    # Each public field appears in both directions: bare (asc) and '-' (desc).
+    expected: set[str] = set()
+    for field in PUBLICATION_SORT_FIELDS:
+        expected.add(field)
+        expected.add(f"-{field}")
+    assert members == expected
+    # The set of fields stripped of '-' equals the sort-field entries exactly.
+    stripped = {m[1:] if m.startswith("-") else m for m in members}
+    assert stripped == set(PUBLICATION_SORT_FIELDS)
+    # No invented keys (e.g. 'date_added') leaked in.
+    assert "date_added" not in stripped
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_publications_accepts_publication_sort_member() -> None:
+    """A typed PublicationSort member is honored and echoed as applied_sort."""
+    route = respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json=_PUBS_RESPONSE)
+    )
+    c = ApiClient(base_url=BASE)
+    sort_value: PublicationSort = "-year"
+    result = await list_publications(c, sort=sort_value)
+    await c.aclose()
+
+    assert result["applied_sort"] == "-year"
+    assert dict(route.calls[0].request.url.params)["sort"] == "-year"

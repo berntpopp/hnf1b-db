@@ -15,9 +15,15 @@ from hnf1b_mcp.contract import (
 )
 from hnf1b_mcp.services.dataclass import DataClass
 from hnf1b_mcp.services.errors import ERROR_CODES
+from hnf1b_mcp.services.publications import PUBLICATION_SORT_FIELDS
 from hnf1b_mcp.services.statistics import _VALID_METRICS
 from hnf1b_mcp.services.terms import _VALID_VOCABULARIES
-from hnf1b_mcp.services.variants import VARIANT_SORT_FIELDS
+from hnf1b_mcp.services.variants import (
+    _CARRIER_SAMPLE_SIZE,
+    CARRIER_COUNT_BASIS,
+    CARRIER_COUNT_NOTE,
+    VARIANT_SORT_FIELDS,
+)
 
 _TOOLS: list[dict[str, str]] = [
     {
@@ -33,14 +39,21 @@ _TOOLS: list[dict[str, str]] = [
             "Unified free-text discovery across individuals, variants, and "
             "publications (default) — also genes. Returns typed ID hits; each "
             "hit carries a 'resolve_with' {tool, argument, value} naming exactly "
-            "how to fetch its authoritative content. Pass types=[...] to scope."
+            "how to fetch its authoritative content, plus a numeric 'score' "
+            "(relevance, higher = better) for ranking. Pass types=[...] to scope."
         ),
     },
     {
         "name": "hnf1b_get_individual",
         "summary": (
             "Retrieve the full phenopacket record for a single individual "
-            "by phenopacket_id."
+            "by phenopacket_id. Returns observed phenotypes in "
+            "phenotypic_features AND the EXCLUDED (confirmed-negative, 'ruled "
+            "out') phenotypes in excluded_features — surfaced from compact mode "
+            "upward so a negative finding is visible, not just counted in "
+            "feature_counts. A long excluded list is sampled outside full mode "
+            "(excluded_features_truncated signalled in meta; feature_counts "
+            "stays the true total)."
         ),
     },
     {
@@ -53,10 +66,12 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_find_individuals_by_phenotype",
         "summary": (
-            "Find individuals carrying ANY of a set of HPO term IDs (OR/union "
-            "match) via `hpo_ids`. Returns the matched cohort with the FULL "
-            "match `total` and `has_more`. Caller supplies exact HPO IDs; v1 "
-            "does not resolve free text (use hnf1b_resolve_terms first)."
+            "Find individuals by a set of HPO term IDs via `hpo_ids`, combined "
+            "by `match_mode`: 'any' (default, OR/union — carries any term) or "
+            "'all' (AND/intersection — carries every term). Returns the matched "
+            "cohort with the FULL match `total` and `has_more`. Caller supplies "
+            "exact HPO IDs; v1 does not resolve free text (use "
+            "hnf1b_resolve_terms first)."
         ),
     },
     {
@@ -72,8 +87,11 @@ _TOOLS: list[dict[str, str]] = [
     {
         "name": "hnf1b_get_variant",
         "summary": (
-            "Given a variant_id, return the carrier phenopacket IDs for that "
-            "variant (a discovery endpoint). Pass the returned ids to "
+            "Given a variant_id, return the variant record plus a SAMPLE of "
+            "carrier phenopacket IDs (a discovery endpoint). carrier_count is "
+            "the true total; by default at most 10 carrier ids are returned in "
+            "every mode (carriers_truncated signalled in meta). Pass "
+            "include_carriers=true for the full list, or the returned ids to "
             "hnf1b_get_individuals for authoritative per-carrier detail."
         ),
     },
@@ -82,8 +100,11 @@ _TOOLS: list[dict[str, str]] = [
         "summary": (
             "Return the HNF1B gene reference record: genomic coordinates, "
             "cross-references (HGNC/NCBI/OMIM), transcripts, and annotated "
-            "protein domains. Emits reference_data_status when the backend's "
-            "reference tables are not seeded."
+            "protein domains. Summarized by default — internal ids/timestamps "
+            "stripped, transcripts de-duplicated, and the per-exon array gated "
+            "behind include_exons=true (exon_count is always kept). Emits "
+            "reference_data_status when the backend's reference tables are not "
+            "seeded."
         ),
     },
     {
@@ -94,7 +115,10 @@ _TOOLS: list[dict[str, str]] = [
             "lookup the individuals citing one publication via `citing_pmid`. "
             "Returns recommended_citation strings, plus `coverage`/"
             "`has_full_text` flags (every mode) and the full `abstract` from "
-            "standard mode upward."
+            "standard mode upward. The citing_pmid reverse lookup summarizes "
+            "citing_individuals to a SAMPLE (at most 10 ids, total stays the true "
+            "count; citing_individuals_truncated signalled in meta) unless "
+            "include_citing_individuals=true."
         ),
     },
     {
@@ -122,7 +146,9 @@ _TOOLS: list[dict[str, str]] = [
         "summary": (
             "Resolve free text against a controlled vocabulary. Call with "
             "text=<query> and vocabulary=<one of the allowed names, default "
-            "'hpo'>. Returns matching {id, label, description} entries."
+            "'hpo'>. Returns matching {id, label, description} entries; HPO "
+            "hits also carry a numeric 'score' (relevance, higher = better) "
+            "for ranking."
         ),
     },
     {
@@ -284,6 +310,48 @@ def _filterable_fields() -> dict[str, Any]:
                     "so ordering within a tie is deterministic across calls."
                 ),
             },
+            # Field-semantics note (not a filter): documents what carrier_count
+            # counts so "most common variant" is unambiguous. Mirrors the
+            # count_mode hint style and the variant tools' response meta
+            # carrier_count_basis; sourced from the single CARRIER_COUNT_*
+            # constants so the advert can never drift from the live meta.
+            "carrier_count": {
+                "basis": CARRIER_COUNT_BASIS,
+                "hint": CARRIER_COUNT_NOTE,
+            },
+        },
+        "hnf1b_get_variant": {
+            "include_carriers": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    "carriers are summarized by default: at most "
+                    f"{_CARRIER_SAMPLE_SIZE} carrier ids are returned in EVERY "
+                    "response mode (carrier_count stays the true total). When the "
+                    "full set is larger, meta carries carriers_total / "
+                    "carriers_returned / carriers_truncated / carriers_note. Set "
+                    "include_carriers=true for the full list (still bounded by the "
+                    "response-mode char budget), or use "
+                    "hnf1b_find_individuals_by_phenotype for the matched cohort "
+                    "with phenotype detail."
+                ),
+            },
+        },
+        "hnf1b_get_gene_context": {
+            "include_exons": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    "transcripts are summarized by default: each ships its "
+                    "exon_count scalar but NOT the verbose per-exon coordinate "
+                    "array. Set include_exons=true to restore the full exons "
+                    "array. Outside full mode the gene/transcripts/domains/exons "
+                    "also drop internal id/created_at/updated_at, the gene's "
+                    "redundant nested transcript block is removed, and "
+                    "transcripts are de-duplicated by transcript_id — full mode "
+                    "returns the complete provenance record."
+                ),
+            },
         },
         "hnf1b_resolve_terms": {
             "vocabulary": {
@@ -308,14 +376,9 @@ def _filterable_fields() -> dict[str, Any]:
         },
         "hnf1b_get_publications": {
             "sort": {
-                "values": [
-                    "phenopacket_count",
-                    "year",
-                    "pmid",
-                    "title",
-                    "journal",
-                    "first_added",
-                ],
+                # Derived from the tool's own sort map so the advertised
+                # vocabulary can never drift from what is actually honored.
+                "values": list(PUBLICATION_SORT_FIELDS),
                 "hint": (
                     "prefix with '-' for descending; default '-phenopacket_count' "
                     "(most-cited first). Echoed as applied_sort."
@@ -324,6 +387,22 @@ def _filterable_fields() -> dict[str, Any]:
             "citing_pmid": {
                 "type": "string",
                 "hint": "reverse lookup: individuals citing this PMID",
+            },
+            "include_citing_individuals": {
+                "type": "boolean",
+                "default": False,
+                "hint": (
+                    "citing_pmid reverse lookup only: citing_individuals are "
+                    f"summarized by default to at most {_CARRIER_SAMPLE_SIZE} ids "
+                    "in EVERY response mode (total stays the true citing count). "
+                    "When the full set is larger, meta carries "
+                    "citing_individuals_total / citing_individuals_returned / "
+                    "citing_individuals_truncated / citing_individuals_note. Set "
+                    "include_citing_individuals=true for the full list (still "
+                    "bounded by the response-mode char budget), then pass the ids "
+                    "to hnf1b_get_individuals, or use "
+                    "hnf1b_find_individuals_by_phenotype for the matched cohort."
+                ),
             },
             "q": {"type": "string", "hint": "free-text keyword filter"},
         },
@@ -369,8 +448,21 @@ def _filterable_fields() -> dict[str, Any]:
             "hpo_ids": {
                 "type": "list[string]",
                 "hint": (
-                    "exact HPO IDs (e.g. ['HP:0000107']); OR/union match. "
-                    "Resolve free text via hnf1b_resolve_terms first."
+                    "exact HPO IDs (e.g. ['HP:0000107']). Combined per "
+                    "match_mode (default OR/union). Resolve free text via "
+                    "hnf1b_resolve_terms first."
+                ),
+            },
+            "match_mode": {
+                "values": ["any", "all"],
+                "default": "any",
+                "hint": (
+                    "how multiple hpo_ids combine: 'any' (default) = OR/union "
+                    "(carries any term); 'all' = AND/intersection (carries every "
+                    "distinct term). Caveat for 'all': per-term enumeration is "
+                    "page-capped, so if _meta.total_is_capped is set the "
+                    "intersection may be under-inclusive (a true match can be "
+                    "excluded) — treat the 'all' cohort as a lower bound."
                 ),
             },
         },

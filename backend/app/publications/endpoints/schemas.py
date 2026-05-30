@@ -126,6 +126,14 @@ class PassagesMeta(BaseModel):
     embedding_dim: Optional[int] = Field(
         default=None, description="Dense embedding dim, if used"
     )
+    embeddings_available: bool = Field(
+        False,
+        description=(
+            "Whether the dense (semantic) leg was operational for this query "
+            "(provider present AND embeddings stored); False means 'hybrid' "
+            "silently degraded to lexical-only"
+        ),
+    )
     truncated: bool = Field(False, description="Whether results were budget-truncated")
     notes: list[str] = Field(default_factory=list, description="Diagnostic notes")
 

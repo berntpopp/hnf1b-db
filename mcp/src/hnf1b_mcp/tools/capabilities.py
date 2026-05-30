@@ -36,9 +36,14 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:  # noqa: ARG001
         with character budgets, pagination limits, citation contract, error
         codes, data-class taxonomy, v1 exclusions, and safety notices.
 
-        Call this tool first when starting a new session to orient yourself
-        before using any other HNF1B tool.  No arguments are required and no
-        API call is made — the response is assembled from server-local data.
+        Calling this is RECOMMENDED for orientation in a new/cold session but
+        is OPTIONAL: tools with enum-constrained filters advertise them in
+        `filterable_fields`, so many valid calls can be built without a cold
+        capabilities load. A
+        warm client should compare the returned `capabilities_version` content
+        hash and skip re-fetching this ~11k-char descriptor when it is
+        unchanged.  No arguments are required and no API call is made — the
+        response is assembled from server-local data.
 
         Returns:
             A dict with keys ``canonical_workflows``, ``tools``,

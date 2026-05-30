@@ -43,6 +43,29 @@ _SEX_VOCAB_RESP = {
     ]
 }
 
+# The REAL backend HPO autocomplete (SELECT … similarity(label, q) AS
+# similarity_score …) returns a pg_trgm trigram relevance score per row,
+# 0–1, higher = better. The MCP must forward it verbatim onto a ``score`` key
+# so a client can rank strong vs. weak HPO matches.
+_HPO_AUTOCOMPLETE_RESP_SCORED = {
+    "data": [
+        {
+            "hpo_id": "HP:0000107",
+            "label": "Renal cyst",
+            "description": "Fluid-filled sacs in the kidney.",
+            "similarity_score": 0.9,
+            "phenopacket_count": 42,
+        },
+        {
+            "hpo_id": "HP:0000083",
+            "label": "Renal insufficiency",
+            "description": "Reduced ability of the kidney to filter waste.",
+            "similarity_score": 0.25,
+            "phenopacket_count": 7,
+        },
+    ]
+}
+
 # The REAL backend sex vocabulary is ``value``-keyed (no ``id`` column), with a
 # Title-cased ``label``. The mapper must fall back to ``value`` for the id so
 # the returned id is the "MALE"/"FEMALE" token the get_individuals(sex=…) filter
@@ -134,6 +157,51 @@ async def test_resolve_terms_hpo_passes_q_param() -> None:
 
     req_url = str(route.calls[0].request.url)
     assert "q=kidney" in req_url
+
+
+# ---------------------------------------------------------------------------
+# HPO relevance score forwarding — the backend computes a per-hit trigram
+# ``similarity_score`` (0–1, higher = better). The MCP must forward it verbatim
+# onto a ``score`` key so a client can rank strong vs. weak HPO matches.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_resolve_terms_hpo_forwards_similarity_score() -> None:
+    """Each HPO hit's backend ``similarity_score`` forwards verbatim as ``score``."""
+    respx.get(f"{BASE}/ontology/hpo/autocomplete").mock(
+        return_value=httpx.Response(200, json=_HPO_AUTOCOMPLETE_RESP_SCORED)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await resolve_terms(c, text="renal cyst", vocabulary="hpo")
+    await c.aclose()
+
+    matches = result["matches"]
+    assert matches[0]["id"] == "HP:0000107"
+    assert matches[0]["score"] == 0.9
+    assert matches[1]["id"] == "HP:0000083"
+    assert matches[1]["score"] == 0.25
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_resolve_terms_hpo_without_score_omits_key() -> None:
+    """An HPO hit lacking ``similarity_score`` shapes cleanly with NO ``score``.
+
+    The forward must be guarded so a missing score never crashes and never
+    fabricates a misleading value (e.g. a 0 that looks like a real weak match).
+    """
+    respx.get(f"{BASE}/ontology/hpo/autocomplete").mock(
+        return_value=httpx.Response(200, json=_HPO_AUTOCOMPLETE_RESP)
+    )
+    c = ApiClient(base_url=BASE)
+    result = await resolve_terms(c, text="renal", vocabulary="hpo")
+    await c.aclose()
+
+    assert len(result["matches"]) == 2
+    for match in result["matches"]:
+        assert "score" not in match
 
 
 # ---------------------------------------------------------------------------
