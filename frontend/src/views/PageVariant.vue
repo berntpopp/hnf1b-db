@@ -514,11 +514,12 @@
               </span>
             </div>
 
-            <v-data-table
+            <AppDataTable
               :headers="headers"
               :items="phenopacketsWithVariant"
-              density="comfortable"
+              :server-side="false"
               :items-per-page="10"
+              density="comfortable"
               class="elevation-0"
             >
               <!-- Subject ID as clickable chip with icon -->
@@ -544,7 +545,65 @@
                   {{ formatSex(item.subject_sex) }}
                 </v-chip>
               </template>
-            </v-data-table>
+
+              <!-- Phenotype count chip with hover/focus/tap tooltip listing terms -->
+              <template #item.phenotype_count="{ item }">
+                <v-tooltip
+                  location="top"
+                  max-width="340"
+                  open-on-hover
+                  open-on-focus
+                  open-on-click
+                  :aria-label="`${item.phenotype_count} phenotype(s)`"
+                >
+                  <template #activator="{ props }">
+                    <v-chip
+                      v-bind="props"
+                      :color="item.phenotype_count > 0 ? 'green-lighten-3' : 'grey-lighten-2'"
+                      size="x-small"
+                      variant="flat"
+                      tabindex="0"
+                      role="button"
+                      class="pheno-count-chip"
+                      :aria-label="`${item.phenotype_count} phenotype(s); activate for details`"
+                    >
+                      {{ item.phenotype_count }} phenotype{{
+                        item.phenotype_count === 1 ? '' : 's'
+                      }}
+                    </v-chip>
+                  </template>
+
+                  <div class="pheno-tooltip">
+                    <div v-if="item.phenotype_present.length" class="pheno-tooltip-group">
+                      <div class="pheno-tooltip-title">Present</div>
+                      <div
+                        v-for="t in item.phenotype_present"
+                        :key="t.id"
+                        class="pheno-tooltip-row"
+                      >
+                        {{ t.label }} <span class="pheno-tooltip-id">{{ t.id }}</span>
+                      </div>
+                    </div>
+                    <div v-if="item.phenotype_excluded.length" class="pheno-tooltip-group">
+                      <div class="pheno-tooltip-title">Excluded</div>
+                      <div
+                        v-for="t in item.phenotype_excluded"
+                        :key="t.id"
+                        class="pheno-tooltip-row"
+                      >
+                        {{ t.label }} <span class="pheno-tooltip-id">{{ t.id }}</span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="!item.phenotype_present.length && !item.phenotype_excluded.length"
+                      class="pheno-tooltip-row"
+                    >
+                      No phenotypes recorded.
+                    </div>
+                  </div>
+                </v-tooltip>
+              </template>
+            </AppDataTable>
           </v-card>
         </v-col>
       </v-row>
@@ -564,6 +623,7 @@ import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
+import AppDataTable from '@/components/common/AppDataTable.vue';
 import {
   extractCNotation,
   extractPNotation,
@@ -573,6 +633,7 @@ import {
 import { getPathogenicityColor } from '@/utils/colors';
 import { getVariantType, isCNV, getCNVDetails, getVariantSize } from '@/utils/variants';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { summarizePhenotypes } from '@/utils/phenotypeMatrix';
 import {
   useVariantSeo,
   useVariantStructuredData,
@@ -585,6 +646,7 @@ export default {
     HNF1BGeneVisualization,
     HNF1BProteinVisualization,
     ProteinStructure3D,
+    AppDataTable,
   },
   setup() {
     const route = useRoute();
@@ -661,6 +723,13 @@ export default {
           value: 'subject_sex',
           sortable: true,
           width: '120px',
+        },
+        {
+          title: 'Phenotypes',
+          value: 'phenotype_count',
+          sortable: true,
+          width: '170px',
+          align: 'start',
         },
         {
           title: 'Added',
@@ -795,16 +864,24 @@ export default {
         }
 
         const phenopacketsResponse = await getPhenopacketsByVariant(variantId);
-        this.phenopacketsWithVariant = phenopacketsResponse.data.map((pp) => ({
-          phenopacket_id: pp.phenopacket_id,
-          subject_id: pp.phenopacket?.subject?.id || 'N/A',
-          subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
-          created_at: new Date(pp.created_at).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          }),
-        }));
+        this.phenopacketsWithVariant = phenopacketsResponse.data.map((pp) => {
+          const features = pp.phenopacket?.phenotypicFeatures ?? [];
+          const summary = summarizePhenotypes(features);
+          return {
+            phenopacket_id: pp.phenopacket_id,
+            subject_id: pp.phenopacket?.subject?.id || 'N/A',
+            subject_sex: pp.phenopacket?.subject?.sex || 'UNKNOWN_SEX',
+            created_at: new Date(pp.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            }),
+            phenotypic_features: features,
+            phenotype_count: summary.presentCount,
+            phenotype_present: summary.present,
+            phenotype_excluded: summary.excluded,
+          };
+        });
 
         // Update SEO meta tags with variant data for mutation discoverability
         this.updateSeoVariant(this.variant);
@@ -1035,5 +1112,32 @@ export default {
 
 .gap-3 {
   gap: 12px;
+}
+
+.pheno-count-chip {
+  cursor: help;
+}
+.pheno-tooltip {
+  font-size: 12px;
+  line-height: 1.35;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.pheno-tooltip-group {
+  margin-bottom: 6px;
+}
+.pheno-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-bottom: 2px;
+}
+.pheno-tooltip-row {
+  font-size: 11px;
+}
+.pheno-tooltip-id {
+  font-family: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 10px;
+  opacity: 0.75;
 }
 </style>

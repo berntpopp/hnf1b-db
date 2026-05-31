@@ -40,6 +40,11 @@ const phenopacketSample = {
   created_at: '2024-01-15T00:00:00Z',
   phenopacket: {
     subject: { id: 'SUB-001', sex: 'FEMALE' },
+    phenotypicFeatures: [
+      { type: { id: 'HP:0000107', label: 'Renal cyst' }, excluded: false },
+      { type: { id: 'HP:0004904', label: 'MODY' } },
+      { type: { id: 'HP:0000365', label: 'Hearing impairment' }, excluded: true },
+    ],
   },
 };
 
@@ -158,5 +163,14 @@ describe('PageVariant.vue (characterization)', () => {
     // phenopackets endpoint with the route param.
     expect(api.getVariants).toHaveBeenCalled();
     expect(api.getPhenopacketsByVariant).toHaveBeenCalledWith('VAR-001');
+  });
+
+  it('retains phenotypic features and exposes a present-only phenotype count', async () => {
+    const wrapper = await mountPageVariant();
+    await flushPromises();
+    const row = wrapper.vm.phenopacketsWithVariant[0];
+    expect(row.phenotype_count).toBe(2); // excluded Hearing impairment not counted
+    expect(row.phenotypic_features).toHaveLength(3);
+    expect(wrapper.html()).toContain('2 phenotypes');
   });
 });
