@@ -546,13 +546,13 @@
       <v-row class="mt-3">
         <v-col cols="12" class="text-center">
           <v-btn-group density="compact">
-            <v-btn size="small" @click="zoomIn">
+            <v-btn size="small" aria-label="Zoom in" data-testid="zoom-in" @click="zoomIn">
               <v-icon>mdi-magnify-plus</v-icon>
             </v-btn>
-            <v-btn size="small" @click="zoomOut">
+            <v-btn size="small" aria-label="Zoom out" data-testid="zoom-out" @click="zoomOut">
               <v-icon>mdi-magnify-minus</v-icon>
             </v-btn>
-            <v-btn size="small" @click="resetZoom">
+            <v-btn size="small" aria-label="Reset zoom" data-testid="zoom-reset" @click="resetZoom">
               <v-icon>mdi-magnify</v-icon>
               Reset
             </v-btn>

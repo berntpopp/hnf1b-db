@@ -77,18 +77,25 @@ describe('HNF1BGeneVisualization.vue (characterization)', () => {
     expect(wrapper.find('svg').exists()).toBe(true);
   });
 
-  // ZOOM BUG: currently broken per 2026-04-09 review (issue #92).
-  // Wave 5 decomposition should fix this. When fixed, remove `.fails`.
-  it.fails('zoom in button increases the visible scale', async () => {
+  // Zoom-in is now accessibly labelled (data-testid="zoom-in" / aria-label="Zoom in")
+  // and applies a d3 zoom transform (via a short transition) to #zoom-group.
+  it('zoom in button increases the visible scale', async () => {
     const wrapper = makeWrapper();
-    const zoomIn = wrapper.find('[data-testid="zoom-in"], button[aria-label*="zoom in" i]');
-    if (!zoomIn.exists()) {
-      throw new Error('zoom-in button not found — rendering already diverged');
-    }
-    const before = wrapper.find('svg g.zoomable, svg g').attributes('transform') || '';
+    const zoomIn = wrapper.find('[data-testid="zoom-in"]');
+    expect(zoomIn.exists()).toBe(true);
+
+    const transform = () => wrapper.find('#zoom-group').attributes('transform') || '';
+    const before = transform();
     await zoomIn.trigger('click');
-    const after = wrapper.find('svg g.zoomable, svg g').attributes('transform') || '';
+
+    // zoomIn() animates via a d3 transition, so the transform lands asynchronously.
+    await vi.waitFor(() => expect(transform()).toMatch(/scale\(/), {
+      timeout: 2000,
+      interval: 25,
+    });
+
+    const after = transform();
     expect(after).not.toBe(before);
-    expect(after).toContain('scale');
+    expect(after).toMatch(/scale\(/);
   });
 });
