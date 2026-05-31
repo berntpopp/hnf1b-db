@@ -3,7 +3,11 @@
 - **Date:** 2026-05-31
 - **Status:** Approved (design); pending implementation plan
 - **Branch:** `feat/pheno-variant-ui-improvements`
+- **Location:** `.planning/specs/` — active, implementation-guiding spec
+  (per `AGENTS.md` §7–8 / `.planning/README.md`; `docs/` is durable reference only).
 - **Scope:** Frontend only. No backend, API, schema, DB, or migration changes.
+  "Frontend-only" here means **client-side**: any table pagination/sorting stays
+  client-side (no server-driven data fetching is introduced).
 
 ## 1. Motivation
 
@@ -23,13 +27,14 @@ make.
 
 ## 2. Goals
 
-- **G1.** Hover tooltip on the phenopacket ACMG classification badge showing the
-  applied criteria as color-coded chips with plain-English meanings.
+- **G1.** Tooltip (revealed on hover, keyboard focus, and tap) on the
+  phenopacket ACMG classification badge showing the applied criteria as
+  color-coded chips with plain-English meanings.
 - **G2.** Make the phenopacket→variant link obvious: a labelled "View variant"
   button instead of a bare arrow.
 - **G3.** Add a Phenotypes column to the variant page's Affected Individuals
-  table: a present-only count chip with a hover tooltip listing all terms
-  (excluded terms grouped separately).
+  table: a present-only count chip with a tooltip (hover/focus/tap) listing all
+  terms (excluded terms grouped separately).
 - **G4.** Add a graphical individual × phenotype heatmap on the variant page,
   colored by organ system, below the Affected Individuals table.
 
@@ -148,14 +153,35 @@ the 13 currently in data.
 - Body (CNV): one list of section chips `[4C ×1 · +0.15]` + meaning; footer =
   "Total score: <totalPoints>".
 - Empty / missing criteria → body = "No ACMG criteria recorded."
-- Accessibility: activator gets `tabindex="0"`, `style="cursor: help"`, and an
-  `:aria-label` summarizing verdict + criteria; tooltip content is decorative
-  duplicate.
+- **Accessibility (the tooltip is the ONLY source of the plain-English criteria
+  meanings — it is not a decorative duplicate):** the activator must surface the
+  same information across input modalities.
+  - Open on hover **and** focus **and** click/tap: `<v-tooltip open-on-hover
+    open-on-focus open-on-click>` so keyboard and touch users can read it (the
+    default v-tooltip is hover+focus only, which strands touch users).
+  - Activator (the badge) is focusable (`tabindex="0"`, `role="button"`,
+    `style="cursor: help"`) with an `:aria-label` that enumerates the criteria
+    in text (e.g. "Pathogenic per ACMG: PS2 Strong, PM1 Moderate, …") so the
+    meanings are reachable by screen readers even though the visual chips live
+    in the tooltip overlay.
+  - The tooltip body uses `role="tooltip"`. If click/tap interaction with a
+    `v-tooltip` proves unreliable on the badge, fall back to a `v-menu`
+    (click/tap-toggle) wrapping the same content — decide during implementation,
+    but the requirement (hover + focus + tap all reveal the criteria) is fixed.
 
-The criteria are read from the interpretation object the card already loops
-over: add a `getClassificationCriteria(interpretation)` method that reads
-`...genomicInterpretations[0].variantInterpretation.extensions.find(e => e.name
-=== 'classification_criteria')?.value`.
+**Which value is the verdict, and multi-interpretation handling:** the visible
+badge today renders `getInterpretationStatus(interpretation)` =
+`interpretation.diagnosis.genomicInterpretations[0].interpretationStatus`
+(InterpretationsCard.vue L171-174) — **not**
+`variantInterpretation.acmgPathogenicityClassification`. This spec keeps that
+exact verdict source unchanged. Consistent with the card's existing behavior,
+**only the first genomic interpretation (`[0]`) is surfaced**; additional
+`genomicInterpretations` / additional `interpretations[]` entries are not
+rendered (pre-existing behavior, unchanged here). The criteria tooltip reads
+from the **same `[0]` interpretation** so the verdict and its criteria always
+correspond. Implementation: add `getClassificationCriteria(interpretation)`
+reading `...genomicInterpretations[0].variantInterpretation.extensions
+.find(e => e.name === 'classification_criteria')?.value`.
 
 ### G2 — "View variant" button
 
@@ -185,19 +211,33 @@ with a labelled button:
 
 In `PageVariant.vue`:
 
+0. **Convention alignment (per review):** the Affected Individuals table is
+   currently the lone view still on a raw `<v-data-table>` (PageVariant.vue
+   L517); every other list view uses the shared `AppDataTable`
+   (`components/common/AppDataTable.vue`, used by Publications, PagePublication,
+   Phenopackets, Variants). Since we are modifying this table, **migrate it to
+   `AppDataTable` with `:server-side="false"`** (client-side pagination + sort
+   over the already-fully-loaded `phenopacketsWithVariant` array). This stays
+   frontend-only and introduces **no** server-driven behavior. (If migration
+   proves disproportionate during implementation, the fallback is to keep the
+   raw `v-data-table` and document it as a deliberate exception — but
+   `AppDataTable serverSide=false` is the preferred, convention-aligned path.)
 1. Retain phenotype data in the row map (~L798-807):
    `phenotypic_features: pp.phenopacket?.phenotypicFeatures ?? []`,
-   `phenotype_count: <count where !excluded>`.
-2. Add a `Phenotypes` header to `headers` (L653-671), `value: 'phenotype_count'`,
-   `sortable: true`, width ~160px, placed between Sex and Added.
+   `phenotype_count: <count of present (non-excluded) features>`.
+2. Add a `Phenotypes` column, `value: 'phenotype_count'`, `sortable: true`,
+   width ~160px, placed between Sex and Added.
 3. Custom cell slot: a count chip — `<v-chip size="x-small"
    :color="count > 0 ? 'green-lighten-3' : 'grey-lighten-2'">{{ count }}
-   phenotype(s)</v-chip>` — wrapped in a `v-tooltip` whose body lists each
+   phenotype(s)</v-chip>` — wrapped in a tooltip/menu whose body lists each
    **present** term as `label (HP:id)` and, if any, an **"Excluded"** subsection
-   listing excluded terms. Cap the visible tooltip list height with scroll for
-   very long lists. Mirrors the existing `features_count` pattern in
-   `PagePublication.vue` (L304-309) plus the tooltip pattern from
-   `PhenotypicFeaturesCard.vue`.
+   listing excluded terms. As with G1, the chip activator opens on **hover +
+   focus + click/tap**, is focusable (`tabindex="0"`), and carries an
+   `:aria-label` with the present-term count so the information is reachable by
+   keyboard/touch/screen-reader (the term list is the only place these appear in
+   the table). Cap the visible list height with scroll for long lists. Mirrors
+   the existing `features_count` pattern in `PagePublication.vue` (L304-309)
+   plus the tooltip pattern from `PhenotypicFeaturesCard.vue`.
 
 Count semantics: **present-only** (`!excluded`) for the chip number and the
 sort key; excluded terms appear only inside the tooltip.
@@ -228,11 +268,24 @@ chartName?: string  // for export menu
   system** (via `getOrganSystem(hpoId)` / `ORGAN_SYSTEMS` / `getCategoryColor`
   from `utils/ageParser.js`), a thin colored band + label per group; within a
   group, columns ordered by descending cohort frequency.
+  - **Caveat (per review):** `getOrganSystem()` is a **frontend numeric-range
+    heuristic** over the HPO numeric ID (`utils/ageParser.js` L115+), **not**
+    an ontology-backed classification. This is acceptable for the frontend-only
+    scope and is the same grouping the existing `PhenotypeTimeline.vue` uses, so
+    the two views stay consistent. Terms it cannot place fall into `other`. An
+    ontology-backed grouping (the existing `GET /ontology/hpo/grouped` via
+    `useGroupedHPO()`) is a possible future enhancement but is out of scope here
+    (extra fetch, no backend change needed but added complexity).
 - **Cell encoding (tri-state):** present = filled cell in the column's
   organ-system color; excluded = hollow/outlined muted cell (distinct from
   not-reported); not-reported (term absent from that individual's list) =
   empty/very-faint cell.
-- **Hover tooltip:** HPO label + `HP:id` + organ system + status
+- **Cell interaction (hover is not the only path):** each cell is keyboard
+  focusable (`tabindex="0"`, `role="img"` with an `aria-label` = "<individual> —
+  <term>: present/excluded/not reported"); the same detail tooltip opens on
+  hover **and** focus. Touch users get the full matrix via the export/data-table
+  fallback (below); hover-only detail is never the sole route to the data.
+- **Hover/focus tooltip:** HPO label + `HP:id` + organ system + status
   (present/excluded/not reported) + onset label when available.
 - **Scaling:** if the term union exceeds `maxTerms`, show the top-N most
   frequent and an "Show all N terms" expand toggle; rows scroll vertically when
@@ -244,6 +297,28 @@ chartName?: string  // for export menu
 - **Empty state:** when no individual has any phenotype, render a friendly
   "No phenotype data recorded for this variant's carriers" placeholder instead
   of an empty grid.
+
+**Data semantics & edge cases (per review) — pin these down in the aggregator:**
+
+- **Duplicate HPO terms within one individual:** dedupe by `type.id` per
+  individual before building the matrix. **Precedence if the same term appears
+  both present and excluded for one individual: `present` wins** (a positive
+  observation overrides a negation), and that pairing is flagged in the cell's
+  tooltip ("also reported excluded") so the conflict is visible, not silently
+  dropped.
+- **Top-N column frequency ranking counts PRESENT observations only** (a term's
+  rank = number of individuals with it present). Excluded-only terms rank after
+  present ones; an excluded-only term still renders its column (with all-excluded
+  cells) unless it falls outside the `maxTerms` cap.
+- **Row-label links:** rendered as real, focusable links to
+  `/phenopackets/{phenopacket_id}`. In SVG, use a `<foreignObject>` wrapping a
+  `<router-link>` (preferred — keeps SPA routing + native a11y/focus/keyboard),
+  or an SVG `<a>` with a programmatic `router.push` `@click`/`@keydown.enter`
+  plus `role="link"` `tabindex="0"`. No full-page reload.
+- **Scroll vs. export:** on-screen vertical scrolling (large cohorts) and the
+  `maxTerms` collapse are **view-only**. PNG/SVG/CSV export renders the **full,
+  untruncated, unscrolled** matrix (all individuals × all terms) so an exported
+  figure is never silently cropped to the viewport.
 
 **Wire-in:** in `PageVariant.vue`, render `<PhenotypeHeatmap>` in its own
 `<v-card>` titled "Phenotype Profile" directly below the Affected Individuals
@@ -261,28 +336,47 @@ dark backgrounds. Cell strokes use theme tokens.
 **New:**
 - `frontend/src/utils/acmgCriteria.js` — parser + ACMG & ClinGen CNV maps.
 - `frontend/src/components/analyses/PhenotypeHeatmap.vue` — heatmap.
-- Unit tests: `acmgCriteria.spec.js`, `PhenotypeHeatmap.spec.js` (+ light tests
-  for the new InterpretationsCard / PageVariant behavior as fits existing test
-  layout).
+- Unit tests (under `frontend/tests/unit/`, matching the existing layout):
+  `utils/acmgCriteria.spec.js`,
+  `components/analyses/PhenotypeHeatmap.spec.js`, and extend the existing
+  `views/PageVariant.spec.js` for the retained-phenotypes/column behavior.
 
 **Edited:**
 - `frontend/src/components/phenopacket/InterpretationsCard.vue` — G1 tooltip + G2 button.
-- `frontend/src/views/PageVariant.vue` — G3 column + G4 heatmap wire-in + retain `phenotypicFeatures`.
+- `frontend/src/views/PageVariant.vue` — retain `phenotypicFeatures` in the row
+  map; migrate the Affected Individuals table to `AppDataTable`
+  (`:server-side="false"`); G3 Phenotypes column; G4 heatmap wire-in.
+
+**Reused (not modified):** `components/common/AppDataTable.vue`,
+`components/analyses/ChartExportMenu.vue`, `composables/useChartAccessibility.js`,
+`utils/ageParser.js` (`getOrganSystem`/`ORGAN_SYSTEMS`/`getCategoryColor`),
+`components/phenopacket/PhenotypicFeaturesCard.vue` (tooltip pattern/CSS).
 
 ## 7. Testing & verification
 
 - **Unit (vitest):** `parseClassificationCriteria` across ACMG multi-criterion
   strings, single `BP4_Supporting`, benign+pathogenic mix, ClinGen CNV with
   points + total, unknown code, empty string, `null`. Heatmap aggregation
-  (present/excluded/not-reported tri-state, organ-system grouping, ordering,
-  maxTerms cap).
-- **Lint/format/build:** the frontend CI gate runs vitest + eslint + prettier
-  (`src` & `tests`) + build. Run `prettier --write` before commit.
-- **Playwright manual verification:** `/phenopackets/phenopacket-892` (hover the
-  badge → criteria tooltip; "View variant" button visible & navigates) and
-  `/variants/ga4gh:VA.PuNUJ-j-dgkKwAF2ZRDuY1usqx5VyJYG` (Phenotypes column +
-  tooltip; heatmap renders, hover a cell, export menu) — in **both** light and
-  dark themes.
+  (present/excluded/not-reported tri-state, duplicate-term dedupe with
+  present-wins precedence, organ-system grouping, frequency ordering on present
+  counts, `maxTerms` cap, export-renders-full-matrix).
+- **Exact CI-equivalent gate (run all four locally from `frontend/`, in this
+  order, before committing).** The local `npm run format` only covers `src/`,
+  but CI's prettier check covers **`{src,tests}`** — so new test files can pass
+  locally yet fail CI. Use the CI-equivalent prettier glob:
+  1. `npm run test` — vitest (`vitest run`).
+  2. `npm run lint` — `eslint . --ext .vue,.js,.jsx --fix`.
+  3. Format to the CI glob, then verify:
+     `npx prettier --write "{src,tests}/**/*.{js,jsx,vue,json,css,scss,md}"`
+     then `npx prettier --check "{src,tests}/**/*.{js,jsx,vue,json,css,scss,md}"`
+     (CI runs exactly this `--check`, `.github/workflows/ci.yml` L190).
+  4. `npm run build` — `vite build` (CI runs this, ci.yml L194).
+- **Playwright manual verification:** `/phenopackets/phenopacket-892` (badge
+  criteria tooltip opens on hover **and** keyboard focus **and** click/tap;
+  "View variant" button visible & navigates) and
+  `/variants/ga4gh:VA.PuNUJ-j-dgkKwAF2ZRDuY1usqx5VyJYG` (Phenotypes column chip +
+  tooltip; heatmap renders, focus/hover a cell, row-label link navigates, export
+  menu emits full matrix) — in **both** light and dark themes.
 
 ## 8. Risks
 
