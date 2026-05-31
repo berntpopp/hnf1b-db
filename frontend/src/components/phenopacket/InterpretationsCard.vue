@@ -142,17 +142,24 @@
               </div>
             </v-tooltip>
 
-            <!-- View details button -->
-            <v-btn
-              v-if="getVariantId(interpretation)"
-              :to="`/variants/${encodeURIComponent(getVariantId(interpretation))}`"
-              color="deep-purple"
-              variant="text"
-              size="x-small"
-              icon="mdi-arrow-right"
-              density="compact"
-              class="ml-1"
-            />
+            <!-- View variant button -->
+            <v-tooltip location="top" text="Open full variant details">
+              <template #activator="{ props }">
+                <v-btn
+                  v-if="getVariantId(interpretation)"
+                  v-bind="props"
+                  :to="`/variants/${encodeURIComponent(getVariantId(interpretation))}`"
+                  color="deep-purple"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-arrow-right"
+                  class="ml-1"
+                  aria-label="View full variant details"
+                >
+                  View variant
+                </v-btn>
+              </template>
+            </v-tooltip>
           </div>
 
           <!-- Row 2: Secondary info - coordinates, size, consequence -->
