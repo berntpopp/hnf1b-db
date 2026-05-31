@@ -173,4 +173,11 @@ describe('PageVariant.vue (characterization)', () => {
     expect(row.phenotypic_features).toHaveLength(3);
     expect(wrapper.html()).toContain('2 phenotypes');
   });
+
+  it('renders the phenotype heatmap fed by retained features', async () => {
+    const wrapper = await mountPageVariant();
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'PhenotypeHeatmap' }).exists()).toBe(true);
+    expect(wrapper.vm.heatmapIndividuals[0].features).toHaveLength(3);
+  });
 });

@@ -605,6 +605,25 @@
               </template>
             </AppDataTable>
           </v-card>
+
+          <!-- PHENOTYPE PROFILE HEATMAP -->
+          <v-card
+            v-if="phenopacketsWithVariant.length > 0"
+            variant="outlined"
+            class="border-opacity-12 mt-4"
+            rounded="lg"
+          >
+            <div class="d-flex align-center px-4 py-2 bg-grey-lighten-4 border-bottom">
+              <v-icon color="purple-darken-2" class="mr-2">mdi-grid</v-icon>
+              <span class="text-h6 font-weight-medium">Phenotype Profile</span>
+            </div>
+            <div class="pa-4">
+              <PhenotypeHeatmap
+                :individuals="heatmapIndividuals"
+                chart-name="Phenotype profile across affected individuals"
+              />
+            </div>
+          </v-card>
         </v-col>
       </v-row>
     </v-container>
@@ -624,6 +643,7 @@ import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
 import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
 import AppDataTable from '@/components/common/AppDataTable.vue';
+import PhenotypeHeatmap from '@/components/analyses/PhenotypeHeatmap.vue';
 import {
   extractCNotation,
   extractPNotation,
@@ -647,6 +667,7 @@ export default {
     HNF1BProteinVisualization,
     ProteinStructure3D,
     AppDataTable,
+    PhenotypeHeatmap,
   },
   setup() {
     const route = useRoute();
@@ -751,6 +772,13 @@ export default {
           disabled: true,
         },
       ];
+    },
+    heatmapIndividuals() {
+      return this.phenopacketsWithVariant.map((row) => ({
+        phenopacketId: row.phenopacket_id,
+        subjectId: row.subject_id,
+        features: row.phenotypic_features || [],
+      }));
     },
   },
   watch: {
