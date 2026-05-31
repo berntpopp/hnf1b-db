@@ -68,4 +68,21 @@ describe('PhenotypeHeatmap', () => {
     // …but the CSV export carries all 4 terms plus the leading 'individual' column.
     expect(w.vm.exportColumns).toHaveLength(5);
   });
+
+  it('keeps the collapse toggle visible after expanding to all terms', async () => {
+    const many = {
+      phenopacketId: 'p-z',
+      subjectId: 'Z',
+      features: Array.from({ length: 4 }, (_, i) => f(`HP:000010${i}`, `Term ${i}`)),
+    };
+    const w = mountHeatmap({ individuals: [many], chartName: 'H', maxTerms: 2 });
+    // truncated initially → expand button present
+    expect(w.find('.heatmap-expand').exists()).toBe(true);
+    expect(w.find('.heatmap-expand').text()).toContain('Show all');
+    // expand
+    await w.find('.heatmap-expand').trigger('click');
+    // control stays visible and now offers collapse
+    expect(w.find('.heatmap-expand').exists()).toBe(true);
+    expect(w.find('.heatmap-expand').text()).toContain('Show top');
+  });
 });

@@ -16,7 +16,7 @@
 
     <template v-else>
       <div ref="chart" aria-hidden="true" />
-      <div v-if="matrix.truncated" class="heatmap-truncation">
+      <div v-if="matrix.truncated || showAll" class="heatmap-truncation">
         Showing the {{ matrix.shownTerms }} most frequent of {{ matrix.totalTerms }} phenotypes.
         <button type="button" class="heatmap-expand" @click="showAll = !showAll">
           {{ showAll ? 'Show top phenotypes' : `Show all ${matrix.totalTerms}` }}
