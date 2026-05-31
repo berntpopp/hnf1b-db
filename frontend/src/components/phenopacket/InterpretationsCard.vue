@@ -50,27 +50,116 @@
             <!-- Spacer -->
             <div class="flex-grow-1" />
 
-            <!-- Classification badge -->
-            <v-chip
-              :color="getStatusColor(getInterpretationStatus(interpretation))"
-              size="x-small"
-              variant="flat"
-              class="classification-chip"
+            <!-- Classification badge with ACMG criteria tooltip -->
+            <v-tooltip
+              location="top"
+              max-width="360"
+              open-on-hover
+              open-on-focus
+              open-on-click
+              :aria-label="criteriaAriaLabel(interpretation)"
             >
-              {{ getStatusLabel(getInterpretationStatus(interpretation)) }}
-            </v-chip>
+              <template #activator="{ props }">
+                <v-chip
+                  v-bind="props"
+                  :color="getStatusColor(getInterpretationStatus(interpretation))"
+                  size="x-small"
+                  variant="flat"
+                  class="classification-chip acmg-badge"
+                  tabindex="0"
+                  role="button"
+                  :aria-label="criteriaAriaLabel(interpretation)"
+                >
+                  {{ getStatusLabel(getInterpretationStatus(interpretation)) }}
+                </v-chip>
+              </template>
 
-            <!-- View details button -->
-            <v-btn
-              v-if="getVariantId(interpretation)"
-              :to="`/variants/${encodeURIComponent(getVariantId(interpretation))}`"
-              color="deep-purple"
-              variant="text"
-              size="x-small"
-              icon="mdi-arrow-right"
-              density="compact"
-              class="ml-1"
-            />
+              <div class="acmg-tooltip">
+                <div class="acmg-tooltip-header">
+                  <strong>{{ getStatusLabel(getInterpretationStatus(interpretation)) }}</strong>
+                  <span class="acmg-guideline">{{ getCriteria(interpretation).guideline }}</span>
+                </div>
+
+                <!-- ACMG: grouped pathogenic / benign evidence -->
+                <template
+                  v-if="
+                    getCriteria(interpretation).pathogenic.length ||
+                    getCriteria(interpretation).benign.length
+                  "
+                >
+                  <div v-if="getCriteria(interpretation).pathogenic.length" class="acmg-group">
+                    <div class="acmg-group-title">Pathogenic evidence</div>
+                    <div
+                      v-for="c in getCriteria(interpretation).pathogenic"
+                      :key="c.code"
+                      class="acmg-row"
+                    >
+                      <v-chip :color="acmgChipColor(c)" size="x-small" variant="flat" label>
+                        {{ c.code }}<template v-if="c.strength"> · {{ c.strength }}</template>
+                      </v-chip>
+                      <span class="acmg-desc">{{ c.label }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="getCriteria(interpretation).benign.length" class="acmg-group">
+                    <div class="acmg-group-title">Benign evidence</div>
+                    <div
+                      v-for="c in getCriteria(interpretation).benign"
+                      :key="c.code"
+                      class="acmg-row"
+                    >
+                      <v-chip :color="acmgChipColor(c)" size="x-small" variant="flat" label>
+                        {{ c.code }}<template v-if="c.strength"> · {{ c.strength }}</template>
+                      </v-chip>
+                      <span class="acmg-desc">{{ c.label }}</span>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- ClinGen CNV: scored sections -->
+                <template v-else-if="getCriteria(interpretation).cnv.length">
+                  <div class="acmg-group">
+                    <div
+                      v-for="c in getCriteria(interpretation).cnv"
+                      :key="c.section"
+                      class="acmg-row"
+                    >
+                      <v-chip :color="cnvChipColor(c.points)" size="x-small" variant="flat" label>
+                        {{ c.section }}<template v-if="c.count > 1"> ×{{ c.count }}</template
+                        ><template v-if="c.points != null">
+                          · {{ c.points > 0 ? '+' : '' }}{{ c.points }}
+                        </template>
+                      </v-chip>
+                      <span class="acmg-desc">{{ c.label }}</span>
+                    </div>
+                    <div v-if="getCriteria(interpretation).totalPoints != null" class="acmg-footer">
+                      Total score: {{ getCriteria(interpretation).totalPoints }}
+                    </div>
+                  </div>
+                </template>
+
+                <div v-else class="acmg-empty">No classification criteria recorded.</div>
+              </div>
+            </v-tooltip>
+
+            <!-- View variant button -->
+            <v-tooltip location="top" text="Open full variant details">
+              <template #activator="{ props }">
+                <v-btn
+                  v-if="getVariantId(interpretation)"
+                  v-bind="props"
+                  :to="`/variants/${encodeURIComponent(getVariantId(interpretation))}`"
+                  color="deep-purple"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-arrow-right"
+                  class="ml-1"
+                  aria-label="View full variant details"
+                >
+                  View variant
+                </v-btn>
+              </template>
+            </v-tooltip>
           </div>
 
           <!-- Row 2: Secondary info - coordinates, size, consequence -->
@@ -116,6 +205,7 @@ import {
 } from '@/utils/cardStyles';
 import { getVariantType, getVariantSize } from '@/utils/variants';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
+import { parseClassificationCriteria, acmgChipColor, cnvChipColor } from '@/utils/acmgCriteria';
 
 export default {
   name: 'InterpretationsCard',
@@ -176,6 +266,31 @@ export default {
     getVariantId(interpretation) {
       const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
       return gi?.variantInterpretation?.variationDescriptor?.id || null;
+    },
+
+    getCriteria(interpretation) {
+      const gi = interpretation.diagnosis?.genomicInterpretations?.[0];
+      const ext = gi?.variantInterpretation?.extensions?.find(
+        (e) => e.name === 'classification_criteria'
+      );
+      const value = ext?.value || {};
+      return parseClassificationCriteria(value.criteria, value.guidelines);
+    },
+
+    acmgChipColor,
+    cnvChipColor,
+
+    criteriaAriaLabel(interpretation) {
+      const status = this.getStatusLabel(this.getInterpretationStatus(interpretation));
+      const c = this.getCriteria(interpretation);
+      const all = [...c.pathogenic, ...c.benign].map((x) =>
+        x.strength ? `${x.code} ${x.strength}` : x.code
+      );
+      const cnv = c.cnv.map((x) => x.section);
+      const codes = [...all, ...cnv];
+      return codes.length
+        ? `${status} per ${c.guideline}: ${codes.join(', ')}`
+        : `${status} — no classification criteria recorded`;
     },
 
     getVariantTypeFromInterpretation(interpretation) {
@@ -553,5 +668,55 @@ export default {
   .flex-grow-1 {
     display: none;
   }
+}
+
+.acmg-badge {
+  cursor: help;
+}
+.acmg-tooltip {
+  padding: 2px 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.acmg-tooltip-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+.acmg-guideline {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.acmg-group {
+  margin-top: 6px;
+}
+.acmg-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.acmg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.acmg-desc {
+  font-size: 11px;
+}
+.acmg-footer {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  opacity: 0.85;
+}
+.acmg-empty {
+  font-size: 11px;
+  opacity: 0.8;
 }
 </style>
