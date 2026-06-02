@@ -119,7 +119,7 @@ propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-protobuf==6.33.6
+protobuf==7.35.0
     # via
     #   hnf1b-api (pyproject.toml)
     #   phenopackets
