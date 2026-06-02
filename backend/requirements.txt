@@ -156,7 +156,7 @@ pyyaml==6.0.3
     # via
     #   hnf1b-api (pyproject.toml)
     #   uvicorn
-redis==7.4.0
+redis==8.0.0
     # via hnf1b-api (pyproject.toml)
 referencing==0.37.0
     # via
