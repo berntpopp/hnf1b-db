@@ -2,11 +2,11 @@
 #    uv pip compile pyproject.toml --all-extras --output-file requirements.txt
 aiohappyeyeballs==2.6.2
     # via aiohttp
-aiohttp==3.13.5
+aiohttp==3.14.1
     # via hnf1b-api (pyproject.toml)
 aiosignal==1.4.0
     # via aiohttp
-aiosmtplib==5.1.0
+aiosmtplib==5.1.1
     # via hnf1b-api (pyproject.toml)
 alembic==1.18.4
     # via hnf1b-api (pyproject.toml)
@@ -76,7 +76,7 @@ httptools==0.8.0
     # via uvicorn
 httpx==0.28.1
     # via hnf1b-api (pyproject.toml)
-idna==3.17
+idna==3.18
     # via
     #   anyio
     #   email-validator
@@ -150,7 +150,7 @@ python-dotenv==1.2.2
     #   hnf1b-api (pyproject.toml)
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.29
+python-multipart==0.0.32
     # via hnf1b-api (pyproject.toml)
 pyyaml==6.0.3
     # via
@@ -179,7 +179,7 @@ sqlalchemy==2.0.50
     # via
     #   hnf1b-api (pyproject.toml)
     #   alembic
-starlette==1.2.0
+starlette==1.2.1
     # via fastapi
 typing-extensions==4.15.0
     # via
@@ -201,7 +201,7 @@ typing-inspection==0.4.2
     #   pydantic-settings
 urllib3==2.7.0
     # via requests
-uvicorn==0.48.0
+uvicorn==0.49.0
     # via hnf1b-api (pyproject.toml)
 uvloop==0.22.1
     # via uvicorn
