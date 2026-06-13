@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_optional_user
 from app.database import get_db
 from app.middleware.rate_limiter import check_rate_limit, get_client_ip
 from app.models.json_api import JsonApiResponse
+from app.models.user import User
 from app.phenopackets.molecular_consequence import compute_molecular_consequence
 from app.phenopackets.variant_search_validation import (
     validate_classification,
@@ -91,6 +93,7 @@ async def aggregate_all_variants(
         None, description="Sort field with optional '-' prefix for descending"
     ),
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
 ):
     """Search and filter variants with offset pagination.
 
@@ -237,7 +240,7 @@ async def aggregate_all_variants(
     # Audit logging (GDPR compliance)
     log_variant_search(
         client_ip=get_client_ip(request),
-        user_id=None,
+        user_id=user.email if user else None,
         query=validated_query,
         variant_type=validated_variant_type,
         classification=validated_classification,
