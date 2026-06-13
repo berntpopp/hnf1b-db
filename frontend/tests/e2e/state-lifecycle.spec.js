@@ -27,27 +27,23 @@
  *
  * Credentials
  * -----------
- * Uses the admin account that is created by `make db-create-admin` /
- * `scripts/create_admin_user.py`.  In CI the E2E job runs that step
- * before starting Playwright.  Passwords are read from env vars with
- * sensible defaults for local dev.
+ * Uses the admin account created by `make db-create-admin` /
+ * `scripts/create_admin_user.py` (CI runs that step before Playwright).
  *
- * ADMIN_USERNAME defaults to "admin"
- * ADMIN_PASSWORD defaults to "ChangeMe!Admin2025"  (matches backend/.env.example)
- * API_URL       defaults to "http://localhost:8000/api/v2"
+ * Admin auth is resolved by `loginAsAdmin` (helpers/auth.js): the
+ * E2E_ADMIN_USERNAME/E2E_ADMIN_PASSWORD pair when set (CI), else the local-dev
+ * admins (admin/ChangeMe!Admin2025, dev-admin/DevAdmin!2026). API_URL
+ * (VITE_API_URL) defaults to http://localhost:8000/api/v2. See README.md.
  */
 
 import { test, expect } from '@playwright/test';
-import { apiLogin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-
-const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 // Unique test record ID — timestamp suffix avoids collisions between runs.
 const RECORD_ID = `e2e-wave7-lifecycle-${Date.now()}`;
@@ -89,7 +85,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // -------------------------------------------------------------------------
   // Step 1 — API: authenticate as admin + create test phenopacket
   // -------------------------------------------------------------------------
-  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {

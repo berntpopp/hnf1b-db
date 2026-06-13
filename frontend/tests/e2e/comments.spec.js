@@ -40,21 +40,21 @@
  *
  *   Playwright `baseURL` defaults to http://localhost:5173
  *   VITE_API_URL        defaults to http://localhost:8000/api/v2
- *   E2E_ADMIN_USERNAME  defaults to admin
- *   E2E_ADMIN_PASSWORD  defaults to ChangeMe!Admin2025
+ *
+ * Admin auth is resolved by `loginAsAdmin` (helpers/auth.js): it uses the
+ * E2E_ADMIN_USERNAME/E2E_ADMIN_PASSWORD pair when set (CI), else falls back to
+ * the local-dev admins (admin/ChangeMe!Admin2025, dev-admin/DevAdmin!2026).
+ * See tests/e2e/README.md.
  */
 
 import { test, expect } from '@playwright/test';
-import { apiLogin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-
-const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 // Unique record ID — timestamp suffix avoids collisions across runs.
 const RECORD_ID = `e2e-wave7-d2-comments-${Date.now()}`;
@@ -112,7 +112,7 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // We publish it so that the record is also reachable by the anonymous
   // public route (not required here, but keeps the fixture realistic).
   // -------------------------------------------------------------------------
-  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {

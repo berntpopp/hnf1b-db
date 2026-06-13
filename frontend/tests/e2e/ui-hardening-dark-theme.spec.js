@@ -1,9 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { apiLogin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, primeAuthSession } from './helpers/auth';
 
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 /**
  * Create a fresh phenopacket via the API and return its id.
@@ -85,7 +83,7 @@ test('PagePhenopacket hero-section uses dark gradient under v-theme--dark', asyn
   // e2e-* fixtures are filtered out of the public /phenopackets list, so we
   // can't rely on clicking a row there (the list is empty in CI, whose only
   // data is e2e fixtures). Prime an admin session so the draft detail loads.
-  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await loginAsAdmin(request, API_BASE);
   const recordId = await seedPhenopacket(request, adminTokens.accessToken);
   await primeAuthSession(page, adminTokens);
   await page.goto(`/phenopackets/${recordId}`, { waitUntil: 'networkidle' });
