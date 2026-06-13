@@ -29,113 +29,51 @@
     </v-card-title>
 
     <v-card-text>
-      <!-- Legend - Clickable filters -->
-      <v-row class="mb-2">
+      <!-- Variant filter + colour-by controls (all-variants view only) -->
+      <v-row v-if="!currentVariantId" class="mb-1">
         <v-col cols="12">
+          <VariantPlotControls v-model="filterState" :variants="snvVariants" class="mb-2" />
+
+          <!-- Domain filter chips (spatial filter, orthogonal to type/classification) -->
           <div class="legend-container">
-            <!-- Domain filters -->
+            <span class="filter-row-label text-caption text-medium-emphasis mr-1">Domain</span>
             <v-chip
+              v-for="d in domainFilterOptions"
+              :key="d.value"
               size="small"
-              color="orange-lighten-2"
-              :variant="activeFilter === 'domain:Dimerization' ? 'elevated' : 'tonal'"
+              label
+              :color="d.color"
+              :variant="activeDomain === d.value ? 'flat' : 'tonal'"
               class="legend-chip"
-              @click="toggleFilter('domain:Dimerization')"
+              :data-testid="`domain-chip-${d.value}`"
+              @click="toggleDomain(d.value)"
             >
-              <v-icon left size="small"> mdi-square </v-icon>
-              Dimerization
+              <v-icon start size="small"> mdi-square </v-icon>
+              {{ d.label }}
             </v-chip>
             <v-chip
-              size="small"
-              color="blue-lighten-2"
-              :variant="activeFilter === 'domain:POU-Specific' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('domain:POU-Specific')"
-            >
-              <v-icon left size="small"> mdi-square </v-icon>
-              POU-Specific
-            </v-chip>
-            <v-chip
-              size="small"
-              color="cyan-lighten-2"
-              :variant="activeFilter === 'domain:POU-Homeodomain' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('domain:POU-Homeodomain')"
-            >
-              <v-icon left size="small"> mdi-square </v-icon>
-              POU-Homeodomain
-            </v-chip>
-            <v-chip
-              size="small"
-              color="green-lighten-2"
-              :variant="activeFilter === 'domain:Transactivation' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('domain:Transactivation')"
-            >
-              <v-icon left size="small"> mdi-square </v-icon>
-              Transactivation
-            </v-chip>
-            <!-- Pathogenicity filters -->
-            <v-chip
-              size="small"
-              color="red-lighten-3"
-              :variant="activeFilter === 'pathogenicity:PATHOGENIC' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('pathogenicity:PATHOGENIC')"
-            >
-              <v-icon left size="small"> mdi-circle </v-icon>
-              Pathogenic
-            </v-chip>
-            <v-chip
-              size="small"
-              color="orange-lighten-3"
-              :variant="activeFilter === 'pathogenicity:LIKELY_PATHOGENIC' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('pathogenicity:LIKELY_PATHOGENIC')"
-            >
-              <v-icon left size="small"> mdi-circle </v-icon>
-              Likely Pathogenic
-            </v-chip>
-            <v-chip
-              size="small"
-              color="yellow-darken-1"
-              :variant="activeFilter === 'pathogenicity:VUS' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('pathogenicity:VUS')"
-            >
-              <v-icon left size="small"> mdi-circle </v-icon>
-              VUS
-            </v-chip>
-            <v-chip
-              size="small"
-              color="light-green-lighten-3"
-              :variant="activeFilter === 'pathogenicity:LIKELY_BENIGN' ? 'elevated' : 'tonal'"
-              class="legend-chip"
-              @click="toggleFilter('pathogenicity:LIKELY_BENIGN')"
-            >
-              <v-icon left size="small"> mdi-circle </v-icon>
-              Likely Benign
-            </v-chip>
-            <!-- Reset filter button -->
-            <v-chip
-              v-if="activeFilter"
+              v-if="activeDomain"
               size="small"
               color="grey"
               variant="outlined"
               class="legend-chip"
               closable
-              @click:close="clearFilter"
-              @click="clearFilter"
+              @click:close="activeDomain = null"
+              @click="activeDomain = null"
             >
-              <v-icon left size="small"> mdi-filter-off </v-icon>
-              Reset
+              <v-icon start size="small"> mdi-filter-off </v-icon>
+              Reset domain
             </v-chip>
           </div>
-          <!-- Active filter indicator -->
-          <div v-if="activeFilter" class="filter-indicator mt-2">
+
+          <!-- Filtered count indicator -->
+          <div
+            v-if="filteredSnvVariants.length !== snvVariants.length"
+            class="filter-indicator mt-2"
+          >
             <v-icon size="small" color="primary" class="mr-1"> mdi-filter </v-icon>
             <span class="text-body-2">
-              Showing {{ filteredSnvVariants.length }} of {{ snvVariants.length }} variants
-              <strong>({{ activeFilterLabel }})</strong>
+              Showing {{ filteredSnvVariants.length }} of {{ snvVariants.length }} SNVs
             </span>
           </div>
         </v-col>
@@ -393,16 +331,42 @@ import * as d3 from 'd3';
 import { extractCNotation, extractPNotation } from '@/utils/hgvs';
 import { getReferenceGeneDomains } from '@/api';
 import {
+  getConsequenceHexColor,
   getPathogenicityHexColor,
   getPathogenicityScore,
-  matchesPathogenicityCategory,
 } from '@/utils/colors';
+import {
+  COLORING_MODES,
+  createDefaultFilterState,
+  getVariantColorByMode,
+  isVariantVisibleByFilters,
+} from '@/utils/variantFilters';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 import { calculateTooltipPosition } from '@/utils/tooltip';
 import { isVariantCNV } from '@/utils/geneVisualization';
+import VariantPlotControls from '@/components/gene/VariantPlotControls.vue';
+
+// Amino-acid boundaries used by the spatial "Domain" filter. Kept in sync with
+// the fallback domains in data() / UniProt P35680.
+const DOMAIN_BOUNDARIES = {
+  Dimerization: { start: 1, end: 31 },
+  'POU-Specific': { start: 8, end: 173 },
+  'POU-Homeodomain': { start: 232, end: 305 },
+  Transactivation: { start: 314, end: 557 },
+};
+
+// Maps the full domain names (used by the SVG domain rects) to the compact
+// filter values used by the domain chips / activeDomain state.
+const DOMAIN_NAME_TO_VALUE = {
+  'Dimerization Domain': 'Dimerization',
+  'POU-Specific Domain': 'POU-Specific',
+  'POU Homeodomain': 'POU-Homeodomain',
+  'Transactivation Domain': 'Transactivation',
+};
 
 export default {
   name: 'HNF1BProteinVisualization',
+  components: { VariantPlotControls },
   props: {
     variants: {
       type: Array,
@@ -429,8 +393,10 @@ export default {
       // Visible range for semantic zoom (amino acid positions)
       visibleStart: 1,
       visibleEnd: 557,
-      // Filter state
-      activeFilter: null, // Format: 'domain:DomainName' or 'pathogenicity:CLASS'
+      // Filter state: pathogenicity + consequence multi-select + colour-by mode
+      filterState: createDefaultFilterState(),
+      // Domain filter (spatial, single-select): null or a domain value
+      activeDomain: null,
       // D3 zoom properties (kept for panning support)
       d3Zoom: null, // D3 zoom behavior instance
       d3Transform: null, // Current D3 zoom transform
@@ -514,74 +480,32 @@ export default {
       return this.variantsWithPositions.filter((v) => v.isCNV);
     },
     filteredSnvVariants() {
-      // Apply active filter to SNV variants
-      if (!this.activeFilter) {
+      // On the single-variant detail view (currentVariantId set), snvVariants
+      // is already the single current variant — never hide it behind filters.
+      if (this.currentVariantId) {
         return this.snvVariants;
       }
 
-      const [filterType, filterValue] = this.activeFilter.split(':');
+      // AND-logic across pathogenicity + consequence (shared util), then the
+      // orthogonal spatial domain filter.
+      let result = this.snvVariants.filter((v) => isVariantVisibleByFilters(v, this.filterState));
 
-      if (filterType === 'pathogenicity') {
-        return this.snvVariants.filter((v) =>
-          matchesPathogenicityCategory(v.classificationVerdict, filterValue)
-        );
+      if (this.activeDomain) {
+        const bounds = DOMAIN_BOUNDARIES[this.activeDomain];
+        if (bounds) {
+          result = result.filter((v) => v.aaPosition >= bounds.start && v.aaPosition <= bounds.end);
+        }
       }
 
-      if (filterType === 'domain') {
-        return this.snvVariants.filter((v) => {
-          const pos = v.aaPosition;
-          // Find matching domain
-          const domain = this.domains.find((d) => {
-            const shortNameMatch =
-              d.shortName === filterValue ||
-              d.name.toLowerCase().includes(filterValue.toLowerCase());
-            // Map filter names to actual domain boundaries
-            const domainMap = {
-              Dimerization: { start: 1, end: 31 },
-              'POU-Specific': { start: 8, end: 173 },
-              'POU-Homeodomain': { start: 232, end: 305 },
-              Transactivation: { start: 314, end: 557 },
-            };
-            const mappedDomain = domainMap[filterValue];
-            if (mappedDomain) {
-              return pos >= mappedDomain.start && pos <= mappedDomain.end;
-            }
-            return shortNameMatch && pos >= d.start && pos <= d.end;
-          });
-          // For domain filter, check if position is within domain boundaries
-          const domainMap = {
-            Dimerization: { start: 1, end: 31 },
-            'POU-Specific': { start: 8, end: 173 },
-            'POU-Homeodomain': { start: 232, end: 305 },
-            Transactivation: { start: 314, end: 557 },
-          };
-          const mappedDomain = domainMap[filterValue];
-          if (mappedDomain) {
-            return pos >= mappedDomain.start && pos <= mappedDomain.end;
-          }
-          return domain !== undefined;
-        });
-      }
-
-      return this.snvVariants;
+      return result;
     },
-    activeFilterLabel() {
-      if (!this.activeFilter) return '';
-      const [filterType, filterValue] = this.activeFilter.split(':');
-      if (filterType === 'pathogenicity') {
-        const labels = {
-          PATHOGENIC: 'Pathogenic',
-          LIKELY_PATHOGENIC: 'Likely Pathogenic',
-          VUS: 'VUS',
-          LIKELY_BENIGN: 'Likely Benign',
-          BENIGN: 'Benign',
-        };
-        return labels[filterValue] || filterValue;
-      }
-      if (filterType === 'domain') {
-        return `${filterValue} domain`;
-      }
-      return filterValue;
+    domainFilterOptions() {
+      return [
+        { value: 'Dimerization', label: 'Dimerization', color: 'orange-lighten-2' },
+        { value: 'POU-Specific', label: 'POU-Specific', color: 'blue-lighten-2' },
+        { value: 'POU-Homeodomain', label: 'POU-Homeodomain', color: 'cyan-lighten-2' },
+        { value: 'Transactivation', label: 'Transactivation', color: 'green-lighten-2' },
+      ];
     },
     groupedVariants() {
       // Group filtered variants by amino acid position
@@ -630,41 +554,18 @@ export default {
     window.removeEventListener('keydown', this.handleKeyboardShortcuts);
   },
   methods: {
-    toggleFilter(filter) {
-      // Toggle filter: if same filter clicked, clear it; otherwise set it
-      if (this.activeFilter === filter) {
-        this.activeFilter = null;
-      } else {
-        this.activeFilter = filter;
-      }
-    },
-    clearFilter() {
-      this.activeFilter = null;
+    toggleDomain(value) {
+      // Single-select spatial filter: clicking the active domain clears it.
+      this.activeDomain = this.activeDomain === value ? null : value;
     },
     handleDomainClick(domain) {
-      // Map domain name to filter value
-      const domainFilterMap = {
-        'Dimerization Domain': 'Dimerization',
-        'POU-Specific Domain': 'POU-Specific',
-        'POU Homeodomain': 'POU-Homeodomain',
-        'Transactivation Domain': 'Transactivation',
-      };
-      const filterValue = domainFilterMap[domain.name] || domain.shortName;
-      this.toggleFilter(`domain:${filterValue}`);
+      const filterValue = DOMAIN_NAME_TO_VALUE[domain.name] || domain.shortName;
+      this.toggleDomain(filterValue);
     },
     isDomainActive(domain) {
-      if (!this.activeFilter) return false;
-      const [filterType, filterValue] = this.activeFilter.split(':');
-      if (filterType !== 'domain') return false;
-      // Check if this domain matches the filter
-      const domainFilterMap = {
-        'Dimerization Domain': 'Dimerization',
-        'POU-Specific Domain': 'POU-Specific',
-        'POU Homeodomain': 'POU-Homeodomain',
-        'Transactivation Domain': 'Transactivation',
-      };
-      const domainFilterValue = domainFilterMap[domain.name] || domain.shortName;
-      return filterValue === domainFilterValue;
+      if (!this.activeDomain) return false;
+      const filterValue = DOMAIN_NAME_TO_VALUE[domain.name] || domain.shortName;
+      return this.activeDomain === filterValue;
     },
     getBoundaryLabelOffset(domain, boundaryType) {
       // Check if this boundary label would overlap with an adjacent domain's label
@@ -773,11 +674,26 @@ export default {
       return baseHeight + (variantGroup.length - 1) * stackIncrement;
     },
     getGroupColor(variantGroup) {
-      // If any variant is current, use purple
+      // If any variant is current, use purple (highlight wins over colour mode).
       if (variantGroup.some((v) => v.isCurrentVariant)) {
         return '#9C27B0';
       }
-      // Otherwise use the most pathogenic variant's color
+      if (this.filterState.coloringMode === COLORING_MODES.CONSEQUENCE) {
+        // Colour the stem by the most frequent consequence in the stack.
+        const counts = {};
+        let representative = variantGroup[0];
+        let best = 0;
+        for (const v of variantGroup) {
+          const key = v.molecular_consequence || '';
+          counts[key] = (counts[key] || 0) + 1;
+          if (counts[key] > best) {
+            best = counts[key];
+            representative = v;
+          }
+        }
+        return getConsequenceHexColor(representative.molecular_consequence);
+      }
+      // Classification mode: use the most pathogenic variant's colour.
       const mostPathogenic = variantGroup.reduce((prev, curr) => {
         const prevScore = getPathogenicityScore(prev.classificationVerdict);
         const currScore = getPathogenicityScore(curr.classificationVerdict);
@@ -786,7 +702,10 @@ export default {
       return getPathogenicityHexColor(mostPathogenic.classificationVerdict);
     },
     getVariantColor(variant) {
-      return getPathogenicityHexColor(variant.classificationVerdict);
+      // Mode-aware fill (classification ⇄ consequence). The current-variant
+      // highlight is applied on the lollipop stem (getGroupColor), so the
+      // per-circle / tooltip chip colour stays true to the colour mode.
+      return getVariantColorByMode(variant, this.filterState);
     },
     // HGVS extraction functions imported from utils/hgvs
     extractCNotation,
@@ -982,6 +901,13 @@ export default {
   display: flex;
   align-items: center;
   color: #1976d2;
+}
+
+/* Align the "Domain" row label with the Classification/Type labels rendered
+   inside VariantPlotControls (whose .filter-row-label style is scoped). */
+.filter-row-label {
+  min-width: 86px;
+  font-weight: 600;
 }
 
 .svg-container {
