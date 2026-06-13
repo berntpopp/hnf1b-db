@@ -15,31 +15,35 @@
       rounded
       full-width
       return-object
+      no-filter
       item-title="label"
       item-value="id"
+      :menu-props="{ maxHeight: 420 }"
+      aria-label="Search variants, phenotypes, and publications"
       @update:search="debouncedSearch"
       @update:model-value="onSelect"
       @keyup.enter="onEnter"
     >
       <template #item="{ props, item }">
-        <v-list-item v-bind="props" :title="item.raw.label">
+        <v-list-item v-bind="props" :title="null">
           <template #prepend>
-            <v-icon v-if="item.raw.type === 'Gene'" color="primary">mdi-dna</v-icon>
-            <v-icon v-else-if="item.raw.type === 'Gene Feature'" color="purple">
-              mdi-creation
+            <v-icon :color="iconFor(rawOf(item).type).color">
+              {{ iconFor(rawOf(item).type).icon }}
             </v-icon>
-            <v-icon v-else-if="item.raw.type === 'Variant'" color="error">mdi-flash</v-icon>
-            <v-icon v-else-if="item.raw.type === 'Phenopacket'" color="teal">mdi-account</v-icon>
-            <v-icon v-else-if="item.raw.type === 'Publication'" color="orange">
-              mdi-book-open-page-variant
-            </v-icon>
-            <v-icon v-else color="grey">mdi-magnify</v-icon>
           </template>
-          <v-list-item-subtitle>
-            {{ item.raw.type }}
-            <span v-if="item.raw.subtype"> · {{ item.raw.subtype }}</span>
-            <span v-if="item.raw.extra_info"> · {{ item.raw.extra_info }}</span>
-          </v-list-item-subtitle>
+          <template #title>
+            <span class="search-item-title">
+              <template v-for="(segment, i) in highlightSegments(rawOf(item).label)" :key="i">
+                <span v-if="segment.match" class="search-hl">{{ segment.text }}</span>
+                <template v-else>{{ segment.text }}</template>
+              </template>
+            </span>
+          </template>
+          <template #subtitle>
+            {{ rawOf(item).type }}
+            <span v-if="rawOf(item).subtype"> · {{ rawOf(item).subtype }}</span>
+            <span v-if="rawOf(item).extra_info"> · {{ rawOf(item).extra_info }}</span>
+          </template>
         </v-list-item>
       </template>
 
@@ -67,12 +71,51 @@
         </v-list-item>
         <v-divider />
       </template>
+
+      <!--
+        Helpful empty state. With `no-filter` the dropdown trusts the
+        server's (fuzzy/substring) results, so when it is empty we tell the
+        user why and offer to escalate to the full search-results page rather
+        than showing a bare "No data available".
+      -->
+      <template #no-data>
+        <div
+          v-if="noDataState !== 'recent'"
+          class="px-4 py-3 text-medium-emphasis search-no-data"
+          role="status"
+          aria-live="polite"
+        >
+          <template v-if="noDataState === 'loading'">
+            <v-progress-circular indeterminate size="16" width="2" class="mr-2" />
+            Searching…
+          </template>
+          <template v-else-if="noDataState === 'empty'">
+            Start typing to search variants, phenotypes, and publications.
+          </template>
+          <template v-else-if="noDataState === 'tooShort'">
+            Type at least 2 characters to see suggestions.
+          </template>
+          <template v-else>
+            <div class="mb-2">No quick matches for “{{ trimmedQuery }}”.</div>
+            <v-btn
+              size="small"
+              variant="tonal"
+              color="primary"
+              prepend-icon="mdi-magnify"
+              @mousedown.prevent
+              @click="searchEverything"
+            >
+              Search everything for “{{ trimmedQuery }}”
+            </v-btn>
+          </template>
+        </div>
+      </template>
     </v-autocomplete>
   </v-card>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { searchAutocomplete } from '@/api';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '@/utils/searchHistory';
@@ -88,6 +131,21 @@ const recentSearches = ref([]);
 // Load recent searches on mount
 onMounted(() => {
   recentSearches.value = getRecentSearches();
+});
+
+const trimmedQuery = computed(() => (searchQuery.value ?? '').trim());
+
+/**
+ * Drives the #no-data slot so the dropdown explains itself instead of
+ * rendering Vuetify's default "No data available".
+ * @returns {'loading'|'recent'|'empty'|'tooShort'|'noMatch'}
+ */
+const noDataState = computed(() => {
+  if (loading.value) return 'loading';
+  const q = trimmedQuery.value;
+  if (q.length === 0) return recentSearches.value.length > 0 ? 'recent' : 'empty';
+  if (q.length < 2) return 'tooShort';
+  return 'noMatch';
 });
 
 const fetchSuggestions = async (query) => {
@@ -113,6 +171,57 @@ const fetchSuggestions = async (query) => {
 };
 
 const debouncedSearch = debounce(fetchSuggestions, 300);
+
+/** Map a result type to its suggestion icon + colour. */
+const TYPE_ICONS = {
+  Gene: { icon: 'mdi-dna', color: 'primary' },
+  'Gene Feature': { icon: 'mdi-creation', color: 'purple' },
+  Variant: { icon: 'mdi-flash', color: 'error' },
+  Phenopacket: { icon: 'mdi-account', color: 'teal' },
+  Publication: { icon: 'mdi-book-open-page-variant', color: 'orange' },
+};
+const iconFor = (type) => TYPE_ICONS[type] ?? { icon: 'mdi-magnify', color: 'grey' };
+
+/**
+ * Resolve the underlying suggestion object from an autocomplete item slot.
+ * Vuetify hands the raw suggestion object directly here, but tolerate the
+ * ``InternalItem`` ``{ raw }`` shape too so the template is robust to either.
+ * @param {object} item
+ * @returns {{ label?: string, type?: string, subtype?: string, extra_info?: string }}
+ */
+const rawOf = (item) => item?.raw ?? item ?? {};
+
+/**
+ * Split a label around the first case-insensitive occurrence of the current
+ * query so it can be rendered with the matched run emphasized. Returns the
+ * whole label as a single non-matching segment when the literal query is not
+ * present (e.g. fuzzy/typo matches), so it is always safe to render.
+ * @param {string} label
+ * @returns {Array<{ text: string, match: boolean }>}
+ */
+const highlightSegments = (label) => {
+  const text = label ?? '';
+  const q = trimmedQuery.value;
+  if (!q) return [{ text, match: false }];
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return [{ text, match: false }];
+  return [
+    { text: text.slice(0, idx), match: false },
+    { text: text.slice(idx, idx + q.length), match: true },
+    { text: text.slice(idx + q.length), match: false },
+  ].filter((segment) => segment.text.length > 0);
+};
+
+/** Navigate to the full search-results page for a free-text term. */
+const goToFullSearch = (term) => {
+  const q = (term ?? '').trim();
+  if (!q) return;
+  addRecentSearch(q);
+  router.push({
+    name: 'SearchResults',
+    query: { q },
+  });
+};
 
 const onSelect = (item) => {
   if (!item) return;
@@ -148,22 +257,19 @@ const onSelect = (item) => {
 const onEnter = () => {
   if (selectedItem.value) {
     onSelect(selectedItem.value);
-  } else if (searchQuery.value) {
-    addRecentSearch(searchQuery.value);
-    router.push({
-      name: 'SearchResults',
-      query: { q: searchQuery.value },
-    });
+  } else {
+    goToFullSearch(searchQuery.value);
   }
+};
+
+/** "Search everything" affordance shown in the empty-state slot. */
+const searchEverything = () => {
+  goToFullSearch(searchQuery.value);
 };
 
 const searchFromRecent = (recentTerm) => {
   searchQuery.value = recentTerm;
-  addRecentSearch(recentTerm);
-  router.push({
-    name: 'SearchResults',
-    query: { q: recentTerm },
-  });
+  goToFullSearch(recentTerm);
 };
 
 const handleClearRecentSearches = () => {
@@ -184,5 +290,20 @@ const handleClearRecentSearches = () => {
 
 .mx-auto {
   margin: 0 auto;
+}
+
+/* Emphasize the matched run of text in a suggestion. Uses the theme primary
+   colour so it reads correctly in both light and dark themes. */
+.search-hl {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 700;
+}
+
+.search-item-title {
+  white-space: normal;
+}
+
+.search-no-data {
+  font-size: 0.875rem;
 }
 </style>
