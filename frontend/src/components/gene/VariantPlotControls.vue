@@ -10,24 +10,29 @@
   is purely presentational and delegates all state derivation to
   `@/utils/variantFilters`. Categories with zero variants are never rendered,
   so each plot only shows the chips that are meaningful for its data.
+
+  Styling follows the app's design language: a left-aligned caption column,
+  the canonical primary `v-btn-toggle` (matching StructureControls), and soft
+  tonal category-coloured chips (matching the original variant legend).
 -->
 <template>
   <div class="variant-plot-controls">
     <!-- Colour-by mode toggle -->
-    <div class="d-flex align-center flex-wrap ga-2 mb-2">
-      <span class="text-caption text-medium-emphasis font-weight-medium mr-1">Colour by:</span>
+    <div class="vpc-row">
+      <span class="vpc-label">Colour by</span>
       <v-btn-toggle
         :model-value="modelValue.coloringMode"
         mandatory
-        density="compact"
-        variant="outlined"
         divided
+        rounded="lg"
+        variant="outlined"
         color="primary"
         aria-label="Variant colouring mode"
+        class="vpc-toggle"
         @update:model-value="setMode"
       >
         <v-btn value="classification" size="small" data-testid="colorby-classification">
-          <v-icon start size="small">mdi-medical-bag</v-icon>
+          <v-icon start size="small">mdi-flag-variant</v-icon>
           Classification
         </v-btn>
         <v-btn value="consequence" size="small" data-testid="colorby-consequence">
@@ -41,59 +46,48 @@
     <div
       v-for="row in rows"
       :key="row.dim"
-      class="filter-row d-flex align-center flex-wrap ga-1 mb-1"
+      class="vpc-row vpc-row--filter"
       :data-testid="`filter-row-${row.dim}`"
     >
-      <span class="filter-row-label text-caption text-medium-emphasis mr-1">{{ row.label }}</span>
-      <span
-        v-for="item in row.items"
-        :key="item.key"
-        class="filter-group d-inline-flex align-center"
-      >
-        <v-chip
-          size="small"
-          label
-          :variant="item.visible ? 'flat' : 'outlined'"
-          class="filter-chip"
-          :class="{ 'filter-chip--hidden': !item.visible }"
-          :aria-pressed="item.visible"
-          :data-testid="`filter-chip-${row.dim}-${item.key}`"
-          @click="onToggle(row.dim, item.key)"
-        >
-          <span
-            class="filter-dot"
-            :style="{
-              backgroundColor: item.visible ? item.color : 'transparent',
-              borderColor: item.color,
-            }"
-          />
-          {{ item.label }}
-          <span class="filter-count">{{ item.count }}</span>
-        </v-chip>
+      <span class="vpc-label">{{ row.label }}</span>
+      <div class="vpc-chips">
+        <span v-for="item in row.items" :key="item.key" class="filter-group">
+          <v-chip
+            size="small"
+            :color="item.visible ? item.color : undefined"
+            :variant="item.visible ? 'tonal' : 'outlined'"
+            class="filter-chip"
+            :class="{ 'filter-chip--hidden': !item.visible }"
+            :aria-pressed="item.visible"
+            :data-testid="`filter-chip-${row.dim}-${item.key}`"
+            @click="onToggle(row.dim, item.key)"
+          >
+            <span class="filter-dot" :style="{ backgroundColor: item.color }" />
+            {{ item.label }}
+            <span class="filter-count">{{ item.count }}</span>
+          </v-chip>
+          <button
+            type="button"
+            class="only-btn"
+            :title="`Show only ${item.label}`"
+            :aria-label="`Show only ${item.label}`"
+            :data-testid="`filter-only-${row.dim}-${item.key}`"
+            @click="onOnly(row.dim, item.key)"
+          >
+            only
+          </button>
+        </span>
         <v-btn
-          class="only-btn"
+          class="all-btn"
           size="x-small"
           variant="text"
-          density="compact"
-          :title="`Show only ${item.label}`"
-          :aria-label="`Show only ${item.label}`"
-          :data-testid="`filter-only-${row.dim}-${item.key}`"
-          @click="onOnly(row.dim, item.key)"
+          color="primary"
+          :data-testid="`filter-all-${row.dim}`"
+          @click="onAll(row.dim)"
         >
-          only
+          All
         </v-btn>
-      </span>
-      <v-btn
-        class="all-btn"
-        size="x-small"
-        variant="tonal"
-        density="compact"
-        :title="`Show all ${row.label.toLowerCase()} categories`"
-        :data-testid="`filter-all-${row.dim}`"
-        @click="onAll(row.dim)"
-      >
-        All
-      </v-btn>
+      </div>
     </div>
   </div>
 </template>
@@ -175,40 +169,80 @@ export default {
 
 <style scoped>
 .variant-plot-controls {
-  font-size: 0.8125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.filter-row-label {
-  min-width: 86px;
+/* One row = a fixed caption column + its content (toggle or chips). */
+.vpc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.vpc-row--filter {
+  align-items: flex-start;
+}
+
+/* Caption column — aligns "Colour by", "Classification" and "Type". */
+.vpc-label {
+  flex: 0 0 auto;
+  width: 92px;
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+/* Filter-row chips wrap and top-align, so nudge their label down to match. */
+.vpc-row--filter .vpc-label {
+  padding-top: 5px;
+}
+
+/* Give the segmented toggle a defined outline + comfortable height/padding. */
+.vpc-toggle {
+  height: 34px;
+}
+
+.vpc-toggle :deep(.v-btn) {
+  height: 34px;
+}
+
+.vpc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }
 
 .filter-group {
-  /* Keep the chip and its "only" button visually grouped. */
-  margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-chip {
   cursor: pointer;
+  font-weight: 500;
   transition:
     opacity 0.15s ease,
     box-shadow 0.15s ease;
 }
 
 .filter-chip:hover {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
 }
 
 .filter-chip--hidden {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .filter-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  border: 1.5px solid;
   margin-right: 6px;
   flex: 0 0 auto;
 }
@@ -217,26 +251,42 @@ export default {
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
+/* "only" — subtle, reveals on hover/focus of its chip group so the rows stay
+   clean while the power-user action remains discoverable. */
 .only-btn {
-  min-width: 0;
-  padding: 0 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 2px 0 4px;
   font-size: 0.65rem;
-  letter-spacing: 0;
-  opacity: 0.55;
-  text-transform: lowercase;
+  line-height: 1;
+  color: rgb(var(--v-theme-primary));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.filter-group:hover .only-btn,
+.only-btn:focus-visible {
+  opacity: 0.85;
 }
 
 .only-btn:hover {
   opacity: 1;
+  text-decoration: underline;
 }
 
 .all-btn {
   min-width: 0;
   padding: 0 8px;
-  font-size: 0.7rem;
-  margin-left: 4px;
+  margin-left: 2px;
+}
+
+/* Render the toggle button labels in the app's button style (no shouty caps). */
+.vpc-row :deep(.v-btn) {
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 </style>

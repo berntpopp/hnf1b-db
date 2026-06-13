@@ -35,35 +35,32 @@
           <VariantPlotControls v-model="filterState" :variants="snvVariants" class="mb-2" />
 
           <!-- Domain filter chips (spatial filter, orthogonal to type/classification) -->
-          <div class="legend-container">
-            <span class="filter-row-label text-caption text-medium-emphasis mr-1">Domain</span>
-            <v-chip
-              v-for="d in domainFilterOptions"
-              :key="d.value"
-              size="small"
-              label
-              :color="d.color"
-              :variant="activeDomain === d.value ? 'flat' : 'tonal'"
-              class="legend-chip"
-              :data-testid="`domain-chip-${d.value}`"
-              @click="toggleDomain(d.value)"
-            >
-              <v-icon start size="small"> mdi-square </v-icon>
-              {{ d.label }}
-            </v-chip>
-            <v-chip
-              v-if="activeDomain"
-              size="small"
-              color="grey"
-              variant="outlined"
-              class="legend-chip"
-              closable
-              @click:close="activeDomain = null"
-              @click="activeDomain = null"
-            >
-              <v-icon start size="small"> mdi-filter-off </v-icon>
-              Reset domain
-            </v-chip>
+          <div class="vpc-row vpc-row--filter">
+            <span class="vpc-label">Domain</span>
+            <div class="vpc-chips">
+              <v-chip
+                v-for="d in domainFilterOptions"
+                :key="d.value"
+                size="small"
+                :color="d.color"
+                :variant="activeDomain === d.value ? 'flat' : 'tonal'"
+                class="domain-chip"
+                :data-testid="`domain-chip-${d.value}`"
+                @click="toggleDomain(d.value)"
+              >
+                {{ d.label }}
+              </v-chip>
+              <v-btn
+                v-if="activeDomain"
+                class="all-btn"
+                size="x-small"
+                variant="text"
+                color="primary"
+                @click="activeDomain = null"
+              >
+                Clear
+              </v-btn>
+            </div>
           </div>
 
           <!-- Filtered count indicator -->
@@ -900,14 +897,43 @@ export default {
 .filter-indicator {
   display: flex;
   align-items: center;
-  color: #1976d2;
+  color: rgb(var(--v-theme-primary));
 }
 
-/* Align the "Domain" row label with the Classification/Type labels rendered
-   inside VariantPlotControls (whose .filter-row-label style is scoped). */
-.filter-row-label {
-  min-width: 86px;
+/* Domain row — mirrors the .vpc-row layout in VariantPlotControls so the
+   "Domain" label/chips align with the Classification/Type rows above. */
+.vpc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.vpc-label {
+  flex: 0 0 auto;
+  width: 92px;
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  padding-top: 4px;
+}
+
+.vpc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.domain-chip {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.all-btn {
+  min-width: 0;
+  padding: 0 8px;
 }
 
 .svg-container {
