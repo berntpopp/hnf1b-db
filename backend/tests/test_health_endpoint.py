@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.core.version import APP_VERSION, PHENOPACKET_SCHEMA_VERSION
+
 
 async def _resolved(value):
     """Return a value from an awaitable helper for monkeypatched checks."""
@@ -30,8 +32,8 @@ async def test_health_reports_ready_when_dependencies_are_healthy(
     assert response.status_code == 200
     assert response.json() == {
         "status": "healthy",
-        "version": "2.0.0",
-        "phenopackets_schema": "2.0.0",
+        "version": APP_VERSION,
+        "phenopackets_schema": PHENOPACKET_SCHEMA_VERSION,
         "ready": True,
         "dependencies": {
             "database": {"ready": True, "error": None},

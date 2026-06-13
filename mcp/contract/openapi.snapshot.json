@@ -3619,6 +3619,78 @@
         ],
         "title": "VariantValidationResponse",
         "type": "object"
+      },
+      "VersionResponse": {
+        "description": "Application and database schema version information.",
+        "properties": {
+          "api_path_version": {
+            "description": "Major version of the REST API URL contract (the /api/v2 prefix).",
+            "examples": [
+              "v2"
+            ],
+            "title": "Api Path Version",
+            "type": "string"
+          },
+          "api_version": {
+            "description": "Application version (semver; beta 0.X.Y), single-sourced from pyproject.toml \u2014 never hardcoded in application code.",
+            "examples": [
+              "0.1.1"
+            ],
+            "title": "Api Version",
+            "type": "string"
+          },
+          "db_schema_head": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest Alembic migration revision defined in the codebase (head), or null if it cannot be determined.",
+            "title": "Db Schema Head"
+          },
+          "db_schema_in_sync": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True when the applied DB revision matches the codebase head; null if either revision is unknown.",
+            "title": "Db Schema In Sync"
+          },
+          "db_schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Alembic migration revision currently applied to the database, or null if it cannot be determined.",
+            "title": "Db Schema Revision"
+          },
+          "phenopacket_schema_version": {
+            "description": "GA4GH Phenopackets schema version the API conforms to.",
+            "examples": [
+              "2.0.0"
+            ],
+            "title": "Phenopacket Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_version",
+          "api_path_version",
+          "phenopacket_schema_version"
+        ],
+        "title": "VersionResponse",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -3631,7 +3703,7 @@
   "info": {
     "description": "GA4GH Phenopackets v2 compliant API for HNF1B disease data",
     "title": "HNF1B Phenopackets API",
-    "version": "2.0.0"
+    "version": "0.1.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9574,6 +9646,28 @@
         "tags": [
           "variant-validation",
           "variant-validation"
+        ]
+      }
+    },
+    "/api/v2/version": {
+      "get": {
+        "description": "Returns the application version (single-sourced from pyproject.toml) and the live database schema revision, including whether the applied migration matches the codebase head (drift detection).",
+        "operationId": "get_version_api_v2_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get API and database schema versions",
+        "tags": [
+          "meta"
         ]
       }
     },
