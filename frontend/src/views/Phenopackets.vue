@@ -14,7 +14,7 @@
     <!-- Unified Table with Integrated Search Toolbar -->
     <AppDataTable
       v-model:options="options"
-      :headers="headers"
+      :headers="displayHeaders"
       :items="phenopackets"
       :loading="loading"
       :items-length="phenopackets.length"
@@ -51,10 +51,11 @@
         </AppTableToolbar>
       </template>
 
-      <!-- Pagination controls above table -->
+      <!-- Pagination controls above table (top paginator desktop-only; single paginator on mobile) -->
       <template #top>
         <div class="d-flex align-center justify-space-between">
           <AppPagination
+            v-if="!$vuetify.display.smAndDown"
             :current-count="phenopackets.length"
             :current-page="pagination.currentPage"
             :page-size="pagination.pageSize"
@@ -283,6 +284,14 @@ export default {
         base.push({ title: 'State', value: 'state', sortable: false, width: '130px' });
       }
       return base;
+    },
+    // Mobile-optimized headers: drop the low-value State column to reduce card noise.
+    // Desktop returns the full headers unchanged.
+    displayHeaders() {
+      if (!this.$vuetify.display.smAndDown) {
+        return this.headers;
+      }
+      return this.headers.filter((header) => header.value !== 'state');
     },
     canCreatePhenopacket() {
       return this.authStore.user?.role === 'curator' || this.authStore.user?.role === 'admin';

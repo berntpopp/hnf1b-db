@@ -107,6 +107,14 @@ export default {
       },
       deep: true,
     },
+    // Re-render when the responsive width/height change so the donut and its
+    // centre label scale down to fit narrow (mobile) containers.
+    width() {
+      this.renderChart();
+    },
+    height() {
+      this.renderChart();
+    },
   },
   mounted() {
     this.renderChart();
@@ -123,13 +131,18 @@ export default {
       const radius = Math.min(width, height) / 2 - margin;
 
       // Create the SVG element. Capture the root <svg> so the export menu can read it.
+      // Drive the rendered size with CSS (width:100%; height:auto; max-width) so
+      // the SVG scales to its container on mobile instead of forcing a fixed
+      // pixel width that overflows / clips the donut. The viewBox keeps the
+      // internal coordinate system intact.
       const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
-        .attr('width', width)
-        .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet');
+        .attr('preserveAspectRatio', 'xMidYMid meet')
+        .style('width', '100%')
+        .style('height', 'auto')
+        .style('max-width', `${width}px`);
       this.svgEl = svgRoot.node();
       const svg = svgRoot.append('g').attr('transform', `translate(${width / 2}, ${height / 2})`);
 
@@ -212,11 +225,20 @@ export default {
         });
 
       // Append a central text element that shows the total count.
+      // Scale the font to the donut hole (innerRadius = radius * 0.5) so the
+      // full label always fits, even at 320–360px container widths, instead of
+      // a fixed 40px that clips on small donuts.
+      const holeRadius = radius * 0.5;
+      const labelLen = String(totalValue).length || 1;
+      const centerFont = Math.max(
+        14,
+        Math.min(40, Math.floor((holeRadius * 1.7) / Math.max(labelLen, 2)))
+      );
       svg
         .append('text')
         .attr('text-anchor', 'middle')
         .attr('dy', '.35em')
-        .attr('font-size', '40px')
+        .attr('font-size', `${centerFont}px`)
         .attr('fill', '#5CB85C')
         .text(totalValue);
 
@@ -277,16 +299,30 @@ export default {
 .chart-wrapper {
   display: flex;
   align-items: flex-start;
-  gap: 40px;
+  flex-wrap: wrap;
+  gap: 24px;
 }
 
 .chart {
-  flex-shrink: 0;
+  /* Fill the row but allow shrinking so the SVG (width:100%) scales down on
+     narrow screens instead of forcing horizontal overflow. */
+  flex: 1 1 280px;
+  min-width: 0;
+  position: relative;
+}
+
+.chart :deep(svg) {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
 }
 
 .legend {
-  flex: 1;
-  min-width: 250px;
+  flex: 1 1 220px;
+  /* No min-width that would exceed a 320px viewport; the legend wraps below the
+     donut on phones and sits beside it on wider screens. */
+  min-width: 0;
   max-height: 500px;
   overflow-y: auto;
   padding: 10px;

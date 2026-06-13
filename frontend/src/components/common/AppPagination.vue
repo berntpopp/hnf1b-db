@@ -6,43 +6,59 @@
   - Items per page selector
   - Range text with total count: "1-20 of 864"
   - First/Previous/Next/Last navigation buttons
-  - Clickable page number buttons (1, 2, 3 ... n)
-  - Compact density for consistency with AppDataTable
+  - Clickable page number buttons (1, 2, 3 ... n) on >= sm
+  - Compact two-row, 44px-touch-target layout on mobile (< sm)
   - JSON:API v1.1 compliant offset-based server-side pagination
 -->
 <template>
-  <div class="app-pagination d-flex align-center justify-end px-4 py-2">
-    <!-- Items per page selector -->
-    <div class="d-flex align-center mr-4">
-      <span class="text-caption text-medium-emphasis mr-2">Items per page:</span>
-      <v-select
-        :model-value="pageSize"
-        :items="itemsPerPageOptions"
-        density="compact"
-        hide-details
-        variant="plain"
-        class="items-per-page-select"
-        @update:model-value="$emit('update:pageSize', $event)"
-      />
+  <div
+    class="app-pagination d-flex align-center px-4 py-2"
+    :class="
+      mobile
+        ? 'app-pagination--mobile flex-column flex-wrap justify-center ga-1'
+        : 'justify-end flex-wrap'
+    "
+  >
+    <!-- Meta: items-per-page selector + range text -->
+    <div
+      class="pg-meta d-flex align-center"
+      :class="mobile ? 'order-2 justify-space-between w-100 mt-1' : ''"
+    >
+      <div class="d-flex align-center" :class="mobile ? '' : 'mr-4'">
+        <span class="text-caption text-medium-emphasis mr-2">Items per page:</span>
+        <v-select
+          :model-value="pageSize"
+          :items="itemsPerPageOptions"
+          density="compact"
+          hide-details
+          variant="plain"
+          class="items-per-page-select"
+          aria-label="Items per page"
+          @update:model-value="$emit('update:pageSize', $event)"
+        />
+      </div>
+
+      <!-- Range text -->
+      <span class="text-caption font-weight-medium" :class="mobile ? '' : 'mx-4'">
+        {{ rangeText }}
+      </span>
     </div>
 
-    <!-- Range text -->
-    <span class="text-caption font-weight-medium mx-4">{{ rangeText }}</span>
-
     <!-- Navigation buttons -->
-    <nav aria-label="Pagination Navigation">
-      <ul class="d-flex align-center pa-0 ma-0" style="list-style: none; gap: 2px">
+    <nav aria-label="Pagination Navigation" :class="mobile ? 'order-1' : ''">
+      <ul class="d-flex align-center justify-center pa-0 ma-0" style="list-style: none; gap: 2px">
         <!-- First page button -->
         <li>
           <v-btn
             icon
             variant="text"
-            size="small"
+            :size="mobile ? 'large' : 'small'"
+            class="pg-icon-btn"
             :disabled="currentPage <= 1"
             aria-label="First page"
             @click="$emit('go-to-page', 1)"
           >
-            <v-icon size="small">mdi-page-first</v-icon>
+            <v-icon :size="mobile ? 'default' : 'small'">mdi-page-first</v-icon>
           </v-btn>
         </li>
 
@@ -51,17 +67,25 @@
           <v-btn
             icon
             variant="text"
-            size="small"
+            :size="mobile ? 'large' : 'small'"
+            class="pg-icon-btn"
             :disabled="currentPage <= 1"
             aria-label="Previous page"
             @click="$emit('go-to-page', currentPage - 1)"
           >
-            <v-icon size="small">mdi-chevron-left</v-icon>
+            <v-icon :size="mobile ? 'default' : 'small'">mdi-chevron-left</v-icon>
           </v-btn>
         </li>
 
-        <!-- Page number buttons -->
-        <template v-if="totalPages > 0">
+        <!-- Mobile: compact "Page X of Y" label (replaces numbered buttons) -->
+        <li v-if="mobile" class="pg-page-label-wrap">
+          <span class="pg-page-label text-body-2 font-weight-medium px-2">
+            Page {{ currentPage }} of {{ safeTotalPages }}
+          </span>
+        </li>
+
+        <!-- Desktop: numbered page buttons (smart pagination with ellipsis) -->
+        <template v-else-if="totalPages > 0">
           <!-- First page (always visible if not in range) -->
           <li v-if="displayedPages[0] > 1">
             <v-btn
@@ -120,12 +144,13 @@
           <v-btn
             icon
             variant="text"
-            size="small"
+            :size="mobile ? 'large' : 'small'"
+            class="pg-icon-btn"
             :disabled="currentPage >= totalPages"
             aria-label="Next page"
             @click="$emit('go-to-page', currentPage + 1)"
           >
-            <v-icon size="small">mdi-chevron-right</v-icon>
+            <v-icon :size="mobile ? 'default' : 'small'">mdi-chevron-right</v-icon>
           </v-btn>
         </li>
 
@@ -134,12 +159,13 @@
           <v-btn
             icon
             variant="text"
-            size="small"
+            :size="mobile ? 'large' : 'small'"
+            class="pg-icon-btn"
             :disabled="currentPage >= totalPages"
             aria-label="Last page"
             @click="$emit('go-to-page', totalPages)"
           >
-            <v-icon size="small">mdi-page-last</v-icon>
+            <v-icon :size="mobile ? 'default' : 'small'">mdi-page-last</v-icon>
           </v-btn>
         </li>
       </ul>
@@ -149,7 +175,11 @@
 
 <script setup>
 import { computed } from 'vue';
+import { useDisplay } from 'vuetify';
 import { calculateRangeText } from '@/utils/pagination';
+
+const { smAndDown } = useDisplay();
+const mobile = smAndDown;
 
 const props = defineProps({
   /**
@@ -204,6 +234,9 @@ const props = defineProps({
 });
 
 defineEmits(['update:pageSize', 'go-to-page']);
+
+// At least 1 so the mobile "Page X of Y" label never reads "of 0".
+const safeTotalPages = computed(() => Math.max(props.totalPages, 1));
 
 // Calculate which page numbers to display (smart pagination with ellipsis)
 const displayedPages = computed(() => {
@@ -284,5 +317,30 @@ const rangeText = computed(() => {
   display: flex;
   align-items: center;
   height: 28px;
+}
+
+/* Mobile: ensure all nav controls meet the 44px touch-target minimum */
+.app-pagination--mobile .pg-icon-btn {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.app-pagination--mobile .pg-page-label-wrap {
+  flex-shrink: 0;
+}
+
+.app-pagination--mobile .pg-page-label {
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.app-pagination--mobile {
+  /* Two stacked rows need a touch more vertical room */
+  min-height: 88px;
+}
+
+/* 44px touch target for the items-per-page select on mobile */
+.app-pagination--mobile .items-per-page-select :deep(.v-field__input) {
+  min-height: 44px;
 }
 </style>

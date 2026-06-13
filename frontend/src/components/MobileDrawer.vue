@@ -178,4 +178,10 @@ const handleLogout = async () => {
 .v-img {
   cursor: pointer;
 }
+
+/* Touch targets: navigation rows are the primary mobile nav, so keep them at
+   the 44px minimum even though the lists use compact density. */
+:deep(.v-list-item) {
+  min-height: 48px;
+}
 </style>

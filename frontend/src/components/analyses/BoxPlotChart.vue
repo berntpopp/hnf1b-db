@@ -151,6 +151,14 @@ export default {
       },
       deep: true,
     },
+    // Re-render so the chart re-measures its container when the responsive
+    // width/height props change (axis ticks / labels stay legible).
+    width() {
+      this.renderChart();
+    },
+    height() {
+      this.renderChart();
+    },
   },
   mounted() {
     this.renderChart();
@@ -493,6 +501,12 @@ export default {
 .chart-container {
   width: 100%;
   min-height: 400px;
+}
+/* Keep the SVG fluid: the renderer sizes it to the container width, but cap it
+   so it never forces horizontal overflow on narrow (mobile) screens. */
+.chart-container :deep(svg) {
+  max-width: 100%;
+  height: auto;
 }
 
 .chart-data-table {

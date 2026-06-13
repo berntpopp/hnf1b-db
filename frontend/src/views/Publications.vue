@@ -11,8 +11,9 @@
 -->
 <template>
   <v-container fluid>
-    <!-- Unified Table with Integrated Search Toolbar -->
+    <!-- Desktop: unified table with integrated search toolbar -->
     <AppDataTable
+      v-if="!$vuetify.display.smAndDown"
       v-model:options="options"
       :headers="headers"
       :items="publications"
@@ -154,6 +155,141 @@
         </v-alert>
       </template>
     </AppDataTable>
+
+    <!-- Mobile: dedicated title-led card list (avoids crushed 300px title column) -->
+    <div v-else class="pub-mobile">
+      <v-card variant="outlined" rounded="lg" class="pub-mobile__shell">
+        <!-- Title bar mirrors the desktop AppDataTable heading -->
+        <v-toolbar color="primary" density="comfortable" flat>
+          <v-toolbar-title class="text-subtitle-1 font-weight-medium">
+            Publications Registry
+          </v-toolbar-title>
+        </v-toolbar>
+
+        <!-- Search toolbar (reused) -->
+        <AppTableToolbar
+          v-model:search-query="searchQuery"
+          search-placeholder="Search PMID, DOI, title, or author..."
+          :result-count="pagination.totalRecords"
+          result-label="publications"
+          :loading="loading"
+          @search="onSearch"
+          @clear-search="clearSearch"
+        />
+
+        <!-- Card list — fixed-height container reserved during load to slash CLS -->
+        <div class="pub-mobile__list pa-3">
+          <!-- Skeletons while loading (height-matched to real cards) -->
+          <template v-if="loading">
+            <v-skeleton-loader
+              v-for="n in pagination.pageSize"
+              :key="`pub-skeleton-${n}`"
+              type="article, actions"
+              class="pub-card pub-card--skeleton mb-2"
+            />
+          </template>
+
+          <!-- Empty state -->
+          <v-alert
+            v-else-if="publications.length === 0"
+            type="info"
+            variant="tonal"
+            density="compact"
+          >
+            No publications found. Publications are extracted from phenopacket metadata.
+          </v-alert>
+
+          <!-- Publication cards -->
+          <template v-else>
+            <v-card
+              v-for="item in publications"
+              :key="extractPmidNumber(item.pmid) || item.title"
+              :to="item.pmid ? `/publications/${extractPmidNumber(item.pmid)}` : undefined"
+              variant="outlined"
+              rounded="lg"
+              class="pub-card mb-2"
+            >
+              <div class="pa-3">
+                <!-- Title heading: line-clamped to 3 lines, left-aligned -->
+                <div class="pub-card__title">{{ item.title || 'Untitled publication' }}</div>
+
+                <!-- Meta row: PMID chip + individuals chip + date -->
+                <div class="d-flex flex-wrap align-center ga-2 mt-2">
+                  <v-chip
+                    v-if="item.pmid"
+                    color="orange-lighten-3"
+                    size="small"
+                    variant="flat"
+                    label
+                  >
+                    <v-icon start size="x-small">mdi-book-open-variant</v-icon>
+                    {{ item.pmid }}
+                  </v-chip>
+                  <v-chip color="green-lighten-3" size="small" variant="flat" label>
+                    <v-icon start size="x-small">mdi-account-multiple</v-icon>
+                    {{ item.phenopacket_count }}
+                  </v-chip>
+                  <span class="text-caption text-medium-emphasis">
+                    {{ formatDate(item.first_added) }}
+                  </span>
+                </div>
+
+                <!-- Authors -->
+                <div v-if="item.authors" class="pub-card__authors text-body-2 mt-2">
+                  {{ item.authors }}
+                </div>
+
+                <!-- Actions row: external links as labelled ≥44px buttons -->
+                <div v-if="item.pmid || item.doi" class="d-flex flex-wrap ga-2 mt-3" @click.stop>
+                  <v-btn
+                    v-if="item.pmid"
+                    :href="`https://pubmed.ncbi.nlm.nih.gov/${extractPmidNumber(item.pmid)}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="tonal"
+                    color="orange-darken-2"
+                    size="default"
+                    class="pub-card__action"
+                    prepend-icon="mdi-book-open-variant"
+                    aria-label="View on PubMed"
+                    @click.stop
+                  >
+                    PubMed
+                  </v-btn>
+                  <v-btn
+                    v-if="item.doi"
+                    :href="`https://doi.org/${item.doi}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="tonal"
+                    color="blue-darken-2"
+                    size="default"
+                    class="pub-card__action"
+                    prepend-icon="mdi-link-variant"
+                    aria-label="View DOI"
+                    @click.stop
+                  >
+                    DOI
+                  </v-btn>
+                </div>
+              </div>
+            </v-card>
+          </template>
+        </div>
+
+        <!-- Pagination (reused, responsive) -->
+        <AppPagination
+          :current-count="publications.length"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :total-pages="pagination.totalPages"
+          :total-records="pagination.totalRecords"
+          :items-per-page-options="itemsPerPageOptions"
+          @go-to-page="goToPage"
+          @update:page-size="onPageSizeChange"
+        />
+      </v-card>
+    </div>
   </v-container>
 </template>
 
@@ -288,6 +424,22 @@ export default {
         }
       },
     },
+  },
+  async mounted() {
+    // The desktop AppDataTable kicks off the initial load via @update:options.
+    // On mobile (smAndDown) that table is not rendered, so the load would never
+    // fire — trigger it here once if it hasn't already initialised.
+    await this.$nextTick();
+    if (!this.loadingInitialized) {
+      this.pagination.currentPage = this.urlState?.page?.value ?? 1;
+      this.pagination.pageSize = this.urlState?.pageSize?.value ?? 10;
+      this.options.sortBy = this.parseSortToVuetify(
+        this.urlState?.sort?.value ?? '-phenopacket_count'
+      );
+      this.previousSortBy = [...this.options.sortBy];
+      this.loadingInitialized = true;
+      this.fetchPublications();
+    }
   },
   methods: {
     /**
@@ -471,5 +623,52 @@ export default {
 
 :deep(.clickable-row:hover) {
   background-color: rgba(var(--v-theme-primary), 0.08) !important;
+}
+
+/* Mobile title-led card list */
+.pub-mobile__shell {
+  overflow: hidden;
+}
+
+/* Reserve vertical space during load so cards do not shift content in (low CLS) */
+.pub-mobile__list {
+  min-height: 320px;
+}
+
+.pub-card {
+  /* Stable floor keeps row height predictable before/after data arrives */
+  min-height: 132px;
+}
+
+.pub-card--skeleton {
+  /* Match the real card footprint so swapping skeleton → card does not jump */
+  min-height: 132px;
+}
+
+/* Title heading: full-width, left-aligned, clamped to 3 lines */
+.pub-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Authors: clamp to two lines to keep card heights tidy */
+.pub-card__authors {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* External-link buttons keep a ≥44px touch target on mobile */
+.pub-card__action {
+  min-height: 44px;
 }
 </style>
