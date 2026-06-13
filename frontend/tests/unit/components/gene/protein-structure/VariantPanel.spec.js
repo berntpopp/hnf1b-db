@@ -37,7 +37,6 @@ function mountPanel(props = {}) {
       selectedVariantId: null,
       hoveredVariantId: null,
       sortBy: 'position',
-      filterPathogenicity: null,
       filterDistance: null,
       ...props,
     },
@@ -79,7 +78,6 @@ describe('VariantPanel', () => {
     const wrapper = mountPanel({
       variants: [],
       totalInStructure: 2,
-      filterPathogenicity: 'PATHOGENIC',
     });
     expect(wrapper.text()).toContain('No variants match filters');
     const clearBtn = wrapper.findAll('button').find((b) => b.text().includes('Clear Filters'));

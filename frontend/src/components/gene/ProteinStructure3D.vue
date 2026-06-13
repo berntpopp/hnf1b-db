@@ -47,6 +47,16 @@
         Variants outside this region cannot be visualized in 3D.
       </v-alert>
 
+      <!-- Unified variant filter + colour-by controls (all-variants view).
+           Defaults to missense-only; shares the design + state shape with the
+           protein and gene plots. -->
+      <VariantPlotControls
+        v-if="showAllVariants && !loading && !error"
+        v-model="filterState"
+        :variants="variantsInStructure"
+        class="mb-3"
+      />
+
       <!-- Main Content: 3D Viewport + Optional Variant Panel -->
       <v-row no-gutters>
         <!-- 3D Viewport Column — full width on mobile, 8/12 alongside the
@@ -63,6 +73,7 @@
             :show-distance-line="showDistanceLine"
             :variants="variants"
             :show-all-variants="showAllVariants"
+            :coloring-mode="filterState.coloringMode"
             @loading="loading = $event"
             @loaded="structureLoaded = true"
             @error="error = $event"
@@ -80,14 +91,13 @@
             :selected-variant-id="selectedVariantId"
             :hovered-variant-id="hoveredVariantId"
             :sort-by="sortBy"
-            :filter-pathogenicity="filterPathogenicity"
             :filter-distance="filterDistance"
+            :coloring-mode="filterState.coloringMode"
             @select="selectVariant"
             @hover="hoverVariant"
             @unhover="unhoverVariant"
             @clear-filters="clearFilters"
             @update:sort-by="sortBy = $event"
-            @update:filter-pathogenicity="filterPathogenicity = $event"
             @update:filter-distance="filterDistance = $event"
           />
         </v-col>
@@ -165,13 +175,20 @@
 
 <script>
 import { STRUCTURE_START, STRUCTURE_END } from '@/utils/dnaDistanceCalculator';
-import { getPathogenicityColor, getPathogenicityScore } from '@/utils/colors';
+import { getPathogenicityScore } from '@/utils/colors';
+import {
+  createDefaultFilterState,
+  getVariantColorByMode,
+  isVariantVisibleByFilters,
+  withOnlyConsequence,
+} from '@/utils/variantFilters';
 import { extractPNotation } from '@/utils/hgvs';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 import StructureViewer from '@/components/gene/protein-structure/StructureViewer.vue';
 import StructureControls from '@/components/gene/protein-structure/StructureControls.vue';
 import VariantPanel from '@/components/gene/protein-structure/VariantPanel.vue';
 import DistanceStatsCard from '@/components/gene/protein-structure/DistanceStatsCard.vue';
+import VariantPlotControls from '@/components/gene/VariantPlotControls.vue';
 
 // HNF1B protein domains (from UniProt P35680)
 // Note: PDB 2H8R only covers residues 90-308 (with gap 187-230)
@@ -213,6 +230,7 @@ export default {
     StructureControls,
     VariantPanel,
     DistanceStatsCard,
+    VariantPlotControls,
   },
   props: {
     variants: {
@@ -243,9 +261,12 @@ export default {
       // For showAllVariants mode
       selectedVariantId: null,
       hoveredVariantId: null,
-      // Sorting and filtering
+      // Sorting and filtering. The 3D structure is most informative for
+      // missense variants (point substitutions that map to a single residue
+      // in the DNA-binding domain), so the unified variant controls default to
+      // showing missense only; users can widen via the chips / "All".
       sortBy: 'position',
-      filterPathogenicity: null,
+      filterState: withOnlyConsequence(createDefaultFilterState(), 'missense'),
       filterDistance: null,
       // Cache for variant distances (built by the viewer, keyed by variant_id)
       variantDistanceCache: {},
@@ -314,16 +335,8 @@ export default {
         _distanceInfo: this.variantDistanceCache[v.variant_id] || null,
       }));
 
-      // Apply pathogenicity filter
-      if (this.filterPathogenicity) {
-        variants = variants.filter((v) => {
-          const classification = (v.classificationVerdict || '').toUpperCase();
-          if (this.filterPathogenicity === 'VUS') {
-            return classification.includes('UNCERTAIN') || classification.includes('VUS');
-          }
-          return classification.includes(this.filterPathogenicity);
-        });
-      }
+      // Apply the unified pathogenicity + consequence filters (AND-logic).
+      variants = variants.filter((v) => isVariantVisibleByFilters(v, this.filterState));
 
       // Apply distance filter
       if (this.filterDistance) {
@@ -362,7 +375,8 @@ export default {
     },
 
     getVariantChipColor(variant) {
-      return getPathogenicityColor(variant.classificationVerdict);
+      // Mode-aware (classification ⇄ consequence) to match the colour-by toggle.
+      return getVariantColorByMode(variant, this.filterState);
     },
 
     getVariantLabel(variant) {
@@ -392,7 +406,9 @@ export default {
     },
 
     clearFilters() {
-      this.filterPathogenicity = null;
+      // Reset to all-visible (widening past the missense-only default) and
+      // clear the distance filter.
+      this.filterState = createDefaultFilterState();
       this.filterDistance = null;
     },
 
