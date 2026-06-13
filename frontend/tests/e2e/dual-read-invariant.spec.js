@@ -40,16 +40,13 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { apiLogin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
 // ---------------------------------------------------------------------------
 
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
-
-const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'ChangeMe!Admin2025';
 
 const RECORD_ID = `e2e-wave7-i1-${Date.now()}`;
 const ORIGINAL_SUBJECT_ID = `original-subject-${Date.now()}`;
@@ -106,7 +103,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // -------------------------------------------------------------------------
   // Phase 1 — API setup: create + publish a phenopacket with ORIGINAL_SUBJECT_ID
   // -------------------------------------------------------------------------
-  const adminTokens = await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
 
   // Create draft
@@ -225,8 +222,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // head). This is the key test of the D.2 effective-state routing: the
   // whole review cycle must work while pp.state stays 'published' (I8).
   // -------------------------------------------------------------------------
-  const curatorToken = (await apiLogin(request, API_BASE, ADMIN_USERNAME, ADMIN_PASSWORD))
-    .accessToken;
+  const curatorToken = (await loginAsAdmin(request, API_BASE)).accessToken;
 
   // Read the current revision from the API (after clone, pp.revision has advanced).
   const detailResp = await request.get(`${API_BASE}/phenopackets/${RECORD_ID}`, {
