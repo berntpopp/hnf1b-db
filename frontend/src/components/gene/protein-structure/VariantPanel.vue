@@ -25,19 +25,6 @@
         @update:model-value="$emit('update:sortBy', $event)"
       />
 
-      <!-- Pathogenicity Filter -->
-      <v-select
-        :model-value="filterPathogenicity"
-        :items="pathogenicityOptions"
-        label="Pathogenicity"
-        density="compact"
-        hide-details
-        variant="outlined"
-        clearable
-        class="filter-select"
-        @update:model-value="$emit('update:filterPathogenicity', $event)"
-      />
-
       <!-- Distance Filter -->
       <v-select
         :model-value="filterDistance"
@@ -93,7 +80,7 @@
         }}
       </div>
       <v-btn
-        v-if="totalInStructure > 0 && (filterPathogenicity || filterDistance)"
+        v-if="totalInStructure > 0"
         size="x-small"
         variant="text"
         color="primary"
@@ -108,7 +95,7 @@
 
 <script>
 import { extractPNotation } from '@/utils/hgvs';
-import { getPathogenicityColor } from '@/utils/colors';
+import { getVariantColorByMode } from '@/utils/variantFilters';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 
 export default {
@@ -136,37 +123,23 @@ export default {
       type: String,
       default: 'position',
     },
-    filterPathogenicity: {
-      type: String,
-      default: null,
-    },
     filterDistance: {
       type: String,
       default: null,
     },
+    // Colour-by mode shared with the unified controls (classification | consequence).
+    coloringMode: {
+      type: String,
+      default: 'classification',
+    },
   },
-  emits: [
-    'select',
-    'hover',
-    'unhover',
-    'clear-filters',
-    'update:sortBy',
-    'update:filterPathogenicity',
-    'update:filterDistance',
-  ],
+  emits: ['select', 'hover', 'unhover', 'clear-filters', 'update:sortBy', 'update:filterDistance'],
   data() {
     return {
       sortOptions: [
         { title: 'Position', value: 'position' },
         { title: 'Distance to DNA', value: 'distance' },
         { title: 'Pathogenicity', value: 'pathogenicity' },
-      ],
-      pathogenicityOptions: [
-        { title: 'Pathogenic', value: 'PATHOGENIC' },
-        { title: 'Likely Pathogenic', value: 'LIKELY_PATHOGENIC' },
-        { title: 'VUS', value: 'VUS' },
-        { title: 'Likely Benign', value: 'LIKELY_BENIGN' },
-        { title: 'Benign', value: 'BENIGN' },
       ],
       distanceOptions: [
         { title: 'Close (<5 Å)', value: 'close' },
@@ -181,7 +154,8 @@ export default {
     },
 
     getVariantChipColor(variant) {
-      return getPathogenicityColor(variant.classificationVerdict);
+      // Mode-aware (classification ⇄ consequence) to match the colour-by toggle.
+      return getVariantColorByMode(variant, { coloringMode: this.coloringMode });
     },
 
     getVariantLabel(variant) {

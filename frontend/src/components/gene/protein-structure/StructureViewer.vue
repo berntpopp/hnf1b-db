@@ -27,7 +27,7 @@ import {
   STRUCTURE_START,
   STRUCTURE_END,
 } from '@/utils/dnaDistanceCalculator';
-import { getPathogenicityHexColor } from '@/utils/colors';
+import { getVariantColorByMode } from '@/utils/variantFilters';
 import { extractPNotation } from '@/utils/hgvs';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 
@@ -83,6 +83,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    coloringMode: {
+      type: String,
+      default: 'classification',
+    },
   },
   emits: [
     'loading',
@@ -108,6 +112,10 @@ export default {
     },
     colorByDomain() {
       this.updateRepresentation();
+    },
+    coloringMode() {
+      // Recolour the highlighted variant when the colour-by mode changes.
+      this.highlightActiveVariant();
     },
     activeVariant() {
       this.highlightActiveVariant();
@@ -516,8 +524,9 @@ export default {
     },
 
     getVariantColor(variant) {
-      // Convert hex color string to NGL-compatible hex number
-      const hexString = getPathogenicityHexColor(variant.classificationVerdict);
+      // Mode-aware hex (classification ⇄ consequence), converted to an
+      // NGL-compatible hex number.
+      const hexString = getVariantColorByMode(variant, { coloringMode: this.coloringMode });
       return parseInt(hexString.replace('#', ''), 16);
     },
 
