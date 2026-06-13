@@ -45,9 +45,24 @@
     </div>
 
     <div class="table-responsive" :class="{ 'is-mobile-cards': isMobile }">
+      <!-- Mobile skeleton placeholders: reserve the cards' height during load so
+           the page (and the footer pagination) doesn't shift when data arrives.
+           Sized to the page size so the reserved height matches the real list. -->
+      <div v-if="isMobile && showSkeletons" class="mobile-skeletons" aria-hidden="true">
+        <div
+          v-for="n in skeletonCount"
+          :key="n"
+          class="mobile-skeleton-card"
+          :style="{ minHeight: mobileSkeletonHeight + 'px' }"
+        >
+          <v-skeleton-loader type="list-item-two-line, list-item, list-item" />
+        </div>
+      </div>
+
       <!-- Server-side pagination table -->
       <v-data-table-server
         v-if="serverSide"
+        v-show="!(isMobile && showSkeletons)"
         v-bind="$attrs"
         class="process-table"
         :density="density"
@@ -63,6 +78,7 @@
       <!-- Client-side pagination table -->
       <v-data-table
         v-else
+        v-show="!(isMobile && showSkeletons)"
         v-bind="$attrs"
         class="process-table"
         :density="density"
@@ -79,7 +95,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, useAttrs } from 'vue';
 import { useDisplay } from 'vuetify';
 
 const props = defineProps({
@@ -111,13 +127,35 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /**
+   * Approximate height (px) of one mobile card, used to size the loading
+   * skeletons so the reserved space matches the real list and CLS stays low.
+   */
+  mobileSkeletonHeight: {
+    type: Number,
+    default: 200,
+  },
 });
 
 const { smAndDown } = useDisplay();
+const attrs = useAttrs();
 
 // Below `sm` the table renders as stacked cards (Vuetify mobile mode), reusing
 // every existing `#item.<key>` slot. Opt out per-table via `disable-mobile`.
 const isMobile = computed(() => (props.disableMobile ? false : smAndDown.value));
+
+// The wrapping view passes `:loading` straight through via $attrs.
+const showSkeletons = computed(() => {
+  const l = attrs.loading;
+  return l === true || l === '' || l === 'true';
+});
+
+// Render one skeleton per expected row so the reserved height ~ the real list.
+const skeletonCount = computed(() => {
+  const raw = Number(attrs['items-per-page'] ?? attrs.itemsPerPage ?? 10);
+  if (!Number.isFinite(raw) || raw <= 0) return 10; // -1 = "all" -> sane default
+  return Math.min(raw, 12);
+});
 
 // Slots that are consumed by AppDataTable itself, not passed to v-data-table
 const internalSlots = ['title-actions', 'toolbar', 'filters'];
@@ -241,6 +279,21 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   overflow-x: hidden; /* never horizontal-scroll on mobile */
   background: rgb(var(--v-theme-background));
   padding: 4px 0;
+}
+
+/* Loading skeletons that reserve the cards' height (CLS guard) */
+.mobile-skeletons {
+  padding: 4px 0;
+}
+
+.mobile-skeleton-card {
+  margin: 8px;
+  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
 /* The header row is redundant in mobile mode (labels come from td-title) */
