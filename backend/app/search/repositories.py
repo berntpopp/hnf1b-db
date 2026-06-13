@@ -187,29 +187,67 @@ class GlobalSearchRepository:
         query: str,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Fast autocomplete using trigram + prefix matching.
+        """Typeahead suggestions over the same hybrid index as ``search()``.
 
-        Prioritizes:
-        1. Prefix matches (ILIKE 'query%')
-        2. High similarity matches (pg_trgm)
+        The previous implementation matched only labels that *start with* the
+        query (``ILIKE 'query%'``) or are trigram-similar *as a whole*. That
+        misses the way users actually type into a global search box: a word
+        *inside* a multi-word label (publication titles, descriptive individual
+        labels, and the disease / phenotype text folded into ``search_vector``)
+        must surface, as must a substring of an HGVS label
+        (``c.5`` -> ``HNF1B:c.544+1G>C``) and common typos. As a result queries
+        like ``diabetes`` or ``cyst`` returned nothing even though
+        ``/search/global`` matched hundreds of records.
+
+        This uses the materialized view's full-text ``search_vector`` (the same
+        signal ``search()`` relies on) plus substring and fuzzy fallbacks,
+        ranked by match quality (best first):
+
+        0. ``label`` starts with the query (classic typeahead, e.g. ``HNF1B``).
+        1. Whole-word full-text match on ``search_vector``
+           (e.g. ``diabetes`` -> "Renal cysts and diabetes syndrome").
+        2. ``label`` contains the query as a substring (e.g. ``c.5``).
+        3. Word-prefix full-text match (e.g. ``diab`` -> ``diabetes``).
+        4. Fuzzy word-similarity match for typos (e.g. ``diabetis``).
+
+        All four predicates are index-backed (GIN on ``search_vector`` and a
+        trigram GIN on ``label``), and the view is small, so this stays well
+        within typeahead latency budgets.
 
         Args:
-            query: Partial search term
-            limit: Maximum suggestions to return
+            query: Partial search term (>= 2 chars enforced at the router).
+            limit: Maximum suggestions to return.
 
         Returns:
-            List of autocomplete suggestions
+            List of autocomplete suggestion dictionaries.
         """
+        or_tsquery = self._build_or_tsquery(query)
         sql = text("""
-            SELECT id, label, type, subtype, extra_info,
-                   similarity(label, :query) as score
-            FROM global_search_index
-            WHERE label ILIKE :prefix
-               OR label % :query
-            ORDER BY
-                CASE WHEN label ILIKE :prefix THEN 0 ELSE 1 END,
-                score DESC,
-                label ASC
+            SELECT id, label, type, subtype, extra_info, score
+            FROM (
+                SELECT id, label, type, subtype, extra_info,
+                    CASE
+                        WHEN label ILIKE :prefix THEN 0
+                        WHEN search_vector @@ plainto_tsquery('simple', :query)
+                            THEN 1
+                        WHEN label ILIKE :contains THEN 2
+                        WHEN search_vector @@ to_tsquery('simple', :or_tsquery)
+                            THEN 3
+                        ELSE 4
+                    END AS match_priority,
+                    GREATEST(
+                        word_similarity(:query, label),
+                        ts_rank(
+                            search_vector, to_tsquery('simple', :or_tsquery)
+                        )
+                    ) AS score
+                FROM global_search_index
+                WHERE label ILIKE :contains
+                   OR search_vector @@ plainto_tsquery('simple', :query)
+                   OR search_vector @@ to_tsquery('simple', :or_tsquery)
+                   OR :query <% label
+            ) ranked
+            ORDER BY match_priority ASC, score DESC, label ASC
             LIMIT :limit
         """)
 
@@ -217,7 +255,9 @@ class GlobalSearchRepository:
             sql,
             {
                 "query": query,
+                "or_tsquery": or_tsquery,
                 "prefix": f"{query}%",
+                "contains": f"%{query}%",
                 "limit": limit,
             },
         )
