@@ -260,16 +260,37 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
-/* Each cell = label + value row with comfortable touch height */
+/* Each cell = label + value row with comfortable touch height. Wrap so a wide
+   value (e.g. a long classification chip) drops to its own full-width line
+   below the label instead of being clipped. */
 .is-mobile-cards :deep(.v-data-table__td--mobile) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   min-height: 44px;
   padding: 6px 12px !important;
   border: none !important;
   background: transparent !important;
+}
+
+/* Chips inside card values wrap their text rather than clipping. */
+.is-mobile-cards :deep(.v-data-table__td-value .v-chip) {
+  height: auto;
+  min-height: 24px;
+  white-space: normal;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.is-mobile-cards :deep(.v-data-table__td-value .v-chip .v-chip__content) {
+  white-space: normal;
+  /* Long single-token values (e.g. UNCERTAIN_SIGNIFICANCE) have no spaces to
+     break on; allow breaking anywhere so the chip wraps instead of clipping. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.25;
 }
 
 .is-mobile-cards :deep(.v-data-table__td--mobile:not(:last-child)) {

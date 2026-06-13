@@ -16,7 +16,7 @@
       <v-col cols="12">
         <v-sheet outlined>
           <v-card>
-            <v-tabs v-model="activeTabLabel" bg-color="primary">
+            <v-tabs v-model="activeTabLabel" bg-color="primary" show-arrows>
               <v-tab v-for="tabDef in AGGREGATION_TABS" :key="tabDef.slug" :value="tabDef.label">
                 {{ tabDef.label }}
               </v-tab>
@@ -64,13 +64,15 @@
                       />
                     </v-col>
                   </v-row>
-                  <DonutChart
-                    :chart-data="chartData"
-                    :color-map="currentColorMap"
-                    :exportable="true"
-                    :width="600"
-                    :height="500"
-                  />
+                  <div ref="donutContainer" class="chart-measure">
+                    <DonutChart
+                      :chart-data="chartData"
+                      :color-map="currentColorMap"
+                      :exportable="true"
+                      :width="donutSize.width.value"
+                      :height="donutSize.height.value"
+                    />
+                  </div>
                 </v-tabs-window-item>
 
                 <!-- Stacked Bar Chart Tab -->
@@ -126,12 +128,14 @@
                     </v-col>
                   </v-row>
 
-                  <StackedBarChart
-                    :chart-data="stackedBarChartData"
-                    :display-limit="displayLimitValue"
-                    :width="1200"
-                    :height="800"
-                  />
+                  <div ref="stackedBarContainer" class="chart-measure">
+                    <StackedBarChart
+                      :chart-data="stackedBarChartData"
+                      :display-limit="displayLimitValue"
+                      :width="stackedBarSize.width.value"
+                      :height="stackedBarSize.height.value"
+                    />
+                  </div>
                 </v-tabs-window-item>
 
                 <!-- Publications Timeline Tab -->
@@ -191,14 +195,15 @@
                   </v-row>
 
                   <!-- Chart -->
-                  <VariantComparisonChart
-                    v-else-if="comparisonData"
-                    :comparison-data="comparisonData"
-                    :comparison-type="comparison"
-                    :organ-system-filter="organSystem"
-                    :width="1200"
-                    :height="600"
-                  />
+                  <div v-else-if="comparisonData" ref="comparisonContainer" class="chart-measure">
+                    <VariantComparisonChart
+                      :comparison-data="comparisonData"
+                      :comparison-type="comparison"
+                      :organ-system-filter="organSystem"
+                      :width="comparisonSize.width.value"
+                      :height="comparisonSize.height.value"
+                    />
+                  </div>
                 </v-tabs-window-item>
 
                 <!-- Survival Curves Tab -->
@@ -262,12 +267,13 @@
                   </v-row>
 
                   <!-- Chart -->
-                  <KaplanMeierChart
-                    v-else-if="survivalData"
-                    :survival-data="survivalData"
-                    :width="1200"
-                    :height="700"
-                  />
+                  <div v-else-if="survivalData" ref="survivalContainer" class="chart-measure">
+                    <KaplanMeierChart
+                      :survival-data="survivalData"
+                      :width="survivalSize.width.value"
+                      :height="survivalSize.height.value"
+                    />
+                  </div>
 
                   <!-- Expandable Panels for Survival Data -->
                   <SurvivalDataPanels :survival-data="survivalData" />
@@ -287,7 +293,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import DonutChart from '@/components/analyses/DonutChart.vue';
 import StackedBarChart from '@/components/analyses/StackedBarChart.vue';
 import PublicationsTimelineChart from '@/components/analyses/PublicationsTimelineChart.vue';
@@ -297,6 +303,7 @@ import DNADistanceAnalysis from '@/components/analyses/DNADistanceAnalysis.vue';
 import SurvivalDataPanels from '@/components/analyses/SurvivalDataPanels.vue';
 import * as API from '@/api';
 import { useUrlState } from '@/composables/useUrlState';
+import { useResponsiveChartWidth } from '@/composables/useResponsiveChartWidth';
 import {
   AGGREGATION_TABS,
   DEFAULT_TAB,
@@ -411,6 +418,39 @@ const comparisonError = ref(null);
 const survivalData = ref(null);
 const survivalLoading = ref(false);
 const survivalError = ref(null);
+
+// Responsive chart sizing. Each chart sits in a measured container so its D3
+// SVG fills the available width on mobile and is capped on desktop. The width
+// prop is read via `<size>.width.value` in the template (refs, not unwrapped).
+const donutContainer = ref(null);
+const stackedBarContainer = ref(null);
+const comparisonContainer = ref(null);
+const survivalContainer = ref(null);
+
+// Per-chart caps mirror the previous fixed desktop sizes so desktop is unchanged.
+const donutSize = useResponsiveChartWidth(donutContainer, { maxWidth: 600, aspect: 0.83 });
+// minWidth/minHeight floors keep the coordinate system larger than each chart's
+// fixed inner margins (else d3 produces negative bar/axis dimensions on phones);
+// the SVG still scales down to the container via viewBox + width:100%.
+const stackedBarSize = useResponsiveChartWidth(stackedBarContainer, {
+  maxWidth: 1200,
+  minWidth: 760, // horiz margins = left300 + right150 = 450
+  aspect: 0.67,
+  maxHeight: 800,
+});
+const comparisonSize = useResponsiveChartWidth(comparisonContainer, {
+  maxWidth: 1200,
+  minWidth: 760,
+  aspect: 0.5,
+  minHeight: 560, // vert margins = top120 + bottom220 = 340
+  maxHeight: 600,
+});
+const survivalSize = useResponsiveChartWidth(survivalContainer, {
+  maxWidth: 1200,
+  minWidth: 760,
+  aspect: 0.58,
+  maxHeight: 700,
+});
 
 // Computed properties
 const selectedAggregations = computed(() => {
@@ -675,7 +715,33 @@ watch(tab, (newTab, oldTab) => {
   if (newTab === 'survival' && !survivalData.value) {
     fetchSurvivalData();
   }
+
+  // A chart inside an inactive v-tabs-window-item measures 0 (display:none).
+  // When its tab becomes visible, re-measure so the SVG gets the real width.
+  remeasureActiveChart(newTab);
 });
+
+/**
+ * Re-measure the chart container for the now-active tab. The window item only
+ * gains layout width once it becomes visible, so we measure on the next tick
+ * (and again after Vuetify's window transition) to capture the real width.
+ */
+function remeasureActiveChart(slug) {
+  const sizeBySlug = {
+    donut: donutSize,
+    'stacked-bar': stackedBarSize,
+    'variant-comparison': comparisonSize,
+    survival: survivalSize,
+  };
+  const size = sizeBySlug[slug];
+  if (!size) return;
+  nextTick(() => {
+    size.measure();
+    // Vuetify's window transition (~300ms) finishes after nextTick; measure
+    // again so a container that was still 0-width during the swap is updated.
+    setTimeout(() => size.measure(), 350);
+  });
+}
 
 watch([comparison, sortBy], () => {
   if (tab.value === 'variant-comparison') {
@@ -701,9 +767,20 @@ onMounted(() => {
   if (tab.value === 'survival') {
     fetchSurvivalData();
   }
+
+  // Measure the chart for whichever tab we land on (deep-link / refresh) so it
+  // is sized correctly from the first paint, not just after a tab switch.
+  remeasureActiveChart(tab.value);
 });
 </script>
 
 <style scoped>
-/* Add view-specific styles if needed */
+/* Measured container for each responsive D3 chart. Full width so the
+   ResizeObserver reads the real available width; overflow hidden so a chart
+   can never force horizontal scroll on the page at narrow (mobile) widths. */
+.chart-measure {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 </style>

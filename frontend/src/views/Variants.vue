@@ -4,7 +4,7 @@
     <!-- Unified Table with Column-Based Filtering -->
     <AppDataTable
       v-model:options="options"
-      :headers="headers"
+      :headers="displayHeaders"
       :items="variants"
       :loading="loading"
       :items-length="variants.length"
@@ -41,8 +41,8 @@
         </AppTableToolbar>
       </template>
 
-      <!-- Pagination controls above table -->
-      <template #top>
+      <!-- Pagination controls above table (desktop only; mobile uses single bottom paginator) -->
+      <template v-if="!$vuetify.display.smAndDown" #top>
         <AppPagination
           :current-count="variants.length"
           :current-page="pagination.currentPage"
@@ -116,8 +116,9 @@
       </template>
 
       <!-- Render protein with only p. notation -->
+      <!-- On mobile, hide empty values gracefully so cards don't show "PROTEIN: –" -->
       <template #item.protein="{ item }">
-        <span class="text-body-2">{{ extractPNotation(item.protein) }}</span>
+        <span :class="proteinDisplay(item).class">{{ proteinDisplay(item).text }}</span>
       </template>
 
       <!-- Render variant type with color coding -->
@@ -282,6 +283,25 @@ export default {
     };
   },
   computed: {
+    // Mobile-curated header subset/order.
+    // On mobile (smAndDown) return an importance-ordered subset that drops the
+    // long/often-empty Transcript (c.) and HG38 columns so cards stay tight.
+    // On desktop return the full headers unchanged.
+    displayHeaders() {
+      if (!this.$vuetify.display.smAndDown) {
+        return this.headers;
+      }
+      const mobileOrder = [
+        'simple_id',
+        'protein',
+        'variant_type',
+        'classificationVerdict',
+        'individualCount',
+      ];
+      return mobileOrder
+        .map((value) => this.headers.find((header) => header.value === value))
+        .filter(Boolean);
+    },
     // Bridge URL state to component for v-model bindings
     searchQuery: {
       get() {
@@ -484,6 +504,19 @@ export default {
     extractPNotation,
     getPathogenicityColor,
     getVariantTypeColor,
+
+    // Resolve the protein (p.) cell display. On mobile, suppress empty/placeholder
+    // values to a muted em dash so cards don't render a noisy "PROTEIN: –" row.
+    // Desktop keeps the original value unchanged.
+    proteinDisplay(item) {
+      const value = this.extractPNotation(item.protein);
+      const trimmed = value == null ? '' : String(value).trim();
+      const isEmpty = trimmed === '' || trimmed === '-' || trimmed === '–' || trimmed === '—';
+      if (this.$vuetify.display.smAndDown && isEmpty) {
+        return { text: '—', class: 'text-body-2 text-medium-emphasis' };
+      }
+      return { text: value, class: 'text-body-2' };
+    },
 
     onOptionsUpdate(newOptions) {
       // Preserve initial sort if Vuetify sends empty sortBy on first mount

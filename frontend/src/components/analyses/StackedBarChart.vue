@@ -139,6 +139,13 @@ export default {
     displayLimit() {
       this.renderChart();
     },
+    // Re-render so the viewBox / internal layout track the responsive size.
+    width() {
+      this.renderChart();
+    },
+    height() {
+      this.renderChart();
+    },
   },
   mounted() {
     this.renderChart();
@@ -236,14 +243,17 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
-      // Append the SVG element. Capture the root for export.
+      // Append the SVG element. Capture the root for export. Render fluidly via
+      // CSS (width:100%; height:auto) so it scales to its container on mobile;
+      // the viewBox preserves the internal coordinate system.
       const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
-        .attr('width', width)
-        .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet');
+        .attr('preserveAspectRatio', 'xMinYMin meet')
+        .style('width', '100%')
+        .style('height', 'auto')
+        .style('max-width', `${width}px`);
       this.svgEl = svgRoot.node();
       const svg = svgRoot.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 

@@ -140,6 +140,13 @@ export default {
         this.renderChart();
       },
     },
+    // Re-render so axis ticks / labels stay legible when the responsive size changes.
+    width() {
+      this.renderChart();
+    },
+    height() {
+      this.renderChart();
+    },
   },
   mounted() {
     this.renderChart();
@@ -236,13 +243,16 @@ export default {
       const svgWidth = width - margin.left - margin.right;
       const svgHeight = height - margin.top - margin.bottom;
 
+      // Render fluidly via CSS (width:100%; height:auto) so the SVG scales to
+      // its container on mobile; the viewBox keeps the internal coordinates.
       const svgRoot = d3
         .select(this.$refs.chart)
         .append('svg')
-        .attr('width', width)
-        .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`)
-        .attr('preserveAspectRatio', 'xMinYMin meet');
+        .attr('preserveAspectRatio', 'xMinYMin meet')
+        .style('width', '100%')
+        .style('height', 'auto')
+        .style('max-width', `${width}px`);
       this.svgEl = typeof svgRoot.node === 'function' ? svgRoot.node() : null;
       const svg = svgRoot.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
