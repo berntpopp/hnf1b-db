@@ -26,7 +26,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hnf1b_pass}
       POSTGRES_DB: ${POSTGRES_DB:-hnf1b_phenopackets}
     ports:
-      - "${DB_PORT_HOST:-5433}:5432"
+      # Bind published ports to loopback by default so Postgres/Redis/app are
+      # not exposed on the host's public interface. Set HOST_BIND_IP=0.0.0.0 to
+      # opt back into direct external exposure. NPM reaches services over the
+      # shared proxy network by container name, so this does not affect routing.
+      - "${HOST_BIND_IP:-127.0.0.1}:${DB_PORT_HOST:-5433}:5432"
     volumes:
       - hnf1b_postgres_data:/var/lib/postgresql/data
     networks:
@@ -57,7 +61,7 @@ services:
       --appendonly yes
       --appendfsync everysec
     ports:
-      - "${REDIS_PORT_HOST:-6380}:6379"
+      - "${HOST_BIND_IP:-127.0.0.1}:${REDIS_PORT_HOST:-6380}:6379"
     volumes:
       - hnf1b_redis_data:/data
     networks:
@@ -110,7 +114,7 @@ services:
       # Data import (set ENABLE_DATA_IMPORT=true to import on first run)
       ENABLE_DATA_IMPORT: ${ENABLE_DATA_IMPORT:-false}
     ports:
-      - "${API_PORT_HOST:-8000}:8000"
+      - "${HOST_BIND_IP:-127.0.0.1}:${API_PORT_HOST:-8000}:8000"
     depends_on:
       hnf1b_db:
         condition: service_healthy
@@ -148,7 +152,7 @@ services:
       HNF1B_MCP_REDIS_URL: redis://hnf1b_cache:6379/1
       HNF1B_MCP_ALLOWED_ORIGINS: ${HNF1B_MCP_ALLOWED_ORIGINS:-https://claude.ai,https://claude.com}
     ports:
-      - "${MCP_PORT_HOST:-8788}:8788"
+      - "${HOST_BIND_IP:-127.0.0.1}:${MCP_PORT_HOST:-8788}:8788"
     depends_on:
       hnf1b_api:
         condition: service_healthy
@@ -179,7 +183,7 @@ services:
     container_name: hnf1b_frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT_HOST:-3000}:80"
+      - "${HOST_BIND_IP:-127.0.0.1}:${FRONTEND_PORT_HOST:-3000}:80"
     depends_on:
       hnf1b_api:
         condition: service_healthy
