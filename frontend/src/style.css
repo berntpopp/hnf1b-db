@@ -153,3 +153,19 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   white-space: nowrap;
   border: 0;
 }
+
+/* ==================== MOBILE TYPOGRAPHY FLOOR ==================== */
+/* On small screens, enforce a readable minimum font size. The biggest
+   offenders are Vuetify x-small chips (0.625rem = 10px) used for variant /
+   type / status badges in the data tables. Bump them — and captions — to a
+   >=12px floor so no body text renders below 12px on mobile. */
+@media (max-width: 600px) {
+  .v-chip.v-chip--size-x-small {
+    font-size: 0.75rem; /* 10px -> 12px */
+  }
+
+  /* Captions used as inline metadata should not drop below 12px on mobile. */
+  .v-application .text-caption {
+    font-size: 0.75rem;
+  }
+}

@@ -1,5 +1,10 @@
 <template>
-  <v-footer app height="44" class="d-flex align-center justify-center px-4 text-caption">
+  <v-footer
+    app
+    height="44"
+    class="d-flex align-center justify-center text-caption"
+    :class="xs ? 'footer-compact px-1' : 'px-4'"
+  >
     <!-- Backend Status -->
     <div class="d-flex align-center mr-auto">
       <v-btn
@@ -12,7 +17,7 @@
         <v-icon :color="healthStatus.color" size="16" class="mr-2">
           {{ healthStatus.icon }}
         </v-icon>
-        <span class="status-text">
+        <span v-if="!xs" class="status-text">
           {{ healthStatus.text }}
           <span v-if="backendConnected" class="version-text"> | {{ responseTime }}ms </span>
         </span>
@@ -114,8 +119,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { useDisplay } from 'vuetify';
 import { useLogStore } from '@/stores/logStore';
 import { healthService } from '@/services/healthService';
+
+// Extra-small screens get a compact footer (tighter icons, no "| Nms" suffix)
+// so the status text + link icons fit within 360px without clipping.
+const { xs } = useDisplay();
 
 // No need for frontend version or current year anymore
 
@@ -301,5 +311,17 @@ onBeforeUnmount(() => {
 .version-text {
   opacity: 0.7;
   font-weight: 500;
+}
+
+/* Compact footer for xs: tighten icon spacing and divider so the status text
+   and all link icons fit within 360px with no clipping. */
+.footer-compact :deep(.v-btn.mx-1) {
+  margin-left: 1px !important;
+  margin-right: 1px !important;
+}
+
+.footer-compact :deep(.v-divider) {
+  margin-left: 2px !important;
+  margin-right: 2px !important;
 }
 </style>

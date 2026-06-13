@@ -190,8 +190,8 @@ const tooltipText = 'HNF1B Database: Curated clinical & genetic variants';
  * Responsive logo width based on screen size
  */
 const logoWidth = computed(() => {
-  if (xs.value) return 120; // Extra small screens
-  if (smAndDown.value) return 150; // Small screens
+  if (xs.value) return 140; // Extra small screens
+  if (smAndDown.value) return 160; // Small screens
   return 184; // Default (medium and up)
 });
 
@@ -290,6 +290,9 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   overflow: visible;
+  /* Ensure the home link meets the 44px touch-target minimum even though the
+     logo art is shorter than the app bar. */
+  min-height: 44px;
 }
 
 .app-logo {
