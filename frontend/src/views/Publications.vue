@@ -425,6 +425,22 @@ export default {
       },
     },
   },
+  async mounted() {
+    // The desktop AppDataTable kicks off the initial load via @update:options.
+    // On mobile (smAndDown) that table is not rendered, so the load would never
+    // fire — trigger it here once if it hasn't already initialised.
+    await this.$nextTick();
+    if (!this.loadingInitialized) {
+      this.pagination.currentPage = this.urlState?.page?.value ?? 1;
+      this.pagination.pageSize = this.urlState?.pageSize?.value ?? 10;
+      this.options.sortBy = this.parseSortToVuetify(
+        this.urlState?.sort?.value ?? '-phenopacket_count'
+      );
+      this.previousSortBy = [...this.options.sortBy];
+      this.loadingInitialized = true;
+      this.fetchPublications();
+    }
+  },
   methods: {
     /**
      * Fetch publications from the server with JSON:API offset pagination.
