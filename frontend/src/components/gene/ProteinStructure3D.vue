@@ -41,11 +41,15 @@
 
     <v-card-text>
       <!-- Info Alert about structure coverage -->
-      <v-alert type="info" density="compact" variant="tonal" class="mb-3">
-        <v-icon size="small" class="mr-1"> mdi-information </v-icon>
-        <strong>Structure coverage:</strong> Residues 90-308 (DNA-binding domain, gap at 187-230).
-        Variants outside this region cannot be visualized in 3D.
-      </v-alert>
+      <v-alert
+        type="info"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        title="Structure coverage"
+        text="Residues 90–308 (DNA-binding domain, gap at 187–230). Variants outside this region cannot be visualized in 3D."
+      />
 
       <!-- Unified variant filter + colour-by controls (all-variants view).
            Defaults to missense-only; shares the design + state shape with the
@@ -132,42 +136,43 @@
       <v-alert
         v-if="!showAllVariants && currentVariant && !currentVariantInStructure"
         type="warning"
-        density="compact"
         variant="tonal"
+        density="compact"
+        rounded="lg"
+        icon="mdi-map-marker-off"
         class="mt-3"
+        title="Variant not in structure"
       >
-        <v-icon size="small" class="mr-1"> mdi-map-marker-off </v-icon>
-        <strong>Current variant not in structure:</strong>
         {{ currentVariant.protein || currentVariant.transcript }} is outside the PDB structure range
-        (residues 90-308, gap at 187-230).
+        (residues 90–308, gap at 187–230).
       </v-alert>
 
       <!-- Selected variant info (all variants mode) -->
       <v-alert
         v-if="showAllVariants && selectedVariant"
         :type="selectedVariantInStructure ? 'info' : 'warning'"
-        density="compact"
+        :icon="selectedVariantInStructure ? 'mdi-cursor-default-click' : 'mdi-map-marker-off'"
         variant="tonal"
+        density="compact"
+        rounded="lg"
         class="mt-3"
       >
-        <v-icon size="small" class="mr-1">
-          {{ selectedVariantInStructure ? 'mdi-cursor-default-click' : 'mdi-map-marker-off' }}
-        </v-icon>
-        <strong>Selected:</strong> {{ getVariantLabel(selectedVariant) }}
-        <v-chip size="x-small" :color="getVariantChipColor(selectedVariant)" class="ml-2">
-          {{ selectedVariant.classificationVerdict || 'Unknown' }}
-        </v-chip>
-        <v-btn
-          v-if="selectedVariant"
-          size="x-small"
-          variant="outlined"
-          color="primary"
-          class="ml-3"
-          @click="emitVariantClicked(selectedVariant)"
-        >
-          <v-icon size="x-small" left>mdi-open-in-new</v-icon>
-          View Details
-        </v-btn>
+        <div class="d-flex align-center flex-wrap ga-2">
+          <span> <strong>Selected:</strong> {{ getVariantLabel(selectedVariant) }} </span>
+          <v-chip size="x-small" :color="getVariantChipColor(selectedVariant)">
+            {{ selectedVariant.classificationVerdict || 'Unknown' }}
+          </v-chip>
+          <v-spacer />
+          <v-btn
+            size="x-small"
+            variant="outlined"
+            color="primary"
+            @click="emitVariantClicked(selectedVariant)"
+          >
+            <v-icon size="x-small" start>mdi-open-in-new</v-icon>
+            View Details
+          </v-btn>
+        </div>
       </v-alert>
     </v-card-text>
   </v-card>
