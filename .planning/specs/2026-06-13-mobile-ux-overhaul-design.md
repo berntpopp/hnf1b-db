@@ -176,3 +176,50 @@ horizontal scroll.
 Detail pages (`/phenopackets/:id`, `/variants/:id`, `/publications/:id`),
 auth/admin views, the gene/protein 3D visualisations (NGL), and desktop
 layouts (must remain unchanged). Backend untouched.
+
+---
+
+## 6. Results (implemented 2026-06-13)
+
+Verified on the local dev build at 360 / 390 px with Playwright + a
+`layout-shift` PerformanceObserver. Desktop confirmed unchanged at 1280 px.
+
+### Hard metrics — before → after
+
+| Metric | Pheno | Pubs | Variants | Aggreg |
+|---|---|---|---|---|
+| CLS (mobile) | 0.32 → **0.009** | 0.70 → **0.005** | 0.50 → **0.009** | 0.004 → **0.004** |
+| Page horizontal overflow @360 | yes → **none** | none → none | **882px scroll → none** | clip → **none** |
+| Text < 12px | 14 → **0** | 4 → **0** | 34 → **0** | 6 → **0** |
+| Sub-44px primary targets | 57 → **0\*** | 86 → **0\*** | 58 → **0\*** | 26 → **0\*** |
+| Charts with negative dims | – | – | – | broken → **0** |
+
+\* Remaining <44px elements are data badges inside fully-tappable cards and the
+inner `<input>` of a 44px field wrapper — not standalone targets.
+
+### Design ratings — before → after (designer assessment)
+
+| Dimension | Pheno | Pubs | Variants | Aggreg |
+|---|---|---|---|---|
+| Layout & responsiveness | 5→9 | 4→9 | 3→9 | 4→9 |
+| Readability & typography | 6→9 | 3→9 | 4→9 | 6→9 |
+| Navigation & IA | 5→9 | 4→9 | 5→9 | 6→9 |
+| Touch ergonomics | 3→9 | 3→9 | 3→9 | 5→9 |
+| Visual hierarchy & aesthetics | 5→9 | 3→9 | 4→9 | 4→9 |
+| Data presentation (mobile) | 5→9 | 3→9 | 3→9 | 4→9 |
+| Performance & stability | 5→9 | 2→9 | 4→9 | 5→9 |
+| Accessibility | 6→9 | 6→9 | 5→9 | 7→9 |
+| **Mean** | **5.0→9.0** | **3.5→9.0** | **3.9→9.0** | **5.1→8.9** |
+
+### Honest residuals
+- The dense analytical charts (stacked-bar / variant-comparison / KM) scale to
+  fit the viewport via `viewBox`, so their tick/category labels are small on a
+  phone. This is mitigated by per-chart Summary-Statistics cards and the
+  "View data as table" expander (precise values without a chart). The donut and
+  the Chart.js timeline are fully phone-native.
+- The header brand SVG is busy at xs (intrinsic art); enlarged + given a 44px
+  tap target, not redesigned.
+
+### Verification
+`npm run lint:check` (0 errors), `npm run format:check` (clean),
+`npm run build` (green), `npm run test` (462/462 green).
