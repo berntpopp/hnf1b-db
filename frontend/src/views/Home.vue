@@ -204,6 +204,8 @@
               bg-color="transparent"
               color="primary"
               align-tabs="start"
+              show-arrows
+              center-active
               class="px-2 pt-2"
               @update:model-value="handleTabChange"
             >

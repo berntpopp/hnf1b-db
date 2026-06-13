@@ -1026,8 +1026,12 @@ export default {
     updateSVGWidth() {
       if (this.$refs.svgContainer) {
         const containerWidth = this.$refs.svgContainer.clientWidth;
-        // Use full container width for CNV view (no scrolling), minimum 800px for gene view
-        const minWidth = this.effectiveViewMode === 'cnv' ? containerWidth : 800;
+        // CNV view always fits the container. The detailed gene view normally
+        // uses a wider 800px canvas for legibility, but on narrow screens that
+        // overflows/clips, so fit the container there and let users zoom/pan
+        // for detail (the component already provides zoom controls).
+        const fitToContainer = this.effectiveViewMode === 'cnv' || containerWidth < 768;
+        const minWidth = fitToContainer ? containerWidth : 800;
         this.svgWidth = Math.max(containerWidth, minWidth);
       }
     },

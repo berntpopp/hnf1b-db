@@ -60,13 +60,14 @@
 
       <!-- Main Content: 3D Viewport + Optional Variant Panel -->
       <v-row v-show="!loading && !error" no-gutters>
-        <!-- 3D Viewport Column -->
-        <v-col :cols="showAllVariants ? 8 : 12">
+        <!-- 3D Viewport Column — full width on mobile, 8/12 alongside the
+             variant panel from md up so the panel stacks below on phones. -->
+        <v-col cols="12" :md="showAllVariants ? 8 : 12">
           <div ref="nglContainer" class="ngl-viewport" />
         </v-col>
 
         <!-- Variant List Panel (only in showAllVariants mode) -->
-        <v-col v-if="showAllVariants" cols="4">
+        <v-col v-if="showAllVariants" cols="12" md="4">
           <div class="variant-panel">
             <div class="variant-panel-header">
               <span class="text-subtitle-2">Variants in Structure</span>
