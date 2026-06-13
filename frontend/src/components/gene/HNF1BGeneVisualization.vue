@@ -85,7 +85,23 @@
         </v-col>
       </v-row>
 
-      <!-- Legend -->
+      <!-- Variant filter + colour-by controls (all-variants view only) -->
+      <v-row v-if="!currentVariantId" class="mb-1">
+        <v-col cols="12">
+          <VariantPlotControls v-model="filterState" :variants="variantsWithPositions" />
+          <div
+            v-if="displayVariants.length !== variantsWithPositions.length"
+            class="filter-indicator mt-1"
+          >
+            <v-icon size="small" color="primary" class="mr-1"> mdi-filter </v-icon>
+            <span class="text-body-2">
+              Showing {{ displayVariants.length }} of {{ variantsWithPositions.length }} variants
+            </span>
+          </div>
+        </v-col>
+      </v-row>
+
+      <!-- Legend (glyph shapes) -->
       <v-row class="mb-2">
         <v-col cols="12">
           <div class="legend-container">
@@ -97,17 +113,9 @@
               <v-icon left size="small"> mdi-minus </v-icon>
               Intron
             </v-chip>
-            <v-chip size="small" color="red-lighten-3">
+            <v-chip size="small" variant="tonal">
               <v-icon left size="small"> mdi-circle </v-icon>
-              Pathogenic
-            </v-chip>
-            <v-chip size="small" color="orange-lighten-3">
-              <v-icon left size="small"> mdi-circle </v-icon>
-              Likely Pathogenic
-            </v-chip>
-            <v-chip size="small" color="yellow-darken-1">
-              <v-icon left size="small"> mdi-circle </v-icon>
-              VUS
+              SNV
             </v-chip>
             <v-chip v-if="indelVariants.length > 0" size="small" color="deep-orange">
               <v-icon left size="small"> mdi-rectangle-outline </v-icon>
@@ -665,10 +673,16 @@ import {
   getIndelDetails as getIndelDetailsUtil,
 } from '@/utils/geneVisualization';
 import { calculateTooltipPosition } from '@/utils/tooltip';
-import { getPathogenicityHexColor } from '@/utils/colors';
+import {
+  createDefaultFilterState,
+  getVariantColorByMode,
+  isVariantVisibleByFilters,
+} from '@/utils/variantFilters';
+import VariantPlotControls from '@/components/gene/VariantPlotControls.vue';
 
 export default {
   name: 'HNF1BGeneVisualization',
+  components: { VariantPlotControls },
   props: {
     variants: {
       type: Array,
@@ -700,6 +714,8 @@ export default {
       zoomLevel: 1,
       zoomedExon: null,
       viewMode: 'gene',
+      // Filter state: pathogenicity + consequence multi-select + colour-by mode
+      filterState: createDefaultFilterState(),
       loading: false,
       apiError: null,
       chr17q12Region: { ...CHR17Q12_REGION_DEFAULT },
@@ -805,14 +821,25 @@ export default {
         }))
         .filter((v) => v.position !== null);
     },
+    // Position-valid variants after applying the pathogenicity + consequence
+    // filters. On a single-variant detail view (currentVariantId) the filters
+    // are bypassed so the focused variant is never hidden.
+    displayVariants() {
+      if (this.currentVariantId) {
+        return this.variantsWithPositions;
+      }
+      return this.variantsWithPositions.filter((v) =>
+        isVariantVisibleByFilters(v, this.filterState)
+      );
+    },
     snvVariants() {
-      return this.variantsWithPositions.filter((v) => !v.isCNV && !v.isIndel && !v.isSpliceVariant);
+      return this.displayVariants.filter((v) => !v.isCNV && !v.isIndel && !v.isSpliceVariant);
     },
     spliceVariants() {
-      return this.variantsWithPositions.filter((v) => v.isSpliceVariant);
+      return this.displayVariants.filter((v) => v.isSpliceVariant);
     },
     indelVariants() {
-      return this.variantsWithPositions
+      return this.displayVariants
         .filter((v) => v.isIndel)
         .map((v) => {
           const details = this.getIndelDetails(v);
@@ -826,7 +853,7 @@ export default {
         .filter((v) => v.start && v.end);
     },
     cnvVariants() {
-      const cnvsFromArray = this.variantsWithPositions
+      const cnvsFromArray = this.displayVariants
         .filter((v) => v.isCNV)
         .map((v) => {
           const cnvDetails = this.getCNVDetails(v);
@@ -1112,10 +1139,21 @@ export default {
       return getExonColorUtil(exon);
     },
     getVariantColor(variant) {
-      return getPathogenicityHexColor(variant.classificationVerdict);
+      // Mode-aware fill: ACMG classification ⇄ molecular-consequence (type).
+      return getVariantColorByMode(variant, this.filterState);
     },
     getCNVColor(cnv) {
-      return getCNVColorUtil(cnv.cnvType);
+      // In "Type" colour mode, fall back to the structural loss/gain palette
+      // when a CNV record lacks an explicit molecular_consequence so the bar is
+      // never an ambiguous grey; otherwise defer to the shared mode-aware logic.
+      if (
+        this.filterState.coloringMode === 'consequence' &&
+        !cnv.molecular_consequence &&
+        cnv.cnvType
+      ) {
+        return getCNVColorUtil(cnv.cnvType);
+      }
+      return getVariantColorByMode(cnv, this.filterState);
     },
     getCNVDisplayCoords(cnv) {
       // Clamp CNV coordinates to VISIBLE region (not fixed gene boundaries)
@@ -1302,6 +1340,12 @@ export default {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.filter-indicator {
+  display: flex;
+  align-items: center;
+  color: #1976d2;
 }
 
 .svg-container {
