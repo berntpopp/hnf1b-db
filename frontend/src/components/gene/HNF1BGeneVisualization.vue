@@ -59,10 +59,13 @@
       <!-- View Mode Toggle -->
       <v-row v-if="hasExtendedCNV" class="mb-3">
         <v-col cols="12">
-          <v-alert type="warning" density="compact" variant="tonal">
-            <v-icon left> mdi-alert </v-icon>
-            CNV extends beyond HNF1B gene ({{ formatCNVSize() }})
-          </v-alert>
+          <v-alert
+            type="warning"
+            variant="tonal"
+            density="compact"
+            rounded="lg"
+            :text="`CNV extends beyond the HNF1B gene (${formatCNVSize()}).`"
+          />
           <!-- Toggle button: only show when not in forced mode (i.e., when used standalone) -->
           <v-btn-group v-if="showViewModeToggle" mandatory class="mt-2">
             <v-btn

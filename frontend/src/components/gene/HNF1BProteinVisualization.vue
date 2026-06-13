@@ -77,22 +77,27 @@
       </v-row>
 
       <!-- Info Alert for CNVs -->
-      <v-alert v-if="cnvVariants.length > 0" type="warning" density="compact" class="mb-3">
-        <v-icon size="small" class="mr-1"> mdi-alert </v-icon>
-        {{ cnvVariants.length }} CNV(s) not shown in protein view. Switch to Gene View to see
-        structural variants.
-      </v-alert>
+      <v-alert
+        v-if="cnvVariants.length > 0"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        :text="`${cnvVariants.length} CNV(s) are not shown in the protein view — switch to Gene View to see structural variants.`"
+      />
 
       <!-- Info Alert for Splice Variants -->
       <v-alert
         v-if="isCurrentVariantSpliceVariant"
         type="info"
-        density="compact"
         variant="tonal"
+        density="compact"
+        rounded="lg"
         class="mb-3"
+        title="Splice site variant detected"
       >
-        <v-icon size="small" class="mr-1"> mdi-information </v-icon>
-        <strong>Splice site variant detected:</strong> {{ currentVariantTranscript }}
+        <div class="font-weight-medium">{{ currentVariantTranscript }}</div>
         <div class="text-caption mt-1">
           This variant affects RNA splicing and cannot be displayed in protein view. The exact
           protein effect depends on how splicing is disrupted (exon skipping, intron retention, or
