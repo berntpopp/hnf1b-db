@@ -259,12 +259,25 @@ networks:
   npm_proxy_network:
     external: true
     name: ${NPM_SHARED_NETWORK_NAME:-npm_default}
+  # Production: the internal network is externally managed so compose never
+  # re-owns it under a shifting project name (silences the "network created for
+  # project ..." provenance warning). Fresh deploy: docker network create hnf1b_internal
+  hnf1b_internal:
+    external: true
+    name: hnf1b_internal
 
 # ============================================
-# Volumes (inherit from base)
+# Volumes (externally managed in production)
 # ============================================
+# The live Postgres/Redis data volumes are declared external so that a compose
+# project-name change (or an accidental `down -v`) can NEVER destroy them, and
+# so the stale-project-label provenance warning is silenced. They are created
+# once and persist independently of the compose project.
+# Fresh deploy: docker volume create hnf1b_postgres_data hnf1b_redis_data
 volumes:
   hnf1b_postgres_data:
+    external: true
     name: hnf1b_postgres_data
   hnf1b_redis_data:
+    external: true
     name: hnf1b_redis_data
