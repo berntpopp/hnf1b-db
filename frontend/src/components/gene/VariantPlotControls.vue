@@ -23,7 +23,7 @@
       <v-btn-toggle
         :model-value="modelValue.coloringMode"
         mandatory
-        divided
+        density="compact"
         rounded="lg"
         variant="outlined"
         color="primary"
@@ -201,13 +201,23 @@ export default {
   padding-top: 5px;
 }
 
-/* Give the segmented toggle a defined outline + comfortable height/padding. */
+/* Compact, evenly-padded segmented toggle. v-btn-toggle's default density
+   renders 48px buttons that ignore size="small", so pin a tight height and
+   centre the content with comfortable horizontal padding. */
 .vpc-toggle {
-  height: 34px;
+  height: 30px;
 }
 
 .vpc-toggle :deep(.v-btn) {
-  height: 34px;
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 16px;
+}
+
+.vpc-toggle :deep(.v-btn__content) {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .vpc-chips {
