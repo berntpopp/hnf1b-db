@@ -129,7 +129,7 @@ function onClearSearch() {
 .search-field :deep(.v-field__input) {
   padding-top: 8px;
   padding-bottom: 8px;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .result-chip {

@@ -338,4 +338,9 @@ const rangeText = computed(() => {
   /* Two stacked rows need a touch more vertical room */
   min-height: 88px;
 }
+
+/* 44px touch target for the items-per-page select on mobile */
+.app-pagination--mobile .items-per-page-select :deep(.v-field__input) {
+  min-height: 44px;
+}
 </style>
