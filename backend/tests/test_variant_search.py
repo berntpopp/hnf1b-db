@@ -5,6 +5,8 @@ capabilities, including security validation, HGVS notation search, and molecular
 consequence filtering.
 """
 
+import logging
+
 import pytest
 from fastapi import HTTPException
 
@@ -537,3 +539,38 @@ class TestAllVariantsConsequenceFilter:
         assert "consq-var-missense" not in ids
         assert "consq-var-nonsense" not in ids
         assert body["meta"]["page"]["totalRecords"] == len(rows)
+
+
+def _variant_search_records(caplog) -> list:
+    """Audit records emitted by the all-variants endpoint."""
+    return [r for r in caplog.records if r.getMessage() == "VARIANT_SEARCH"]
+
+
+@pytest.mark.asyncio
+class TestAllVariantsAuditUser:
+    """Issue #140: the /all-variants audit log records the authenticated user.
+
+    Previously ``user_id`` was hardcoded to ``None`` (always ``"anonymous"``).
+    The endpoint now resolves the optional user and logs their email, while
+    unauthenticated requests still log ``"anonymous"``.
+    """
+
+    async def test_authenticated_request_logs_user_email(
+        self, async_client, admin_headers, caplog
+    ):
+        """An authenticated request records the caller's email in the audit log."""
+        with caplog.at_level(logging.INFO, logger="audit"):
+            resp = await async_client.get(ALL_VARIANTS_PATH, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        records = _variant_search_records(caplog)
+        assert records, "expected a VARIANT_SEARCH audit record"
+        assert records[-1].user_id == "testadmin@example.com"
+
+    async def test_anonymous_request_logs_anonymous(self, async_client, caplog):
+        """An unauthenticated request still records ``anonymous`` (no PII leak)."""
+        with caplog.at_level(logging.INFO, logger="audit"):
+            resp = await async_client.get(ALL_VARIANTS_PATH)
+        assert resp.status_code == 200, resp.text
+        records = _variant_search_records(caplog)
+        assert records, "expected a VARIANT_SEARCH audit record"
+        assert records[-1].user_id == "anonymous"
