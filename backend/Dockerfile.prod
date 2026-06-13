@@ -82,6 +82,10 @@ COPY --from=builder --chown=hnf1b:hnf1b /app/.venv /app/.venv
 COPY --chown=hnf1b:hnf1b ./app ./app
 COPY --chown=hnf1b:hnf1b ./alembic ./alembic
 COPY --chown=hnf1b:hnf1b ./alembic.ini ./
+# pyproject.toml is the single source of truth for the application version,
+# resolved at runtime by app/core/version.py. The runtime stage does not
+# install the project as a distribution, so the file itself must be present.
+COPY --chown=hnf1b:hnf1b ./pyproject.toml ./
 COPY --chown=hnf1b:hnf1b ./migration ./migration
 COPY --chown=hnf1b:hnf1b ./scripts ./scripts
 COPY --chown=hnf1b:hnf1b ./config.yaml ./

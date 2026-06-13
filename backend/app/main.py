@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app import hpo_proxy, variant_validator_endpoint
 from app.api import auth_endpoints
 from app.api.admin import router as admin_router
+from app.api.version import router as version_router
 from app.comments.routers import router as comments_router
 from app.core.cache import cache, close_cache, init_cache
 from app.core.config import settings
@@ -17,6 +18,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.mv_cache import init_mv_cache
 from app.core.request_id import RequestIdMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.version import APP_VERSION, PHENOPACKET_SCHEMA_VERSION
 from app.database import async_session_maker, engine
 from app.ontology import routers as ontology_router
 from app.phenopackets import clinical_endpoints
@@ -56,7 +58,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HNF1B Phenopackets API",
     description="GA4GH Phenopackets v2 compliant API for HNF1B disease data",
-    version="2.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     openapi_url="/api/v2/openapi.json",  # OpenAPI spec at /api/v2/openapi.json
     docs_url="/api/v2/docs",
@@ -108,6 +110,7 @@ app.include_router(search_router, prefix="/api/v2")
 app.include_router(seo_router, prefix="/api/v2/seo")
 app.include_router(comments_router, prefix="/api/v2")
 app.include_router(users_mentionable_router, prefix="/api/v2")
+app.include_router(version_router, prefix="/api/v2")
 
 # --- Wave 5a dev-mode quick-login — Layer 2 conditional mount ------------
 #
@@ -137,7 +140,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "HNF1B Phenopackets API",
-        "version": "2.0.0",
+        "version": APP_VERSION,
         "description": "GA4GH Phenopackets v2 compliant API",
         "documentation": "/api/v2/docs",
         "endpoints": {
@@ -178,8 +181,8 @@ async def liveness_check():
     """Lightweight liveness endpoint for process-level health checks."""
     return {
         "status": "alive",
-        "version": "2.0.0",
-        "phenopackets_schema": "2.0.0",
+        "version": APP_VERSION,
+        "phenopackets_schema": PHENOPACKET_SCHEMA_VERSION,
     }
 
 
@@ -192,8 +195,8 @@ async def health_check():
 
     payload = {
         "status": "healthy" if is_ready else "degraded",
-        "version": "2.0.0",
-        "phenopackets_schema": "2.0.0",
+        "version": APP_VERSION,
+        "phenopackets_schema": PHENOPACKET_SCHEMA_VERSION,
         "ready": is_ready,
         "dependencies": {
             "database": {
@@ -215,8 +218,8 @@ async def health_check():
 async def api_info():
     """Get API information and capabilities."""
     return {
-        "version": "2.0.0",
-        "phenopackets_version": "2.0.0",
+        "version": APP_VERSION,
+        "phenopackets_version": PHENOPACKET_SCHEMA_VERSION,
         "capabilities": {
             "search": True,
             "aggregation": True,

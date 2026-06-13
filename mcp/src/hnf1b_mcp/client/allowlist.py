@@ -63,6 +63,7 @@ _DENY = [
         r"^/hpo/",
         # Build/version info — not data.
         r"^/info$",
+        r"^/version$",
         # Per-phenopacket workflow/audit/revision routes — curation internals.
         r"^/phenopackets/[^/]+/(audit|revisions|timeline|transitions)(/|$)",
         # Statistical-comparison endpoint — not in the curated metric set.

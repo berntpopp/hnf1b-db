@@ -123,6 +123,7 @@ VARIANTS_RECODE = "/variants/recode"
 VARIANTS_RECODE_BATCH = "/variants/recode/batch"
 VARIANTS_SUGGEST_BY_PARTIAL_NOTATION = "/variants/suggest/{partial_notation}"
 VARIANTS_VALIDATE = "/variants/validate"
+VERSION = "/version"
 
 ALL_PATHS: tuple[str, ...] = (
     ADMIN_REFERENCE_STATUS,
@@ -226,4 +227,5 @@ ALL_PATHS: tuple[str, ...] = (
     VARIANTS_RECODE_BATCH,
     VARIANTS_SUGGEST_BY_PARTIAL_NOTATION,
     VARIANTS_VALIDATE,
+    VERSION,
 )
