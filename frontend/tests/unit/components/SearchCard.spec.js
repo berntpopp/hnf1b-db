@@ -107,4 +107,28 @@ describe('SearchCard', () => {
       query: { q: 'NM_000458.4:c.826C>T' },
     });
   });
+
+  it('disables client-side filtering so server-driven suggestions are trusted', async () => {
+    // Server-driven async autocomplete must set `no-filter`; otherwise
+    // Vuetify re-filters fetched items against the literal typed string and
+    // silently drops fuzzy/substring/synonym matches the backend returned.
+    const { wrapper } = await mountCard();
+    const autocomplete = wrapper.findComponent({ name: 'VAutocomplete' });
+    expect(autocomplete.props('noFilter')).toBe(true);
+  });
+
+  it('escalates a free-text query to the full search page on Enter', async () => {
+    const { wrapper, router } = await mountCard();
+    const pushSpy = vi.spyOn(router, 'push');
+    const autocomplete = wrapper.findComponent({ name: 'VAutocomplete' });
+
+    // Type a phenotype phrase with no suggestion selected, then press Enter.
+    await autocomplete.vm.$emit('update:search', 'renal cysts');
+    await wrapper.find('input').trigger('keyup.enter');
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      name: 'SearchResults',
+      query: { q: 'renal cysts' },
+    });
+  });
 });

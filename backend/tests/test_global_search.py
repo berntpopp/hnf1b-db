@@ -226,6 +226,75 @@ class TestGlobalSearchRepository:
 
         assert len(results) <= 2
 
+    @pytest.mark.asyncio
+    async def test_autocomplete_matches_word_inside_label(
+        self, db_session: AsyncSession, search_test_data
+    ):
+        """Autocomplete must surface a word that appears *inside* a label.
+
+        Regression: the previous prefix-only implementation matched solely
+        ``label ILIKE 'query%'`` or whole-label trigram, so a query for a word
+        embedded in a multi-word label (the real-world ``diabetes`` /
+        ``cyst`` case) returned nothing. ``mutation`` appears mid-title in the
+        fixture publication "SEARCHGENE mutation analysis study"; full-text
+        matching on ``search_vector`` must now find it.
+        """
+        repo = GlobalSearchRepository(db_session)
+        results = await repo.autocomplete("mutation", limit=10)
+
+        assert any(
+            r["label"] == "SEARCHGENE mutation analysis study" for r in results
+        ), results
+
+    @pytest.mark.asyncio
+    async def test_autocomplete_matches_substring_inside_label(
+        self, db_session: AsyncSession, search_test_data
+    ):
+        """Autocomplete must surface a *substring* that is not a token start.
+
+        Regression mirroring partial variant queries like ``c.5`` ->
+        ``HNF1B:c.544+1G>C``. ``nalysis`` is a substring of "analysis" in the
+        fixture publication title but is neither a label prefix nor a
+        full-text token, so only the substring tier can find it.
+        """
+        repo = GlobalSearchRepository(db_session)
+        results = await repo.autocomplete("nalysis", limit=10)
+
+        assert any(
+            r["label"] == "SEARCHGENE mutation analysis study" for r in results
+        ), results
+
+    @pytest.mark.asyncio
+    async def test_autocomplete_tolerates_typos(
+        self, db_session: AsyncSession, search_test_data
+    ):
+        """Autocomplete must tolerate a one-character typo via word similarity.
+
+        ``mutaton`` (missing the ``i`` of "mutation") must still surface the
+        fixture publication through the fuzzy ``word_similarity`` tier.
+        """
+        repo = GlobalSearchRepository(db_session)
+        results = await repo.autocomplete("mutaton", limit=10)
+
+        assert any(
+            r["label"] == "SEARCHGENE mutation analysis study" for r in results
+        ), results
+
+    @pytest.mark.asyncio
+    async def test_autocomplete_prefix_ranked_first(
+        self, db_session: AsyncSession, search_test_data
+    ):
+        """A label that starts with the query must outrank mid-label matches.
+
+        Classic typeahead expectation: typing the start of a label keeps that
+        label at the top even though the FTS/substring tiers also match.
+        """
+        repo = GlobalSearchRepository(db_session)
+        results = await repo.autocomplete("SEARCHGENE", limit=10)
+
+        assert results, results
+        assert results[0]["label"].upper().startswith("SEARCHGENE"), results
+
 
 # ============================================================================
 # PhenopacketSearchRepository Tests
