@@ -30,7 +30,7 @@
 
     <v-card-text>
       <!-- Variant filter + colour-by controls (all-variants view only) -->
-      <v-row v-if="!currentVariantId" class="mb-1">
+      <v-row v-if="!currentVariantId" class="mb-1 pt-4">
         <v-col cols="12">
           <VariantPlotControls v-model="filterState" :variants="snvVariants" class="mb-2" />
 
