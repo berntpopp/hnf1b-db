@@ -54,7 +54,7 @@ dnspython==2.8.0
     # via email-validator
 email-validator==2.3.0
     # via hnf1b-api (pyproject.toml)
-fastapi==0.136.3
+fastapi==0.137.0
     # via hnf1b-api (pyproject.toml)
 fastobo==0.14.1
     # via pronto
@@ -62,7 +62,7 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-ga4gh-vrs==2.3.2
+ga4gh-vrs==2.3.3
     # via hnf1b-api (pyproject.toml)
 greenlet==3.5.1
     # via sqlalchemy
@@ -135,7 +135,7 @@ pydantic==2.13.4
     #   fastapi
     #   ga4gh-vrs
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.47.0
     # via pydantic
 pydantic-settings==2.14.1
     # via hnf1b-api (pyproject.toml)
