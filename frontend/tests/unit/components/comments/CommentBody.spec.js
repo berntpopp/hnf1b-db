@@ -1,6 +1,12 @@
 /**
  * Unit tests for CommentBody.vue
  *
+ * @vitest-environment jsdom
+ *
+ * CommentBody renders sanitized markdown (DOMPurify via @/utils/sanitize).
+ * DOMPurify 3.4.x needs a spec-accurate DOM; happy-dom's shim mis-sanitizes,
+ * so this runs under jsdom (matches real browsers). See sanitize.spec.js.
+ *
  * CommentBody renders markdown via markdown-it and then passes the result
  * through DOMPurify (via @/utils/sanitize) before setting it as v-html.
  *

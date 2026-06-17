@@ -1,6 +1,12 @@
 /**
  * Characterization test for FAQ.vue XSS resistance.
  *
+ * @vitest-environment jsdom
+ *
+ * Exercises DOMPurify via @/utils/sanitize, which requires a spec-accurate
+ * DOM. happy-dom's shim is incompatible with DOMPurify 3.4.x, so this runs
+ * under jsdom (matches real-browser sanitization). See sanitize.spec.js.
+ *
  * Does not mount the full component (it fetches remote content
  * asynchronously). Instead tests the renderMarkdown + sanitize pipeline
  * directly by exercising the same transformation chain FAQ.vue uses.

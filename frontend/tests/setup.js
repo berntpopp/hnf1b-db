@@ -5,6 +5,10 @@
  * Reference: /mnt/c/development/agde-frontend/tests/setup.js
  */
 
+// MUST be first: establishes globalThis.CSS before the Vuetify plugin import
+// below evaluates (Vuetify's util/globals reads CSS.supports() at import time,
+// and jsdom — used by the DOMPurify sanitization suites — has no CSS global).
+import './setup-polyfills.js';
 import { config } from '@vue/test-utils';
 import vuetify from '@/plugins/vuetify';
 
