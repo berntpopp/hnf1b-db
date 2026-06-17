@@ -1,6 +1,15 @@
 /**
  * Unit tests for the sanitize utility.
  *
+ * @vitest-environment jsdom
+ *
+ * DOMPurify needs a spec-accurate DOM to sanitize correctly. happy-dom's DOM
+ * shim is incompatible with DOMPurify 3.4.x (it drops allowed tags such as
+ * <strong>/<a>/<p> and leaves <script> text content behind), so these
+ * security tests run under jsdom, whose output matches real browsers.
+ * Verified: identical, correct output in Chromium and jsdom; only happy-dom
+ * mis-sanitizes.
+ *
  * Tests cover: script removal, event-handler stripping, javascript: URLs,
  * and preservation of the markdown-friendly tag whitelist.
  */
