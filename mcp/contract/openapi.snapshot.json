@@ -3703,7 +3703,7 @@
   "info": {
     "description": "GA4GH Phenopackets v2 compliant API for HNF1B disease data",
     "title": "HNF1B Phenopackets API",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "openapi": "3.1.0",
   "paths": {
