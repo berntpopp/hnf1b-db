@@ -52,7 +52,7 @@ rag = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.15.17",
+    "ruff==0.15.20",
     "mypy==2.1.0",
     "types-jsonschema>=4.25.1.20250822",
     "types-pyyaml>=6.0.12.20260408",  # Type stubs for PyYAML
@@ -60,7 +60,7 @@ dev = [
 ]
 test = [
     "ga4gh-vrs>=2.1.3",
-    "pytest==9.1.0",
+    "pytest==9.1.1",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
     "pytest-cov==7.1.0",
     "pytest-xdist>=3.6.0",  # Parallel test execution with per-worker DB isolation
