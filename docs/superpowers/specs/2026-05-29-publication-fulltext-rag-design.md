@@ -62,7 +62,7 @@ Two sibling MCP servers independently converged on the same pattern; we adopt it
 | Lexical ranking | `phraseto×3.0 + websearch×2.0 + to_tsquery(recall OR)×1.0`, `ts_rank_cd`; recall fallback confidence multiplier | same |
 | Semantic index | `vector(384)` + HNSW (cosine), built post-bulk-load | same, optional |
 | Embedding model | `BAAI/bge-small-en-v1.5` (384-d, normalized), query prefix `"Represent this sentence for searching relevant passages: "` | same |
-| Embedding runtime | `sentence-transformers` via `asyncio.to_thread`, FakeProvider in tests, async batched (32) backfill keyed on `text_hash` (SHA256) | same; dependency is an optional `[rag]` extra |
+| Embedding runtime | `sentence-transformers` via `asyncio.to_thread`, FakeProvider in tests, async batched (32) backfill keyed on `text_hash` (SHA256) | same; optional runtime install only, not a tracked project extra while the transitive `torch` advisory has no patched lock target |
 | Fusion | RRF `1/(60+rank_lex) + 1/(60+rank_dense)` + section/role boosts | RRF, k=60, section boosts |
 | Chunking | genereviews: 510-token / 50-overlap windows, never cross section, BGE tokenizer w/ char-offset recovery | adopt genereviews approach |
 | Token budgeting | `chars/3.6` estimate; `max_chars`; `ts_headline` snippets | same |
@@ -223,7 +223,7 @@ MCP:
   record partial; continue batch.
 - ID-converter or EuropePMC unavailable → skip full text, keep abstracts
   (degraded mode), reflected in `SyncResponse`.
-- Embedding provider absent (no `[rag]` extra) → semantic disabled gracefully;
+- Embedding provider absent (no optional runtime backend) → semantic disabled gracefully;
   `rerank=rrf` falls back to lexical with a diagnostic note.
 
 ## Testing

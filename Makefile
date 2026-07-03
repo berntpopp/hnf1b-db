@@ -206,8 +206,8 @@ publications-backfill-dry:  ## Dry run - shows which publications would be backf
 publications-backfill-test:  ## Backfill first 10 publications (for testing)
 	cd backend && uv run python scripts/backfill_publications.py --limit 10
 
-publications-backfill-embeddings:  ## Backfill full text AND embeddings (needs [rag] extra)
-	cd backend && uv run --extra rag python scripts/backfill_publications.py --embeddings
+publications-backfill-embeddings:  ## Backfill full text AND embeddings (needs sentence-transformers)
+	cd backend && uv run python scripts/backfill_publications.py --embeddings
 
 # Variant Annotation Sync Commands (Fetch VEP annotations for unique variants)
 variants-sync:  ## Sync all variant annotations from VEP
