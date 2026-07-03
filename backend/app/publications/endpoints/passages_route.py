@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["publications"])
 
 # Lazily-built, process-wide embedding provider. Building it loads the model
-# (seconds), so we cache the single instance. ``None`` means the optional [rag]
-# stack is not installed and the dense leg is disabled (lexical-only retrieval).
+# (seconds), so we cache the single instance. ``None`` means the optional
+# embedding backend is not installed and the dense leg is disabled.
 _PROVIDER_CACHE: dict[str, Optional[EmbeddingProvider]] = {}
 
 
 def _shared_provider() -> Optional[EmbeddingProvider]:
-    """Return the cached embedding provider (or ``None`` when [rag] is absent)."""
+    """Return the cached embedding provider, or ``None`` when unavailable."""
     if "provider" not in _PROVIDER_CACHE:
         rag = settings.publications_rag
         _PROVIDER_CACHE["provider"] = get_embedding_provider(

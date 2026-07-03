@@ -138,8 +138,7 @@
                   <pre
                     class="text-body-2"
                     style="white-space: pre-wrap; font-family: monospace; margin: 0"
-                    >{{ formatBibtex(section.content.formats.bibtex.template) }}</pre
-                  >
+                    >{{ formatBibtex(section.content.formats.bibtex.template) }}</pre>
                 </v-sheet>
               </v-card-text>
             </v-card>

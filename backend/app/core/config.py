@@ -291,9 +291,9 @@ class PublicationsRagConfig(BaseModel):
 
     The retrieval stack mirrors the genereviews-link / pubtator-link sibling
     MCP servers: lexical FTS (always on) + optional pgvector semantic search
-    fused with Reciprocal Rank Fusion. Embeddings are an optional dependency
-    (``sentence-transformers`` via the ``[rag]`` extra); when absent the lexical
-    path degrades gracefully and a ``FakeEmbeddingProvider`` powers tests.
+    fused with Reciprocal Rank Fusion. Embeddings are provided by an optional
+    runtime ``sentence-transformers`` installation; when absent the lexical path
+    degrades gracefully and a ``FakeEmbeddingProvider`` powers tests.
     """
 
     # License gate: body passages are stored only when the publication's

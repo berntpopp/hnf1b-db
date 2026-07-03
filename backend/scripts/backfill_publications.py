@@ -14,7 +14,7 @@ By default, publications whose full text was fetched within
 Usage:
     python scripts/backfill_publications.py --dry-run
     python scripts/backfill_publications.py --limit 10
-    python scripts/backfill_publications.py --embeddings        # needs [rag] extra
+    python scripts/backfill_publications.py --embeddings        # needs sentence-transformers
     python scripts/backfill_publications.py --force
 
 Requirements:
@@ -153,7 +153,8 @@ async def main(
             if provider is None:
                 print(
                     "\nEmbeddings requested but sentence-transformers is not "
-                    "installed (install the [rag] extra). Skipping."
+                    "installed. Install a patched sentence-transformers/torch "
+                    "stack in the runtime environment to enable embeddings. Skipping."
                 )
             else:
                 print(f"\nEmbedding passages with {provider.model_name}...")
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--embeddings",
         action="store_true",
-        help="Also backfill embeddings (needs [rag])",
+        help="Also backfill embeddings (needs sentence-transformers)",
     )
     args = parser.parse_args()
 

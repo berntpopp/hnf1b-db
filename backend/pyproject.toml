@@ -10,7 +10,7 @@ dependencies = [
     "pandas>=2.3.2",
     "pwdlib[argon2,bcrypt]>=0.2.1", # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
     "pydantic>=2.13.0",
-    "pydantic-settings>=2.10.1",
+    "pydantic-settings>=2.14.2",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.27",
@@ -39,20 +39,9 @@ dependencies = [
     "aiosmtplib>=5.1.0",
 ]
 
-[project.optional-dependencies]
-# Optional semantic-search stack for publication full-text RAG. NOT installed
-# in CI (the unit + integration lanes use a deterministic FakeEmbeddingProvider
-# and exercise the dense/RRF path with pgvector-inserted fake vectors). Install
-# with `uv sync --extra rag` (or `pip install .[rag]`) to enable real
-# BAAI/bge-small-en-v1.5 embeddings in production/backfill.
-rag = [
-    "sentence-transformers>=3.0.0",
-]
-
-
 [dependency-groups]
 dev = [
-    "ruff==0.15.17",
+    "ruff==0.15.20",
     "mypy==2.1.0",
     "types-jsonschema>=4.25.1.20250822",
     "types-pyyaml>=6.0.12.20260408",  # Type stubs for PyYAML
@@ -60,7 +49,7 @@ dev = [
 ]
 test = [
     "ga4gh-vrs>=2.1.3",
-    "pytest==9.1.0",
+    "pytest==9.1.1",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
     "pytest-cov==7.1.0",
     "pytest-xdist>=3.6.0",  # Parallel test execution with per-worker DB isolation
@@ -94,9 +83,10 @@ module = ["ga4gh.*", "bioutils.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Optional [rag] extra — not installed in CI. The embedding provider lazy-imports
-# these behind a capability check, so missing stubs/imports must not fail typecheck.
-module = ["sentence_transformers.*", "tokenizers.*", "transformers.*", "torch.*"]
+# Optional embedding backend is not installed in CI. The embedding provider
+# lazy-imports these behind a capability check, so missing stubs/imports must
+# not fail typecheck.
+module = ["sentence_transformers.*", "transformers.*"]
 ignore_missing_imports = true
 # NOTE: ga4gh.vrs and bioutils libraries do not include type annotations (no py.typed marker)
 # and have no published type stubs on PyPI (verified 2025-01-06).

@@ -146,6 +146,9 @@ async def _truncate_mutable_tables() -> None:
     async with engine.begin() as conn:
         joined = ", ".join(_MUTABLE_TABLES)
         await conn.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
+        # TRUNCATE clears pg_stat_user_tables timestamps; keep index/statistics
+        # assertions deterministic after the isolation cleanup.
+        await conn.execute(text("ANALYZE phenopackets"))
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
