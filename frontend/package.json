@@ -51,7 +51,7 @@
     "@pinia/testing": "^1.0.3",
     "@playwright/test": "^1.61.1",
     "@vitejs/plugin-vue": "^6.0.7",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.0.7",
     "@vue/test-utils": "^2.4.11",
     "eslint": "^10.6.0",
