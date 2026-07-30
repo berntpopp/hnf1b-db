@@ -41,6 +41,10 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
             "progress-status",
             "allelic-state",
             "evidence-code",
+            "cohort",
+            "detection-method",
+            "segregation",
+            "family-history",
         ] = "hpo",
         limit: int = 10,
         response_mode: ResponseMode | None = None,
@@ -51,23 +55,28 @@ def register(mcp: FastMCP, client: ApiClient | None) -> None:
         HNF1B-db.  For HPO, performs a free-text autocomplete search returning
         matching HPO identifiers with labels and descriptions.  For named
         controlled vocabularies (sex, interpretation-status, progress-status,
-        allelic-state, evidence-code), retrieves the full vocabulary list and
-        optionally filters by *text* (case-insensitive substring match),
-        returning at most *limit* entries.
+        allelic-state, evidence-code, cohort, detection-method, segregation,
+        family-history), retrieves the full vocabulary list and optionally
+        filters by *text* (case-insensitive substring match), returning at
+        most *limit* entries.  The last four (cohort, detection-method,
+        segregation, family-history) back HNF1B-DB's curated case-level
+        facts (spec §4.6); note that ``hnf1bCuration`` itself is not exposed
+        by ``hnf1b_get_individual`` — see that tool's docstring.
 
         Use this tool to:
         - Find the correct ``HP:XXXXXXX`` term ID before submitting phenotype
           queries.
         - Enumerate allowed values for structured annotation fields
-          (e.g. sex, allelic state).
+          (e.g. sex, allelic state, detection method).
 
         Args:
             text: Free-text query string.  May be empty for controlled
                 vocabularies to retrieve the full list.
             vocabulary: Vocabulary to search.  One of ``"hpo"``, ``"sex"``,
                 ``"interpretation-status"``, ``"progress-status"``,
-                ``"allelic-state"``, ``"evidence-code"``.  Defaults to
-                ``"hpo"``.
+                ``"allelic-state"``, ``"evidence-code"``, ``"cohort"``,
+                ``"detection-method"``, ``"segregation"``,
+                ``"family-history"``.  Defaults to ``"hpo"``.
             limit: Maximum number of matches to return (≥ 1).  Defaults to 10.
                 A value below 1 returns an ``invalid_input`` error.
             response_mode: Response verbosity — one of ``minimal``, ``compact``,

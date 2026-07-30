@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import httpx
 import pytest
 import respx
@@ -926,3 +928,38 @@ async def test_get_individuals_batch_order_with_not_found():
     await c.aclose()
     assert [i["phenopacket_id"] for i in result["individuals"]] == ["A", "B"]
     assert result["not_found"] == ["MISSING"]
+
+
+# ---------------------------------------------------------------------------
+# hnf1bCuration exclusion (curation data-model spec §4.8, MCP Task 12 Step 5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_mcp_output_excludes_curation_metadata():
+    """hnf1bCuration is curator-internal; the MCP surface is public.
+
+    Asserted rather than left implicit so that adding it later is a
+    conscious contract change, not an accident of field-by-field shaping in
+    _shape_individual. response_mode="full" is used so a narrower mode's
+    field projection cannot be mistaken for the reason it is absent — it
+    must never even reach the shaped dict.
+    """
+    record = copy.deepcopy(_PHENOPACKET_X)
+    record["phenopacket"]["hnf1bCuration"] = {
+        "cohort": "fetus",
+        "detectionMethod": "mlpa",
+        "curatedBy": "someone",
+    }
+    respx.get(f"{BASE}/phenopackets/X").mock(
+        return_value=httpx.Response(200, json=record)
+    )
+    respx.get(f"{BASE}/publications/").mock(
+        return_value=httpx.Response(200, json={"data": [], "meta": {}})
+    )
+    c = ApiClient(base_url=BASE)
+    result = await get_individual(c, "X", response_mode="full")
+    await c.aclose()
+
+    assert "hnf1bCuration" not in result

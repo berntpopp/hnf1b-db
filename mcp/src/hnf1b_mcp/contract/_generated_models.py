@@ -1019,6 +1019,69 @@ class VariantValidationResponse(BaseModel):
     ] = None
 
 
+class VersionResponse(BaseModel):
+    api_path_version: Annotated[
+        str,
+        Field(
+            description="Major version of the REST API URL contract (the /api/v2 prefix).",
+            examples=["v2"],
+            title="Api Path Version",
+        ),
+    ]
+    api_version: Annotated[
+        str,
+        Field(
+            description="Application version (semver; beta 0.X.Y), single-sourced from pyproject.toml — never hardcoded in application code.",
+            examples=["0.1.1"],
+            title="Api Version",
+        ),
+    ]
+    db_schema_head: Annotated[
+        Optional[str],
+        Field(
+            description="Latest Alembic migration revision defined in the codebase (head), or null if it cannot be determined.",
+            title="Db Schema Head",
+        ),
+    ] = None
+    db_schema_in_sync: Annotated[
+        Optional[bool],
+        Field(
+            description="True when the applied DB revision matches the codebase head; null if either revision is unknown.",
+            title="Db Schema In Sync",
+        ),
+    ] = None
+    db_schema_revision: Annotated[
+        Optional[str],
+        Field(
+            description="Alembic migration revision currently applied to the database, or null if it cannot be determined.",
+            title="Db Schema Revision",
+        ),
+    ] = None
+    phenopacket_schema_version: Annotated[
+        str,
+        Field(
+            description="GA4GH Phenopackets schema version the API conforms to.",
+            examples=["2.0.0"],
+            title="Phenopacket Schema Version",
+        ),
+    ]
+
+
+class VocabularyItem(BaseModel):
+    description: Annotated[
+        Optional[str],
+        Field(description="Optional clarifying text", title="Description"),
+    ] = None
+    label: Annotated[
+        str, Field(description="Curator-facing label, e.g. 'MLPA'", title="Label")
+    ]
+    value: Annotated[str, Field(description="Stored token, e.g. 'mlpa'", title="Value")]
+
+
+class VocabularyResponse(BaseModel):
+    data: Annotated[list[VocabularyItem], Field(title="Data")]
+
+
 class AutocompleteResponse(BaseModel):
     results: Annotated[Optional[list[SearchResultItem]], Field(title="Results")] = None
 

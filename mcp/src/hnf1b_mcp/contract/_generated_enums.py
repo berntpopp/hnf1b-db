@@ -96,6 +96,9 @@ COMPARISON_VALUES: tuple[str, ...] = (
 DiabetesType = Literal["Type 1", "Type 2", "MODY"]
 DIABETES_TYPE_VALUES: tuple[str, ...] = ("Type 1", "Type 2", "MODY")
 
+Mode = Literal["conformant", "full"]
+MODE_VALUES: tuple[str, ...] = ("conformant", "full")
+
 ReportingMode = Literal["all_cases", "reported_only"]
 REPORTING_MODE_VALUES: tuple[str, ...] = ("all_cases", "reported_only")
 
