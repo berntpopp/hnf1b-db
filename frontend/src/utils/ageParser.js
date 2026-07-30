@@ -50,7 +50,10 @@ export function onsetClassToAge(hpoId) {
   const onsetMapping = {
     'HP:0003577': 0, // Congenital onset
     'HP:0003623': 0, // Neonatal onset (0-4 weeks)
-    'HP:0034199': 0.08, // Neonatal onset (approx 1 month)
+    // HP:0034199 removed: it is "Late first trimester onset", not "Neonatal
+    // onset" as this map's comment claimed, and the stored corpus no longer
+    // uses it (docs/ontology-defect-report-2026-07-30.md T4; corrected to
+    // HP:0003577 "Congenital onset" by backend migration efa98cccfa51).
     'HP:0003593': 0.5, // Infantile onset (1-12 months)
     'HP:0410280': 3, // Pediatric onset (midpoint ~age 3)
     'HP:0003621': 5, // Juvenile onset (midpoint ~age 5)
@@ -60,7 +63,13 @@ export function onsetClassToAge(hpoId) {
     'HP:0003584': 65, // Late onset (midpoint ~age 65)
   };
 
-  return onsetMapping[hpoId] || null;
+  // `|| null` would silently turn a legitimate age of 0 (Congenital /
+  // Neonatal onset, i.e. birth) into `null`, since 0 is falsy in
+  // JavaScript -- an independent bug found while adding a test for this
+  // map (Task 6, ontology data-quality plan), not one of the three ways
+  // HP:0034199 itself was wrong. `hasOwnProperty` distinguishes "mapped to
+  // 0" from "not mapped at all".
+  return Object.prototype.hasOwnProperty.call(onsetMapping, hpoId) ? onsetMapping[hpoId] : null;
 }
 
 /**

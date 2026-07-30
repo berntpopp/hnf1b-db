@@ -11,6 +11,8 @@ with its own description must raise, naming the term the description
 actually describes.
 """
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -136,3 +138,21 @@ def test_a_row_with_the_t1_defect_raises_and_names_the_right_term():
             )
         )
     assert "HP:0033132" in str(excinfo.value)
+
+
+def test_no_script_rewrites_stored_curator_labels():
+    """scripts/normalize_hpo_labels.py rewrote stored labels to match ids (§4.1).
+
+    It was a sixth instance of the label-laundering defect family and the
+    one that most directly defeated this file's fix: it rewrote
+    ``feature["type"]["label"]`` on *already-stored* records (so deleting
+    ``_get_canonical_label`` did not contain it), and wrote only
+    ``pp.phenopacket``, never the head-published revision. Confirmed invoked
+    by no Makefile target, CI workflow, or migration path -- deleted rather
+    than flagged, matching this file's precedent that the fix is deletion,
+    not a behaviour flag. ``check_label`` +
+    ``scripts/ontology_preflight.py`` replace it.
+    """
+    assert not (
+        Path(__file__).parents[2] / "scripts" / "normalize_hpo_labels.py"
+    ).exists()

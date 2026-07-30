@@ -197,6 +197,39 @@ class MonarchAPIClient(OntologyAPIClient):
         return None
 
 
+# Additional common HNF1B-related terms, layered on top of HPOMapper's
+# mappings below. Module-level (not built inside a method body) so
+# tests/test_ontology_conformance.py can import ADDITIONAL_TERMS and check
+# every entry against app.ontology.conformance.check_label -- three
+# independent hardcoded ontology maps is how these defects multiplied in
+# the first place (docs/ontology-defect-report-2026-07-30.md §5).
+#
+# Two corrections from that report, T6 and T2/T3:
+#   HP:0003149 is Hyperuricosuria (elevated urinary uric acid), not
+#     Hyperuricemia (elevated serum uric acid) -- corrected to HP:0002149.
+#   MONDO:0011593 ("seizures, benign familial infantile, 2") and
+#     MONDO:0010953 ("Fanconi anemia complementation group E") both denote
+#     something other than what their label claims; collapsed to the single
+#     correct entry, MONDO:0007669 "renal cysts and diabetes syndrome".
+# A third, found auditing this dict for the above (not in the defect
+# report): MONDO:0005147 is "type 1 diabetes mellitus" -- clinical_endpoints.py
+# already uses it correctly for "Type 1"/MONDO:0005148 for "Type 2" -- but
+# this dict labelled it "Type 2 diabetes mellitus". Corrected to match the id.
+ADDITIONAL_TERMS: Dict[str, str] = {
+    "HP:0000083": "Renal insufficiency",
+    "HP:0000107": "Renal cyst",
+    "HP:0000003": "Multicystic kidney dysplasia",
+    "HP:0000078": "Genital abnormality",
+    "HP:0000819": "Diabetes mellitus",
+    "HP:0002917": "Hypomagnesemia",
+    "HP:0002900": "Hypokalemia",
+    "HP:0002149": "Hyperuricemia",
+    "HP:0001997": "Gout",
+    "MONDO:0005147": "type 1 diabetes mellitus",
+    "MONDO:0007669": "renal cysts and diabetes syndrome",
+}
+
+
 class LocalMappingsProvider:
     """Provider for existing hardcoded mappings."""
 
@@ -218,23 +251,7 @@ class LocalMappingsProvider:
                     source=OntologySource.LOCAL_HARDCODED,
                 )
 
-        # Add additional common HNF1B-related terms
-        additional_terms = {
-            "HP:0000083": "Renal insufficiency",
-            "HP:0000107": "Renal cyst",
-            "HP:0000003": "Multicystic kidney dysplasia",
-            "HP:0000078": "Genital abnormality",
-            "HP:0000819": "Diabetes mellitus",
-            "HP:0002917": "Hypomagnesemia",
-            "HP:0002900": "Hypokalemia",
-            "HP:0003149": "Hyperuricemia",
-            "HP:0001997": "Gout",
-            "MONDO:0005147": "Type 2 diabetes mellitus",
-            "MONDO:0011593": "Renal cysts and diabetes syndrome",
-            "MONDO:0010953": "Maturity-onset diabetes of the young type 5",
-        }
-
-        for term_id, label in additional_terms.items():
+        for term_id, label in ADDITIONAL_TERMS.items():
             if term_id not in mappings:
                 mappings[term_id] = OntologyTerm(
                     id=term_id, label=label, source=OntologySource.LOCAL_HARDCODED

@@ -141,3 +141,28 @@ def test_check_source_row_against_the_real_curation_vocabulary():
     term_id, violation = violations[0]
     assert term_id == "HP:0033133"
     assert "HP:0033132" in violation, "must name the term the description describes"
+
+
+def test_ontology_service_hardcoded_terms_are_conformant():
+    """Three independent hardcoded maps is how these defects multiplied (§5).
+
+    ``ADDITIONAL_TERMS`` is a module-level constant precisely so this test
+    can import and check every entry, rather than a dict built inline inside
+    a method body.
+    """
+    from app.services.ontology_service import ADDITIONAL_TERMS
+
+    for term_id, label in ADDITIONAL_TERMS.items():
+        assert check_label(term_id, label) is None, f"{term_id}: {label}"
+
+
+def test_hpo_mapper_fallback_is_conformant():
+    """T7-T11: every entry in HPOMapper's Sheets-outage fallback dict must be conformant.
+
+    This is the assertion that would have caught T6-T9 (and, once extended
+    while fixing them, T10-T11) without anyone auditing anything by hand.
+    """
+    from migration.phenopackets.hpo_mapper import HPOMapper
+
+    for entry in HPOMapper().hpo_mappings.values():
+        assert check_label(entry["id"], entry["label"]) is None, entry

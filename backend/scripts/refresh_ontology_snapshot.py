@@ -76,7 +76,12 @@ _LATERALITY_IDS = ["HP:0012832", "HP:0012833", "HP:0012835", "HP:0012834"]
 
 # Onset (age_parser.py), disease (builder_simple.py / cnv_parser.py) and
 # evidence (evidence_builder.py) ids the importer hardcodes outside the
-# curation sheet, plus HP:0033132 (see module docstring point 3).
+# curation sheet, plus HP:0033132 (see module docstring point 3), plus
+# hpo_mapper.py's fallback dictionary and ontology_service.py's
+# ADDITIONAL_TERMS entries that are not already covered by the sheet
+# vocabulary CSV above (Task 6, ontology data-quality plan). HP:0012759 is a
+# coverage gap, not a defect: "Neurodevelopmental abnormality" is the
+# correct name for that id, it was simply absent from the pinned snapshot.
 _EXPLICIT_TERM_IDS = [
     "HP:0003577",  # Congenital onset
     "HP:0003593",  # Infantile onset
@@ -86,6 +91,10 @@ _EXPLICIT_TERM_IDS = [
     "MONDO:0007669",  # renal cysts and diabetes syndrome
     "ECO:0000033",  # author statement supported by traceable reference
     "HP:0033132",  # Renal cortical hyperechogenicity (corrected id)
+    "HP:0012759",  # Neurodevelopmental abnormality (hpo_mapper.py fallback)
+    "HP:0000083",  # Renal insufficiency (ontology_service.py ADDITIONAL_TERMS)
+    "HP:0000819",  # Diabetes mellitus (ontology_service.py ADDITIONAL_TERMS)
+    "MONDO:0005147",  # type 1 diabetes mellitus (ontology_service.py ADDITIONAL_TERMS)
 ]
 
 # SO / GENO ids the importer emits for structuralType / allelicState. Not

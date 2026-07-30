@@ -108,12 +108,14 @@ These never reached the database but are live in application and import paths.
 | **T7** | `HP:0010935` | Increased echogenicity of kidneys | **Abnormality of the upper urinary tract** | `migration/phenopackets/hpo_mapper.py` |
 | **T8** | `HP:0004729` | Solitary functioning kidney | **Acute tubulointerstitial nephritis** | `migration/phenopackets/hpo_mapper.py` |
 | **T9** | `HP:0004719` | Oligomeganephronia | **Hyperechogenic kidneys** | `migration/phenopackets/hpo_mapper.py` |
+| **T10** | `HP:0010945` | Fetal renal anomaly | **Fetal pyelectasis** | `migration/phenopackets/hpo_mapper.py` |
+| **T11** | `HP:0100575` | Pancreatic hypoplasia | **Neoplasm of the gallbladder** | `migration/phenopackets/hpo_mapper.py` |
 
 **T6** confuses urine with blood. Hyperuricosuria is elevated urinary uric acid;
 hyperuricemia is elevated serum uric acid. The correct term is `HP:0002149`, which the
 curation sheet uses correctly.
 
-**T7–T9** sit in `HPOMapper`'s default dictionary. That dictionary is normally replaced
+**T7–T11** sit in `HPOMapper`'s default dictionary. That dictionary is normally replaced
 at runtime by the sheet (§4), so these have not reached the corpus — but
 `hpo_mapper.py:238` falls back to it when the Sheets fetch fails:
 
@@ -123,9 +125,21 @@ if phenotypes_df is None or phenotypes_df.empty:
     return
 ```
 
-A transient Sheets outage during an import would therefore write three wrong terms.
+A transient Sheets outage during an import would therefore write five wrong terms.
 T9 is notable: `HP:0004719` *is* an echogenicity term, labelled here as
-oligomeganephronia.
+oligomeganephronia. **T10 and T11** were found running Task 2's `check_label` over
+every entry in this dictionary and resolving each against the live HPO API, after T6–T9
+were already fixed — the same audit method, applied completely rather than by hand.
+`HP:0012759` "Neurodevelopmental abnormality", also in this dictionary, resolved as
+**correct**; it only failed `check_label` because it was missing from the pinned
+snapshot, a coverage gap rather than a tenth defect, closed by adding it to
+`scripts/refresh_ontology_snapshot.py`'s explicit term list.
+
+**Status (2026-07-30): T1–T11 are now all corrected.** T1–T5 (stored data) by
+migrations `d4e8b1f60a27` (T1) and `efa98cccfa51` (T2–T5); T6, T8–T11 in
+`app/services/ontology_service.py` and `migration/phenopackets/hpo_mapper.py`; T7 was
+already fixed at source before this pass. See
+`docs/superpowers/plans/2026-07-30-ontology-data-quality.md` Tasks 3 and 6.
 
 ---
 
@@ -296,16 +310,26 @@ and an HPO rename respectively, both with sheet definitions matching canonical v
 ## 8. Scale
 
 ```
-ontology terms audited                        44
-identifiers denoting something else            9
-  originating in code                          8
+ontology terms audited                        44   (+ hpo_mapper.py's full default
+                                                       dictionary, audited a second
+                                                       pass with check_label — T10, T11)
+identifiers denoting something else           11
+  originating in code                         10   (T7-T11)
   originating in the curation sheet            1   (with correct name + description)
-of those, present in stored data               5
+of those, present in stored data               5   (T1-T5; T10/T11 never reached the
+                                                       corpus, same as T7-T9)
 stored entries affected            ~1,725 × 2 copies
 laterality annotations discarded             408   (all correct in the sheet)
 independent ontology maps                      4
 maps containing errors                         3
 ```
+
+**Status (2026-07-30): resolved.** All 11 identifiers corrected — T1-T5 in stored data
+(migrations `d4e8b1f60a27`, `efa98cccfa51`), T6-T11 in application/migration code
+(`app/services/ontology_service.py`, `migration/phenopackets/hpo_mapper.py`); the 408
+laterality annotations restored (migration `18cfc57307f6`); both label-laundering
+mechanisms deleted (`hpo_mapper._get_canonical_label`, `scripts/normalize_hpo_labels.py`).
+See `docs/superpowers/plans/2026-07-30-ontology-data-quality.md`.
 
 For one representative record (`phenopacket-317`): the source sheet holds 33 curated
 fields, the database stores 24, the public page renders 8, and the curation form can

@@ -63,8 +63,12 @@ class HPOMapper(OntologyMapper):
             "renalcysts": {"id": "HP:0000107", "label": "Renal cyst"},
             "renalhypoplasia": {"id": "HP:0000089", "label": "Renal hypoplasia"},
             "solitarykidney": {
-                "id": "HP:0004729",
-                "label": "Solitary functioning kidney",
+                # HP:0004729 is "Acute tubulointerstitial nephritis", not
+                # "Solitary functioning kidney" -- T8. The sheet maps
+                # SolitaryKidney -> HP:0000122 "Unilateral renal agenesis"
+                # (corpus stores it 583x); verified against HPO 2026-06-23.
+                "id": "HP:0000122",
+                "label": "Unilateral renal agenesis",
             },
             "multicysticdysplastickidney": {
                 "id": "HP:0000003",
@@ -84,14 +88,24 @@ class HPOMapper(OntologyMapper):
                 "label": "Abnormality of the urinary system",
             },
             "antenatalrenalabnormalities": {
-                "id": "HP:0010945",
-                "label": "Fetal renal anomaly",
+                # HP:0010945 is "Fetal pyelectasis", not "Fetal renal
+                # anomaly" -- T10. The sheet maps AntenatalRenalAbnormalities
+                # -> HP:0012210 "Abnormal renal morphology" (corpus stores it
+                # 261x); verified against HPO 2026-06-23.
+                "id": "HP:0012210",
+                "label": "Abnormal renal morphology",
             },
             "multiple glomerular cysts": {
                 "id": "HP:0100611",
                 "label": "Multiple glomerular cysts",
             },
-            "oligomeganephronia": {"id": "HP:0004719", "label": "Oligomeganephronia"},
+            "oligomeganephronia": {
+                # HP:0004719 is "Hyperechogenic kidneys", not
+                # "Oligomeganephronia" -- T9. The correct id is the Orphanet
+                # entry the sheet and corpus actually use, ORPHA:2260.
+                "id": "ORPHA:2260",
+                "label": "Oligomeganephronia",
+            },
             # Metabolic phenotypes
             "hypomagnesemia": {"id": "HP:0002917", "label": "Hypomagnesemia"},
             "hyperuricemia": {"id": "HP:0002149", "label": "Hyperuricemia"},
@@ -104,7 +118,11 @@ class HPOMapper(OntologyMapper):
                 "label": "Maturity-onset diabetes of the young",
             },
             "pancreatichypoplasia": {
-                "id": "HP:0100575",
+                # HP:0100575 is "Neoplasm of the gallbladder", not
+                # "Pancreatic hypoplasia" -- T11. The correct id for
+                # "Pancreatic hypoplasia" is HP:0002594 (corpus stores it
+                # 206x); verified against HPO 2026-06-23.
+                "id": "HP:0002594",
                 "label": "Pancreatic hypoplasia",
             },
             "exocrinepancreaticinsufficiency": {

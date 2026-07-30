@@ -42,6 +42,14 @@
         "Urinary tract anomalies"
       ]
     },
+    "HP:0000083": {
+      "definition": "A reduction in the level of performance of the kidneys in areas of function comprising the concentration of urine, removal of wastes, the maintenance of electrolyte balance, homeostasis of blood pressure, and calcium metabolism.",
+      "name": "Renal insufficiency",
+      "synonyms": [
+        "Renal failure",
+        "Renal failure in adulthood"
+      ]
+    },
     "HP:0000089": {
       "definition": "Hypoplasia of the kidney.",
       "name": "Renal hypoplasia",
@@ -102,6 +110,11 @@
         "Psychiatric disorders",
         "Psychiatric disturbances"
       ]
+    },
+    "HP:0000819": {
+      "definition": "A group of abnormalities characterized by hyperglycemia and glucose intolerance.",
+      "name": "Diabetes mellitus",
+      "synonyms": []
     },
     "HP:0000843": {
       "definition": "Excessive production of parathyroid hormone (PTH) by the parathyroid glands.",
@@ -389,6 +402,11 @@
         "NDD"
       ]
     },
+    "HP:0012759": {
+      "definition": "A deviation from normal of the neurological development of a child, which may include any or all of the aspects of the development of personal, social, gross or fine motor, and cognitive abilities.",
+      "name": "Neurodevelopmental abnormality",
+      "synonyms": []
+    },
     "HP:0012832": {
       "definition": "Being present on both sides of the body.",
       "name": "Bilateral",
@@ -442,6 +460,23 @@
       "name": "Multiple glomerular cysts",
       "synonyms": [
         "Glomerulocystic kidney disease"
+      ]
+    },
+    "MONDO:0005147": {
+      "definition": "A chronic condition characterized by minimal or absent production of insulin by the pancreas.",
+      "name": "type 1 diabetes mellitus",
+      "synonyms": [
+        "diabetes mellitis type 1",
+        "diabetes mellitis type I",
+        "IDDM",
+        "T1D",
+        "T1DM",
+        "immune mediated diabetes",
+        "insulin dependent diabetes",
+        "juvenile diabetes",
+        "type 1 diabetes",
+        "type I diabetes mellitus",
+        "type I diabetes"
       ]
     },
     "MONDO:0007669": {
