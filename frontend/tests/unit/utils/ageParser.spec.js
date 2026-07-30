@@ -84,18 +84,37 @@ describe('getOrganSystem', () => {
    * (78-80), so the genital branch could never fire for those ids --
    * getOrganSystem('HP:0000078') returned 'renal' instead of 'genital'.
    * Confirmed by executing this module directly before fixing the branch
-   * order.
+   * order (commit be491ca).
+   *
+   * Reordering the genital check ahead of renal, on its own, introduced a
+   * second, independent regression on HP:0000079 ("Abnormality of the
+   * urinary system", 329 stored occurrences, one of the six
+   * laterality-policy terms): it sits numerically between the two genuinely
+   * genital ids 78 and 80, so the naive `78..80` range swept it in as
+   * 'genital' too, flipping it from its correct pre-existing 'renal'
+   * classification. Caught in review after be491ca landed and fixed by
+   * carving 79 out of the genital range explicitly. These four assertions
+   * pin every id on that boundary so a future edit to either range cannot
+   * silently repeat either mistake.
    */
-  it('classifies HP:0000078 (Abnormality of the genital system) as genital, not renal', () => {
+  it('classifies HP:0000078 (Abnormality of the genital system) as genital', () => {
     expect(getOrganSystem('HP:0000078')).toBe('genital');
   });
 
-  it('classifies a genital id in the second range (HP:0000811-815) as genital', () => {
-    expect(getOrganSystem('HP:0000811')).toBe('genital');
+  it('classifies HP:0000079 (Abnormality of the urinary system) as renal, not genital', () => {
+    expect(getOrganSystem('HP:0000079')).toBe('renal');
+  });
+
+  it('classifies HP:0000080 (Abnormality of reproductive system physiology) as genital', () => {
+    expect(getOrganSystem('HP:0000080')).toBe('genital');
   });
 
   it('still classifies HP:0000077 (Abnormality of the kidney) as renal', () => {
     expect(getOrganSystem('HP:0000077')).toBe('renal');
+  });
+
+  it('classifies a genital id in the second range (HP:0000811-815) as genital', () => {
+    expect(getOrganSystem('HP:0000811')).toBe('genital');
   });
 
   it('returns other for a falsy or non-HPO id', () => {

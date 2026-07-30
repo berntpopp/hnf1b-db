@@ -133,18 +133,27 @@ export function getOrganSystem(hpoId) {
   const numericId = parseInt(hpoId.replace('HP:', ''));
 
   // Genital System
-  // HP:0000078-0080 - Abnormality of the genital system
+  // HP:0000078 - Abnormality of the genital system
+  // HP:0000080 - Abnormality of reproductive system physiology
   //
-  // Checked BEFORE the renal range below on purpose: HP:0000078-0080 and
-  // HP:0000811-815 both fall *inside* the renal ranges (77-140 and 795-850
-  // respectively). With the renal check first, the renal branch always
-  // matched and returned before execution ever reached this block, so it
-  // was dead code -- e.g. getOrganSystem('HP:0000078') ("Abnormality of the
-  // genital system") returned 'renal', confirmed by executing this module
-  // directly. Found while fixing the HP:0033133 -> HP:0033132
+  // Checked BEFORE the renal range below on purpose: these ids fall *inside*
+  // the renal ranges (77-140 and 795-850 respectively). With the renal check
+  // first, the renal branch always matched and returned before execution
+  // ever reached this block, so it was dead code -- e.g.
+  // getOrganSystem('HP:0000078') returned 'renal', confirmed by executing
+  // this module directly. Found while fixing the HP:0033133 -> HP:0033132
   // renal-classification defect (docs/superpowers/plans/
   // 2026-07-30-ontology-data-quality.md, C2).
-  if ((numericId >= 78 && numericId <= 80) || (numericId >= 811 && numericId <= 815)) {
+  //
+  // 79 is deliberately excluded from the first range: HP:0000079 is
+  // "Abnormality of the urinary system", not genital -- despite sitting
+  // numerically between the two genuinely-genital ids 78 and 80. Reordering
+  // this block ahead of the renal check (above) without carving 79 out
+  // regressed it from 'renal' (correct) to 'genital' (wrong) for the 329
+  // stored occurrences of this term, one of the six laterality-policy terms.
+  // Caught in review after the reorder landed; see the regression tests
+  // below pinning all four boundary ids (77/78/79/80).
+  if (numericId === 78 || numericId === 80 || (numericId >= 811 && numericId <= 815)) {
     return 'genital';
   }
 
