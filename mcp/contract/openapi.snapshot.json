@@ -8116,6 +8116,61 @@
         ]
       }
     },
+    "/api/v2/phenopackets/{phenopacket_id}/export": {
+      "get": {
+        "description": "Export one phenopacket document.\n\nVisibility mirrors the detail GET (``get_phenopacket`` above) exactly:\nanonymous and viewer callers see published content only, dereferenced\nthrough ``resolve_public_content`` (which follows\n``head_published_revision_id``), so an in-progress clone-to-draft edit\nis never exported to a non-curator caller.\n\n``full`` additionally returns the ``hnf1bCuration`` block and therefore\nrequires curator access \u2014 it is internal curation metadata, not part of\nthe public record.\n\n``conformant`` (default) removes that block. It is **not** a claim of\nGA4GH Phenopackets v2 validity: the corpus retains the nonconformances\nrecorded in docs/adr/0003-ga4gh-conformance-debt.md. It only means that\nHNF1B-DB-specific curation has been stripped.",
+        "operationId": "export_phenopacket_api_v2_phenopackets__phenopacket_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "conformant",
+              "enum": [
+                "conformant",
+                "full"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Phenopacket",
+        "tags": [
+          "phenopackets-crud"
+        ]
+      }
+    },
     "/api/v2/phenopackets/{phenopacket_id}/revisions": {
       "get": {
         "description": "List revision rows for a phenopacket.\n\nCurator and admin only \u2014 non-curator callers receive 404 (spec \u00a77.2).\nThe list response omits ``content_jsonb`` to keep payload size small.\nUse the detail endpoint to fetch a specific revision's content.\n\nOrdered by ``created_at DESC`` (newest first).",

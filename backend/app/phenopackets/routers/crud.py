@@ -23,7 +23,7 @@ Wave 7 D.1 additions:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
@@ -373,6 +373,59 @@ async def get_phenopacket(
             phenopacket_override=public_content,
             include_state=False,
         )
+
+
+@router.get("/{phenopacket_id}/export")
+async def export_phenopacket(
+    phenopacket_id: str,
+    mode: Literal["conformant", "full"] = "conformant",
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Export one phenopacket document.
+
+    Visibility mirrors the detail GET (``get_phenopacket`` above) exactly:
+    anonymous and viewer callers see published content only, dereferenced
+    through ``resolve_public_content`` (which follows
+    ``head_published_revision_id``), so an in-progress clone-to-draft edit
+    is never exported to a non-curator caller.
+
+    ``full`` additionally returns the ``hnf1bCuration`` block and therefore
+    requires curator access — it is internal curation metadata, not part of
+    the public record.
+
+    ``conformant`` (default) removes that block. It is **not** a claim of
+    GA4GH Phenopackets v2 validity: the corpus retains the nonconformances
+    recorded in docs/adr/0003-ga4gh-conformance-debt.md. It only means that
+    HNF1B-DB-specific curation has been stripped.
+    """
+    is_curator = is_curator_or_admin(current_user)
+
+    stmt = select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    stmt = curator_filter(stmt) if is_curator else public_filter(stmt)
+
+    result = await db.execute(stmt)
+    pp = result.scalar_one_or_none()
+    if pp is None:
+        raise HTTPException(status_code=404, detail="Phenopacket not found")
+
+    if mode == "full" and not is_curator:
+        raise HTTPException(
+            status_code=403,
+            detail="full export requires curator access",
+        )
+
+    if is_curator:
+        document = dict(resolve_curator_content(pp))
+    else:
+        public_content = await resolve_public_content(db, pp)
+        if public_content is None:
+            raise HTTPException(status_code=404, detail="Phenopacket not found")
+        document = dict(public_content)
+
+    if mode == "conformant":
+        document.pop("hnf1bCuration", None)
+    return document
 
 
 # =============================================================================
