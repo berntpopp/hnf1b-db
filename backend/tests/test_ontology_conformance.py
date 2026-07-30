@@ -5,7 +5,18 @@ identifier, because it is satisfiable by editing the label — which is exactly
 how HP:0033133 survived.
 """
 
+import csv
+from pathlib import Path
+
 from app.ontology.conformance import ALLOWED_DEVIATIONS, check_label, check_source_row
+
+_CURATION_VOCABULARY_CSV = (
+    Path(__file__).resolve().parent.parent
+    / "app"
+    / "ontology"
+    / "data"
+    / "curation_vocabulary.csv"
+)
 
 
 class TestA3StoredConformance:
@@ -84,5 +95,49 @@ class TestA1SourceIntegrity:
 
 
 def test_every_allowlisted_deviation_carries_a_reason():
+    """Every ALLOWED_DEVIATIONS entry needs a justification, not a placeholder."""
     for key, reason in ALLOWED_DEVIATIONS.items():
         assert len(reason) > 40, f"{key} needs a justification, not a placeholder"
+
+
+def test_check_source_row_against_the_real_curation_vocabulary():
+    """A1 against the shipped CSV, not a hand-picked fixture built to pass.
+
+    Hand-picked fixtures (above) have descriptions engineered to match their
+    canonical definition verbatim. Real curated descriptions are usually a
+    paraphrase, not a verbatim copy — e.g. HP:0001250's sheet description
+    says "characterised", HPO's canonical definition says "characterized".
+    Running every row of the committed `curation_vocabulary.csv` through
+    `check_source_row` is what caught A1's rule-2-never-runs regression: 7
+    of 8 "violations" it once reported were paraphrase mismatches on rows
+    whose name matched the canonical name/synonym exactly, and only
+    HP:0033133 (T1) is a genuine defect.
+    """
+    violations = []
+    with _CURATION_VOCABULARY_CSV.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    assert len(rows) == 41, (
+        "expected 41 rows (36 Phenotype + 5 Phenotype_modifier); the CSV "
+        "shape changed — update this test deliberately, don't just raise "
+        "the number"
+    )
+
+    for row in rows:
+        violation = check_source_row(
+            row["phenotype_id"],
+            row["phenotype_name"],
+            row["phenotype_description"],
+        )
+        if violation:
+            violations.append((row["phenotype_id"], violation))
+
+    assert len(violations) == 1, (
+        f"expected exactly one violation (the T1 defect), got "
+        f"{len(violations)}: {violations}"
+    )
+
+    term_id, violation = violations[0]
+    assert term_id == "HP:0033133"
+    assert "HP:0033132" in violation, "must name the term the description describes"

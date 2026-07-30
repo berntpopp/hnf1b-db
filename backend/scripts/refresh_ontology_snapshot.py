@@ -178,6 +178,13 @@ def _fetch_ols4(term_id: str) -> Optional[dict[str, Any]]:
 
     Uses `/ontologies/{ont}/terms?iri=...` (exact identifier lookup), never
     `/search` — see the module docstring for why.
+
+    Symmetric with `_fetch_hpo`'s validation: a malformed, obsolete, or
+    mismatched response is logged and skipped (returns `None`) rather than
+    silently written into the snapshot. An unvalidated OLS4 response could
+    put a wrong or empty name in the pinned snapshot, which would make A3
+    endorse a wrong term — the exact defect class this module exists to
+    prevent.
     """
     for prefix, (ontology, iri_template) in _OLS4_ONTOLOGY_BY_PREFIX.items():
         if not term_id.startswith(prefix):
@@ -206,9 +213,34 @@ def _fetch_ols4(term_id: str) -> Optional[dict[str, Any]]:
             return None
 
         term = terms[0]
+
+        returned_iri = term.get("iri")
+        if returned_iri != iri:
+            logger.warning(
+                "OLS4 lookup for %s returned a term whose iri (%s) does not "
+                "match the requested iri (%s); skipping",
+                term_id,
+                returned_iri,
+                iri,
+            )
+            return None
+
+        if term.get("is_obsolete"):
+            logger.warning(
+                "OLS4 lookup for %s returned an obsolete term; skipping", term_id
+            )
+            return None
+
+        name = term.get("label") or ""
+        if not name:
+            logger.warning(
+                "OLS4 lookup for %s returned an empty label; skipping", term_id
+            )
+            return None
+
         description = term.get("description") or []
         return {
-            "name": term.get("label", ""),
+            "name": name,
             "synonyms": term.get("synonyms", []) or [],
             "definition": description[0] if description else "",
         }

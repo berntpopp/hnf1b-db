@@ -10,11 +10,13 @@ something other than what it claims:
   curator's *description*, a field label-normalisation never touches. For
   every source row it evaluates, in order: does the description match
   `term_id`'s canonical definition? If not, does the name match `term_id`'s
-  canonical name or a synonym? If neither, the row fails, and — because a
-  wrong identifier's description usually still matches *some* term — the
-  violation names that term, turning "this row is wrong" into "you meant
-  `HP:0033132`". This is exactly the check that would have failed the import
-  that produced `HP:0033133`.
+  canonical name or a synonym — a genuine fallback, not just a no-description
+  path, because most curated descriptions are a paraphrase rather than a
+  verbatim copy and a name match is still real corroboration? If neither,
+  the row fails, and — because a wrong identifier's description usually
+  still matches *some* term — the violation names that term, turning "this
+  row is wrong" into "you meant `HP:0033132`". This is exactly the check
+  that would have failed the import that produced `HP:0033133`.
 
 - **A3** `check_label` is the naive label-vs-identifier check, retained and
   labelled as insufficient on its own. It is satisfiable by editing the
@@ -182,29 +184,56 @@ def check_source_row(term_id: str, name: str, description: str) -> Optional[str]
 
     Evaluated in this order, matching spec §3.3:
 
-    1. `description` non-empty → it must match `term_id`'s canonical
-       definition. If it does not, the row fails outright — it does **not**
-       fall through to a name check, because falling through is what makes
-       the invariant bypassable (a normalised label always agrees with its
-       own, possibly wrong, identifier's name).
-    2. `description` empty → `name` must match `term_id`'s canonical name or
-       a listed synonym.
-    3. Otherwise the row fails.
-
-    On failure, the snapshot is searched for the term whose definition
-    `description` actually matches; if found, the violation names it — this
-    is what turns "this id is wrong" into "you meant `HP:0033132`".
+    1. `description` non-empty and matches `term_id`'s canonical definition
+       → corroborated, `None`.
+    2. Else `name` matches `term_id`'s canonical name or a listed synonym →
+       corroborated, `None`. This is a genuine fallback, checked whenever
+       rule 1 didn't already pass — not only when `description` is empty.
+       Most curated descriptions are a human paraphrase of the ontology's
+       definition, not a verbatim copy (compare "characterised" vs
+       "characterized", or a shortened restatement); demanding an exact
+       string match on the description alone flags the majority of a real
+       curation sheet's honest rows as violations and buries the one row
+       that is actually wrong. A name/synonym match is still real
+       corroboration — normalisation never touches this field either — so
+       falling through to it after a failed description match does not
+       reopen the bypass rule 1 exists to close: a **wrong** identifier
+       whose label has been *normalised* still fails here, because its
+       label was rewritten to match the wrong id's own canonical name, and
+       that id is exactly `term_id`, so this check is checking the id
+       against itself and only passes if it truly is that id's name.
+    3. Otherwise the row fails. The snapshot is searched for the term whose
+       definition `description` actually matches; if found, the violation
+       names it — this is what turns "this id is wrong" into "you meant
+       `HP:0033132`".
 
     Returns `None` when corroborated; otherwise a human-readable violation
     message. Never rewrites `name` or `term_id` — it only reports.
+
+    Does not consult `ALLOWED_DEVIATIONS` (that allowlist belongs to
+    `check_label`/A3 only). Every documented A3 deviation already
+    corroborates independently here — via a verbatim definition match
+    (`HP:0012622`, `HP:0002910`) or a synonym match (`HP:0000708`,
+    `HP:0012443`) — so A1 doesn't need the allowlist to accept them, and a
+    hypothetical future "deviation" that couldn't pass on its own evidence
+    is exactly the wrong-identifier defect A1 exists to catch, not a case to
+    quietly wave through.
     """
     term = _snapshot().get(term_id)
     description = (description or "").strip()
+    name = name or ""
+
+    if (
+        description
+        and term is not None
+        and _texts_match(description, term.get("definition") or "")
+    ):
+        return None
+
+    if term is not None and (name == term["name"] or name in term.get("synonyms", [])):
+        return None
 
     if description:
-        if term is not None and _texts_match(description, term.get("definition") or ""):
-            return None
-
         match = _find_term_by_definition(description)
         if match is not None and match != term_id:
             return (
@@ -213,14 +242,19 @@ def check_source_row(term_id: str, name: str, description: str) -> Optional[str]
                 f"canonical definition, not {term_id}'s. The identifier "
                 f"should probably be {match}."
             )
+        if term is None:
+            return (
+                f"{term_id} is not a known term in the pinned ontology "
+                f"snapshot, and its description {description!r} matches no "
+                "other term either."
+            )
         return (
             f"{term_id} is named {name!r} with description {description!r}, "
             f"which matches neither {term_id}'s canonical definition nor "
-            "any other term in the pinned ontology snapshot."
+            "any other term in the pinned ontology snapshot, and the name "
+            f"does not match {term_id}'s canonical name "
+            f"({term['name']!r}) or a listed synonym either."
         )
-
-    if term is not None and (name == term["name"] or name in term.get("synonyms", [])):
-        return None
 
     if term is None:
         return (
