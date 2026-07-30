@@ -141,8 +141,13 @@ class HPOMapper(OntologyMapper):
                 "label": "Multicystic kidney dysplasia",
             },
             "hyperechogenicity": {
-                "id": "HP:0010935",
-                "label": "Increased echogenicity of kidneys",
+                # HP:0010935 does not exist in current HPO and appears in zero
+                # stored records; the sheet-driven path is authoritative. The
+                # correct term is HP:0033132 — note HP:0033133, which the source
+                # sheet names, is "Renal cortical hypoechogeneity", the opposite
+                # finding. Verified against HPO 2026-06-23.
+                "id": "HP:0033132",
+                "label": "Renal cortical hyperechogenicity",
             },
             "urinarytractmalformation": {
                 "id": "HP:0000079",
