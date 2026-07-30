@@ -178,11 +178,14 @@ class TestDirectPhenopacketsMigration:
 
         phenopacket = builder.build_phenopacket("TEST001", rows)
 
-        # Should have HNF1B disease (RCAD)
+        # Should have HNF1B disease (RCAD). MONDO:0011593 is "seizures, benign
+        # familial infantile, 2" -- the pre-correction value this test used to
+        # assert; see docs/ontology-defect-report-2026-07-30.md T2 and commit
+        # 2acfe03, which fixed builder_simple.py to emit the correct term.
         diseases = phenopacket.get("diseases", [])
         assert len(diseases) > 0
-        assert diseases[0]["term"]["id"] == "MONDO:0011593"
-        assert "Renal cysts and diabetes" in diseases[0]["term"]["label"]
+        assert diseases[0]["term"]["id"] == "MONDO:0007669"
+        assert "renal cysts and diabetes" in diseases[0]["term"]["label"]
 
     def test_metadata_creation(self, migration):
         """Test metadata creation for phenopackets."""
