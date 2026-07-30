@@ -132,6 +132,9 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
     * ``ontology_migration_journal`` — raw-SQL audit trail created by
       ``efa98cccfa51_correct_ontology_terms`` and reused by later ontology
       data-quality migrations to make their corrections exactly reversible.
+    * ``cohort_values``, ``detection_method_values``, ``segregation_values``,
+      ``family_history_values`` — curation controlled-vocabulary tables from
+      ``a1c4e7f20b93_add_curation_vocabularies``.
     * ``alembic_version`` — alembic's own bookkeeping table.
 
     Without this filter, ``alembic revision --autogenerate`` emits
@@ -141,7 +144,10 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
     if type_ == "table" and name in {
         "alembic_version",
         "allelic_state_values",
+        "cohort_values",
+        "detection_method_values",
         "evidence_code_values",
+        "family_history_values",
         "hpo_terms_lookup",
         "interpretation_status_values",
         "ontology_migration_journal",
@@ -149,6 +155,7 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "publication_metadata",
         "publication_fulltext",
         "publication_fulltext_embeddings",
+        "segregation_values",
         "sex_values",
         "variant_annotations",
     }:
