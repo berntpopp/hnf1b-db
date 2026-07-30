@@ -20,11 +20,7 @@
 
             <v-list-item-subtitle v-if="variant.geneSymbol">
               Gene: {{ variant.geneSymbol }}
-              <span v-if="variant.consequence">
-                | {{ variant.consequence }}
-                <span v-if="variant.impact">({{ variant.impact }})</span>
-              </span>
-              <span v-if="variant.caddScore"> | CADD: {{ variant.caddScore }}</span>
+              <span v-if="variant.consequence"> | {{ variant.consequence }}</span>
             </v-list-item-subtitle>
 
             <template #append>
@@ -111,6 +107,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useVariantAnnotation } from '@/composables/useVariantAnnotation';
+import { soIdFor } from '@/utils/soTerms';
 
 const props = defineProps({
   modelValue: {
@@ -147,9 +144,8 @@ const variants = computed(() => {
       return {
         label: descriptor.label || descriptor.id || 'Unknown variant',
         geneSymbol: descriptor.geneContext?.symbol,
-        consequence: descriptor.moleculeContext,
-        impact: variantInterp.impact,
-        caddScore: variantInterp.caddScore,
+        consequence: descriptor.molecularConsequences?.[0]?.label,
+        moleculeContext: descriptor.moleculeContext,
       };
     })
     .filter(Boolean);
@@ -185,8 +181,7 @@ const addAnnotatedVariant = () => {
     annotation.value.gene_symbol || 'HNF1B',
     {
       consequence: annotation.value.most_severe_consequence,
-      impact: annotation.value.impact,
-      caddScore: annotation.value.cadd_score,
+      consequenceSoId: soIdFor(annotation.value.most_severe_consequence),
     }
   );
 
@@ -234,40 +229,55 @@ const removeVariant = (index) => {
 };
 
 /**
- * Create GA4GH Phenopackets v2 interpretation structure
- * @param {string} variantNotation - Variant notation (HGVS, VCF, etc.)
- * @param {string} geneSymbol - Gene symbol
- * @param {object} annotationData - Optional VEP annotation data
+ * Pick the GA4GH MoleculeContext enum member implied by a notation.
+ * GA4GH v2 admits exactly: unspecified_molecule_context | genomic | transcript | protein.
+ */
+const inferMoleculeContext = (notation) => {
+  if (/:c\.|:n\./.test(notation)) return 'transcript';
+  if (/:p\./.test(notation)) return 'protein';
+  if (/^(chr)?[0-9XYMT]+[-:]/.test(notation) || /:g\./.test(notation)) return 'genomic';
+  return 'unspecified_molecule_context';
+};
+
+/** Pick the VRSATILE expression syntax implied by a notation. */
+const inferExpressionSyntax = (notation) => {
+  if (/:c\./.test(notation)) return 'hgvs.c';
+  if (/:p\./.test(notation)) return 'hgvs.p';
+  if (/:g\./.test(notation)) return 'hgvs.g';
+  if (/^rs\d+$/i.test(notation)) return 'dbsnp';
+  return 'vcf';
+};
+
+/**
+ * Create a GA4GH Phenopackets v2 interpretation.
+ *
+ * Deliberately does NOT write:
+ *  - the VEP consequence into moleculeContext (it is an enum; the consequence
+ *    goes to molecularConsequences as an SO term, matching the 424 corpus records)
+ *  - a `variation` key (GA4GH requires a VRS Variation object; the notation is
+ *    carried as a VCF expression instead)
+ *  - impact / caddScore onto VariantInterpretation (it has exactly three fields:
+ *    acmgPathogenicityClassification, therapeuticActionability, variationDescriptor).
+ *    Both are derived annotation, re-fetchable from POST /api/v2/variants/annotate.
  */
 const createInterpretation = (variantNotation, geneSymbol, annotationData = {}) => {
   const interpretationId = `interpretation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const variantId = `var:${variantNotation}`;
 
   const variationDescriptor = {
-    id: variantId,
+    id: `var:${variantNotation}`,
     label: variantNotation,
     geneContext: {
       valueId: geneSymbol === 'HNF1B' ? 'HGNC:5024' : '',
       symbol: geneSymbol,
     },
-    moleculeContext: annotationData.consequence || 'genomic',
+    moleculeContext: inferMoleculeContext(variantNotation),
+    expressions: [{ syntax: inferExpressionSyntax(variantNotation), value: variantNotation }],
   };
 
-  // Add variation object with notation
-  variationDescriptor.variation = {
-    notation: variantNotation,
-  };
-
-  const variantInterpretation = {
-    variationDescriptor,
-  };
-
-  // Add optional annotation data
-  if (annotationData.impact) {
-    variantInterpretation.impact = annotationData.impact;
-  }
-  if (annotationData.caddScore) {
-    variantInterpretation.caddScore = annotationData.caddScore;
+  if (annotationData.consequenceSoId && annotationData.consequence) {
+    variationDescriptor.molecularConsequences = [
+      { id: annotationData.consequenceSoId, label: annotationData.consequence },
+    ];
   }
 
   return {
@@ -278,12 +288,14 @@ const createInterpretation = (variantNotation, geneSymbol, annotationData = {}) 
         {
           subjectOrBiosampleId: props.subjectId,
           interpretationStatus: 'UNKNOWN',
-          variantInterpretation,
+          variantInterpretation: { variationDescriptor },
         },
       ],
     },
   };
 };
+
+defineExpose({ createInterpretation, inferMoleculeContext });
 </script>
 
 <style scoped>
