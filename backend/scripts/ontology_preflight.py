@@ -57,6 +57,24 @@ from app.ontology.conformance import ONTOLOGY_PATHS, check_label  # noqa: E402
 
 _HPO_LOOKUP_PATH = "hpo_terms_lookup.hpo_id"
 
+# Onset identifiers live in FOUR independent paths, not two. Task 3's
+# migration corrected 10 `phenotypicFeatures[].onset.age.ontologyClass`
+# values that *disagreed* with their sibling
+# `phenotypicFeatures[].onset.ontologyClass` value on the same feature and
+# were fixed independently rather than derived from one another -- so a
+# corrupted feature-onset at either nested path can exist without the other
+# noticing. Enumerated explicitly here (not sourced from `ONTOLOGY_PATHS`,
+# which also carries non-onset paths) so `test_onset_report_covers_all_four_`
+# `required_paths` fails loudly if a path is ever silently dropped from this
+# report, rather than passing vacuously because it merely iterated whatever
+# `ONTOLOGY_PATHS` happened to contain.
+_ONSET_PATHS: list[str] = [
+    "diseases[].onset.ontologyClass",
+    "subject.timeAtLastEncounter.ontologyClass",
+    "phenotypicFeatures[].onset.ontologyClass",
+    "phenotypicFeatures[].onset.age.ontologyClass",
+]
+
 
 def _iter_path_values(doc: dict[str, Any], path: str) -> Iterator[Any]:
     """Walk ``doc`` along an ``ONTOLOGY_PATHS``-style dotted/bracketed path.
@@ -202,36 +220,26 @@ async def run_preflight() -> Report:
     for length, count in sorted(array_lengths.items()):
         report.line(f"  length {length}: {count} records")
 
-    # --- Section 3: onset distribution across both onset paths ---
-    report.header("Onset distribution (diseases[].onset + subject.timeAtLastEncounter)")
-    disease_onset: Counter[tuple[str | None, str | None]] = Counter()
-    tale_onset: Counter[tuple[str | None, str | None]] = Counter()
-    for _phenopacket_id, working_copy, _head in records:
-        diseases = working_copy.get("diseases")
-        if isinstance(diseases, list):
-            for disease in diseases:
-                onset_class = (disease.get("onset") or {}).get("ontologyClass")
-                if onset_class:
-                    disease_onset[
-                        (onset_class.get("id"), onset_class.get("label"))
-                    ] += 1
-                else:
-                    disease_onset[(None, None)] += 1
-        subject = working_copy.get("subject") or {}
-        tale_class = (subject.get("timeAtLastEncounter") or {}).get("ontologyClass")
-        if tale_class:
-            tale_onset[(tale_class.get("id"), tale_class.get("label"))] += 1
+    # --- Section 3: onset distribution across all four onset paths ---
+    # All four are reported independently -- see _ONSET_PATHS's comment for
+    # why the two phenotypicFeatures[] onset paths can disagree with each
+    # other and must not be conflated into one count.
+    report.header("Onset distribution (all four onset paths)")
+    for path in _ONSET_PATHS:
+        onset_counts: Counter[tuple[str | None, str | None]] = Counter()
+        pairs_at_path = 0
+        for _phenopacket_id, working_copy, _head in records:
+            for value in _iter_path_values(working_copy, path):
+                if not isinstance(value, dict):
+                    continue
+                onset_counts[(value.get("id"), value.get("label"))] += 1
+                pairs_at_path += 1
 
-    report.line("diseases[].onset.ontologyClass:")
-    for (term_id, label), count in sorted(
-        disease_onset.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")
-    ):
-        report.line(f"  {term_id!r}  {label!r}: {count}")
-    report.line("subject.timeAtLastEncounter.ontologyClass:")
-    for (term_id, label), count in sorted(
-        tale_onset.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")
-    ):
-        report.line(f"  {term_id!r}  {label!r}: {count}")
+        report.line(f"{path}:  ({pairs_at_path} occurrences)")
+        for (term_id, label), count in sorted(
+            onset_counts.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")
+        ):
+            report.line(f"  {term_id!r}  {label!r}: {count}")
 
     # --- Section 4: modifier totals ---
     report.header("phenotypicFeatures[].modifiers[] totals (working copy)")

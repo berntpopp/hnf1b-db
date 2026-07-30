@@ -100,3 +100,58 @@ def test_every_ontology_paths_entry_is_walkable_without_error():
         if path == PREFLIGHT._HPO_LOOKUP_PATH:
             continue
         assert list(PREFLIGHT._iter_path_values(doc, path)) == []
+
+
+def test_onset_report_covers_all_four_required_paths():
+    """Onset ids live in four independent paths; a corrupted feature-onset
+    must not go unseen.
+
+    Enumerated explicitly here rather than merely iterating whatever
+    ``PREFLIGHT.ONTOLOGY_PATHS`` happens to contain: if this test derived its
+    expectation from ``ONTOLOGY_PATHS`` instead, it could not fail when an
+    onset path is silently dropped from that list (the exact class of
+    regression this test exists to catch), because both sides of the
+    assertion would move together.
+    """
+    required_onset_paths = {
+        "diseases[].onset.ontologyClass",
+        "subject.timeAtLastEncounter.ontologyClass",
+        "phenotypicFeatures[].onset.ontologyClass",
+        "phenotypicFeatures[].onset.age.ontologyClass",
+    }
+    assert required_onset_paths == set(PREFLIGHT._ONSET_PATHS)
+
+
+def test_onset_paths_independently_surface_disagreeing_outer_and_nested_values():
+    """The whole point of the nested onset path: it can disagree with its
+    sibling, and both must be visible, not merged into one count.
+
+    Mirrors the real corpus shape found while proving the Task 3 term
+    correction migration: 10 features carried a
+    ``phenotypicFeatures[].onset.ontologyClass`` value that disagreed with
+    their own ``phenotypicFeatures[].onset.age.ontologyClass`` sibling.
+    """
+    doc = {
+        "phenotypicFeatures": [
+            {
+                "onset": {
+                    "ontologyClass": {"id": "HP:0003581", "label": "Adult onset"},
+                    "age": {
+                        "ontologyClass": {
+                            "id": "HP:0011463",
+                            "label": "Childhood onset",
+                        }
+                    },
+                }
+            }
+        ]
+    }
+    outer = list(
+        PREFLIGHT._iter_path_values(doc, "phenotypicFeatures[].onset.ontologyClass")
+    )
+    nested = list(
+        PREFLIGHT._iter_path_values(doc, "phenotypicFeatures[].onset.age.ontologyClass")
+    )
+    assert outer == [{"id": "HP:0003581", "label": "Adult onset"}]
+    assert nested == [{"id": "HP:0011463", "label": "Childhood onset"}]
+    assert outer != nested, "a disagreeing pair must not collapse into one value"
