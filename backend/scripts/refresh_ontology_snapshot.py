@@ -135,6 +135,46 @@ _SO_GENO_TERM_IDS = [
     "SO:0000667",  # insertion
 ]
 
+# Every SO id `frontend/src/utils/soTerms.js`'s `SO_TERMS` map can write to
+# `variationDescriptor.molecularConsequences[]` (added this branch; see
+# `ONTOLOGY_PATHS` in `app/ontology/conformance.py`, which previously omitted
+# that path entirely -- a wrong SO id/label pair there would never have been
+# checked by A3). All 29 verified live against OLS4 2026-07-30: every VEP
+# consequence key in `SO_TERMS` matches its SO id's canonical `label` exactly
+# (no mismatches found). Six overlap with `_SO_GENO_TERM_IDS` above
+# (`SO:0001483` SNV) and are de-duplicated by `build_term_id_list`.
+_FRONTEND_SO_TERM_IDS = [
+    "SO:0001893",  # transcript_ablation
+    "SO:0001574",  # splice_acceptor_variant
+    "SO:0001575",  # splice_donor_variant
+    "SO:0001587",  # stop_gained
+    "SO:0001589",  # frameshift_variant
+    "SO:0001578",  # stop_lost
+    "SO:0002012",  # start_lost
+    "SO:0001889",  # transcript_amplification
+    "SO:0001821",  # inframe_insertion
+    "SO:0001822",  # inframe_deletion
+    "SO:0001583",  # missense_variant
+    "SO:0001818",  # protein_altering_variant
+    "SO:0001630",  # splice_region_variant
+    "SO:0001626",  # incomplete_terminal_codon_variant
+    "SO:0002019",  # start_retained_variant
+    "SO:0001567",  # stop_retained_variant
+    "SO:0001819",  # synonymous_variant
+    "SO:0001580",  # coding_sequence_variant
+    "SO:0001620",  # mature_miRNA_variant
+    "SO:0001623",  # 5_prime_UTR_variant
+    "SO:0001624",  # 3_prime_UTR_variant
+    "SO:0001792",  # non_coding_transcript_exon_variant
+    "SO:0001627",  # intron_variant
+    "SO:0001621",  # NMD_transcript_variant
+    "SO:0001619",  # non_coding_transcript_variant
+    "SO:0001631",  # upstream_gene_variant
+    "SO:0001632",  # downstream_gene_variant
+    "SO:0001628",  # intergenic_variant
+    "SO:0001483",  # SNV (already in _SO_GENO_TERM_IDS; de-duplicated)
+]
+
 # OLS4 ontology key + IRI-building function for each non-HPO prefix this
 # script covers. Orphanet's OLS4 IRI segment is "Orphanet_<number>" — NOT
 # "ORPHA_<number>", which `term_id.replace(":", "_")` would naively produce
@@ -168,6 +208,7 @@ def build_term_id_list() -> list[str]:
         *_LATERALITY_IDS,
         *_EXPLICIT_TERM_IDS,
         *_SO_GENO_TERM_IDS,
+        *_FRONTEND_SO_TERM_IDS,
     ]
     seen: set[str] = set()
     unique_ids: list[str] = []

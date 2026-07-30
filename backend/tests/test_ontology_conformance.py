@@ -85,6 +85,25 @@ class TestA1SourceIntegrity:
         assert violation
         assert "HP:0033132" in violation, "must name the term the description describes"
 
+    def test_rejects_the_laundered_variant_even_though_the_name_is_normalised(self):
+        """The T1 row after its label was normalised to HP:0033133's own name.
+
+        Before the rule-order fix, this exact `(id, name, description)`
+        triple returned `None`: the name matched `term_id`'s own canonical
+        name, so the old rule-2 name/synonym fallback short-circuited before
+        the description (still `HP:0033132`'s canonical definition) was ever
+        checked against a different term. This is the state the pre-fix
+        importer would have laundered T1 into, and it must be caught exactly
+        like the un-normalised row above.
+        """
+        violation = check_source_row(
+            "HP:0033133",
+            "Renal cortical hypoechogeneity",
+            "Increased echogenecity of the kidney cortex.",
+        )
+        assert violation
+        assert "HP:0033132" in violation, "must name the term the description describes"
+
     def test_accepts_a_name_only_match_when_no_definition_is_given(self):
         """No description falls back to a name-or-synonym match."""
         assert check_source_row("HP:0000107", "Renal cyst", "") is None

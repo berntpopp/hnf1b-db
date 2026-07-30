@@ -9,14 +9,22 @@ something other than what it claims:
 - **A1** `check_source_row` is the discriminator. It anchors on the
   curator's *description*, a field label-normalisation never touches. For
   every source row it evaluates, in order: does the description match
-  `term_id`'s canonical definition? If not, does the name match `term_id`'s
-  canonical name or a synonym — a genuine fallback, not just a no-description
-  path, because most curated descriptions are a paraphrase rather than a
-  verbatim copy and a name match is still real corroboration? If neither,
-  the row fails, and — because a wrong identifier's description usually
-  still matches *some* term — the violation names that term, turning "this
-  row is wrong" into "you meant `HP:0033132`". This is exactly the check
-  that would have failed the import that produced `HP:0033133`.
+  `term_id`'s canonical definition? If so, corroborated. Otherwise, does a
+  non-empty description exactly match a *different* term's canonical
+  definition? If so, the row is rejected immediately, naming that term —
+  **before** the name/synonym fallback ever runs, because a name that has
+  been normalised to `term_id`'s own canonical name is not corroboration
+  when the description itself names a different term. Only once that check
+  has cleared does the name/synonym fallback run: does the name match
+  `term_id`'s canonical name or a synonym — a genuine fallback, not just a
+  no-description path, because most curated descriptions are a paraphrase
+  rather than a verbatim copy and a name match is still real corroboration?
+  If neither, the row fails, and — because a wrong identifier's description
+  usually still matches *some* term — the violation names that term, turning
+  "this row is wrong" into "you meant `HP:0033132`". This is exactly the
+  check that would have failed the import that produced `HP:0033133`,
+  *and* the laundered variant where `HP:0033133`'s label was rewritten to
+  its own canonical name while the description still named `HP:0033132`.
 
 - **A3** `check_label` is the naive label-vs-identifier check, retained and
   labelled as insufficient on its own. It is satisfiable by editing the
@@ -78,6 +86,15 @@ ONTOLOGY_PATHS: list[str] = [
     ".variantInterpretation.variationDescriptor.structuralType",
     "interpretations[].diagnosis.genomicInterpretations[]"
     ".variantInterpretation.variationDescriptor.allelicState",
+    # SO terms written by `migration/phenopackets/extractors.py`'s
+    # `_add_molecular_consequence` and, since this branch,
+    # `frontend/src/utils/soTerms.js`'s `SO_TERMS` map (via the variant
+    # annotation UI). Omitted before 2026-07-30: a wrong SO id/label pair at
+    # this path would have been stored and never checked by A3, and
+    # `ontology_preflight.py` could report zero violations while
+    # ontology-bearing content here was wrong.
+    "interpretations[].diagnosis.genomicInterpretations[]"
+    ".variantInterpretation.variationDescriptor.molecularConsequences[]",
     "hpo_terms_lookup.hpo_id",
 ]
 
@@ -196,26 +213,39 @@ def check_source_row(term_id: str, name: str, description: str) -> Optional[str]
 
     1. `description` non-empty and matches `term_id`'s canonical definition
        → corroborated, `None`.
-    2. Else `name` matches `term_id`'s canonical name or a listed synonym →
+    2. Else, `description` non-empty and matches a *different* term's
+       canonical definition → immediate violation naming that term. This
+       runs **before** the name/synonym fallback (rule 3), deliberately: a
+       laundered row can have a name that has already been normalised to
+       `term_id`'s own canonical name while the description still names a
+       different term — that name match is not corroboration, it is the
+       whole reason the wrong id survived undetected before. Checking the
+       description-names-another-term case first closes that bypass. (Found
+       2026-07-30: `check_source_row("HP:0033133", "Renal cortical
+       hypoechogeneity", "Increased echogenecity of the kidney cortex.")` —
+       `HP:0033133`'s own canonical name, `HP:0033133`'s description that is
+       actually `HP:0033132`'s canonical definition — used to return `None`
+       because the old rule 2 (name/synonym match) ran before this one and
+       short-circuited it.)
+    3. Else, `name` matches `term_id`'s canonical name or a listed synonym →
        corroborated, `None`. This is a genuine fallback, checked whenever
-       rule 1 didn't already pass — not only when `description` is empty.
-       Most curated descriptions are a human paraphrase of the ontology's
-       definition, not a verbatim copy (compare "characterised" vs
-       "characterized", or a shortened restatement); demanding an exact
-       string match on the description alone flags the majority of a real
-       curation sheet's honest rows as violations and buries the one row
-       that is actually wrong. A name/synonym match is still real
-       corroboration — normalisation never touches this field either — so
-       falling through to it after a failed description match does not
-       reopen the bypass rule 1 exists to close: a **wrong** identifier
-       whose label has been *normalised* still fails here, because its
-       label was rewritten to match the wrong id's own canonical name, and
-       that id is exactly `term_id`, so this check is checking the id
-       against itself and only passes if it truly is that id's name.
-    3. Otherwise the row fails. The snapshot is searched for the term whose
+       rules 1-2 didn't already resolve the row — not only when
+       `description` is empty. Most curated descriptions are a human
+       paraphrase of the ontology's definition, not a verbatim copy (compare
+       "characterised" vs "characterized", or a shortened restatement);
+       demanding an exact string match on the description alone flags the
+       majority of a real curation sheet's honest rows as violations and
+       buries the one row that is actually wrong. A name/synonym match is
+       still real corroboration — normalisation never touches this field
+       either — precisely because rule 2 has already ruled out the case
+       where the description points at some other term entirely.
+    4. Otherwise the row fails. The snapshot is searched for the term whose
        definition `description` actually matches; if found, the violation
        names it — this is what turns "this id is wrong" into "you meant
-       `HP:0033132`".
+       `HP:0033132`". (In practice this duplicates rule 2's search when
+       `description` is non-empty; it is reached here only when `term_id`
+       itself is unknown to the snapshot, since rule 2 already handled the
+       known-`term_id`-with-description case.)
 
     Returns `None` when corroborated; otherwise a human-readable violation
     message. Never rewrites `name` or `term_id` — it only reports.
@@ -240,9 +270,6 @@ def check_source_row(term_id: str, name: str, description: str) -> Optional[str]
     ):
         return None
 
-    if term is not None and (name == term["name"] or name in term.get("synonyms", [])):
-        return None
-
     if description:
         match = _find_term_by_definition(description)
         if match is not None and match != term_id:
@@ -252,6 +279,11 @@ def check_source_row(term_id: str, name: str, description: str) -> Optional[str]
                 f"canonical definition, not {term_id}'s. The identifier "
                 f"should probably be {match}."
             )
+
+    if term is not None and (name == term["name"] or name in term.get("synonyms", [])):
+        return None
+
+    if description:
         if term is None:
             return (
                 f"{term_id} is not a known term in the pinned ontology "
