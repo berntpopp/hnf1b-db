@@ -92,6 +92,17 @@ ALLOWED_DEVIATIONS: dict[tuple[str, str], str] = {
         "definition for this row matches HP:0012622's canonical definition "
         "verbatim, so check_source_row (A1) accepts it independently."
     ),
+    ("HP:0012622", "Chronic kidney disease (unspecified)"): (
+        "Same deliberate 'unstaged CKD' qualifier as the entry above "
+        "(HP:0012622 denotes 'Chronic kidney disease'; both wordings "
+        "distinguish it from the staged HP:0012623-26 / HP:0003774 terms), "
+        "just the Title Case phrasing used in app/core/config.py's "
+        "HPOTermsConfig.any_kidney / ckd_stages inline comments rather than "
+        "the curation sheet's own wording. Found by the T12/T13 check_label "
+        "sweep of HPOTermsConfig (docs/ontology-defect-report-2026-07-30.md "
+        "S2); the identifier itself is correct, only the comment's wording "
+        "differs from the pinned snapshot's canonical name."
+    ),
     ("HP:0002910", "Elevated hepatic transaminase"): (
         "HPO renamed this term to 'Elevated circulating hepatic transaminase "
         "concentration'; the sheet's pre-rename label is not a listed "

@@ -223,8 +223,8 @@ class HPOTermsConfig(BaseModel):
         "HP:0000122",  # Unilateral renal agenesis
         "HP:0012210",  # Abnormal renal morphology
         "HP:0033133",  # Renal cortical hypoechogeneity
-        "HP:0000108",  # Multiple glomerular cysts
-        "HP:0001970",  # Oligomeganephronia
+        "HP:0100611",  # Multiple glomerular cysts
+        "ORPHA:2260",  # Oligomeganephronia
     ]
 
     # MODY (Maturity-onset diabetes of the young)
@@ -233,11 +233,11 @@ class HPOTermsConfig(BaseModel):
     # CKD stage terms
     ckd_stages: List[str] = [
         "HP:0012622",  # Chronic kidney disease (unspecified)
-        "HP:0012623",  # Stage 1 CKD
-        "HP:0012624",  # Stage 2 CKD
-        "HP:0012625",  # Stage 3 CKD
-        "HP:0012626",  # Stage 4 CKD
-        "HP:0003774",  # Stage 5 CKD
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
     ]
 
     # Kidney failure (Stage 4 and Stage 5 CKD)
@@ -245,9 +245,9 @@ class HPOTermsConfig(BaseModel):
 
     # CKD Stage 3+ (for survival analysis endpoint)
     ckd_stage_3_plus: List[str] = [
-        "HP:0012625",  # Stage 3 CKD
-        "HP:0012626",  # Stage 4 CKD
-        "HP:0003774",  # Stage 5 CKD
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
     ]
 
     # Stage 5 CKD only (ESRD)
@@ -256,9 +256,9 @@ class HPOTermsConfig(BaseModel):
     # Scalar aliases for individual CKD stages — used where the call site
     # wants a single HPO ID string rather than a list (e.g. raw-SQL
     # literal filters or human-readable metadata descriptions).
-    chronic_kidney_disease: str = "HP:0012622"  # CKD unspecified
-    ckd_stage_4: str = "HP:0012626"  # Stage 4 CKD
-    ckd_stage_5: str = "HP:0003774"  # Stage 5 CKD / ESRD
+    chronic_kidney_disease: str = "HP:0012622"  # Chronic kidney disease (unspecified)
+    ckd_stage_4: str = "HP:0012626"  # Stage 4 chronic kidney disease
+    ckd_stage_5: str = "HP:0003774"  # Stage 5 chronic kidney disease
 
 
 class SecurityConfig(BaseModel):

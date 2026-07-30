@@ -142,6 +142,8 @@ These never reached the database but are live in application and import paths.
 | **T9** | `HP:0004719` | Oligomeganephronia | **Hyperechogenic kidneys** | `migration/phenopackets/hpo_mapper.py` |
 | **T10** | `HP:0010945` | Fetal renal anomaly | **Fetal pyelectasis** | `migration/phenopackets/hpo_mapper.py` |
 | **T11** | `HP:0100575` | Pancreatic hypoplasia | **Neoplasm of the gallbladder** | `migration/phenopackets/hpo_mapper.py` |
+| **T12** | `HP:0000108` | Multiple glomerular cysts | **Renal corticomedullary cysts** | `app/core/config.py` (`HPOTermsConfig.any_kidney`) |
+| **T13** | `HP:0001970` | Oligomeganephronia | **Tubulointerstitial nephritis** | `app/core/config.py` (`HPOTermsConfig.any_kidney`) |
 
 **T6** confuses urine with blood. Hyperuricosuria is elevated urinary uric acid;
 hyperuricemia is elevated serum uric acid. The correct term is `HP:0002149`, which the
@@ -167,11 +169,25 @@ were already fixed — the same audit method, applied completely rather than by 
 snapshot, a coverage gap rather than a tenth defect, closed by adding it to
 `scripts/refresh_ontology_snapshot.py`'s explicit term list.
 
+**T12 and T13** were found by applying the same `check_label` sweep method to a sixth
+independent hardcoded ontology map, `app/core/config.py`'s `HPOTermsConfig.any_kidney`
+(the fifth map, `app/phenopackets/clinical_queries.py`'s `MORPHOLOGY_TERM_LABELS`, was
+found and corrected the same way — see `backend/tests/test_clinical_queries_morphology.py`
+— and is not renumbered here). Both wrong ids appeared in zero stored records; the
+corpus stores the intended concepts as `HP:0100611` (103 features) and `ORPHA:2260` (75
+features), so any filter built on `any_kidney` with the wrong ids silently excluded all
+178 of those stored feature rows. Every remaining id/label pair in `HPOTermsConfig`,
+including its scalar CKD aliases, was independently verified conformant by the same
+sweep (`backend/tests/test_hpo_terms_config_conformance.py`).
+
 **Status (2026-07-30): T1–T11 are now all corrected.** T1–T5 (stored data) by
 migrations `d4e8b1f60a27` (T1) and `efa98cccfa51` (T2–T5); T6, T8–T11 in
 `app/services/ontology_service.py` and `migration/phenopackets/hpo_mapper.py`; T7 was
 already fixed at source before this pass. See
 `docs/superpowers/plans/2026-07-30-ontology-data-quality.md` Tasks 3 and 6.
+
+**T12 and T13 are also now corrected**, in `app/core/config.py`'s
+`HPOTermsConfig.any_kidney`.
 
 ---
 
@@ -345,8 +361,8 @@ and an HPO rename respectively, both with sheet definitions matching canonical v
 ontology terms audited                        44   (+ hpo_mapper.py's full default
                                                        dictionary, audited a second
                                                        pass with check_label — T10, T11)
-identifiers denoting something else           11
-  originating in code                         10   (T7-T11)
+identifiers denoting something else           13
+  originating in code                         12   (T7-T13)
   originating in the curation sheet            1   (with correct name + description)
 of those, present in stored data               5   (T1-T5; T10/T11 never reached the
                                                        corpus, same as T7-T9)
@@ -365,6 +381,10 @@ maps containing errors                         3
 laterality annotations restored (migration `18cfc57307f6`); both label-laundering
 mechanisms deleted (`hpo_mapper._get_canonical_label`, `scripts/normalize_hpo_labels.py`).
 See `docs/superpowers/plans/2026-07-30-ontology-data-quality.md`.
+
+**T12 and T13 also corrected the same day**, found by the same `check_label` sweep
+applied to a sixth independent hardcoded map (`app/core/config.py`'s
+`HPOTermsConfig.any_kidney`); the programme total is now **13** wrong identifiers.
 
 For one representative record (`phenopacket-317`): the source sheet holds 33 curated
 fields, the database stores 24, the public page renders 8, and the curation form can
