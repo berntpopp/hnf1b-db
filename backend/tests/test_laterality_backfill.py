@@ -318,7 +318,13 @@ def test_downgrade_restores_seeded_preimages_byte_identically(sync_conn):
     assert restored_head == rec["doc"]
 
 
-def test_downgrade_does_not_touch_a_row_edited_after_the_migration_ran(sync_conn):
+def test_downgrade_refuses_when_a_row_was_edited_after_the_migration_ran(sync_conn):
+    """A curator edit made after the migration ran must abort the downgrade,
+    not be silently skipped -- see efa98cccfa51's equivalent test for why a
+    silent skip is unsafe (Alembic would still record the schema version as
+    moved backward, and the next successful upgrade() clears the journal,
+    making the true original preimage permanently unreachable).
+    """
     actor_id = _seed_actor(sync_conn)
     rec = _seed_phenopacket(
         sync_conn, actor_id, "9301", [_feature(RENAL_CYST, "Renal cyst")]
@@ -342,10 +348,48 @@ def test_downgrade_does_not_touch_a_row_edited_after_the_migration_ran(sync_conn
         {"features": json.dumps(edited_features), "id": rec["pp_id"]},
     )
 
-    MIGRATION.restore_from_journal(sync_conn, REVISION_ID)
+    with pytest.raises(RuntimeError, match="phenopackets"):
+        MIGRATION.restore_from_journal(sync_conn, REVISION_ID)
 
     current = _fetch(sync_conn, "phenopackets", "phenopacket", rec["pp_id"])
-    assert current["phenotypicFeatures"] == edited_features
+    assert current["phenotypicFeatures"] == edited_features, (
+        "downgrade must not clobber a post-migration curator edit"
+    )
+
+
+def test_apply_restoration_refuses_when_the_journal_already_has_rows(sync_conn):
+    """H2 regression test: calling ``apply_restoration`` twice without an
+    intervening successful ``restore_from_journal`` must raise, not silently
+    clear the journal and journal nothing in its place.
+
+    Against an already-restored corpus every backfilled feature takes the
+    "already_correct" branch in ``_restore_and_journal`` (``changed`` stays
+    ``False``), so a second, unguarded application journals nothing while an
+    unconditional clear-first would have destroyed the first application's
+    preimage rows outright.
+    """
+    actor_id = _seed_actor(sync_conn)
+    rec = _seed_phenopacket(
+        sync_conn, actor_id, "9302", [_feature(RENAL_CYST, "Renal cyst")]
+    )
+    fixture_rows = [
+        {
+            "individual_id": "9302",
+            "phenotype_column": "RenalCysts",
+            "hpo_id": RENAL_CYST,
+            "laterality_value": "unilateral left",
+        }
+    ]
+    MIGRATION.apply_restoration(sync_conn, REVISION_ID, fixture_rows=fixture_rows)
+
+    with pytest.raises(RuntimeError, match="journal"):
+        MIGRATION.apply_restoration(sync_conn, REVISION_ID, fixture_rows=fixture_rows)
+
+    current = _fetch(sync_conn, "phenopackets", "phenopacket", rec["pp_id"])
+    assert current["phenotypicFeatures"][0]["modifiers"] == [
+        dict(UNILATERAL),
+        dict(LEFT),
+    ]
 
 
 def test_aborts_when_the_join_is_lossy(sync_conn, monkeypatch):

@@ -360,14 +360,19 @@ def test_downgrade_restores_every_fixture_record_byte_identically(sync_conn):
         )
 
 
-def test_downgrade_does_not_touch_a_row_whose_postimage_was_edited_afterwards(
-    sync_conn,
-):
-    """A curator edit made after the migration ran must survive downgrade.
+def test_downgrade_refuses_when_a_postimage_was_edited_afterwards(sync_conn):
+    """A curator edit made after the migration ran must abort the downgrade,
+    not be silently skipped.
 
     The whole-array preimage/postimage model can only verify the row hasn't
-    changed since the correction; it cannot merge concurrent edits, so the
-    contract is "leave it alone", not "silently overwrite".
+    changed since the correction; it cannot merge concurrent edits. Earlier
+    this left the edited row alone and returned normally -- but that let
+    Alembic record the schema version as moved backward while the row stayed
+    migrated, and the very next successful upgrade() clears the journal
+    (see ``restore_from_journal``'s docstring), making the row's true
+    original preimage permanently unreachable. ``restore_from_journal`` must
+    raise instead, aborting the whole downgrade transaction, so the edit
+    survives because nothing commits -- not because it was carefully skipped.
     """
     seeded = _seed(sync_conn, {"pp-onset": FIXTURE["pp-onset"]})
     MIGRATION.apply_corrections(sync_conn, REVISION_ID)
@@ -381,7 +386,8 @@ def test_downgrade_does_not_touch_a_row_whose_postimage_was_edited_afterwards(
         {"diseases": json.dumps(edited_diseases), "id": seeded["pp-onset"]["pp_id"]},
     )
 
-    MIGRATION.restore_from_journal(sync_conn, REVISION_ID)
+    with pytest.raises(RuntimeError, match="diseases"):
+        MIGRATION.restore_from_journal(sync_conn, REVISION_ID)
 
     current = _fetch(
         sync_conn, "phenopackets", "phenopacket", "id", seeded["pp-onset"]["pp_id"]
@@ -389,6 +395,32 @@ def test_downgrade_does_not_touch_a_row_whose_postimage_was_edited_afterwards(
     assert current["diseases"] == edited_diseases, (
         "downgrade must not clobber a post-migration curator edit"
     )
+
+
+def test_apply_corrections_refuses_when_the_journal_already_has_rows(sync_conn):
+    """H2 regression test: calling ``apply_corrections`` twice without an
+    intervening successful ``restore_from_journal`` must raise, not silently
+    clear and re-journal.
+
+    Reproduces the operator-triggered scenario (``alembic stamp`` to an
+    earlier revision then ``upgrade``, or a backup restored against a stale
+    ``alembic_version``): a second, unguarded application would destroy the
+    first application's journalled preimages -- most corrections are no-ops
+    against already-corrected data, so most of the original journal would be
+    dropped with nothing re-journalled in its place.
+    """
+    seeded = _seed(sync_conn, {"pp-onset": FIXTURE["pp-onset"]})
+    MIGRATION.apply_corrections(sync_conn, REVISION_ID)
+
+    with pytest.raises(RuntimeError, match="journal"):
+        MIGRATION.apply_corrections(sync_conn, REVISION_ID)
+
+    # The first application's journal rows must be untouched by the refused
+    # second call.
+    current = _fetch(
+        sync_conn, "phenopackets", "phenopacket", "id", seeded["pp-onset"]["pp_id"]
+    )
+    assert current["diseases"][0]["term"] == RCAD_NEW
 
 
 def test_upgrade_then_downgrade_then_upgrade_again_is_idempotent(sync_conn):

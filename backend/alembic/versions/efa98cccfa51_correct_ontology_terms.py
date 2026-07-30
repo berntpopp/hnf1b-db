@@ -89,11 +89,43 @@ happen last on downgrade, from ``diseases`` journal rows, and NOT be
 re-derived by inverting the id map, since the id map alone cannot know which
 of the two collapsed entries -- if any -- a given record originally had.
 
-The journal table is retained after downgrade, deliberately: it is
+The journal *table* is retained after downgrade, deliberately: it is
 infrastructure in the same permanent-raw-SQL-table family as
 ``hpo_terms_lookup``, not schema this revision owns end-to-end, and Task 4's
 migration reuses it. Dropping it on downgrade would also destroy the audit
-trail of any later migration's journal rows.
+trail of any later migration's journal rows. This revision's own *rows* in
+it, however, are deleted once ``restore_from_journal`` finishes restoring
+every one of them -- see "Re-running upgrade() safely" below for why.
+
+``restore_from_journal`` also aborts (raises) rather than silently returning
+a partial count if any journalled row was skipped -- see its docstring.
+
+Re-running upgrade() safely
+----------------------------
+
+``apply_corrections`` used to be paired with an unconditional
+``DELETE FROM ontology_migration_journal WHERE revision = :revision`` in
+``upgrade()``, to make a downgrade -> upgrade cycle re-journal cleanly. That
+is correct for downgrade -> upgrade, but not for upgrade -> upgrade: calling
+``upgrade()`` a second time without an intervening ``downgrade()`` (e.g.
+``alembic stamp`` to an earlier revision then ``upgrade``, or a backup
+restored against a stale ``alembic_version``) would delete the *first*
+upgrade's journal rows -- the only record of the true pre-correction preimage
+-- and re-run the correction against already-corrected data. Most
+corrections are no-ops the second time (their ``EXISTS`` candidates are
+already gone), so most of the original journal is destroyed with nothing
+re-journalled in its place; the ``onset_abstract`` (``HP:0003674``) branch
+additionally re-matches on id even though only its label changed the first
+time, so some rows get re-journalled carrying an *already-corrected* value as
+their recorded "preimage" -- silently wrong, not just silently missing.
+
+``apply_corrections`` therefore refuses (raises ``RuntimeError``) if this
+revision already has any journal rows when it is called, instead of
+clearing them. ``restore_from_journal`` is the only thing that clears this
+revision's journal rows now, and only after confirming every one of them
+restored cleanly (see its own docstring) -- so the journal is non-empty
+exactly when the corpus is in the post-``upgrade()`` state, and empty
+exactly when it is safe to ``upgrade()`` again.
 
 ``ontology_migration_journal`` is registered in ``alembic/env.py``'s
 ``include_object`` and in
@@ -155,10 +187,13 @@ _JOURNAL_INDEX_SQL = (
     "(revision, table_name, row_id)"
 )
 
-# Re-running upgrade() after a downgrade must not accumulate a second set of
-# journal rows for this revision -- clear any journal rows this revision
-# previously wrote before re-applying, so (revision, table_name, row_id,
-# json_path) stays unique and restore_from_journal's join is unambiguous.
+# restore_from_journal() runs this once every journalled row for this
+# revision has been confirmed restored, so a later upgrade() finds an empty
+# journal and apply_corrections()'s own guard (see its docstring) lets it
+# proceed. NOT run by upgrade() itself -- see module docstring "Re-running
+# upgrade() safely" for why clearing here unconditionally, before
+# re-applying, silently destroyed the only record of the true preimage on a
+# second, unguarded upgrade().
 _CLEAR_OWN_JOURNAL_ROWS_SQL = (
     "DELETE FROM ontology_migration_journal WHERE revision = :revision"
 )
@@ -535,13 +570,43 @@ _CORRECTIONS: list[tuple[str, str, str]] = [
 ]
 
 
+_JOURNAL_ROW_COUNT_FOR_REVISION_SQL = (
+    "SELECT count(*) FROM ontology_migration_journal WHERE revision = :revision"
+)
+
+
 def apply_corrections(conn: Connection, revision_id: str) -> dict[str, int]:
     """Apply all five term corrections to both stored copies, journalling each row.
 
     Returns a ``{json_path: rows_touched}`` count per correction, summed over
     both tables, for callers (tests, this module's ``upgrade``) to assert
     against.
+
+    Refuses (raises ``RuntimeError``) if ``revision_id`` already has journal
+    rows -- see module docstring "Re-running upgrade() safely". A second,
+    unguarded application would destroy the first application's journalled
+    preimages (most corrections are no-ops the second time and would
+    silently drop out of a naive clear-and-reapply) and, for the
+    ``onset_abstract`` id-based branch specifically, re-journal an
+    already-corrected value as if it were the original preimage.
     """
+    existing = conn.execute(
+        text(_JOURNAL_ROW_COUNT_FOR_REVISION_SQL), {"revision": revision_id}
+    ).scalar_one()
+    if existing:
+        raise RuntimeError(
+            f"Refusing to apply efa98cccfa51's corrections: "
+            f"ontology_migration_journal already has {existing} row(s) for "
+            f"revision {revision_id!r}. This means upgrade() already ran and "
+            f"was never followed by a successful downgrade() (which clears "
+            f"its own journal rows once every one of them restores cleanly) "
+            f"-- applying the corrections again would destroy or corrupt the "
+            f"existing journal rather than reflect the true original "
+            f"preimage. Run downgrade() first, or clear this revision's rows "
+            f"from ontology_migration_journal deliberately if you are certain "
+            f"they are stale."
+        )
+
     counts: dict[str, int] = {}
     for json_path, working_sql, head_sql in _CORRECTIONS:
         touched = 0
@@ -592,6 +657,12 @@ RETURNING r.id
 """
 
 
+_JOURNAL_ROW_IDS_SQL = """
+SELECT row_id FROM ontology_migration_journal
+WHERE revision = :revision AND table_name = :table_name AND json_path = :json_path
+"""
+
+
 def restore_from_journal(conn: Connection, revision_id: str) -> dict[str, int]:
     """Restore every journalled row for ``revision_id``, verifying postimage_sha first.
 
@@ -603,16 +674,67 @@ def restore_from_journal(conn: Connection, revision_id: str) -> dict[str, int]:
     information the id map alone cannot re-derive; order does not matter for
     correctness here (each json_path is a disjoint top-level key) but keeps
     the more information-losing correction visually last.
+
+    Aborts (raises ``RuntimeError``) instead of returning a partial count if
+    any journalled row could not be restored -- i.e. its current value no
+    longer hashes to the recorded postimage (edited after this migration
+    ran), or the row no longer exists. A silent partial downgrade would leave
+    those rows migrated while Alembic still records the schema version as
+    moved backward, and this function's own end-of-run journal clear (below)
+    would then discard the only record of their true preimage on the very
+    next successful ``upgrade()``, making it permanently unreachable.
+
+    On full success -- every journalled row for ``revision_id`` restored --
+    this revision's own rows are deleted from ``ontology_migration_journal``
+    (the table itself is retained; see module docstring "Re-running
+    upgrade() safely"), so a subsequent ``upgrade()`` finds an empty journal
+    and is allowed to re-apply cleanly.
     """
     counts: dict[str, int] = {}
     for json_path, _working_sql, _head_sql in reversed(_CORRECTIONS):
         touched = 0
-        for sql in (_RESTORE_WORKING_SQL, _RESTORE_HEAD_SQL):
-            rows = conn.execute(
+        skipped: list[str] = []
+        for table_name, sql in (
+            ("phenopackets", _RESTORE_WORKING_SQL),
+            ("phenopacket_revisions", _RESTORE_HEAD_SQL),
+        ):
+            expected_row_ids = {
+                row.row_id
+                for row in conn.execute(
+                    text(_JOURNAL_ROW_IDS_SQL),
+                    {
+                        "revision": revision_id,
+                        "table_name": table_name,
+                        "json_path": json_path,
+                    },
+                ).fetchall()
+            }
+            restored_rows = conn.execute(
                 text(sql), {"revision": revision_id, "json_path": json_path}
             ).fetchall()
-            touched += len(rows)
+            restored_row_ids = {str(row[0]) for row in restored_rows}
+            touched += len(restored_row_ids)
+            skipped.extend(
+                f"{table_name}:{row_id}"
+                for row_id in sorted(expected_row_ids - restored_row_ids)
+            )
+        if skipped:
+            raise RuntimeError(
+                f"Refusing to downgrade efa98cccfa51: {len(skipped)} "
+                f"journalled row(s) for json_path={json_path!r} (revision "
+                f"{revision_id!r}) were skipped because their current value "
+                f"no longer hashes to the recorded postimage (edited after "
+                f"this migration ran), or the row no longer exists: "
+                f"{skipped}. Downgrading anyway would leave these rows "
+                f"migrated while Alembic records the schema version as moved "
+                f"backward, and a later re-upgrade would clear the journal, "
+                f"making their original preimage permanently unreachable. "
+                f"Resolve the divergence manually before downgrading past "
+                f"this revision."
+            )
         counts[json_path] = touched
+
+    conn.execute(text(_CLEAR_OWN_JOURNAL_ROWS_SQL), {"revision": revision_id})
     return counts
 
 
@@ -620,7 +742,9 @@ def upgrade() -> None:
     conn = op.get_bind()
     conn.execute(text(_JOURNAL_TABLE_SQL))
     conn.execute(text(_JOURNAL_INDEX_SQL))
-    conn.execute(text(_CLEAR_OWN_JOURNAL_ROWS_SQL), {"revision": revision})
+    # No unconditional clear here -- apply_corrections() refuses if this
+    # revision's journal is non-empty. See module docstring "Re-running
+    # upgrade() safely".
     apply_corrections(conn, revision)
 
 
