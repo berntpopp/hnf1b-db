@@ -175,7 +175,14 @@ class SchemaValidator:
                 },
                 "interpretation": {
                     "type": "object",
-                    "required": ["id", "progressStatus"],
+                    # "id" is deliberately NOT required: 365 of the 923 corpus
+                    # records have no id on their sole interpretation (measured
+                    # 2026-07-30). GA4GH's Interpretation.id is a plain string
+                    # field with no cardinality constraint of its own; this
+                    # schema was stricter than the corpus it validates. See
+                    # docs/adr/0003-ga4gh-conformance-debt.md — this is not one
+                    # of D1-D5, just an overly strict schema, so no ADR entry.
+                    "required": ["progressStatus"],
                     "properties": {
                         "id": {"type": "string"},
                         "progressStatus": {
@@ -294,7 +301,19 @@ class SchemaValidator:
                 "timeElement": {
                     "type": "object",
                     "properties": {
-                        "age": {"type": "object"},
+                        # GA4GH's conformant shape is an object wrapping
+                        # iso8601duration, e.g. {"iso8601duration": "P13Y"}.
+                        # 672 phenotypicFeatures[].onset.age occurrences across
+                        # the corpus (measured 2026-07-30) instead store a bare
+                        # ISO-8601 duration string, e.g. "P13Y" directly. Accept
+                        # both shapes, matching how the frontend already reads
+                        # age (frontend/src/utils/age.js::readEncounterAge).
+                        # diseases[].onset.age never uses the bare-string form
+                        # in the corpus (216 uses, all object-shaped) and
+                        # subject.timeAtLastEncounter is validated only as
+                        # "type": "object" below (not through this $ref), so
+                        # neither needed a matching change.
+                        "age": {"type": ["object", "string"]},
                         "ageRange": {"type": "object"},
                         "ontologyClass": {"$ref": "#/definitions/ontologyClass"},
                         "timestamp": {"type": "string"},
