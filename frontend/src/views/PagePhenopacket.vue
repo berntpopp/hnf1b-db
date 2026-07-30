@@ -328,6 +328,7 @@ import { useRoute } from 'vue-router';
 import { getPhenopacket, deletePhenopacket } from '@/api';
 import { useAuthStore } from '@/stores/authStore';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { readEncounterAge } from '@/utils/age';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
@@ -446,12 +447,10 @@ export default {
       const subject = this.phenopacket?.subject;
       if (!subject) return 'N/A';
 
-      // Try timeAtLastEncounter first (ISO8601 duration format)
-      if (subject.timeAtLastEncounter?.age?.iso8601duration) {
-        return this.formatISO8601Duration(subject.timeAtLastEncounter.age.iso8601duration);
-      }
+      const encounterAge = readEncounterAge(subject);
+      if (encounterAge) return this.formatISO8601Duration(encounterAge);
 
-      // Try vitalStatus.timeOfDeath if deceased
+      // Deceased individuals may record only an age at death.
       if (subject.vitalStatus?.timeOfDeath?.age?.iso8601duration) {
         return this.formatISO8601Duration(subject.vitalStatus.timeOfDeath.age.iso8601duration);
       }

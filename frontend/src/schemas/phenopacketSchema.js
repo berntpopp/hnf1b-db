@@ -17,9 +17,16 @@ export const subjectSchema = yup.object({
   // Note: Valid values fetched from API via usePhenopacketVocabularies()
   // Backend validates against authoritative database values
 
+  // Both shapes are valid input: the GA4GH-conformant `age` wrapper and the
+  // flat corpus convention. See docs/adr/0003-ga4gh-conformance-debt.md.
   timeAtLastEncounter: yup.object({
+    iso8601duration: yup.string().matches(/^P/, 'Invalid ISO8601 duration format'),
     age: yup.object({
       iso8601duration: yup.string().matches(/^P/, 'Invalid ISO8601 duration format'),
+    }),
+    gestationalAge: yup.object({
+      weeks: yup.number().integer().min(0).max(45),
+      days: yup.number().integer().min(0).max(6),
     }),
   }),
 });

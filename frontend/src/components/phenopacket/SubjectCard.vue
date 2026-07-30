@@ -91,6 +91,7 @@
 
 <script>
 import { CARD_HEADERS, SEX_COLORS } from '@/utils/cardStyles';
+import { readEncounterAge } from '@/utils/age';
 
 export default {
   name: 'SubjectCard',
@@ -115,11 +116,8 @@ export default {
     },
 
     age() {
-      const timeAtLastEncounter = this.subject.timeAtLastEncounter;
-      if (timeAtLastEncounter?.age?.iso8601duration) {
-        return this.formatISO8601Duration(timeAtLastEncounter.age.iso8601duration);
-      }
-      return null;
+      const duration = readEncounterAge(this.subject);
+      return duration ? this.formatISO8601Duration(duration) : null;
     },
 
     showKaryotypicSex() {
