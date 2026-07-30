@@ -62,6 +62,7 @@ from app.phenopackets.services.phenopacket_service import (
     ServiceValidationError,
 )
 from app.phenopackets.services.state_service import PhenopacketStateService
+from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.pagination import build_offset_response
 
@@ -452,6 +453,12 @@ async def update_phenopacket(
     errors = validator.validate(sanitized)
     if errors:
         raise HTTPException(status_code=400, detail={"validation_errors": errors})
+
+    domain_errors = await DomainValidator(db).validate(sanitized)
+    if domain_errors:
+        raise HTTPException(
+            status_code=400, detail={"validation_errors": domain_errors}
+        )
 
     svc = PhenopacketStateService(db)
     try:

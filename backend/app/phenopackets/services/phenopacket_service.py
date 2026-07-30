@@ -36,6 +36,7 @@ from app.phenopackets.models import (
     PhenopacketUpdate,
 )
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.audit import create_audit_entry
 
@@ -144,6 +145,11 @@ class PhenopacketService:
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)
+
+        # Reference-data checks that need the database (spec §4.5).
+        domain_errors = await DomainValidator(self._repo.session).validate(sanitized)
+        if domain_errors:
+            raise ServiceValidationError(domain_errors)
 
         phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
