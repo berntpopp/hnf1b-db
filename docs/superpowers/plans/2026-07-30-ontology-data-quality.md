@@ -792,6 +792,31 @@ def test_no_script_rewrites_stored_curator_labels():
 kidney") and `HP:0004719` (Hyperechogenic kidneys, labelled "Oligomeganephronia"). Use
 `HP:0000122` and `ORPHA:2260`, matching what the sheet and corpus actually use.
 
+> **EXTENDED 2026-07-30 — the fallback map holds FOUR wrong ids, not two.**
+> Found by running Task 2's `check_label` over every entry, then resolving each against the
+> live HPO API. Step 3's `test_hpo_mapper_fallback_is_conformant` asserts EVERY entry is
+> conformant, so it stays red until all four are corrected — fixing only the two above is not
+> enough.
+>
+> | Entry | Label claims | Identifier actually denotes | Correct id | Evidence |
+> |---|---|---|---|---|
+> | `HP:0004729` | Solitary functioning kidney | Acute tubulointerstitial nephritis | `HP:0000122` | sheet maps SolitaryKidney → HP:0000122; corpus stores it 583× |
+> | `HP:0004719` | Oligomeganephronia | Hyperechogenic kidneys | `ORPHA:2260` | sheet + corpus |
+> | `HP:0010945` | Fetal renal anomaly | **Fetal pyelectasis** | `HP:0012210` | sheet maps AntenatalRenalAbnormalities → HP:0012210; corpus stores "Abnormal renal morphology" **261×** |
+> | `HP:0100575` | Pancreatic hypoplasia | **Neoplasm of the gallbladder** | `HP:0002594` | HPO search resolves "Pancreatic hypoplasia" → HP:0002594; corpus stores it **206×** |
+>
+> All four wrong ids appear in **zero** stored records — the sheet replaces this dict at
+> runtime, exactly as §2 of the defect report describes. They are live only on the
+> Sheets-outage fallback path (`hpo_mapper.py:238`).
+>
+> **`HP:0012759` "Neurodevelopmental abnormality" is CORRECT** and must not be "fixed". It
+> fails `check_label` only because it is absent from the pinned snapshot. Add it to the
+> snapshot's term list instead — a coverage gap, not a defect.
+>
+> This raises the programme's total from 9 wrong identifiers to **11**. Update
+> `docs/ontology-defect-report-2026-07-30.md` §2 and §8 accordingly as part of this task
+> (T10 = `HP:0010945`, T11 = `HP:0100575`).
+
 - [ ] **Step 3: Add a test that every hardcoded map is conformant**
 
 ```python
