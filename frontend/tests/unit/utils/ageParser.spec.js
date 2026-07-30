@@ -9,7 +9,7 @@
  * stored onset value could ever reach this map again anyway.
  */
 import { describe, it, expect } from 'vitest';
-import { parseAge, formatAge, onsetClassToAge } from '@/utils/ageParser';
+import { parseAge, formatAge, onsetClassToAge, getOrganSystem } from '@/utils/ageParser';
 
 describe('onsetClassToAge', () => {
   it('no longer maps the removed, wrong HP:0034199 entry', () => {
@@ -58,6 +58,49 @@ describe('onsetClassToAge', () => {
     // in the map now.
     expect(onsetClassToAge('HP:0003577')).toBe(0);
     expect(onsetClassToAge('HP:0003623')).toBe(0);
+  });
+});
+
+describe('getOrganSystem', () => {
+  /**
+   * C2 (docs/superpowers/plans/2026-07-30-ontology-data-quality.md): migration
+   * ca9950e rewrote all 460 stored occurrences of HP:0033133 to HP:0033132
+   * ("Renal cortical hypoechogeneity" -> "Renal cortical hyperechogenicity",
+   * the correct, characteristic HNF1B ultrasound finding), but this
+   * classifier still only keyed on the retired 33133 literal, so every
+   * corrected feature fell through to 'other' instead of 'renal'.
+   */
+  it('classifies the current corpus id HP:0033132 (Renal cortical hyperechogenicity) as renal', () => {
+    expect(getOrganSystem('HP:0033132')).toBe('renal');
+  });
+
+  it('still classifies the retired id HP:0033133 as renal, for historical documents', () => {
+    expect(getOrganSystem('HP:0033133')).toBe('renal');
+  });
+
+  /**
+   * Reviewer-flagged overlap: the renal numeric range (77-140) previously
+   * ran before the genital check, and fully contained the genital range
+   * (78-80), so the genital branch could never fire for those ids --
+   * getOrganSystem('HP:0000078') returned 'renal' instead of 'genital'.
+   * Confirmed by executing this module directly before fixing the branch
+   * order.
+   */
+  it('classifies HP:0000078 (Abnormality of the genital system) as genital, not renal', () => {
+    expect(getOrganSystem('HP:0000078')).toBe('genital');
+  });
+
+  it('classifies a genital id in the second range (HP:0000811-815) as genital', () => {
+    expect(getOrganSystem('HP:0000811')).toBe('genital');
+  });
+
+  it('still classifies HP:0000077 (Abnormality of the kidney) as renal', () => {
+    expect(getOrganSystem('HP:0000077')).toBe('renal');
+  });
+
+  it('returns other for a falsy or non-HPO id', () => {
+    expect(getOrganSystem(null)).toBe('other');
+    expect(getOrganSystem('ORPHA:2260')).toBe('other');
   });
 });
 

@@ -222,9 +222,10 @@ class HPOTermsConfig(BaseModel):
         "HP:0000107",  # Renal cyst
         "HP:0000122",  # Unilateral renal agenesis
         "HP:0012210",  # Abnormal renal morphology
-        "HP:0033133",  # Renal cortical hypoechogeneity
+        "HP:0033132",  # Renal cortical hyperechogenicity
         "HP:0100611",  # Multiple glomerular cysts
         "ORPHA:2260",  # Oligomeganephronia
+        "HP:0000079",  # Abnormality of the urinary system
     ]
 
     # MODY (Maturity-onset diabetes of the young)

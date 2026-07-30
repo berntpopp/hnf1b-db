@@ -132,6 +132,22 @@ export function getOrganSystem(hpoId) {
   // Extract numeric part for range-based categorization
   const numericId = parseInt(hpoId.replace('HP:', ''));
 
+  // Genital System
+  // HP:0000078-0080 - Abnormality of the genital system
+  //
+  // Checked BEFORE the renal range below on purpose: HP:0000078-0080 and
+  // HP:0000811-815 both fall *inside* the renal ranges (77-140 and 795-850
+  // respectively). With the renal check first, the renal branch always
+  // matched and returned before execution ever reached this block, so it
+  // was dead code -- e.g. getOrganSystem('HP:0000078') ("Abnormality of the
+  // genital system") returned 'renal', confirmed by executing this module
+  // directly. Found while fixing the HP:0033133 -> HP:0033132
+  // renal-classification defect (docs/superpowers/plans/
+  // 2026-07-30-ontology-data-quality.md, C2).
+  if ((numericId >= 78 && numericId <= 80) || (numericId >= 811 && numericId <= 815)) {
+    return 'genital';
+  }
+
   // Renal/Urinary System
   // HP:0000077 - Abnormality of the kidney (and all descendants)
   // HP:0000119 - Abnormality of the genitourinary system
@@ -146,16 +162,11 @@ export function getOrganSystem(hpoId) {
     (numericId >= 3774 && numericId <= 3780) || // Stage 5 CKD
     (numericId >= 12210 && numericId <= 12213) || // Abnormal renal morphology/physiology
     (numericId >= 12622 && numericId <= 12626) || // CKD stages
-    numericId === 33133 || // Renal cortical hyperechogenicity
+    numericId === 33132 || // Renal cortical hyperechogenicity (current corpus id since migration ca9950e)
+    numericId === 33133 || // Renal cortical hypoechogeneity (retired id; kept for historical documents)
     numericId === 100611 // Multiple glomerular cysts
   ) {
     return 'renal';
-  }
-
-  // Genital System
-  // HP:0000078-0080 - Abnormality of the genital system
-  if ((numericId >= 78 && numericId <= 80) || (numericId >= 811 && numericId <= 815)) {
-    return 'genital';
   }
 
   // Neurological/Neurodevelopmental
