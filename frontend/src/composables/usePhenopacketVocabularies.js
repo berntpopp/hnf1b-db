@@ -13,6 +13,10 @@
  *   progressStatus: Ref<Array>,
  *   allelicState: Ref<Array>,
  *   evidenceCode: Ref<Array>,
+ *   cohort: Ref<Array>,
+ *   detectionMethod: Ref<Array>,
+ *   segregation: Ref<Array>,
+ *   familyHistory: Ref<Array>,
  *   loading: Ref<boolean>,
  *   error: Ref<Error|null>,
  *   loadAll: Function
@@ -46,6 +50,14 @@ export function usePhenopacketVocabularies() {
   const progressStatus = ref([]);
   const allelicState = ref([]);
   const evidenceCode = ref([]);
+
+  // Curation vocabularies (spec §4.6). Added explicitly rather than by making
+  // this composable generic: the five pre-existing endpoints have four different
+  // item shapes, so a generic loader would have to special-case them anyway.
+  const cohort = ref([]);
+  const detectionMethod = ref([]);
+  const segregation = ref([]);
+  const familyHistory = ref([]);
 
   // State refs
   const loading = ref(false);
@@ -84,6 +96,10 @@ export function usePhenopacketVocabularies() {
         loadVocabulary('progress-status', progressStatus),
         loadVocabulary('allelic-state', allelicState),
         loadVocabulary('evidence-code', evidenceCode),
+        loadVocabulary('cohort', cohort),
+        loadVocabulary('detection-method', detectionMethod),
+        loadVocabulary('segregation', segregation),
+        loadVocabulary('family-history', familyHistory),
       ]);
 
       window.logService.info('All phenopacket vocabularies loaded', {
@@ -93,6 +109,10 @@ export function usePhenopacketVocabularies() {
           progressStatus: progressStatus.value.length,
           allelicState: allelicState.value.length,
           evidenceCode: evidenceCode.value.length,
+          cohort: cohort.value.length,
+          detectionMethod: detectionMethod.value.length,
+          segregation: segregation.value.length,
+          familyHistory: familyHistory.value.length,
         },
       });
     } catch (e) {
@@ -113,6 +133,10 @@ export function usePhenopacketVocabularies() {
     progressStatus,
     allelicState,
     evidenceCode,
+    cohort,
+    detectionMethod,
+    segregation,
+    familyHistory,
 
     // State
     loading,
