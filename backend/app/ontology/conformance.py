@@ -119,14 +119,6 @@ ALLOWED_DEVIATIONS: dict[tuple[str, str], str] = {
         "still uses the pre-rename primary label, which HPO now lists as a "
         "synonym; recorded explicitly in case a future HPO release drops it."
     ),
-    ("HP:0003674", "Postnatal onset"): (
-        "HPO's onset hierarchy has no discrete postnatal-onset term; "
-        "HP:0003674 is the abstract 'Onset' parent. The importer now emits "
-        "the accurate label 'Onset' for this id (migration/phenopackets/"
-        "age_parser.py, commit 2acfe03); this entry only tolerates the "
-        "pre-correction label already stored in the existing corpus, "
-        "pending spec §3.2's T5 correction migration."
-    ),
     ("ECO:0000033", "author statement"): (
         "Label is an imprecise shortening of the canonical 'author "
         "statement supported by traceable reference'; correcting it is "

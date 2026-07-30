@@ -298,6 +298,15 @@ def test_downgrade_restores_seeded_preimages_byte_identically(sync_conn):
 
     changed = _fetch(sync_conn, "phenopackets", "phenopacket", rec["pp_id"])
     assert changed != rec["doc"]
+    changed_head = _fetch(
+        sync_conn, "phenopacket_revisions", "content_jsonb", rec["rev_id"]
+    )
+    assert changed_head != rec["doc"], (
+        "head revision must have actually been modified by apply_restoration "
+        "-- otherwise the byte-identical-restore assertions below would pass "
+        "just as well against a head-side write that never happened, since "
+        "an untouched document already equals its own preimage"
+    )
 
     MIGRATION.restore_from_journal(sync_conn, REVISION_ID)
 

@@ -242,59 +242,98 @@ def test_migration_corrects_every_fixture_shape(sync_conn):
             seeded[key]["rev_id"],
         )
 
-    # pp-both: collapse + dedupe down to a single disease entry
+    # pp-both: collapse + dedupe down to a single disease entry -- both copies
     both = wc("pp-both")
     assert len(both["diseases"]) == 1
     assert both["diseases"][0]["term"] == RCAD_NEW
+    both_head = head("pp-both")
+    assert len(both_head["diseases"]) == 1
+    assert both_head["diseases"][0]["term"] == RCAD_NEW
 
-    # pp-single: collapse only
+    # pp-single: collapse only -- both copies
     single = wc("pp-single")
     assert len(single["diseases"]) == 1
     assert single["diseases"][0]["term"] == RCAD_NEW
+    single_head = head("pp-single")
+    assert len(single_head["diseases"]) == 1
+    assert single_head["diseases"][0]["term"] == RCAD_NEW
 
-    # pp-onset: term collapsed AND onset remapped
+    # pp-onset: term collapsed AND onset remapped -- both copies
     onset = wc("pp-onset")
     assert onset["diseases"][0]["term"] == RCAD_NEW
     assert onset["diseases"][0]["onset"]["ontologyClass"] == CONGENITAL_CLASS
+    onset_head = head("pp-onset")
+    assert onset_head["diseases"][0]["term"] == RCAD_NEW
+    assert onset_head["diseases"][0]["onset"]["ontologyClass"] == CONGENITAL_CLASS
 
-    # pp-tale: subject.timeAtLastEncounter remapped
+    # pp-tale: subject.timeAtLastEncounter remapped -- both copies
     tale = wc("pp-tale")
     assert tale["subject"]["timeAtLastEncounter"]["ontologyClass"] == CONGENITAL_CLASS
+    tale_head = head("pp-tale")
+    assert (
+        tale_head["subject"]["timeAtLastEncounter"]["ontologyClass"] == CONGENITAL_CLASS
+    )
 
-    # pp-post: HP:0003674 keeps its id, label becomes "Onset"
+    # pp-post: HP:0003674 keeps its id, label becomes "Onset" -- both copies
     post = wc("pp-post")
     assert post["diseases"][0]["onset"]["ontologyClass"] == ONSET_CLASS
+    post_head = head("pp-post")
+    assert post_head["diseases"][0]["onset"]["ontologyClass"] == ONSET_CLASS
 
-    # pp-clean: byte-identical no-op
+    # pp-clean: byte-identical no-op, both copies
     assert wc("pp-clean") == FIXTURE["pp-clean"]
     assert head("pp-clean") == FIXTURE["pp-clean"]
 
-    # pp-no-diseases: guard must not error and must leave the record alone
+    # pp-no-diseases: guard must not error and must leave the record alone,
+    # both copies
     no_diseases = wc("pp-no-diseases")
     assert "diseases" not in no_diseases
     assert (
         no_diseases["phenotypicFeatures"]
         == FIXTURE["pp-no-diseases"]["phenotypicFeatures"]
     )
+    no_diseases_head = head("pp-no-diseases")
+    assert "diseases" not in no_diseases_head
+    assert (
+        no_diseases_head["phenotypicFeatures"]
+        == FIXTURE["pp-no-diseases"]["phenotypicFeatures"]
+    )
 
-    # pp-feature-onset: phenotypicFeatures[].onset.ontologyClass corrected
+    # pp-feature-onset: phenotypicFeatures[].onset.ontologyClass corrected,
+    # both copies
     feat = wc("pp-feature-onset")
     assert feat["phenotypicFeatures"][0]["onset"]["ontologyClass"] == CONGENITAL_CLASS
+    feat_head = head("pp-feature-onset")
+    assert (
+        feat_head["phenotypicFeatures"][0]["onset"]["ontologyClass"] == CONGENITAL_CLASS
+    )
 
     # pp-feature-age-onset-mismatch: each nested location corrected from its
-    # OWN stored value, not copied from its sibling
+    # OWN stored value, not copied from its sibling -- both copies
     mismatch = wc("pp-feature-age-onset-mismatch")
     onset_obj = mismatch["phenotypicFeatures"][0]["onset"]
     assert onset_obj["ontologyClass"] == CONGENITAL_CLASS  # was HP:0034199
     assert onset_obj["age"]["ontologyClass"] == ONSET_CLASS  # was HP:0003674
+    mismatch_head = head("pp-feature-age-onset-mismatch")
+    onset_obj_head = mismatch_head["phenotypicFeatures"][0]["onset"]
+    assert onset_obj_head["ontologyClass"] == CONGENITAL_CLASS
+    assert onset_obj_head["age"]["ontologyClass"] == ONSET_CLASS
 
-    # pp-interpretation: interpretations[].diagnosis.disease corrected
+    # pp-interpretation: interpretations[].diagnosis.disease corrected, both
+    # copies
     interp = wc("pp-interpretation")
     assert interp["interpretations"][0]["diagnosis"]["disease"] == RCAD_NEW
+    interp_head = head("pp-interpretation")
+    assert interp_head["interpretations"][0]["diagnosis"]["disease"] == RCAD_NEW
 
-    # Both copies agree for a representative record
-    assert wc("pp-both") == head("pp-both")
-    assert wc("pp-tale") == head("pp-tale")
+    # Every fixture's two authoritative copies agree, not just a sample of
+    # two. A head-side JOIN that silently matched zero rows (e.g. a swapped
+    # join direction) would leave head() equal to the untouched preimage
+    # while wc() shows the correction, and this loop -- run over all nine
+    # keys, not a hand-picked pair -- would fail for every key the migration
+    # was supposed to touch.
+    for key in FIXTURE:
+        assert wc(key) == head(key), f"{key}: working copy and head revision disagree"
 
     # No feature or interpretation was dropped or reordered
     assert len(wc("pp-feature-age-onset-mismatch")["phenotypicFeatures"]) == 1
@@ -396,13 +435,38 @@ def test_upgrade_then_downgrade_then_upgrade_again_is_idempotent(sync_conn):
 
 
 def test_journal_table_is_registered_in_alembic_env_include_object():
+    """Assert against the actual literal set ``include_object`` checks ``name``
+    against, not against the file's raw text.
+
+    A substring check on the whole file would pass on a stray mention in a
+    comment or docstring (this function's own module docstring mentions
+    ``ontology_migration_journal`` by name) without the table ever being in
+    the excluded-names set -- exactly the "test that cannot fail" failure
+    mode this migration's test suite exists to close. Parsing the AST and
+    walking only ``include_object``'s body for ``ast.Set`` string literals
+    ties the assertion to the actual filter the function applies.
+    """
     import ast
 
     env_py = Path(__file__).resolve().parents[1] / "alembic" / "env.py"
     tree = ast.parse(env_py.read_text(encoding="utf-8"))
-    source = env_py.read_text(encoding="utf-8")
-    assert "ontology_migration_journal" in source, (
-        "ontology_migration_journal must be registered in alembic/env.py's "
-        "include_object whitelist"
+
+    include_object = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "include_object"
     )
-    _ = tree
+    excluded_names: set[str] = set()
+    for node in ast.walk(include_object):
+        if isinstance(node, ast.Set):
+            excluded_names.update(
+                elt.value
+                for elt in node.elts
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+            )
+
+    assert "ontology_migration_journal" in excluded_names, (
+        "ontology_migration_journal must be a literal member of the set "
+        "include_object() checks `name` against in alembic/env.py -- a "
+        "comment or docstring mention alone is not enough"
+    )
