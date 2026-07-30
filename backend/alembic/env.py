@@ -135,6 +135,9 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
     * ``cohort_values``, ``detection_method_values``, ``segregation_values``,
       ``family_history_values`` — curation controlled-vocabulary tables from
       ``a1c4e7f20b93_add_curation_vocabularies``.
+    * ``publication_type_values``, ``classification_system_values`` —
+      curation console controlled-vocabulary tables from
+      ``e7f710e344d2_add_curation_console_vocabularies``.
     * ``alembic_version`` — alembic's own bookkeeping table.
 
     Without this filter, ``alembic revision --autogenerate`` emits
@@ -148,6 +151,7 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "detection_method_values",
         "evidence_code_values",
         "family_history_values",
+        "classification_system_values",
         "hpo_terms_lookup",
         "interpretation_status_values",
         "ontology_migration_journal",
@@ -155,6 +159,7 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "publication_metadata",
         "publication_fulltext",
         "publication_fulltext_embeddings",
+        "publication_type_values",
         "segregation_values",
         "sex_values",
         "variant_annotations",

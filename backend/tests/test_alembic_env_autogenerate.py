@@ -48,6 +48,7 @@ from app.database import Base
 _RAW_SQL_TABLES = {
     "alembic_version",
     "allelic_state_values",
+    "classification_system_values",
     "cohort_values",
     "detection_method_values",
     "evidence_code_values",
@@ -59,6 +60,7 @@ _RAW_SQL_TABLES = {
     "publication_metadata",
     "publication_fulltext",
     "publication_fulltext_embeddings",
+    "publication_type_values",
     "segregation_values",
     "sex_values",
     "variant_annotations",
