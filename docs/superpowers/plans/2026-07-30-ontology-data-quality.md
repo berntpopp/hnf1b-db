@@ -546,6 +546,37 @@ onsets  HP:0003577 594 · HP:0003674 54 · null 216
 unchanged, in the same two locations. Journal the `subject` preimage too — Step 1's
 `json_path` column exists for this.
 
+> **AMENDED 2026-07-30 — four hazards, all verified against the live database. The plan as
+> originally written aborts the migration.**
+>
+> 1. **Every array-rewrite UPDATE needs its own `WHERE EXISTS` guard.** Step 3's collapse SQL
+>    has one; this step originally supplied neither SQL nor a warning. Reproduced: an unguarded
+>    onset remap touches all 923 records, and the **59 with no `diseases` key** make
+>    `jsonb_agg` over an empty set return NULL, so `jsonb_set(...)` returns NULL and the
+>    statement dies with
+>    `null value in column "phenopacket" of relation "phenopackets" violates not-null constraint`.
+>    Guard shape: `WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(t.phenopacket->'diseases') d
+>    WHERE d->'onset'->'ontologyClass'->>'id' = 'HP:0034199')`.
+>    Measured: `diseases` is missing in 59 working copies and 43 head revisions; there are
+>    **zero** empty arrays and **zero** non-array values in either copy, so `WHERE EXISTS` is
+>    sufficient and no type-normalisation is needed.
+>
+> 2. **`subject.timeAtLastEncounter` is NOT an aggregation problem — do not copy the array
+>    shape here.** It is a single object at a fixed path. Use a scalar predicate:
+>    `WHERE t.phenopacket #>> '{subject,timeAtLastEncounter,ontologyClass,id}' IN ('HP:0034199','HP:0003674')`
+>    and a plain `jsonb_set` on that path. Wrapping it in `jsonb_agg` would be needless and
+>    dangerous.
+>
+> 3. **Guard the working copy and the head revision independently**, and join the revision side
+>    explicitly: `... FROM phenopacket_revisions r JOIN phenopackets p ON p.head_published_revision_id = r.id`.
+>    Do not assume the two copies have the same row set.
+>
+> 4. **The head-revision copy has 907 documents, not 923** — 16 records have no
+>    `head_published_revision_id`. Any assertion of the form "expect 923 rows updated" on the
+>    revision side is wrong. Step 3's post-conditions (864 entries, all length 1, all
+>    `MONDO:0007669`, onsets `HP:0003577` 594 / `HP:0003674` 54 / null 216) were verified by the
+>    controller in a rolled-back transaction against the **working copy** and are correct there.
+
 - [ ] **Step 5: Write the migration test against a seeded fixture**
 
 CI truncates the corpus, so this test **seeds its own records** covering every defect
@@ -715,6 +746,46 @@ Three wrong terms and one wrong numeric mapping outside the migration package.
 `MONDO:0010953` → `MONDO:0007669`. Check `HP:0000078`'s label against the snapshot while
 you are there.
 
+- [ ] **Step 1b: Remediate `backend/scripts/normalize_hpo_labels.py` — ADDED 2026-07-30**
+
+Found during Task 1, in neither plan. This standalone maintenance script is a **sixth instance
+of the label-laundering defect family** (§4.1), and the one that most directly defeats Task 1.
+Lines 79-85:
+
+```python
+term = ontology_service.get_term(hpo_id)
+if term and not term.label.startswith("Unknown term:"):
+    old_label = feature["type"].get("label", "")
+    if old_label != term.label:
+        feature["type"]["label"] = term.label       # <-- rewrites the curator's label
+```
+
+It cites "Fixes #165" — the same issue that produced `_get_canonical_label`. It is worse than
+the importer path in two ways: it rewrites labels on **already-stored** records, so Task 1's
+deletion does not contain it; and it writes only `pp.phenopacket`, never the head-published
+revision, so running it would also violate this plan's Global Constraint on writing both
+copies. One invocation re-inverts `HP:0033132` across 460 records.
+
+Confirmed by review: no Makefile target, CI workflow, or migration path invokes it — it is
+manually run. That lowers urgency, not severity.
+
+**Delete it.** Task 1's precedent governs: the fix is deletion, not a behaviour flag. A
+report-only variant is not worth keeping, because Task 2's `check_label` already provides that
+capability over every ontology-bearing path, and Task 5's preflight script is the supported way
+to run it against a live database. State in the commit message that `ontology_preflight.py`
+supersedes it.
+
+Add a regression fence next to the Task 1 tests:
+
+```python
+def test_no_script_rewrites_stored_curator_labels():
+    """scripts/normalize_hpo_labels.py rewrote stored labels to match ids (§4.1).
+
+    Deleted rather than flagged; check_label + ontology_preflight.py replace it.
+    """
+    assert not (Path(__file__).parents[2] / "scripts" / "normalize_hpo_labels.py").exists()
+```
+
 - [ ] **Step 2: Correct the `hpo_mapper` fallback dictionary**
 
 `HP:0004729` (Acute tubulointerstitial nephritis, labelled "Solitary functioning
@@ -784,10 +855,18 @@ in parallel.
 
 - [ ] **Step 3: Point the curation plan at the shared modifier constants**
 
-Its Task 7 migration, Task 9 validator and Phase 3 UI must import the four ids from
+Its Task 9 validator and Phase 3 UI must import the four ids from
 `migration/phenopackets/laterality.py` rather than redeclaring them. Its test fixtures
 use a fake label `"x"`, which a conformance call now rejects — update them to real
 labels.
+
+> **CORRECTED 2026-07-30.** This step originally included the Task 7 **migration** in that
+> list. That is wrong, and the curation plan's inline redeclaration is right. An Alembic
+> revision must be a frozen snapshot of its own intent: if it imported `BILATERAL` and friends
+> from a mutable application module, editing that module later would silently change what an
+> already-applied revision does when replayed on a fresh database. **Migrations redeclare ID
+> literals inline; application code imports them.** Parity between the two encodings is
+> enforced by a test, never by an import.
 
 ---
 

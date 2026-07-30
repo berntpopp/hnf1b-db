@@ -313,8 +313,13 @@ edit 6.
 
 ## 9. Related
 
-- `docs/adr/0003-ga4gh-conformance-debt.md` — separate, deliberately deferred: GA4GH
-  field placement and extension value types. Not overlapping with these findings.
+- `docs/adr/0003-ga4gh-conformance-debt.md` — deliberately deferred: GA4GH field placement
+  and extension value types.
+  **Correction (2026-07-30):** this entry originally read "Not overlapping with these
+  findings." That is true of the ADR's D1–D4 and **false of its D5**, which is the same
+  laterality loss recorded in §3 above. The ADR's D5 deferral has been superseded by its
+  Amendment 1, which authorizes the journalled, reversible restoration of the 408 annotations
+  as data recovery. D1–D4 remain deferred.
 - `docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md` and its plan —
   rev 2, rewritten after adversarial review. The invariant is now three assertions
   anchored on the curator's description (§4 explains why a label-vs-id check cannot

@@ -1400,7 +1400,26 @@ Refs: docs/superpowers/specs/2026-07-30-curation-data-model-design.md §4.6"
 
 ## Task 7: Add per-term laterality policy and its endpoint
 
-Laterality is restored as HPO modifiers. Which modifiers a term admits is **reference data**, not a constant, because of one asymmetry: HP:0000122 *Unilateral renal agenesis* already asserts unilaterality, so it takes Left/Right but must reject Unilateral (redundant) and Bilateral (contradictory).
+Laterality is restored as HPO modifiers. Which modifiers a term admits is **reference data**, not a constant, because of one asymmetry: HP:0000122 *Unilateral renal agenesis* already asserts unilaterality, so it must reject Bilateral as contradictory.
+
+> **AMENDED 2026-07-30 (adversarial review, user-confirmed).** This task originally gave
+> HP:0000122 `{Left, Right}` only, rejecting `Unilateral` as redundant. That is wrong. The
+> source carries 48 laterality values on `SolitaryKidney` (which the sheet maps to HP:0000122),
+> of which **20 are `unilateral unspecified`**. Rejecting `Unilateral` would force the ontology
+> plan's Task 4 backfill to drop those 20, leaving the features with no modifier at all —
+> indistinguishable from "laterality never stated", which is precisely the defect
+> `docs/ontology-defect-report-2026-07-30.md` §3 exists to condemn. Clinical redundancy is not
+> the same as provenance-losslessness.
+>
+> HP:0000122 therefore admits `{Unilateral, Left, Right}` and rejects only `Bilateral`.
+> `parse_laterality()` needs no term-awareness, the ontology plan's Task 4 invariant
+> "`Left`/`Right` never appear without `Unilateral`" remains globally true, and no second
+> encoding of the policy is created.
+>
+> Verified no consumer breaks on a side-only or bare-`Unilateral` modifier list:
+> `schema_validator.py:108-111` types `modifiers` as an unordered array of `ontologyClass`, and
+> `PhenotypicFeaturesCard.vue:218` renders `modifiers.map((m) => m.label || m.id).join(', ')`
+> with no positional interpretation.
 
 **Files:**
 - Create: `backend/alembic/versions/c8f1a3d5e207_add_hpo_allowed_modifiers.py`
@@ -1448,15 +1467,19 @@ async def test_full_laterality_terms(db_session, hpo_id):
 
 
 @pytest.mark.asyncio
-async def test_unilateral_renal_agenesis_takes_side_only(db_session):
-    """HP:0000122 already asserts unilaterality.
+async def test_unilateral_renal_agenesis_rejects_bilateral_only(db_session):
+    """HP:0000122 already asserts unilaterality, so Bilateral contradicts the term.
 
-    Unilateral would be redundant; Bilateral would contradict the term itself.
+    Unilateral is redundant here but NOT rejected: 20 source rows record
+    'unilateral unspecified' on this term, and dropping them would leave those
+    features with no modifier — indistinguishable from 'laterality never stated',
+    the defect of docs/ontology-defect-report-2026-07-30.md §3.
     """
     result = await db_session.execute(
         text("SELECT allowed_modifiers FROM hpo_terms_lookup WHERE hpo_id = 'HP:0000122'")
     )
-    assert set(result.scalar_one()) == {LEFT, RIGHT}
+    assert set(result.scalar_one()) == {UNILATERAL, LEFT, RIGHT}
+    assert BILATERAL not in set(result.scalar_one())
 
 
 @pytest.mark.asyncio
@@ -1474,7 +1497,7 @@ async def test_endpoint_lists_only_terms_with_modifiers(async_client):
     policy = {item["hpo_id"]: set(item["allowed_modifiers"]) for item in response.json()["data"]}
 
     assert policy["HP:0000107"] == FULL
-    assert policy["HP:0000122"] == {LEFT, RIGHT}
+    assert policy["HP:0000122"] == {UNILATERAL, LEFT, RIGHT}
     assert "HP:0004904" not in policy, "terms admitting no modifiers are omitted"
 ```
 
@@ -1492,8 +1515,8 @@ Create `backend/alembic/versions/c8f1a3d5e207_add_hpo_allowed_modifiers.py`:
 
 Which HPO modifiers a term admits is reference data rather than a constant,
 because of one asymmetry: HP:0000122 Unilateral renal agenesis already asserts
-unilaterality, so it takes Left/Right but must reject Unilateral (redundant)
-and Bilateral (contradictory).
+unilaterality, so it must reject Bilateral as contradictory. Unilateral is
+redundant there but permitted -- see the amendment note in the task body.
 
 Revision ID: c8f1a3d5e207
 Revises: a1c4e7f20b93
@@ -1512,7 +1535,11 @@ LEFT = "HP:0012835"
 RIGHT = "HP:0012834"
 
 FULL_LATERALITY = (BILATERAL, UNILATERAL, LEFT, RIGHT)
-SIDE_ONLY = (LEFT, RIGHT)
+# HP:0000122 already asserts unilaterality, so Bilateral contradicts the term.
+# Unilateral is redundant but permitted: 20 source rows state "unilateral
+# unspecified" on it, and rejecting them would discard a curator's explicit
+# annotation (defect report §3). See the amendment note at the top of Task 7.
+NOT_BILATERAL = (UNILATERAL, LEFT, RIGHT)
 
 POLICY = {
     "HP:0000107": FULL_LATERALITY,  # Renal cyst
@@ -1520,8 +1547,13 @@ POLICY = {
     "HP:0000089": FULL_LATERALITY,  # Renal hypoplasia
     "HP:0033132": FULL_LATERALITY,  # Renal cortical hyperechogenicity
     "HP:0000079": FULL_LATERALITY,  # Abnormality of the urinary system
-    "HP:0000122": SIDE_ONLY,  # Unilateral renal agenesis
+    "HP:0000122": NOT_BILATERAL,  # Unilateral renal agenesis
 }
+
+# These ID literals are deliberately redeclared inline rather than imported from
+# migration/phenopackets/laterality.py. A migration must be a frozen snapshot:
+# importing a mutable application constant would mean that editing that module
+# later silently changes what this revision does on a fresh database.
 
 
 def upgrade() -> None:
@@ -1578,8 +1610,9 @@ git commit -m "feat(curation): add per-term laterality policy and endpoint
 
 hpo_terms_lookup.allowed_modifiers plus GET /ontology/laterality-policy.
 Reference data rather than a constant because HP:0000122 Unilateral renal
-agenesis already asserts unilaterality: it takes Left/Right but must reject
-Unilateral as redundant and Bilateral as contradictory.
+agenesis already asserts unilaterality, so it must reject Bilateral as
+contradictory. Unilateral stays permitted: 20 source rows state "unilateral
+unspecified" on that term and dropping them would discard a curated annotation.
 
 Refs: docs/superpowers/specs/2026-07-30-curation-data-model-design.md §4.4"
 ```
@@ -1919,7 +1952,7 @@ async def test_rejects_bilateral_with_unilateral(db_session):
 
 @pytest.mark.asyncio
 async def test_rejects_modifier_outside_the_terms_set(db_session):
-    """HP:0000122 already asserts unilaterality."""
+    """HP:0000122 already asserts unilaterality, so Bilateral contradicts it."""
     errors = await DomainValidator(db_session).validate(
         packet(phenotypicFeatures=[feature("HP:0000122", [BILATERAL])])
     )
@@ -2777,7 +2810,7 @@ curl -s "http://localhost:8000/api/v2/ontology/vocabularies/detection-method" | 
 curl -s "http://localhost:8000/api/v2/ontology/laterality-policy" | head -c 400
 ```
 
-Expected: `{"data":[{"value":"sanger",...}]}` and a policy list including `HP:0000122` with exactly `["HP:0012835","HP:0012834"]`.
+Expected: `{"data":[{"value":"sanger",...}]}` and a policy list including `HP:0000122` with exactly `["HP:0012833","HP:0012835","HP:0012834"]` (order per the endpoint; Bilateral `HP:0012832` absent).
 
 - [ ] **Step 8: Commit**
 
@@ -3015,7 +3048,7 @@ test.describe('curation storage contract', () => {
     expect(policy['HP:0000107']).toEqual(
       ['HP:0012832', 'HP:0012833', 'HP:0012834', 'HP:0012835'].sort()
     );
-    expect(policy['HP:0000122']).toEqual(['HP:0012834', 'HP:0012835'].sort());
+    expect(policy['HP:0000122']).toEqual(['HP:0012833', 'HP:0012834', 'HP:0012835'].sort());
   });
 
   test('a curated record round-trips and exports in both modes', async ({ request }) => {
@@ -3141,7 +3174,7 @@ Phases 1 and 2 are complete when:
 - `cycleState` does not mutate its prop.
 - Age at last encounter renders on the phenopacket detail page for a record such as `phenopacket-219`; `age_utils.py` is gone.
 - `hnf1bCuration` round-trips through create and update, with a typo inside the block rejected at 400.
-- Segregation and laterality are validated against reference data on the REST write path, with HP:0000122 accepting Left/Right and rejecting Unilateral and Bilateral.
+- Segregation and laterality are validated against reference data on the REST write path, with HP:0000122 accepting Unilateral/Left/Right and rejecting only Bilateral.
 - Four vocabulary endpoints and the laterality-policy endpoint return correctly-shaped data, and the composable exposes them.
 - Export offers `conformant` and `full`, differing only by `hnf1bCuration`.
 - The MCP contract regenerates cleanly and the no-silent-gaps test passes.

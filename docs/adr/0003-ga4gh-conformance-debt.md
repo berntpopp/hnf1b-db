@@ -1,6 +1,6 @@
 # ADR 0003: Accept and defer the GA4GH Phenopackets v2 conformance debt
 
-**Status:** Accepted
+**Status:** Accepted — **amended 2026-07-30, see "Amendment 1" below**
 **Date:** 2026-07-30
 **Context:** Adversarial review of the curation data model design
 ([spec](../superpowers/specs/2026-07-30-curation-data-model-design.md)) surfaced five
@@ -91,6 +91,8 @@ Two debts get partial relief because it costs nothing:
   age renders. The 664 records are not migrated.
 - **D5** — laterality *modelling* and validation land with the curation spec, so new
   records are annotated correctly. The ~400 legacy annotations are not restored.
+  **[SUPERSEDED by Amendment 1 below: the 408 legacy annotations ARE restored by the ontology
+  data-quality program, journalled and exactly reversible.]**
 
 ## Consequences
 
@@ -130,6 +132,52 @@ Two debts get partial relief because it costs nothing:
   institutional email addresses that the database does not currently hold
   (`metaData.reviewer` stores display names), and the dataset license is unspecified in
   `docs/references/data-sources.md:318`.
+
+## Amendment 1 — D5 legacy laterality restoration is authorized (2026-07-30)
+
+**Raised by:** adversarial review of the execution decisions for the two implementation plans.
+**Status:** accepted, same day, before any laterality code was written.
+
+The "Decision" section above states, for D5, that *"The ~400 legacy annotations are not
+restored."* Task 4 of
+[`docs/superpowers/plans/2026-07-30-ontology-data-quality.md`](../superpowers/plans/2026-07-30-ontology-data-quality.md)
+is titled "Restore the 408 laterality annotations" and does exactly that. Executing that plan
+while claiming this ADR is out of scope would leave an accepted ADR contradicted by shipped
+work — the same drift between the written record and reality that produced the defect class
+this program exists to fix.
+
+`docs/ontology-defect-report-2026-07-30.md` §9 compounded the error by describing this ADR as
+*"Not overlapping with these findings."* That is true of D1–D4 and **false of D5**: D5 *is* the
+laterality loss. §9 is corrected accordingly.
+
+**D5 is therefore carved out of the deferral**, narrowly:
+
+- The 408 dropped annotations are restored by the ontology data-quality program as a
+  **data-recovery** repair, not as GA4GH conformance work. The information was present and
+  correct in the curation source and was destroyed by an importer defect
+  (`extractors.py:157` matched four bare tokens against compound source values); recovering it
+  restores curator intent rather than changing a representation choice.
+- The restoration is **journalled and exactly reversible**: every touched feature's preimage is
+  written to `ontology_migration_journal` with a postimage hash, and `downgrade()` restores
+  journalled rows only after verifying that hash. A global delete of the three unilateral ids
+  is explicitly not an acceptable downgrade, because it would also delete post-migration
+  curator edits.
+- Scope is the working copy and the head-published revision only. Older revision rows remain
+  immutable history.
+- The representation is unchanged: HPO clinical modifiers on `phenotypicFeatures[].modifiers`,
+  exactly as the 771 existing `Bilateral` annotations already use. No field moves, no type
+  changes, so this adds nothing to the D1–D4 debt.
+
+**D1, D2, D3 and D4 remain deferred exactly as written.** This amendment authorizes no other
+migration of stored content, and the "Deferred to a conformance program" list above stands in
+full.
+
+One consequence for the D5 paragraph in "Decision": per-term laterality *modelling* still lands
+with the curation spec, and now has legacy data to validate against. The policy for
+`HP:0000122` admits `{Unilateral, Left, Right}` and rejects only `Bilateral` — rejecting the
+redundant `Unilateral` would have forced the backfill to discard 20 explicitly curated
+`unilateral unspecified` values, recreating in miniature the very indistinguishability this
+amendment repairs.
 
 ## Alternatives considered
 
