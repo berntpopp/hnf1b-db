@@ -263,3 +263,21 @@ async def get_family_history_values(db: AsyncSession = Depends(get_db)):
     return await _fetch_curation_vocabulary(
         db, _CURATION_VOCABULARIES["family-history"]
     )
+
+
+@router.get("/laterality-policy")
+async def get_laterality_policy(db: AsyncSession = Depends(get_db)):
+    """Get the HPO modifiers each phenotype term admits.
+
+    Only terms that admit at least one modifier are returned; every other term
+    admits none. Consumed by the curation console to decide whether to render a
+    laterality control, and by the domain validator on the write path.
+    """
+    query = text(
+        """SELECT hpo_id, allowed_modifiers
+           FROM hpo_terms_lookup
+           WHERE cardinality(allowed_modifiers) > 0
+           ORDER BY hpo_id"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}

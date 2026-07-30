@@ -6299,6 +6299,26 @@
         ]
       }
     },
+    "/api/v2/ontology/laterality-policy": {
+      "get": {
+        "description": "Get the HPO modifiers each phenotype term admits.\n\nOnly terms that admit at least one modifier are returned; every other term\nadmits none. Consumed by the curation console to decide whether to render a\nlaterality control, and by the domain validator on the write path.",
+        "operationId": "get_laterality_policy_api_v2_ontology_laterality_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Laterality Policy",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
     "/api/v2/ontology/vocabularies/allelic-state": {
       "get": {
         "description": "Get all valid allelic state values (GENO ontology).",
