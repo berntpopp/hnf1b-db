@@ -220,6 +220,8 @@ _CURATION_VOCABULARIES = {
     "detection-method": "detection_method_values",
     "segregation": "segregation_values",
     "family-history": "family_history_values",
+    "publication-type": "publication_type_values",
+    "classification-system": "classification_system_values",
 }
 
 
@@ -262,6 +264,22 @@ async def get_family_history_values(db: AsyncSession = Depends(get_db)):
     """Get valid family history statuses for hnf1bCuration.familyHistory."""
     return await _fetch_curation_vocabulary(
         db, _CURATION_VOCABULARIES["family-history"]
+    )
+
+
+@router.get("/vocabularies/publication-type", response_model=VocabularyResponse)
+async def get_publication_type_values(db: AsyncSession = Depends(get_db)):
+    """Get valid publication types for hnf1bCuration.publicationType."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["publication-type"]
+    )
+
+
+@router.get("/vocabularies/classification-system", response_model=VocabularyResponse)
+async def get_classification_system_values(db: AsyncSession = Depends(get_db)):
+    """Get valid classification systems for hnf1bCuration.classificationSystem."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["classification-system"]
     )
 
 

@@ -22,6 +22,12 @@ const FIXTURES = {
   '/ontology/vocabularies/family-history': [
     { value: 'positive', label: 'Positive', description: null },
   ],
+  '/ontology/vocabularies/publication-type': [
+    { value: 'case_report', label: 'Case report', description: null },
+  ],
+  '/ontology/vocabularies/classification-system': [
+    { value: 'acmg', label: 'ACMG', description: null },
+  ],
 };
 
 describe('usePhenopacketVocabularies curation additions', () => {
@@ -58,5 +64,19 @@ describe('usePhenopacketVocabularies curation additions', () => {
     const v = usePhenopacketVocabularies();
     await v.loadAll();
     expect(v).toHaveProperty('sex');
+  });
+
+  it('exposes the two Phase 3 curation console vocabularies', () => {
+    const v = usePhenopacketVocabularies();
+    expect(v).toHaveProperty('publicationType');
+    expect(v).toHaveProperty('classificationSystem');
+  });
+
+  it('populates the two Phase 3 curation console vocabularies from loadAll', async () => {
+    const v = usePhenopacketVocabularies();
+    await v.loadAll();
+
+    expect(v.publicationType.value.map((i) => i.value)).toEqual(['case_report']);
+    expect(v.classificationSystem.value[0].value).toBe('acmg');
   });
 });

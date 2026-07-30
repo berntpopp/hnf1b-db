@@ -17,6 +17,8 @@
  *   detectionMethod: Ref<Array>,
  *   segregation: Ref<Array>,
  *   familyHistory: Ref<Array>,
+ *   publicationType: Ref<Array>,
+ *   classificationSystem: Ref<Array>,
  *   loading: Ref<boolean>,
  *   error: Ref<Error|null>,
  *   loadAll: Function
@@ -59,6 +61,10 @@ export function usePhenopacketVocabularies() {
   const segregation = ref([]);
   const familyHistory = ref([]);
 
+  // Phase 3 curation console vocabularies (curation console spec §4).
+  const publicationType = ref([]);
+  const classificationSystem = ref([]);
+
   // State refs
   const loading = ref(false);
   const error = ref(null);
@@ -100,6 +106,8 @@ export function usePhenopacketVocabularies() {
         loadVocabulary('detection-method', detectionMethod),
         loadVocabulary('segregation', segregation),
         loadVocabulary('family-history', familyHistory),
+        loadVocabulary('publication-type', publicationType),
+        loadVocabulary('classification-system', classificationSystem),
       ]);
 
       window.logService.info('All phenopacket vocabularies loaded', {
@@ -113,6 +121,8 @@ export function usePhenopacketVocabularies() {
           detectionMethod: detectionMethod.value.length,
           segregation: segregation.value.length,
           familyHistory: familyHistory.value.length,
+          publicationType: publicationType.value.length,
+          classificationSystem: classificationSystem.value.length,
         },
       });
     } catch (e) {
@@ -137,6 +147,8 @@ export function usePhenopacketVocabularies() {
     detectionMethod,
     segregation,
     familyHistory,
+    publicationType,
+    classificationSystem,
 
     // State
     loading,

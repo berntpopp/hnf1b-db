@@ -6339,6 +6339,28 @@
         ]
       }
     },
+    "/api/v2/ontology/vocabularies/classification-system": {
+      "get": {
+        "description": "Get valid classification systems for hnf1bCuration.classificationSystem.",
+        "operationId": "get_classification_system_values_api_v2_ontology_vocabularies_classification_system_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Classification System Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
     "/api/v2/ontology/vocabularies/cohort": {
       "get": {
         "description": "Get valid cohort values (born / fetus) for hnf1bCuration.cohort.",
@@ -6460,6 +6482,28 @@
           }
         },
         "summary": "Get Progress Status Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
+    "/api/v2/ontology/vocabularies/publication-type": {
+      "get": {
+        "description": "Get valid publication types for hnf1bCuration.publicationType.",
+        "operationId": "get_publication_type_values_api_v2_ontology_vocabularies_publication_type_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Publication Type Values",
         "tags": [
           "ontology"
         ]
