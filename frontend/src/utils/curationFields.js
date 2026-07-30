@@ -100,6 +100,95 @@ CURATION_FIELDS.push(
   }
 );
 
+// ── Task 5: Variant section (design spec §3.2) ──────────────────────────────
+// VariantReported, VariantType, hg38, hg19, coordinates (hg19_INFO/
+// hg38_INFO), dbVar ID, Varsome, DetecionMethod [sic, sheet's actual column
+// name], Segregation, allelicState.
+//
+// `phenopacket.interpretations` is an array -- a case CAN have multiple
+// variants (e.g. biallelic) -- but this registry is a fixed ~28-dimension
+// completeness count, so it only tracks the primary/first variant. The
+// design spec's "~28 dimensions" total (6 Case + 10 Variant + 5
+// Classification + 2 Age + 5 Provenance = 28) only makes sense as a
+// per-case, not per-variant-instance, count.
+const firstVariationDescriptor = (p) =>
+  p?.interpretations?.[0]?.diagnosis?.genomicInterpretations?.[0]?.variantInterpretation
+    ?.variationDescriptor;
+
+CURATION_FIELDS.push(
+  {
+    id: 'variantReported',
+    section: 'variant',
+    getValue: (p) => firstVariationDescriptor(p)?.description,
+  },
+  {
+    id: 'variantType',
+    section: 'variant',
+    getValue: (p) => firstVariationDescriptor(p)?.structuralType,
+  },
+  {
+    id: 'hg38',
+    section: 'variant',
+    // Both hg38 and hg19 use syntax 'hgvs.g' (existing readers pick the
+    // first matching entry -- see hg19 below) and are disambiguated by
+    // `version`, so they must be looked up independently rather than by
+    // syntax alone.
+    getValue: (p) =>
+      firstVariationDescriptor(p)?.expressions?.find(
+        (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh38'
+      )?.value,
+  },
+  {
+    id: 'hg19',
+    section: 'variant',
+    getValue: (p) =>
+      firstVariationDescriptor(p)?.expressions?.find(
+        (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh37'
+      )?.value,
+  },
+  {
+    id: 'coordinates',
+    section: 'variant',
+    // Derived, read-only (design spec §3.2: hg19_INFO/hg38_INFO) -- the
+    // console never writes this; filled iff the legacy `coordinates`
+    // extension (already present on 440 records) is present.
+    getValue: (p) =>
+      firstVariationDescriptor(p)?.extensions?.find((e) => e.name === 'coordinates')?.value,
+  },
+  {
+    id: 'dbVarId',
+    section: 'variant',
+    getValue: (p) => firstVariationDescriptor(p)?.xrefs,
+  },
+  {
+    id: 'varsome',
+    section: 'variant',
+    // The one canonical hgvs.c entry -- no versioning needed here, unlike
+    // hg38/hg19.
+    getValue: (p) =>
+      firstVariationDescriptor(p)?.expressions?.find((e) => e.syntax === 'hgvs.c')?.value,
+  },
+  {
+    id: 'detectionMethod',
+    // Case-level (design spec §3.2), unlike the other nine variant fields --
+    // one publication reports one detection method for the case, not one
+    // per variant.
+    section: 'variant',
+    getValue: (p) => p?.hnf1bCuration?.detectionMethod,
+  },
+  {
+    id: 'segregation',
+    section: 'variant',
+    getValue: (p) =>
+      firstVariationDescriptor(p)?.extensions?.find((e) => e.name === 'segregation')?.value?.origin,
+  },
+  {
+    id: 'allelicState',
+    section: 'variant',
+    getValue: (p) => firstVariationDescriptor(p)?.allelicState,
+  }
+);
+
 /**
  * Default fill rule (used when a field does not supply its own `isFilled`):
  * arrays are filled iff non-empty; everything else is filled iff

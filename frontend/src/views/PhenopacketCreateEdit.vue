@@ -165,7 +165,12 @@
               >
                 <VariantAnnotationForm
                   v-model="phenopacket.interpretations"
+                  v-model:detection-method="phenopacket.hnf1bCuration.detectionMethod"
                   :subject-id="phenopacket.subject?.id || ''"
+                  :detection-method-items="vocabularies.detectionMethod.value"
+                  :segregation-items="vocabularies.segregation.value"
+                  :allelic-state-items="vocabularies.allelicState.value"
+                  :vocabularies-loading="vocabularies.loading.value"
                 />
               </CurationSection>
 

@@ -44,3 +44,33 @@ export const SO_TERMS = {
 
 /** @returns {string|undefined} SO accession, or undefined if unmapped. */
 export const soIdFor = (consequence) => SO_TERMS[consequence];
+
+/**
+ * `VariantType` (curation console design spec §3.2) -> Sequence Ontology
+ * term, for the `variationDescriptor.structuralType` select.
+ *
+ * No backend vocabulary endpoint exists for this field (it is not one of
+ * the six curation vocabularies), so unlike every other select in the
+ * curation console, this is a local constant rather than something fetched
+ * via `usePhenopacketVocabularies`. Values verified against the real source
+ * (`HNF1B_DataCuration.xlsx`, `Individuals` sheet, 939 rows,
+ * sha256 0fcc5362148085ea0c55b682836c8f4ecef2b5be7f88a9038409f94d8a5061ec):
+ * `df['VariantType'].value_counts()` = Deletion 431, SNV 341, indel 131,
+ * Duplication 36 -- exactly these four, nothing else.
+ *
+ * ids/labels match the historical migration mapping
+ * (`backend/migration/phenopackets/extractors.py::_add_molecular_consequence`)
+ * so a curator's selection lines up with what the 908 already-migrated
+ * records store on `molecularConsequences` for the same variant types. Note
+ * SO:1000032's current formal SO name is "delins" (renamed from "indel" in
+ * 2019, see `backend/app/ontology/data/ontology_snapshot.json`) -- the label
+ * here stays "indel" to match both the sheet's own column value and the
+ * label already stored on legacy records, rather than surprise curators with
+ * an unfamiliar synonym.
+ */
+export const STRUCTURAL_VARIANT_TYPES = [
+  { id: 'SO:0000159', label: 'deletion' },
+  { id: 'SO:1000035', label: 'duplication' },
+  { id: 'SO:0001483', label: 'SNV' },
+  { id: 'SO:1000032', label: 'indel' },
+];
