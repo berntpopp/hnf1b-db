@@ -253,6 +253,7 @@ def db_session():
     yield session
     # Teardown
 
+
 @pytest.fixture
 def sample_phenopacket():
     """Provide a sample phenopacket for tests."""

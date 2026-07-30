@@ -129,9 +129,7 @@ Computes molecular consequences from HGVS notations:
 from app.phenopackets.molecular_consequence import compute_molecular_consequence
 
 consequence = compute_molecular_consequence(
-    transcript="NM_000458.4:c.544+1G>T",
-    protein=None,
-    variant_type=None
+    transcript="NM_000458.4:c.544+1G>T", protein=None, variant_type=None
 )
 # Returns: "Splice Donor"
 ```
@@ -229,11 +227,11 @@ See [tests/README.md](../../tests/README.md) for detailed testing documentation.
         "phenotypicFeatures": [...],
         "interpretations": [...],
         "diseases": [...],
-        "metaData": {...}
+        "metaData": {...},
     },
     "created_at": "2025-10-27T12:00:00Z",
     "updated_at": "2025-10-27T12:00:00Z",
-    "schema_version": "2.0"
+    "schema_version": "2.0",
 }
 ```
 
@@ -253,7 +251,7 @@ See [tests/README.md](../../tests/README.md) for detailed testing documentation.
         "hg38": "chr17:36098063",
         "transcript": "NM_000458.4:c.1654-2A>T",
         "protein": "NP_000449.3:p.Ser552Ter",
-        "molecular_consequence": "Splice Acceptor"
+        "molecular_consequence": "Splice Acceptor",
     }
 ]
 ```
