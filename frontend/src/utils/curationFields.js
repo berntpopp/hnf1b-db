@@ -189,6 +189,63 @@ CURATION_FIELDS.push(
   }
 );
 
+// ── Task 6: Classification section (design spec §3.3) ──────────────────────
+// verdict_classification, criteria_classification, system_classification,
+// date_classification, comment_classification.
+//
+// `verdict` and `criteria` both read off the SAME primary/first variant
+// convention Task 5's fields use (interpretations[0]) -- but unlike
+// firstVariationDescriptor (variantInterpretation.variationDescriptor),
+// `interpretationStatus` is a SIBLING of `variantInterpretation` on the
+// genomicInterpretation itself (ADR 0003 D1: this is deliberate, not a typo --
+// the console never writes the GA4GH-conformant
+// `variantInterpretation.acmgPathogenicityClassification`), and
+// `classification_criteria` lives on `variantInterpretation.extensions`
+// (NOT `variationDescriptor.extensions`, where Task 5's `segregation`/
+// `coordinates` extensions live) -- so this section needs its own accessor,
+// not firstVariationDescriptor.
+const firstGenomicInterpretation = (p) =>
+  p?.interpretations?.[0]?.diagnosis?.genomicInterpretations?.[0];
+
+CURATION_FIELDS.push(
+  {
+    id: 'verdict',
+    section: 'classification',
+    getValue: (p) => firstGenomicInterpretation(p)?.interpretationStatus,
+    // Unlike `sex`'s 'UNKNOWN_SEX' default (a real, selectable GA4GH enum
+    // member), the string 'UNKNOWN' is not a member of the
+    // `interpretation-status` vocabulary at all -- Task 5's
+    // createInterpretation/saveDetailedVariant seed every new variant with
+    // it before the curator has made any verdict choice. Treating it as
+    // filled would mark the Classification section's verdict complete the
+    // instant a variant is added, before a verdict was ever entered.
+    isFilled: (value) => !!value && value !== 'UNKNOWN',
+  },
+  {
+    id: 'criteria',
+    section: 'classification',
+    getValue: (p) =>
+      firstGenomicInterpretation(p)?.variantInterpretation?.extensions?.find(
+        (e) => e.name === 'classification_criteria'
+      )?.value?.criteria,
+  },
+  {
+    id: 'classificationSystem',
+    section: 'classification',
+    getValue: (p) => p?.hnf1bCuration?.classificationSystem,
+  },
+  {
+    id: 'classificationDate',
+    section: 'classification',
+    getValue: (p) => p?.hnf1bCuration?.classificationDate,
+  },
+  {
+    id: 'classificationComment',
+    section: 'classification',
+    getValue: (p) => p?.hnf1bCuration?.classificationComment,
+  }
+);
+
 /**
  * Default fill rule (used when a field does not supply its own `isFilled`):
  * arrays are filled iff non-empty; everything else is filled iff

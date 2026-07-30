@@ -108,6 +108,28 @@ export function parseClassificationCriteria(criteria, guidelines) {
   return result;
 }
 
+/**
+ * Serialize curator picks back into the corpus's stored ACMG criteria string
+ * format -- the reverse of parseClassificationCriteria's ACMG branch. Used by
+ * the curation console's Classification section (design spec §3.3, plan
+ * Task 6) to let a criteria picker assemble the free-text field's value
+ * instead of requiring the curator to type the raw format by hand.
+ *
+ * Verified against a real stored value:
+ *   buildClassificationCriteriaString([
+ *     {code:'PM1',strength:'Moderate'}, {code:'PM2',strength:'Supporting'},
+ *     {code:'PP2',strength:'Supporting'}, {code:'PP3',strength:'Supporting'},
+ *   ]) === "PM1_Moderate, PM2_Supporting, PP2_Supporting, PP3_Supporting"
+ *
+ * @param {Array<{code: string, strength?: string}>} entries
+ * @returns {string} comma-space-separated `CODE_Strength` tokens (or bare
+ *   `CODE` when `strength` is falsy), in the given order. `''` for no entries.
+ */
+export function buildClassificationCriteriaString(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return '';
+  return entries.map((e) => (e.strength ? `${e.code}_${e.strength}` : e.code)).join(', ');
+}
+
 /** Vuetify color for an ACMG criterion chip. */
 export function acmgChipColor({ direction, strength } = {}) {
   if (direction === 'benign') {

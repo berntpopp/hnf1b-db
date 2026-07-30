@@ -332,6 +332,14 @@ const VOCAB_FIXTURES = {
     { value: 'case_report', label: 'Case report', description: null },
     { value: 'case_series', label: 'Case series', description: null },
   ],
+  '/ontology/vocabularies/interpretation-status': [
+    { value: 'PATHOGENIC', label: 'Pathogenic', description: null },
+    { value: 'LIKELY_PATHOGENIC', label: 'Likely pathogenic', description: null },
+  ],
+  '/ontology/vocabularies/classification-system': [
+    { value: 'acmg', label: 'ACMG', description: null },
+    { value: 'clingen_cnv', label: 'ClinGen CNV', description: null },
+  ],
 };
 
 function mockVocabularyApi() {
@@ -509,5 +517,74 @@ describe('Case section controls (Task 4)', () => {
     expect(wrapper.vm.phenopacket.metaData.externalReferences || []).not.toContainEqual({
       id: 'PMID:25324567',
     });
+  });
+});
+
+// ── Classification section wiring (Task 6) — full mount ────────────────────
+// ClassificationSection.vue is exercised in depth by its own suite
+// (tests/unit/components/ClassificationSection.spec.js, including the ADR
+// 0003 D1 non-negotiable); these prove PhenopacketCreateEdit.vue actually
+// mounts it (unlike VariantAnnotationForm, it is NOT stubbed above) and wires
+// its vocabulary props to the composable's refs, matching the Case section's
+// wiring tests.
+describe('Classification section wiring (Task 6)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('wires the Classification system select to phenopacket.hnf1bCuration.classificationSystem using the vocabulary composable', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const select = selectByLabel(wrapper, 'Classification system');
+    expect(select).toBeTruthy();
+    expect(select.props('items')).toEqual(
+      VOCAB_FIXTURES['/ontology/vocabularies/classification-system']
+    );
+
+    await select.vm.$emit('update:modelValue', 'acmg');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.classificationSystem).toBe('acmg');
+  });
+
+  it('passes the interpretation-status vocabulary through to the ACMG verdict select', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const select = selectByLabel(wrapper, 'ACMG verdict');
+    expect(select).toBeTruthy();
+    expect(select.props('items')).toEqual(
+      VOCAB_FIXTURES['/ontology/vocabularies/interpretation-status']
+    );
+    // No variant on a fresh phenopacket -- disabled until one is added.
+    expect(select.props('disabled')).toBe(true);
+  });
+
+  it('round-trips Classification date and comment into phenopacket.hnf1bCuration', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const dateField = wrapper
+      .findAllComponents({ name: 'VTextField' })
+      .find((c) => c.props('label') === 'Classification date');
+    const commentField = wrapper
+      .findAllComponents({ name: 'VTextarea' })
+      .find((c) => c.props('label') === 'Classification comment');
+    expect(dateField).toBeTruthy();
+    expect(commentField).toBeTruthy();
+
+    await dateField.vm.$emit('update:modelValue', '2024-03-01');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.classificationDate).toBe('2024-03-01');
+
+    await commentField.vm.$emit('update:modelValue', 'Reviewed after functional study.');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.classificationComment).toBe(
+      'Reviewed after functional study.'
+    );
   });
 });

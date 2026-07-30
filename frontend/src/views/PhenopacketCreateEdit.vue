@@ -181,9 +181,15 @@
                 :filled="classificationCompleteness.filled"
                 :total="classificationCompleteness.total"
               >
-                <p class="text-medium-emphasis mb-0">
-                  Nothing here yet — classification fields land in a later task.
-                </p>
+                <ClassificationSection
+                  v-model="phenopacket.interpretations"
+                  v-model:classification-system="phenopacket.hnf1bCuration.classificationSystem"
+                  v-model:classification-date="phenopacket.hnf1bCuration.classificationDate"
+                  v-model:classification-comment="phenopacket.hnf1bCuration.classificationComment"
+                  :interpretation-status-items="vocabularies.interpretationStatus.value"
+                  :classification-system-items="vocabularies.classificationSystem.value"
+                  :vocabularies-loading="vocabularies.loading.value"
+                />
               </CurationSection>
 
               <CurationSection
@@ -300,6 +306,7 @@ import PhenotypicFeaturesSection from '@/components/PhenotypicFeaturesSection.vu
 import VariantAnnotationForm from '@/components/VariantAnnotationForm.vue';
 import CurationSection from '@/components/curation/CurationSection.vue';
 import CompletenessRail from '@/components/curation/CompletenessRail.vue';
+import ClassificationSection from '@/components/curation/ClassificationSection.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
 
 export default {
@@ -309,6 +316,7 @@ export default {
     VariantAnnotationForm,
     CurationSection,
     CompletenessRail,
+    ClassificationSection,
   },
   // Vue Router 4-style in-component guard (works with the Options API used
   // throughout this file). Prompts on navigate-away only when the live form
