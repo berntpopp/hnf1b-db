@@ -5,6 +5,7 @@ from typing import Dict, Optional
 
 import pandas as pd
 
+from app.ontology.conformance import OntologySourceError, check_source_row
 from migration.phenopackets.ontology_mapper import OntologyMapper
 
 logger = logging.getLogger(__name__)
@@ -160,26 +161,51 @@ class HPOMapper(OntologyMapper):
     def build_from_dataframe(self, phenotypes_df: pd.DataFrame) -> None:
         """Build HPO mappings from the Phenotype sheet.
 
+        Each row's identifier is checked against its own description via A1
+        (`check_source_row`, spec §3.3) before the mapping is used — the
+        description is a field label normalisation never touches, so it is
+        what catches a wrong identifier whose label has already been made to
+        agree with it. This is the check that would have failed the import
+        that produced HP:0033133; see
+        docs/ontology-defect-report-2026-07-30.md §4.1. Every offending row
+        is collected and reported together, not just the first, so one
+        failed import tells a curator everything that needs fixing.
+
         Args:
             phenotypes_df: DataFrame containing phenotype mappings
+
+        Raises:
+            OntologySourceError: if any row's identifier is not corroborated
+                by its own description (or, absent a description, its own
+                name) — see `app.ontology.conformance.check_source_row`.
         """
         if phenotypes_df is None or phenotypes_df.empty:
             logger.warning("No phenotype dataframe provided, using default mappings")
             return
 
         self.hpo_mappings = {}
+        violations: list[str] = []
 
         for _, row in phenotypes_df.iterrows():
             category = row.get("phenotype_category")
             hpo_id = row.get("phenotype_id")
             source_label = row.get("phenotype_name")
+            description = row.get("phenotype_description")
 
             if pd.notna(category) and pd.notna(hpo_id):
+                violation = check_source_row(
+                    hpo_id,
+                    source_label if pd.notna(source_label) else "",
+                    description if pd.notna(description) else "",
+                )
+                if violation:
+                    violations.append(violation)
+
                 # The curator's name is written verbatim. Rewriting it to agree
                 # with the identifier is what inverted HP:0033133 across 460
                 # features; see docs/ontology-defect-report-2026-07-30.md §4.1.
                 # A name that disagrees with its identifier is a defect for a
-                # human to resolve, and Task 2's source-integrity check catches
+                # human to resolve — check_source_row (above) is what catches
                 # it at import time.
                 label = source_label if pd.notna(source_label) else category
 
@@ -198,6 +224,12 @@ class HPOMapper(OntologyMapper):
                         "id": hpo_id,
                         "label": label,
                     }
+
+        if violations:
+            raise OntologySourceError(
+                "Curation sheet rows name a term their identifier does not "
+                "denote:\n" + "\n".join(violations)
+            )
 
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
 

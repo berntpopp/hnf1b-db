@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test dev-seed-users
+.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test dev-seed-users refresh-ontology-snapshot
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -131,6 +131,10 @@ variants-sync-dry:  ## Dry run - shows what would be fetched without changes
 
 variants-sync-test:  ## Sync first 10 variants (for testing)
 	uv run python scripts/sync_variant_annotations.py --limit 10
+
+# Ontology Snapshot Commands (spec: 2026-07-30-ontology-data-quality-design.md §3.3)
+refresh-ontology-snapshot: check-env  ## Refresh the pinned ontology snapshot (review the diff)
+	uv run python scripts/refresh_ontology_snapshot.py
 
 check: check-env lint typecheck test  ## Run all checks (lint, typecheck, test)
 

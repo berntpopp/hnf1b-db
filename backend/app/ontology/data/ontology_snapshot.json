@@ -1,0 +1,475 @@
+{
+  "_generated_against": {
+    "eco": "unknown",
+    "hp": "2026-06-23",
+    "mondo": "2026-07-06",
+    "ordo": "4.9"
+  },
+  "terms": {
+    "ECO:0000033": {
+      "definition": "A type of author statement in which the author makes a statement that is not supported by information in that particular publication, but rather can be traced to a reference cited by that publication.",
+      "name": "author statement supported by traceable reference",
+      "synonyms": [
+        "traceable author statement"
+      ]
+    },
+    "HP:0000003": {
+      "definition": "Multicystic dysplasia of the kidney is characterized by multiple cysts of varying size in the kidney and the absence of a normal pelvicaliceal system. The condition is associated with ureteral or ureteropelvic atresia, and the affected kidney is nonfunctional.",
+      "name": "Multicystic kidney dysplasia",
+      "synonyms": [
+        "Multicystic dysplastic kidney",
+        "Multicystic kidneys",
+        "Multicystic renal dysplasia"
+      ]
+    },
+    "HP:0000078": {
+      "definition": "An abnormality of the genital system.",
+      "name": "Abnormality of the genital system",
+      "synonyms": [
+        "Genital abnormalities",
+        "Genital abnormality",
+        "Genital anomalies",
+        "Genital defects",
+        "Abnormality of the reproductive system"
+      ]
+    },
+    "HP:0000079": {
+      "definition": "An abnormality of the urinary system.",
+      "name": "Abnormality of the urinary system",
+      "synonyms": [
+        "Urinary tract abnormalities",
+        "Urinary tract abnormality",
+        "Urinary tract anomalies"
+      ]
+    },
+    "HP:0000089": {
+      "definition": "Hypoplasia of the kidney.",
+      "name": "Renal hypoplasia",
+      "synonyms": [
+        "Hypoplastic kidney",
+        "Hypoplastic kidneys",
+        "Small kidneys",
+        "Underdeveloped kidneys"
+      ]
+    },
+    "HP:0000107": {
+      "definition": "A fluid filled sac in the kidney.",
+      "name": "Renal cyst",
+      "synonyms": [
+        "Kidney cyst",
+        "Cystic kidney disease",
+        "Cystic kidneys",
+        "Renal cysts"
+      ]
+    },
+    "HP:0000122": {
+      "definition": "A unilateral form of agenesis of the kidney.",
+      "name": "Unilateral renal agenesis",
+      "synonyms": [
+        "Absent kidney on one side",
+        "Missing one kidney",
+        "Single kidney",
+        "Unilateral kidney agenesis"
+      ]
+    },
+    "HP:0000478": {
+      "definition": "Any abnormality of the eye, including location, spacing, and intraocular abnormalities.",
+      "name": "Abnormality of the eye",
+      "synonyms": [
+        "Abnormal eye",
+        "Abnormality of the eye",
+        "Eye disease"
+      ]
+    },
+    "HP:0000708": {
+      "definition": "Atypical behavior is an abnormality in a person's actions that can be controlled or modulated by the will of the individual. While abnormal behaviors can be difficult to control, they are distinct from other abnormal actions that cannot be affected by the individual's will.",
+      "name": "Atypical behavior",
+      "synonyms": [
+        "Behavioral abnormality",
+        "Behavioral changes",
+        "Behavioral disorders",
+        "Behavioral disturbances",
+        "Behavioral problems",
+        "Behavioral symptoms",
+        "Behavioral/psychiatric abnormalities",
+        "Behavioural abnormality",
+        "Behavioural changes",
+        "Behavioural disorders",
+        "Behavioural disturbances",
+        "Behavioural problems",
+        "Behavioural symptoms",
+        "Behavioural/Psychiatric abnormality",
+        "Psychiatric disorders",
+        "Psychiatric disturbances"
+      ]
+    },
+    "HP:0000843": {
+      "definition": "Excessive production of parathyroid hormone (PTH) by the parathyroid glands.",
+      "name": "Hyperparathyroidism",
+      "synonyms": [
+        "Elevated blood parathyroid hormone level"
+      ]
+    },
+    "HP:0001250": {
+      "definition": "A seizure is an intermittent abnormality of nervous system physiology characterized by a transient occurrence of signs and/or symptoms due to abnormal excessive or synchronous neuronal activity in the brain.",
+      "name": "Seizure",
+      "synonyms": [
+        "Epileptic seizure",
+        "Seizures",
+        "Epilepsy"
+      ]
+    },
+    "HP:0001622": {
+      "definition": "The birth of a baby of less than 37 weeks of gestational age.",
+      "name": "Premature birth",
+      "synonyms": [
+        "Premature birth",
+        "Premature delivery",
+        "Premature delivery of affected infants",
+        "Preterm birth",
+        "Preterm delivery",
+        "Shortened gestation time"
+      ]
+    },
+    "HP:0001627": {
+      "definition": "Any structural anomaly of the heart.",
+      "name": "Abnormal heart morphology",
+      "synonyms": [
+        "Abnormality of cardiac morphology",
+        "Abnormality of the heart",
+        "Abnormally shaped heart",
+        "Cardiac abnormality",
+        "Cardiac anomalies",
+        "Cardiac anomaly",
+        "Congenital heart defect",
+        "Congenital heart defects",
+        "Heart defect"
+      ]
+    },
+    "HP:0001738": {
+      "definition": "Impaired function of the exocrine pancreas associated with a reduced ability to digest foods because of lack of digestive enzymes.",
+      "name": "Exocrine pancreatic insufficiency",
+      "synonyms": [
+        "Inability to properly digest food due to lack of pancreatic digestive enzymes",
+        "Pancreatic insufficiency"
+      ]
+    },
+    "HP:0001997": {
+      "definition": "Recurrent attacks of acute inflammatory arthritis of a joint or set of joints caused by elevated levels of uric acid in the blood which crystallize and are deposited in joints, tendons, and surrounding tissues.",
+      "name": "Gout",
+      "synonyms": [
+        "Gouty arthritis"
+      ]
+    },
+    "HP:0001999": {
+      "definition": "An abnormal morphology (form) of the face or its components.",
+      "name": "Abnormal facial shape",
+      "synonyms": [
+        "Deformity of face",
+        "Malformation of face",
+        "Abnormal facial shape",
+        "Abnormal morphology of the face",
+        "Distinctive facies",
+        "Dysmorphic facial features",
+        "Dysmorphic facies",
+        "Facial dysmorphism",
+        "Unusual facial appearance",
+        "Unusual facies",
+        "Distortion of face",
+        "Funny looking face"
+      ]
+    },
+    "HP:0002149": {
+      "definition": "The concentration of uric acid in the blood circulation is above the upper limit of normal.",
+      "name": "Hyperuricemia",
+      "synonyms": [
+        "Elevated uric acid concentration",
+        "Elevated uric acid level",
+        "Elevated uric acid level in blood",
+        "High blood uric acid level",
+        "Hyperuricaemia",
+        "Hyperuricemia",
+        "Increased uric acid concentration",
+        "Increased uric acid level",
+        "Increased uric acid level in blood"
+      ]
+    },
+    "HP:0002594": {
+      "definition": "Hypoplasia of the pancreas.",
+      "name": "Pancreatic hypoplasia",
+      "synonyms": [
+        "Hypoplastic pancreas",
+        "Underdeveloped pancreas"
+      ]
+    },
+    "HP:0002900": {
+      "definition": "The concentration of potassium(1+) in the blood circulation is below the lower limit of normal.",
+      "name": "Hypokalemia",
+      "synonyms": [
+        "Decreased potassium(1+) concentration",
+        "Decreased potassium(1+) level",
+        "Decreased potassium(1+) level in blood",
+        "Hypokalemia",
+        "Low blood potassium levels",
+        "Reduced potassium(1+) concentration",
+        "Reduced potassium(1+) level",
+        "Reduced potassium(1+) level in blood"
+      ]
+    },
+    "HP:0002910": {
+      "definition": "Elevations of the levels of SGOT and SGPT in the serum. SGOT (serum glutamic oxaloacetic transaminase) and SGPT (serum glutamic pyruvic transaminase) are transaminases primarily found in the liver and heart and are released into the bloodstream as the result of liver or heart damage. SGOT and SGPT are used clinically mainly as markers of liver damage.",
+      "name": "Elevated circulating hepatic transaminase concentration",
+      "synonyms": [
+        "Abnormal liver enzymes",
+        "Abnormal liver function",
+        "Abnormal liver function tests",
+        "Elevated circulating hepatic transaminase activity",
+        "Elevated liver enzymes",
+        "Elevated serum transaminases",
+        "Elevated transaminases",
+        "High liver enzymes",
+        "Increased liver enzymes",
+        "Increased liver function tests",
+        "Increased transaminases",
+        "Raised liver enzymes",
+        "Subclinical abnormal liver function tests",
+        "Elevated liver function tests"
+      ]
+    },
+    "HP:0002917": {
+      "definition": "The concentration of magnesium in the blood circulation is below the lower limit of normal.",
+      "name": "Hypomagnesemia",
+      "synonyms": [
+        "Decreased magnesium(2+) concentration",
+        "Decreased magnesium(2+) level",
+        "Decreased magnesium(2+) level in blood",
+        "Hypomagnesemia",
+        "Low blood Mg levels",
+        "Low blood magnesium levels",
+        "Reduced magnesium(2+) concentration",
+        "Reduced magnesium(2+) level",
+        "Reduced magnesium(2+) level in blood"
+      ]
+    },
+    "HP:0003577": {
+      "definition": "A phenotypic abnormality that is present at birth.",
+      "name": "Congenital onset",
+      "synonyms": [
+        "Onset at birth",
+        "Symptoms present at birth"
+      ]
+    },
+    "HP:0003581": {
+      "definition": "Onset of disease manifestations in adulthood, defined here as at the age of 16 years or later.",
+      "name": "Adult onset",
+      "synonyms": [
+        "Onset in adulthood",
+        "Onset in early adulthood",
+        "Symptoms begin in adulthood"
+      ]
+    },
+    "HP:0003593": {
+      "definition": "Onset of signs or symptoms of disease between 28 days to one year of life.",
+      "name": "Infantile onset",
+      "synonyms": [
+        "Infantile onset",
+        "Onset in first year of life",
+        "Onset in infancy"
+      ]
+    },
+    "HP:0003674": {
+      "definition": "The age group in which disease manifestations appear.",
+      "name": "Onset",
+      "synonyms": [
+        "Age of onset",
+        "Age symptoms begin"
+      ]
+    },
+    "HP:0003774": {
+      "definition": "A degree of kidney failure severe enough to require dialysis or kidney transplantation for survival characterized by a severe reduction in glomerular filtration rate (less than 15 ml/min/1.73 m2) and other manifestations including increased serum creatinine.",
+      "name": "Stage 5 chronic kidney disease",
+      "synonyms": [
+        "Chronic renal failure",
+        "End stage renal disease",
+        "End stage renal failure",
+        "End-stage renal disease",
+        "End-stage renal failure",
+        "Stage 5 chronic kidney disease",
+        "Renal failure, endstage"
+      ]
+    },
+    "HP:0004322": {
+      "definition": "A height below that which is expected according to age and gender norms. Although there is no universally accepted definition of short stature, many refer to \"short stature\" as height more than 2 standard deviations below the mean for age and gender (or below the 3rd percentile for age and gender dependent norms).",
+      "name": "Short stature",
+      "synonyms": [
+        "Decreased body height",
+        "Height less than 3rd percentile",
+        "Short stature",
+        "Small stature",
+        "Stature below 3rd percentile"
+      ]
+    },
+    "HP:0004904": {
+      "definition": "The term Maturity-onset diabetes of the young (MODY) was initially used for patients diagnosed with fasting hyperglycemia that could be treated without insulin for more than two years, where the initial diagnosis was made at a young age (under 25 years). Thus, MODY combines characteristics of type 1 diabetes (young age at diagnosis) and type 2 diabetes (less insulin dependence than type 1 diabetes). The term MODY is now most often used to refer to a group of monogenic diseases with these characteristics. Here, the term is used to describe hyperglycemia diagnosed at a young age with no or minor insulin dependency, no evidence of insulin resistance, and lack of evidence of autoimmune destruction of the beta cells.",
+      "name": "Maturity-onset diabetes of the young",
+      "synonyms": [
+        "Maturity onset diabetes of the young",
+        "MODY"
+      ]
+    },
+    "HP:0011463": {
+      "definition": "Onset of disease at the age of between 1 and 5 years.",
+      "name": "Childhood onset",
+      "synonyms": [
+        "Symptoms begin in childhood"
+      ]
+    },
+    "HP:0012210": {
+      "definition": "Any structural anomaly of the kidney.",
+      "name": "Abnormal renal morphology",
+      "synonyms": [
+        "Abnormal kidney morphology",
+        "Abnormally shaped kidney",
+        "Kidney malformation",
+        "Kidney structure issue",
+        "Renal malformation",
+        "Structural anomalies of the renal tract",
+        "Structural kidney abnormalities",
+        "Structural renal anomalies"
+      ]
+    },
+    "HP:0012443": {
+      "definition": "A structural abnormality of the brain, which has as its parts the forebrain, midbrain, and hindbrain.",
+      "name": "Abnormal brain morphology",
+      "synonyms": [
+        "Abnormal shape of brain",
+        "Abnormality of brain morphology",
+        "Abnormality of the brain"
+      ]
+    },
+    "HP:0012622": {
+      "definition": "Functional anomaly of the kidney persisting for at least three months.",
+      "name": "Chronic kidney disease",
+      "synonyms": [
+        "CKD",
+        "Chronic kidney disease",
+        "Loss of renal function",
+        "Progressive renal failure",
+        "Progressive renal insufficiency",
+        "Renal failure, progressive",
+        "Renal insufficiency, progressive"
+      ]
+    },
+    "HP:0012623": {
+      "definition": "A type of chronic kidney disease with normal or increased glomerular filtration rate (GFR at least 90 mL/min/1.73 m2).",
+      "name": "Stage 1 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012624": {
+      "definition": "A type of chronic kidney disease with mildly reduced glomerular filtration rate (GFR 60-89 mL/min/1.73 m2).",
+      "name": "Stage 2 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012625": {
+      "definition": "A type of chronic kidney disease with moderately reduced glomerular filtration rate (GFR 30-59 mL/min/1.73 m2).",
+      "name": "Stage 3 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012626": {
+      "definition": "A type of chronic kidney disease with severely reduced glomerular filtration rate (GFR 15-29 mL/min/1.73 m2).",
+      "name": "Stage 4 chronic kidney disease",
+      "synonyms": [
+        "Stage 4 chronic kidney disease"
+      ]
+    },
+    "HP:0012758": {
+      "definition": "Neurodevelopmental delay (NDD) refers to delays in the maturation of the brain and central nervous system; infants and young children with NDD may experience delays in the development of one or more skills including gross motor abilities, fine-motor coordination, language abilities and ability to solve increasingly complex problems.",
+      "name": "Neurodevelopmental delay",
+      "synonyms": [
+        "NDD"
+      ]
+    },
+    "HP:0012832": {
+      "definition": "Being present on both sides of the body.",
+      "name": "Bilateral",
+      "synonyms": []
+    },
+    "HP:0012833": {
+      "definition": "Being present on only the left or only the right side of the body.",
+      "name": "Unilateral",
+      "synonyms": []
+    },
+    "HP:0012834": {
+      "definition": "Being located on the right side of the body.",
+      "name": "Right",
+      "synonyms": [
+        "Right-sided"
+      ]
+    },
+    "HP:0012835": {
+      "definition": "Being located on the left side of the body.",
+      "name": "Left",
+      "synonyms": [
+        "Left-sided"
+      ]
+    },
+    "HP:0031865": {
+      "definition": "Any functional anomaly of the liver.",
+      "name": "Abnormal liver physiology",
+      "synonyms": [
+        "Abnormal hepatic physiology"
+      ]
+    },
+    "HP:0033127": {
+      "definition": "An anomaly of the musculoskeletal system, which consists of the bones of the skeleton, muscles, cartilage, tendons, ligaments, joints, and other connective tissue. The musculoskeletal system supports the weight of the body, maintains body position and produces movements of the body or of parts of the body.",
+      "name": "Abnormality of the musculoskeletal system",
+      "synonyms": []
+    },
+    "HP:0033132": {
+      "definition": "Increased echogenecity of the kidney cortex.",
+      "name": "Renal cortical hyperechogenicity",
+      "synonyms": []
+    },
+    "HP:0033133": {
+      "definition": "",
+      "name": "Renal cortical hypoechogeneity",
+      "synonyms": [
+        "Hypoechogenic renal cortex"
+      ]
+    },
+    "HP:0100611": {
+      "definition": "The presence of many cysts in the glomerulus of the kidney related to dilatation of the Bowman's capsule.",
+      "name": "Multiple glomerular cysts",
+      "synonyms": [
+        "Glomerulocystic kidney disease"
+      ]
+    },
+    "MONDO:0007669": {
+      "definition": "Renal cysts and diabetes syndrome (RCAD) is a rare form of maturity-onset diabetes of the young (MODY) characterized clinically by heterogeneous cystic renal disease and early-onset familial non-autoimmune diabetes. Pancreatic atrophy, liver dysfunction and genital tract anomalies are also features of the syndrome.",
+      "name": "renal cysts and diabetes syndrome",
+      "synonyms": [
+        "HNF1B-related renal cysts and diabetes syndrome",
+        "renal cysts-maturity-onset diabetes of the young syndrome",
+        "CAKUT with diabetes",
+        "FJHN atypical",
+        "HNF1B-MODY",
+        "MODY type 5",
+        "MODY5",
+        "RCAD syndrome",
+        "RCAD",
+        "congenital anomalies of the kidney and urinary tract with diabetes",
+        "hepatocyte nuclear Factor 1-beta-associated monogenic diabetes",
+        "maturity onset diabetes of the Young, type 5",
+        "renal cysts and diabetes syndrome",
+        "renal dysfunction-early-onset diabetes syndrome"
+      ]
+    },
+    "ORPHA:2260": {
+      "definition": "A rare kidney malformation characterized by a reduction of 80% in nephron number and a marked hypertrophy of the glomeruli and tubules.",
+      "name": "Oligomeganephronia",
+      "synonyms": [
+        "Oligomeganephronic renal hypoplasia"
+      ]
+    }
+  }
+}

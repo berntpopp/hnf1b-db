@@ -295,6 +295,14 @@ class TestHPOMapperLabelNormalization:
                     "phenotype_category": "test_category",
                     "phenotype_id": "HP:0012622",
                     "phenotype_name": source_label,
+                    # A1 (check_source_row, spec §3.3) corroborates the id
+                    # against this description before the row is used; it is
+                    # HP:0012622's own canonical definition, so the row
+                    # passes even though the name is a made-up local label.
+                    "phenotype_description": (
+                        "Functional anomaly of the kidney persisting for at "
+                        "least three months."
+                    ),
                 },
             ]
         )
