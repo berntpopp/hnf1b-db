@@ -1,11 +1,13 @@
+<!--
+  Phenotypes section content for the curation console (curation console
+  design spec §3.4; plan Task 7). Renders inside PhenopacketCreateEdit.vue's
+  <CurationSection id="phenotypes">, which already provides the section
+  chrome (title, completeness badge, collapse) -- this component owns no
+  card of its own, and no hardcoded bg-*-lighten-* (design floor §5).
+-->
 <template>
-  <v-card variant="outlined" class="mb-4">
-    <v-card-title class="bg-green-lighten-5">
-      <v-icon left>mdi-dna</v-icon>
-      Phenotypic Features
-    </v-card-title>
-
-    <v-card-text>
+  <div>
+    <div>
       <!-- Filter Select -->
       <v-select
         v-model="recommendationFilter"
@@ -104,29 +106,74 @@
                 <v-list-item-subtitle class="text-caption">
                   {{ term.hpo_id }}
                 </v-list-item-subtitle>
+
+                <!-- Per-feature laterality (curation console Task 7, design
+                     spec §3.4): only for a present (non-excluded) term the
+                     live /ontology/laterality-policy fetch admits at least
+                     one modifier for. Single-select -- laterality is
+                     mutually exclusive per term. -->
+                <template v-if="showLaterality(term.hpo_id)" #append>
+                  <v-select
+                    :model-value="getModifierValue(term.hpo_id)"
+                    :items="lateralityOptionsFor(term.hpo_id)"
+                    item-title="label"
+                    item-value="id"
+                    :label="`Laterality for ${term.label}`"
+                    density="compact"
+                    variant="outlined"
+                    clearable
+                    hide-details
+                    class="phenotype-item__laterality"
+                    @update:model-value="(value) => setModifier(term, value)"
+                  />
+                </template>
               </v-list-item>
             </v-list>
           </div>
         </v-col>
       </v-row>
-    </v-card-text>
-  </v-card>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useGroupedHPO } from '@/composables/useGroupedHPO';
+import { useLateralityPolicy } from '@/composables/useLateralityPolicy';
 
 const props = defineProps({
   modelValue: {
     type: Array,
     default: () => [],
   },
+  // Curation console Task 7 (design spec §3.4): the evidence-code vocabulary,
+  // loaded once by the parent's usePhenopacketVocabularies().loadAll() and
+  // passed down rather than re-fetched here -- this component never
+  // hardcodes an evidence-code value.
+  evidenceCodeItems: {
+    type: Array,
+    default: () => [],
+  },
+  // Curation console Task 7 (design spec §3.4; curation spec §7): the first
+  // listed publication's PMID, formatted `PMID:...`, or null when no
+  // publication has been entered yet. A newly-created feature entry
+  // attaches `evidence` referencing this; null means omit `evidence`
+  // entirely rather than write a reference to nothing.
+  anchoringReference: {
+    type: String,
+    default: null,
+  },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
 const { groups, loading, fetchGrouped } = useGroupedHPO();
+// Curation console Task 7 (design spec §3.4): WHICH HPO term admits WHICH
+// laterality modifiers always comes from this live fetch -- never hardcoded
+// or special-cased per-term below. `lateralityPolicy.value` is a plain
+// object keyed by hpo_id -> array of allowed modifier HPO ids (see
+// useLateralityPolicy.js).
+const { policy: lateralityPolicy, fetchPolicy: fetchLateralityPolicy } = useLateralityPolicy();
 
 const recommendationFilter = ref('all');
 const filterOptions = [
@@ -163,6 +210,40 @@ const SYSTEM_ICONS = {
 
 const getGroupColor = (groupName) => SYSTEM_COLORS[groupName] || SYSTEM_COLORS.Other;
 const getGroupIcon = (groupName) => SYSTEM_ICONS[groupName] || SYSTEM_ICONS.Other;
+
+// Curation console Task 7 (design spec §3.4): the 4 possible laterality
+// modifier HPO ids are a small, stable, fixed set (the standard HPO clinical
+// modifier subtree) -- NOT one of the six curation vocabularies, and no
+// backend endpoint enumerates their labels. Resolved once, live, from
+// backend/app/ontology/data/ontology_snapshot.json (2026-07-31):
+//   HP:0012832 Bilateral, HP:0012833 Unilateral,
+//   HP:0012834 Right,     HP:0012835 Left
+// WHICH terms admit WHICH of these four is never decided here -- that always
+// comes from `lateralityPolicy` (the live /ontology/laterality-policy
+// fetch) above.
+const LATERALITY_MODIFIER_LABELS = {
+  'HP:0012832': 'Bilateral',
+  'HP:0012833': 'Unilateral',
+  'HP:0012834': 'Right',
+  'HP:0012835': 'Left',
+};
+
+// Curation console Task 7 (design spec §3.4, curation spec §7): default
+// evidence code attached to features the console creates. Picks the
+// evidence-code vocabulary entry labeled "author statement" (ECO:0000033 --
+// "Evidence from published author statement", the vocabulary's
+// sort_order=1 entry, confirmed live 2026-07-31) when present, falling back
+// to the first vocabulary entry so a differently-ordered/labeled vocabulary
+// still degrades gracefully. Never a hardcoded ECO id -- always read off
+// `props.evidenceCodeItems`, which the parent loads from
+// GET /ontology/vocabularies/evidence-code.
+const defaultEvidenceCode = computed(() => {
+  const items = props.evidenceCodeItems || [];
+  const authorStatement = items.find(
+    (item) => (item.label || '').trim().toLowerCase() === 'author statement'
+  );
+  return authorStatement || items[0] || null;
+});
 
 const filteredGroups = computed(() => {
   if (recommendationFilter.value === 'all') return groups.value;
@@ -228,12 +309,70 @@ const cycleState = (term) => {
   const updated = [...props.modelValue];
 
   if (currentState === 0) {
-    updated.push({ type: { id: term.hpo_id, label: term.label }, excluded: false });
+    const feature = { type: { id: term.hpo_id, label: term.label }, excluded: false };
+    // Curation spec §7 / design spec §3.4: attach evidence from the
+    // anchoring publication ONLY on a brand-new unknown->present transition
+    // (never on present->excluded below, which carries any existing
+    // evidence through untouched via the spread) -- and ONLY when a
+    // publication has actually been entered and the evidence-code
+    // vocabulary has loaded. An evidence entry with no reference is worse
+    // than no evidence entry, so both are required or `evidence` is
+    // omitted entirely.
+    if (props.anchoringReference && defaultEvidenceCode.value) {
+      feature.evidence = [
+        {
+          evidenceCode: {
+            id: defaultEvidenceCode.value.id,
+            label: defaultEvidenceCode.value.label,
+          },
+          reference: { id: props.anchoringReference },
+        },
+      ];
+    }
+    updated.push(feature);
   } else if (currentState === 1) {
     updated[index] = { ...updated[index], excluded: true };
   } else {
     updated.splice(index, 1);
   }
+
+  emit('update:modelValue', updated);
+};
+
+// Whether to show the laterality select for `hpoId`: only for a present
+// (not excluded, not unknown) term the live policy admits at least one
+// modifier for.
+const showLaterality = (hpoId) =>
+  getState(hpoId) === 1 && Array.isArray(lateralityPolicy.value[hpoId]);
+
+// The exact set the policy admits for this term, mapped to display labels --
+// never assumed to be all four (e.g. HP:0000122 admits Unilateral/Left/Right
+// but not Bilateral).
+const lateralityOptionsFor = (hpoId) =>
+  (lateralityPolicy.value[hpoId] || []).map((id) => ({
+    id,
+    label: LATERALITY_MODIFIER_LABELS[id] || id,
+  }));
+
+const getModifierValue = (hpoId) => {
+  const feature = props.modelValue.find((f) => f.type?.id === hpoId);
+  return feature?.modifiers?.[0]?.id ?? null;
+};
+
+// Laterality is mutually exclusive per term (Unilateral vs Left vs Right vs
+// Bilateral aren't combinable), so this is a single-select writing
+// `modifiers` to either `[]` (cleared) or exactly one `{id,label}`
+// ontologyClass -- never a multi-select. Never mutates props.modelValue --
+// same immutability discipline as cycleState/selectCKDStage.
+const setModifier = (term, modifierId) => {
+  const index = props.modelValue.findIndex((f) => f.type?.id === term.hpo_id);
+  if (index === -1) return;
+
+  const updated = [...props.modelValue];
+  const modifiers = modifierId
+    ? [{ id: modifierId, label: LATERALITY_MODIFIER_LABELS[modifierId] || modifierId }]
+    : [];
+  updated[index] = { ...updated[index], modifiers };
 
   emit('update:modelValue', updated);
 };
@@ -264,7 +403,13 @@ const selectCKDStage = (ckdStages, selectedId) => {
   emit('update:modelValue', updated);
 };
 
-onMounted(() => fetchGrouped());
+onMounted(() => {
+  fetchGrouped();
+  // Fetched once on mount, alongside the grouped HPO terms (design spec
+  // §3.4) -- see the `lateralityPolicy` docs above for why WHICH terms
+  // admit WHICH modifiers must always come from this fetch.
+  fetchLateralityPolicy();
+});
 </script>
 
 <style scoped>
@@ -279,5 +424,8 @@ onMounted(() => fetchGrouped());
 }
 .gap-4 {
   gap: 16px;
+}
+.phenotype-item__laterality {
+  max-width: 11rem;
 }
 </style>

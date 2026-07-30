@@ -202,6 +202,8 @@
                 <PhenotypicFeaturesSection
                   v-model="phenopacket.phenotypicFeatures"
                   :form-submitted="formSubmitted"
+                  :evidence-code-items="vocabularies.evidenceCode.value"
+                  :anchoring-reference="anchoringReference"
                 />
               </CurationSection>
 
@@ -421,13 +423,33 @@ export default {
       return computeSectionCompleteness(this.phenopacket, 'provenance');
     },
     // Phenotypes is deliberately NOT in CURATION_FIELDS (its completeness is
-    // dynamic per-case -- see curationFields.js). This is a naive stand-in
-    // (present/total feature count) until Task 7 wires the real tri-state
-    // count; kept intentionally simple since Task 7 replaces it wholesale.
-    // TODO(Task 7): replace with the real present/excluded/unknown count.
+    // dynamic per-case -- see curationFields.js). Curation console Task 7
+    // (design spec §3.4): `filled` = `total` = the number of entries in
+    // `phenotypicFeatures`. By construction of
+    // PhenotypicFeaturesSection.vue's own tri-state convention (`cycleState`
+    // /`getState`), an entry only exists once a curator has made an
+    // explicit present/excluded choice -- "unknown" has no entry at all --
+    // so every entry already IS "unambiguously curated" and this count
+    // never needs to distinguish present from excluded. There is no fixed
+    // universe size to divide by here (unlike the fixed-schema sections'
+    // CURATION_FIELDS registry, which counts against a known ~28-dimension
+    // total): the set of curatable HPO terms is open-ended across ~36 terms
+    // spanning organ-system groups, so this section is always N/N once
+    // anything has been entered, by design -- not a bug.
     phenotypesCompleteness() {
       const features = this.phenopacket.phenotypicFeatures || [];
       return { filled: features.length, total: features.length };
+    },
+    // Curation console Task 7 (design spec §3.4; curation spec §7): the
+    // FIRST listed publication's PMID, formatted the same way
+    // mergedExternalReferences() formats PMIDs (`PMID:${pmid}`). Null when
+    // no publication row exists yet, or its PMID field is still blank --
+    // PhenotypicFeaturesSection uses null to mean "omit `evidence`
+    // entirely" rather than write a reference to nothing. Multi-publication
+    // attribution nuance is deliberately out of scope (curation spec §7).
+    anchoringReference() {
+      const pmid = `${this.publications[0]?.pmid || ''}`.trim();
+      return pmid ? `PMID:${pmid}` : null;
     },
     // The `publication` CURATION_FIELDS entry reads
     // `metaData.externalReferences`, but a PMID the curator is actively

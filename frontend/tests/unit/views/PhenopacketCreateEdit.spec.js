@@ -33,7 +33,7 @@ vi.mock('@/api', () => ({
 vi.mock('@/components/PhenotypicFeaturesSection.vue', () => ({
   default: {
     name: 'PhenotypicFeaturesSection',
-    props: ['modelValue', 'formSubmitted'],
+    props: ['modelValue', 'formSubmitted', 'evidenceCodeItems', 'anchoringReference'],
     template: '<div class="mock-phenotypic-features" />',
   },
 }));
@@ -340,6 +340,15 @@ const VOCAB_FIXTURES = {
     { value: 'acmg', label: 'ACMG', description: null },
     { value: 'clingen_cnv', label: 'ClinGen CNV', description: null },
   ],
+  '/ontology/vocabularies/evidence-code': [
+    {
+      id: 'ECO:0000033',
+      label: 'author statement',
+      description: 'Evidence from published author statement',
+      category: 'literature',
+    },
+    { id: 'ECO:0000218', label: 'clinical study', description: null, category: 'clinical' },
+  ],
 };
 
 function mockVocabularyApi() {
@@ -586,5 +595,103 @@ describe('Classification section wiring (Task 6)', () => {
     expect(wrapper.vm.phenopacket.hnf1bCuration.classificationComment).toBe(
       'Reviewed after functional study.'
     );
+  });
+});
+
+// ── Phenotypes section wiring (Task 7) — full mount ─────────────────────────
+// PhenotypicFeaturesSection itself is stubbed above (see the vi.mock block
+// at the top of this file) and is exercised in depth by its own suite
+// (tests/unit/components/PhenotypicFeaturesSection.spec.js); these prove
+// PhenopacketCreateEdit.vue actually passes it the two new props the design
+// spec §3.4 evidence-attachment behaviour needs: the evidence-code
+// vocabulary (never hardcoded -- sourced from usePhenopacketVocabularies)
+// and the anchoring publication reference (the first listed publication's
+// PMID, formatted `PMID:...`, or null until one has been entered).
+describe('Phenotypes section wiring (Task 7)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('passes the evidence-code vocabulary into PhenotypicFeaturesSection', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const section = wrapper.findComponent({ name: 'PhenotypicFeaturesSection' });
+    expect(section.exists()).toBe(true);
+    expect(section.props('evidenceCodeItems')).toEqual(
+      VOCAB_FIXTURES['/ontology/vocabularies/evidence-code']
+    );
+  });
+
+  it('passes anchoringReference as null when no publication has been entered', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const section = wrapper.findComponent({ name: 'PhenotypicFeaturesSection' });
+    expect(section.props('anchoringReference')).toBeNull();
+  });
+
+  it('passes anchoringReference as PMID:<first pmid> once one is entered, ignoring later ones', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    wrapper.vm.publications = [{ pmid: '25324567' }, { pmid: '99999999' }];
+    await wrapper.vm.$nextTick();
+
+    const section = wrapper.findComponent({ name: 'PhenotypicFeaturesSection' });
+    expect(section.props('anchoringReference')).toBe('PMID:25324567');
+  });
+
+  it('treats a publication row with a blank PMID as no publication entered yet', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    wrapper.vm.publications = [{ pmid: '' }];
+    await wrapper.vm.$nextTick();
+
+    const section = wrapper.findComponent({ name: 'PhenotypicFeaturesSection' });
+    expect(section.props('anchoringReference')).toBeNull();
+  });
+});
+
+// ── phenotypesCompleteness (Task 7) ──────────────────────────────────────
+// Formula: filled = total = phenopacket.phenotypicFeatures.length. By
+// construction (PhenotypicFeaturesSection's own tri-state convention -- see
+// that component's `cycleState`/`getState`) an entry only exists once a
+// curator has made an explicit present/excluded choice, so every entry is
+// "unambiguously curated" and the section is always N/N once anything has
+// been entered. There is no fixed universe size to divide by here, unlike
+// the fixed-schema sections' CURATION_FIELDS registry.
+describe('phenotypesCompleteness (Task 7)', () => {
+  const computeIt = PhenopacketCreateEdit.computed.phenotypesCompleteness;
+
+  it('is 0/0 with no phenotypic features', () => {
+    const ctx = { phenopacket: { phenotypicFeatures: [] } };
+    expect(computeIt.call(ctx)).toEqual({ filled: 0, total: 0 });
+  });
+
+  it('is N/N for N curated features, counting both present and excluded entries', () => {
+    const ctx = {
+      phenopacket: {
+        phenotypicFeatures: [
+          { type: { id: 'HP:0000107', label: 'Renal cyst' }, excluded: false },
+          { type: { id: 'HP:0000122', label: 'Unilateral renal agenesis' }, excluded: true },
+          { type: { id: 'HP:0100611', label: 'Multiple glomerular cysts' }, excluded: false },
+        ],
+      },
+    };
+    expect(computeIt.call(ctx)).toEqual({ filled: 3, total: 3 });
+  });
+
+  it('tolerates a missing phenotypicFeatures array', () => {
+    const ctx = { phenopacket: {} };
+    expect(computeIt.call(ctx)).toEqual({ filled: 0, total: 0 });
   });
 });
