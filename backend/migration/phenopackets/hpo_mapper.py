@@ -1,4 +1,4 @@
-"""HPO term mapping for phenotypic features with canonical label normalization."""
+"""HPO term mapping for phenotypic features."""
 
 import logging
 from typing import Dict, Optional
@@ -11,93 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 class HPOMapper(OntologyMapper):
-    """Maps phenotype categories to HPO terms with canonical label normalization.
+    """Maps phenotype categories to HPO terms.
 
     Implements OntologyMapper interface following Dependency Inversion Principle.
     High-level modules depend on this abstraction, not this concrete implementation.
-
-    Label Normalization:
-        When normalize_labels=True (default), the mapper fetches canonical labels
-        from the HPO API via HybridOntologyService. This ensures consistent labels
-        across all phenopackets, avoiding issues like HP:0012622 appearing as both
-        "Chronic kidney disease" and "chronic kidney disease, not specified".
     """
 
     def __init__(
         self,
         mappings: Optional[Dict[str, Dict[str, str]]] = None,
-        normalize_labels: bool = True,
     ):
         """Initialize with default or provided HPO mappings.
 
         Args:
             mappings: Optional pre-configured mappings. If None, uses defaults.
-            normalize_labels: If True, fetch canonical labels from HPO API.
-                            Defaults to True for data quality.
         """
-        self.normalize_labels = normalize_labels
-        self._canonical_labels: Dict[str, str] = {}
-        self._ontology_service = None  # Lazy-loaded to avoid circular imports
         self.hpo_mappings = mappings if mappings else self._init_default_hpo_mappings()
-
-    def _get_ontology_service(self):
-        """Lazy-load ontology service to avoid circular imports."""
-        if self._ontology_service is None:
-            try:
-                from app.services.ontology_service import ontology_service
-
-                self._ontology_service = ontology_service
-            except ImportError:
-                logger.warning(
-                    "Could not import ontology_service - canonical label "
-                    "normalization disabled"
-                )
-                self.normalize_labels = False
-        return self._ontology_service
-
-    def _get_canonical_label(self, hpo_id: str, fallback_label: str) -> str:
-        """Get canonical HPO label from API or local cache.
-
-        Uses HybridOntologyService which has multi-level caching:
-        1. Memory cache (instant)
-        2. File cache (fast)
-        3. HPO JAX API (authoritative)
-        4. OLS API (backup)
-        5. Local fallback (last resort)
-
-        Args:
-            hpo_id: HPO term ID (e.g., "HP:0012622")
-            fallback_label: Label to use if lookup fails
-
-        Returns:
-            Canonical label from HPO or fallback
-        """
-        if not self.normalize_labels:
-            return fallback_label
-
-        # Check internal cache first (faster than service lookup)
-        if hpo_id in self._canonical_labels:
-            return self._canonical_labels[hpo_id]
-
-        try:
-            service = self._get_ontology_service()
-            if service is None:
-                self._canonical_labels[hpo_id] = fallback_label
-                return fallback_label
-
-            term = service.get_term(hpo_id)
-
-            # Only use API label if it's valid (not "Unknown term:")
-            if term and not term.label.startswith("Unknown term:"):
-                self._canonical_labels[hpo_id] = term.label
-                return term.label
-
-        except Exception as e:
-            logger.debug(f"Failed to lookup canonical label for {hpo_id}: {e}")
-
-        # Cache fallback to avoid repeated failures
-        self._canonical_labels[hpo_id] = fallback_label
-        return fallback_label
 
     def _init_default_hpo_mappings(self) -> Dict[str, Dict[str, str]]:
         """Initialize default HPO term mappings for phenotypes.
@@ -229,7 +158,7 @@ class HPOMapper(OntologyMapper):
         }
 
     def build_from_dataframe(self, phenotypes_df: pd.DataFrame) -> None:
-        """Build HPO mappings from Phenotype sheet with canonical label normalization.
+        """Build HPO mappings from the Phenotype sheet.
 
         Args:
             phenotypes_df: DataFrame containing phenotype mappings
@@ -239,7 +168,6 @@ class HPOMapper(OntologyMapper):
             return
 
         self.hpo_mappings = {}
-        normalized_count = 0
 
         for _, row in phenotypes_df.iterrows():
             category = row.get("phenotype_category")
@@ -247,23 +175,19 @@ class HPOMapper(OntologyMapper):
             source_label = row.get("phenotype_name")
 
             if pd.notna(category) and pd.notna(hpo_id):
-                # Get canonical label (normalizes to official HPO label)
-                fallback = source_label if pd.notna(source_label) else category
-                canonical_label = self._get_canonical_label(hpo_id, fallback)
-
-                # Track normalization for logging
-                if pd.notna(source_label) and canonical_label != source_label:
-                    logger.debug(
-                        f"Normalized label for {hpo_id}: "
-                        f"'{source_label}' -> '{canonical_label}'"
-                    )
-                    normalized_count += 1
+                # The curator's name is written verbatim. Rewriting it to agree
+                # with the identifier is what inverted HP:0033133 across 460
+                # features; see docs/ontology-defect-report-2026-07-30.md §4.1.
+                # A name that disagrees with its identifier is a defect for a
+                # human to resolve, and Task 2's source-integrity check catches
+                # it at import time.
+                label = source_label if pd.notna(source_label) else category
 
                 # Normalize the category name to match column names in individuals sheet
                 normalized_category = self._normalize_column_name(category)
                 self.hpo_mappings[normalized_category] = {
                     "id": hpo_id,
-                    "label": canonical_label,
+                    "label": label,
                 }
 
                 # ALSO add mapping for the phenotype_name
@@ -272,12 +196,10 @@ class HPOMapper(OntologyMapper):
                     normalized_label = self._normalize_column_name(source_label)
                     self.hpo_mappings[normalized_label] = {
                         "id": hpo_id,
-                        "label": canonical_label,
+                        "label": label,
                     }
 
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
-        if normalized_count > 0:
-            logger.info(f"Normalized {normalized_count} HPO labels to canonical form")
 
     def normalize_key(self, key: str) -> str:
         """Normalize a phenotype key for lookup.
