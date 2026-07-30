@@ -88,6 +88,25 @@ class SchemaValidator:
                         "externalReferences": {"type": "array"},
                     },
                 },
+                "hnf1bCuration": {
+                    "type": "object",
+                    "description": (
+                        "HNF1B-DB curated case-level facts. Namespaced and "
+                        "explicitly NOT GA4GH content: conformant export strips "
+                        "it. Stored inside the phenopacket so it inherits "
+                        "revisioning, audit and the optimistic lock. Values are "
+                        "checked against reference tables by the async domain "
+                        "validator, not here."
+                    ),
+                    "additionalProperties": False,
+                    "properties": {
+                        "cohort": {"type": "string"},
+                        "familyHistory": {"type": "string"},
+                        "detectionMethod": {"type": "string"},
+                        "curatedBy": {"type": "string"},
+                        "curatedAt": {"type": "string"},
+                    },
+                },
             },
             "definitions": {
                 "ontologyClass": {
@@ -204,7 +223,15 @@ class SchemaValidator:
                                         "variation": {"type": "object"},
                                         "label": {"type": "string"},
                                         "geneContext": {"type": "object"},
-                                        "moleculeContext": {"type": "string"},
+                                        "moleculeContext": {
+                                            "type": "string",
+                                            "enum": [
+                                                "unspecified_molecule_context",
+                                                "genomic",
+                                                "transcript",
+                                                "protein",
+                                            ],
+                                        },
                                         "allelicState": {
                                             "$ref": "#/definitions/ontologyClass"
                                         },
