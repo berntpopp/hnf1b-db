@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.ontology.schemas import VocabularyResponse
 
 router = APIRouter(prefix="/ontology", tags=["ontology"])
 
@@ -212,3 +213,53 @@ async def get_evidence_code_values(db: AsyncSession = Depends(get_db)):
     )
     result = await db.execute(query)
     return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+_CURATION_VOCABULARIES = {
+    "cohort": "cohort_values",
+    "detection-method": "detection_method_values",
+    "segregation": "segregation_values",
+    "family-history": "family_history_values",
+}
+
+
+async def _fetch_curation_vocabulary(
+    db: AsyncSession, table: str
+) -> VocabularyResponse:
+    """Read one curation reference table in sort_order.
+
+    The table name comes from the module-level mapping, never from user input.
+    """
+    query = text(
+        f"SELECT value, label, description FROM {table} ORDER BY sort_order"  # noqa: S608
+    )
+    result = await db.execute(query)
+    return VocabularyResponse(data=[dict(row._mapping) for row in result.fetchall()])
+
+
+@router.get("/vocabularies/cohort", response_model=VocabularyResponse)
+async def get_cohort_values(db: AsyncSession = Depends(get_db)):
+    """Get valid cohort values (born / fetus) for hnf1bCuration.cohort."""
+    return await _fetch_curation_vocabulary(db, _CURATION_VOCABULARIES["cohort"])
+
+
+@router.get("/vocabularies/detection-method", response_model=VocabularyResponse)
+async def get_detection_method_values(db: AsyncSession = Depends(get_db)):
+    """Get valid variant detection methods for hnf1bCuration.detectionMethod."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["detection-method"]
+    )
+
+
+@router.get("/vocabularies/segregation", response_model=VocabularyResponse)
+async def get_segregation_values(db: AsyncSession = Depends(get_db)):
+    """Get valid segregation origins for the variant segregation extension."""
+    return await _fetch_curation_vocabulary(db, _CURATION_VOCABULARIES["segregation"])
+
+
+@router.get("/vocabularies/family-history", response_model=VocabularyResponse)
+async def get_family_history_values(db: AsyncSession = Depends(get_db)):
+    """Get valid family history statuses for hnf1bCuration.familyHistory."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["family-history"]
+    )

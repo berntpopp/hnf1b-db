@@ -3691,6 +3691,56 @@
         ],
         "title": "VersionResponse",
         "type": "object"
+      },
+      "VocabularyItem": {
+        "description": "One controlled-vocabulary member.\n\nThe canonical shape for vocabularies added by the curation storage contract.\nPre-existing endpoints (sex, interpretation-status, allelic-state,\nevidence-code) have divergent shapes and are deliberately left alone.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional clarifying text",
+            "title": "Description"
+          },
+          "label": {
+            "description": "Curator-facing label, e.g. 'MLPA'",
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "Stored token, e.g. 'mlpa'",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "VocabularyItem",
+        "type": "object"
+      },
+      "VocabularyResponse": {
+        "description": "Envelope matching every other vocabulary endpoint in this API.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyItem"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "VocabularyResponse",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -6269,6 +6319,50 @@
         ]
       }
     },
+    "/api/v2/ontology/vocabularies/cohort": {
+      "get": {
+        "description": "Get valid cohort values (born / fetus) for hnf1bCuration.cohort.",
+        "operationId": "get_cohort_values_api_v2_ontology_vocabularies_cohort_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Cohort Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
+    "/api/v2/ontology/vocabularies/detection-method": {
+      "get": {
+        "description": "Get valid variant detection methods for hnf1bCuration.detectionMethod.",
+        "operationId": "get_detection_method_values_api_v2_ontology_vocabularies_detection_method_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Detection Method Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
     "/api/v2/ontology/vocabularies/evidence-code": {
       "get": {
         "description": "Get all valid evidence code values (ECO ontology).",
@@ -6284,6 +6378,28 @@
           }
         },
         "summary": "Get Evidence Code Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
+    "/api/v2/ontology/vocabularies/family-history": {
+      "get": {
+        "description": "Get valid family history statuses for hnf1bCuration.familyHistory.",
+        "operationId": "get_family_history_values_api_v2_ontology_vocabularies_family_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Family History Values",
         "tags": [
           "ontology"
         ]
@@ -6324,6 +6440,28 @@
           }
         },
         "summary": "Get Progress Status Values",
+        "tags": [
+          "ontology"
+        ]
+      }
+    },
+    "/api/v2/ontology/vocabularies/segregation": {
+      "get": {
+        "description": "Get valid segregation origins for the variant segregation extension.",
+        "operationId": "get_segregation_values_api_v2_ontology_vocabularies_segregation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Segregation Values",
         "tags": [
           "ontology"
         ]
