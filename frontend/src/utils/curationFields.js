@@ -246,6 +246,65 @@ CURATION_FIELDS.push(
   }
 );
 
+// ── Task 8: Age & onset section (design spec §3.5) ──────────────────────────
+// AgeOnset -> diseases[0].onset, AgeReported -> subject.timeAtLastEncounter.
+// Both are GA4GH TimeElement objects (congenital OntologyClass / ISO-8601 age
+// / gestational age -- see TimeElementPicker.vue). Unlike the vocabulary-
+// backed fields Tasks 4-6 registered, a TimeElement has no `not_reported`
+// concept -- GA4GH doesn't model "the source is silent about onset" as a
+// selectable value the way `familyHistory`/`detectionMethod` do -- so these
+// use the plain default fill rule (non-empty object = filled) with no
+// custom `isFilled`.
+CURATION_FIELDS.push(
+  {
+    id: 'ageOnset',
+    section: 'age',
+    getValue: (p) => p?.diseases?.[0]?.onset,
+  },
+  {
+    id: 'ageReported',
+    section: 'age',
+    getValue: (p) => p?.subject?.timeAtLastEncounter,
+  }
+);
+
+// ── Task 8: Provenance & notes section (design spec §3.6) ───────────────────
+// ReviewBy -> hnf1bCuration.curatedBy (+ metaData.reviewer, stamped
+// alongside it but not separately registered here), ReviewDate ->
+// curatedAt, Comment/Problematic/DupCheck -> the three free-text fields.
+// curatedBy/curatedAt are auto-stamped by PhenopacketCreateEdit.vue's
+// stampCuration() -- there is deliberately NO curator-facing input control
+// for either (see ProvenanceSection.vue's module doc, the programme's
+// no-reviewer-input-control non-negotiable) -- so they read filled as soon
+// as the form mounts, not only after an explicit curator action.
+CURATION_FIELDS.push(
+  {
+    id: 'curatedBy',
+    section: 'provenance',
+    getValue: (p) => p?.hnf1bCuration?.curatedBy,
+  },
+  {
+    id: 'curatedAt',
+    section: 'provenance',
+    getValue: (p) => p?.hnf1bCuration?.curatedAt,
+  },
+  {
+    id: 'caseComment',
+    section: 'provenance',
+    getValue: (p) => p?.hnf1bCuration?.caseComment,
+  },
+  {
+    id: 'problematic',
+    section: 'provenance',
+    getValue: (p) => p?.hnf1bCuration?.problematic,
+  },
+  {
+    id: 'duplicateCheck',
+    section: 'provenance',
+    getValue: (p) => p?.hnf1bCuration?.duplicateCheck,
+  }
+);
+
 /**
  * Default fill rule (used when a field does not supply its own `isFilled`):
  * arrays are filled iff non-empty; everything else is filled iff

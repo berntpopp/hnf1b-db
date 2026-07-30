@@ -214,9 +214,14 @@
                 :filled="ageCompleteness.filled"
                 :total="ageCompleteness.total"
               >
-                <p class="text-medium-emphasis mb-0">
-                  Nothing here yet — age & onset fields land in a later task.
-                </p>
+                <AgeSection
+                  :diseases="phenopacket.diseases"
+                  :time-at-last-encounter="phenopacket.subject.timeAtLastEncounter"
+                  @update:diseases="(value) => (phenopacket.diseases = value)"
+                  @update:time-at-last-encounter="
+                    (value) => (phenopacket.subject.timeAtLastEncounter = value)
+                  "
+                />
               </CurationSection>
 
               <CurationSection
@@ -226,9 +231,18 @@
                 :filled="provenanceCompleteness.filled"
                 :total="provenanceCompleteness.total"
               >
-                <p class="text-medium-emphasis mb-0">
-                  Nothing here yet — provenance & notes fields land in a later task.
-                </p>
+                <ProvenanceSection
+                  :case-comment="phenopacket.hnf1bCuration.caseComment"
+                  :problematic="phenopacket.hnf1bCuration.problematic"
+                  :duplicate-check="phenopacket.hnf1bCuration.duplicateCheck"
+                  :curated-by="phenopacket.hnf1bCuration.curatedBy"
+                  :curated-at="phenopacket.hnf1bCuration.curatedAt"
+                  @update:case-comment="(value) => (phenopacket.hnf1bCuration.caseComment = value)"
+                  @update:problematic="(value) => (phenopacket.hnf1bCuration.problematic = value)"
+                  @update:duplicate-check="
+                    (value) => (phenopacket.hnf1bCuration.duplicateCheck = value)
+                  "
+                />
               </CurationSection>
 
               <!-- Change Reason (Edit Mode Only) -->
@@ -304,11 +318,14 @@
 <script>
 import { getPhenopacket, createPhenopacket, updatePhenopacket } from '@/api';
 import { usePhenopacketVocabularies } from '@/composables/usePhenopacketVocabularies';
+import { useAuthStore } from '@/stores/authStore';
 import PhenotypicFeaturesSection from '@/components/PhenotypicFeaturesSection.vue';
 import VariantAnnotationForm from '@/components/VariantAnnotationForm.vue';
 import CurationSection from '@/components/curation/CurationSection.vue';
 import CompletenessRail from '@/components/curation/CompletenessRail.vue';
 import ClassificationSection from '@/components/curation/ClassificationSection.vue';
+import AgeSection from '@/components/curation/AgeSection.vue';
+import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
 
 export default {
@@ -319,6 +336,8 @@ export default {
     CurationSection,
     CompletenessRail,
     ClassificationSection,
+    AgeSection,
+    ProvenanceSection,
   },
   // Vue Router 4-style in-component guard (works with the Options API used
   // throughout this file). Prompts on navigate-away only when the live form
@@ -334,7 +353,13 @@ export default {
   },
   setup() {
     const vocabularies = usePhenopacketVocabularies();
-    return { vocabularies };
+    // Curation console Task 8 (design spec §3.6): the ONLY source
+    // `stampCuration()` reads for `hnf1bCuration.curatedBy` /
+    // `metaData.reviewer` -- the authenticated session's display name.
+    // There is deliberately no other path (see ProvenanceSection.vue's
+    // module doc, the no-reviewer-input-control non-negotiable).
+    const authStore = useAuthStore();
+    return { vocabularies, authStore };
   },
   data() {
     return {
@@ -488,12 +513,53 @@ export default {
       this.phenopacket.id = '';
     }
 
+    // Curation console Task 8 (design spec §3.6): stamp curatedBy/curatedAt
+    // (+ metaData.reviewer) immediately on mount, for BOTH create and edit --
+    // so the Provenance section's completeness badge reads filled as soon as
+    // the form is open, not only after an explicit save (there is no
+    // curator-facing control for either field to "fill" in the first
+    // place). Placed after the load/init branch above, before the snapshot
+    // below, so opening an existing record for edit and leaving without
+    // touching anything is not itself flagged as an unsaved change.
+    this.stampCuration();
+
     // Snapshot the settled initial state for the unsaved-changes guard. Taken
     // after both branches above so it reflects the actually-loaded record in
     // edit mode, not the placeholder pre-load shape.
     this.captureSnapshot();
   },
   methods: {
+    // Curation console Task 8 (design spec §3.6): the ONLY thing that reads
+    // the authenticated session's identity for curatedBy/reviewer. A plain
+    // method (not a `computed`) so it works identically whether called from
+    // a real mounted instance or via `PhenopacketCreateEdit.methods
+    // .stampCuration.call(ctx)` in a unit test, where `ctx` is a plain
+    // object with no Vue reactivity system behind it.
+    curatorDisplayName() {
+      return this.authStore?.user?.full_name || this.authStore?.user?.username || '';
+    },
+    // Curation console Task 8: stamps `hnf1bCuration.curatedBy`,
+    // `hnf1bCuration.curatedAt` and `metaData.reviewer` -- NEVER from a form
+    // field (see ProvenanceSection.vue's module doc, the
+    // no-reviewer-input-control non-negotiable). `curatedBy`/`metaData
+    // .reviewer` come from the session's display name; `curatedAt` from the
+    // client clock, since the backend does not stamp it server-side
+    // (verified: no `curated_at`/`curated_by` write path in
+    // backend/app/phenopackets/ -- only the JSON-schema type declaration).
+    // This matches the existing precedent for `metaData.created`/`createdBy`
+    // in this file's data(), which are likewise client-stamped. Called both
+    // in mounted() (so the completeness rail reflects it immediately) and
+    // again at the top of handleSubmit() (so curatedAt is the freshest
+    // client-observable timestamp at actual save time, not whenever the
+    // form happened to be opened).
+    stampCuration() {
+      const displayName = this.curatorDisplayName();
+      this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+      this.phenopacket.hnf1bCuration.curatedBy = displayName;
+      this.phenopacket.hnf1bCuration.curatedAt = new Date().toISOString();
+      this.phenopacket.metaData = this.phenopacket.metaData || {};
+      this.phenopacket.metaData.reviewer = displayName;
+    },
     captureSnapshot() {
       this.initialSnapshot = JSON.stringify({
         phenopacket: this.phenopacket,
@@ -625,6 +691,12 @@ export default {
         this.error = 'Change reason is required for updates (minimum 5 characters)';
         return;
       }
+
+      // Curation console Task 8: refresh curatedAt to the freshest
+      // client-observable timestamp right before building the save payload
+      // (mounted() already stamped it once, but a curator may have spent
+      // real time in the form since then).
+      this.stampCuration();
 
       this.saving = true;
       this.error = null;

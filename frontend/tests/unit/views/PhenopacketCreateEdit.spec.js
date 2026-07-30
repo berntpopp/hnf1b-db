@@ -45,9 +45,51 @@ vi.mock('@/components/VariantAnnotationForm.vue', () => ({
   },
 }));
 
+// Task 8: PhenopacketCreateEdit.vue's setup() now calls useAuthStore() to
+// source curatedBy's display name (the no-reviewer-input-control
+// non-negotiable -- see ProvenanceSection.vue's module doc). Mocked the same
+// way tests/unit/views/PagePhenopacket.spec.js already does (a plain object
+// returned from the mocked composable, not a real Pinia instance -- this
+// view's tests never install a Pinia plugin).
+vi.mock('@/stores/authStore', () => ({ useAuthStore: vi.fn() }));
+
 import { getPhenopacket, updatePhenopacket } from '@/api';
+import { useAuthStore } from '@/stores/authStore';
 import PhenopacketCreateEdit from '@/views/PhenopacketCreateEdit.vue';
 import CompletenessRail from '@/components/curation/CompletenessRail.vue';
+import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
+
+/** Curation console Task 8: the session identity stampCuration() reads. */
+function mockAuthenticatedCurator(userOverrides = {}) {
+  useAuthStore.mockReturnValue({
+    user: {
+      username: 'jane.curator',
+      full_name: 'Jane Curator',
+      role: 'curator',
+      ...userOverrides,
+    },
+  });
+}
+
+/**
+ * Recursively walks a JSON-serializable value and returns the dotted path of
+ * every string leaf containing '@'. Used by the Task 8 no-email non-
+ * negotiable test to prove '@' reaches the submission payload ONLY through
+ * the three free-text fields a curator explicitly controls, never through
+ * curatedBy/reviewer/createdBy or any other path.
+ */
+function findAtSignPaths(value, path = '') {
+  if (typeof value === 'string') {
+    return value.includes('@') ? [path] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((v, i) => findAtSignPaths(v, `${path}[${i}]`));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).flatMap(([k, v]) => findAtSignPaths(v, path ? `${path}.${k}` : k));
+  }
+  return [];
+}
 
 const EDIT_ROUTE = {
   params: {
@@ -94,6 +136,13 @@ function createContext(overrides = {}) {
     isEditing: true,
     buildSubmissionPhenopacket: PhenopacketCreateEdit.methods.buildSubmissionPhenopacket,
     mergedExternalReferences: PhenopacketCreateEdit.methods.mergedExternalReferences,
+    stampCuration: PhenopacketCreateEdit.methods.stampCuration,
+    curatorDisplayName: PhenopacketCreateEdit.methods.curatorDisplayName,
+    // Task 8: stampCuration()/curatorDisplayName read this. Direct-method-call
+    // tests (via createContext()) never go through the real setup(), so a
+    // default stub is needed here for handleSubmit/buildSubmissionPhenopacket
+    // to not throw on `this.authStore.user`.
+    authStore: { user: { username: 'jane.curator', full_name: 'Jane Curator' } },
     publications: [],
     phenopacket: {
       id: 'PP-001',
@@ -383,6 +432,7 @@ describe('Case section controls (Task 4)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockVocabularyApi();
+    mockAuthenticatedCurator();
     window.logService = {
       debug: vi.fn(),
       info: vi.fn(),
@@ -455,12 +505,20 @@ describe('Case section controls (Task 4)', () => {
     expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual(['Family2_II-1']);
   });
 
-  it('defaults subject.alternateIds to [] and hnf1bCuration to {} for a new phenopacket', async () => {
+  it('defaults subject.alternateIds to [] and hnf1bCuration to {} (before Task 8 stamping) for a new phenopacket', async () => {
     const wrapper = await mountCreateForm();
     await flushPromises();
 
     expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([]);
-    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({});
+    // Task 8 (design spec §3.6): hnf1bCuration starts at {} (unchanged from
+    // Task 4) but is no longer EMPTY by the time mounted() finishes --
+    // stampCuration() immediately stamps curatedBy/curatedAt, with no other
+    // key leaking in (see "curatorDisplayName / stampCuration (Task 8)"
+    // below for the dedicated stampCuration suite).
+    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({
+      curatedBy: 'Jane Curator',
+      curatedAt: expect.any(String),
+    });
   });
 
   it('defaults hnf1bCuration and subject.alternateIds when loading a legacy record that lacks them', async () => {
@@ -499,7 +557,13 @@ describe('Case section controls (Task 4)', () => {
     const wrapper = mount(PhenopacketCreateEdit, { global: { plugins: [router, vuetify] } });
     await flushPromises();
 
-    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({});
+    // Task 8: hnf1bCuration is defaulted to {} and then immediately stamped
+    // (curatedBy/curatedAt) by mounted() -- see the sibling "new phenopacket"
+    // test above for the same note.
+    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({
+      curatedBy: 'Jane Curator',
+      curatedAt: expect.any(String),
+    });
     expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([]);
   });
 
@@ -540,6 +604,7 @@ describe('Classification section wiring (Task 6)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockVocabularyApi();
+    mockAuthenticatedCurator();
     window.logService = {
       debug: vi.fn(),
       info: vi.fn(),
@@ -611,6 +676,7 @@ describe('Phenotypes section wiring (Task 7)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockVocabularyApi();
+    mockAuthenticatedCurator();
     window.logService = {
       debug: vi.fn(),
       info: vi.fn(),
@@ -693,5 +759,276 @@ describe('phenotypesCompleteness (Task 7)', () => {
   it('tolerates a missing phenotypicFeatures array', () => {
     const ctx = { phenopacket: {} };
     expect(computeIt.call(ctx)).toEqual({ filled: 0, total: 0 });
+  });
+});
+
+// ── curatorDisplayName / stampCuration (Task 8) ─────────────────────────────
+// curatedBy/curatedAt (+ metaData.reviewer) are stamped from the
+// authenticated session's display name and the client clock -- NEVER from a
+// form field. See ProvenanceSection.spec.js and the "no email" suite below
+// for the structural absence-of-a-control proof; these cover the stamping
+// logic itself.
+describe('curatorDisplayName / stampCuration (Task 8)', () => {
+  const displayName = PhenopacketCreateEdit.methods.curatorDisplayName;
+  const stamp = PhenopacketCreateEdit.methods.stampCuration;
+
+  it('curatorDisplayName prefers full_name over username', () => {
+    const ctx = { authStore: { user: { full_name: 'Jane Curator', username: 'jane.c' } } };
+    expect(displayName.call(ctx)).toBe('Jane Curator');
+  });
+
+  it('curatorDisplayName falls back to username when full_name is absent', () => {
+    const ctx = { authStore: { user: { username: 'jane.c' } } };
+    expect(displayName.call(ctx)).toBe('jane.c');
+  });
+
+  it('curatorDisplayName falls back to an empty string when there is no user', () => {
+    expect(displayName.call({ authStore: { user: null } })).toBe('');
+    expect(displayName.call({ authStore: {} })).toBe('');
+  });
+
+  it('stampCuration sets hnf1bCuration.curatedBy/curatedAt and metaData.reviewer from the session and the client clock', () => {
+    const ctx = createContext({
+      authStore: { user: { full_name: 'Jane Curator', username: 'jane.c' } },
+      phenopacket: {
+        id: 'PP-001',
+        subject: { id: 'SUB-001' },
+        hnf1bCuration: {},
+        metaData: {},
+      },
+    });
+    // stampCuration is a real method on the ctx object (see createContext),
+    // referencing `this.curatorDisplayName()` -- attach it too.
+    ctx.curatorDisplayName = displayName;
+
+    const before = Date.now();
+    stamp.call(ctx);
+    const after = Date.now();
+
+    expect(ctx.phenopacket.hnf1bCuration.curatedBy).toBe('Jane Curator');
+    expect(ctx.phenopacket.metaData.reviewer).toBe('Jane Curator');
+    const stampedTime = new Date(ctx.phenopacket.hnf1bCuration.curatedAt).getTime();
+    expect(stampedTime).toBeGreaterThanOrEqual(before);
+    expect(stampedTime).toBeLessThanOrEqual(after);
+  });
+
+  it('stampCuration defensively creates hnf1bCuration/metaData when a legacy record lacks either', () => {
+    const ctx = createContext({
+      authStore: { user: { username: 'jane.c' } },
+      phenopacket: { id: 'PP-LEGACY', subject: { id: 'SUB-LEGACY' } },
+    });
+    ctx.curatorDisplayName = displayName;
+
+    stamp.call(ctx);
+
+    expect(ctx.phenopacket.hnf1bCuration.curatedBy).toBe('jane.c');
+    expect(ctx.phenopacket.metaData.reviewer).toBe('jane.c');
+  });
+
+  it('handleSubmit re-stamps curatedAt with a fresher timestamp at actual submit time', async () => {
+    updatePhenopacket.mockResolvedValueOnce({ data: { phenopacket_id: 'PP-001' } });
+    const ctx = createContext({
+      authStore: { user: { full_name: 'Jane Curator' } },
+      isEditing: true,
+      phenopacket: {
+        id: 'PP-001',
+        subject: { id: 'SUB-001', sex: 'UNKNOWN_SEX' },
+        phenotypicFeatures: [{ id: 'HP:0000001' }],
+        interpretations: [],
+        hnf1bCuration: { curatedBy: 'Jane Curator', curatedAt: '2020-01-01T00:00:00.000Z' },
+        metaData: { externalReferences: [], reviewer: 'Jane Curator' },
+      },
+      changeReason: 'Fixed a typo',
+      revision: 7,
+    });
+    ctx.curatorDisplayName = displayName;
+
+    await PhenopacketCreateEdit.methods.handleSubmit.call(ctx);
+
+    const submitted = updatePhenopacket.mock.calls[0][1].phenopacket;
+    expect(submitted.hnf1bCuration.curatedBy).toBe('Jane Curator');
+    expect(new Date(submitted.hnf1bCuration.curatedAt).getTime()).toBeGreaterThan(
+      new Date('2020-01-01T00:00:00.000Z').getTime()
+    );
+  });
+
+  it('mounted() stamps curatedBy/curatedAt/reviewer immediately -- the Provenance badge reads filled right away', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    expect(wrapper.vm.phenopacket.hnf1bCuration.curatedBy).toBe('Jane Curator');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.curatedAt).toBeTruthy();
+    expect(wrapper.vm.phenopacket.metaData.reviewer).toBe('Jane Curator');
+  });
+});
+
+// ── Age section wiring (Task 8) — full mount ────────────────────────────────
+describe('Age section wiring (Task 8)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    mockAuthenticatedCurator();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('mounts AgeSection wired to phenopacket.diseases and subject.timeAtLastEncounter', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const ageSection = wrapper.findComponent({ name: 'AgeSection' });
+    expect(ageSection.exists()).toBe(true);
+    expect(ageSection.props('diseases')).toEqual([]);
+    expect(ageSection.props('timeAtLastEncounter')).toBeNull();
+  });
+
+  it('update:diseases from AgeSection writes phenopacket.diseases (AgeOnset)', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const ageSection = wrapper.findComponent({ name: 'AgeSection' });
+    const diseases = [
+      {
+        term: { id: 'MONDO:0007669', label: 'renal cysts and diabetes syndrome' },
+        onset: { ontologyClass: { id: 'HP:0003577', label: 'Congenital onset' } },
+      },
+    ];
+    await ageSection.vm.$emit('update:diseases', diseases);
+
+    expect(wrapper.vm.phenopacket.diseases).toEqual(diseases);
+  });
+
+  it('update:timeAtLastEncounter from AgeSection writes subject.timeAtLastEncounter (AgeReported)', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const ageSection = wrapper.findComponent({ name: 'AgeSection' });
+    await ageSection.vm.$emit('update:timeAtLastEncounter', { iso8601duration: 'P41Y' });
+
+    expect(wrapper.vm.phenopacket.subject.timeAtLastEncounter).toEqual({
+      iso8601duration: 'P41Y',
+    });
+  });
+});
+
+// ── Provenance section wiring (Task 8) — full mount ─────────────────────────
+describe('Provenance section wiring (Task 8)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    mockAuthenticatedCurator();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('mounts ProvenanceSection wired to the five hnf1bCuration provenance fields', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const provenance = wrapper.findComponent({ name: 'ProvenanceSection' });
+    expect(provenance.exists()).toBe(true);
+    expect(provenance.props('curatedBy')).toBe('Jane Curator');
+    expect(provenance.props('curatedAt')).toBeTruthy();
+    expect(provenance.props('caseComment')).toBeNull();
+  });
+
+  it('update:caseComment / update:problematic / update:duplicateCheck write into phenopacket.hnf1bCuration', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const provenance = wrapper.findComponent({ name: 'ProvenanceSection' });
+    await provenance.vm.$emit('update:caseComment', 'note');
+    await provenance.vm.$emit('update:problematic', 'issue');
+    await provenance.vm.$emit('update:duplicateCheck', 'checked');
+
+    expect(wrapper.vm.phenopacket.hnf1bCuration.caseComment).toBe('note');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.problematic).toBe('issue');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.duplicateCheck).toBe('checked');
+  });
+});
+
+// ── No email / no reviewer-input-control (Task 8 non-negotiable) ───────────
+// One of the programme's three global non-negotiable tests. Proves, at the
+// full-form level, that '@' can only ever reach the built submission
+// payload through the three free-text fields a curator explicitly controls
+// (caseComment/problematic/duplicateCheck) -- never through
+// hnf1bCuration.curatedBy, metaData.reviewer, metaData.createdBy, or any
+// other path. Combined with ProvenanceSection.spec.js's component-level
+// structural proof (its compiled `emits` array has no curatedBy/reviewer
+// event at all), this proves absence of a control, not merely that one
+// happened to stay empty in this run.
+describe('No email / no reviewer-input-control (Task 8 non-negotiable)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    mockAuthenticatedCurator();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('typing "@" into every Task 8 textarea reaches the submission payload ONLY at the three free-text paths', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    // Also feed a PMID and phenotype so the payload resembles a real save,
+    // and set a subject id -- none of these are expected to contain '@'.
+    wrapper.vm.publications = [{ pmid: '25324567' }];
+    wrapper.vm.phenopacket.subject.id = 'SUB-001';
+    await wrapper.vm.$nextTick();
+
+    const provenance = wrapper.findComponent({ name: 'ProvenanceSection' });
+    await provenance.vm.$emit('update:caseComment', 'seen at reviewer@example.org conference');
+    await provenance.vm.$emit('update:problematic', 'possible dup, ask curator@example.org');
+    await provenance.vm.$emit('update:duplicateCheck', 'cf. sibling@example.org record');
+
+    const submitted = wrapper.vm.buildSubmissionPhenopacket();
+    const atSignPaths = findAtSignPaths(submitted);
+
+    expect(atSignPaths.sort()).toEqual(
+      [
+        'hnf1bCuration.caseComment',
+        'hnf1bCuration.problematic',
+        'hnf1bCuration.duplicateCheck',
+      ].sort()
+    );
+  });
+
+  it('curatedBy and metaData.reviewer are always exactly the authenticated display name, never derived from a free-text field', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const provenance = wrapper.findComponent({ name: 'ProvenanceSection' });
+    await provenance.vm.$emit('update:caseComment', 'Dr. Evil <evil@example.org> reviewed this');
+
+    const submitted = wrapper.vm.buildSubmissionPhenopacket();
+    expect(submitted.hnf1bCuration.curatedBy).toBe('Jane Curator');
+    expect(submitted.metaData.reviewer).toBe('Jane Curator');
+    expect(submitted.hnf1bCuration.curatedBy).not.toContain('@');
+    expect(submitted.metaData.reviewer).not.toContain('@');
+  });
+
+  it("ProvenanceSection's entire public emit contract is mounted as-is -- no wrapper/override adds a curatedBy/reviewer event", async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const provenance = wrapper.findComponent({ name: 'ProvenanceSection' });
+    expect(provenance.exists()).toBe(true);
+    expect(ProvenanceSection.emits).toEqual([
+      'update:caseComment',
+      'update:problematic',
+      'update:duplicateCheck',
+    ]);
   });
 });
