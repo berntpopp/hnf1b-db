@@ -63,6 +63,13 @@ ONTOLOGY_PATHS: list[str] = [
     "phenotypicFeatures[].type",
     "phenotypicFeatures[].modifiers[]",
     "phenotypicFeatures[].onset.ontologyClass",
+    # A second, independent copy of the same onset id, nested under the
+    # feature's own `onset.age` key. Found while proving the Task 3 term
+    # correction migration against the live database (efa98cccfa51): 275
+    # features carry this path, 10 of which *disagree* with their sibling
+    # `phenotypicFeatures[].onset.ontologyClass` value, so each is corrected
+    # independently rather than derived from the other.
+    "phenotypicFeatures[].onset.age.ontologyClass",
     "phenotypicFeatures[].evidence[].evidenceCode",
     "diseases[].term",
     "diseases[].onset.ontologyClass",

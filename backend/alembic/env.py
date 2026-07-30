@@ -129,6 +129,9 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
       ``interpretation_status_values``, ``progress_status_values``,
       ``sex_values`` — phenopackets controlled-vocabulary tables from
       ``88b3a0c19a89_add_phenopacket_controlled_vocabularies``.
+    * ``ontology_migration_journal`` — raw-SQL audit trail created by
+      ``efa98cccfa51_correct_ontology_terms`` and reused by later ontology
+      data-quality migrations to make their corrections exactly reversible.
     * ``alembic_version`` — alembic's own bookkeeping table.
 
     Without this filter, ``alembic revision --autogenerate`` emits
@@ -141,6 +144,7 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "evidence_code_values",
         "hpo_terms_lookup",
         "interpretation_status_values",
+        "ontology_migration_journal",
         "progress_status_values",
         "publication_metadata",
         "publication_fulltext",

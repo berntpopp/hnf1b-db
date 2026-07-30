@@ -51,6 +51,7 @@ _RAW_SQL_TABLES = {
     "evidence_code_values",
     "hpo_terms_lookup",
     "interpretation_status_values",
+    "ontology_migration_journal",
     "progress_status_values",
     "publication_metadata",
     "publication_fulltext",
