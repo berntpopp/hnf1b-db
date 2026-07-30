@@ -219,23 +219,19 @@ const getStateColor = (hpoId) => {
   return 'error';
 };
 
-// Cycle through states: unknown -> present -> excluded -> unknown
+// Cycle through states: unknown -> present -> excluded -> unknown.
+// Never mutates props.modelValue: `[...arr]` is a shallow copy, so writing
+// `copy[i].excluded` would write through to the parent's own object.
 const cycleState = (term) => {
-  const updated = [...props.modelValue];
-  const index = updated.findIndex((f) => f.type?.id === term.hpo_id);
+  const index = props.modelValue.findIndex((f) => f.type?.id === term.hpo_id);
   const currentState = getState(term.hpo_id);
+  const updated = [...props.modelValue];
 
   if (currentState === 0) {
-    // Unknown -> Present
-    updated.push({
-      type: { id: term.hpo_id, label: term.label },
-      excluded: false,
-    });
+    updated.push({ type: { id: term.hpo_id, label: term.label }, excluded: false });
   } else if (currentState === 1) {
-    // Present -> Excluded
-    updated[index].excluded = true;
+    updated[index] = { ...updated[index], excluded: true };
   } else {
-    // Excluded -> Unknown (remove)
     updated.splice(index, 1);
   }
 
@@ -249,6 +245,7 @@ const getSelectedCKDStage = (ckdStages) => {
   return selected?.type?.id || null;
 };
 
+// Builds a fresh array and a fresh element; safe as written.
 // Select a CKD stage (remove all other CKD stages, add the selected one)
 const selectCKDStage = (ckdStages, selectedId) => {
   const ckdIds = ckdStages.map((s) => s.hpo_id);
