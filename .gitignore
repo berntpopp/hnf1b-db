@@ -237,3 +237,6 @@ test-results/
 
 # Codex CLI tool state (regenerates per-session)
 .codex
+
+# Claude Code local hook config (per-machine tool state, not project code)
+.github/hooks/
