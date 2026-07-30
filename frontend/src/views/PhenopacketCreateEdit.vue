@@ -83,7 +83,7 @@
               Publications
             </v-card-title>
             <v-card-text>
-              <div v-for="(pub, index) in phenopacket.publications" :key="index" class="mb-3">
+              <div v-for="(pub, index) in publications" :key="index" class="mb-3">
                 <v-row>
                   <v-col cols="12" md="10">
                     <v-text-field
@@ -206,7 +206,6 @@ export default {
         },
         phenotypicFeatures: [],
         interpretations: [],
-        publications: [],
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'HNF1B-DB Curation Interface',
@@ -222,6 +221,10 @@ export default {
           ],
         },
       },
+      // Editor-only state. Deliberately NOT on `phenopacket`: `publications` is
+      // not a Phenopackets v2 field, and buildSubmissionPhenopacket spreads that
+      // object wholesale. PMIDs are promoted to metaData.externalReferences on save.
+      publications: [],
       loading: true, // Start with loading true to prevent form flash
       saving: false,
       error: null,
@@ -279,7 +282,7 @@ export default {
 
         // Load existing publications into the same state the template and
         // submit path use so edits stay round-trippable.
-        this.phenopacket.publications = (this.phenopacket.metaData?.externalReferences || [])
+        this.publications = (this.phenopacket.metaData?.externalReferences || [])
           .filter((ref) => ref.id?.startsWith('PMID:'))
           .map((ref) => ({
             pmid: ref.id.replace('PMID:', ''),
@@ -288,7 +291,7 @@ export default {
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
           revision: this.revision,
-          publicationsLoaded: this.phenopacket.publications.length,
+          publicationsLoaded: this.publications.length,
         });
       } catch (err) {
         this.error = 'Failed to load phenopacket: ' + err.message;
@@ -301,31 +304,32 @@ export default {
     },
 
     addPublication() {
-      this.phenopacket.publications.push({
-        pmid: '',
-      });
+      this.publications.push({ pmid: '' });
     },
 
     removePublication(index) {
-      this.phenopacket.publications.splice(index, 1);
+      this.publications.splice(index, 1);
     },
 
     buildSubmissionPhenopacket() {
-      const existingReferences = this.phenopacket.metaData?.externalReferences || [];
+      // `publications` is destructured out and discarded: it is not a Phenopackets
+      // v2 field, and records saved before this fix may carry it in the loaded
+      // document. `this.publications` (component state) is the source of truth.
+      const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
+
+      const existingReferences = phenopacket.metaData?.externalReferences || [];
       const nonPmidExternalReferences = existingReferences.filter(
         (ref) => !ref.id?.startsWith('PMID:')
       );
-      const pmidExternalReferences = this.phenopacket.publications
+      const pmidExternalReferences = this.publications
         .map((pub) => `${pub.pmid || ''}`.trim())
         .filter(Boolean)
-        .map((pmid) => ({
-          id: `PMID:${pmid}`,
-        }));
+        .map((pmid) => ({ id: `PMID:${pmid}` }));
 
       return {
-        ...this.phenopacket,
+        ...phenopacket,
         metaData: {
-          ...(this.phenopacket.metaData || {}),
+          ...(phenopacket.metaData || {}),
           externalReferences: [...nonPmidExternalReferences, ...pmidExternalReferences],
         },
       };
