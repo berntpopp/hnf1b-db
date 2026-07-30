@@ -1,7 +1,7 @@
 # Ontology Data Quality — Design
 
 **Date:** 2026-07-30
-**Status:** Draft (awaiting adversarial review)
+**Status:** Draft rev 2 (post adversarial review)
 **Scope:** Correct five wrong ontology terms, restore 408 dropped laterality
 annotations, and instrument the invariant that would have caught all six.
 
@@ -176,7 +176,9 @@ uninformative rather than false. The label is corrected; the ID stays. Represent
 
 ### 3.2 Data corrections
 
-One Alembic revision, both copies, wrapped in a single transaction.
+One Alembic revision, wrapped in a single transaction, writing **every working copy
+and each record's `head_published_revision_id` row**. Older revision rows are immutable
+history and are deliberately left alone; §3.3's A3 scope is qualified to match.
 
 | Step | Operation | Entries |
 |---|---|---|
@@ -187,7 +189,10 @@ One Alembic revision, both copies, wrapped in a single transaction.
 | 5 | restore laterality modifiers from the source sheet | 408 features |
 | 6 | `hpo_terms_lookup` rows realigned to canonical ids | 2 |
 
-Steps 1–4 are pure remaps derivable from the stored data. **Step 5 is different**: the
+Steps 1–2 are **not** reversible by inverse remap: collapsing two terms into one and
+deduplicating destroys which record held which. Steps 3–4 are reversible in principle
+but are journalled alongside them so downgrade is one mechanism, not two. **Step 5 is
+different again**: the
 information does not exist in the database and must be re-derived from the spreadsheet,
 joined on `phenopacket-{individual_id}` (verified: sheet `individual_id=317` ⇄
 `phenopacket-317`, `subject.alternateIds = [report_id, IndividualIdentifier]`).
@@ -200,19 +205,114 @@ emails, no comments, no clinical columns beyond the six laterality-bearing ones.
 and deduplicating loses which record had which. The revision therefore writes a
 per-record preimage journal (`phenopacket_id`, `sha256(diseases)`, original JSON) into
 a migration-owned table, and `downgrade()` restores from it, aborting on hash mismatch.
-Steps 3–6 are reversible by inverse remap.
+Every step restores from the journal; no step relies on an inverse remap.
 
-### 3.3 The invariant — an ontology conformance test
+### 3.3 The invariant — three assertions, not one
 
-This is the deliverable that matters. Every defect above is an instance of one
-violated invariant:
+This is the deliverable that matters, and the obvious version of it is wrong.
 
-> For every `(id, label)` pair stored anywhere in the database, `label` must equal the
-> canonical name of `id` in its source ontology, or one of that term's listed synonyms.
+**The naive invariant reproduces the defect.** "For every `(id, label)` pair, `label`
+must equal the canonical name of `id`" is exactly what `test_hpo_label_integrity.py`
+already asserts, and exactly what `_get_canonical_label` already enforces at import.
+It is satisfiable by **editing the label**, so a wrong identifier becomes permanently
+invisible the moment someone makes the check pass. That is not a hypothetical: it is
+how T1 reached production and survived every subsequent audit.
 
-A test enumerates every `(id, label)` pair in `phenopackets.phenopacket`,
-`phenopacket_revisions.content_jsonb` and `hpo_terms_lookup`, resolves each ID against
-a **pinned local ontology snapshot**, and asserts the invariant.
+Any label-versus-identifier check is **necessary but not sufficient**. Three assertions
+are needed, and A1 is the one that catches the actual defect class.
+
+#### A1 — Source integrity (the discriminator)
+
+> For every row of the curation `Phenotype` sheet, the identifier must be corroborated
+> by a field that normalisation does not touch.
+
+Concretely, evaluated **in this order** — the description is authoritative whenever it
+is present, and a name match is a fallback only when no description exists:
+
+1. `phenotype_description` non-empty → it **must** match the canonical definition of
+   `phenotype_id`. If it does not, the row fails. It does **not** fall through to a
+   name check: falling through is what makes the invariant bypassable, because a
+   normalised label always matches its (wrong) identifier's name.
+2. `phenotype_description` empty → `phenotype_name` must match the canonical name or a
+   listed synonym of `phenotype_id`.
+3. Otherwise the row fails.
+
+Rule 1 is the whole point. A wrong identifier whose label has already been normalised
+passes any name-based check by construction; only a field the normaliser never touched
+can refute it. A row with **neither** a matching description nor a matching name is
+also a failure — silence is not corroboration.
+
+The description is the discriminator because no process rewrites it. It already
+separates the real defects from the benign deviations without any human judgement:
+
+| Term | Sheet definition vs `phenotype_id`'s definition | Verdict |
+|---|---|---|
+| `HP:0012622` | matches verbatim | ID correct; label is a local qualifier |
+| `HP:0002910` | matches verbatim | ID correct; HPO renamed the term |
+| `HP:0033133` | matches **`HP:0033132`'s** definition | **ID wrong** |
+
+A1 would have failed the import that created T1, and named `HP:0033132` as the term the
+description actually describes.
+
+#### A2 — No laundering
+
+> The importer writes the curator's `phenotype_name` verbatim. It never rewrites a
+> label to agree with an identifier.
+
+`_get_canonical_label` is deleted, not fixed. A disagreement between name and identifier
+is a defect for a human to resolve, not a value for code to overwrite — and A1 has
+already caught it by the time this matters. The current debug-level log line
+(`Normalized label for HP:0033133: 'hyperechogenicity' -> 'hypoechogeneity'`) becomes
+impossible to emit because the code path ceases to exist.
+
+#### A3 — Stored conformance (drift detection)
+
+> Every `(id, label)` pair stored anywhere resolves against a pinned snapshot and
+> matches the canonical name or a listed synonym, unless explicitly allowlisted.
+
+This is the naive invariant, retained deliberately and labelled as insufficient. It
+catches drift, typos, and terms retired upstream — not wrong-identifier defects. It is
+worth having; it is not the guard.
+
+**A3 must actually cover what it claims.** The existing guard checks one table and one
+ontology. A3 enumerates every ontology-bearing path in both authoritative copies:
+
+```
+subject.timeAtLastEncounter.ontologyClass
+phenotypicFeatures[].type
+phenotypicFeatures[].modifiers[]
+phenotypicFeatures[].onset.ontologyClass
+phenotypicFeatures[].evidence[].evidenceCode
+diseases[].term
+diseases[].onset.ontologyClass
+interpretations[].diagnosis.disease
+interpretations[].diagnosis.genomicInterpretations[]
+    .variantInterpretation.variationDescriptor.structuralType     (SO)
+    .variantInterpretation.variationDescriptor.allelicState       (GENO)
+hpo_terms_lookup.hpo_id
+```
+
+`structuralType` (SO terms, 864 records) and `allelicState` (GENO) are ontology-bearing
+and were omitted from rev 1's list. The snapshot therefore covers **six** vocabularies:
+HPO, MONDO, Orphanet, ECO, SO and GENO.
+
+**A3's scope is working copies plus each record's head-published revision** — the same
+scope §3.2's migration writes. Older revision rows are historical snapshots that may
+legitimately contain superseded terms; asserting over them would make A3 permanently
+red after any correction.
+
+in `phenopackets.phenopacket`, `phenopacket_revisions.content_jsonb`, and the lookup
+table. Two of the five stored defects are MONDO, so the snapshot covers **HPO, MONDO,
+Orphanet and ECO** — HPO via `ontology.jax.org`, the rest via EBI OLS4 term lookup by
+IRI. (OLS4's `search` endpoint does *not* do identifier lookup and returns plausible
+wrong matches; use `/ontologies/{ont}/terms?iri=...`.)
+
+#### Where the code lives
+
+`backend/app/ontology/conformance.py` — a **production module**, not a test helper,
+with the snapshot as package data. Tests import it, and so does the curation program's
+`DomainValidator` (§6.2), so a wrong identifier cannot enter through the form either.
+A test-only helper under `tests/` could not be imported by production code.
 
 **Pinned, not live.** A test that calls `ontology.jax.org` is nondeterministic, fails
 offline, and breaks CI whenever HPO renames a term. The snapshot is a committed JSON
@@ -269,12 +369,15 @@ attaching laterality to its term, showing age, showing the disease, and showing
 | Area | Assertion |
 |---|---|
 | `parse_laterality` | all six real source values map correctly; `bilateral`+`unilateral` yields `[]`; `no` / `not reported` yield `[]` |
-| Migration | round-trip upgrade/downgrade restores byte-identical JSON via the preimage journal |
+| Migration | round-trip upgrade/downgrade restores byte-identical JSON via the journal, **against a seeded fixture** — CI truncates the corpus, so production counts cannot be asserted in pytest |
 | Collapse | 1125 → 864 disease entries; every array length 1; no record loses a disease |
 | Onset | totals reconcile to 594/54/216 exactly |
-| Laterality backfill | 408 features gain modifiers; totals reach Bilateral 797 / Unilateral 408 / Left 119 / Right 112 |
-| **Conformance** | every stored `(id,label)` satisfies the invariant or is allowlisted |
-| **Sheet integrity** | every `phenotype_id` in the sheet denotes its `phenotype_name` |
+| Laterality backfill | totals match the **resolved** fixture, not raw sheet-row counts — 939 rows collapse to 864 individuals and features deduplicate by HPO id, so 797 `bilateral` rows do not imply 797 stored modifiers. Conflicting duplicate rows go to a conflicts CSV, not into the fixture. |
+| **A1 source integrity** | the T1 row fails and the message names `HP:0033132`; local qualifiers backed by a matching definition pass |
+| **A2 no laundering** | `_get_canonical_label` does not exist; a curated label survives verbatim |
+| **A3 conformance** | every stored `(id,label)` at every path in `ONTOLOGY_PATHS`, across HPO/MONDO/ORPHA/ECO, in both copies |
+| **A3 limitation** | a normalised wrong id (`HP:0033133` + its own canonical name) passes A3 — asserted, so nobody mistakes A3 for the guard |
+| **Hardcoded maps** | every entry of `ontology_service` and the `hpo_mapper` fallback passes `check_label` |
 | Display | a record with excluded features renders them; header count equals rendered count |
 | Both copies | working copy and published revision agree after migration |
 

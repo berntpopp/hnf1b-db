@@ -2,1103 +2,812 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Correct four wrong ontology terms, restore 408 dropped laterality annotations, and add a conformance test that makes the whole class of defect impossible to reintroduce.
+**Goal:** Stop the importer rewriting curator labels, correct four wrong ontology terms and 408 dropped laterality annotations in both stored copies, and add the source-integrity check that would have caught the whole defect class at import time.
 
-**Architecture:** Three layers. The import source is already corrected and needs tests. One Alembic revision corrects the stored data in both authoritative copies with a preimage journal for reversibility. A pinned-snapshot conformance test then asserts the invariant every one of these defects violated — that a term's stored label matches what its ID actually denotes.
+**Architecture:** Four layers, in strict dependency order. First delete the laundering mechanism (A2) — until that is gone, every other fix can be silently reverted by the next import. Then build the conformance module (A1 + A3) as production code. Then correct the data with journalled, exactly-reversible migrations. Then fix the remaining consumers.
 
-**Tech Stack:** Python 3.11, pytest, Alembic, SQLAlchemy 2 async, PostgreSQL 15; Vue 3 + Vitest for the one display fix.
+**Tech Stack:** Python 3.11, pytest, Alembic, SQLAlchemy 2 async, PostgreSQL 15; Vue 3 + Vitest.
 
-**Spec:** [`docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md`](../specs/2026-07-30-ontology-data-quality-design.md)
-**Related:** [`2026-07-30-curation-data-model-design.md`](../specs/2026-07-30-curation-data-model-design.md) — see §5 of this plan for the coupling.
+**Spec:** [`../specs/2026-07-30-ontology-data-quality-design.md`](../specs/2026-07-30-ontology-data-quality-design.md)
+**Findings:** [`../../ontology-defect-report-2026-07-30.md`](../../ontology-defect-report-2026-07-30.md)
 
 ## Global Constraints
 
-- **This plan lands before the curation program.** Curation Task 7's laterality policy references `HP:0033132`, which only exists after revision `d4e8b1f60a27` (already applied locally, uncommitted).
-- **Every data change writes both copies.** `phenopackets.phenopacket` *and* `phenopacket_revisions.content_jsonb`. `visibility.py:80` serves the published revision to the public; a working-copy-only fix leaves the wrong term in every public response.
-- **Do not "normalise" labels toward `hpo_terms_lookup` or toward stored IDs.** That is the mechanism that converted these contradictions into consistent falsehoods. Labels are corrected only toward the *authoritative ontology*, and only for the terms named in this plan.
-- **Do not touch the four benign deviations** — `HP:0000708`, `HP:0012443`, `HP:0012622`, `HP:0002910`. Their IDs are correct; the labels are synonyms, HPO renames, or deliberate local qualifiers. They go in the allowlist, not the migration.
-- **Do not touch the GA4GH conformance debt** (ADR 0003) — ACMG placement, extension value types, the `timeAtLastEncounter.age` wrapper.
-- Backend: `cd backend && uv run ruff format` before every commit — CI runs `ruff format --check` as a step local `make check` does not cover.
-- Frontend: `npm run lint:check`, never `npm run lint`.
-- Any route change requires `uv run python scripts/dump_openapi.py` in the same commit (see the curation plan's constraints). This plan adds no routes.
+- **Never rewrite a curator's label to match an identifier.** That is the mechanism that
+  caused this. A name/ID disagreement is a hard failure for a human to resolve.
+- **Every data change writes the working copy and the head-published revision** —
+  `phenopackets.phenopacket`, and the `phenopacket_revisions.content_jsonb` row at
+  `head_published_revision_id`. `visibility.py:80` serves that revision publicly, so a
+  working-copy-only fix leaves the wrong term in every public response. Older revision
+  rows are immutable history and are deliberately not rewritten; A3's scope is qualified
+  to match (Task 3 Step 2).
+- **CI has no corpus.** `conftest.py::_isolate_database_between_tests` is `autouse=True`
+  and truncates `phenopackets` and `phenopacket_revisions` after every test. Any test
+  asserting production counts passes vacuously or fails with 0. Migration tests seed
+  their own fixture; whole-corpus arithmetic lives in a preflight script (Task 5), never
+  in pytest.
+- **Do not touch the four benign deviations** — `HP:0000708`, `HP:0012443`, `HP:0012622`,
+  `HP:0002910`. Their identifiers are correct. They are allowlisted, not migrated.
+- **Do not touch the GA4GH conformance debt** (ADR 0003).
+- Backend: `uv run ruff format` before every commit — CI runs `ruff format --check`
+  separately from `make check`.
+- Migrations: set `down_revision` to the output of `uv run alembic heads` at the time
+  you write the file. Do not guess.
 
-## Ontology facts (verified 2026-07-30, do not re-derive)
+## Verified ontology facts — do not re-derive
 
 ```
-HP:0033132  Renal cortical hyperechogenicity   "Increased echogenecity of the kidney cortex."
-HP:0033133  Renal cortical hypoechogeneity     <- what was stored; opposite finding
-HP:0003577  Congenital onset                   sheet lists "Prenatal onset" as its synonym
-HP:0034199  Late first trimester onset         <- what was stored for "prenatal"
-HP:0003674  Onset                              abstract parent; no generic postnatal term exists
-HP:0012832  Bilateral    HP:0012833  Unilateral    HP:0012835  Left    HP:0012834  Right
-MONDO:0007669  renal cysts and diabetes syndrome   <- correct RCAD/MODY5 term
+HP:0033132  Renal cortical hyperechogenicity  "Increased echogenecity of the kidney cortex."
+HP:0033133  Renal cortical hypoechogeneity
+HP:0003577  Congenital onset      sheet lists "Prenatal onset" among its synonyms
+HP:0034199  Late first trimester onset
+HP:0003674  Onset (abstract parent; HPO has no generic postnatal term)
+HP:0002149  Hyperuricemia         HP:0003149  Hyperuricosuria
+HP:0010935  Abnormality of the upper urinary tract
+HP:0004729  Acute tubulointerstitial nephritis
+HP:0004719  Hyperechogenic kidneys
+HP:0012832 Bilateral · HP:0012833 Unilateral · HP:0012835 Left · HP:0012834 Right
+MONDO:0007669  renal cysts and diabetes syndrome
 MONDO:0011593  seizures, benign familial infantile, 2
 MONDO:0010953  Fanconi anemia complementation group E
-ORPHA:2260  Oligomeganephronia                 correct
+ORPHA:2260  Oligomeganephronia      ECO:0000033  author statement supported by traceable reference
 ```
+
+Corpus baseline measured 2026-07-30 (after `d4e8b1f60a27`): 1125 disease entries over
+864 records, 7810 features, 771 modifiers all `Bilateral`, 134 `HP:0034199` disease
+onsets + 46 in `timeAtLastEncounter`, 65 + 17 `HP:0003674`.
 
 ---
 
-## Task 1: Test the laterality parser
+## Task 1: Delete the label-laundering path (A2)
 
-`migration/phenopackets/laterality.py` and the `extractors.py` call site are already written (uncommitted). They have no tests. This task adds them before anything depends on the parser.
+**This must land first.** While `_get_canonical_label` exists, every other correction in
+this plan can be silently reverted by the next import — including the already-applied
+`d4e8b1f60a27`.
 
 **Files:**
-- Test: `backend/tests/migration/test_laterality.py` (create)
-- Verify: `backend/migration/phenopackets/laterality.py`, `backend/migration/phenopackets/extractors.py:157`
+- Modify: `backend/migration/phenopackets/hpo_mapper.py` (`build_from_dataframe`, `_get_canonical_label`)
+- Test: `backend/tests/migration/test_no_label_laundering.py` (create)
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: confidence in `parse_laterality(value) -> list[dict]`. Task 4's backfill and the curation program's `allowed_modifiers` both depend on these exact four term IDs.
+- Produces: `HPOMapper.build_from_dataframe` writes `phenotype_name` verbatim and raises `OntologySourceError` on an uncorroborated row. Task 2's A1 check supplies the corroboration logic.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Create the test package**
 
-Create `backend/tests/migration/test_laterality.py`:
+`backend/tests/migration/` does not exist. Create it with an empty `__init__.py`.
 
-```python
-"""Laterality parsing (spec §1.2, §3.1).
-
-The original extractor exact-matched ["bilateral","unilateral","left","right"].
-The source uses compound values, so only "bilateral" ever matched and 408
-laterality assertions were silently dropped.
-"""
-
-import pytest
-
-from migration.phenopackets.laterality import (
-    BILATERAL,
-    LEFT,
-    RIGHT,
-    UNILATERAL,
-    parse_laterality,
-)
-
-
-def ids(mods):
-    return [m["id"] for m in mods]
-
-
-# Every value that actually occurs in the source, with its frequency.
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        ("bilateral", [BILATERAL["id"]]),                              # 797
-        ("unilateral unspecified", [UNILATERAL["id"]]),                # 177
-        ("unilateral left", [UNILATERAL["id"], LEFT["id"]]),           # 119
-        ("unilateral right", [UNILATERAL["id"], RIGHT["id"]]),         # 112
-        ("no", []),                                                    # 2114
-        ("not reported", []),                                          # 2314
-    ],
-)
-def test_every_real_source_value(value, expected):
-    assert ids(parse_laterality(value)) == expected
-
-
-@pytest.mark.parametrize("value", ["Bilateral", "BILATERAL", "  bilateral  "])
-def test_case_and_whitespace_insensitive(value):
-    assert ids(parse_laterality(value)) == [BILATERAL["id"]]
-
-
-def test_bilateral_is_not_matched_by_the_unilateral_substring_check():
-    """'bilateral' contains 'lateral' but must not be read as unilateral."""
-    assert ids(parse_laterality("bilateral")) == [BILATERAL["id"]]
-
-
-def test_contradictory_value_yields_nothing_rather_than_both():
-    """Bilateral and unilateral are mutually exclusive.
-
-    Emitting both would create a feature asserting a contradiction, which is
-    worse than emitting neither.
-    """
-    assert parse_laterality("bilateral and unilateral") == []
-
-
-@pytest.mark.parametrize("value", [None, "", "   ", "yes", "unknown"])
-def test_values_carrying_no_laterality(value):
-    assert parse_laterality(value) == []
-
-
-def test_returned_dicts_are_copies():
-    """Callers attach these to phenopackets; a shared dict would alias."""
-    a = parse_laterality("bilateral")[0]
-    a["label"] = "mutated"
-    assert parse_laterality("bilateral")[0]["label"] == "Bilateral"
-
-
-def test_modifier_ids_match_the_curation_vocabulary():
-    """These four ids are referenced by the curation program's allowed_modifiers.
-
-    Three independent copies of four HPO ids is how the HP:0033133 error
-    happened; this asserts the single source of truth (spec §6.1).
-    """
-    assert BILATERAL["id"] == "HP:0012832"
-    assert UNILATERAL["id"] == "HP:0012833"
-    assert LEFT["id"] == "HP:0012835"
-    assert RIGHT["id"] == "HP:0012834"
-```
-
-- [ ] **Step 2: Run it**
-
-Run: `cd backend && uv run pytest tests/migration/test_laterality.py -q`
-Expected: PASS. If `test_contradictory_value_yields_nothing_rather_than_both` fails, the guard in `laterality.py` is wrong — fix the module, not the test.
-
-Create `backend/tests/migration/__init__.py` if the directory is new.
-
-- [ ] **Step 3: Prove the extractor call site uses it**
-
-Run: `grep -n "parse_laterality\|bilateral" backend/migration/phenopackets/extractors.py`
-Expected: the import at the top, the call in `extract()`, and **no** remaining inline `["bilateral", "unilateral", "left", "right"]` list.
-
-- [ ] **Step 4: Commit**
-
-```bash
-cd backend && uv run ruff format && cd ..
-git add backend/migration/phenopackets/laterality.py backend/migration/phenopackets/extractors.py backend/tests/migration/
-git commit -m "fix(migration): parse compound laterality values
-
-extractors.py exact-matched ['bilateral','unilateral','left','right'] but the
-source records compound text: 'unilateral left', 'unilateral right',
-'unilateral unspecified'. Only 'bilateral' ever matched, so 408 of 1205
-laterality assertions were dropped while the phenotype row was still written —
-leaving features indistinguishable from ones whose laterality was never stated.
-
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §1.2"
-```
-
----
-
-## Task 2: Test the corrected term IDs in the import source
-
-`age_parser.py`, `builder_simple.py`, `cnv_parser.py` and `hpo_mapper.py` are corrected (uncommitted) and untested. These tests pin the corrections so a future edit cannot quietly revert them.
-
-**Files:**
-- Test: `backend/tests/migration/test_ontology_term_ids.py` (create)
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: nothing consumed downstream. This is a regression fence.
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 2: Write the failing test**
 
 ```python
-"""The import must emit terms whose id denotes what its label says (spec §1).
+"""The importer must never rewrite a curator's term name (spec §3.3 A2).
 
-Each assertion here corresponds to a defect that reached production.
+hpo_mapper._get_canonical_label trusted the identifier and overwrote
+phenotype_name with the canonical name of whatever id the sheet supplied. For
+HP:0033133 that inverted a clinical finding across 460 features and logged it
+at debug level.
 """
 
 import pandas as pd
+import pytest
 
-from migration.phenopackets.age_parser import AgeParser
-from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
 
 
-class TestOnsetTerms:
-    def test_prenatal_maps_to_congenital_onset(self):
-        """HP:0034199 is 'Late first trimester onset', not 'Prenatal onset'.
-
-        The source Phenotype_modifier sheet lists 'Prenatal onset' as a synonym
-        of HP:0003577 Congenital onset, so that is the curated intent.
-        """
-        result = AgeParser().parse_age("prenatal")
-        assert result["ontologyClass"]["id"] == "HP:0003577"
-        assert result["ontologyClass"]["label"] == "Congenital onset"
-
-    def test_postnatal_keeps_the_parent_id_with_an_honest_label(self):
-        """HPO has no generic postnatal-onset term.
-
-        HP:0003674 'Onset' is a true ancestor of any onset, so it is
-        uninformative rather than false. The label must not claim otherwise.
-        """
-        result = AgeParser().parse_age("postnatal")
-        assert result["ontologyClass"]["id"] == "HP:0003674"
-        assert result["ontologyClass"]["label"] == "Onset"
-
-    def test_congenital_is_unchanged(self):
-        result = AgeParser().parse_age("congenital")
-        assert result["ontologyClass"]["id"] == "HP:0003577"
-
-    def test_no_emitted_onset_uses_a_retired_id(self):
-        for value in ["prenatal", "postnatal", "congenital", "infantile", "adult"]:
-            result = AgeParser().parse_age(value)
-            if result and "ontologyClass" in result:
-                assert result["ontologyClass"]["id"] != "HP:0034199"
+def sheet(rows):
+    return pd.DataFrame(
+        rows, columns=["phenotype_category", "phenotype_id", "phenotype_name"]
+    )
 
 
-class TestDiseaseTerms:
-    def test_both_disease_keys_use_the_correct_mondo_term(self):
-        """MONDO:0011593 = 'seizures, benign familial infantile, 2';
-        MONDO:0010953 = 'Fanconi anemia complementation group E'."""
-        mappings = PhenopacketBuilder(HPOMapper())._init_mondo_mappings()
-        for key in ("hnf1b_disorder", "mody5"):
-            assert mappings[key]["id"] == "MONDO:0007669", key
-
-    def test_the_two_wrong_ids_appear_nowhere(self):
-        mappings = PhenopacketBuilder(HPOMapper())._init_mondo_mappings()
-        emitted = {m["id"] for m in mappings.values()}
-        assert "MONDO:0011593" not in emitted
-        assert "MONDO:0010953" not in emitted
-
-    def test_mapping_entries_are_independent_objects(self):
-        """Both keys share one term; they must not share one dict."""
-        mappings = PhenopacketBuilder(HPOMapper())._init_mondo_mappings()
-        mappings["mody5"]["label"] = "mutated"
-        assert mappings["hnf1b_disorder"]["label"] == "renal cysts and diabetes syndrome"
+def test_curator_label_is_written_verbatim():
+    mapper = HPOMapper()
+    mapper.build_from_dataframe(
+        sheet([["RenalCysts", "HP:0000107", "Renal cyst"]])
+    )
+    assert mapper.get_hpo_term("renalcysts")["label"] == "Renal cyst"
 
 
-class TestEchogenicity:
-    def test_hpo_mapper_uses_the_hyper_term(self):
-        """HP:0033133 is hypoechogeneity — the opposite finding."""
-        term = HPOMapper().get_hpo_term("hyperechogenicity")
-        assert term["id"] == "HP:0033132"
-        assert "hyper" in term["label"].lower()
+def test_a_local_qualifier_survives_unchanged():
+    """HP:0012622's curated label is deliberately not the canonical name."""
+    mapper = HPOMapper()
+    mapper.build_from_dataframe(
+        sheet([["RenalInsufficancy", "HP:0012622",
+                "chronic kidney disease, not specified"]])
+    )
+    label = mapper.get_hpo_term("renalinsufficancy")["label"]
+    assert label == "chronic kidney disease, not specified"
+    assert label != "Chronic kidney disease", "canonical name must not be substituted"
+
+
+def test_the_laundering_method_no_longer_exists():
+    """A regression fence: the fix is deletion, not a behaviour flag."""
+    assert not hasattr(HPOMapper, "_get_canonical_label")
+
+
+def test_no_normalization_is_logged(caplog):
+    mapper = HPOMapper()
+    with caplog.at_level("DEBUG"):
+        mapper.build_from_dataframe(
+            sheet([["RenalCysts", "HP:0000107", "Renal cyst"]])
+        )
+    assert not any("Normalized label" in r.message for r in caplog.records)
 ```
 
-- [ ] **Step 2: Run it**
+- [ ] **Step 3: Run to verify it fails**
 
-Run: `cd backend && uv run pytest tests/migration/test_ontology_term_ids.py -q`
-Expected: PASS. `PhenopacketBuilder(HPOMapper())` may need different construction — check its `__init__` signature and adapt; do not weaken the assertions.
+Run: `cd backend && uv run pytest tests/migration/test_no_label_laundering.py -q`
+Expected: FAIL on `test_the_laundering_method_no_longer_exists`, and on
+`test_a_local_qualifier_survives_unchanged` (the canonical name is substituted).
 
-- [ ] **Step 3: Grep for survivors**
+- [ ] **Step 4: Delete the method and its call**
 
-Run:
+In `hpo_mapper.py`, remove `_get_canonical_label` entirely, and in
+`build_from_dataframe` replace:
+
+```python
+                fallback = source_label if pd.notna(source_label) else category
+                canonical_label = self._get_canonical_label(hpo_id, fallback)
+
+                if pd.notna(source_label) and canonical_label != source_label:
+                    logger.debug(...)
+                    normalized_count += 1
+```
+
+with:
+
+```python
+                # The curator's name is written verbatim. Rewriting it to agree
+                # with the identifier is what inverted HP:0033133 across 460
+                # features; see docs/ontology-defect-report-2026-07-30.md §4.1.
+                # A name that disagrees with its identifier is a defect for a
+                # human to resolve, and Task 2's source-integrity check catches
+                # it at import time.
+                label = source_label if pd.notna(source_label) else category
+```
+
+Then use `label` where `canonical_label` was used, and delete the
+`normalized_count` bookkeeping and its summary log line.
+
+- [ ] **Step 5: Verify nothing else called it**
+
+Run: `grep -rn "_get_canonical_label\|normalized_count" --include=*.py backend/`
+Expected: no output.
+
+- [ ] **Step 6: Find and update tests that encoded the old behaviour**
+
+Run first, before assuming anything passes:
 
 ```bash
-grep -rn "MONDO:0011593\|MONDO:0010953\|HP:0034199\|HP:0010935\|HP:0033133" \
-  --include=*.py backend/migration/ | grep -v "denotes\|was wrong\|NOT \|opposite"
+grep -rn "canonical\|normaliz" --include=*.py backend/tests/ | grep -i label
+uv run pytest -q -k "hpo or mapper or migration or ontology"
 ```
 
-Expected: no output. Any hit outside an explanatory comment is a missed call site.
+Any test asserting that a curated label is replaced by the canonical name **encoded the
+bug**. Update it to assert the opposite and say so in the commit message. Do not weaken
+the new tests to accommodate it.
 
-- [ ] **Step 4: Commit**
+Note this task is deliberately standalone: the comment added in Step 4 refers forward to
+Task 2's check, but no code here imports it, so Task 1 lands and passes on its own. It
+must land first regardless — while `_get_canonical_label` exists, Task 2's A1 can be
+satisfied by the very rewriting it is meant to prevent.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
-git add backend/migration/ backend/tests/migration/test_ontology_term_ids.py
-git commit -m "fix(migration): correct four ontology term ids
+git add backend/migration/phenopackets/hpo_mapper.py backend/tests/migration/
+git commit -m "fix(migration): stop rewriting curator term names
 
-Each had the right label on the wrong id, verified against HPO 2026-06-23 and
-MONDO releases/2026-07-06:
+_get_canonical_label took the sheet's phenotype_id, fetched that id's canonical
+name, and overwrote the curator's phenotype_name with it — logging the change
+at debug level. For HP:0033133 this replaced 'Renal cortical hyperechogenicity'
+with 'Renal cortical hypoechogeneity', inverting the finding across 460
+features and making the contradiction undetectable ever after.
 
-  HP:0034199  'Prenatal onset'  is Late first trimester onset -> HP:0003577
-  HP:0003674  'Postnatal onset' is Onset (parent) -> label corrected, id kept
-  MONDO:0011593 is seizures, benign familial infantile, 2 -> MONDO:0007669
-  MONDO:0010953 is Fanconi anemia complementation group E -> MONDO:0007669
-  HP:0010935 does not exist -> HP:0033132
+Deleted rather than flagged. A name that disagrees with its identifier is a
+defect for a human to resolve; Task 2 catches it at import.
 
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.1"
+Refs: docs/ontology-defect-report-2026-07-30.md §4.1"
 ```
 
 ---
 
-## Task 3: Build the pinned ontology snapshot and conformance test
+## Task 2: Build the conformance module (A1 + A3)
 
-The deliverable that outlives the individual fixes. Every defect in this spec violated one invariant: a stored label must match what its ID denotes.
+Production code, not a test helper — the curation program's `DomainValidator` imports it.
 
 **Files:**
+- Create: `backend/app/ontology/conformance.py`
+- Create: `backend/app/ontology/data/ontology_snapshot.json`
 - Create: `backend/scripts/refresh_ontology_snapshot.py`
-- Create: `backend/tests/fixtures/ontology_snapshot.json`
-- Create: `backend/tests/test_ontology_conformance.py`
-- Modify: `backend/Makefile` (add `refresh-ontology-snapshot`)
+- Test: `backend/tests/test_ontology_conformance.py` (create)
+- Modify: `backend/Makefile`
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `assert_term_conformant(term_id, label) -> str | None` returning a violation message or `None`. The curation program's domain validator calls this (spec §6.2).
+- Produces:
+  - `check_label(term_id: str, label: str) -> str | None` — A3; violation message or `None`.
+  - `check_source_row(term_id, name, description) -> str | None` — A1; violation message or `None`.
+  - `ONTOLOGY_PATHS: list[str]` — the JSONB paths A3 enumerates.
+  Task 1's importer and the curation `DomainValidator` both call these.
 
 - [ ] **Step 1: Write the snapshot refresher**
 
-Create `backend/scripts/refresh_ontology_snapshot.py`:
+Create `backend/scripts/refresh_ontology_snapshot.py`. Requirements:
 
-```python
-#!/usr/bin/env python3
-"""Refresh the pinned ontology snapshot used by the conformance test.
+- Cover **four** ontologies. HPO via `https://ontology.jax.org/api/hp/terms/{id}`.
+  MONDO, Orphanet (ORDO) and ECO via OLS4 **term lookup by IRI**:
+  `https://www.ebi.ac.uk/ols4/api/ontologies/{ont}/terms?iri={iri}`, with IRIs
+  `http://purl.obolibrary.org/obo/MONDO_0007669`,
+  `http://www.orpha.net/ORDO/Orphanet_2260`,
+  `http://purl.obolibrary.org/obo/ECO_0000033`.
+  **Do not use OLS4 `/search`** — it does text matching and returns plausible wrong
+  terms for an identifier query (it reported `MONDO:0011593` as
+  "seizures, benign familial infantile, 2" only because that *is* correct; for other
+  ids it silently returns unrelated matches).
+- Store `{name, synonyms, definition}` per term. The definition is what A1 needs.
+- Term list must not depend on Task 4 (which runs later). **This task commits the sheet
+  vocabulary itself**, as `backend/app/ontology/data/curation_vocabulary.csv`
+  (`phenotype_category, phenotype_id, phenotype_name, phenotype_description`), exported
+  from the workbook's `Phenotype` and `Phenotype_modifier` sheets. It carries no
+  individual-level data, so ADR 0003's PII constraint does not apply. Term ids are then
+  read from that file, plus `laterality.py`'s four constants, plus an explicit list of
+  the onset/disease/evidence/SO/GENO terms the importer emits.
+- `--check` mode exits 1 on drift without writing.
+- Record `"_generated_against"` with each ontology's version string.
 
-The test must not call a live ontology API: that is nondeterministic, fails
-offline, and turns any upstream rename into a red build. Instead this script
-fetches the canonical name and synonyms for every term the database uses and
-writes them to a committed fixture, so a rename surfaces as a reviewable diff.
-
-Usage:
-    uv run python scripts/refresh_ontology_snapshot.py            # rewrite
-    uv run python scripts/refresh_ontology_snapshot.py --check    # diff only
-"""
-
-import argparse
-import json
-import sys
-import time
-import urllib.request
-from pathlib import Path
-
-SNAPSHOT = Path(__file__).parent.parent / "tests" / "fixtures" / "ontology_snapshot.json"
-HPO_TERM_URL = "https://ontology.jax.org/api/hp/terms/{}"
-
-
-def fetch_hpo(term_id: str) -> dict:
-    with urllib.request.urlopen(
-        HPO_TERM_URL.format(term_id.replace(":", "%3A")), timeout=30
-    ) as response:
-        data = json.load(response)
-    synonyms = [
-        s if isinstance(s, str) else (s.get("name") or s.get("synonym") or "")
-        for s in (data.get("synonyms") or [])
-    ]
-    return {
-        "name": data["name"],
-        "synonyms": sorted(filter(None, synonyms)),
-        "definition": (data.get("definition") or "").strip(),
-    }
-
-
-def collect_term_ids() -> list[str]:
-    """Term ids to snapshot.
-
-    Sourced from the committed curation sheet vocabulary plus the modifiers and
-    onset terms the importer emits, so the snapshot does not require a database.
-    """
-    from migration.phenopackets.laterality import BILATERAL, LEFT, RIGHT, UNILATERAL
-
-    ids = {t["id"] for t in (BILATERAL, UNILATERAL, LEFT, RIGHT)}
-    ids |= {
-        "HP:0003577", "HP:0003674", "HP:0003593", "HP:0011463", "HP:0003581",
-        "HP:0033132", "HP:0012622", "HP:0012623", "HP:0012624", "HP:0012625",
-        "HP:0012626", "HP:0003774", "HP:0000107", "HP:0000003", "HP:0100611",
-        "HP:0000089", "HP:0000122", "HP:0000079", "HP:0000078", "HP:0012210",
-        "HP:0002917", "HP:0002900", "HP:0002149", "HP:0001997", "HP:0004904",
-        "HP:0002594", "HP:0001738", "HP:0000843", "HP:0012758", "HP:0000708",
-        "HP:0001250", "HP:0012443", "HP:0001622", "HP:0001627", "HP:0000478",
-        "HP:0004322", "HP:0033127", "HP:0001999", "HP:0002910", "HP:0031865",
-    }
-    return sorted(ids)
-
-
-def build() -> dict:
-    terms = {}
-    for term_id in collect_term_ids():
-        terms[term_id] = fetch_hpo(term_id)
-        time.sleep(0.1)
-    return {
-        "_source": "https://ontology.jax.org/api/hp/terms/{id}",
-        "_note": "Regenerate with scripts/refresh_ontology_snapshot.py; review the diff.",
-        "terms": terms,
-    }
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true", help="diff without writing")
-    args = parser.parse_args()
-
-    fresh = build()
-    serialized = json.dumps(fresh, indent=2, sort_keys=True) + "\n"
-
-    if args.check:
-        current = SNAPSHOT.read_text() if SNAPSHOT.exists() else ""
-        if current != serialized:
-            print("Ontology snapshot is stale. Run without --check to update.")
-            return 1
-        print("Ontology snapshot is current.")
-        return 0
-
-    SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT.write_text(serialized)
-    print(f"Wrote {len(fresh['terms'])} terms to {SNAPSHOT}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
-```
-
-- [ ] **Step 2: Generate the snapshot**
+- [ ] **Step 2: Generate and eyeball the snapshot**
 
 Run: `cd backend && uv run python scripts/refresh_ontology_snapshot.py`
-Expected: `Wrote 44 terms to .../ontology_snapshot.json` (count may differ slightly; it is whatever `collect_term_ids` returns).
 
-Inspect it: `python3 -c "import json;d=json.load(open('backend/tests/fixtures/ontology_snapshot.json'));print(d['terms']['HP:0033132'])"`
-Expected: name `Renal cortical hyperechogenicity`.
+Verify three entries by hand:
 
-- [ ] **Step 3: Write the conformance test**
-
-Create `backend/tests/test_ontology_conformance.py`:
-
-```python
-"""Every stored (id, label) pair must be consistent with the ontology.
-
-This is the invariant that all five wrong-term defects violated. Each of them
-had the right label on the wrong id, and nothing ever checked. Worse, a label
-normalisation step rewrote labels to AGREE with the wrong ids, converting a
-detectable contradiction into a consistent falsehood.
-"""
-
+```bash
+python3 - <<'PY'
 import json
-from pathlib import Path
-
-import pytest
-from sqlalchemy import text
-
-SNAPSHOT = Path(__file__).parent / "fixtures" / "ontology_snapshot.json"
-
-# Pairs that legitimately deviate from the canonical name. Every entry needs a
-# reason. An allowlist rather than a blanket tolerance means a NEW deviation
-# fails loudly while a known one stays silent.
-ALLOWED_DEVIATIONS = {
-    ("HP:0012622", "chronic kidney disease, not specified"): (
-        "Deliberate local qualifier. The curation sheet's definition matches "
-        "the canonical definition verbatim, which is what proves the id is right."
-    ),
-    ("HP:0002910", "Elevated hepatic transaminase"): (
-        "HPO renamed the term to 'Elevated circulating hepatic transaminase "
-        "concentration'; the sheet definition still matches canonical verbatim."
-    ),
-    ("HP:0000708", "Behavioral abnormality"): (
-        "Listed HPO synonym of the current name 'Atypical behavior'."
-    ),
-    ("HP:0012443", "Abnormality of brain morphology"): (
-        "Listed HPO synonym of the current name 'Abnormal brain morphology'."
-    ),
-    ("HP:0003674", "Onset"): (
-        "HPO has no generic postnatal-onset term. The parent 'Onset' is a true "
-        "ancestor of any onset, so it is uninformative rather than false."
-    ),
-}
-
-
-@pytest.fixture(scope="module")
-def snapshot():
-    assert SNAPSHOT.exists(), (
-        "Missing ontology snapshot. Run "
-        "`uv run python scripts/refresh_ontology_snapshot.py`."
-    )
-    return json.loads(SNAPSHOT.read_text())["terms"]
-
-
-def check(term_id: str, label: str, snapshot: dict) -> str | None:
-    """Return a violation message, or None when the pair is acceptable."""
-    if (term_id, label) in ALLOWED_DEVIATIONS:
-        return None
-    entry = snapshot.get(term_id)
-    if entry is None:
-        return f"{term_id} is not in the ontology snapshot (label {label!r})"
-    if label == entry["name"] or label in entry["synonyms"]:
-        return None
-    return (
-        f"{term_id} is stored with label {label!r} but denotes "
-        f"{entry['name']!r}. If the label is right, the id is wrong."
-    )
-
-
-async def _pairs(db_session, sql: str) -> list[tuple[str, str]]:
-    result = await db_session.execute(text(sql))
-    return [(row[0], row[1]) for row in result.fetchall() if row[0] and row[1]]
-
-
-@pytest.mark.asyncio
-async def test_stored_phenotypic_features_are_conformant(db_session, snapshot):
-    pairs = await _pairs(
-        db_session,
-        """SELECT DISTINCT f->'type'->>'id', f->'type'->>'label'
-           FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f""",
-    )
-    violations = [v for tid, lab in pairs if (v := check(tid, lab, snapshot))]
-    assert not violations, "\n".join(violations)
-
-
-@pytest.mark.asyncio
-async def test_stored_modifiers_are_conformant(db_session, snapshot):
-    pairs = await _pairs(
-        db_session,
-        """SELECT DISTINCT m->>'id', m->>'label'
-           FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f,
-                jsonb_array_elements(f->'modifiers') m""",
-    )
-    violations = [v for tid, lab in pairs if (v := check(tid, lab, snapshot))]
-    assert not violations, "\n".join(violations)
-
-
-@pytest.mark.asyncio
-async def test_stored_onsets_are_conformant(db_session, snapshot):
-    pairs = await _pairs(
-        db_session,
-        """SELECT DISTINCT d->'onset'->'ontologyClass'->>'id',
-                           d->'onset'->'ontologyClass'->>'label'
-           FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d""",
-    )
-    violations = [v for tid, lab in pairs if (v := check(tid, lab, snapshot))]
-    assert not violations, "\n".join(violations)
-
-
-@pytest.mark.asyncio
-async def test_published_revisions_are_conformant(db_session, snapshot):
-    """The public snapshot is a second authoritative copy (visibility.py:80)."""
-    pairs = await _pairs(
-        db_session,
-        """SELECT DISTINCT f->'type'->>'id', f->'type'->>'label'
-           FROM phenopacket_revisions r,
-                jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') f""",
-    )
-    violations = [v for tid, lab in pairs if (v := check(tid, lab, snapshot))]
-    assert not violations, "\n".join(violations)
-
-
-@pytest.mark.asyncio
-async def test_hpo_terms_lookup_is_conformant(db_session, snapshot):
-    """This table paired the wrong id with the right label, which is exactly
-    why the curation form rendered the defect as if it were correct."""
-    pairs = await _pairs(
-        db_session, "SELECT hpo_id, label FROM hpo_terms_lookup WHERE hpo_id LIKE 'HP:%'"
-    )
-    violations = [v for tid, lab in pairs if (v := check(tid, lab, snapshot))]
-    assert not violations, "\n".join(violations)
-
-
-def test_every_allowlisted_deviation_has_a_reason():
-    for key, reason in ALLOWED_DEVIATIONS.items():
-        assert len(reason) > 40, f"{key} needs a real justification, not a placeholder"
-
-
-def test_the_known_defects_would_be_caught(snapshot):
-    """Regression fence: the invariant must reject the exact pairs that shipped."""
-    assert check("HP:0033133", "Renal cortical hyperechogenicity", snapshot)
-    assert check("HP:0034199", "Prenatal onset", snapshot)
+t = json.load(open('backend/app/ontology/data/ontology_snapshot.json'))['terms']
+for k in ('HP:0033132', 'MONDO:0007669', 'ORPHA:2260'):
+    print(k, '->', t[k]['name'])
+PY
 ```
 
-- [ ] **Step 4: Run it — expect failures that name the real defects**
+Expected: `Renal cortical hyperechogenicity`, `renal cysts and diabetes syndrome`,
+`Oligomeganephronia`. If any is wrong the resolver is wrong — stop and fix it before
+anything depends on this file.
 
-Run: `cd backend && uv run pytest tests/test_ontology_conformance.py -q`
+- [ ] **Step 3: Write the failing test**
 
-Expected on a database that has **not** had Task 4 applied: failures naming
-`HP:0034199` stored as "Prenatal onset" and the MONDO terms. That is the test working.
-`test_the_known_defects_would_be_caught` must pass immediately.
+```python
+"""Ontology conformance (spec §3.3).
 
-If `test_stored_phenotypic_features_are_conformant` fails on a term this plan does not
-name, stop — the audit missed something and it needs the same investigation.
+A1 catches wrong identifiers. A3 catches drift. A3 alone cannot catch a wrong
+identifier, because it is satisfiable by editing the label — which is exactly
+how HP:0033133 survived.
+"""
 
-- [ ] **Step 5: Add the Makefile target**
+import pytest
 
-In `backend/Makefile`:
+from app.ontology.conformance import ALLOWED_DEVIATIONS, check_label, check_source_row
+
+
+class TestA3StoredConformance:
+    def test_accepts_the_canonical_name(self):
+        assert check_label("HP:0000107", "Renal cyst") is None
+
+    def test_accepts_a_listed_synonym(self):
+        assert check_label("HP:0000708", "Behavioral abnormality") is None
+
+    def test_rejects_an_unrelated_label(self):
+        assert check_label("HP:0000107", "Seizure")
+
+    def test_rejects_an_unknown_identifier(self):
+        assert check_label("HP:9999999", "Nonexistent")
+
+    def test_covers_mondo_not_only_hpo(self):
+        """Two of the five stored defects were MONDO."""
+        assert check_label("MONDO:0007669", "renal cysts and diabetes syndrome") is None
+        assert check_label("MONDO:0011593", "Renal cysts and diabetes syndrome")
+
+    def test_cannot_catch_a_normalized_wrong_id(self):
+        """Documents the limitation, so nobody mistakes A3 for the guard.
+
+        HP:0033133 paired with ITS OWN canonical name passes A3 and is still
+        the wrong term for this database. Only A1 catches that.
+        """
+        assert check_label("HP:0033133", "Renal cortical hypoechogeneity") is None
+
+
+class TestA1SourceIntegrity:
+    def test_accepts_a_row_whose_definition_corroborates_its_id(self):
+        assert check_source_row(
+            "HP:0000107", "Renal cyst", "A fluid filled sac in the kidney."
+        ) is None
+
+    def test_accepts_a_local_qualifier_backed_by_a_matching_definition(self):
+        """HP:0012622's name is curated, but its definition matches canonical."""
+        assert check_source_row(
+            "HP:0012622",
+            "chronic kidney disease, not specified",
+            "Functional anomaly of the kidney persisting for at least three months.",
+        ) is None
+
+    def test_rejects_the_real_defect(self):
+        """The row that produced T1: right name, right definition, wrong id."""
+        violation = check_source_row(
+            "HP:0033133",
+            "Renal cortical hyperechogenicity",
+            "Increased echogenecity of the kidney cortex.",
+        )
+        assert violation
+        assert "HP:0033132" in violation, "must name the term the description describes"
+
+    def test_accepts_a_name_only_match_when_no_definition_is_given(self):
+        assert check_source_row("HP:0000107", "Renal cyst", "") is None
+
+    def test_rejects_when_neither_field_corroborates(self):
+        assert check_source_row("HP:0000107", "Seizure", "An epileptic event.")
+
+
+def test_every_allowlisted_deviation_carries_a_reason():
+    for key, reason in ALLOWED_DEVIATIONS.items():
+        assert len(reason) > 40, f"{key} needs a justification, not a placeholder"
+```
+
+- [ ] **Step 4: Implement `conformance.py`**
+
+`check_label(term_id, label)` — allowlist, then snapshot lookup, then
+`label == name or label in synonyms`.
+
+`check_source_row(term_id, name, description)`:
+
+1. If `description` is non-empty and matches the canonical definition of `term_id`
+   (case-insensitive, trailing-period-insensitive) → `None`.
+2. Else if `name` matches the canonical name or a synonym of `term_id` → `None`.
+3. Else → violation. **Search the snapshot for a term whose canonical definition
+   matches `description`**; if found, name it in the message. That is what turns
+   "this is wrong" into "you meant `HP:0033132`".
+
+`ALLOWED_DEVIATIONS` holds **six** documented pairs — `HP:0012622`, `HP:0002910`,
+`HP:0000708`, `HP:0012443`, `HP:0003674`, and `("ECO:0000033", "author statement")`,
+whose label is an imprecise shortening of "author statement supported by traceable
+reference" and which the spec defers rather than corrects. Omitting it would make A3
+red on the existing corpus. Each entry carries a written reason.
+
+- [ ] **Step 5: Wire A1 into the importer**
+
+In `hpo_mapper.build_from_dataframe`, for each row call `check_source_row` and raise on
+violation, collecting all violations first so one import reports every bad row rather
+than the first:
+
+```python
+violations = [v for row in rows if (v := check_source_row(...))]
+if violations:
+    raise OntologySourceError(
+        "Curation sheet rows name a term their identifier does not denote:\n"
+        + "\n".join(violations)
+    )
+```
+
+Add a test asserting a sheet containing the T1 row raises, and that the message names
+`HP:0033132`.
+
+- [ ] **Step 6: Run everything**
+
+Run: `cd backend && uv run pytest tests/test_ontology_conformance.py tests/migration/ -q`
+Expected: PASS.
+
+- [ ] **Step 7: Add the Makefile target and commit**
 
 ```makefile
-refresh-ontology-snapshot:
+refresh-ontology-snapshot: check-env  ## Refresh the pinned ontology snapshot (review the diff)
 	uv run python scripts/refresh_ontology_snapshot.py
 ```
 
-- [ ] **Step 6: Commit**
+Do **not** add `--check` to the PR pipeline; an upstream rename must not redden
+unrelated PRs. Wire it to the existing `-m network` job or a scheduled run so drift
+surfaces as a reviewable diff.
 
 ```bash
 cd backend && uv run ruff format && cd ..
-git add backend/scripts/refresh_ontology_snapshot.py backend/tests/fixtures/ontology_snapshot.json backend/tests/test_ontology_conformance.py backend/Makefile
-git commit -m "test: assert every stored ontology label matches what its id denotes
+git add backend/app/ontology/ backend/scripts/refresh_ontology_snapshot.py backend/tests/test_ontology_conformance.py backend/Makefile
+git commit -m "feat(ontology): source-integrity and conformance checks
 
-The invariant all five wrong-term defects violated. Uses a pinned snapshot
-rather than a live API so an upstream rename is a reviewable diff, not a red
-build, and an allowlist so known deviations stay silent while new ones fail.
+A1 corroborates each sheet identifier against a field normalisation cannot
+touch — the curator's description — and names the term the description
+actually describes. It would have failed the import that created HP:0033133
+and pointed at HP:0033132.
+
+A3 is the naive label-vs-id check, retained and explicitly documented as
+insufficient: it is satisfiable by editing the label, which is how the defect
+survived. Covers HPO, MONDO, Orphanet and ECO across every ontology-bearing
+JSONB path, not just hpo_terms_lookup.
+
+Production module so the curation DomainValidator can import it.
 
 Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.3"
 ```
 
 ---
 
-## Task 4: Correct the stored terms
-
-One revision, both copies, one transaction, with a preimage journal because steps 1–2 are not reversible by inverse remap.
+## Task 3: Correct the stored terms
 
 **Files:**
-- Create: `backend/alembic/versions/e6a2d9c04b71_correct_ontology_terms.py`
+- Create: `backend/alembic/versions/<rev>_correct_ontology_terms.py`
+- Modify: `backend/alembic/env.py`, `backend/tests/test_alembic_env_autogenerate.py`
 - Test: `backend/tests/test_ontology_term_migration.py` (create)
 
 **Interfaces:**
-- Consumes: Task 3's conformance test (to prove the result).
-- Produces: a conformant corpus. Everything downstream assumes it.
+- Consumes: nothing.
+- Produces: a corpus with `MONDO:0007669` only, `HP:0034199` eliminated, `HP:0003674` relabelled. Task 4's backfill runs after.
 
-- [ ] **Step 1: Record the baseline**
+- [ ] **Step 1: Create the journal table and register it**
 
-```bash
-export PGPASSWORD=hnf1b_pass
-psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -tAc "
-SELECT 'diseases', count(*) FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d
-UNION ALL SELECT 'HP:0034199 onsets', count(*) FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d WHERE d->'onset'->'ontologyClass'->>'id'='HP:0034199'
-UNION ALL SELECT 'features', count(*) FROM phenopackets p, jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f
-UNION ALL SELECT 'modifiers', count(*) FROM phenopackets p, jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f, jsonb_array_elements(f->'modifiers') m;" | tee /tmp/ontology-baseline.txt
-```
-
-Expected: `diseases 1125`, `HP:0034199 onsets 134`, `features 7810`, `modifiers 771`.
-If these differ, the corpus has changed since 2026-07-30 — re-derive the spec's numbers before continuing.
-
-- [ ] **Step 2: Write the migration**
-
-Create `backend/alembic/versions/e6a2d9c04b71_correct_ontology_terms.py`. Key requirements, in order:
-
-1. Create `ontology_migration_journal (phenopacket_id text, source text, content_sha256 text, preimage jsonb)` and populate it with the pre-change `diseases` array for every affected record, from **both** tables. Steps 3–4 collapse two terms into one and deduplicate, which is not reversible by inverse remap.
-2. Remap `diseases[].term` — `MONDO:0011593` and `MONDO:0010953` → `MONDO:0007669` / `"renal cysts and diabetes syndrome"`.
-3. Deduplicate `diseases[]` with `jsonb_agg(DISTINCT ...)`; entries become identical.
-4. Remap `HP:0034199` → `HP:0003577` / `"Congenital onset"` in `diseases[].onset.ontologyClass` **and** `subject.timeAtLastEncounter.ontologyClass`.
-5. Relabel `HP:0003674` → `"Onset"` in the same two locations; **id unchanged**.
-6. Apply every step to `phenopackets.phenopacket` and `phenopacket_revisions.content_jsonb`.
-
-Reuse the SQL shape proven in revision `d4e8b1f60a27` — `jsonb_agg(... ORDER BY ord)` over `jsonb_array_elements(...) WITH ORDINALITY`. Two traps that already cost a debugging cycle there and are documented in its comments:
-
-- `((elem->'type') - 'id' - 'label') || jsonb_build_object(...)` — the parenthesisation matters. Written the other way round it parses as `(build || type) - 'id' - 'label'` and deletes the keys it was meant to set.
-- `jsonb_build_object` takes `"any"`, so asyncpg cannot infer a bare bind parameter's type. Wrap every bound value in `cast(:param as text)`. And never write `::jsonb` directly after a bind parameter — that is a syntax error under asyncpg.
-
-`downgrade()` restores from the journal, matching on `phenopacket_id` + `source`, and aborts if the current content hash does not match what the journal recorded as the post-migration state.
-
-- [ ] **Step 3: Dry-run in a rolled-back transaction before writing the revision file**
-
-Prove the arithmetic first:
+The collapse (two terms → one, then deduplicate) destroys which record held which term,
+so downgrade cannot be an inverse remap. The revision creates:
 
 ```sql
-BEGIN;
--- steps 2-4 here
-SELECT count(*) FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d;         -- expect 864
-SELECT DISTINCT jsonb_array_length(phenopacket->'diseases') FROM phenopackets WHERE phenopacket ? 'diseases';  -- expect {1}
-SELECT d->'onset'->'ontologyClass'->>'id', count(*) FROM phenopackets p,
-       jsonb_array_elements(p.phenopacket->'diseases') d GROUP BY 1;  -- expect HP:0003577 594, null 216, HP:0003674 54
-ROLLBACK;
+CREATE TABLE ontology_migration_journal (
+    id             bigserial PRIMARY KEY,
+    revision       text NOT NULL,
+    table_name     text NOT NULL,
+    row_id         text NOT NULL,      -- rendered PK; phenopackets.id is uuid,
+                                       -- phenopacket_revisions.id is bigint, so a
+                                       -- single typed column cannot hold both
+    json_path      text NOT NULL,      -- 'diseases' | 'subject'
+    preimage       jsonb NOT NULL,
+    postimage_sha  text NOT NULL
+);
+CREATE INDEX ix_omj_lookup ON ontology_migration_journal (revision, table_name, row_id);
 ```
 
-Do not proceed until all three match.
+Keyed on the **row primary key rendered as text**, not `phenopacket_id`:
+`phenopacket_revisions` has many rows per record, and the two tables' primary keys have
+different types (`phenopackets.id uuid`, `phenopacket_revisions.id bigint`). Casts are
+explicit at both ends: `row_id = t.id::text` on write, `t.id::text = j.row_id` on
+restore. The journal is **retained after upgrade**; downgrade depends on
+it. Register `ontology_migration_journal` in **both** `alembic/env.py::include_object`
+and `tests/test_alembic_env_autogenerate.py::_RAW_SQL_TABLES`, or the drift test
+proposes dropping it.
 
-- [ ] **Step 4: Write the migration test**
+- [ ] **Step 2: Decide and document revision scope**
+
+`phenopacket_revisions` rows are immutable historical snapshots and there can be several
+per record. Rewriting all of them edits history; rewriting none leaves the public
+snapshot wrong.
+
+**Decision: rewrite only each record's `head_published_revision_id` row**, plus every
+working copy. Older revisions keep their original content and are correct as history.
+
+Two consequences, both mandatory:
+
+- Task 4's assertions count **head revisions**, not all revisions.
+- **A3's scope must match.** `check_label` is applied to working copies and head
+  revisions only. If A3 traversed all revision rows it would go permanently red the
+  moment any term is corrected, since history legitimately holds the old value. Encode
+  this in the query, not in an allowlist.
+
+State both in the revision docstring.
+
+- [ ] **Step 3: Prove the SQL in a rolled-back transaction**
+
+Deterministic deduplication — `jsonb_agg(DISTINCT e ORDER BY ord)` is **invalid**
+PostgreSQL, because the ORDER BY expression is not the DISTINCT argument. Keep the
+first occurrence by ordinality instead:
+
+```sql
+UPDATE phenopackets AS t
+SET phenopacket = jsonb_set(t.phenopacket, '{diseases}', (
+    SELECT jsonb_agg(e ORDER BY ord)
+    FROM (
+        SELECT DISTINCT ON (e) e, ord
+        FROM (
+            SELECT CASE
+                     WHEN d->'term'->>'id' IN ('MONDO:0011593','MONDO:0010953')
+                     THEN jsonb_set(d, '{term}', jsonb_build_object(
+                              'id',    cast(:to_id    as text),
+                              'label', cast(:to_label as text)))
+                     ELSE d
+                   END AS e,
+                   ord
+            FROM jsonb_array_elements(t.phenopacket->'diseases')
+                 WITH ORDINALITY AS a(d, ord)
+        ) mapped
+        ORDER BY e, ord
+    ) deduped
+))
+WHERE EXISTS (
+    SELECT 1 FROM jsonb_array_elements(t.phenopacket->'diseases') d
+    WHERE d->'term'->>'id' IN ('MONDO:0011593','MONDO:0010953')
+);
+```
+
+Two traps already paid for in `d4e8b1f60a27` and documented in its comments: parenthesise
+`((elem->'x') - 'k') || jsonb_build_object(...)` or the `-` binds wrong and deletes the
+keys you are setting; and wrap every bind in `cast(:p as text)` because
+`jsonb_build_object` takes `"any"` and asyncpg cannot infer it. Never write `::jsonb`
+directly after a bind parameter.
+
+Then assert, still inside the transaction:
+
+```
+diseases entries                 864
+distinct array lengths           {1}
+distinct term ids                {MONDO:0007669}
+onsets  HP:0003577 594 · HP:0003674 54 · null 216
+```
+
+`ROLLBACK` and only then write the revision file.
+
+- [ ] **Step 4: Write the remaining remaps**
+
+`HP:0034199` → `HP:0003577` / `"Congenital onset"` in `diseases[].onset.ontologyClass`
+**and** `subject.timeAtLastEncounter.ontologyClass`. `HP:0003674` label → `"Onset"`, id
+unchanged, in the same two locations. Journal the `subject` preimage too — Step 1's
+`json_path` column exists for this.
+
+- [ ] **Step 5: Write the migration test against a seeded fixture**
+
+CI truncates the corpus, so this test **seeds its own records** covering every defect
+shape, then invokes the migration functions directly:
 
 ```python
-"""Term-correction migration (spec §3.2)."""
+"""Term-correction migration, against a seeded fixture.
 
-import pytest
-from sqlalchemy import text
+CI has no corpus: conftest truncates phenopackets after every test. Whole-corpus
+arithmetic lives in scripts/ontology_preflight.py, not here.
+"""
 
-
-@pytest.mark.asyncio
-async def test_no_record_lost_a_disease(db_session):
-    result = await db_session.execute(
-        text("SELECT count(*) FROM phenopackets WHERE phenopacket ? 'diseases'")
-    )
-    assert result.scalar() == 864
-
-
-@pytest.mark.asyncio
-async def test_every_disease_array_has_exactly_one_entry(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT DISTINCT jsonb_array_length(phenopacket->'diseases')
-               FROM phenopackets WHERE phenopacket ? 'diseases'"""
-        )
-    )
-    assert [r[0] for r in result.fetchall()] == [1]
-
-
-@pytest.mark.asyncio
-async def test_only_the_correct_mondo_term_remains(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT DISTINCT d->'term'->>'id'
-               FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d"""
-        )
-    )
-    assert [r[0] for r in result.fetchall()] == ["MONDO:0007669"]
-
-
-@pytest.mark.asyncio
-async def test_onset_totals_reconcile(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT d->'onset'->'ontologyClass'->>'id', count(*)
-               FROM phenopackets p, jsonb_array_elements(p.phenopacket->'diseases') d
-               GROUP BY 1"""
-        )
-    )
-    counts = {row[0]: row[1] for row in result.fetchall()}
-    assert counts.get("HP:0003577") == 594
-    assert counts.get("HP:0003674") == 54
-    assert counts.get(None) == 216
-
-
-@pytest.mark.asyncio
-async def test_no_retired_id_survives_in_either_copy(db_session):
-    for table, column in (
-        ("phenopackets", "phenopacket"),
-        ("phenopacket_revisions", "content_jsonb"),
-    ):
-        result = await db_session.execute(
-            text(f"SELECT count(*) FROM {table} WHERE {column}::text LIKE '%HP:0034199%'")  # noqa: S608
-        )
-        assert result.scalar() == 0, table
-
-
-@pytest.mark.asyncio
-async def test_both_copies_agree(db_session):
-    """A working-copy-only fix leaves the wrong term in every public response."""
-    result = await db_session.execute(
-        text(
-            """SELECT count(*) FROM phenopackets p
-               JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
-               WHERE p.phenopacket->'diseases' IS DISTINCT FROM r.content_jsonb->'diseases'
-                 AND p.state = 'published'"""
-        )
-    )
-    assert result.scalar() == 0
-
-
-@pytest.mark.asyncio
-async def test_feature_and_modifier_counts_unchanged(db_session):
-    """This migration touches diseases and onsets, never features."""
-    for sql, expected in (
-        ("""SELECT count(*) FROM phenopackets p,
-            jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f""", 7810),
-        ("""SELECT count(*) FROM phenopackets p,
-            jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f,
-            jsonb_array_elements(f->'modifiers') m""", 771),
-    ):
-        result = await db_session.execute(text(sql))
-        assert result.scalar() == expected
+FIXTURE = [
+    # id, diseases, timeAtLastEncounter
+    ("pp-both",   [RCAD_OLD, MODY5_OLD], None),          # collapse + dedupe
+    ("pp-single", [RCAD_OLD],            None),          # collapse only
+    ("pp-onset",  [dict(RCAD_OLD, onset=PRENATAL)], None),
+    ("pp-tale",   [RCAD_OLD],            PRENATAL_TALE), # subject path
+    ("pp-post",   [dict(RCAD_OLD, onset=POSTNATAL)], None),
+    ("pp-clean",  [RCAD_NEW],            None),          # already correct: no-op
+]
 ```
 
-- [ ] **Step 5: Apply, verify, round-trip**
+Assert per record: `pp-both` ends with one disease; `pp-clean` is byte-identical
+before and after; `pp-post` keeps `HP:0003674` and gains the label `"Onset"`;
+`pp-tale`'s subject path is remapped. Then `downgrade()` and assert every fixture
+record is byte-identical to its preimage.
+
+- [ ] **Step 6: Apply and round-trip against the real database**
 
 ```bash
 cd backend
 uv run alembic upgrade head
 uv run pytest tests/test_ontology_term_migration.py tests/test_ontology_conformance.py -q
 uv run alembic downgrade -1 && uv run alembic upgrade head
-uv run pytest tests/test_ontology_term_migration.py -q
 ```
 
-Expected: all pass both times. The conformance test should now be green for onsets and diseases.
-
-- [ ] **Step 6: Refresh derived state**
-
-The migration changed content the search index and aggregation MVs derive from:
+- [ ] **Step 7: Refresh derived state**
 
 ```bash
-psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -c "REFRESH MATERIALIZED VIEW global_search_index;"
+psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -c "\dm"   # enumerate first
+psql ... -c "REFRESH MATERIALIZED VIEW global_search_index;"
 ```
 
-Enumerate the other MVs (`\dm`) and refresh each. Confirm `/api/v2/search/global?q=renal` still returns results.
+Refresh every materialized view listed. Confirm `/api/v2/search/global?q=renal` still
+returns results.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
-```bash
-cd backend && uv run ruff format && cd ..
-git add backend/alembic/versions/e6a2d9c04b71_correct_ontology_terms.py backend/tests/test_ontology_term_migration.py
-git commit -m "fix(data): correct disease and onset terms in both stored copies
-
-MONDO:0011593 (seizures, benign familial infantile, 2) and MONDO:0010953
-(Fanconi anemia complementation group E) were annotated on every record as
-RCAD and MODY5. Both -> MONDO:0007669, then deduplicated: the 261 dual-disease
-records carried byte-identical entries apart from the term.
-
-HP:0034199 (Late first trimester onset) labelled 'Prenatal onset' -> HP:0003577
-Congenital onset, per the source Phenotype_modifier sheet's own synonym list.
-HP:0003674 relabelled to its real name 'Onset'; id kept, since HPO has no
-generic postnatal-onset term and the parent is a true ancestor.
-
-Preimage journal supports downgrade; the collapse is not reversible by remap.
-
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.2"
-```
+Message: as in the defect report §1; note the head-revision-only scope decision.
 
 ---
 
-## Task 5: Restore the 408 dropped laterality annotations
+## Task 4: Restore the 408 laterality annotations
 
-Unlike Task 4, this information **is not in the database**. It must be re-derived from the source sheet.
+The information is **not in the database**; it must be re-derived from the source.
 
 **Files:**
-- Create: `backend/alembic/versions/f1b7e35c92a0_restore_laterality.py`
-- Create: `backend/migration/data/laterality_2026-07-30.csv` (de-identified fixture)
 - Create: `backend/scripts/build_laterality_fixture.py`
+- Create: `backend/migration/data/laterality_2026-07-30.csv`
+- Create: `backend/alembic/versions/<rev>_restore_laterality.py`
 - Test: `backend/tests/test_laterality_backfill.py` (create)
 
 **Interfaces:**
-- Consumes: Task 1's `parse_laterality`, Task 4's corrected corpus.
-- Produces: modifier totals Bilateral 797 / Unilateral 408 / Left 119 / Right 112.
+- Consumes: Task 1's `parse_laterality`, Task 3's corrected corpus.
+- Produces: `Bilateral 797 / Unilateral 408 / Left 119 / Right 112` **subject to Step 1's resolution** — see the warning there.
 
-- [ ] **Step 1: Build the de-identified fixture**
+- [ ] **Step 1: Resolve source rows to records before trusting any total**
 
-Per ADR 0003, the raw workbook must not be committed: `ReviewBy` holds institutional email addresses the repository does not currently contain, and the dataset licence is unspecified. Write `backend/scripts/build_laterality_fixture.py` emitting **only**:
+The importer groups 939 sheet rows into 864 individuals and deduplicates features by
+HPO id. **797 "bilateral" source rows therefore do not imply 797 stored Bilateral
+modifiers**, and the curation spec records that duplicate-row merge rules are undefined.
 
-```csv
-individual_id,phenotype_column,hpo_id,laterality_value
-317,RenalCysts,HP:0000107,bilateral
+`build_laterality_fixture.py` must emit **one resolved row per
+`(phenopacket_id, hpo_id)`**:
+
+- group source rows by `individual_id`;
+- for each laterality-bearing column, collect the distinct non-empty values;
+- if they agree, emit the resolved value;
+- if they disagree, emit **nothing** and write the conflict to
+  `laterality_conflicts_2026-07-30.csv` for curator resolution.
+
+Print the resolution summary — source rows, unique keys, agreements, conflicts — and
+**derive the plan's expected totals from the emitted fixture**, not from raw row counts.
+If conflicts exist, the expected totals in Step 3 change accordingly; update them and
+say so in the commit rather than forcing the numbers.
+
+Per ADR 0003 the fixture is de-identified: `individual_id, phenotype_column, hpo_id,
+laterality_value` only. No `ReviewBy`, no comments, no other clinical columns. Record
+the workbook's sha256 in a header comment.
+
+- [ ] **Step 2: Journal every touched feature**
+
+Reuse `ontology_migration_journal` with `json_path = 'phenotypicFeatures'`. Downgrade
+restores journalled rows only, after verifying `postimage_sha`, and asserts the exact
+**771** baseline. Globally deleting the three unilateral ids would also delete
+post-migration curator edits, so it is not an acceptable downgrade.
+
+- [ ] **Step 3: Write the test against a seeded fixture**
+
+Same constraint as Task 3 — seed records, run the migration, assert. Cover:
+
+- a feature that gains `[Unilateral, Left]`;
+- a feature that already has `Bilateral` and is untouched;
+- a feature whose stored modifier **disagrees** with the source → skipped, reported,
+  not overwritten;
+- a source row with no matching record → counted, reported, not an error;
+- `downgrade()` restores the seeded preimages byte-identically;
+- no feature ends with `Bilateral` alongside any sided modifier;
+- `Left`/`Right` never appear without `Unilateral`;
+- total feature count unchanged.
+
+- [ ] **Step 4: Apply, round-trip, refresh MVs, commit**
+
+Assert `matched + skipped + unmatched == fixture rows`; abort the migration if not,
+since that means the join is lossy.
+
+---
+
+## Task 5: Whole-corpus preflight
+
+The arithmetic that cannot live in pytest.
+
+**Files:**
+- Create: `backend/scripts/ontology_preflight.py`
+
+- [ ] **Step 1: Write it**
+
+Connects to a target database and reports, without modifying anything:
+
+- every `(id, label)` pair at each path in `ONTOLOGY_PATHS`, run through `check_label`;
+- disease entry count, distinct disease terms, array-length distribution;
+- onset distribution across both paths;
+- modifier totals by label;
+- working copy vs head-published-revision divergence per record.
+
+Exit non-zero on any A3 violation. Intended to be run **before and after** a deployment
+of Tasks 3–4 and its output archived, replacing the "assert 864 in CI" idea that cannot
+work against a truncated test database.
+
+- [ ] **Step 2: Run it against the local database and archive both outputs**
+
+```bash
+cd backend && uv run python scripts/ontology_preflight.py > /tmp/preflight-before.txt
+# ... apply Tasks 3-4 ...
+uv run python scripts/ontology_preflight.py > /tmp/preflight-after.txt
+diff /tmp/preflight-before.txt /tmp/preflight-after.txt
 ```
 
-No reviewer, no comments, no clinical columns beyond the six laterality-bearing ones (`Hyperechogenicity`, `RenalCysts`, `MulticysticDysplasticKidney`, `RenalHypoplasia`, `SolitaryKidney`, `UrinaryTractMalformation`). Record the workbook's sha256 in a header comment so the derivation is auditable.
+The diff is the deployment record.
 
-Run it and confirm the row count is 1205 (797 + 177 + 119 + 112).
+---
 
-- [ ] **Step 2: Write the backfill test first**
+## Task 6: Fix the remaining consumers
+
+Three wrong terms and one wrong numeric mapping outside the migration package.
+
+**Files:**
+- Modify: `backend/app/services/ontology_service.py`
+- Modify: `backend/migration/phenopackets/hpo_mapper.py`
+- Modify: `frontend/src/utils/ageParser.js`
+- Test: extend `backend/tests/test_ontology_conformance.py`; `frontend/tests/unit/utils/ageParser.spec.js`
+
+- [ ] **Step 1: Correct `ontology_service.py`**
+
+`HP:0003149` is Hyperuricosuria → `HP:0002149` Hyperuricemia. `MONDO:0011593` and
+`MONDO:0010953` → `MONDO:0007669`. Check `HP:0000078`'s label against the snapshot while
+you are there.
+
+- [ ] **Step 2: Correct the `hpo_mapper` fallback dictionary**
+
+`HP:0004729` (Acute tubulointerstitial nephritis, labelled "Solitary functioning
+kidney") and `HP:0004719` (Hyperechogenic kidneys, labelled "Oligomeganephronia"). Use
+`HP:0000122` and `ORPHA:2260`, matching what the sheet and corpus actually use.
+
+- [ ] **Step 3: Add a test that every hardcoded map is conformant**
 
 ```python
-"""Laterality backfill (spec §3.2 step 5)."""
+def test_ontology_service_hardcoded_terms_are_conformant():
+    """Three independent hardcoded maps is how these defects multiplied.
 
-import pytest
-from sqlalchemy import text
+    Extract the literal dict in ontology_service into a module-level constant
+    (e.g. ``ADDITIONAL_TERMS``) first so it can be imported; asserting against a
+    dict built inside a method body is not possible.
+    """
+    from app.services.ontology_service import ADDITIONAL_TERMS
 
-EXPECTED = {"Bilateral": 797, "Unilateral": 408, "Left": 119, "Right": 112}
-
-
-@pytest.mark.asyncio
-async def test_modifier_totals_match_the_source(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT m->>'label', count(*)
-               FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f,
-                    jsonb_array_elements(f->'modifiers') m
-               GROUP BY 1"""
-        )
-    )
-    assert {row[0]: row[1] for row in result.fetchall()} == EXPECTED
+    for term_id, label in ADDITIONAL_TERMS.items():
+        assert check_label(term_id, label) is None, f"{term_id}: {label}"
 
 
-@pytest.mark.asyncio
-async def test_no_feature_has_contradictory_modifiers(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT count(*) FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f
-               WHERE f->'modifiers' @> '[{"id":"HP:0012832"}]'
-                 AND (f->'modifiers' @> '[{"id":"HP:0012833"}]'
-                   OR f->'modifiers' @> '[{"id":"HP:0012835"}]'
-                   OR f->'modifiers' @> '[{"id":"HP:0012834"}]')"""
-        )
-    )
-    assert result.scalar() == 0
-
-
-@pytest.mark.asyncio
-async def test_left_and_right_always_accompany_unilateral(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT count(*) FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f
-               WHERE (f->'modifiers' @> '[{"id":"HP:0012835"}]'
-                   OR f->'modifiers' @> '[{"id":"HP:0012834"}]')
-                 AND NOT f->'modifiers' @> '[{"id":"HP:0012833"}]'"""
-        )
-    )
-    assert result.scalar() == 0
-
-
-@pytest.mark.asyncio
-async def test_feature_count_unchanged(db_session):
-    """The backfill adds modifiers to existing features; it creates none."""
-    result = await db_session.execute(
-        text(
-            """SELECT count(*) FROM phenopackets p,
-               jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f"""
-        )
-    )
-    assert result.scalar() == 7810
-
-
-@pytest.mark.asyncio
-async def test_both_copies_backfilled(db_session):
-    result = await db_session.execute(
-        text(
-            """SELECT count(*) FROM phenopacket_revisions r,
-                    jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') f,
-                    jsonb_array_elements(f->'modifiers') m
-               WHERE m->>'id' = 'HP:0012833'"""
-        )
-    )
-    assert result.scalar() == 408
+def test_hpo_mapper_fallback_is_conformant():
+    for entry in HPOMapper().hpo_mappings.values():
+        assert check_label(entry["id"], entry["label"]) is None
 ```
 
-- [ ] **Step 3: Write the migration**
+This is the assertion that would have caught T6–T9 without anyone auditing anything.
 
-Join on `phenopacket-{individual_id}`, match the feature by `type.id`, and set `modifiers` from `parse_laterality(laterality_value)`. Requirements:
+- [ ] **Step 4: Correct `ageParser.js`**
 
-- **Skip and report**, never overwrite, any record whose `phenotypicFeatures` already carries a modifier for that term other than the one the source implies. A record edited since migration must not be silently reverted.
-- Apply to both `phenopackets.phenopacket` and `phenopacket_revisions.content_jsonb`.
-- Log the counts: rows in fixture, features matched, features skipped, modifiers written. Abort if matched + skipped ≠ fixture rows, which would mean the join is lossy.
-- `downgrade()` removes the three unilateral modifier ids and leaves `Bilateral` (which predates this migration), restoring the 771 baseline.
+`'HP:0034199': 0.08, // Neonatal onset` is wrong three ways: the term is Late first
+trimester onset, the comment says Neonatal, and Task 3 eliminates the id from the
+corpus. Remove the entry and add `'HP:0003577': 0` if not already present. Add a test
+asserting no onset id maps to a value contradicting its ontology meaning.
 
-- [ ] **Step 4: Apply and verify**
-
-```bash
-cd backend
-uv run alembic upgrade head
-uv run pytest tests/test_laterality_backfill.py tests/test_ontology_conformance.py -q
-uv run alembic downgrade -1
-psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -tAc "
-SELECT m->>'label', count(*) FROM phenopackets p,
- jsonb_array_elements(p.phenopacket->'phenotypicFeatures') f,
- jsonb_array_elements(f->'modifiers') m GROUP BY 1;"
-uv run alembic upgrade head
-```
-
-Expected after downgrade: `Bilateral 797` only. After re-upgrade: all four totals.
-
-- [ ] **Step 5: Refresh derived state and commit**
-
-```bash
-psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -c "REFRESH MATERIALIZED VIEW global_search_index;"
-cd backend && uv run ruff format && cd ..
-git add backend/alembic/versions/f1b7e35c92a0_restore_laterality.py backend/migration/data/ backend/scripts/build_laterality_fixture.py backend/tests/test_laterality_backfill.py
-git commit -m "fix(data): restore 408 dropped laterality annotations
-
-The importer exact-matched four bare tokens against compound source values, so
-177 'unilateral unspecified', 119 'unilateral left' and 112 'unilateral right'
-were discarded while the phenotype row was still written.
-
-Re-derived from a de-identified fixture (join key, phenotype column, laterality
-value only — no reviewer emails, per ADR 0003) joined on phenopacket-{id}.
-Records edited since migration are skipped and reported, never overwritten.
-
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.2"
-```
-
----
-
-## Task 6: Render excluded phenotypic features
-
-`hnf1b.org/phenopackets/phenopacket-317` shows `5 HPO` in the header and `Phenotypic Features (3)` in the section. The two `excluded: true` features are counted and never rendered, erasing the difference between "assessed and absent" and "not assessed".
-
-**Files:**
-- Modify: `frontend/src/views/PagePhenopacket.vue`
-- Test: `frontend/tests/unit/views/PagePhenopacket.spec.js` (create or extend)
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: nothing consumed downstream.
-
-- [ ] **Step 1: Locate the discrepancy**
-
-Run: `grep -n "phenotypicFeatures\|excluded\|HPO" frontend/src/views/PagePhenopacket.vue | head -30`
-
-Find the header badge computation and the list render. One counts all features; the other filters `excluded === false` — or the filter is implicit in a `v-for` guard. Note both line numbers before editing.
-
-- [ ] **Step 2: Write the failing test**
-
-```javascript
-import { describe, it, expect } from 'vitest';
-
-const FEATURES = [
-  { type: { id: 'HP:0000107', label: 'Renal cyst' }, excluded: false,
-    modifiers: [{ id: 'HP:0012832', label: 'Bilateral' }] },
-  { type: { id: 'HP:0000078', label: 'Abnormality of the genital system' }, excluded: false },
-  { type: { id: 'HP:0004904', label: 'Maturity-onset diabetes of the young' }, excluded: false },
-  { type: { id: 'HP:0000122', label: 'Unilateral renal agenesis' }, excluded: true },
-  { type: { id: 'HP:0000079', label: 'Abnormality of the urinary system' }, excluded: true },
-];
-
-describe('PagePhenopacket phenotype rendering', () => {
-  it('renders excluded features, not only present ones', () => {
-    // phenopacket-317 has 3 present + 2 excluded; the page showed "5 HPO"
-    // in the header and "Phenotypic Features (3)" in the section.
-    const rendered = renderedFeatures(FEATURES);
-    expect(rendered).toHaveLength(5);
-  });
-
-  it('the header count equals the rendered count', () => {
-    expect(headerCount(FEATURES)).toBe(renderedFeatures(FEATURES).length);
-  });
-
-  it('distinguishes excluded features rather than showing them as present', () => {
-    const excluded = renderedFeatures(FEATURES).filter((f) => f.excluded);
-    expect(excluded).toHaveLength(2);
-    expect(excluded.map((f) => f.type.id)).toEqual(['HP:0000122', 'HP:0000079']);
-  });
-
-  it('keeps laterality attached to its own feature', () => {
-    const cyst = renderedFeatures(FEATURES).find((f) => f.type.id === 'HP:0000107');
-    expect(cyst.modifiers.map((m) => m.label)).toEqual(['Bilateral']);
-  });
-});
-```
-
-Replace `renderedFeatures` / `headerCount` with the component's actual computed properties found in Step 1, importing them the way the repo's other view tests do.
-
-- [ ] **Step 3: Run to verify it fails**
-
-Run: `cd frontend && npx vitest run tests/unit/views/PagePhenopacket.spec.js`
-Expected: FAIL — 3 rendered, header says 5.
-
-- [ ] **Step 4: Render excluded features**
-
-Remove the filter so excluded features appear, styled distinctly (strikethrough or a muted "excluded" chip — follow whatever convention `PhenotypicFeaturesCard.vue` already uses for negation, and reuse it rather than inventing one). Make the header badge and the section heading read from the same array.
-
-The fourth assertion — laterality attached to its feature — is the spec's deferred display item; if the current markup renders modifiers as a detached chip, fix it here since the test now pins it.
-
-- [ ] **Step 5: Verify in the browser**
-
-```bash
-make hybrid-up && make backend   # and `make frontend` in another shell
-```
-
-Open `http://localhost:3000/phenopackets/phenopacket-317`. Confirm: five features listed, two visibly marked excluded, header and section counts agree, and `Bilateral` sits on Renal cyst rather than floating.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add frontend/src/views/PagePhenopacket.vue frontend/tests/unit/views/PagePhenopacket.spec.js
-git commit -m "fix(ui): render excluded phenotypic features
-
-phenopacket-317 showed '5 HPO' in the header and 'Phenotypic Features (3)' in
-the section: the two excluded features were counted and never rendered. That
-erases the difference between 'assessed and absent' and 'not assessed', which
-is the distinction the excluded flag exists to carry.
-
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.4"
-```
-
----
-
-## Task 7: Wire the conformance test into CI and hand off to the curation program
-
-**Files:**
-- Modify: `.github/workflows/ci.yml`
-- Modify: `docs/superpowers/plans/2026-07-30-curation-data-model.md`
-- Modify: `docs/superpowers/specs/2026-07-30-curation-data-model-design.md`
-
-- [ ] **Step 1: Add the conformance test to the backend CI job**
-
-It runs with the rest of `pytest`, so confirm it is not excluded by any marker filter. Add a separate step running `uv run python scripts/refresh_ontology_snapshot.py --check` **only** as a scheduled/manual job, never on PRs — an upstream HPO rename must not break unrelated PRs. Its purpose is to surface renames as a reviewable diff.
-
-- [ ] **Step 2: Record the coupling in the curation plan**
-
-Per spec §6, add to `docs/superpowers/plans/2026-07-30-curation-data-model.md`:
-
-- In Global Constraints: a line stating this plan must land first, and that `HP:0033132` in Task 7's policy depends on it.
-- In Task 7: a note that the four modifier IDs are defined in `migration/phenopackets/laterality.py` and must be referenced, not re-declared.
-- In Task 9: a step making the domain validator call the conformance checker, so a wrong ID cannot enter through the form either — Task 9 alone would accept `HP:0033133` labelled "hyperechogenicity".
-
-- [ ] **Step 3: Cross-reference the specs**
-
-Add a line to the curation spec's §7 pointing at this spec's §6 boundary table.
-
-- [ ] **Step 4: Full gate**
+- [ ] **Step 5: Full gate and commit**
 
 ```bash
 cd backend && uv run ruff format && uv run ruff check . && uv run pytest -q
-cd ../frontend && npx vitest run && npm run lint:check && npx prettier --check src tests && npm run build
+cd ../frontend && npx vitest run && npm run lint:check && npm run build
 cd ../mcp && uv run pytest -q
 ```
 
-- [ ] **Step 5: Commit**
+---
 
-```bash
-git add .github/workflows/ci.yml docs/superpowers/
-git commit -m "ci: enforce ontology conformance; record curation coupling
+## Task 7: Hand off to the curation program
 
-Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §6"
-```
+- [ ] **Step 1: Wire the conformance check into the curation validator**
+
+Curation plan Task 9's `DomainValidator` validates that a modifier is *permitted for a
+term*. It would happily accept `HP:0033133` labelled "hyperechogenicity". Add a
+`check_label` call so a wrong identifier cannot enter through the form.
+
+- [ ] **Step 2: Record the narrow dependency edges**
+
+Not "this whole plan first". The real edges are:
+
+1. `d4e8b1f60a27` (already applied) must precede the curation plan's `HP:0033132`
+   laterality policy.
+2. Task 2's `app/ontology/conformance.py` must precede curation Task 9.
+3. Whichever plan's migration is written second must set `down_revision` to the other's
+   head — update the placeholder in the curation plan's Task 5 accordingly.
+
+Tasks 3–6 here are **not** prerequisites for the curation vocabularies and can proceed
+in parallel.
+
+- [ ] **Step 3: Point the curation plan at the shared modifier constants**
+
+Its Task 7 migration, Task 9 validator and Phase 3 UI must import the four ids from
+`migration/phenopackets/laterality.py` rather than redeclaring them. Its test fixtures
+use a fake label `"x"`, which a conformance call now rejects — update them to real
+labels.
 
 ---
 
 ## Done criteria
 
-- `HP:0033133`, `HP:0034199`, `MONDO:0011593`, `MONDO:0010953` appear in **zero** rows of `phenopackets.phenopacket` and `phenopacket_revisions.content_jsonb`.
-- Disease entries: 864, every array length 1, every term `MONDO:0007669`.
-- Onsets reconcile: `HP:0003577` 594, `HP:0003674` 54, null 216.
-- Modifier totals: Bilateral 797, Unilateral 408, Left 119, Right 112. No feature carries Bilateral together with any sided modifier.
-- Feature count unchanged at 7810.
-- The conformance test passes against both copies and `hpo_terms_lookup`, with five allowlisted deviations each carrying a written justification.
-- `phenopacket-317` renders five phenotypic features, two marked excluded, header count matching, `Bilateral` attached to Renal cyst.
-- Search index and aggregation MVs refreshed; `/api/v2/search/global` still returns results.
-- The curation plan records the dependency and the shared modifier constants.
+- `_get_canonical_label` does not exist; no import path rewrites a curator's label.
+- A sheet row naming a term its identifier does not denote fails the import, and the
+  error names the term the description describes.
+- `HP:0034199`, `MONDO:0011593`, `MONDO:0010953` appear in zero working copies and zero
+  head-published revisions.
+- `HP:0003674` carries the label `"Onset"`.
+- Disease entries 864, every array length 1, every term `MONDO:0007669`.
+- Modifier totals match the **resolved fixture** from Task 4 Step 1, with any conflicts
+  written to the conflicts CSV rather than silently resolved.
+- `check_label` passes for every hardcoded map and every seeded fixture path.
+- Both migrations round-trip byte-identically against their seeded fixtures.
+- `ontology_preflight.py` exits zero, and its before/after diff is archived.
+- The curation plan's dependency edges and shared constants are recorded.
 
-**The test that matters:** re-running the original audit — resolve every stored `(id, label)` pair against the ontology — reports zero unexplained violations. Everything else in this plan is a consequence of that invariant having been unenforced.
+**The test that matters:** re-run the audit that produced the defect report — resolve
+every stored `(id, label)` against its ontology, and check every sheet row's identifier
+against its description. Both must come back clean, and A1 must be capable of failing,
+which `test_rejects_the_real_defect` proves.

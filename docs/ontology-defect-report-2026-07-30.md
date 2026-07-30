@@ -316,6 +316,7 @@ edit 6.
 - `docs/adr/0003-ga4gh-conformance-debt.md` — separate, deliberately deferred: GA4GH
   field placement and extension value types. Not overlapping with these findings.
 - `docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md` and its plan —
-  **drafts with known blockers**, superseded pending a remediation decision. Their
-  conformance test reproduces the §4 flaw and their count assertions assume a corpus CI
-  does not have. Do not execute as written.
+  rev 2, rewritten after adversarial review. The invariant is now three assertions
+  anchored on the curator's description (§4 explains why a label-vs-id check cannot
+  work), migration tests run against seeded fixtures because CI truncates the corpus,
+  and whole-corpus arithmetic moved to a preflight script.
