@@ -63,8 +63,40 @@ Counts are `entries × 2` because every record exists twice: `phenopackets.pheno
 | **T1** | `HP:0033133` | Renal cortical hyperechogenicity | **Renal cortical hypoechogeneity** | 460 × 2 |
 | **T2** | `MONDO:0011593` | Renal cysts and diabetes syndrome | **seizures, benign familial infantile, 2** | 864 × 2 |
 | **T3** | `MONDO:0010953` | Maturity-onset diabetes of the young type 5 | **Fanconi anemia complementation group E** | 261 × 2 |
-| **T4** | `HP:0034199` | Prenatal onset | **Late first trimester onset** | 180 × 2 |
-| **T5** | `HP:0003674` | Postnatal onset | **Onset** (abstract parent) | 82 × 2 |
+| **T4** | `HP:0034199` | Prenatal onset | **Late first trimester onset** | ~1,068 × 2 (see below) |
+| **T5** | `HP:0003674` | Postnatal onset | **Onset** (abstract parent) | ~445 × 2 (see below) |
+
+**T4/T5 entry counts corrected (2026-07-30).** The `180 × 2` and `82 × 2` figures originally
+printed above were never the number of occurrences of `HP:0034199` / `HP:0003674` in the
+corpus — they were the count in two of the *four* paths the importer writes each onset id to.
+`diseases[].onset.ontologyClass` and `subject.timeAtLastEncounter.ontologyClass` are the two
+paths a reader would expect onset to live in, and are the two the original audit queried;
+`phenotypicFeatures[].onset.ontologyClass` and `phenotypicFeatures[].onset.age.ontologyClass`
+are the two it did not. Per-path counts in the working copy, measured before correction
+migration `efa98cccfa51` ran (each doubled again by the head-published revision copy, per the
+note above the table):
+
+| Path | `HP:0034199` (T4) | `HP:0003674` (T5) |
+|---|---|---|
+| `diseases[].onset.ontologyClass` | 134 | 65 |
+| `subject.timeAtLastEncounter.ontologyClass` | 46 | 17 |
+| `phenotypicFeatures[].onset.ontologyClass` | 678 | 298 |
+| `phenotypicFeatures[].onset.age.ontologyClass` | 210 | 65 |
+| **Total** | **1,068** | **445** |
+
+`phenotypicFeatures[].onset.age.ontologyClass` is a second, independent copy of the same onset
+id, nested under each feature's own `onset.age` key rather than derived from
+`phenotypicFeatures[].onset.ontologyClass`. Of the 275 features carrying this path, **10**
+disagreed with their sibling `onset.ontologyClass` value (outer `HP:0034199`, nested
+`HP:0003674`); migration `efa98cccfa51` corrects each independently from its own stored value,
+never copying from the other.
+
+`interpretations[].diagnosis.disease` was surfaced by the same investigation that found the two
+`phenotypicFeatures[]` paths above, and is corrected in the same migration commit — but its
+journalled pre-correction values show it carries only the T2 `MONDO:0011593` defect (880
+journalled rows across both copies, confirmed via `ontology_migration_journal`); zero of those
+rows contain `HP:0034199` or `HP:0003674`. It is not a fifth onset path and is not counted in
+the totals above.
 
 **T1** inverts a clinical finding. Hyper- and hypo-echogenicity are opposite
 ultrasound observations, and renal cortical hyperechogenicity is the characteristic
@@ -318,7 +350,10 @@ identifiers denoting something else           11
   originating in the curation sheet            1   (with correct name + description)
 of those, present in stored data               5   (T1-T5; T10/T11 never reached the
                                                        corpus, same as T7-T9)
-stored entries affected            ~1,725 × 2 copies
+stored entries affected            ~2,976 × 2 copies  (corrected 2026-07-30 -- see §1's
+                                                       T4/T5 per-path breakdown; the original
+                                                       figure summed T4/T5 occurrences from
+                                                       only 2 of their 4 stored paths)
 laterality annotations discarded             408   (all correct in the sheet)
 independent ontology maps                      4
 maps containing errors                         3
