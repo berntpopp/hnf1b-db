@@ -51,6 +51,55 @@ export const CURATION_SECTIONS = [
  */
 export const CURATION_FIELDS = [];
 
+// ── Task 4: Case section (design spec §3.1) ────────────────────────────────
+// Cohort, Sex, IndividualIdentifier, Publication, PublicationType,
+// FamilyHistory. Sex and Publication already had storage/controls before
+// this task; they are registered here anyway so the Case section's
+// completeness badge accounts for every one of its six dimensions, not just
+// the four that are new.
+CURATION_FIELDS.push(
+  {
+    id: 'cohort',
+    section: 'case',
+    getValue: (p) => p?.hnf1bCuration?.cohort,
+  },
+  {
+    id: 'sex',
+    // The form defaults `subject.sex` to the literal string 'UNKNOWN_SEX',
+    // which is itself a legitimate GA4GH Sex enum member the curator can
+    // deliberately select -- not a placeholder for "untouched". No custom
+    // `isFilled` needed: the default rule already treats any non-empty
+    // string, including 'UNKNOWN_SEX', as filled.
+    section: 'case',
+    getValue: (p) => p?.subject?.sex,
+  },
+  {
+    id: 'individualIdentifiers',
+    section: 'case',
+    getValue: (p) => p?.subject?.alternateIds,
+  },
+  {
+    id: 'publication',
+    section: 'case',
+    getValue: (p) => p?.metaData?.externalReferences,
+    // A bare `{id: 'PMID:'}` (empty-PMID row mid-typing) must not count as
+    // filled -- guard against it explicitly rather than relying on the
+    // default non-empty-array rule, which would be fooled by it.
+    isFilled: (refs) =>
+      Array.isArray(refs) && refs.some((r) => r?.id?.startsWith('PMID:') && r.id !== 'PMID:'),
+  },
+  {
+    id: 'publicationType',
+    section: 'case',
+    getValue: (p) => p?.hnf1bCuration?.publicationType,
+  },
+  {
+    id: 'familyHistory',
+    section: 'case',
+    getValue: (p) => p?.hnf1bCuration?.familyHistory,
+  }
+);
+
 /**
  * Default fill rule (used when a field does not supply its own `isFilled`):
  * arrays are filled iff non-empty; everything else is filled iff

@@ -8,15 +8,46 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
+import { createRouter, createWebHistory } from 'vue-router';
+import { createVuetify } from 'vuetify';
+import * as vuetifyComponents from 'vuetify/components';
+import * as vuetifyDirectives from 'vuetify/directives';
+
+// `get` must be created via vi.hoisted -- vi.mock factories are hoisted above
+// the rest of the module, so a plain `const apiGet = vi.fn()` referenced
+// inside one throws "Cannot access 'apiGet' before initialization".
+const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }));
 
 vi.mock('@/api', () => ({
   getPhenopacket: vi.fn(),
   createPhenopacket: vi.fn(),
   updatePhenopacket: vi.fn(),
+  apiClient: { get: apiGet },
+}));
+
+// PhenotypicFeaturesSection and VariantAnnotationForm are exercised by their
+// own suites and pull in unrelated dependencies (useGroupedHPO's own API
+// calls, VEP annotation state). Stubbed out here so the Case-section mount
+// tests below stay focused and fast.
+vi.mock('@/components/PhenotypicFeaturesSection.vue', () => ({
+  default: {
+    name: 'PhenotypicFeaturesSection',
+    props: ['modelValue', 'formSubmitted'],
+    template: '<div class="mock-phenotypic-features" />',
+  },
+}));
+vi.mock('@/components/VariantAnnotationForm.vue', () => ({
+  default: {
+    name: 'VariantAnnotationForm',
+    props: ['modelValue', 'subjectId'],
+    template: '<div class="mock-variant-annotation-form" />',
+  },
 }));
 
 import { getPhenopacket, updatePhenopacket } from '@/api';
 import PhenopacketCreateEdit from '@/views/PhenopacketCreateEdit.vue';
+import CompletenessRail from '@/components/curation/CompletenessRail.vue';
 
 const EDIT_ROUTE = {
   params: {
@@ -62,6 +93,7 @@ function createContext(overrides = {}) {
     savedRecordState: null,
     isEditing: true,
     buildSubmissionPhenopacket: PhenopacketCreateEdit.methods.buildSubmissionPhenopacket,
+    mergedExternalReferences: PhenopacketCreateEdit.methods.mergedExternalReferences,
     publications: [],
     phenopacket: {
       id: 'PP-001',
@@ -205,5 +237,277 @@ describe('buildSubmissionPhenopacket', () => {
   it('drops blank PMID rows', () => {
     const out = build.call(createContext({ publications: [{ pmid: '  ' }, { pmid: '25324567' }] }));
     expect(out.metaData.externalReferences).toEqual([{ id: 'PMID:25324567' }]);
+  });
+});
+
+describe('mergedExternalReferences', () => {
+  const merge = PhenopacketCreateEdit.methods.mergedExternalReferences;
+
+  it('merges component-local PMIDs with non-PMID references already on the phenopacket', () => {
+    const ctx = createContext({
+      publications: [{ pmid: '25324567' }],
+      phenopacket: {
+        ...createContext().phenopacket,
+        metaData: { externalReferences: [{ id: 'DOI:10.1000/example' }] },
+      },
+    });
+
+    expect(merge.call(ctx)).toEqual([{ id: 'DOI:10.1000/example' }, { id: 'PMID:25324567' }]);
+  });
+
+  it('drops blank PMID rows, matching buildSubmissionPhenopacket', () => {
+    const ctx = createContext({ publications: [{ pmid: '  ' }, { pmid: '25324567' }] });
+    expect(merge.call(ctx)).toEqual([{ id: 'PMID:25324567' }]);
+  });
+
+  it('is the single source buildSubmissionPhenopacket delegates to (no duplicated logic)', () => {
+    const ctx = createContext({
+      publications: [{ pmid: '25324567' }],
+      phenopacket: {
+        ...createContext().phenopacket,
+        metaData: { externalReferences: [{ id: 'DOI:10.1000/example' }] },
+      },
+    });
+
+    const merged = merge.call(ctx);
+    const built = PhenopacketCreateEdit.methods.buildSubmissionPhenopacket.call(ctx);
+
+    expect(built.metaData.externalReferences).toEqual(merged);
+  });
+});
+
+describe('phenopacketForCompleteness', () => {
+  const computeIt = PhenopacketCreateEdit.computed.phenopacketForCompleteness;
+
+  it('reflects an in-progress (unsaved) PMID entry not yet promoted to metaData.externalReferences', () => {
+    const ctx = createContext({
+      publications: [{ pmid: '25324567' }],
+      phenopacket: {
+        id: 'PP-001',
+        subject: { id: 'SUB-001', sex: 'UNKNOWN_SEX' },
+        phenotypicFeatures: [],
+        interpretations: [],
+        metaData: { externalReferences: [] }, // PMID not yet promoted here
+      },
+    });
+
+    const result = computeIt.call(ctx);
+
+    expect(result.metaData.externalReferences).toEqual([{ id: 'PMID:25324567' }]);
+    // The underlying phenopacket itself must not be mutated by reading this.
+    expect(ctx.phenopacket.metaData.externalReferences).toEqual([]);
+  });
+
+  it('matches the raw phenopacket when there are no in-progress publications', () => {
+    const ctx = createContext({ publications: [] });
+    const result = computeIt.call(ctx);
+    expect(result.metaData.externalReferences).toEqual(
+      ctx.phenopacket.metaData.externalReferences || []
+    );
+  });
+});
+
+// ── Case section controls (Task 4) — full mount ────────────────────────────
+// Cohort, IndividualIdentifier chips, PublicationType, FamilyHistory: the
+// four NEW controls (Sex and Publication already existed). These tests mount
+// the real component to prove the selects are wired to the vocabulary
+// composable's refs (not a hardcoded items array) and that v-model bindings
+// round-trip into the right phenopacket paths.
+const VOCAB_FIXTURES = {
+  '/ontology/vocabularies/sex': [
+    { value: 'FEMALE', label: 'Female', description: null },
+    { value: 'MALE', label: 'Male', description: null },
+    { value: 'UNKNOWN_SEX', label: 'Unknown', description: null },
+  ],
+  '/ontology/vocabularies/cohort': [
+    { value: 'born', label: 'Born', description: null },
+    { value: 'fetus', label: 'Fetus', description: null },
+  ],
+  '/ontology/vocabularies/family-history': [
+    { value: 'positive', label: 'Positive', description: null },
+    { value: 'negative', label: 'Negative', description: null },
+    { value: 'not_reported', label: 'Not reported', description: null },
+  ],
+  '/ontology/vocabularies/publication-type': [
+    { value: 'case_report', label: 'Case report', description: null },
+    { value: 'case_series', label: 'Case series', description: null },
+  ],
+};
+
+function mockVocabularyApi() {
+  apiGet.mockImplementation((url) => {
+    const key = Object.keys(VOCAB_FIXTURES).find((k) => url.includes(k));
+    return Promise.resolve({ data: { data: key ? VOCAB_FIXTURES[key] : [] } });
+  });
+}
+
+async function mountCreateForm() {
+  const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+  const router = createRouter({
+    history: createWebHistory(),
+    routes: [
+      { path: '/phenopackets/create', name: 'CreatePhenopacket', component: PhenopacketCreateEdit },
+      { path: '/phenopackets', name: 'Phenopackets', component: { template: '<div />' } },
+    ],
+  });
+  await router.push('/phenopackets/create');
+  await router.isReady();
+
+  return mount(PhenopacketCreateEdit, {
+    global: { plugins: [router, vuetify] },
+  });
+}
+
+function selectByLabel(wrapper, label) {
+  return wrapper.findAllComponents({ name: 'VSelect' }).find((c) => c.props('label') === label);
+}
+
+describe('Case section controls (Task 4)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('wires the Cohort select to phenopacket.hnf1bCuration.cohort using the vocabulary composable', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const cohortSelect = selectByLabel(wrapper, 'Cohort');
+    expect(cohortSelect).toBeTruthy();
+    // Items come from the composable's fixture response, not a literal array
+    // hardcoded in the template.
+    expect(cohortSelect.props('items')).toEqual(VOCAB_FIXTURES['/ontology/vocabularies/cohort']);
+
+    await cohortSelect.vm.$emit('update:modelValue', 'born');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.cohort).toBe('born');
+  });
+
+  it('wires the Publication type select to phenopacket.hnf1bCuration.publicationType using the vocabulary composable', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const select = selectByLabel(wrapper, 'Publication type');
+    expect(select).toBeTruthy();
+    expect(select.props('items')).toEqual(
+      VOCAB_FIXTURES['/ontology/vocabularies/publication-type']
+    );
+
+    await select.vm.$emit('update:modelValue', 'case_report');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.publicationType).toBe('case_report');
+  });
+
+  it('wires the Family history select to phenopacket.hnf1bCuration.familyHistory using the vocabulary composable', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const select = selectByLabel(wrapper, 'Family history');
+    expect(select).toBeTruthy();
+    expect(select.props('items')).toEqual(VOCAB_FIXTURES['/ontology/vocabularies/family-history']);
+
+    await select.vm.$emit('update:modelValue', 'not_reported');
+    expect(wrapper.vm.phenopacket.hnf1bCuration.familyHistory).toBe('not_reported');
+  });
+
+  it('round-trips individual identifiers into phenopacket.subject.alternateIds via the chips input', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    const combobox = wrapper.findComponent({ name: 'VCombobox' });
+    expect(combobox.exists()).toBe(true);
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([]);
+
+    // Add a chip.
+    await combobox.vm.$emit('update:modelValue', ['Berberich_Proband1']);
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual(['Berberich_Proband1']);
+
+    // Add a second chip.
+    await combobox.vm.$emit('update:modelValue', ['Berberich_Proband1', 'Family2_II-1']);
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([
+      'Berberich_Proband1',
+      'Family2_II-1',
+    ]);
+
+    // Remove the first chip (closable-chips emits the array without it).
+    await combobox.vm.$emit('update:modelValue', ['Family2_II-1']);
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual(['Family2_II-1']);
+  });
+
+  it('defaults subject.alternateIds to [] and hnf1bCuration to {} for a new phenopacket', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([]);
+    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({});
+  });
+
+  it('defaults hnf1bCuration and subject.alternateIds when loading a legacy record that lacks them', async () => {
+    getPhenopacket.mockResolvedValueOnce({
+      data: {
+        phenopacket: {
+          id: 'PP-LEGACY',
+          subject: { id: 'SUB-LEGACY', sex: 'UNKNOWN_SEX' },
+          phenotypicFeatures: [],
+          interpretations: [],
+          metaData: { externalReferences: [] },
+          // No hnf1bCuration block at all -- this is the legacy shape.
+        },
+        revision: 1,
+        state: 'draft',
+      },
+    });
+
+    const vuetify = createVuetify({
+      components: vuetifyComponents,
+      directives: vuetifyDirectives,
+    });
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [
+        {
+          path: '/phenopackets/:phenopacket_id/edit',
+          name: 'EditPhenopacket',
+          component: PhenopacketCreateEdit,
+        },
+      ],
+    });
+    await router.push('/phenopackets/PP-LEGACY/edit');
+    await router.isReady();
+
+    const wrapper = mount(PhenopacketCreateEdit, { global: { plugins: [router, vuetify] } });
+    await flushPromises();
+
+    expect(wrapper.vm.phenopacket.hnf1bCuration).toEqual({});
+    expect(wrapper.vm.phenopacket.subject.alternateIds).toEqual([]);
+  });
+
+  it('passes phenopacketForCompleteness (not the raw phenopacket) into CompletenessRail', async () => {
+    const wrapper = await mountCreateForm();
+    await flushPromises();
+
+    // Reassignment rather than `.push()`: Vue's public-instance proxy for a
+    // component mixing `setup()` with Options API `data` does not route an
+    // externally-called `wrapper.vm.arr.push()` through the same reactive
+    // proxy the render/computed tree tracks (a VTU/Vue quirk unrelated to
+    // this component's own code -- `this.publications.push()` called from
+    // inside a real method, as `addPublication()` does, is unaffected).
+    // Reassigning goes through the tracked `set` trap correctly either way.
+    wrapper.vm.publications = [{ pmid: '25324567' }];
+    await wrapper.vm.$nextTick();
+
+    const rail = wrapper.findComponent(CompletenessRail);
+    expect(rail.exists()).toBe(true);
+    expect(rail.props('phenopacket').metaData.externalReferences).toEqual([
+      { id: 'PMID:25324567' },
+    ]);
+    // The raw phenopacket must not have been mutated by reading the computed.
+    expect(wrapper.vm.phenopacket.metaData.externalReferences || []).not.toContainEqual({
+      id: 'PMID:25324567',
+    });
   });
 });

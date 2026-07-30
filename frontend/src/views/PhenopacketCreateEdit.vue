@@ -77,6 +77,59 @@
                   </v-col>
                 </v-row>
 
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.cohort"
+                      :items="vocabularies.cohort.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Cohort"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-combobox
+                      v-model="phenopacket.subject.alternateIds"
+                      label="Individual identifiers"
+                      hint="Press enter to add an identifier"
+                      persistent-hint
+                      chips
+                      multiple
+                      closable-chips
+                    />
+                  </v-col>
+                </v-row>
+
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.publicationType"
+                      :items="vocabularies.publicationType.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Publication type"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.familyHistory"
+                      :items="vocabularies.familyHistory.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Family history"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                </v-row>
+
                 <div class="text-subtitle-2 text-medium-emphasis mt-4 mb-2">Publications</div>
                 <div v-for="(pub, index) in publications" :key="index" class="mb-3">
                   <v-row>
@@ -223,7 +276,7 @@
             <!-- Sticky completeness rail -->
             <v-col cols="12" md="4">
               <CompletenessRail
-                :phenopacket="phenopacket"
+                :phenopacket="phenopacketForCompleteness"
                 :phenotypes-completeness="phenotypesCompleteness"
                 @navigate="onRailNavigate"
               />
@@ -275,9 +328,19 @@ export default {
         subject: {
           id: '',
           sex: 'UNKNOWN_SEX',
+          // Curation console Task 4 (design spec §3.1): chips input for
+          // IndividualIdentifier. Default [] so `v-model` on a fresh record
+          // never touches `undefined`.
+          alternateIds: [],
         },
         phenotypicFeatures: [],
         interpretations: [],
+        // Curation console Task 4 (design spec §3.1): cohort, publicationType,
+        // familyHistory land here. Typed fields only (schema_validator.py
+        // keeps `additionalProperties: false`) -- default {} so a fresh
+        // record's `v-model="phenopacket.hnf1bCuration.cohort"` etc. never
+        // throws on an absent parent object.
+        hnf1bCuration: {},
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'HNF1B-DB Curation Interface',
@@ -353,6 +416,23 @@ export default {
       const features = this.phenopacket.phenotypicFeatures || [];
       return { filled: features.length, total: features.length };
     },
+    // The `publication` CURATION_FIELDS entry reads
+    // `metaData.externalReferences`, but a PMID the curator is actively
+    // typing lives in `this.publications` (component-local state) until
+    // save time -- see buildSubmissionPhenopacket/mergedExternalReferences.
+    // Feeding the raw `phenopacket` prop into CompletenessRail would show
+    // "not filled" while the curator is mid-entry. This computed overlays
+    // the same merge so the rail reflects in-progress state without
+    // mutating `phenopacket` itself.
+    phenopacketForCompleteness() {
+      return {
+        ...this.phenopacket,
+        metaData: {
+          ...this.phenopacket.metaData,
+          externalReferences: this.mergedExternalReferences(),
+        },
+      };
+    },
   },
   async mounted() {
     // Load controlled vocabularies from API
@@ -403,6 +483,14 @@ export default {
         // Backend returns full phenopacket response with metadata
         this.phenopacket = response.data.phenopacket;
 
+        // Legacy records (curation console Task 4, design spec §3.1) may
+        // carry no hnf1bCuration block at all, or a subject with no
+        // alternateIds. Default both defensively so the new v-model
+        // bindings below never throw on a record older than this task.
+        this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+        this.phenopacket.subject = this.phenopacket.subject || {};
+        this.phenopacket.subject.alternateIds = this.phenopacket.subject.alternateIds || [];
+
         // Enable optimistic locking by capturing current revision
         this.revision = response.data.revision;
 
@@ -447,13 +535,15 @@ export default {
       this.publications.splice(index, 1);
     },
 
-    buildSubmissionPhenopacket() {
-      // `publications` is destructured out and discarded: it is not a Phenopackets
-      // v2 field, and records saved before this fix may carry it in the loaded
-      // document. `this.publications` (component state) is the source of truth.
-      const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
-
-      const existingReferences = phenopacket.metaData?.externalReferences || [];
+    // Merges `this.publications` (component-local PMID editor state -- see
+    // the `publications` data() comment) with any non-PMID external
+    // references already on `phenopacket.metaData`. Shared by
+    // buildSubmissionPhenopacket (save payload) and the
+    // phenopacketForCompleteness computed (completeness rail), so an
+    // in-progress PMID the curator hasn't saved yet still counts as filled
+    // there instead of only becoming visible after a save round-trip.
+    mergedExternalReferences() {
+      const existingReferences = this.phenopacket.metaData?.externalReferences || [];
       const nonPmidExternalReferences = existingReferences.filter(
         (ref) => !ref.id?.startsWith('PMID:')
       );
@@ -462,11 +552,20 @@ export default {
         .filter(Boolean)
         .map((pmid) => ({ id: `PMID:${pmid}` }));
 
+      return [...nonPmidExternalReferences, ...pmidExternalReferences];
+    },
+
+    buildSubmissionPhenopacket() {
+      // `publications` is destructured out and discarded: it is not a Phenopackets
+      // v2 field, and records saved before this fix may carry it in the loaded
+      // document. `this.publications` (component state) is the source of truth.
+      const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
+
       return {
         ...phenopacket,
         metaData: {
           ...(phenopacket.metaData || {}),
-          externalReferences: [...nonPmidExternalReferences, ...pmidExternalReferences],
+          externalReferences: this.mergedExternalReferences(),
         },
       };
     },
