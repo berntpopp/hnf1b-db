@@ -10,12 +10,12 @@ fails offline, and turns an upstream HPO rename into a red build for every
 unrelated PR. This script is the explicit, reviewable way that snapshot gets
 updated: run it, and the diff shows exactly what changed upstream.
 
-Covers **four** ontologies:
+Covers **six** ontologies:
 
 - HPO, via `https://ontology.jax.org/api/hp/terms/{id}` (field `name`, not
   `label`; field `definition`, not `description`).
-- MONDO, Orphanet (ORDO) and ECO, via EBI OLS4 **term lookup by IRI**:
-  `https://www.ebi.ac.uk/ols4/api/ontologies/{ont}/terms?iri={iri}`.
+- MONDO, Orphanet (ORDO), ECO, SO and GENO, via EBI OLS4 **term lookup by
+  IRI**: `https://www.ebi.ac.uk/ols4/api/ontologies/{ont}/terms?iri={iri}`.
   Deliberately NOT OLS4's `/search` endpoint — `/search` does free-text
   matching and can return a plausible-looking but wrong term for an
   identifier query (it would report `MONDO:0011593` as "seizures, benign
@@ -23,11 +23,15 @@ Covers **four** ontologies:
   ids it silently returns unrelated matches). `/terms?iri=...` is an exact
   identifier lookup.
 
-SO and GENO ids the importer emits for `structuralType` / `allelicState`
-(`migration/phenopackets/extractors.py`, `migration/vrs/cnv_parser.py`) are
-listed in `_UNRESOLVED_TERM_IDS` for documentation but are not resolved: no
-ontology key in the four covered here serves them. A future extension can
-add a resolver and move them into `_EXPLICIT_TERM_IDS`.
+SO and GENO cover the ids the importer emits for `structuralType` /
+`allelicState` (`migration/phenopackets/extractors.py`,
+`migration/vrs/cnv_parser.py`) — `_SO_GENO_TERM_IDS` below. Added
+2026-07-30: `ontology_preflight.py` was failing on three of them
+(`SO:1000035` duplication, `SO:0000159` deletion, `GENO:0000135`
+heterozygous) even though all three are stored correctly — the snapshot
+simply never covered these two ontologies before. Verified live against
+OLS4 at the time: neither `so` nor `geno` was previously in
+`_OLS4_ONTOLOGY_BY_PREFIX`.
 
 The term list itself must not depend on Task 4 (the curation-sheet re-sync,
 which runs later), so it is built from three **already-committed** sources:
@@ -95,29 +99,54 @@ _EXPLICIT_TERM_IDS = [
     "HP:0000083",  # Renal insufficiency (ontology_service.py ADDITIONAL_TERMS)
     "HP:0000819",  # Diabetes mellitus (ontology_service.py ADDITIONAL_TERMS)
     "MONDO:0005147",  # type 1 diabetes mellitus (ontology_service.py ADDITIONAL_TERMS)
+    # clinical_queries.py's MORPHOLOGY_TERM_LABELS (backend/tests/
+    # test_clinical_queries_morphology.py). Coverage gaps, not defects --
+    # both verified live against OLS4 2026-07-30 and both match the map's
+    # stored label exactly:
+    #   HP:0000110 -> "Renal dysplasia"
+    #   HP:0000113 -> "Polycystic kidney dysplasia"
+    "HP:0000110",  # Renal dysplasia
+    "HP:0000113",  # Polycystic kidney dysplasia
+    # app/hpo_proxy.py's GET /common-terms "developmental" category.
+    # Coverage gaps, not defects -- both verified live against OLS4
+    # 2026-07-30 and both match hpo_proxy.py's stored label exactly.
+    "HP:0001737",  # Pancreatic cysts
+    "HP:0001732",  # Abnormality of the pancreas
 ]
 
-# SO / GENO ids the importer emits for structuralType / allelicState. Not
-# resolved by this script — see module docstring. Kept here so the full
-# ontology footprint of the importer is discoverable in one place.
-_UNRESOLVED_TERM_IDS = [
-    "SO:0001483",  # SNV
+# SO and GENO ids the importer emits for structuralType / allelicState
+# (migration/phenopackets/extractors.py, migration/vrs/cnv_parser.py).
+# SO:0000159, SO:1000035 and GENO:0000135 are the ones actually present in
+# the corpus today (confirmed by querying every distinct id at both paths,
+# working copies and head-published revisions, 2026-07-30); the other three
+# are included too so the coverage gap does not reopen the moment a
+# different structural type is imported -- extractors.py's molecular-
+# consequence branch already emits them. All six verified live against OLS4
+# 2026-07-30. SO:1000032's canonical OLS4 label is "delins" -- SO renamed it
+# from "indel" in 2019 to align with HGVS nomenclature -- but "indel", the
+# label the importer actually stores, remains a listed synonym, so it is
+# conformant, not a defect.
+_SO_GENO_TERM_IDS = [
     "SO:0000159",  # deletion
     "SO:1000035",  # duplication
-    "SO:1000032",  # indel
-    "SO:0000667",  # insertion
     "GENO:0000135",  # heterozygous
+    "SO:0001483",  # SNV
+    "SO:1000032",  # canonical label "delins"; "indel" (stored) is a listed synonym
+    "SO:0000667",  # insertion
 ]
 
 # OLS4 ontology key + IRI-building function for each non-HPO prefix this
 # script covers. Orphanet's OLS4 IRI segment is "Orphanet_<number>" — NOT
 # "ORPHA_<number>", which `term_id.replace(":", "_")` would naively produce
-# and which 404s (verified live). MONDO and ECO use their own prefix as the
-# OBO Foundry local-id segment, so the naive substitution is correct there.
+# and which 404s (verified live). MONDO, ECO, SO and GENO use their own
+# prefix as the OBO Foundry local-id segment, so the naive substitution is
+# correct there (verified live for SO_1000035 and GENO_0000135, 2026-07-30).
 _OLS4_ONTOLOGY_BY_PREFIX: dict[str, tuple[str, str]] = {
     "MONDO:": ("mondo", "http://purl.obolibrary.org/obo/MONDO_{}"),
     "ORPHA:": ("ordo", "http://www.orpha.net/ORDO/Orphanet_{}"),
     "ECO:": ("eco", "http://purl.obolibrary.org/obo/ECO_{}"),
+    "SO:": ("so", "http://purl.obolibrary.org/obo/SO_{}"),
+    "GENO:": ("geno", "http://purl.obolibrary.org/obo/GENO_{}"),
 }
 
 
@@ -138,6 +167,7 @@ def build_term_id_list() -> list[str]:
         *_term_ids_from_vocabulary_csv(_VOCAB_CSV_PATH),
         *_LATERALITY_IDS,
         *_EXPLICIT_TERM_IDS,
+        *_SO_GENO_TERM_IDS,
     ]
     seen: set[str] = set()
     unique_ids: list[str] = []
@@ -316,6 +346,8 @@ def build_snapshot() -> dict[str, Any]:
         "mondo": _ontology_version("mondo"),
         "ordo": _ontology_version("ordo"),
         "eco": _ontology_version("eco"),
+        "so": _ontology_version("so"),
+        "geno": _ontology_version("geno"),
     }
 
     return {"_generated_against": generated_against, "terms": terms}

@@ -1,9 +1,11 @@
 {
   "_generated_against": {
     "eco": "unknown",
+    "geno": "2026-02-02",
     "hp": "2026-06-23",
     "mondo": "2026-07-06",
-    "ordo": "4.9"
+    "ordo": "4.9",
+    "so": "unknown"
   },
   "terms": {
     "ECO:0000033": {
@@ -12,6 +14,11 @@
       "synonyms": [
         "traceable author statement"
       ]
+    },
+    "GENO:0000135": {
+      "definition": "A zygosity quality inhering in a 'single locus complement' where the copies of the feature at this location have at least one difference in sequence  (in a eukaryotic diploid genome, this means having two distinct alleles on each of the two homologous chromosomes, one inherited from each parent).",
+      "name": "heterozygous",
+      "synonyms": []
     },
     "HP:0000003": {
       "definition": "Multicystic dysplasia of the kidney is characterized by multiple cysts of varying size in the kidney and the absence of a normal pelvicaliceal system. The condition is associated with ureteral or ureteropelvic atresia, and the affected kidney is nonfunctional.",
@@ -68,6 +75,22 @@
         "Cystic kidney disease",
         "Cystic kidneys",
         "Renal cysts"
+      ]
+    },
+    "HP:0000110": {
+      "definition": "The presence of developmental dysplasia of the kidney.",
+      "name": "Renal dysplasia",
+      "synonyms": [
+        "Dysplastic kidneys",
+        "Renal adysplasia"
+      ]
+    },
+    "HP:0000113": {
+      "definition": "The presence of multiple cysts in both kidneys.",
+      "name": "Polycystic kidney dysplasia",
+      "synonyms": [
+        "Polycystic kidneys",
+        "Polycystic kidney disease"
       ]
     },
     "HP:0000122": {
@@ -157,6 +180,23 @@
         "Congenital heart defect",
         "Congenital heart defects",
         "Heart defect"
+      ]
+    },
+    "HP:0001732": {
+      "definition": "An abnormality of the pancreas.",
+      "name": "Abnormality of the pancreas",
+      "synonyms": [
+        "Abnormality of the pancreas",
+        "Pancreatic disease"
+      ]
+    },
+    "HP:0001737": {
+      "definition": "A cyst of the pancreas that possess a lining of mucous epithelium.",
+      "name": "Pancreatic cysts",
+      "synonyms": [
+        "Pancreatic cysts",
+        "Multiple pancreatic cysts",
+        "Pancreatic cyst"
       ]
     },
     "HP:0001738": {
@@ -504,6 +544,47 @@
       "name": "Oligomeganephronia",
       "synonyms": [
         "Oligomeganephronic renal hypoplasia"
+      ]
+    },
+    "SO:0000159": {
+      "definition": "The point at which one or more contiguous nucleotides were excised.",
+      "name": "deletion",
+      "synonyms": [
+        "deleted_sequence",
+        "nucleotide deletion",
+        "nucleotide_deletion"
+      ]
+    },
+    "SO:0000667": {
+      "definition": "The sequence of one or more nucleotides added between two adjacent nucleotides in the sequence.",
+      "name": "insertion",
+      "synonyms": [
+        "nucleotide insertion",
+        "nucleotide_insertion",
+        "insertion"
+      ]
+    },
+    "SO:0001483": {
+      "definition": "SNVs are single nucleotide positions in genomic DNA at which different sequence alternatives exist.",
+      "name": "SNV",
+      "synonyms": [
+        "single nucleotide variant"
+      ]
+    },
+    "SO:1000032": {
+      "definition": "Indels can have a different number of bases than the corresponding reference sequence. The term name was changed from indel to delins on 2/24/2019 to align with the HGVS nomenclature term for a deletion-insertion. Indel was causing confusion in the annotation community (github issue 445). The HGVS nomenclature definition of deletion-insertion (delins) is a sequence change where, compared to a reference sequence, one or more nucleotides are replaced by one or more other nucleotides and which is not a substitution, inversion or conversion.",
+      "name": "delins",
+      "synonyms": [
+        "deletion-insertion",
+        "indel"
+      ]
+    },
+    "SO:1000035": {
+      "definition": "An insertion which derives from, or is identical in sequence to, nucleotides present at a known location in the genome.",
+      "name": "duplication",
+      "synonyms": [
+        "nucleotide duplication",
+        "nucleotide_duplication"
       ]
     }
   }

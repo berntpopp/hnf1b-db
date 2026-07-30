@@ -17,54 +17,33 @@ Mirrors `tests/test_ontology_conformance.py::test_hpo_mapper_fallback_is_conform
 from app.ontology.conformance import check_label
 from app.phenopackets.clinical_queries import MORPHOLOGY_TERM_LABELS
 
-# Ids present in MORPHOLOGY_TERM_LABELS but absent from the pinned ontology
-# snapshot (app/ontology/data/ontology_snapshot.json) -- a coverage gap, not
-# a defect, in the same sense the defect report describes for HP:0012759
-# (§2): "it only failed check_label because it was missing from the pinned
-# snapshot, a coverage gap rather than a defect." Both ids were independently
+# HP:0000110 and HP:0000113 used to fail check_label only because they were
+# absent from the pinned ontology snapshot (app/ontology/data/
+# ontology_snapshot.json) -- a coverage gap, not a defect, in the same sense
+# the defect report describes for HP:0012759 (§2). Both were independently
 # verified against the live HPO API (OLS4, 2026-07-30):
 #   HP:0000110 -> "Renal dysplasia" (matches this map's label exactly)
-#   HP:0000113 -> "Polycystic kidney dysplasia", with "Polycystic kidneys"
-#     (this map's label) listed as a synonym
-# Extending the pinned snapshot's explicit term list is out of scope for this
-# fix (file scope: clinical_queries.py, this test, the defect-report doc), so
-# this test asserts the coverage gap explicitly rather than silently
-# skipping these two ids -- if the snapshot is later extended to cover them,
-# `check_label` will start returning `None` and this test documents exactly
-# that expected transition.
-_NOT_IN_PINNED_SNAPSHOT = {"HP:0000110", "HP:0000113"}
+#   HP:0000113 -> "Polycystic kidney dysplasia" (matches this map's label
+#     exactly; "Polycystic kidneys" is also a listed synonym)
+# scripts/refresh_ontology_snapshot.py now resolves both (Task 5,
+# docs/superpowers/plans/2026-07-30-ontology-data-quality.md), closing the
+# gap this test used to document explicitly.
 
 
-def test_morphology_term_labels_are_conformant_or_a_documented_coverage_gap():
-    """Every id/label pair is either A3-conformant or a known snapshot gap.
+def test_morphology_term_labels_are_conformant():
+    """Every id/label pair in MORPHOLOGY_TERM_LABELS is A3-conformant.
 
     A genuine wrong-identifier defect (the T9 shape this test guards
-    against) fails with a *label mismatch* message naming the pinned
-    snapshot's actual canonical name/synonyms for that id -- distinct from
-    the "not a known term in the pinned ontology snapshot" message a
-    coverage gap produces. Asserting on the message content, not just
-    truthiness, keeps this test from silently reclassifying a real defect as
-    a coverage gap if a future edit reuses one of the gap ids for something
-    else.
+    against, e.g. `HP:0004719` labelled "Oligomeganephronia") fails with a
+    *label mismatch* message naming the pinned snapshot's actual canonical
+    name/synonyms for that id.
     """
-    unexpected_violations = {}
-    for term_id, label in MORPHOLOGY_TERM_LABELS.items():
-        violation = check_label(term_id, label)
-        if violation is None:
-            assert term_id not in _NOT_IN_PINNED_SNAPSHOT, (
-                f"{term_id} now resolves against the pinned snapshot -- "
-                "remove it from _NOT_IN_PINNED_SNAPSHOT."
-            )
-            continue
-        if term_id in _NOT_IN_PINNED_SNAPSHOT:
-            assert "not a known term in the pinned ontology snapshot" in violation, (
-                f"{term_id} failed check_label for a reason other than "
-                f"snapshot coverage -- investigate: {violation}"
-            )
-            continue
-        unexpected_violations[term_id] = violation
-
-    assert not unexpected_violations, unexpected_violations
+    violations = {
+        term_id: violation
+        for term_id, label in MORPHOLOGY_TERM_LABELS.items()
+        if (violation := check_label(term_id, label)) is not None
+    }
+    assert not violations, violations
 
 
 def test_hypoplasia_filter_no_longer_uses_the_wrong_oligomeganephronia_id():
