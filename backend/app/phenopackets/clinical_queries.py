@@ -22,6 +22,24 @@ from sqlalchemy.sql import Select
 
 from app.phenopackets.models import Phenopacket
 
+# Kidney morphology term labels, keyed by the id `get_morphology_features`
+# filters on. Module-level (rather than inline in the method) so
+# `tests/test_clinical_queries_morphology.py` can import it and check every
+# entry with `app.ontology.conformance.check_label` -- this is the fifth
+# hardcoded ontology map documented in
+# docs/ontology-defect-report-2026-07-30.md §5. Mostly HPO, except
+# Oligomeganephronia, which HPO has no term for; the corpus (and this map)
+# use the Orphanet term instead (`ORPHA:2260`; see §2 T9).
+MORPHOLOGY_TERM_LABELS: Dict[str, str] = {
+    "HP:0100611": "Multiple glomerular cysts",
+    "ORPHA:2260": "Oligomeganephronia",
+    "HP:0000110": "Renal dysplasia",
+    "HP:0000089": "Renal hypoplasia",
+    "HP:0000107": "Renal cyst",
+    "HP:0000003": "Multicystic kidney dysplasia",
+    "HP:0000113": "Polycystic kidney dysplasia",
+}
+
 
 class ClinicalQueries:
     """Reusable clinical query patterns - DRY principle."""
@@ -322,21 +340,15 @@ class ClinicalQueries:
         Returns:
             SQLAlchemy query for morphology cases
         """
-        # Define morphology HPO mappings
-        all_morphology_hpo = [
-            "HP:0100611",  # Multiple glomerular cysts
-            "HP:0004719",  # Oligomeganephronia
-            "HP:0000110",  # Renal dysplasia
-            "HP:0000089",  # Renal hypoplasia
-            "HP:0000107",  # Renal cysts
-            "HP:0000003",  # Multicystic kidney dysplasia
-            "HP:0000113",  # Polycystic kidneys
-        ]
+        # Morphology term ids, in the same order as MORPHOLOGY_TERM_LABELS
+        # (the module-level id -> label map used for ontology conformance
+        # testing; HPO, plus one Orphanet term -- see its docstring).
+        all_morphology_hpo = list(MORPHOLOGY_TERM_LABELS)
 
         morphology_mappings = {
             "cysts": ["HP:0100611", "HP:0000107", "HP:0000113"],
             "dysplasia": ["HP:0000110", "HP:0000003"],
-            "hypoplasia": ["HP:0000089", "HP:0004719"],
+            "hypoplasia": ["HP:0000089", "ORPHA:2260"],
         }
 
         # Select appropriate HPO terms
