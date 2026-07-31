@@ -10,11 +10,18 @@
       </h1>
 
       <v-card-text>
-        <!-- Error State -->
-        <v-alert v-if="error" type="error" variant="tonal" prominent class="mb-4">
+        <!-- Fatal: the form could not be built at all (vocabularies or the
+             record itself failed to load). Only this replaces the form. -->
+        <v-alert v-if="loadError" type="error" variant="tonal" prominent class="mb-4">
           <v-alert-title>Error</v-alert-title>
-          {{ error }}
+          {{ loadError }}
         </v-alert>
+
+        <!-- A recoverable error (validation, save failure) is NOT rendered
+             here. It renders once, next to the Save button the curator just
+             pressed, on a form that stays mounted -- this block used to be
+             `v-else-if="!error"`, so any such error unmounted every section
+             and left a fully entered case irrecoverable behind an alert. -->
 
         <!-- Loading State (Edit Mode) -->
         <div v-if="loading && isEditing">
@@ -26,7 +33,7 @@
         </div>
 
         <!-- Form -->
-        <v-form v-else-if="!error" ref="form" @submit.prevent="handleSubmit">
+        <v-form v-else-if="!loadError" ref="form" @submit.prevent="handleSubmit">
           <!-- Phenopacket ID (read-only for edit) -->
           <v-text-field
             v-model="phenopacket.id"
@@ -171,6 +178,7 @@
                   :segregation-items="vocabularies.segregation.value"
                   :allelic-state-items="vocabularies.allelicState.value"
                   :vocabularies-loading="vocabularies.loading.value"
+                  @update:pending-edit="pendingVariantEdit = $event"
                 />
               </CurationSection>
 
@@ -327,6 +335,7 @@ import ClassificationSection from '@/components/curation/ClassificationSection.v
 import AgeSection from '@/components/curation/AgeSection.vue';
 import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
+import { formatApiError } from '@/utils/apiError';
 
 export default {
   name: 'PhenopacketCreateEdit',
@@ -403,7 +412,13 @@ export default {
       loading: true, // Start with loading true to prevent form flash
       saving: false,
       error: null,
+      // Separate from `error`: only a failure that makes the form
+      // unbuildable may replace it. Recoverable errors render above it.
+      loadError: null,
       formSubmitted: false,
+      // True while the detailed variant editor holds typed-but-uncommitted
+      // changes; blocks submit so they are never silently dropped.
+      pendingVariantEdit: false,
       revision: null, // For optimistic locking
       changeReason: '', // For audit trail
       // Saved record state for toast message selection
@@ -501,7 +516,7 @@ export default {
       window.logService.info('Loaded phenopacket vocabularies for form');
     } catch (err) {
       window.logService.error('Failed to load vocabularies', { error: err.message });
-      this.error = 'Failed to load form vocabularies. Please refresh the page.';
+      this.loadError = 'Failed to load form vocabularies. Please refresh the page.';
     }
 
     if (this.isEditing) {
@@ -619,7 +634,7 @@ export default {
         // unsaved change relative to the stale mount-time snapshot.
         this.captureSnapshot();
       } catch (err) {
-        this.error = 'Failed to load phenopacket: ' + err.message;
+        this.loadError = 'Failed to load phenopacket: ' + err.message;
         window.logService.error('Failed to load phenopacket for editing', {
           error: err.message,
         });
@@ -677,6 +692,17 @@ export default {
       const { valid } = await this.$refs.form.validate();
       if (!valid) {
         this.error = 'Please fix validation errors';
+        return;
+      }
+
+      // The detailed variant editor is a sub-form: its contents reach the
+      // phenopacket only via its own "Save variant" button. Submitting with
+      // something typed there but not committed used to drop it without a
+      // word -- silently discarding curator input is the one failure this
+      // console must not have.
+      if (this.pendingVariantEdit) {
+        this.error =
+          'The variant editor has unsaved changes. Click "Save variant" to keep them, or Cancel to discard them, then save the record.';
         return;
       }
 
@@ -778,7 +804,10 @@ export default {
             status: err.response?.status,
           });
         } else {
-          this.error = 'Failed to save phenopacket: ' + (err.response?.data?.detail || err.message);
+          // formatApiError renders the backend's
+          // {validation_errors: [...]} body; plain concatenation produced
+          // "[object Object]" and threw away every reason the save failed.
+          this.error = `Failed to save phenopacket: ${formatApiError(err, 'Unknown error')}`;
           window.logService.error('Failed to save phenopacket', {
             error: err.message,
             status: err.response?.status,

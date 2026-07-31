@@ -68,9 +68,33 @@ export const soIdFor = (consequence) => SO_TERMS[consequence];
  * label already stored on legacy records, rather than surprise curators with
  * an unfamiliar synonym.
  */
-export const STRUCTURAL_VARIANT_TYPES = [
+export const VARIANT_TYPES = [
   { id: 'SO:0000159', label: 'deletion' },
   { id: 'SO:1000035', label: 'duplication' },
   { id: 'SO:0001483', label: 'SNV' },
   { id: 'SO:1000032', label: 'indel' },
 ];
+
+/**
+ * The two members that belong on `variationDescriptor.structuralType`.
+ *
+ * The corpus partitions these four terms across two different fields, and the
+ * split is exact: 404 deletion + 36 duplication on `structuralType`, 302 SNV +
+ * 122 indel on `molecularConsequences`, 440 + 424 = 864 records, no overlap.
+ *
+ * The distinction is load-bearing, not cosmetic. The backend rejects any
+ * descriptor that carries `structuralType` without an accompanying ISCN or
+ * GA4GH-CNV expression ("Structural variant missing valid CNV notation",
+ * backend/app/phenopackets/validation/variant_validator/validator.py:200), and
+ * an SNV has neither. Writing all four to `structuralType` therefore made
+ * every SNV and indel entered through the console unsaveable.
+ */
+export const STRUCTURAL_TYPE_IDS = new Set(['SO:0000159', 'SO:1000035']);
+
+/** Every id in VARIANT_TYPES, so the variant-type member of
+ * `molecularConsequences` can be replaced without disturbing a VEP-derived
+ * consequence term (e.g. SO:0001583 missense_variant) sharing that array. */
+export const VARIANT_TYPE_IDS = new Set(VARIANT_TYPES.map((t) => t.id));
+
+/** @param {{id?: string} | null | undefined} term */
+export const isStructuralType = (term) => !!term && STRUCTURAL_TYPE_IDS.has(term.id);

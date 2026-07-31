@@ -55,6 +55,17 @@
  *       one of the 3 real rows carrying a real institutional email in its
  *       `ReviewBy` column -- curatedBy/reviewer are stamped from the session
  *       display name, never from a form field.
+ *  D10. The sheet's `Varsome` cell is a Varsome *display* string
+ *       ("HNF1B(NM_000458.4):c.443C>T (p.Ser148Leu)"), not a coding-HGVS
+ *       value. The migration parsed it down to "NM_000458.4:c.443C>T", which
+ *       is what the migrated record stores and what the "Varsome (hgvs.c)"
+ *       control asks for, so that is what is typed here. The verbatim cell
+ *       is not lost -- `VariantReported` is the field that keeps the
+ *       curator's own wording untouched.
+ *  D11. No sheet column holds an ISCN karyotype, yet the backend rejects any
+ *       structural variant that carries none, and it cannot be derived (the
+ *       sheet's CNV coordinate has a start but no end). The curator supplies
+ *       it; the value used here is the one the migrated record stores.
  */
 
 import { test, expect } from '@playwright/test';
@@ -199,13 +210,30 @@ function timeElementPicker(page, pickerLabel) {
   });
 }
 
+/**
+ * Select a picker mode, idempotently.
+ *
+ * The mode toggle is a v-btn-toggle *without* `mandatory` on purpose: clicking
+ * the active mode clears it, which is how the picker expresses "not yet
+ * curated" (TimeElementPicker.vue:42). So a blind .click() on an already-active
+ * mode does the opposite of what the caller wants and hides the value inputs.
+ * This matters on the edit route, where the picker arrives pre-populated.
+ */
+async function ensureTimeMode(picker, modeLabel) {
+  const button = picker.getByRole('button', { name: modeLabel, exact: true });
+  const classes = (await button.getAttribute('class')) || '';
+  if (!classes.includes('v-btn--active')) {
+    await button.click();
+  }
+}
+
 async function setTimeElementGestational(picker, weeks) {
-  await picker.getByRole('button', { name: 'Gestational', exact: true }).click();
+  await ensureTimeMode(picker, 'Gestational');
   await fillText(picker.locator('.v-input', { hasText: 'gestational weeks' }), String(weeks));
 }
 
 async function setTimeElementAgeYears(picker, years) {
-  await picker.getByRole('button', { name: 'Age', exact: true }).click();
+  await ensureTimeMode(picker, 'Age');
   await fillText(picker.locator('.v-input', { hasText: 'years' }), String(years));
 }
 
@@ -323,14 +351,15 @@ const SHEET_ROWS = [
     },
     variant: {
       reported: 'S148L (C443T)',
-      structuralType: { label: 'SNV', id: 'SO:0001483' },
+      variantType: { label: 'SNV', id: 'SO:0001483' },
+      isStructural: false,
       hg38: 'chr17-37739541-G-A',
       hg19: 'chr17-36099532-G-A',
       // D7 sibling: the sheet's own embedded newline (a copy/paste artefact
       // in the Varsome cell, not part of the HGVS notation) is collapsed to
       // a single space -- Varsome is not covered by VariantReported's
       // verbatim guarantee.
-      varsome: 'HNF1B(NM_000458.4):c.443C>T (p.Ser148Leu)',
+      varsome: 'NM_000458.4:c.443C>T', // D10
       dbVarId: null,
       segregationLabel: 'De novo',
       segregationValue: 'de_novo',
@@ -435,7 +464,13 @@ const SHEET_ROWS = [
     },
     variant: {
       reported: '17q11-q12 deletion',
-      structuralType: { label: 'deletion', id: 'SO:0000159' },
+      variantType: { label: 'deletion', id: 'SO:0000159' },
+      isStructural: true,
+      // D11: no sheet column holds ISCN, but the backend rejects any
+      // structural variant without one and nothing can derive it (the
+      // sheet's CNV coordinate has a start, no end). This is the value the
+      // migrated record stores for this individual.
+      iscn: 'del(17)(q12)',
       hg38: 'chr17-36459258-T-<DEL>',
       hg19: 'chr17-34815071-T-<DEL>',
       // D7: 'NA' is not a real hgvs.c value -- left blank.
@@ -522,10 +557,11 @@ const SHEET_ROWS = [
     },
     variant: {
       reported: 'exon 4 (c.827G > A–p. R276Q)',
-      structuralType: { label: 'SNV', id: 'SO:0001483' },
+      variantType: { label: 'SNV', id: 'SO:0001483' },
+      isStructural: false,
       hg38: 'chr17-37731813-C-T',
       hg19: 'chr17-36091804-C-T',
-      varsome: 'HNF1B(NM_000458.4):c.827G>A (p.Arg276Gln)',
+      varsome: 'NM_000458.4:c.827G>A', // D10
       dbVarId: null,
       segregationLabel: 'De novo',
       segregationValue: 'de_novo',
@@ -615,8 +651,11 @@ async function fillVariantSection(page, row) {
   await selectExact(
     page,
     sectionControl(page, 'variant', 'Variant type'),
-    row.variant.structuralType.label
+    row.variant.variantType.label
   );
+  if (row.variant.iscn) {
+    await fillText(sectionControl(page, 'variant', 'Karyotype (ISCN)'), row.variant.iscn);
+  }
   await fillText(sectionControl(page, 'variant', 'hg38 (GRCh38)'), row.variant.hg38);
   await fillText(sectionControl(page, 'variant', 'hg19 (GRCh37)'), row.variant.hg19);
   if (row.variant.varsome) {
@@ -707,9 +746,36 @@ async function fillProvenanceSection(page, row) {
   );
 }
 
-async function submitForm(page) {
+/**
+ * Click Save and wait for the success redirect to THAT record's detail page.
+ *
+ * The expected id is required, not optional: a bare `/\/phenopackets\/[^/]+$/`
+ * also matches `/phenopackets/create`, so it resolves instantly on the page we
+ * are still sitting on and reports success for a save that never happened.
+ * Every later assertion then fails somewhere unrelated (a 404 on GET, a
+ * missing section on the edit route) and hides the real cause.
+ *
+ * On timeout, surface the app's own error alert instead of a bare Playwright
+ * timeout — a rejected save is a fact about the app, and the message is the
+ * evidence.
+ */
+async function submitForm(page, phenopacketId) {
+  if (!phenopacketId) {
+    throw new Error('submitForm requires the expected phenopacket id');
+  }
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL(/\/phenopackets\/[^/]+$/, { timeout: 15_000 });
+  try {
+    await page.waitForURL(`**/phenopackets/${phenopacketId}`, { timeout: 30_000 });
+  } catch {
+    const alerts = page.locator('.v-alert');
+    const count = await alerts.count();
+    const rendered = count ? (await alerts.allInnerTexts()).join(' | ') : '(no .v-alert rendered)';
+    throw new Error(
+      `Save did not redirect to /phenopackets/${phenopacketId}.\n` +
+        `  still at: ${page.url()}\n` +
+        `  app said: ${rendered}`
+    );
+  }
 }
 
 /** Full console fill for one SHEET_ROWS entry, returns the created phenopacket_id. */
@@ -725,7 +791,7 @@ async function enterRow(page, row) {
   await fillPhenotypesSection(page, row);
   await fillAgeSection(page, row);
   await fillProvenanceSection(page, row);
-  await submitForm(page);
+  await submitForm(page, phenopacketId);
 
   return { phenopacketId, subjectId };
 }
@@ -745,9 +811,21 @@ function assertRowMatches(pp, row, subjectId) {
   // (the defect this whole programme exists to end).
   const descriptor = firstVariationDescriptor(pp);
   expect(descriptor.description).toBe(row.variant.reported);
-  expect(descriptor.structuralType).toMatchObject(row.variant.structuralType);
-  const hg38 = findExpression(descriptor, (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh38');
-  const hg19 = findExpression(descriptor, (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh37');
+  // VariantType lands on structuralType for deletion/duplication and on
+  // molecularConsequences for SNV/indel, exactly as the corpus partitions
+  // them (soTerms.js::STRUCTURAL_TYPE_IDS).
+  if (row.variant.isStructural) {
+    expect(descriptor.structuralType).toMatchObject(row.variant.variantType);
+    expect(descriptor.molecularConsequences ?? []).toHaveLength(0);
+  } else {
+    expect(descriptor.structuralType).toBeUndefined();
+    expect(descriptor.molecularConsequences).toContainEqual(row.variant.variantType);
+  }
+  // The sheet's hg38/hg19 columns are VCF-style dash notation and land on
+  // syntax 'vcf' -- hg38 untagged (byte-identical to the migrated shape),
+  // hg19 tagged version 'GRCh37'.
+  const hg38 = findExpression(descriptor, (e) => e.syntax === 'vcf' && e.version !== 'GRCh37');
+  const hg19 = findExpression(descriptor, (e) => e.syntax === 'vcf' && e.version === 'GRCh37');
   expect(hg38?.value).toBe(row.variant.hg38);
   expect(hg19?.value).toBe(row.variant.hg19);
   if (row.variant.varsome) {
@@ -874,7 +952,9 @@ test.describe('1. Acceptance test — 3 real sheet rows', () => {
         // Task 9: the gestational-age reader must round-trip onto the
         // display page, not show N/A.
         await page.goto(`/phenopackets/${phenopacketId}`, { waitUntil: 'networkidle' });
-        await expect(page.getByText(`${row.age.reportedGestationalWeeks} weeks`)).toBeVisible();
+        await expect(
+          page.getByText(`${row.age.reportedGestationalWeeks} weeks`).first()
+        ).toBeVisible();
         await expect(page.getByText('N/A')).toHaveCount(0);
       }
     });
@@ -915,10 +995,7 @@ test.describe('2. Round-trip', () => {
     await selectExact(page, sectionControl(page, 'variant', 'Variant type'), 'indel');
     await fillText(sectionControl(page, 'variant', 'hg38 (GRCh38)'), 'chr17-11111111-A-G');
     await fillText(sectionControl(page, 'variant', 'hg19 (GRCh37)'), 'chr17-22222222-A-G');
-    await fillText(
-      sectionControl(page, 'variant', 'Varsome (hgvs.c)'),
-      'HNF1B(NM_000458.4):c.1A>G'
-    );
+    await fillText(sectionControl(page, 'variant', 'Varsome (hgvs.c)'), 'NM_000458.4:c.1A>G');
     await addChip(sectionControl(page, 'variant', 'dbVar ID(s)'), 'dbVar:synthetic1');
     await selectExact(page, sectionControl(page, 'variant', 'Segregation'), 'Inherited, maternal');
     await selectExact(page, sectionControl(page, 'variant', 'Allelic state'), 'heterozygous');
@@ -961,7 +1038,7 @@ test.describe('2. Round-trip', () => {
     await fillText(sectionControl(page, 'provenance', 'Problematic'), 'synthetic problematic note');
     await fillText(sectionControl(page, 'provenance', 'Duplicate check'), 'synthetic dup check');
 
-    await submitForm(page);
+    await submitForm(page, phenopacketId);
 
     // ---- Reload: fresh navigation to the edit route, re-fetching from the server ----
     await page.goto(`/phenopackets/${phenopacketId}/edit`, { waitUntil: 'networkidle' });
@@ -974,27 +1051,41 @@ test.describe('2. Round-trip', () => {
     );
     await expect(page.getByText('RT-subject-1')).toBeVisible();
     await expect(pmidRows(page).first().locator('input')).toHaveValue('19999001');
+
+    // The detailed editor is an add/edit form, not a always-bound view of the
+    // saved variant: reopening the saved variant is what runs
+    // editorFromDescriptor, which is the round-trip actually under test here.
+    await sectionLocator(page, 'variant').locator('[data-testid="edit-variant-btn-0"]').click();
     await expect(
-      sectionControl(page, 'variant', 'Variant as reported').locator('textarea')
+      sectionControl(page, 'variant', 'Variant as reported').locator(
+        'textarea:not([aria-hidden="true"])'
+      )
     ).toHaveValue('c.1A>G synthetic');
     await expect(sectionControl(page, 'variant', 'hg38 (GRCh38)').locator('input')).toHaveValue(
       'chr17-11111111-A-G'
     );
     await expect(
       sectionControl(page, 'classification', 'Classification criteria (free text)').locator(
-        'textarea'
+        'textarea:not([aria-hidden="true"])'
       )
     ).toHaveValue('PM2_Supporting, PP3_Supporting');
-    await expect(sectionControl(page, 'provenance', 'Comment').locator('textarea')).toHaveValue(
-      'synthetic case comment'
-    );
-    await expect(sectionControl(page, 'provenance', 'Problematic').locator('textarea')).toHaveValue(
-      'synthetic problematic note'
-    );
+    await expect(
+      sectionControl(page, 'provenance', 'Comment').locator('textarea:not([aria-hidden="true"])')
+    ).toHaveValue('synthetic case comment');
+    await expect(
+      sectionControl(page, 'provenance', 'Problematic').locator(
+        'textarea:not([aria-hidden="true"])'
+      )
+    ).toHaveValue('synthetic problematic note');
 
     // ---- Edit one field per section ----
     await selectExact(page, sectionControl(page, 'case', 'Family history'), 'Negative');
     await fillText(sectionControl(page, 'variant', 'hg38 (GRCh38)'), 'chr17-33333333-A-G');
+    // The detailed editor is a sub-form; committing it is what puts the edit
+    // into the phenopacket. Submitting without this is now refused outright
+    // (see the "unsaved variant editor" adversarial test) rather than
+    // silently dropping the change.
+    await saveDetailedVariant(page);
     await selectExact(page, sectionControl(page, 'classification', 'ACMG verdict'), 'Pathogenic');
     // HP:0000107 is already "present" (from the create phase) after reload --
     // one click, not setPhenotypeExcluded's two (see that helper's doc).
@@ -1006,7 +1097,7 @@ test.describe('2. Round-trip', () => {
     );
 
     await fillText(pageControl(page, 'Change Reason'), 'E2E round-trip edit (Task 10)');
-    await submitForm(page);
+    await submitForm(page, phenopacketId);
 
     // ---- Reload once more and assert BOTH the edited AND untouched fields ----
     const pp = await fetchPhenopacket(request, tokens.accessToken, phenopacketId);
@@ -1018,9 +1109,9 @@ test.describe('2. Round-trip', () => {
 
     const descriptor = firstVariationDescriptor(pp);
     expect(descriptor.description).toBe('c.1A>G synthetic'); // untouched
-    const hg38 = findExpression(descriptor, (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh38');
+    const hg38 = findExpression(descriptor, (e) => e.syntax === 'vcf' && e.version !== 'GRCh37');
     expect(hg38.value).toBe('chr17-33333333-A-G'); // edited
-    const hg19 = findExpression(descriptor, (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh37');
+    const hg19 = findExpression(descriptor, (e) => e.syntax === 'vcf' && e.version === 'GRCh37');
     expect(hg19.value).toBe('chr17-22222222-A-G'); // untouched
     expect(descriptor.allelicState?.label).toBe('heterozygous'); // untouched
     expect(descriptor.xrefs).toContain('dbVar:synthetic1'); // untouched
@@ -1088,7 +1179,7 @@ test.describe('3. Adversarial pass', () => {
     await expandSection(page, 'phenotypes');
     await expect(page.locator('.phenotype-item').first()).toBeVisible({ timeout: 15_000 });
     await setPhenotypePresent(page, 'HP:0000107');
-    await submitForm(page);
+    await submitForm(page, phenopacketId);
 
     const pp = await fetchPhenopacket(request, tokens.accessToken, phenopacketId);
     expect(pp.subject.id).toBe('   ');
@@ -1118,7 +1209,7 @@ test.describe('3. Adversarial pass', () => {
     await expandSection(page, 'phenotypes');
     await expect(page.locator('.phenotype-item').first()).toBeVisible({ timeout: 15_000 });
     await setPhenotypePresent(page, 'HP:0000107');
-    await submitForm(page);
+    await submitForm(page, phenopacketId);
 
     const pp = await fetchPhenopacket(request, tokens.accessToken, phenopacketId);
     const descriptor = firstVariationDescriptor(pp);
@@ -1169,7 +1260,7 @@ test.describe('3. Adversarial pass', () => {
     await btn.click(); // excluded -> unknown
     await btn.click(); // unknown -> present (final state)
 
-    await submitForm(page);
+    await submitForm(page, phenopacketId);
 
     const pp = await fetchPhenopacket(request, tokens.accessToken, phenopacketId);
     const feature = findPhenotype(pp, 'HP:0000107');
@@ -1201,6 +1292,52 @@ test.describe('3. Adversarial pass', () => {
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.waitForURL(/\/phenopackets$/, { timeout: 10_000 });
+  });
+
+  test('unsaved variant editor: submit is refused, not silently discarded', async ({
+    page,
+    request,
+  }) => {
+    // The detailed variant editor only reaches the phenopacket via its own
+    // "Save variant" button. A record used to save happily with typed-but-
+    // uncommitted variant fields, dropping them without a word.
+    await login(page, request);
+    const phenopacketId = `e2e-curation-pending-variant-${Date.now()}`;
+
+    await gotoCreate(page);
+    await fillText(pageControl(page, 'Phenopacket ID'), phenopacketId);
+    await expandSection(page, 'case');
+    await fillText(sectionControl(page, 'case', 'Subject ID'), `${phenopacketId}-subject`);
+    await expandSection(page, 'phenotypes');
+    await expect(page.locator('.phenotype-item').first()).toBeVisible({ timeout: 15_000 });
+    await setPhenotypePresent(page, 'HP:0000107');
+
+    // Type into the variant editor, deliberately WITHOUT clicking Save variant.
+    await expandSection(page, 'variant');
+    await fillText(sectionControl(page, 'variant', 'Variant as reported'), 'uncommitted variant');
+
+    await page.locator('button[type="submit"]').click();
+    await expect(
+      page.locator('.v-alert', { hasText: 'variant editor has unsaved changes' }).first()
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/phenopackets\/create$/);
+
+    // A recoverable error must NOT take the form down with it. The form used
+    // to be `v-else-if="!error"`, so any validation or save failure unmounted
+    // every section and left the curator staring at an alert with a fully
+    // entered case irrecoverable behind it.
+    await expect(sectionLocator(page, 'case')).toBeVisible();
+    await expect(sectionControl(page, 'case', 'Subject ID').locator('input')).toHaveValue(
+      `${phenopacketId}-subject`
+    );
+
+    // Committing the sub-form clears the block and the record saves.
+    await saveDetailedVariant(page);
+    await submitForm(page, phenopacketId);
+
+    const tokens = await loginAsAdmin(request, API_BASE);
+    const pp = await fetchPhenopacket(request, tokens.accessToken, phenopacketId);
+    expect(firstVariationDescriptor(pp).description).toBe('uncommitted variant');
   });
 });
 

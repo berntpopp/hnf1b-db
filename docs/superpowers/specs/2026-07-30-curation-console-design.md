@@ -80,12 +80,35 @@ conventions; it does not invent storage.
 | Sheet column | Storage | Control |
 |---|---|---|
 | `VariantReported` (337 distinct) | `variationDescriptor.description` | **text — free, verbatim, never normalised** |
-| `VariantType` | `variationDescriptor.structuralType` | select → SO term (`SO:0000159` deletion, `SO:1000035` duplication, …) |
-| `hg38` | `expressions[syntax=hgvs.g]` | text + validate |
-| `hg19` | `expressions[syntax=hgvs.g]` (assembly-tagged) | text |
+| `VariantType` (deletion, duplication) | `variationDescriptor.structuralType` | select → SO term (`SO:0000159`, `SO:1000035`) |
+| `VariantType` (SNV, indel) | `variationDescriptor.molecularConsequences[]` | same select (`SO:0001483`, `SO:1000032`) |
+| — | `expressions[syntax=iscn]` | text, **required for a structural type** |
+| `hg38` | `expressions[syntax=vcf]` (untagged) | text + validate |
+| `hg19` | `expressions[syntax=vcf]`, `version=GRCh37` | text |
 | `hg19_INFO` / `hg38_INFO` | `extensions[coordinates]` (exists, 440) | derived, read-only |
 | `ID` (dbVar) | `variationDescriptor.xrefs[]` **NEW use** | text, chips |
 | `Varsome` | `expressions[syntax=hgvs.c]` | text |
+
+**`VariantType` has two landing places, and the corpus draws the line exactly.**
+404 deletion + 36 duplication sit on `structuralType`; 302 SNV + 122 indel sit on
+`molecularConsequences` — 440 + 424 = 864, no overlap. The split is load-bearing: the backend
+rejects any descriptor carrying `structuralType` without an accompanying ISCN or GA4GH-CNV
+expression (`variant_validator/validator.py:200`), which no SNV has. A single control writing
+all four to `structuralType` made every SNV and indel unsaveable.
+
+**`hg38`/`hg19` are VCF-style dash notation, not HGVS.** The sheet's cells look like
+`chr17-37739541-G-A`, and that is what the corpus stores under `syntax: 'vcf'` — all 864
+records, none with a `version` key. `hgvs.g` is a different, derived value
+(`NC_000017.11:g.37739541G>A`, 424 records). Mapping the sheet column onto `hgvs.g` made the
+backend's HGVS check reject it, and reading it back by `version` matched nothing on a
+migrated record, so opening an existing variant showed hg38 blank. hg38 is therefore written
+untagged (byte-identical to the migrated shape, and still what
+`expressions.find(e => e.syntax === 'vcf')` resolves to); hg19, which has no corpus precedent,
+carries `version: 'GRCh37'`.
+
+**ISCN has no sheet column but is not optional.** All 440 structural records carry one and it
+cannot be derived — the sheet's CNV coordinate gives a start but no end — so the curator
+supplies the karyotype. The control appears only when the selected type is structural.
 | `DetecionMethod` | `hnf1bCuration.detectionMethod` | select ← `/vocabularies/detection-method` |
 | `Segregation` | `extensions[segregation].origin` | select ← `/vocabularies/segregation` |
 | — | `allelicState` (GENO) | select |

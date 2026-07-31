@@ -170,8 +170,8 @@
       <v-row>
         <v-col cols="12" md="6">
           <v-select
-            v-model="detailedEditor.structuralType"
-            :items="STRUCTURAL_VARIANT_TYPES"
+            v-model="detailedEditor.variantType"
+            :items="VARIANT_TYPES"
             item-title="label"
             item-value="id"
             label="Variant type"
@@ -194,19 +194,33 @@
         </v-col>
       </v-row>
 
+      <v-row v-if="requiresIscn">
+        <v-col cols="12">
+          <v-text-field
+            v-model="detailedEditor.iscn"
+            label="Karyotype (ISCN)"
+            hint="Required for a deletion or duplication, e.g. del(17)(q12)"
+            persistent-hint
+            :rules="[iscnRule]"
+          />
+        </v-col>
+      </v-row>
+
       <v-row>
         <v-col cols="12" md="6">
           <v-text-field
             v-model="detailedEditor.hg38"
             label="hg38 (GRCh38)"
-            hint="Genomic HGVS, e.g. NC_000017.11:g.37739589T>C"
+            hint="VCF-style coordinates, e.g. chr17-37739541-G-A"
+            persistent-hint
           />
         </v-col>
         <v-col cols="12" md="6">
           <v-text-field
             v-model="detailedEditor.hg19"
             label="hg19 (GRCh37)"
-            hint="Genomic HGVS on the GRCh37 assembly"
+            hint="VCF-style coordinates on GRCh37, e.g. chr17-36099532-G-A"
+            persistent-hint
           />
         </v-col>
       </v-row>
@@ -217,6 +231,7 @@
             v-model="detailedEditor.varsome"
             label="Varsome (hgvs.c)"
             hint="Coding HGVS, e.g. NM_000458.4:c.395A>G"
+            persistent-hint
           />
         </v-col>
         <v-col cols="12" md="6">
@@ -265,9 +280,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useVariantAnnotation } from '@/composables/useVariantAnnotation';
-import { soIdFor, STRUCTURAL_VARIANT_TYPES } from '@/utils/soTerms';
+import { soIdFor, VARIANT_TYPES, VARIANT_TYPE_IDS, isStructuralType } from '@/utils/soTerms';
 
 const props = defineProps({
   modelValue: {
@@ -304,7 +319,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:modelValue', 'update:detectionMethod']);
+const emit = defineEmits(['update:modelValue', 'update:detectionMethod', 'update:pendingEdit']);
 
 const { annotation, loading, error, annotateVariant, reset } = useVariantAnnotation();
 
@@ -490,7 +505,8 @@ const createInterpretation = (variantNotation, geneSymbol, annotationData = {}) 
 function createEmptyEditor() {
   return {
     variantReported: '',
-    structuralType: null,
+    variantType: null,
+    iscn: '',
     hg38: '',
     hg19: '',
     varsome: '',
@@ -504,6 +520,36 @@ const detailedEditor = ref(createEmptyEditor());
 // null = adding a new variant; otherwise the index into props.modelValue
 // currently being edited.
 const editingIndex = ref(null);
+
+/**
+ * Snapshot of the detailed editor as it was last committed or reset, so
+ * "dirty" means the curator typed something that is not yet in the variant
+ * list -- not merely that the editor is open.
+ */
+const editorBaseline = ref(JSON.stringify(createEmptyEditor()));
+
+/**
+ * The detailed editor is a sub-form: its contents only reach the phenopacket
+ * when "Save variant" is clicked. Without this signal the page-level Save
+ * silently discarded whatever was typed there, which is the one thing a
+ * curation tool must never do to a curator's input.
+ */
+const hasPendingVariantEdit = computed(
+  () => JSON.stringify(detailedEditor.value) !== editorBaseline.value
+);
+
+watch(hasPendingVariantEdit, (value) => emit('update:pendingEdit', value), { immediate: true });
+
+/**
+ * Deletion and duplication are the only two types the backend treats as
+ * structural, and it rejects a structural descriptor that carries no ISCN or
+ * GA4GH-CNV expression. Surfacing that as a field rule keeps the curator from
+ * meeting the rule for the first time as a save failure.
+ */
+const requiresIscn = computed(() => isStructuralType(detailedEditor.value.variantType));
+
+const iscnRule = (value) =>
+  !requiresIscn.value || !!value || 'Required for a deletion or duplication';
 
 const coordinatesDisplay = computed(() => {
   if (editingIndex.value === null) return null;
@@ -527,9 +573,14 @@ function editorFromDescriptor(descriptor) {
     // for a quick-add variant is correct: the curator hasn't reported
     // anything verbatim yet.
     variantReported: descriptor?.description ?? '',
-    structuralType: descriptor?.structuralType ?? null,
-    hg38: expressions.find((e) => e.syntax === 'hgvs.g' && e.version === 'GRCh38')?.value ?? '',
-    hg19: expressions.find((e) => e.syntax === 'hgvs.g' && e.version === 'GRCh37')?.value ?? '',
+    // One control, two possible sources -- see buildVariationDescriptor.
+    variantType:
+      descriptor?.structuralType ??
+      (descriptor?.molecularConsequences || []).find((c) => VARIANT_TYPE_IDS.has(c.id)) ??
+      null,
+    iscn: expressions.find((e) => e.syntax === 'iscn')?.value ?? '',
+    hg38: expressions.find((e) => e.syntax === 'vcf' && e.version !== 'GRCh37')?.value ?? '',
+    hg19: expressions.find((e) => e.syntax === 'vcf' && e.version === 'GRCh37')?.value ?? '',
     varsome: expressions.find((e) => e.syntax === 'hgvs.c')?.value ?? '',
     dbVarIds: [...(descriptor?.xrefs || [])],
     segregation:
@@ -571,15 +622,35 @@ function buildVariationDescriptor(editor, existingDescriptor) {
     descriptor.moleculeContext ||
     inferMoleculeContext(editor.hg38 || editor.hg19 || editor.varsome || '');
 
-  if (editor.structuralType) {
-    // Strip to {id,label}: the STRUCTURAL_VARIANT_TYPES items are already
-    // clean, but defend against accidental extra keys regardless.
-    descriptor.structuralType = {
-      id: editor.structuralType.id,
-      label: editor.structuralType.label,
-    };
+  // Variant type is ONE control (the sheet has one `VariantType` column) but
+  // two landing places, and the corpus draws the line exactly: deletion and
+  // duplication are structural variants and go on `structuralType`; SNV and
+  // indel are not, and go on `molecularConsequences`. Sending all four to
+  // `structuralType` tripped the backend's "structural variant missing valid
+  // CNV notation" rule for every SNV/indel, making them impossible to save.
+  const selectedType = editor.variantType
+    ? { id: editor.variantType.id, label: editor.variantType.label }
+    : null;
+
+  if (selectedType && isStructuralType(selectedType)) {
+    descriptor.structuralType = selectedType;
   } else {
     delete descriptor.structuralType;
+  }
+
+  // Replace only the variant-type member; a VEP-derived consequence term in
+  // the same array (written by the quick-add path) is preserved.
+  const otherConsequences = (descriptor.molecularConsequences || []).filter(
+    (c) => !VARIANT_TYPE_IDS.has(c.id)
+  );
+  const nextConsequences =
+    selectedType && !isStructuralType(selectedType)
+      ? [selectedType, ...otherConsequences]
+      : otherConsequences;
+  if (nextConsequences.length > 0) {
+    descriptor.molecularConsequences = nextConsequences;
+  } else {
+    delete descriptor.molecularConsequences;
   }
 
   if (editor.allelicState) {
@@ -596,24 +667,38 @@ function buildVariationDescriptor(editor, existingDescriptor) {
     delete descriptor.xrefs;
   }
 
-  // hg38 MUST land before hg19: both use syntax 'hgvs.g', and existing
-  // readers do `expressions.find(e => e.syntax === 'hgvs.g')`
-  // (Phenopackets.vue, InterpretationsCard.vue), which resolves to whichever
-  // entry appears first -- hg38 stays the one they see by default. Both are
-  // tagged with `version` so a curator or future reader can tell them apart
-  // despite the shared syntax.
-  const preservedExpressions = (descriptor.expressions || []).filter((e) => {
-    const isHg38 = e.syntax === 'hgvs.g' && e.version === 'GRCh38';
-    const isHg19 = e.syntax === 'hgvs.g' && e.version === 'GRCh37';
-    const isVarsome = e.syntax === 'hgvs.c';
-    return !isHg38 && !isHg19 && !isVarsome;
-  });
+  // The sheet's hg38/hg19 columns hold VCF-style dash notation
+  // ("chr17-37739541-G-A"), and the corpus stores exactly that under
+  // `syntax: 'vcf'` -- all 864 records, no `version` key on any of them.
+  // `hgvs.g` is a different thing entirely: the derived, true HGVS form
+  // ("NC_000017.11:g.37739541G>A", 424 records). Writing the sheet's value to
+  // `hgvs.g` meant the backend's HGVS format check rejected it outright, and
+  // reading it back with `.find(e => e.syntax === 'hgvs.g' && e.version ===
+  // 'GRCh38')` matched nothing on a migrated record -- so opening any existing
+  // variant showed hg38 blank and re-saving appended a duplicate.
+  //
+  // hg38 is written first and, like the corpus, carries no `version`, so it
+  // stays byte-identical to the migrated shape and remains the entry that
+  // `expressions.find(e => e.syntax === 'vcf')` resolves to. hg19 has no
+  // corpus precedent at all, so it is tagged `version: 'GRCh37'` -- the
+  // GA4GH-sanctioned Expression field -- which both disambiguates it and
+  // keeps it out of every existing reader's way.
+  const preservedExpressions = (descriptor.expressions || []).filter(
+    (e) => e.syntax !== 'vcf' && e.syntax !== 'hgvs.c' && e.syntax !== 'iscn'
+  );
   const editorExpressions = [];
+  if (editor.iscn) {
+    // A structural variant is rejected outright unless an ISCN (or GA4GH-CNV)
+    // expression is present. All 440 structural corpus records carry one, and
+    // nothing can derive it: the sheet's CNV coordinate gives a start but no
+    // end, so the curator has to supply the karyotype.
+    editorExpressions.push({ syntax: 'iscn', value: editor.iscn });
+  }
   if (editor.hg38) {
-    editorExpressions.push({ syntax: 'hgvs.g', value: editor.hg38, version: 'GRCh38' });
+    editorExpressions.push({ syntax: 'vcf', value: editor.hg38 });
   }
   if (editor.hg19) {
-    editorExpressions.push({ syntax: 'hgvs.g', value: editor.hg19, version: 'GRCh37' });
+    editorExpressions.push({ syntax: 'vcf', value: editor.hg19, version: 'GRCh37' });
   }
   if (editor.varsome) {
     // Varsome maps to hgvs.c (design spec §3.2): "the one canonical hgvs.c
@@ -647,11 +732,13 @@ function startEditVariant(index) {
     target?.diagnosis?.genomicInterpretations?.[0]?.variantInterpretation?.variationDescriptor;
   if (!descriptor) return;
   detailedEditor.value = editorFromDescriptor(descriptor);
+  editorBaseline.value = JSON.stringify(detailedEditor.value);
   editingIndex.value = index;
 }
 
 function cancelEdit() {
   detailedEditor.value = createEmptyEditor();
+  editorBaseline.value = JSON.stringify(detailedEditor.value);
   editingIndex.value = null;
 }
 

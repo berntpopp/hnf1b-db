@@ -49,6 +49,8 @@ export const CURATION_SECTIONS = [
  * Deliberately a plain mutable array, not frozen/sealed: later commits do
  * `CURATION_FIELDS.push(...)` (or splice/filter) to register their fields.
  */
+import { VARIANT_TYPE_IDS } from '@/utils/soTerms';
+
 export const CURATION_FIELDS = [];
 
 // ── Task 4: Case section (design spec §3.1) ────────────────────────────────
@@ -124,18 +126,28 @@ CURATION_FIELDS.push(
   {
     id: 'variantType',
     section: 'variant',
-    getValue: (p) => firstVariationDescriptor(p)?.structuralType,
+    // One sheet column, two landing places: deletion/duplication are
+    // structural and live on `structuralType`; SNV/indel are not and live on
+    // `molecularConsequences`. See soTerms.js::STRUCTURAL_TYPE_IDS.
+    getValue: (p) => {
+      const descriptor = firstVariationDescriptor(p);
+      return (
+        descriptor?.structuralType ??
+        (descriptor?.molecularConsequences || []).find((c) => VARIANT_TYPE_IDS.has(c.id))
+      );
+    },
   },
   {
     id: 'hg38',
     section: 'variant',
-    // Both hg38 and hg19 use syntax 'hgvs.g' (existing readers pick the
-    // first matching entry -- see hg19 below) and are disambiguated by
-    // `version`, so they must be looked up independently rather than by
-    // syntax alone.
+    // The sheet's hg38/hg19 columns are VCF-style dash notation, which the
+    // corpus stores under syntax 'vcf' (864 records, none carrying a
+    // `version`). hg38 is the untagged entry -- the one every existing
+    // reader's `.find(e => e.syntax === 'vcf')` resolves to -- and hg19,
+    // which has no corpus precedent, is tagged version 'GRCh37'.
     getValue: (p) =>
       firstVariationDescriptor(p)?.expressions?.find(
-        (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh38'
+        (e) => e.syntax === 'vcf' && e.version !== 'GRCh37'
       )?.value,
   },
   {
@@ -143,7 +155,7 @@ CURATION_FIELDS.push(
     section: 'variant',
     getValue: (p) =>
       firstVariationDescriptor(p)?.expressions?.find(
-        (e) => e.syntax === 'hgvs.g' && e.version === 'GRCh37'
+        (e) => e.syntax === 'vcf' && e.version === 'GRCh37'
       )?.value,
   },
   {

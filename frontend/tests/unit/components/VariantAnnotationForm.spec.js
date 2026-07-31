@@ -245,7 +245,7 @@ describe('VariantAnnotationForm — detailed variant entry (Task 5)', () => {
     expect(descriptorOf(interp).description.length).toBe(raw.length);
   });
 
-  it('pushes hg38 before hg19 in expressions, and expressions.find(hgvs.g) resolves hg38', async () => {
+  it('stores hg38/hg19 as vcf expressions, hg38 first and untagged', async () => {
     const wrapper = mountDetailedForm();
     await setReported(wrapper, 'test variant');
 
@@ -255,8 +255,8 @@ describe('VariantAnnotationForm — detailed variant entry (Task 5)', () => {
     expect(hg38Field).toBeTruthy();
 
     // Enter hg19 FIRST to prove ordering doesn't just track entry order.
-    await hg19Field.vm.$emit('update:modelValue', 'NC_000017.10:g.36895769T>C');
-    await hg38Field.vm.$emit('update:modelValue', 'NC_000017.11:g.37739589T>C');
+    await hg19Field.vm.$emit('update:modelValue', 'chr17-36099532-G-A');
+    await hg38Field.vm.$emit('update:modelValue', 'chr17-37739541-G-A');
 
     await saveDetailedBtn(wrapper).trigger('click');
 
@@ -264,18 +264,39 @@ describe('VariantAnnotationForm — detailed variant entry (Task 5)', () => {
     const interp = emitted[emitted.length - 1][0][0];
     const expressions = descriptorOf(interp).expressions;
 
-    expect(expressions[0]).toEqual({
-      syntax: 'hgvs.g',
-      value: 'NC_000017.11:g.37739589T>C',
-      version: 'GRCh38',
-    });
+    // hg38 is byte-identical to the migrated shape: syntax + value, no version.
+    expect(expressions[0]).toEqual({ syntax: 'vcf', value: 'chr17-37739541-G-A' });
     expect(expressions[1]).toEqual({
-      syntax: 'hgvs.g',
-      value: 'NC_000017.10:g.36895769T>C',
+      syntax: 'vcf',
+      value: 'chr17-36099532-G-A',
       version: 'GRCh37',
     });
-    // The existing reader pattern (Phenopackets.vue, InterpretationsCard.vue).
-    expect(expressions.find((e) => e.syntax === 'hgvs.g').value).toBe('NC_000017.11:g.37739589T>C');
+    // The existing reader pattern resolves to hg38, not hg19.
+    expect(expressions.find((e) => e.syntax === 'vcf').value).toBe('chr17-37739541-G-A');
+  });
+
+  it('reads hg38 back from a migrated descriptor that has no version key', async () => {
+    // Regression: the reader used to require `version === 'GRCh38'`, which no
+    // migrated record carries, so opening an existing variant showed hg38
+    // blank and re-saving appended a duplicate expression.
+    const existing = fixtureInterpretation('existing');
+    descriptorOf(existing).expressions = [
+      { syntax: 'vcf', value: 'chr17-37739541-G-A' },
+      { syntax: 'hgvs.g', value: 'NC_000017.11:g.37739541G>A' },
+    ];
+    const wrapper = mountDetailedForm({ modelValue: [existing] });
+
+    await wrapper.get('[data-testid="edit-variant-btn-0"]').trigger('click');
+    expect(findByLabel(wrapper, 'VTextField', 'hg38 (GRCh38)').props('modelValue')).toBe(
+      'chr17-37739541-G-A'
+    );
+
+    await saveDetailedBtn(wrapper).trigger('click');
+    const emitted = wrapper.emitted('update:modelValue');
+    const expressions = descriptorOf(emitted[emitted.length - 1][0][0]).expressions;
+    // Exactly one vcf entry — no duplicate — and the derived hgvs.g survives.
+    expect(expressions.filter((e) => e.syntax === 'vcf')).toHaveLength(1);
+    expect(expressions.find((e) => e.syntax === 'hgvs.g').value).toBe('NC_000017.11:g.37739541G>A');
   });
 
   it('stores Varsome as the canonical hgvs.c expression entry', async () => {
@@ -307,6 +328,48 @@ describe('VariantAnnotationForm — detailed variant entry (Task 5)', () => {
     const interp = emitted[emitted.length - 1][0][0];
 
     expect(descriptorOf(interp).structuralType).toEqual({ id: 'SO:0000159', label: 'deletion' });
+    expect(descriptorOf(interp).molecularConsequences).toBeUndefined();
+  });
+
+  it('routes SNV/indel to molecularConsequences, never structuralType', async () => {
+    // The backend rejects any descriptor carrying `structuralType` without an
+    // ISCN or GA4GH-CNV expression, so writing SNV there made every small
+    // variant entered through the console unsaveable. The corpus partition is
+    // exact: 440 structural on structuralType, 424 SNV/indel on
+    // molecularConsequences.
+    const wrapper = mountDetailedForm();
+    await setReported(wrapper, 'test variant');
+
+    const typeSelect = findByLabel(wrapper, 'VSelect', 'Variant type');
+    await typeSelect.vm.$emit('update:modelValue', { id: 'SO:0001483', label: 'SNV' });
+
+    await saveDetailedBtn(wrapper).trigger('click');
+    const emitted = wrapper.emitted('update:modelValue');
+    const descriptor = descriptorOf(emitted[emitted.length - 1][0][0]);
+
+    expect(descriptor.structuralType).toBeUndefined();
+    expect(descriptor.molecularConsequences).toEqual([{ id: 'SO:0001483', label: 'SNV' }]);
+  });
+
+  it('preserves a VEP consequence term when the variant type is set', async () => {
+    const existing = fixtureInterpretation('existing');
+    descriptorOf(existing).molecularConsequences = [
+      { id: 'SO:0001583', label: 'missense_variant' },
+    ];
+    const wrapper = mountDetailedForm({ modelValue: [existing] });
+
+    await wrapper.get('[data-testid="edit-variant-btn-0"]').trigger('click');
+    const typeSelect = findByLabel(wrapper, 'VSelect', 'Variant type');
+    await typeSelect.vm.$emit('update:modelValue', { id: 'SO:1000032', label: 'indel' });
+
+    await saveDetailedBtn(wrapper).trigger('click');
+    const emitted = wrapper.emitted('update:modelValue');
+    const descriptor = descriptorOf(emitted[emitted.length - 1][0][0]);
+
+    expect(descriptor.molecularConsequences).toEqual([
+      { id: 'SO:1000032', label: 'indel' },
+      { id: 'SO:0001583', label: 'missense_variant' },
+    ]);
   });
 
   it('stores allelicState as a clean {id,label} object, stripping vocabulary description', async () => {

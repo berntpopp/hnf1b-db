@@ -84,6 +84,20 @@ describe('CURATION_FIELDS — variant section (Task 5)', () => {
       expect(field.getValue(withDescriptor({ structuralType }))).toEqual(structuralType);
     });
 
+    it('reads SNV/indel from molecularConsequences, where the corpus keeps them', () => {
+      // The corpus partition is exact: 440 deletion/duplication on
+      // structuralType, 424 SNV/indel on molecularConsequences.
+      const field = fieldById('variantType');
+      const snv = { id: 'SO:0001483', label: 'SNV' };
+      expect(field.getValue(withDescriptor({ molecularConsequences: [snv] }))).toEqual(snv);
+    });
+
+    it('ignores a VEP consequence term that is not a variant type', () => {
+      const field = fieldById('variantType');
+      const vep = { id: 'SO:0001583', label: 'missense_variant' };
+      expect(field.getValue(withDescriptor({ molecularConsequences: [vep] }))).toBeUndefined();
+    });
+
     it('is filled when set and not filled when absent', () => {
       const field = fieldById('variantType');
       expect(
@@ -92,25 +106,35 @@ describe('CURATION_FIELDS — variant section (Task 5)', () => {
           withDescriptor({ structuralType: { id: 'SO:1000035', label: 'duplication' } })
         )
       ).toBe(true);
+      expect(
+        isFieldFilled(
+          field,
+          withDescriptor({ molecularConsequences: [{ id: 'SO:1000032', label: 'indel' }] })
+        )
+      ).toBe(true);
       expect(isFieldFilled(field, withDescriptor({}))).toBe(false);
       expect(isFieldFilled(field, {})).toBe(false);
     });
   });
 
-  describe('hg38 / hg19 — both use syntax hgvs.g, disambiguated by version', () => {
+  describe('hg38 / hg19 — both use syntax vcf, hg19 disambiguated by version', () => {
+    // The sheet's hg38/hg19 columns are VCF-style dash notation, which the
+    // corpus stores under syntax 'vcf' with no version key. hg38 is therefore
+    // the untagged entry -- the one existing readers resolve to -- and hg19,
+    // which has no corpus precedent, carries version 'GRCh37'.
     const expressions = [
-      { syntax: 'hgvs.g', value: 'NC_000017.11:g.37739589T>C', version: 'GRCh38' },
-      { syntax: 'hgvs.g', value: 'NC_000017.10:g.36895769T>C', version: 'GRCh37' },
+      { syntax: 'vcf', value: 'chr17-37739541-G-A' },
+      { syntax: 'vcf', value: 'chr17-36099532-G-A', version: 'GRCh37' },
     ];
 
-    it('hg38 reads the GRCh38-tagged entry specifically', () => {
+    it('hg38 reads the untagged vcf entry, as migrated records store it', () => {
       const field = fieldById('hg38');
-      expect(field.getValue(withDescriptor({ expressions }))).toBe('NC_000017.11:g.37739589T>C');
+      expect(field.getValue(withDescriptor({ expressions }))).toBe('chr17-37739541-G-A');
     });
 
     it('hg19 reads the GRCh37-tagged entry specifically, independent of hg38', () => {
       const field = fieldById('hg19');
-      expect(field.getValue(withDescriptor({ expressions }))).toBe('NC_000017.10:g.36895769T>C');
+      expect(field.getValue(withDescriptor({ expressions }))).toBe('chr17-36099532-G-A');
     });
 
     it('hg38 and hg19 are independently trackable as filled/unfilled', () => {
