@@ -4,12 +4,29 @@ Living in the JSONB rather than a side table is the design's central claim.
 These tests are what make it true rather than merely asserted.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import select
 
 from app.phenopackets.models import PhenopacketRevision
 
 _RESOURCES = [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}]
+
+
+def _assert_recent_server_curated_at(curation: dict) -> None:
+    """``curatedAt`` must be a server-stamped, recent ISO-8601 UTC timestamp.
+
+    Proves the value came from the server clock
+    (``app/phenopackets/services/phenopacket_service.py::stamp_curated_at``),
+    not from whatever the request body happened to contain.
+    """
+    assert "curatedAt" in curation
+    stamped = datetime.fromisoformat(curation["curatedAt"])
+    assert stamped.tzinfo is not None and stamped.utcoffset() == timedelta(0), (
+        "curatedAt must be timezone-aware UTC"
+    )
+    assert abs(datetime.now(timezone.utc) - stamped) < timedelta(minutes=5)
 
 
 def _meta():
@@ -45,13 +62,19 @@ async def test_update_round_trips_curation(async_client, curator_headers, draft_
         headers=curator_headers,
     )
     assert put_resp.status_code == 200, put_resp.text
-    assert put_resp.json()["phenopacket"]["hnf1bCuration"] == curation
+    put_curation = put_resp.json()["phenopacket"]["hnf1bCuration"]
+    assert {k: v for k, v in put_curation.items() if k != "curatedAt"} == curation
+    _assert_recent_server_curated_at(put_curation)
 
     get_resp = await async_client.get(
         f"/api/v2/phenopackets/{pid}", headers=curator_headers
     )
     assert get_resp.status_code == 200
-    assert get_resp.json()["phenopacket"]["hnf1bCuration"] == curation
+    get_curation = get_resp.json()["phenopacket"]["hnf1bCuration"]
+    assert {k: v for k, v in get_curation.items() if k != "curatedAt"} == curation
+    # The GET is a pure read of what PUT persisted -- the stamp must not
+    # move between the write and a subsequent read.
+    assert get_curation["curatedAt"] == put_curation["curatedAt"]
 
 
 @pytest.mark.asyncio
@@ -149,7 +172,9 @@ async def test_editing_curation_produces_a_revision_containing_the_change(
         select(PhenopacketRevision).where(PhenopacketRevision.id == editing_revision_id)
     )
     stored = result.scalar_one()
-    assert stored.content_jsonb["hnf1bCuration"] == curation
+    stored_curation = stored.content_jsonb["hnf1bCuration"]
+    assert {k: v for k, v in stored_curation.items() if k != "curatedAt"} == curation
+    _assert_recent_server_curated_at(stored_curation)
 
 
 @pytest.mark.asyncio
@@ -282,7 +307,40 @@ async def test_a_record_with_zero_interpretations_accepts_curation(
     assert resp.status_code == 200, resp.text
     body = resp.json()["phenopacket"]
     assert "interpretations" not in body
-    assert body["hnf1bCuration"] == curation
+    body_curation = body["hnf1bCuration"]
+    assert {k: v for k, v in body_curation.items() if k != "curatedAt"} == curation
+    _assert_recent_server_curated_at(body_curation)
+
+
+@pytest.mark.asyncio
+async def test_curated_by_is_left_untouched_by_the_server_stamp(
+    async_client, curator_headers, draft_record
+):
+    """``stamp_curated_at`` only ever writes ``curatedAt``.
+
+    Its docstring claims it "never touches curatedBy or any other field --
+    those are out of scope for this task" (Phase 3 plan Task 9 §c). Prove
+    it: a curator-supplied ``curatedBy`` must round-trip through the live
+    write path unchanged while ``curatedAt`` is independently server-
+    stamped alongside it.
+    """
+    pid = draft_record.phenopacket_id
+    curation = {"cohort": "fetus", "curatedBy": "Bernt Popp"}
+
+    resp = await async_client.put(
+        f"/api/v2/phenopackets/{pid}",
+        json={
+            "phenopacket": _content(pid, hnf1bCuration=curation),
+            "revision": draft_record.revision,
+            "change_reason": "curate with an explicit curatedBy",
+        },
+        headers=curator_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    stored = resp.json()["phenopacket"]["hnf1bCuration"]
+    assert stored["curatedBy"] == "Bernt Popp"
+    assert stored["cohort"] == "fetus"
+    _assert_recent_server_curated_at(stored)
 
 
 @pytest.mark.asyncio
@@ -328,7 +386,11 @@ async def test_rollback_restores_prior_curation(
     get_resp = await async_client.get(
         f"/api/v2/phenopackets/{pid}", headers=curator_headers
     )
-    assert get_resp.json()["phenopacket"]["hnf1bCuration"] == {"cohort": "fetus"}
+    working_curation = get_resp.json()["phenopacket"]["hnf1bCuration"]
+    assert {k: v for k, v in working_curation.items() if k != "curatedAt"} == {
+        "cohort": "fetus"
+    }
+    _assert_recent_server_curated_at(working_curation)
 
     # Roll back: fetch the prior (published) revision's content and PUT it
     # back as the new working copy.
@@ -349,4 +411,8 @@ async def test_rollback_restores_prior_curation(
         headers=curator_headers,
     )
     assert rollback_resp.status_code == 200, rollback_resp.text
-    assert rollback_resp.json()["phenopacket"]["hnf1bCuration"] == {"cohort": "born"}
+    rollback_curation = rollback_resp.json()["phenopacket"]["hnf1bCuration"]
+    assert {k: v for k, v in rollback_curation.items() if k != "curatedAt"} == {
+        "cohort": "born"
+    }
+    _assert_recent_server_curated_at(rollback_curation)

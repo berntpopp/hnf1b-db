@@ -1,11 +1,28 @@
 """Export modes (spec §4.6)."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import select
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
 
 CURATION = {"cohort": "fetus", "detectionMethod": "mlpa"}
+
+
+def _assert_recent_server_curated_at(curation: dict) -> None:
+    """``curatedAt`` must be a server-stamped, recent ISO-8601 UTC timestamp.
+
+    Proves the value came from the server clock
+    (``app/phenopackets/services/phenopacket_service.py::stamp_curated_at``),
+    not from whatever the request body happened to contain.
+    """
+    assert "curatedAt" in curation
+    stamped = datetime.fromisoformat(curation["curatedAt"])
+    assert stamped.tzinfo is not None and stamped.utcoffset() == timedelta(0), (
+        "curatedAt must be timezone-aware UTC"
+    )
+    assert abs(datetime.now(timezone.utc) - stamped) < timedelta(minutes=5)
 
 
 @pytest.fixture
@@ -68,7 +85,42 @@ async def test_full_mode_includes_curation(
         headers=curator_headers,
     )
     assert response.status_code == 200
-    assert response.json()["hnf1bCuration"] == CURATION
+    curation = response.json()["hnf1bCuration"]
+    # Curator-supplied fields round-trip exactly; curatedAt is added by the
+    # server on top of them (it is not part of what the fixture submitted).
+    assert {k: v for k, v in curation.items() if k != "curatedAt"} == CURATION
+    _assert_recent_server_curated_at(curation)
+
+
+@pytest.mark.asyncio
+async def test_curated_at_cannot_be_forged_by_the_client(async_client, curator_headers):
+    """A client-supplied ``curatedAt`` lie must never survive persistence.
+
+    This is the actual reason the field is server-stamped
+    (``stamp_curated_at``, spec §3.6): provenance is stamped, not typed, so
+    a curator -- or a compromised console -- cannot backdate (or otherwise
+    forge) a review timestamp by putting a value in the request body.
+    """
+    lie = "1999-01-01T00:00:00+00:00"
+    payload = {
+        "phenopacket": {
+            "id": "phenopacket-curated-at-forgery-test",
+            "subject": {"id": "forgery-test", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-07-30T00:00:00Z",
+                "createdBy": "test",
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
+            },
+            "hnf1bCuration": {"cohort": "fetus", "curatedAt": lie},
+        }
+    }
+    response = await async_client.post(
+        "/api/v2/phenopackets/", json=payload, headers=curator_headers
+    )
+    assert response.status_code in (200, 201), response.text
+    stored_curation = response.json()["phenopacket"]["hnf1bCuration"]
+    assert stored_curation["curatedAt"] != lie
+    _assert_recent_server_curated_at(stored_curation)
 
 
 @pytest.mark.asyncio
