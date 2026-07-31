@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.ontology.schemas import VocabularyResponse
+from app.ontology.schemas import VocabularyItem, VocabularyResponse
 
 router = APIRouter(prefix="/ontology", tags=["ontology"])
 
@@ -236,7 +236,9 @@ async def _fetch_curation_vocabulary(
         f"SELECT value, label, description FROM {table} ORDER BY sort_order"  # noqa: S608
     )
     result = await db.execute(query)
-    return VocabularyResponse(data=[dict(row._mapping) for row in result.fetchall()])
+    return VocabularyResponse(
+        data=[VocabularyItem(**row._mapping) for row in result.fetchall()]
+    )
 
 
 @router.get("/vocabularies/cohort", response_model=VocabularyResponse)
