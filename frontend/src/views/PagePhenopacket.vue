@@ -328,7 +328,7 @@ import { useRoute } from 'vue-router';
 import { getPhenopacket, deletePhenopacket } from '@/api';
 import { useAuthStore } from '@/stores/authStore';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
-import { readEncounterAge } from '@/utils/age';
+import { readEncounterAge, readEncounterGestationalAge, formatGestationalAge } from '@/utils/age';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
@@ -449,6 +449,12 @@ export default {
 
       const encounterAge = readEncounterAge(subject);
       if (encounterAge) return this.formatISO8601Duration(encounterAge);
+
+      // Curation console Task 9: a fetus's timeAtLastEncounter carries
+      // {gestationalAge: {weeks, days}} instead of a duration -- see
+      // utils/age.js for why readEncounterAge alone can't read this shape.
+      const gestationalAge = readEncounterGestationalAge(subject);
+      if (gestationalAge) return formatGestationalAge(gestationalAge);
 
       // Deceased individuals may record only an age at death.
       if (subject.vitalStatus?.timeOfDeath?.age?.iso8601duration) {

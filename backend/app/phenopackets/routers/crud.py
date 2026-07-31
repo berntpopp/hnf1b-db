@@ -60,6 +60,7 @@ from app.phenopackets.services.phenopacket_service import (
     ServiceDatabaseError,
     ServiceNotFound,
     ServiceValidationError,
+    stamp_curated_at,
 )
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
@@ -503,6 +504,11 @@ async def update_phenopacket(
     sanitizer = PhenopacketSanitizer()
     validator = PhenopacketValidator()
     sanitized = sanitizer.sanitize_phenopacket(phenopacket_data.phenopacket)
+    # Curation console design spec §3.6: hnf1bCuration.curatedAt is server-
+    # clock-stamped, not client-stamped. This is the live edit path (PUT ->
+    # PhenopacketStateService.edit_record); see stamp_curated_at's docstring
+    # for why it's safe to always overwrite here.
+    stamp_curated_at(sanitized)
     errors = validator.validate(sanitized)
     if errors:
         raise HTTPException(status_code=400, detail={"validation_errors": errors})

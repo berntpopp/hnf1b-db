@@ -3,21 +3,27 @@
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-green-lighten-5">
       <v-icon left color="success" size="small"> mdi-medical-bag </v-icon>
-      Phenotypic Features ({{ presentFeatures.length }})
+      Phenotypic Features ({{ headerCountLabel }})
     </v-card-title>
     <v-card-text class="pa-3">
-      <v-alert v-if="presentFeatures.length === 0" type="info" density="compact">
+      <v-alert v-if="features.length === 0" type="info" density="compact">
         No phenotypic features recorded
       </v-alert>
 
-      <!-- Compact chip-based display -->
+      <!-- Compact chip-based display. Renders BOTH present and excluded
+           features -- excluded ones are a stronger clinical claim than
+           silence and must be visible and counted (curation console plan
+           Task 9), visually distinguished via the same present=green/
+           excluded=error semantic-color convention
+           PhenotypicFeaturesSection.vue's tri-state editor already uses,
+           so no hardcoded bg-*-lighten-* is introduced (design spec §5). -->
       <div v-else class="feature-chips">
         <v-tooltip
-          v-for="(feature, index) in presentFeatures"
+          v-for="(feature, index) in features"
           :key="index"
           location="top"
           max-width="320"
-          :aria-label="`${feature.type.label} - ${feature.type.id}`"
+          :aria-label="tooltipAriaLabel(feature)"
         >
           <template #activator="{ props }">
             <v-chip
@@ -25,15 +31,28 @@
               :href="getHpoUrl(feature.type.id)"
               target="_blank"
               rel="noopener noreferrer"
-              color="green"
+              :color="feature.excluded ? 'error' : 'green'"
               variant="tonal"
               size="small"
               class="feature-chip"
               label
-              :aria-label="`${feature.type.label} (${feature.type.id}) - Click to view in HPO Browser`"
+              :aria-label="chipAriaLabel(feature)"
             >
+              <!-- Excluded indicator -->
+              <v-icon v-if="feature.excluded" size="x-small" class="mr-1" aria-hidden="true">
+                mdi-minus-circle
+              </v-icon>
+
               <!-- Feature name -->
-              <span class="feature-name">{{ feature.type.label }}</span>
+              <span
+                class="feature-name"
+                :class="{ 'text-decoration-line-through': feature.excluded }"
+              >
+                {{ feature.type.label }}
+              </span>
+              <span v-if="feature.excluded" class="feature-excluded-label text-caption ml-1">
+                (excluded)
+              </span>
 
               <!-- Modifier indicators -->
               <template v-if="feature.modifiers && feature.modifiers.length > 0">
@@ -67,6 +86,11 @@
             <div class="tooltip-header">
               <strong class="tooltip-title">{{ feature.type.label }}</strong>
               <span class="tooltip-id">{{ feature.type.id }}</span>
+            </div>
+
+            <div v-if="feature.excluded" class="tooltip-row">
+              <v-icon size="x-small" class="mr-1" color="error">mdi-minus-circle</v-icon>
+              <span>Excluded (tested, not observed)</span>
             </div>
 
             <div v-if="feature.onset" class="tooltip-row">
@@ -133,6 +157,19 @@ export default {
       return this.features.filter((feature) => !feature.excluded);
     },
 
+    excludedFeatures() {
+      return this.features.filter((feature) => feature.excluded);
+    },
+
+    // Curation console plan Task 9: the header count must equal what's
+    // actually rendered below (ALL features, present + excluded) rather
+    // than silently dropping excluded ones from both the DOM and the count,
+    // as it did before this task.
+    headerCountLabel() {
+      if (this.excludedFeatures.length === 0) return `${this.presentFeatures.length}`;
+      return `${this.presentFeatures.length} present, ${this.excludedFeatures.length} excluded`;
+    },
+
     onsetCategories() {
       const categories = { prenatal: 0, congenital: 0, postnatal: 0, unknown: 0 };
 
@@ -189,6 +226,21 @@ export default {
     },
   },
   methods: {
+    // Curation console plan Task 9: excluded features must be unmistakable
+    // to assistive tech too, not just visually (strikethrough + icon +
+    // "(excluded)" label are sighted-only cues).
+    tooltipAriaLabel(feature) {
+      const base = `${feature.type.label} - ${feature.type.id}`;
+      return feature.excluded ? `${base} (excluded)` : base;
+    },
+
+    chipAriaLabel(feature) {
+      const base = `${feature.type.label} (${feature.type.id})`;
+      return feature.excluded
+        ? `${base} - Excluded - Click to view in HPO Browser`
+        : `${base} - Click to view in HPO Browser`;
+    },
+
     getHpoUrl(hpoId) {
       if (hpoId && hpoId.startsWith('HP:')) {
         return `https://hpo.jax.org/app/browse/term/${hpoId}`;

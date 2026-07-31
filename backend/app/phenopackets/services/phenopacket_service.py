@@ -91,6 +91,30 @@ class ServiceDatabaseError(ServiceError):
     """Raised for unexpected SQLAlchemy errors that aren't integrity issues."""
 
 
+def stamp_curated_at(sanitized: Dict[str, Any]) -> None:
+    """Overwrite ``hnf1bCuration.curatedAt`` with the server clock, in place.
+
+    Curation console design spec §3.6: ``ReviewDate`` /
+    ``hnf1bCuration.curatedAt`` must be "auto-stamped, server clock", not
+    client-stamped. The curation console (plan Task 8,
+    ``PhenopacketCreateEdit.vue``'s ``stampCuration()``) still sets a client
+    ``Date.toISOString()`` value before submit -- that value is harmless
+    (it's overwritten here) and keeps the console's own optimistic UI
+    working before the round-trip completes -- but the persisted value must
+    come from the server so it cannot be forged or skewed by the caller's
+    clock, exactly like an HTTP request's own timestamp would be.
+
+    Deliberately narrow: only touches a block that is already present in
+    the sanitized payload. Never synthesizes an ``hnf1bCuration`` block for
+    a caller that submitted none (e.g. non-curation writers), and never
+    touches ``curatedBy`` or any other field -- those are out of scope for
+    this task (plan Task 9 §c).
+    """
+    block = sanitized.get("hnf1bCuration")
+    if isinstance(block, dict):
+        block["curatedAt"] = datetime.now(timezone.utc).isoformat()
+
+
 # =============================================================================
 # Service class
 # =============================================================================
@@ -142,6 +166,7 @@ class PhenopacketService:
             Any other SQLAlchemy error during commit.
         """
         sanitized = self._sanitizer.sanitize_phenopacket(payload.phenopacket)
+        stamp_curated_at(sanitized)
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)
@@ -242,6 +267,7 @@ class PhenopacketService:
 
         old_phenopacket = existing.phenopacket.copy()
         sanitized = self._sanitizer.sanitize_phenopacket(payload.phenopacket)
+        stamp_curated_at(sanitized)
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)

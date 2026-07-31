@@ -40,3 +40,59 @@ export function readTimeElementAge(timeElement) {
 export function readEncounterAge(subject) {
   return readTimeElementAge(subject?.timeAtLastEncounter);
 }
+
+/**
+ * Read a `{weeks, days}` gestational age off a raw GA4GH TimeElement.
+ *
+ * Curation console Task 9 (design spec §3.5, plan Task 9): rev 2 of the
+ * curation spec specified AgeSection.vue's WRITE of the standard GA4GH
+ * `{gestationalAge: {weeks, days}}` TimeElement variant but forgot the
+ * read side -- `readTimeElementAge` above explicitly (and correctly, for
+ * its own contract) returns null for this variant, so a fetus saved via
+ * the console displayed "N/A" everywhere. This is the lower-level reader
+ * for that shape, parallel to `readTimeElementAge`.
+ *
+ * @param {object|null|undefined} timeElement a GA4GH TimeElement
+ * @returns {{weeks: number, days: number}|null} the gestational age, or
+ *   null when this TimeElement carries no (well-formed) gestational age
+ */
+export function readTimeElementGestationalAge(timeElement) {
+  const gestationalAge = timeElement?.gestationalAge;
+  if (!gestationalAge || typeof gestationalAge.weeks !== 'number') return null;
+  return gestationalAge;
+}
+
+/**
+ * Read the gestational age at last encounter from a GA4GH subject.
+ *
+ * Parallel to `readEncounterAge`, for `subject.timeAtLastEncounter`'s
+ * gestational-age variant (see `readTimeElementGestationalAge` above).
+ *
+ * @param {object|null|undefined} subject GA4GH Individual
+ * @returns {{weeks: number, days: number}|null} the gestational age, or
+ *   null when none is recorded
+ */
+export function readEncounterGestationalAge(subject) {
+  return readTimeElementGestationalAge(subject?.timeAtLastEncounter);
+}
+
+/**
+ * Format a `{weeks, days}` gestational age as a human-readable string, e.g.
+ * "32 weeks 3 days" or "32 weeks" when days is 0/absent.
+ *
+ * Centralized here (curation console Task 9) so SubjectCard.vue and
+ * PagePhenopacket.vue share one formatting implementation instead of each
+ * growing its own ad-hoc gestational-age reader.
+ *
+ * @param {{weeks: number, days?: number}|null|undefined} gestationalAge
+ * @returns {string|null} formatted string, or null for a falsy input
+ */
+export function formatGestationalAge(gestationalAge) {
+  if (!gestationalAge || typeof gestationalAge.weeks !== 'number') return null;
+  const { weeks } = gestationalAge;
+  const days = typeof gestationalAge.days === 'number' ? gestationalAge.days : 0;
+
+  const weekPart = `${weeks} week${weeks === 1 ? '' : 's'}`;
+  if (days === 0) return weekPart;
+  return `${weekPart} ${days} day${days === 1 ? '' : 's'}`;
+}
