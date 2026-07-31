@@ -44,7 +44,7 @@ The corpus already has the right home for consequence: `variationDescriptor.mole
 - Consumes: nothing.
 - Produces: `createInterpretation(variantNotation: string, geneSymbol: string, annotationData?: {consequence?: string, consequenceSoId?: string, impact?: string, caddScore?: number}) → Interpretation`. Task 3 and the Phase 3 console rely on this shape.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `frontend/tests/unit/components/VariantAnnotationForm.spec.js`:
 
@@ -139,12 +139,12 @@ describe('VariantAnnotationForm payload shape', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run tests/unit/components/VariantAnnotationForm.spec.js`
 Expected: FAIL — `createInterpretation` is not exposed, and current output has `moleculeContext: 'missense_variant'`, a `variation` key, and `impact`/`caddScore`.
 
-- [ ] **Step 3: Rewrite `createInterpretation` and expose it**
+- [x] **Step 3: Rewrite `createInterpretation` and expose it**
 
 Replace `frontend/src/components/VariantAnnotationForm.vue` lines 242-286 with:
 
@@ -210,7 +210,7 @@ const createInterpretation = (variantNotation, geneSymbol, annotationData = {}) 
 defineExpose({ createInterpretation, inferMoleculeContext });
 ```
 
-- [ ] **Step 3b: Supply the SO identifier the annotate endpoint does not return**
+- [x] **Step 3b: Supply the SO identifier the annotate endpoint does not return**
 
 `POST /api/v2/variants/annotate` returns `most_severe_consequence` as a VEP term
 string only — there is no SO ID in the response
@@ -270,7 +270,7 @@ export const SO_TERMS = {
 export const soIdFor = (consequence) => SO_TERMS[consequence];
 ```
 
-- [ ] **Step 3c: Update `addAnnotatedVariant`**
+- [x] **Step 3c: Update `addAnnotatedVariant`**
 
 Replace lines 180-204's call so the SO ID is derived rather than expected from the
 response, and impact/caddScore no longer reach the payload:
@@ -318,7 +318,7 @@ it('omits molecularConsequences for an unmapped consequence rather than guessing
 
 with `import { soIdFor } from '@/utils/soTerms';` at the top of the spec.
 
-- [ ] **Step 3d: Infer the expression syntax from the notation**
+- [x] **Step 3d: Infer the expression syntax from the notation**
 
 The form accepts HGVS, VCF and rsID (`VariantAnnotationForm.vue:49`), so labelling
 every expression `syntax: 'vcf'` is wrong for two of the three. Replace the
@@ -344,12 +344,12 @@ const inferExpressionSyntax = (notation) => {
 All five syntaxes are already used by the corpus (`vcf` 864, `hgvs.g` 424,
 `hgvs.c` 424, `hgvs.p` 363). Add a test asserting each mapping.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run tests/unit/components/VariantAnnotationForm.spec.js`
 Expected: PASS, 7 tests.
 
-- [ ] **Step 5: Verify the annotation display still works**
+- [x] **Step 5: Verify the annotation display still works**
 
 The `impact` and `caddScore` are still shown from `annotation.value` in the success alert (lines 72-93) — that markup is unchanged and reads the composable's response, not the payload. Confirm the variant list subtitle no longer references removed payload fields by checking `variants` computed (lines 136-156): `variant.impact` and `variant.caddScore` now resolve to `undefined` and the `v-if`/`v-show` guards hide them.
 
@@ -373,12 +373,12 @@ and in the template (lines 21-28) replace the `impact`/`caddScore` spans with:
 </v-list-item-subtitle>
 ```
 
-- [ ] **Step 6: Run the full frontend gate**
+- [x] **Step 6: Run the full frontend gate**
 
 Run: `cd frontend && npx vitest run && npm run lint:check && npx prettier --check src tests`
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/components/VariantAnnotationForm.vue frontend/tests/unit/components/VariantAnnotationForm.spec.js
@@ -413,13 +413,13 @@ It happens to be invisible today only because an *empty* array is dropped by `re
 - Consumes: nothing.
 - Produces: `buildSubmissionPhenopacket() → Phenopacket` with no `publications` key, reading PMIDs from `this.publications`. Task 10's export test asserts the same invariant server-side.
 
-- [ ] **Step 1: Read the existing test file**
+- [x] **Step 1: Read the existing test file**
 
 Run: `cat frontend/tests/unit/views/PhenopacketCreateEdit.spec.js`
 
 Note that `createContext()` (`:43-78`) puts `publications: []` **inside** `phenopacket`, and that all three tests drive `loadPhenopacket` / `handleSubmit` rather than `buildSubmissionPhenopacket` directly. The rewrite keeps that structure — only the location of `publications` changes.
 
-- [ ] **Step 2: Rewrite the existing tests against the new location**
+- [x] **Step 2: Rewrite the existing tests against the new location**
 
 In `createContext` (`:63-75`), move `publications` out of `phenopacket` to a sibling, and add the builder helper reference already present at `:62`:
 
@@ -490,12 +490,12 @@ describe('buildSubmissionPhenopacket', () => {
 });
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run tests/unit/views/PhenopacketCreateEdit.spec.js`
 Expected: FAIL — `publications` is still emitted, because it lives on `this.phenopacket` and is spread through.
 
-- [ ] **Step 4: Move `publications` off the phenopacket into component state**
+- [x] **Step 4: Move `publications` off the phenopacket into component state**
 
 In `data()` (line 199), remove `publications: []` from the `phenopacket` object and add a sibling:
 
@@ -518,7 +518,7 @@ data() {
 }
 ```
 
-- [ ] **Step 5: Update every reference from `phenopacket.publications` to `publications`**
+- [x] **Step 5: Update every reference from `phenopacket.publications` to `publications`**
 
 Template (line 86): `v-for="(pub, index) in publications"`.
 
@@ -575,12 +575,12 @@ buildSubmissionPhenopacket() {
 },
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `cd frontend && npx vitest run tests/unit/views/PhenopacketCreateEdit.spec.js`
 Expected: PASS — the three rewritten tests plus four new ones.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/views/PhenopacketCreateEdit.vue frontend/tests/unit/views/PhenopacketCreateEdit.spec.js
@@ -611,7 +611,7 @@ Refs: docs/superpowers/specs/2026-07-30-curation-data-model-design.md"
 - Consumes: nothing.
 - Produces: `cycleState(term)` and `selectCKDStage(stages, id)` emit new arrays whose elements are new objects. The Phase 3 grid replaces this component but preserves the emitted value shape `{type: {id, label}, excluded: boolean}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `frontend/tests/unit/components/PhenotypicFeaturesSection.spec.js`:
 
@@ -677,12 +677,12 @@ describe('PhenotypicFeaturesSection state transitions', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run tests/unit/components/PhenotypicFeaturesSection.spec.js`
 Expected: FAIL on the first two tests — `original[0].excluded` becomes `true`, and the emitted element is the same object reference.
 
-- [ ] **Step 3: Replace the element instead of mutating it**
+- [x] **Step 3: Replace the element instead of mutating it**
 
 Replace `cycleState` (lines 223-243):
 
@@ -713,12 +713,12 @@ const cycleState = (term) => {
 // Builds a fresh array and a fresh element; safe as written.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run tests/unit/components/PhenotypicFeaturesSection.spec.js`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/PhenotypicFeaturesSection.vue frontend/tests/unit/components/PhenotypicFeaturesSection.spec.js
@@ -751,7 +751,7 @@ Per ADR 0003 the data is not migrated; the readers are corrected. Both shapes ar
 - Consumes: nothing.
 - Produces: `readEncounterAge(subject) → string | null`, a shared helper. The Phase 3 console's age control reads and writes through the same helper.
 
-- [ ] **Step 1: Confirm `age_utils` really is unreferenced**
+- [x] **Step 1: Confirm `age_utils` really is unreferenced**
 
 Run:
 
@@ -761,7 +761,7 @@ grep -rn "age_utils" --include=*.py . | grep -v '\.venv' | grep -v __pycache__ |
 
 Expected: no output. If anything is printed, stop — the deletion in Step 7 is unsafe and the module must be repaired instead.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `frontend/tests/unit/components/SubjectCard.spec.js`:
 
@@ -804,12 +804,12 @@ describe('readEncounterAge', () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run tests/unit/components/SubjectCard.spec.js`
 Expected: FAIL — `@/utils/age` does not exist.
 
-- [ ] **Step 4: Create the shared helper**
+- [x] **Step 4: Create the shared helper**
 
 Create `frontend/src/utils/age.js`:
 
@@ -835,12 +835,12 @@ export function readEncounterAge(subject) {
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run tests/unit/components/SubjectCard.spec.js`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Wire the helper into both readers**
+- [x] **Step 6: Wire the helper into both readers**
 
 `frontend/src/components/phenopacket/SubjectCard.vue` — add the import alongside the existing imports, then replace the `age()` computed (lines 117-123):
 
@@ -887,19 +887,19 @@ ageDisplay() {
   }),
 ```
 
-- [ ] **Step 7: Delete the dead backend module**
+- [x] **Step 7: Delete the dead backend module**
 
 ```bash
 git rm backend/app/phenopackets/age_utils.py
 ```
 
-- [ ] **Step 8: Run both gates**
+- [x] **Step 8: Run both gates**
 
 Run: `cd frontend && npx vitest run && npm run lint:check && npx prettier --check src tests`
 Run: `cd backend && uv run ruff format && uv run ruff check . && uv run pytest -q`
 Expected: all pass. The backend suite needs the docker pgvector/pg15 + redis services up; `conftest` self-migrates.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add frontend/src/utils/age.js frontend/src/components/phenopacket/SubjectCard.vue \
@@ -940,7 +940,7 @@ Values and counts come from the spreadsheet (939 rows).
 - Consumes: nothing.
 - Produces: tables `cohort_values`, `detection_method_values`, `segregation_values`, `family_history_values`, each `(value text PK, label text, description text, sort_order int)`. Task 6 selects from them; Task 9 validates against them.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_curation_vocabularies.py`:
 
@@ -1020,12 +1020,12 @@ async def test_not_reported_present_where_the_source_records_silence(db_session)
     assert result.first() is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_curation_vocabularies.py -q`
 Expected: FAIL — relations do not exist.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 Create `backend/alembic/versions/a1c4e7f20b93_add_curation_vocabularies.py`:
 
@@ -1115,13 +1115,13 @@ def downgrade() -> None:
         op.execute(f"DROP TABLE IF EXISTS {table}")  # noqa: S608
 ```
 
-- [ ] **Step 4: Set the revision parent**
+- [x] **Step 4: Set the revision parent**
 
 Run: `cd backend && uv run alembic heads`
 
 Set `down_revision` in the new file to the printed head. If more than one head is printed, stop and resolve the branch first.
 
-- [ ] **Step 5: Register the tables in BOTH registries**
+- [x] **Step 5: Register the tables in BOTH registries**
 
 There are two independent lists, and missing either fails the drift test:
 
@@ -1184,17 +1184,17 @@ and add the four names to the set at lines 141-152, keeping alphabetical order:
     return True
 ```
 
-- [ ] **Step 6: Run the migration and the tests**
+- [x] **Step 6: Run the migration and the tests**
 
 Run: `cd backend && uv run alembic upgrade head && uv run pytest tests/test_curation_vocabularies.py tests/test_alembic_env_autogenerate.py -q`
 Expected: PASS. The autogenerate-drift test must stay green — if it now proposes dropping the new tables, Step 5 was missed.
 
-- [ ] **Step 7: Verify downgrade**
+- [x] **Step 7: Verify downgrade**
 
 Run: `cd backend && uv run alembic downgrade -1 && uv run alembic upgrade head`
 Expected: both succeed; re-running the vocabulary tests still passes.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -1228,7 +1228,7 @@ New endpoints declare an explicit response model with one canonical item shape r
 - Consumes: Task 5's four tables.
 - Produces: `GET /api/v2/ontology/vocabularies/{cohort,detection-method,segregation,family-history}` → `{"data": [{"value": str, "label": str, "description": str | None}]}`. Task 11's composable and Task 12's MCP `Literal` consume these paths.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_curation_vocabulary_endpoints.py`:
 
@@ -1285,12 +1285,12 @@ async def test_cohort_has_no_not_reported(async_client):
     assert "not_reported" not in {item["value"] for item in response.json()["data"]}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_curation_vocabulary_endpoints.py -q`
 Expected: FAIL with 404 — routes do not exist.
 
-- [ ] **Step 3: Add the response model**
+- [x] **Step 3: Add the response model**
 
 In `backend/app/ontology/schemas.py` (create if absent, with a module docstring):
 
@@ -1321,7 +1321,7 @@ class VocabularyResponse(BaseModel):
     data: List[VocabularyItem]
 ```
 
-- [ ] **Step 4: Add the routes**
+- [x] **Step 4: Add the routes**
 
 Append to `backend/app/ontology/routers.py`, after `get_evidence_code_values`:
 
@@ -1376,12 +1376,12 @@ Add the import at the top of the module:
 from app.ontology.schemas import VocabularyResponse
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_curation_vocabulary_endpoints.py -q`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -1430,7 +1430,7 @@ Laterality is restored as HPO modifiers. Which modifiers a term admits is **refe
 - Consumes: `hpo_terms_lookup` (raw-SQL managed, already in `include_object`).
 - Produces: `hpo_terms_lookup.allowed_modifiers text[]`, and `GET /api/v2/ontology/laterality-policy` → `{"data": [{"hpo_id": str, "allowed_modifiers": [str]}]}`. Task 9 validates against the column; Task 12 allowlists the path.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_laterality_policy.py`:
 
@@ -1501,12 +1501,12 @@ async def test_endpoint_lists_only_terms_with_modifiers(async_client):
     assert "HP:0004904" not in policy, "terms admitting no modifiers are omitted"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_laterality_policy.py -q`
 Expected: FAIL — column `allowed_modifiers` does not exist.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 Create `backend/alembic/versions/c8f1a3d5e207_add_hpo_allowed_modifiers.py`:
 
@@ -1573,7 +1573,7 @@ def downgrade() -> None:
     op.execute("ALTER TABLE hpo_terms_lookup DROP COLUMN IF EXISTS allowed_modifiers")
 ```
 
-- [ ] **Step 4: Add the endpoint**
+- [x] **Step 4: Add the endpoint**
 
 Append to `backend/app/ontology/routers.py`:
 
@@ -1596,12 +1596,12 @@ async def get_laterality_policy(db: AsyncSession = Depends(get_db)):
     return {"data": [dict(row._mapping) for row in result.fetchall()]}
 ```
 
-- [ ] **Step 5: Run migration and tests**
+- [x] **Step 5: Run migration and tests**
 
 Run: `cd backend && uv run alembic upgrade head && uv run pytest tests/test_laterality_policy.py tests/test_alembic_env_autogenerate.py -q`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -1633,7 +1633,7 @@ A namespaced top-level block for case-level curated facts. It lives inside the J
 - Consumes: **Task 1 is a hard dependency.** Step 4 constrains `moleculeContext` to the GA4GH enum; the unfixed form writes a VEP consequence there (`VariantAnnotationForm.vue:253`), so doing this first would make every save from the current UI fail validation. Do not reorder.
 - Produces: schema acceptance of `phenopacket.hnf1bCuration = {cohort?, familyHistory?, detectionMethod?, curatedBy?, curatedAt?}`. Task 9 validates its *values*; Task 10 strips it on conformant export.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_hnf1b_curation_schema.py`:
 
@@ -1739,12 +1739,12 @@ def test_rejects_a_vep_consequence_as_molecule_context(validator):
     assert validator.validate(_with_molecule_context("missense_variant"))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_hnf1b_curation_schema.py -q`
 Expected: FAIL on `test_rejects_an_unknown_key_inside_the_block` — the block is currently unconstrained, so a typo passes.
 
-- [ ] **Step 3: Declare the block**
+- [x] **Step 3: Declare the block**
 
 In `backend/app/phenopackets/validation/schema_validator.py`, add to `properties` after `metaData` (around line 88):
 
@@ -1770,7 +1770,7 @@ In `backend/app/phenopackets/validation/schema_validator.py`, add to `properties
                 },
 ```
 
-- [ ] **Step 4: Constrain `moleculeContext` to the GA4GH enum**
+- [x] **Step 4: Constrain `moleculeContext` to the GA4GH enum**
 
 Task 1 stopped the *writer* from putting a VEP consequence there; this stops the
 schema from accepting one. The enum includes `unspecified_molecule_context`, which
@@ -1790,7 +1790,7 @@ In the same file, replace the `moleculeContext` declaration at line 207:
                                         },
 ```
 
-- [ ] **Step 5: Confirm the 424 corpus records still validate**
+- [x] **Step 5: Confirm the 424 corpus records still validate**
 
 The corpus uses `moleculeContext: "genomic"` in 424 records and omits it in 440.
 Both must pass:
@@ -1806,18 +1806,18 @@ Expected: only `genomic` and an empty line (the omitted case). If any other valu
 appears, the enum would reject existing data — stop and widen it rather than
 breaking the additive-only constraint.
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_hnf1b_curation_schema.py -q`
 Expected: PASS, 12 tests.
 
-- [ ] **Step 7: Confirm no existing test regressed**
+- [x] **Step 7: Confirm no existing test regressed**
 
 Run: `cd backend && uv run pytest tests/ -q -k "phenopacket or schema or valid"`
 Expected: PASS — the change is additive at the top level, and the `moleculeContext`
 enum admits every value the corpus uses.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -1857,7 +1857,7 @@ Reference-table membership and per-term laterality need database lookups, so the
 - Consumes: Task 5's four tables, Task 7's `allowed_modifiers`, Task 8's schema.
 - Produces: `async DomainValidator(db).validate(phenopacket: dict) -> list[str]`, returning human-readable messages. Empty list means valid. Raised to the caller as HTTP 400 with `{"detail": {"validation_errors": [...]}}`, matching `crud.py:448`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_domain_validator.py`:
 
@@ -2047,12 +2047,12 @@ async def test_structurally_malformed_documents_do_not_crash(db_session, malform
     await DomainValidator(db_session).validate(packet(**malformed))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_domain_validator.py -q`
 Expected: FAIL — `app.phenopackets.validation.domain` does not exist.
 
-- [ ] **Step 3: Implement the validator**
+- [x] **Step 3: Implement the validator**
 
 Create `backend/app/phenopackets/validation/domain.py`:
 
@@ -2216,12 +2216,12 @@ class DomainValidator:
         return errors
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_domain_validator.py -q`
 Expected: PASS, 10 tests.
 
-- [ ] **Step 5: Wire it into the create path**
+- [x] **Step 5: Wire it into the create path**
 
 In `backend/app/phenopackets/services/phenopacket_service.py`, replace lines 143-147:
 
@@ -2243,7 +2243,7 @@ with the import at the top of the module:
 from app.phenopackets.validation.domain import DomainValidator
 ```
 
-- [ ] **Step 6: Wire it into the edit path**
+- [x] **Step 6: Wire it into the edit path**
 
 In `backend/app/phenopackets/routers/crud.py`, after line 455:
 
@@ -2264,7 +2264,7 @@ with the import at the top:
 from app.phenopackets.validation.domain import DomainValidator
 ```
 
-- [ ] **Step 7: Write the end-to-end rejection test**
+- [x] **Step 7: Write the end-to-end rejection test**
 
 Append to `backend/tests/test_domain_validator.py`:
 
@@ -2300,12 +2300,12 @@ Note also that `resources` must be non-empty: the sanitizer strips empty arrays
 `metaData.resources` field (`schema_validator.py:73`) — masking the domain error the
 test is trying to observe.
 
-- [ ] **Step 8: Run the whole backend suite**
+- [x] **Step 8: Run the whole backend suite**
 
 Run: `cd backend && uv run ruff format && uv run ruff check . && uv run pytest -q`
 Expected: PASS. Note `.env` must not set `ENABLE_DEV_AUTH` — it breaks `make check`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/app/phenopackets/validation/domain.py backend/app/phenopackets/services/phenopacket_service.py backend/app/phenopackets/routers/crud.py backend/tests/test_domain_validator.py
@@ -2337,7 +2337,7 @@ Refs: docs/superpowers/specs/2026-07-30-curation-data-model-design.md §4.5"
 - Consumes: Task 8's block.
 - Produces: `GET /api/v2/phenopackets/{phenopacket_id}/export?mode={conformant|full}` → the phenopacket document. Task 12 allowlists the path for MCP.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_phenopacket_export.py`:
 
@@ -2426,12 +2426,12 @@ async def test_missing_record_is_404(async_client):
     assert response.status_code == 404
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_phenopacket_export.py -q`
 Expected: FAIL with 404 — the route does not exist.
 
-- [ ] **Step 3: Read how the detail GET enforces visibility**
+- [x] **Step 3: Read how the detail GET enforces visibility**
 
 Run: `sed -n '1,120p' backend/app/phenopackets/repositories/visibility.py` and find the
 detail `GET /{phenopacket_id}` handler in `crud.py`.
@@ -2447,7 +2447,7 @@ publication model:
 Reading `pp.phenopacket` directly would export a curator's in-progress draft to an
 anonymous caller.
 
-- [ ] **Step 4: Add the route with the same visibility boundary**
+- [x] **Step 4: Add the route with the same visibility boundary**
 
 Append to `backend/app/phenopackets/routers/crud.py`, using the same optional-user
 dependency and content-selection helper the detail GET uses (substitute the real
@@ -2496,7 +2496,7 @@ Add `Literal` to the module's `typing` import if absent. If the repository has n
 GET calls rather than inventing a parallel path — a second, subtly different
 visibility implementation is exactly the defect this step exists to avoid.
 
-- [ ] **Step 5: Add the leakage tests**
+- [x] **Step 5: Add the leakage tests**
 
 Append to `backend/tests/test_phenopacket_export.py`, using the existing
 `draft_record` (`conftest.py:502`), `published_record` (`:526`) and
@@ -2531,12 +2531,12 @@ async def test_full_mode_requires_curator(async_client, published_record):
     assert response.status_code in (401, 403)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_phenopacket_export.py -q`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -2564,13 +2564,13 @@ Refs: docs/superpowers/specs/2026-07-30-curation-data-model-design.md §4.6"
 - Consumes: Task 6's endpoints.
 - Produces: `usePhenopacketVocabularies()` additionally returns `cohort`, `detectionMethod`, `segregation`, `familyHistory` refs, each `[{value, label, description}]`. The Phase 3 console binds its selects to these.
 
-- [ ] **Step 1: Read the current composable**
+- [x] **Step 1: Read the current composable**
 
 Run: `sed -n '1,124p' frontend/src/composables/usePhenopacketVocabularies.js`
 
 Note the exact ref names, the request helper, the `loadAll` implementation and the returned object, so the four additions match the file's own idiom rather than a guessed one.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `frontend/tests/unit/composables/usePhenopacketVocabularies.spec.js`:
 
@@ -2637,12 +2637,12 @@ describe('usePhenopacketVocabularies curation additions', () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run tests/unit/composables/usePhenopacketVocabularies.spec.js`
 Expected: FAIL — the four properties are absent.
 
-- [ ] **Step 4: Add the four vocabularies**
+- [x] **Step 4: Add the four vocabularies**
 
 Following the file's existing pattern exactly (read in Step 1), add four refs initialised to `[]`, four fetches inside `loadAll` matching how the existing five are issued, and the four names in the returned object. Add above the new refs:
 
@@ -2652,17 +2652,17 @@ Following the file's existing pattern exactly (read in Step 1), add four refs in
 // item shapes, so a generic loader would have to special-case them anyway.
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run tests/unit/composables/usePhenopacketVocabularies.spec.js`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Run the full frontend gate**
+- [x] **Step 6: Run the full frontend gate**
 
 Run: `cd frontend && npx vitest run && npm run lint:check && npx prettier --check src tests`
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/composables/usePhenopacketVocabularies.js frontend/tests/unit/composables/usePhenopacketVocabularies.spec.js
@@ -2696,7 +2696,7 @@ The MCP server is read-only, so there is no write risk — but four new API path
 - Consumes: Tasks 6, 7, 10.
 - Produces: MCP `hnf1b_resolve_terms(vocabulary=...)` accepting the four new names.
 
-- [ ] **Step 1: Confirm the snapshot already carries the new routes**
+- [x] **Step 1: Confirm the snapshot already carries the new routes**
 
 Tasks 6, 7 and 10 each refreshed `mcp/contract/openapi.snapshot.json` per the Global
 Constraints. Verify before touching the allowlist — if the snapshot is stale, the
@@ -2717,12 +2717,12 @@ Expected: the four `/ontology/vocabularies/...` paths, `/ontology/laterality-pol
 and `/phenopackets/{phenopacket_id}/export`. If any is missing, go back and run
 `cd backend && uv run python scripts/dump_openapi.py` before continuing.
 
-- [ ] **Step 2: Run the contract test to see it fail**
+- [x] **Step 2: Run the contract test to see it fail**
 
 Run: `cd mcp && uv run pytest tests/test_contract.py -q`
 Expected: FAIL — `/ontology/laterality-policy` and `/phenopackets/{id}/export` are now in the snapshot but match neither `_RULES` nor `_DENY`, which is exactly the silent gap the test exists to catch.
 
-- [ ] **Step 2: Extend the vocabulary `Literal`**
+- [x] **Step 2: Extend the vocabulary `Literal`**
 
 In `mcp/src/hnf1b_mcp/tools/terms.py`, replace lines 36-43:
 
@@ -2741,7 +2741,7 @@ In `mcp/src/hnf1b_mcp/tools/terms.py`, replace lines 36-43:
         ] = "hpo",
 ```
 
-- [ ] **Step 3: Allowlist the laterality policy, allowlist export**
+- [x] **Step 3: Allowlist the laterality policy, allowlist export**
 
 In `mcp/src/hnf1b_mcp/client/allowlist.py`, add after the `/ontology/vocabularies/...` rule:
 
@@ -2757,12 +2757,12 @@ and next to the phenopacket rules, **before** the catch-all `^/phenopackets/[^/]
     (re.compile(r"^/phenopackets/[^/]+/export$"), False),
 ```
 
-- [ ] **Step 4: Run the contract test**
+- [x] **Step 4: Run the contract test**
 
 Run: `cd mcp && uv run pytest tests/test_contract.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Decide MCP response shaping for `hnf1bCuration`**
+- [x] **Step 5: Decide MCP response shaping for `hnf1bCuration`**
 
 `mcp/src/hnf1b_mcp/services/individuals.py:219` constructs its output field-by-field,
 so `hnf1bCuration` is dropped silently today. Silence is not a decision — make one
@@ -2784,7 +2784,7 @@ async def test_mcp_output_excludes_curation_metadata(...):
 
 Update the `hnf1b_resolve_terms` docstring to list the four new vocabularies.
 
-- [ ] **Step 6: Regenerate the generated models**
+- [x] **Step 6: Regenerate the generated models**
 
 Run: `cd mcp && make contract`
 
@@ -2796,12 +2796,12 @@ Run: `git diff --stat mcp/`
 Expected: `_generated_models.py` shows the new paths. If it is unchanged while the
 snapshot contains them, generation did not run — investigate before committing.
 
-- [ ] **Step 6: Run the whole MCP suite**
+- [x] **Step 6: Run the whole MCP suite**
 
 Run: `cd mcp && uv run pytest -q`
 Expected: PASS.
 
-- [ ] **Step 7: Verify the new vocabularies resolve end-to-end**
+- [x] **Step 7: Verify the new vocabularies resolve end-to-end**
 
 With the backend running on :8000:
 
@@ -2812,7 +2812,7 @@ curl -s "http://localhost:8000/api/v2/ontology/laterality-policy" | head -c 400
 
 Expected: `{"data":[{"value":"sanger",...}]}` and a policy list including `HP:0000122` with exactly `["HP:0012833","HP:0012835","HP:0012834"]` (order per the endpoint; Bilateral `HP:0012832` absent).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add mcp/
@@ -2847,7 +2847,7 @@ needs revisiting before Phase 3 builds on it.
 - Consumes: Tasks 8, 9, 10.
 - Produces: nothing. This is the gate that validates the spec's central design claim.
 
-- [ ] **Step 1: Read the existing state fixtures and edit flow**
+- [x] **Step 1: Read the existing state fixtures and edit flow**
 
 Run: `sed -n '500,610p' backend/tests/conftest.py` and
 `grep -n "edit_record\|publish\|def " backend/app/phenopackets/services/state_service.py | head -40`
@@ -2855,7 +2855,7 @@ Run: `sed -n '500,610p' backend/tests/conftest.py` and
 Use `draft_record` (`:502`), `published_record` (`:526`), `clone_in_progress_record`
 (`:570`) and `another_curator` (`:477`) rather than building new fixtures.
 
-- [ ] **Step 2: Write the tests**
+- [x] **Step 2: Write the tests**
 
 Create `backend/tests/test_curation_revision_semantics.py`:
 
@@ -2937,13 +2937,13 @@ async def test_rollback_restores_prior_curation(
 Fill each body against the real PUT/publish/rollback API discovered in Step 1 —
 the docstrings define the required behaviour, not the implementation.
 
-- [ ] **Step 3: Run them**
+- [x] **Step 3: Run them**
 
 Run: `cd backend && uv run pytest tests/test_curation_revision_semantics.py -q`
 Expected: PASS. A failure here is a design signal, not a test bug — stop and reassess
 before continuing to Phase 3.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -2970,7 +2970,7 @@ Phase 1 changed what the form writes; Phase 2 added what it can write into. Noth
 - Consumes: everything above.
 - Produces: nothing consumed by later tasks. This is the gate before Phase 3 begins.
 
-- [ ] **Step 1: Read the existing Playwright setup before writing anything**
+- [x] **Step 1: Read the existing Playwright setup before writing anything**
 
 Run: `cat frontend/playwright.config.js` and `ls frontend/tests/e2e/`
 
@@ -2990,14 +2990,14 @@ Also note CI migrates an **empty** database and seeds only an admin
 (`.github/workflows/ci.yml:298`), so `phenopacket-219` does not exist there. Every
 record this spec needs must be created through the API by the test itself.
 
-- [ ] **Step 2: Start the backend**
+- [x] **Step 2: Start the backend**
 
 Run: `make hybrid-up` then `make backend`. Playwright starts the frontend itself.
 
 `backend/.env` must contain `REDIS_URL=redis://localhost:6380` or the cache silently
 degrades.
 
-- [ ] **Step 3: Write the end-to-end check**
+- [x] **Step 3: Write the end-to-end check**
 
 Create `frontend/tests/e2e/curation-contract.spec.js`. Substitute the real sign-in
 helper name found in Step 1 for `signInAsCurator`, and the real API base the other
@@ -3128,7 +3128,7 @@ test.describe('curation storage contract', () => {
 });
 ```
 
-- [ ] **Step 4: Pin down the age locator**
+- [x] **Step 4: Pin down the age locator**
 
 `getByTestId('subject-age')` is a placeholder. Open the detail page for a record with
 a flat age, inspect the DOM around the rendered age, and either use an existing stable
@@ -3136,13 +3136,13 @@ selector or add `data-testid="subject-age"` to `SubjectCard.vue`. Do not ship a
 `getByText('N/A')`-style assertion — other fields legitimately show N/A and it would
 pass for the wrong reason.
 
-- [ ] **Step 5: Run the checks**
+- [x] **Step 5: Run the checks**
 
 Run: `cd frontend && npx playwright test tests/e2e/curation-contract.spec.js`
 Expected: PASS. Playwright starts its own dev server on 5173; do not also run
 `make frontend`, or `--strictPort` fails.
 
-- [ ] **Step 6: Run every gate one final time**
+- [x] **Step 6: Run every gate one final time**
 
 ```bash
 cd backend && uv run ruff format && uv run ruff check . && uv run pytest -q
@@ -3152,7 +3152,7 @@ cd ../mcp && uv run pytest -q
 
 Expected: all green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/tests/e2e/curation-contract.spec.js
@@ -3234,3 +3234,34 @@ Expected: **no rows**. Any row is a record a curator can no longer save — add 
 term to the policy rather than backfilling data.
 
 Phase 3 — the curation console — is a separate spec and plan, written against this contract.
+
+---
+
+## Status: COMPLETE — landed in PR #422, CI green (2026-07-31)
+
+All 13 tasks (+12b) implemented, reviewed, and verified against the live corpus.
+
+### Where reality differed from the plan
+
+- **Two write-path blockers the plan did not know about.** `SchemaValidator` rejected 487/923
+  stored records and `PhenopacketValidator` rejected 864/923 — so a curator could not save an
+  edit to most of the corpus, which would have made Phase 3 unusable no matter how good the
+  UI was. Both fixed by widening the readers to the corpus's real shapes (never by migrating
+  records), per ADR 0003. Now 0/864 on both, guarded by whole-corpus tests.
+- **Vocabulary values were guessed and then corrected from the sheet**: `publication_type` is
+  `case_report, case_series, review_and_cases, review, research, screening_multiple` (not
+  `thesis`/`preprint`), and `classification_system` is `acmg, clingen_cnv` (not
+  `clingen_hnf1b`).
+- **`any_kidney` is latent, not live.** The plan implied a consumer; there is none, and 136 of
+  its 178 rows are `excluded: true`. Recorded rather than "fixed".
+- **Onset ids live in 4 JSON paths, not 2.** `interpretations[].diagnosis.disease` carries only
+  the MONDO defect.
+- **Server-side `curatedAt` stamping** broke 5 export/revision tests that exact-matched stale
+  fixtures; they now assert the stamp is present and recent, plus a new test that POSTs a
+  forged `1999-01-01` and proves the server overwrites it.
+
+### Verified, not assumed
+
+- Corpus content unchanged by the whole programme: 864 records, `e5bc71d2…` before and after.
+- Both write-path validators: 0 failures across all 864 records.
+- `cardinality(allowed_modifiers) > 0` is exactly 6.

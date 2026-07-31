@@ -70,30 +70,30 @@ structuralType SO terms already stored: SO:0000159 deletion, SO:1000035 duplicat
 `backend/alembic/env.py`; `backend/tests/test_alembic_env_autogenerate.py`;
 tests `backend/tests/test_curation_console_schema.py` (create)
 
-- [ ] **Step 1: Write the failing test** — assert the schema accepts a block carrying
+- [x] **Step 1: Write the failing test** — assert the schema accepts a block carrying
   `publicationType, classificationSystem, classificationDate, classificationComment,
   caseComment, problematic, duplicateCheck`; that a typo inside the block is still rejected
   (`additionalProperties: false` must keep working); that a record with no block is still
   valid; and that all 923 legacy shapes still validate.
-- [ ] **Step 2: Add the seven typed fields** to the `hnf1bCuration` declaration. Typed, not a
+- [x] **Step 2: Add the seven typed fields** to the `hnf1bCuration` declaration. Typed, not a
   free-form `notes` object — a bag would defeat `additionalProperties: false`, which is the
   property Task 8 of the previous plan bought.
-- [ ] **Step 3: Add two vocabulary tables** `publication_type_values`
+- [x] **Step 3: Add two vocabulary tables** `publication_type_values`
   (case_report, case_series, research, review, thesis, preprint) and
   `classification_system_values` (acmg, clingen_hnf1b). Follow the `cohort_values` pattern.
   Register in BOTH registries. `down_revision` from `uv run alembic heads` immediately before
   writing.
-- [ ] **Step 4: Verify additive-only** — content hash unchanged; `alembic downgrade -1 && upgrade head` round-trips.
+- [x] **Step 4: Verify additive-only** — content hash unchanged; `alembic downgrade -1 && upgrade head` round-trips.
 
 ## Task 2: Expose the two new vocabularies
 
 **Files:** `backend/app/ontology/routers.py`; `backend/app/ontology/schemas.py`;
 tests `backend/tests/test_curation_console_vocabularies.py` (create)
 
-- [ ] Reuse `VocabularyResponse` and `_fetch_curation_vocabulary` exactly; item shape stays
+- [x] Reuse `VocabularyResponse` and `_fetch_curation_vocabulary` exactly; item shape stays
   `{value,label,description}` wrapped in `{"data":[...]}`.
-- [ ] Refresh the OpenAPI snapshot in the same commit.
-- [ ] Extend `usePhenopacketVocabularies.js` with the two new refs, following the file's
+- [x] Refresh the OpenAPI snapshot in the same commit.
+- [x] Extend `usePhenopacketVocabularies.js` with the two new refs, following the file's
   existing idiom.
 
 ## Task 3: The console shell — sections + completeness rail
@@ -103,53 +103,53 @@ tests `backend/tests/test_curation_console_vocabularies.py` (create)
 `frontend/src/components/curation/CompletenessRail.vue` (create);
 tests `frontend/tests/unit/components/CompletenessRail.spec.js` (create)
 
-- [ ] **Step 1: Failing test** — the rail reports `filled/total` per section; a field set to
+- [x] **Step 1: Failing test** — the rail reports `filled/total` per section; a field set to
   `not_reported` counts as **filled**; an absent field counts as **not filled**; the two are
   never conflated. This is the spec's central semantic.
-- [ ] **Step 2: Build** collapsible sections with per-section counts and a sticky rail. Section
+- [x] **Step 2: Build** collapsible sections with per-section counts and a sticky rail. Section
   state persists across a reload (localStorage) so a curator returning to a case resumes where
   they were.
-- [ ] **Step 3: Unsaved-changes guard** on route leave — the current form has none.
-- [ ] **Step 4:** keyboard-complete; each section reachable by skip-link; `prefers-reduced-motion` respected.
+- [x] **Step 3: Unsaved-changes guard** on route leave — the current form has none.
+- [x] **Step 4:** keyboard-complete; each section reachable by skip-link; `prefers-reduced-motion` respected.
 
 ## Task 4: Case section
 
-- [ ] Cohort, Sex, Individual identifiers (chips → `subject.alternateIds`), Publication type,
+- [x] Cohort, Sex, Individual identifiers (chips → `subject.alternateIds`), Publication type,
   Family history. Selects bind to the vocabulary composable, never to hardcoded arrays.
 
 ## Task 5: Variant section
 
-- [ ] `VariantReported` → `variationDescriptor.description`, **verbatim, never normalised** —
+- [x] `VariantReported` → `variationDescriptor.description`, **verbatim, never normalised** —
   add a test asserting the stored value equals the typed value byte-for-byte.
-- [ ] Variant type → `structuralType` as an SO term; hg38/hg19 → `expressions[hgvs.g]`;
+- [x] Variant type → `structuralType` as an SO term; hg38/hg19 → `expressions[hgvs.g]`;
   Varsome → `expressions[hgvs.c]`; dbVar `ID` → `xrefs[]`; detection method; segregation →
   `extensions[segregation].origin`; allelic state.
-- [ ] Reuse `inferExpressionSyntax`/`inferMoleculeContext` from the existing form; do not
+- [x] Reuse `inferExpressionSyntax`/`inferMoleculeContext` from the existing form; do not
   duplicate them.
 
 ## Task 6: Classification section
 
-- [ ] ACMG verdict → `interpretationStatus` (**unchanged placement**, ADR 0003 D1);
+- [x] ACMG verdict → `interpretationStatus` (**unchanged placement**, ADR 0003 D1);
   criteria → `extensions[classification_criteria]`; system, date, comment → the new typed
   fields.
-- [ ] Add a test asserting the console does **not** write
+- [x] Add a test asserting the console does **not** write
   `acmgPathogenicityClassification` — writing it would break the P/LP filter that reads
   `interpretationStatus` (`sql_fragments/paths.py:22`).
 
 ## Task 7: Phenotypes section
 
-- [ ] Keep the tri-state grid; add **per-feature laterality**, offered only for terms
+- [x] Keep the tri-state grid; add **per-feature laterality**, offered only for terms
   `/api/v2/ontology/laterality-policy` admits. `HP:0000122` must offer Unilateral/Left/Right
   and **not** Bilateral.
-- [ ] Add `KidneyBiopsy` (`HP:0100611`). Keep CKD staging behaviour.
-- [ ] Attach `evidence` from the anchoring publication (curation spec §7).
+- [x] Add `KidneyBiopsy` (`HP:0100611`). Keep CKD staging behaviour.
+- [x] Attach `evidence` from the anchoring publication (curation spec §7).
 
 ## Task 8: Age & provenance sections
 
-- [ ] Onset and age-at-report pickers writing `diseases[].onset` and
+- [x] Onset and age-at-report pickers writing `diseases[].onset` and
   `subject.timeAtLastEncounter`, supporting congenital / ISO-8601 / gestational.
-- [ ] `caseComment`, `problematic`, `duplicateCheck` textareas.
-- [ ] `curatedBy`/`curatedAt` auto-stamped from session + server clock. **No reviewer input
+- [x] `caseComment`, `problematic`, `duplicateCheck` textareas.
+- [x] `curatedBy`/`curatedAt` auto-stamped from session + server clock. **No reviewer input
   control exists.** Add a test asserting no `@` can reach the payload from any field.
 
 ## Task 9: Fix the readers Phase 3 owns
@@ -157,10 +157,10 @@ tests `frontend/tests/unit/components/CompletenessRail.spec.js` (create)
 **This is the step rev 2 of the curation spec forgot.** A fetus saves and then displays N/A
 unless all three readers handle `gestationalAge`.
 
-- [ ] `frontend/src/components/phenopacket/SubjectCard.vue`,
+- [x] `frontend/src/components/phenopacket/SubjectCard.vue`,
   `frontend/src/views/PagePhenopacket.vue`, `frontend/src/schemas/phenopacketSchema.js` must
   read `gestationalAge` alongside both age shapes. Extend `frontend/src/utils/age.js`.
-- [ ] **Render excluded phenotypic features.** Logged during Phase 2 monkey testing: a record
+- [x] **Render excluded phenotypic features.** Logged during Phase 2 monkey testing: a record
   with 5 features / 2 excluded renders "Phenotypic Features (3)" and the word "excluded"
   appears nowhere. `excluded: true` is a stronger clinical claim than silence and must be
   visible and counted.
@@ -169,17 +169,17 @@ unless all three readers handle `gestationalAge`.
 
 **Files:** `frontend/tests/e2e/curation-console.spec.js` (create)
 
-- [ ] **Step 1: The acceptance test.** Pick **3 real rows** from the sheet spanning the shapes
+- [x] **Step 1: The acceptance test.** Pick **3 real rows** from the sheet spanning the shapes
   (an SNV case_report, a 17q12 deletion with CNV fields, a fetus with gestational age). Enter
   each through the console by hand. Diff the resulting phenopacket against that individual's
   migrated record. Every field both can express must match. Document any that cannot and why.
-- [ ] **Step 2:** create → save → reload → edit → save round-trip preserves all ~28 dimensions.
-- [ ] **Step 3:** adversarial pass — empty submit, whitespace-only, 10k-char `VariantReported`,
+- [x] **Step 2:** create → save → reload → edit → save round-trip preserves all ~28 dimensions.
+- [x] **Step 3:** adversarial pass — empty submit, whitespace-only, 10k-char `VariantReported`,
   20 publications added then removed, every phenotype cycled through all three states, save
   mid-annotation, navigate away with unsaved changes.
-- [ ] **Step 4:** dark mode on every section; 1440px and 390px; **zero console errors**; no
+- [x] **Step 4:** dark mode on every section; 1440px and 390px; **zero console errors**; no
   horizontal body scroll at 390.
-- [ ] **Step 5:** re-run the curation plan's Done-criteria queries — no legacy record
+- [x] **Step 5:** re-run the curation plan's Done-criteria queries — no legacy record
   unsaveable; content hash unchanged; `cardinality(allowed_modifiers) > 0` still exactly 6.
 
 ## Done criteria
@@ -191,3 +191,57 @@ unless all three readers handle `gestationalAge`.
 - No email can enter a phenopacket by any path.
 - Zero console errors; dark mode correct; 390px clean.
 - Excluded phenotypic features render and are counted.
+
+---
+
+## Status: COMPLETE — landed in PR #422, CI green (2026-07-31)
+
+All 10 tasks implemented. Task 10's spec was **authored but not executed** in the first pass;
+running it on 2026-07-31 against a live stack found six product defects, all now fixed, and
+all 13 e2e tests pass.
+
+### Where reality differed from the spec's field map
+
+The spec's §3.2 mapping was written from the sheet's column names rather than from the corpus,
+and three entries were wrong. §3.2 has been corrected in place.
+
+| Spec said | Corpus actually holds | Consequence of the spec's version |
+|---|---|---|
+| `VariantType` → `structuralType` (all four SO terms) | 404 deletion + 36 duplication on `structuralType`; 302 SNV + 122 indel on `molecularConsequences` (exact partition, 864 records) | The backend rejects `structuralType` without an ISCN/GA4GH-CNV expression, so **every SNV and indel was unsaveable** |
+| `hg38`/`hg19` → `expressions[hgvs.g]`, assembly-tagged | dash notation lives on `syntax: 'vcf'`; **no `version` key on any of 864 records**; `hgvs.g` holds derived true HGVS | Backend rejected the sheet's own values, and reading back by `version` matched nothing — **opening any migrated variant showed hg38 blank** |
+| (no entry) | all 440 structural records carry `expressions[iscn]` | Deletions and duplications — **51% of the corpus** — could not be saved at all |
+
+### Other defects found by executing Task 10
+
+- **`<v-form v-else-if="!error">` unmounted the whole form on any error.** Fill 28 fields, hit a
+  validation error, lose the screen with no way to dismiss the alert. Only a fatal load failure
+  may replace the form now; recoverable errors render once, beside the Save button.
+- **Save errors read `[object Object]`** — `detail` is `{validation_errors: [...]}` and nothing
+  in the frontend had ever rendered that shape. Added `frontend/src/utils/apiError.js`.
+- **The variant sub-editor silently discarded uncommitted input** on submit. Now refused with an
+  instruction.
+- **The spec's own submit assertion could not fail**: `waitForURL(/\/phenopackets\/[^/]+$/)`
+  also matches `/phenopackets/create`, so it resolved instantly on the page it was already
+  sitting on. This is why the suite could look complete and be wrong — it is what hid all six
+  defects above.
+
+### Two documented deviations (D10, D11)
+
+Neither loses information; `VariantReported` keeps the curator's wording verbatim in both cases.
+
+- **D10** — the sheet's `Varsome` cell is a display string
+  (`HNF1B(NM_000458.4):c.443C>T (p.Ser148Leu)`), not coding HGVS. The migration parsed it to
+  `NM_000458.4:c.443C>T`, which is what the migrated record stores and what the control asks for.
+- **D11** — no sheet column holds an ISCN karyotype, yet the backend requires one for a
+  structural variant and it cannot be derived (the sheet's CNV coordinate has a start, no end).
+  The curator supplies it.
+
+### Done criteria — evidence
+
+- 3 real sheet rows enter through the console and diff field-for-field against their migrated
+  records (SNV case report, 17q12 deletion, fetus with gestational age). ✅
+- Create → save → reload → edit → save round-trip preserves every dimension. ✅
+- A typo inside `hnf1bCuration` is still rejected at 400. ✅
+- No legacy record unsaveable; corpus hash `e5bc71d2…` unchanged across the whole run. ✅
+- No email reaches a phenopacket by any path. ✅
+- Zero console errors; dark mode correct; no horizontal scroll at 390px. ✅

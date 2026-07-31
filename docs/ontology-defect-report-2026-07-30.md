@@ -323,26 +323,43 @@ age-of-onset analysis.
 
 ## 7. Current status
 
-**Applied locally, uncommitted:**
+**RESOLVED — PR #422, merged branch `fix/ontology-defects-and-curation-specs`, CI green
+(updated 2026-07-31).** Everything below the "Not addressed" heading in the original report
+has been closed. What follows is the closing record, not a to-do list.
 
-- `backend/alembic/versions/d4e8b1f60a27_fix_renal_echogenicity_hpo_term.py` — T1
-  corrected in both copies and in `hpo_terms_lookup` (460 + 460 + 1). Round-trip tested;
-  feature count 7810 and modifier count 771 unchanged.
-- `migration/phenopackets/laterality.py` — new `parse_laterality()` handling compound
-  values; verified against all six real source values, recovers 639 modifier entries
-  across 408 features.
-- `extractors.py`, `age_parser.py`, `builder_simple.py`, `cnv_parser.py`,
-  `hpo_mapper.py` — T4, T5, T7 and both MONDO ids corrected at source. Lint-clean.
+**Data corrected in both stored copies**, by journalled, exactly-reversible migrations
+(`efa98cccfa51_correct_ontology_terms`, `18cfc57307f6_restore_laterality`), each writing
+`phenopackets.phenopacket` *and* the `phenopacket_revisions.content_jsonb` row at
+`head_published_revision_id`:
 
-**Not addressed:**
+- T1–T5 and both MONDO ids. Reversibility proved on a clone of the real corpus:
+  `e5bc71d2…` → downgrade → `8feba383…` → upgrade → `e5bc71d2…`, byte-exact.
+- The 408 dropped laterality annotations, restored from
+  `backend/migration/data/laterality_2026-07-30.csv`. The corpus now carries 1148 features
+  with modifiers (Bilateral 771, Unilateral 377, Left 113, Right 104).
 
-- T2, T3, T4, T5 in stored data (1725 entries across both copies).
-- T6 in `ontology_service.py`; T8, T9 in `hpo_mapper.py` defaults.
-- The 408 dropped laterality annotations.
-- `ageParser.js` — T4 plus the erroneous 0.08-year age.
-- Both laundering mechanisms (§4). **Until `_get_canonical_label` stops rewriting
-  curator labels, a corrected sheet row can be re-inverted on the next import.**
-- The unused `Phenotype_modifier` sheet wiring.
+**Both laundering mechanisms removed.** `_get_canonical_label`, the `normalize_labels`
+kwarg and the ontology-service dependency are gone from `hpo_mapper.py`; the curator's name
+is written verbatim. `scripts/normalize_hpo_labels.py` — a **second** mechanism this report
+never listed — was deleted rather than fixed, since its only purpose was the thing §4
+forbids. `backend/tests/migration/test_no_label_laundering.py` is the standing guard.
+
+**Source-integrity check added.** `app/ontology/conformance.py` provides A1
+(`check_source_row`, wired into `build_from_dataframe`, which now *raises* on a row whose
+identifier disagrees with its own description) and A3 (`check_label`, used by the
+conformance fences over every hardcoded map). `ALLOWED_DEVIATIONS` is keyed on exact
+`(id, label)` pairs with a written reason each — no wildcards, no term-wide exemptions.
+
+**Larger than this report measured.** §5 counted four hardcoded ontology maps; the sweep
+found **eight**, holding **14** wrong identifiers rather than 9. Two of them were returning
+wrong results to users, which §6 assumed had not happened:
+
+- `/kidney-morphology` filtered on `HP:0004719`, which occurs **zero** times in the corpus.
+  All 75 `ORPHA:2260` Oligomeganephronia cases were invisible.
+- The `/timeline` renal bucket matched HPO ids by substring, catching 657 of ~3300 features
+  and filing `HP:0000079` (urinary) under *genital*. It is now exact-id membership covering
+  30 of the corpus's 36 distinct feature ids; the 6 that fall to "other" are extrarenal
+  syndromic findings for which "other" is the right answer.
 
 **Known-good — do not "fix":**
 
@@ -352,6 +369,11 @@ and an HPO rename respectively, both with sheet definitions matching canonical v
 `ORPHA:2260` Oligomeganephronia and the four laterality modifiers are correct.
 `ECO:0000033` is *"author statement supported by traceable reference"*, stored as
 "author statement" — label imprecise, identifier defensible.
+
+Eight `hpo_terms_lookup.description` rows still paraphrase the ontology definition rather
+than quoting it. They are recorded in
+`tests/test_hpo_lookup_snapshot_agreement.py::_KNOWN_PARAPHRASE_DIFFERENCES`; identifiers
+and labels are correct, so this is wording, not the defect class this report is about.
 
 ---
 

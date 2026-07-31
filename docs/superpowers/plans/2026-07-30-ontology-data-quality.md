@@ -73,11 +73,11 @@ this plan can be silently reverted by the next import — including the already-
 - Consumes: nothing.
 - Produces: `HPOMapper.build_from_dataframe` writes `phenotype_name` verbatim and raises `OntologySourceError` on an uncorroborated row. Task 2's A1 check supplies the corroboration logic.
 
-- [ ] **Step 1: Create the test package**
+- [x] **Step 1: Create the test package**
 
 `backend/tests/migration/` does not exist. Create it with an empty `__init__.py`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 """The importer must never rewrite a curator's term name (spec §3.3 A2).
@@ -134,13 +134,13 @@ def test_no_normalization_is_logged(caplog):
     assert not any("Normalized label" in r.message for r in caplog.records)
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Run: `cd backend && uv run pytest tests/migration/test_no_label_laundering.py -q`
 Expected: FAIL on `test_the_laundering_method_no_longer_exists`, and on
 `test_a_local_qualifier_survives_unchanged` (the canonical name is substituted).
 
-- [ ] **Step 4: Delete the method and its call**
+- [x] **Step 4: Delete the method and its call**
 
 In `hpo_mapper.py`, remove `_get_canonical_label` entirely, and in
 `build_from_dataframe` replace:
@@ -169,12 +169,12 @@ with:
 Then use `label` where `canonical_label` was used, and delete the
 `normalized_count` bookkeeping and its summary log line.
 
-- [ ] **Step 5: Verify nothing else called it**
+- [x] **Step 5: Verify nothing else called it**
 
 Run: `grep -rn "_get_canonical_label\|normalized_count" --include=*.py backend/`
 Expected: no output.
 
-- [ ] **Step 6: Find and update tests that encoded the old behaviour**
+- [x] **Step 6: Find and update tests that encoded the old behaviour**
 
 Run first, before assuming anything passes:
 
@@ -192,7 +192,7 @@ Task 2's check, but no code here imports it, so Task 1 lands and passes on its o
 must land first regardless — while `_get_canonical_label` exists, Task 2's A1 can be
 satisfied by the very rewriting it is meant to prevent.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd backend && uv run ruff format && cd ..
@@ -232,7 +232,7 @@ Production code, not a test helper — the curation program's `DomainValidator` 
   - `ONTOLOGY_PATHS: list[str]` — the JSONB paths A3 enumerates.
   Task 1's importer and the curation `DomainValidator` both call these.
 
-- [ ] **Step 1: Write the snapshot refresher**
+- [x] **Step 1: Write the snapshot refresher**
 
 Create `backend/scripts/refresh_ontology_snapshot.py`. Requirements:
 
@@ -257,7 +257,7 @@ Create `backend/scripts/refresh_ontology_snapshot.py`. Requirements:
 - `--check` mode exits 1 on drift without writing.
 - Record `"_generated_against"` with each ontology's version string.
 
-- [ ] **Step 2: Generate and eyeball the snapshot**
+- [x] **Step 2: Generate and eyeball the snapshot**
 
 Run: `cd backend && uv run python scripts/refresh_ontology_snapshot.py`
 
@@ -276,7 +276,7 @@ Expected: `Renal cortical hyperechogenicity`, `renal cysts and diabetes syndrome
 `Oligomeganephronia`. If any is wrong the resolver is wrong — stop and fix it before
 anything depends on this file.
 
-- [ ] **Step 3: Write the failing test**
+- [x] **Step 3: Write the failing test**
 
 ```python
 """Ontology conformance (spec §3.3).
@@ -354,7 +354,7 @@ def test_every_allowlisted_deviation_carries_a_reason():
         assert len(reason) > 40, f"{key} needs a justification, not a placeholder"
 ```
 
-- [ ] **Step 4: Implement `conformance.py`**
+- [x] **Step 4: Implement `conformance.py`**
 
 `check_label(term_id, label)` — allowlist, then snapshot lookup, then
 `label == name or label in synonyms`.
@@ -374,7 +374,7 @@ whose label is an imprecise shortening of "author statement supported by traceab
 reference" and which the spec defers rather than corrects. Omitting it would make A3
 red on the existing corpus. Each entry carries a written reason.
 
-- [ ] **Step 5: Wire A1 into the importer**
+- [x] **Step 5: Wire A1 into the importer**
 
 In `hpo_mapper.build_from_dataframe`, for each row call `check_source_row` and raise on
 violation, collecting all violations first so one import reports every bad row rather
@@ -392,12 +392,12 @@ if violations:
 Add a test asserting a sheet containing the T1 row raises, and that the message names
 `HP:0033132`.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `cd backend && uv run pytest tests/test_ontology_conformance.py tests/migration/ -q`
 Expected: PASS.
 
-- [ ] **Step 7: Add the Makefile target and commit**
+- [x] **Step 7: Add the Makefile target and commit**
 
 ```makefile
 refresh-ontology-snapshot: check-env  ## Refresh the pinned ontology snapshot (review the diff)
@@ -441,7 +441,7 @@ Refs: docs/superpowers/specs/2026-07-30-ontology-data-quality-design.md §3.3"
 - Consumes: nothing.
 - Produces: a corpus with `MONDO:0007669` only, `HP:0034199` eliminated, `HP:0003674` relabelled. Task 4's backfill runs after.
 
-- [ ] **Step 1: Create the journal table and register it**
+- [x] **Step 1: Create the journal table and register it**
 
 The collapse (two terms → one, then deduplicate) destroys which record held which term,
 so downgrade cannot be an inverse remap. The revision creates:
@@ -470,7 +470,7 @@ it. Register `ontology_migration_journal` in **both** `alembic/env.py::include_o
 and `tests/test_alembic_env_autogenerate.py::_RAW_SQL_TABLES`, or the drift test
 proposes dropping it.
 
-- [ ] **Step 2: Decide and document revision scope**
+- [x] **Step 2: Decide and document revision scope**
 
 `phenopacket_revisions` rows are immutable historical snapshots and there can be several
 per record. Rewriting all of them edits history; rewriting none leaves the public
@@ -489,7 +489,7 @@ Two consequences, both mandatory:
 
 State both in the revision docstring.
 
-- [ ] **Step 3: Prove the SQL in a rolled-back transaction**
+- [x] **Step 3: Prove the SQL in a rolled-back transaction**
 
 Deterministic deduplication — `jsonb_agg(DISTINCT e ORDER BY ord)` is **invalid**
 PostgreSQL, because the ORDER BY expression is not the DISTINCT argument. Keep the
@@ -539,7 +539,7 @@ onsets  HP:0003577 594 · HP:0003674 54 · null 216
 
 `ROLLBACK` and only then write the revision file.
 
-- [ ] **Step 4: Write the remaining remaps**
+- [x] **Step 4: Write the remaining remaps**
 
 `HP:0034199` → `HP:0003577` / `"Congenital onset"` in `diseases[].onset.ontologyClass`
 **and** `subject.timeAtLastEncounter.ontologyClass`. `HP:0003674` label → `"Onset"`, id
@@ -577,7 +577,7 @@ unchanged, in the same two locations. Journal the `subject` preimage too — Ste
 >    `MONDO:0007669`, onsets `HP:0003577` 594 / `HP:0003674` 54 / null 216) were verified by the
 >    controller in a rolled-back transaction against the **working copy** and are correct there.
 
-- [ ] **Step 5: Write the migration test against a seeded fixture**
+- [x] **Step 5: Write the migration test against a seeded fixture**
 
 CI truncates the corpus, so this test **seeds its own records** covering every defect
 shape, then invokes the migration functions directly:
@@ -605,7 +605,7 @@ before and after; `pp-post` keeps `HP:0003674` and gains the label `"Onset"`;
 `pp-tale`'s subject path is remapped. Then `downgrade()` and assert every fixture
 record is byte-identical to its preimage.
 
-- [ ] **Step 6: Apply and round-trip against the real database**
+- [x] **Step 6: Apply and round-trip against the real database**
 
 ```bash
 cd backend
@@ -614,7 +614,7 @@ uv run pytest tests/test_ontology_term_migration.py tests/test_ontology_conforma
 uv run alembic downgrade -1 && uv run alembic upgrade head
 ```
 
-- [ ] **Step 7: Refresh derived state**
+- [x] **Step 7: Refresh derived state**
 
 ```bash
 psql -h localhost -p 5433 -U hnf1b_user -d hnf1b_phenopackets -c "\dm"   # enumerate first
@@ -624,7 +624,7 @@ psql ... -c "REFRESH MATERIALIZED VIEW global_search_index;"
 Refresh every materialized view listed. Confirm `/api/v2/search/global?q=renal` still
 returns results.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Message: as in the defect report §1; note the head-revision-only scope decision.
 
@@ -644,7 +644,7 @@ The information is **not in the database**; it must be re-derived from the sourc
 - Consumes: Task 1's `parse_laterality`, Task 3's corrected corpus.
 - Produces: `Bilateral 797 / Unilateral 408 / Left 119 / Right 112` **subject to Step 1's resolution** — see the warning there.
 
-- [ ] **Step 1: Resolve source rows to records before trusting any total**
+- [x] **Step 1: Resolve source rows to records before trusting any total**
 
 The importer groups 939 sheet rows into 864 individuals and deduplicates features by
 HPO id. **797 "bilateral" source rows therefore do not imply 797 stored Bilateral
@@ -668,14 +668,14 @@ Per ADR 0003 the fixture is de-identified: `individual_id, phenotype_column, hpo
 laterality_value` only. No `ReviewBy`, no comments, no other clinical columns. Record
 the workbook's sha256 in a header comment.
 
-- [ ] **Step 2: Journal every touched feature**
+- [x] **Step 2: Journal every touched feature**
 
 Reuse `ontology_migration_journal` with `json_path = 'phenotypicFeatures'`. Downgrade
 restores journalled rows only, after verifying `postimage_sha`, and asserts the exact
 **771** baseline. Globally deleting the three unilateral ids would also delete
 post-migration curator edits, so it is not an acceptable downgrade.
 
-- [ ] **Step 3: Write the test against a seeded fixture**
+- [x] **Step 3: Write the test against a seeded fixture**
 
 Same constraint as Task 3 — seed records, run the migration, assert. Cover:
 
@@ -689,7 +689,7 @@ Same constraint as Task 3 — seed records, run the migration, assert. Cover:
 - `Left`/`Right` never appear without `Unilateral`;
 - total feature count unchanged.
 
-- [ ] **Step 4: Apply, round-trip, refresh MVs, commit**
+- [x] **Step 4: Apply, round-trip, refresh MVs, commit**
 
 Assert `matched + skipped + unmatched == fixture rows`; abort the migration if not,
 since that means the join is lossy.
@@ -703,7 +703,7 @@ The arithmetic that cannot live in pytest.
 **Files:**
 - Create: `backend/scripts/ontology_preflight.py`
 
-- [ ] **Step 1: Write it**
+- [x] **Step 1: Write it**
 
 Connects to a target database and reports, without modifying anything:
 
@@ -717,7 +717,7 @@ Exit non-zero on any A3 violation. Intended to be run **before and after** a dep
 of Tasks 3–4 and its output archived, replacing the "assert 864 in CI" idea that cannot
 work against a truncated test database.
 
-- [ ] **Step 2: Run it against the local database and archive both outputs**
+- [x] **Step 2: Run it against the local database and archive both outputs**
 
 ```bash
 cd backend && uv run python scripts/ontology_preflight.py > /tmp/preflight-before.txt
@@ -740,13 +740,13 @@ Three wrong terms and one wrong numeric mapping outside the migration package.
 - Modify: `frontend/src/utils/ageParser.js`
 - Test: extend `backend/tests/test_ontology_conformance.py`; `frontend/tests/unit/utils/ageParser.spec.js`
 
-- [ ] **Step 1: Correct `ontology_service.py`**
+- [x] **Step 1: Correct `ontology_service.py`**
 
 `HP:0003149` is Hyperuricosuria → `HP:0002149` Hyperuricemia. `MONDO:0011593` and
 `MONDO:0010953` → `MONDO:0007669`. Check `HP:0000078`'s label against the snapshot while
 you are there.
 
-- [ ] **Step 1b: Remediate `backend/scripts/normalize_hpo_labels.py` — ADDED 2026-07-30**
+- [x] **Step 1b: Remediate `backend/scripts/normalize_hpo_labels.py` — ADDED 2026-07-30**
 
 Found during Task 1, in neither plan. This standalone maintenance script is a **sixth instance
 of the label-laundering defect family** (§4.1), and the one that most directly defeats Task 1.
@@ -786,7 +786,7 @@ def test_no_script_rewrites_stored_curator_labels():
     assert not (Path(__file__).parents[2] / "scripts" / "normalize_hpo_labels.py").exists()
 ```
 
-- [ ] **Step 2: Correct the `hpo_mapper` fallback dictionary**
+- [x] **Step 2: Correct the `hpo_mapper` fallback dictionary**
 
 `HP:0004729` (Acute tubulointerstitial nephritis, labelled "Solitary functioning
 kidney") and `HP:0004719` (Hyperechogenic kidneys, labelled "Oligomeganephronia"). Use
@@ -817,7 +817,7 @@ kidney") and `HP:0004719` (Hyperechogenic kidneys, labelled "Oligomeganephronia"
 > `docs/ontology-defect-report-2026-07-30.md` §2 and §8 accordingly as part of this task
 > (T10 = `HP:0010945`, T11 = `HP:0100575`).
 
-- [ ] **Step 3: Add a test that every hardcoded map is conformant**
+- [x] **Step 3: Add a test that every hardcoded map is conformant**
 
 ```python
 def test_ontology_service_hardcoded_terms_are_conformant():
@@ -840,14 +840,14 @@ def test_hpo_mapper_fallback_is_conformant():
 
 This is the assertion that would have caught T6–T9 without anyone auditing anything.
 
-- [ ] **Step 4: Correct `ageParser.js`**
+- [x] **Step 4: Correct `ageParser.js`**
 
 `'HP:0034199': 0.08, // Neonatal onset` is wrong three ways: the term is Late first
 trimester onset, the comment says Neonatal, and Task 3 eliminates the id from the
 corpus. Remove the entry and add `'HP:0003577': 0` if not already present. Add a test
 asserting no onset id maps to a value contradicting its ontology meaning.
 
-- [ ] **Step 5: Full gate and commit**
+- [x] **Step 5: Full gate and commit**
 
 ```bash
 cd backend && uv run ruff format && uv run ruff check . && uv run pytest -q
@@ -859,13 +859,13 @@ cd ../mcp && uv run pytest -q
 
 ## Task 7: Hand off to the curation program
 
-- [ ] **Step 1: Wire the conformance check into the curation validator**
+- [x] **Step 1: Wire the conformance check into the curation validator**
 
 Curation plan Task 9's `DomainValidator` validates that a modifier is *permitted for a
 term*. It would happily accept `HP:0033133` labelled "hyperechogenicity". Add a
 `check_label` call so a wrong identifier cannot enter through the form.
 
-- [ ] **Step 2: Record the narrow dependency edges**
+- [x] **Step 2: Record the narrow dependency edges**
 
 Not "this whole plan first". The real edges are:
 
@@ -878,7 +878,7 @@ Not "this whole plan first". The real edges are:
 Tasks 3–6 here are **not** prerequisites for the curation vocabularies and can proceed
 in parallel.
 
-- [ ] **Step 3: Point the curation plan at the shared modifier constants**
+- [x] **Step 3: Point the curation plan at the shared modifier constants**
 
 Its Task 9 validator and Phase 3 UI must import the four ids from
 `migration/phenopackets/laterality.py` rather than redeclaring them. Its test fixtures
@@ -915,3 +915,40 @@ labels.
 every stored `(id, label)` against its ontology, and check every sheet row's identifier
 against its description. Both must come back clean, and A1 must be capable of failing,
 which `test_rejects_the_real_defect` proves.
+
+---
+
+## Status: COMPLETE — landed in PR #422, CI green (2026-07-31)
+
+All 6 tasks implemented, reviewed, and verified against the live corpus.
+
+### Where reality differed from the plan
+
+- **14 wrong identifiers, not 9**, across **8 hardcoded ontology maps, not 4**. The extra maps
+  were found by sweeping every module that hardcodes an HPO/MONDO/ORPHA id rather than working
+  from the defect report's list.
+- **Two consumers were returning wrong results in production**, which the plan did not know
+  about: `/kidney-morphology` filtered on `HP:0004719`, which appears **zero** times in the
+  corpus, missing all 75 `ORPHA:2260` cases; and the `/timeline` renal bucket used substring
+  matching, catching 657 of ~3300 features and mis-bucketing `HP:0000079` as genital.
+- **`scripts/normalize_hpo_labels.py` was a second laundering mechanism** the report never
+  listed. Deleted rather than fixed — it existed only to do the thing this plan forbids.
+- **The onset remap aborted the migration** on first run: 59 records have no `diseases`, and
+  `jsonb_agg` over an empty set returns `NULL`, violating the NOT NULL constraint. Every
+  jsonb rebuild in both data migrations now carries a `WHERE EXISTS` guard.
+- **A test fixture was destroying real reference rows** via `LIKE 'HP:000000%'`, and 5 tests
+  could not fail. Both fixed.
+- **`ORPHA:2260` still bucketed as "other"** in the timeline after the first pass — 75 renal
+  findings reported as uncategorised. Caught in the 2026-07-31 review and fixed; timeline
+  coverage is now 30 of the corpus's 36 distinct feature ids, and the 6 that remain are
+  extrarenal syndromic findings for which "other" is correct.
+- **`mypy` is a CI gate that the plan's verification sequence omitted.** `make check` runs it;
+  `ruff format && ruff check && pytest` does not. It failed CI on `app/ontology/routers.py:239`.
+
+### Verified, not assumed
+
+- Migration reversibility on a clone of the real corpus: `e5bc71d2…` → downgrade past both data
+  migrations → `8feba383…` → upgrade → `e5bc71d2…`. Byte-exact.
+- Laterality: exactly 6 terms carry a policy; `HP:0000122` holds Unilateral/Left/Right
+  (47/19/9) and **zero** Bilateral, per ADR 0003 Amendment 1.
+- `hpo_mapper.py` writes `source_label` verbatim; no canonical-label lookup remains anywhere.
