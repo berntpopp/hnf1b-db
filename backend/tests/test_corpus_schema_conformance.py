@@ -30,12 +30,18 @@ letting either test pass vacuously on zero rows — this codebase already has
 several tests that silently pass on an empty corpus for lack of that guard;
 this file is not a fifth one.
 
-**Scope note:** ``test_previously_failing_records_round_trip_through_the_write_path``
-strips ``variationDescriptor.expressions`` from its PUT payloads. This is
-documented in that test's docstring — it exists to route around a separate,
-larger, pre-existing defect (a variant-format validator too strict for the
-corpus's real VCF/SPDI notations) discovered while writing this proof, which
-blocks writes to 864/923 records and is explicitly out of scope for this fix.
+**Second blocker, since closed:** the same ``PUT`` handler also runs
+``PhenopacketValidator``, which chains variant-format checks on top of
+``SchemaValidator``. Those regexes rejected the corpus's real notations — CNV
+entries encode ``chrom-start-end-ref-alt`` (5 fields, where ``_VCF_PATTERN``
+accepted only ``chrom-pos-ref-alt``) and SPDI entries use the numeric
+deletion-length form (``NC_000017.11:37710609:1:C``, where ``_SPDI_PATTERN``
+accepted only a literal ``[ATCG]``) — blocking writes to 864/923 records, more
+than the 487 above. Both format validators have since been widened to the
+corpus's real shapes, so the round-trip test below now PUTs each record back
+byte-for-byte instead of stripping the expressions the old regexes choked on.
+``test_every_stored_phenopacket_passes_full_write_path_validation`` guards
+that second fix the same way the first one is guarded.
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.phenopackets.models import Phenopacket
 from app.phenopackets.validation.schema_validator import SchemaValidator
+from app.phenopackets.validator import PhenopacketValidator
 
 # Same default as the non-secret local dev URL committed in
 # backend/.env.example; overridable for anyone whose corpus database lives
@@ -69,37 +76,6 @@ _CORPUS_DATABASE_URL = os.environ.get(
 _INTERPRETATION_ID_ONLY = "phenopacket-68"  # interpretations[0] has no "id"
 _ONSET_AGE_ONLY = "phenopacket-508"  # phenotypicFeatures[].onset.age == "P4Y"
 _BOTH = "phenopacket-775"  # both of the above at once
-
-
-# The two ``expressions[].syntax`` values whose format validators
-# (app/phenopackets/validation/variant_validator/format_validators.py)
-# reject the corpus's real notations — see the module docstring's "Scope
-# note". "iscn" / "ga4gh" / "hgvs.*" expressions are left in place: they are
-# what satisfies the separate "Structural variant missing valid CNV
-# notation" check, so removing them would trade one unrelated 400 for
-# another instead of isolating the fix under test.
-_UNVALIDATABLE_SYNTAXES = {"vcf", "spdi"}
-
-
-def _without_unvalidatable_variant_expressions(doc: dict) -> dict:
-    """Deep copy of ``doc`` with the confounding ``expressions`` entries dropped.
-
-    Routes around the separate variant-format-validator confound described in
-    this module's docstring, without touching the two fields under test
-    (``interpretations[].id`` presence and ``phenotypicFeatures[].onset.age``
-    shape) or the CNV-notation expressions the same validator also checks.
-    """
-    doc = copy.deepcopy(doc)
-    for interpretation in doc.get("interpretations", []):
-        for gi in interpretation.get("diagnosis", {}).get("genomicInterpretations", []):
-            vd = gi.get("variantInterpretation", {}).get("variationDescriptor")
-            if vd and vd.get("expressions"):
-                vd["expressions"] = [
-                    e
-                    for e in vd["expressions"]
-                    if e.get("syntax") not in _UNVALIDATABLE_SYNTAXES
-                ]
-    return doc
 
 
 @pytest_asyncio.fixture
@@ -161,6 +137,26 @@ def test_every_stored_phenopacket_passes_schema_validation(corpus_rows):
     )
 
 
+def test_every_stored_phenopacket_passes_full_write_path_validation(corpus_rows):
+    """The stronger claim: the validator ``PUT`` actually runs, not just the schema one.
+
+    ``PhenopacketValidator`` chains the variant-format checks on top of
+    ``SchemaValidator``, and it is what
+    ``crud.py::update_phenopacket`` calls. Measured 2026-07-30 before the fix:
+    864/923 records failed here — the whole CNV corpus — because the VCF and
+    SPDI regexes predated the notations the corpus actually stores. A record
+    that fails this cannot be saved by a curator at all, so this must stay 0.
+    """
+    validator = PhenopacketValidator()
+    failures = {pid: validator.validate(doc) for pid, doc in corpus_rows}
+    failures = {pid: errs for pid, errs in failures.items() if errs}
+
+    assert failures == {}, (
+        f"{len(failures)} of {len(corpus_rows)} stored phenopackets fail the "
+        f"full write-path validation, e.g. {next(iter(failures.items()))}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_previously_failing_records_round_trip_through_the_write_path(
     async_client, curator_headers, curator_user, db_session, corpus_rows
@@ -177,26 +173,11 @@ async def test_previously_failing_records_round_trip_through_the_write_path(
     gets 403 before validation ever runs, which would make this test pass
     for the wrong reason.
 
-    **Newly discovered, out-of-scope confound (not fixed here):** the same
-    ``PUT`` handler also runs ``PhenopacketValidator`` (crud.py's
-    ``validator.validate()``), a facade that chains variant-format checks
-    (``app/phenopackets/validation/variant_validator/format_validators.py``)
-    on top of ``SchemaValidator``. Measured 2026-07-30: of the 923 corpus
-    records, 100% of those exhibiting either failure class under test here
-    also carry a ``variationDescriptor`` whose VCF/SPDI expressions this
-    separate, pre-existing regex rejects — CNV entries encode
-    ``chrom-start-end-ref-alt`` (5 fields; ``_VCF_PATTERN`` only accepts
-    ``chrom-pos-ref-alt``) and SPDI entries use the standard numeric
-    deletion-length form (e.g. ``NC_000017.11:37710609:1:C``;
-    ``_SPDI_PATTERN`` only accepts literal ``[ATCG]`` there). That bug blocks
-    writes to 864/923 corpus records — far more than the 487 this task was
-    scoped to — and is untouched by this commit: fixing it is unrelated
-    format-validator work, not a schema widen, and doing it here would
-    silently balloon a one-issue blocker fix into a second one. So the
-    ``expressions`` this confound reacts to are stripped from the PUT
-    payload below (documented, not hidden) to isolate what this test can
-    actually prove: that the schema-level fix unblocks these two failure
-    classes specifically. See the report's "concerns" section.
+    The record is PUT back exactly as it was fetched -- no field is removed to
+    make it pass. That is only possible because the variant-format validators
+    were widened too (see this module's docstring); while they were still
+    rejecting the corpus's real VCF/SPDI notations, this test stripped those
+    expressions in order to isolate the schema fix.
     """
     by_id = dict(corpus_rows)
     for phenopacket_id in (_INTERPRETATION_ID_ONLY, _ONSET_AGE_ONLY, _BOTH):
@@ -259,12 +240,12 @@ async def test_previously_failing_records_round_trip_through_the_write_path(
         assert get_resp.status_code == 200, get_resp.text
         body = get_resp.json()
 
-        # See the module and test docstrings: expressions are stripped here,
-        # not because the schema fix needs it, but to route around a
-        # separate, unrelated, larger variant-format-validator defect that
-        # would otherwise 400 every one of these records regardless of the
-        # fix under test.
-        put_payload = _without_unvalidatable_variant_expressions(body["phenopacket"])
+        # The record goes back EXACTLY as it came out. An earlier revision of
+        # this test stripped the vcf/spdi expressions to route around a
+        # variant-format validator too strict for the corpus's real notations;
+        # that validator has since been widened, so stripping would now only
+        # weaken the proof.
+        put_payload = copy.deepcopy(body["phenopacket"])
         put_resp = await async_client.put(
             f"/api/v2/phenopackets/{phenopacket_id}",
             json={
