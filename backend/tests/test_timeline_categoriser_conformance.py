@@ -44,6 +44,11 @@ _EXPECTED_NAMES: dict[str, str] = {
     "HP:0003774": "Stage 5 chronic kidney disease",
     "HP:0012626": "Stage 4 chronic kidney disease",
     "HP:0100611": "Multiple glomerular cysts",
+    # The one non-HPO id in any category set: HPO has no oligomeganephronia
+    # term, so the corpus (75 occurrences) and the kidney-morphology query
+    # both use Orphanet's. Name taken from the pinned snapshot's own entry,
+    # not from the HPO API, which does not serve ORPHA ids.
+    "ORPHA:2260": "Oligomeganephronia",
     "HP:0000077": "Abnormality of the kidney",
     "HP:0000119": "Abnormality of the genitourinary system",
     "HP:0000078": "Abnormality of the genital system",

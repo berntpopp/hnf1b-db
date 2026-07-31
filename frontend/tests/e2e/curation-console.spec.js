@@ -154,10 +154,30 @@ function pmidRows(page) {
 }
 
 // ── Variant section ──────────────────────────────────────────────────────
+/**
+ * Commit the detailed variant editor, and prove the commit happened.
+ *
+ * Committing clears the editor, so an empty "Variant as reported" is the
+ * observable effect. Asserting it matters because the click is not guaranteed
+ * to land: that field is an `auto-grow` textarea, so a long value makes the
+ * form thousands of pixels tall and the button can still be settling when the
+ * click is dispatched — this file's own 10,000-character case failed exactly
+ * that way on CI's slower runner while passing locally every time.
+ * `toPass` re-clicks if needed; a second click on an already-empty editor is
+ * a no-op (VariantAnnotationForm returns early when there is nothing to add).
+ */
 async function saveDetailedVariant(page) {
-  await sectionLocator(page, 'variant')
-    .locator('[data-testid="save-detailed-variant-btn"]')
-    .click();
+  const section = sectionLocator(page, 'variant');
+  const button = section.locator('[data-testid="save-detailed-variant-btn"]');
+  const reported = section
+    .locator('.v-input', { hasText: 'Variant as reported' })
+    .first()
+    .locator('textarea:not([aria-hidden="true"])');
+
+  await expect(async () => {
+    await button.click();
+    await expect(reported).toHaveValue('', { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
 }
 
 // ── Phenotypes section ───────────────────────────────────────────────────

@@ -131,12 +131,19 @@ def _build_evidence_list(feature: Dict[str, Any]) -> List[Dict[str, Any]]:
 # .superpowers/sdd/2026-07-30-ontology-data-quality/task-timeline-report.md.
 #
 # Built from a frequency count of every distinct stored
-# ``phenotypicFeatures[].type.id`` in the dev corpus (36 distinct ids), so
-# every recurring term gets a deliberate bucket instead of falling through
-# to "other". A handful of ids below (HP:0000077, HP:0000080, HP:0000119,
-# HP:0003111) have zero stored occurrences today but are kept for parity
-# with the frontend's ``getOrganSystem`` (frontend/src/utils/ageParser.js)
-# and because the previous test suite already pinned them.
+# ``phenotypicFeatures[].type.id`` in the dev corpus (36 distinct ids). 30 of
+# them are bucketed below; the remaining 6 fall to "other" **deliberately**,
+# because they are extrarenal syndromic findings with no organ bucket here:
+# HP:0001622 premature birth (153), HP:0004322 short stature (151),
+# HP:0001999 abnormal facial shape (139), HP:0000478 abnormality of the eye
+# (109), HP:0033127 abnormality of the musculoskeletal system (104),
+# HP:0001627 abnormal heart morphology (83). "Other" is the right answer for
+# those; adding a bucket for them is a product decision, not a defect fix.
+#
+# A handful of ids below (HP:0000077, HP:0000080, HP:0000119, HP:0003111)
+# have zero stored occurrences today but are kept for parity with the
+# frontend's ``getOrganSystem`` (frontend/src/utils/ageParser.js) and because
+# the previous test suite already pinned them.
 
 _RENAL_IDS = frozenset(
     {
@@ -166,6 +173,13 @@ _RENAL_IDS = frozenset(
         # its 77-140 numeric range (it is not carved out the way HP:0000078
         # / HP:0000080 are). Not in the current corpus.
         "HP:0000119",
+        # Oligomeganephronia. HPO has no term for it, so the corpus stores the
+        # Orphanet one (75 occurrences) -- the same id the kidney-morphology
+        # query filters on (clinical_queries.py::MORPHOLOGY_TERM_LABELS). It is
+        # unambiguously a renal finding; leaving it out bucketed all 75 as
+        # "other". Non-HPO ids are legitimate here: this set is matched by
+        # exact id, and nothing about the bucket logic requires an HP prefix.
+        "ORPHA:2260",
     }
 )
 
