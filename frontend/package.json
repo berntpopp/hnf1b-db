@@ -28,7 +28,7 @@
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-mention": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
-    "@tiptap/vue-3": "^3.27.1",
+    "@tiptap/vue-3": "^3.29.2",
     "@unhead/vue": "^3.1.7",
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",
