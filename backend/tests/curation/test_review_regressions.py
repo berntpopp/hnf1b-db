@@ -384,7 +384,12 @@ def test_correction_cannot_target_raw_source_or_provenance_fields():
             {
                 "raw": "A",
                 "correctionsById": {
-                    "bad": {"jsonPointer": "/raw", "preimage": "A", "postimage": "B"}
+                    "bad": {
+                        "jsonPointer": "/raw",
+                        "preimage": "A",
+                        "postimage": "B",
+                        "createdAt": "2026-08-09T00:00:00Z",
+                    }
                 },
             }
         )
