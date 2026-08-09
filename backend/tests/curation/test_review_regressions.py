@@ -249,7 +249,49 @@ def test_ledger_rejects_blank_negative_and_nonnumeric_count_data(tmp_path):
     bad.write_text(content.replace(",460,", ",-1,"), encoding="utf-8")
     with pytest.raises(ValueError):
         load_correction_ledger(bad)
-
     bad.write_text(content.replace(",460,", ",not-a-number,"), encoding="utf-8")
     with pytest.raises(ValueError):
         load_correction_ledger(bad)
+
+
+def test_active_correction_chain_applies_a_to_b_to_c_in_order():
+    """Supersession preserves the full historical transform, not only its tail."""
+    from app.phenopackets.curation.adapters import _apply_active_corrections
+
+    block = {
+        "value": "A",
+        "correctionsById": {
+            "one": {"jsonPointer": "/value", "preimage": "A", "postimage": "B"},
+            "two": {
+                "jsonPointer": "/value",
+                "preimage": "B",
+                "postimage": "C",
+                "supersedesCorrectionId": "one",
+            },
+        },
+    }
+    assert _apply_active_corrections(block)["value"] == "C"
+    assert block["value"] == "A"
+
+
+def test_malformed_scalar_correction_pointer_has_structured_error_code():
+    """Bad pointer traversal does not leak a KeyError/TypeError from projection."""
+    from app.phenopackets.curation.adapters import (
+        CurationProjectionError,
+        _apply_active_corrections,
+    )
+
+    with pytest.raises(CurationProjectionError) as error:
+        _apply_active_corrections(
+            {
+                "value": "A",
+                "correctionsById": {
+                    "bad": {
+                        "jsonPointer": "/value/x",
+                        "preimage": "A",
+                        "postimage": "B",
+                    }
+                },
+            }
+        )
+    assert error.value.code == "invalid_correction"
