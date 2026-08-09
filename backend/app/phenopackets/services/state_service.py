@@ -100,7 +100,21 @@ class PhenopacketStateService:
         self, record_id: UUID, expected_revision: int
     ) -> Phenopacket:
         """Lock the phenopacket row FOR UPDATE and validate optimistic lock."""
-        stmt = select(Phenopacket).where(Phenopacket.id == record_id).with_for_update()
+        # The previous state-machine operation may have assigned the working
+        # copy or pointer after its own revision insert.  Flush those caller-
+        # owned pending assignments before ``populate_existing`` refreshes the
+        # locked row, otherwise a second operation in the same transaction can
+        # silently discard its own in-flight state.
+        await self.db.flush()
+        stmt = (
+            select(Phenopacket)
+            .where(
+                Phenopacket.id == record_id,
+                Phenopacket.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         pp = (await self.db.execute(stmt)).scalar_one_or_none()
         if pp is None:
             raise self.RecordNotFound(f"Phenopacket {record_id!r} not found")

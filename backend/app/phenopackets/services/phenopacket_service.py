@@ -30,8 +30,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from app.models.user import User
 from app.phenopackets.models import (
     Phenopacket,
     PhenopacketCreate,
@@ -45,6 +47,13 @@ from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidato
 from app.utils.audit import create_audit_entry
 
 logger = logging.getLogger(__name__)
+
+_SYSTEM_ACTOR_USERNAME = "system"
+_SYSTEM_ACTOR_EMAIL = "system@hnf1b-db.local"
+_SYSTEM_ACTOR_PASSWORD_HASH = (
+    "$argon2id$v=19$m=19456,t=2,p=1$0000000000000000$"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+)
 
 
 # =============================================================================
@@ -133,6 +142,44 @@ class PhenopacketService:
         self._validator = PhenopacketValidator()
         self._sanitizer = PhenopacketSanitizer()
 
+    async def _resolve_revision_actor_id(self, actor_id: Optional[int]) -> int:
+        """Return an attributable actor for an immutable revision.
+
+        API requests provide a real user id.  The legacy service API also
+        permits batch callers to pass ``None``; those writes are attributed to
+        the disabled, non-login ``system`` user rather than creating an
+        invalid anonymous revision.  The upsert is safe when two import
+        workers initialise a previously empty database concurrently.
+        """
+        if actor_id is not None:
+            return actor_id
+
+        stmt = (
+            insert(User)
+            .values(
+                username=_SYSTEM_ACTOR_USERNAME,
+                email=_SYSTEM_ACTOR_EMAIL,
+                hashed_password=_SYSTEM_ACTOR_PASSWORD_HASH,
+                full_name="System",
+                role="admin",
+                is_active=False,
+                is_verified=True,
+                is_fixture_user=False,
+            )
+            .on_conflict_do_nothing(index_elements=[User.username])
+            .returning(User.id)
+        )
+        created_id = (await self._repo.session.execute(stmt)).scalar_one_or_none()
+        if created_id is not None:
+            return int(created_id)
+
+        existing_id = await self._repo.session.scalar(
+            select(User.id).where(User.username == _SYSTEM_ACTOR_USERNAME)
+        )
+        if existing_id is None:
+            raise ServiceDatabaseError("system actor could not be resolved")
+        return int(existing_id)
+
     async def get(
         self, phenopacket_id: str, *, include_deleted: bool = False
     ) -> Optional[Phenopacket]:
@@ -182,6 +229,8 @@ class PhenopacketService:
         domain_errors = await DomainValidator(self._repo.session).validate(sanitized)
         if domain_errors:
             raise ServiceValidationError(domain_errors)
+
+        revision_actor_id = await self._resolve_revision_actor_id(actor_id)
 
         phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -234,7 +283,7 @@ class PhenopacketService:
                 state="draft",
                 content_jsonb=sanitized,
                 change_reason="Initial creation",
-                actor_id=actor_id,
+                actor_id=revision_actor_id,
                 from_state=None,
                 to_state="draft",
                 event_type="created",

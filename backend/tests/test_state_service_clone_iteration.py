@@ -32,8 +32,8 @@ async def test_second_put_after_clone_is_inplace(
         expected_revision=pp.revision,
         actor=curator_user,
     )
-    # editing_revision_id unchanged (inplace-save doesn't create new row)
-    assert pp.editing_revision_id == first_editing_id
+    # A second save is a distinct immutable observation in the ledger.
+    assert pp.editing_revision_id != first_editing_id
     assert pp.phenopacket["subject"]["id"] == "second-edit"
     # pp.state still 'published' (I8)
     assert pp.state == "published"

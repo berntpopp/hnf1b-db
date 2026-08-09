@@ -100,17 +100,11 @@ async def test_update_phenopacket_success(
         )
     )
     revisions = rev_result.scalars().all()
-    # _inplace_save only bumps pp.revision — no new revision row for draft saves
-    # (the editing_revision_id row is updated in-place when it exists).
-    # The key invariant is that the working copy was updated correctly (asserted above).
-    assert len(revisions) == 0  # no revision row: editing_revision_id was NULL
-
-    # Cleanup
-    await db_session.execute(
-        select(Phenopacket).where(Phenopacket.phenopacket_id == "test-update-001")
-    )
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
+    # Draft saves append an immutable event and move the editing pointer; they
+    # never overwrite a previously recorded revision.
+    assert len(revisions) == 1
+    assert revisions[0].event_type == "draft_saved"
+    assert revisions[0].content_jsonb == data["phenopacket"]
 
 
 @pytest.mark.asyncio
@@ -195,10 +189,6 @@ async def test_update_phenopacket_conflict(
     await db_session.refresh(test_phenopacket)
     assert test_phenopacket.revision == 5
     assert test_phenopacket.phenopacket["subject"]["sex"] == "MALE"
-
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -315,10 +305,6 @@ async def test_delete_phenopacket_soft_delete(
     phenopacket_ids = [p["id"] for p in response_data["data"]]
     assert "test-delete-001" not in phenopacket_ids
 
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
-
 
 @pytest.mark.asyncio
 async def test_delete_phenopacket_missing_reason(
@@ -369,10 +355,6 @@ async def test_delete_phenopacket_missing_reason(
     # Verify phenopacket not deleted
     await db_session.refresh(test_phenopacket)
     assert test_phenopacket.deleted_at is None
-
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -427,10 +409,6 @@ async def test_delete_already_deleted(
     # Should return 404 (not found because soft-deleted records are filtered)
     assert response.status_code == 404
     assert "not found or already deleted" in response.json()["detail"]
-
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -507,10 +485,6 @@ async def test_update_soft_deleted_phenopacket(
 
     # Should return 404 (soft-deleted records are filtered)
     assert response.status_code == 404
-
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -607,19 +581,29 @@ async def test_get_audit_history(
     assert revisions_response.status_code == 200
     revisions_body = revisions_response.json()
 
-    # _inplace_save on a draft with no editing_revision_id does not create
-    # new revision rows (it only bumps pp.revision). The working copy changes
-    # are confirmed by checking the phenopacket content directly.
+    # Each report-level save is independently auditable in the immutable
+    # revision ledger, in addition to updating the working copy.
     await db_session.refresh(test_phenopacket)
     assert test_phenopacket.phenopacket["subject"]["sex"] == "MALE"
     assert test_phenopacket.revision == 3  # two PUT calls each bumped revision
+    assert len(revisions_body["data"]) == 2
+    from app.phenopackets.models import PhenopacketRevision
+
+    rows = (
+        (
+            await db_session.execute(
+                select(PhenopacketRevision)
+                .where(PhenopacketRevision.record_id == test_phenopacket.id)
+                .order_by(PhenopacketRevision.revision_number)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [row.event_type for row in rows] == ["draft_saved", "draft_saved"]
 
     # /revisions endpoint is curator-only and must return 200
     assert "data" in revisions_body
-
-    # Cleanup
-    await db_session.delete(test_phenopacket)
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
