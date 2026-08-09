@@ -305,7 +305,10 @@ def _make_phenopacket_row(
         subject_id=subject_id,
         subject_sex="MALE",
         created_by_id=None,
-        state=state,
+        # A record may not be inserted directly as published: b9 enforces a
+        # published-head pointer.  ``_add_head_revision`` performs the atomic
+        # promotion used by these fixtures.
+        state="draft" if state == "published" else state,
         revision=1,
     )
     if deleted:
@@ -340,6 +343,7 @@ async def _add_head_revision(db_session, row: Phenopacket, actor_id: int) -> Non
     )
     db_session.add(rev)
     await db_session.flush()
+    row.state = "published"
     row.head_published_revision_id = rev.id
 
 

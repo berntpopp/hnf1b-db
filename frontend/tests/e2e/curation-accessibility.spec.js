@@ -89,7 +89,7 @@ async function mockLedger(page) {
     issues: [],
   };
   await page.route('**/api/v2/**', async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const path = new URL(route.request().url()).pathname.replace(/\/+$/, '');
     const json = (body) =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
     if (path.endsWith('/auth/refresh')) return json({ access_token: 'e2e-access-token' });

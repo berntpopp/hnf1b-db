@@ -23,7 +23,7 @@ test('copy and download JSON use only the authoritative server-redacted projecti
 
   await page.route('**/api/v2/**', async (route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const path = new URL(request.url()).pathname.replace(/\/+$/, '');
     const json = (body) =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
     if (path.endsWith('/auth/refresh')) return json({ access_token: 'e2e-access-token' });

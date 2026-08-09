@@ -1288,29 +1288,32 @@ test.describe('3. Adversarial pass', () => {
     expect(feature.excluded).toBeFalsy();
   });
 
-  test('navigate away with unsaved changes: the in-app confirm() guard fires', async ({
+  test('navigate away with unsaved changes: the accessible in-app guard preserves or discards', async ({
     page,
     request,
   }) => {
     await login(page, request);
 
-    // Scenario 1: dismiss the dialog -> navigation is cancelled, form stays.
+    // Scenario 1: keep editing -> navigation is cancelled, form stays. The
+    // application deliberately uses an accessible, focus-managed dialog
+    // rather than browser ``window.confirm``.
     await gotoCreate(page);
     await expandSection(page, 'case');
     await fillText(sectionControl(page, 'case', 'Subject ID'), 'unsaved-changes-probe');
 
-    let dialogMessage = null;
-    page.once('dialog', (dialog) => {
-      dialogMessage = dialog.message();
-      dialog.dismiss();
-    });
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect.poll(() => dialogMessage).toContain('unsaved changes');
+    const leaveDialog = page.getByRole('dialog', { name: 'Unsaved changes' });
+    await expect(leaveDialog).toBeVisible();
+    await expect(leaveDialog).toContainText('unsaved');
+    await leaveDialog.getByRole('button', { name: 'Keep editing' }).click();
     await expect(page).toHaveURL(/\/phenopackets\/create$/);
 
-    // Scenario 2: accept the dialog -> navigation proceeds.
-    page.once('dialog', (dialog) => dialog.accept());
+    // Scenario 2: explicitly discard -> navigation proceeds.
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Unsaved changes' })
+      .getByRole('button', { name: 'Leave without saving' })
+      .click();
     await page.waitForURL(/\/phenopackets$/, { timeout: 10_000 });
   });
 

@@ -1,31 +1,15 @@
-"""Tests for the materialized-view fast paths in the aggregation endpoints.
+"""Aggregation endpoint contracts over immutable published-head snapshots.
 
-The ``/sex-distribution``, ``/by-disease``, ``/by-feature`` endpoints
-(and indirectly others) each have two code paths:
-
-1. **MV fast path** — used when the startup-cached
-   ``mv_cache.is_available(view_name)`` reports the materialized view
-   exists. A single ``SELECT ... FROM mv_*_aggregation`` query returns
-   the pre-aggregated rows.
-2. **Fallback path** — live JSONB query computing the aggregation on
-   the fly.
-
-The CI test database is empty and has no materialized views, so the
-endpoint-level smoke tests in ``test_aggregations_endpoints.py``
-always hit the fallback. That leaves the MV fast-path branches
-uncovered — Codecov flagged these on PR #231.
-
-This module mocks ``check_materialized_view_exists`` to return True
-and the ``AsyncSession.execute`` call to return a canned RowMapping
-sequence, driving the MV branches. It uses the FastAPI TestClient to
-exercise the real route wiring, not just the raw function.
+Materialized views that read mutable working copies were deliberately retired
+by PR #422.  These tests exercise the live, published-head query path with
+canned SQLAlchemy row mappings; they must not re-introduce an unsafe fast path.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,10 +76,8 @@ def mv_client() -> TestClient:
 # --------------------------------------------------------------------------
 
 
-class TestSexDistributionMvPath:
-    """The MV fast path at demographics.py returns rows from
-    ``mv_sex_distribution`` and runs them through ``calculate_percentages``.
-    """
+class TestSexDistributionPublishedHeadPath:
+    """The live published-head query returns normalized percentages."""
 
     def test_mv_hit_returns_aggregated_rows_with_percentages(
         self, mv_client: TestClient
@@ -109,37 +91,20 @@ class TestSexDistributionMvPath:
             _FakeRowMapping(sex="UNKNOWN_SEX", count=159, percentage=18.7),
         ]
 
-        with patch(
-            "app.phenopackets.routers.aggregations.demographics"
-            ".check_materialized_view_exists",
-            new=AsyncMock(return_value=True),
-        ):
-            # Patch the AsyncSession.execute path for this module so the
-            # MV SELECT returns our canned rows.
-            with patch(
-                "app.phenopackets.routers.aggregations.demographics.text"
-            ) as mock_text:
-                # text() is called to compile the SQL — give it back a
-                # sentinel value; the mock session will use side_effect
-                # to produce the result.
-                mock_text.side_effect = lambda sql: sql
-                # Wire the session via dependency override.
-                from app.database import get_db
+        from app.database import get_db
 
-                async def _override_get_db():
-                    session = AsyncMock()
-                    session.execute = AsyncMock(
-                        return_value=_mock_db_execute_returning_mappings(mv_rows)
-                    )
-                    yield session
+        async def _override_get_db():
+            session = AsyncMock()
+            session.execute = AsyncMock(
+                return_value=_mock_db_execute_returning_mappings(mv_rows)
+            )
+            yield session
 
-                app.dependency_overrides[get_db] = _override_get_db
-                try:
-                    response = mv_client.get(
-                        "/api/v2/phenopackets/aggregate/sex-distribution"
-                    )
-                finally:
-                    app.dependency_overrides.clear()
+        app.dependency_overrides[get_db] = _override_get_db
+        try:
+            response = mv_client.get("/api/v2/phenopackets/aggregate/sex-distribution")
+        finally:
+            app.dependency_overrides.clear()
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -158,10 +123,8 @@ class TestSexDistributionMvPath:
 # --------------------------------------------------------------------------
 
 
-class TestByDiseaseMvPath:
-    """The MV fast path at diseases.py returns rows from
-    ``mv_disease_aggregation`` and runs them through ``calculate_percentages``.
-    """
+class TestByDiseasePublishedHeadPath:
+    """The live published-head query preserves disease identifiers."""
 
     def test_mv_hit_returns_aggregated_rows_with_percentages(
         self, mv_client: TestClient
@@ -182,25 +145,20 @@ class TestByDiseaseMvPath:
             ),
         ]
 
-        with patch(
-            "app.phenopackets.routers.aggregations.diseases"
-            ".check_materialized_view_exists",
-            new=AsyncMock(return_value=True),
-        ):
-            from app.database import get_db
+        from app.database import get_db
 
-            async def _override_get_db():
-                session = AsyncMock()
-                session.execute = AsyncMock(
-                    return_value=_mock_db_execute_returning_mappings(mv_rows)
-                )
-                yield session
+        async def _override_get_db():
+            session = AsyncMock()
+            session.execute = AsyncMock(
+                return_value=_mock_db_execute_returning_mappings(mv_rows)
+            )
+            yield session
 
-            app.dependency_overrides[get_db] = _override_get_db
-            try:
-                response = mv_client.get("/api/v2/phenopackets/aggregate/by-disease")
-            finally:
-                app.dependency_overrides.clear()
+        app.dependency_overrides[get_db] = _override_get_db
+        try:
+            response = mv_client.get("/api/v2/phenopackets/aggregate/by-disease")
+        finally:
+            app.dependency_overrides.clear()
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -217,10 +175,8 @@ class TestByDiseaseMvPath:
 # --------------------------------------------------------------------------
 
 
-class TestByFeatureMvPath:
-    """The MV fast path at features.py uses ``count_key='present_count'``
-    and carries additional fields through to ``details``.
-    """
+class TestByFeaturePublishedHeadPath:
+    """The live query uses present-count semantics and preserves details."""
 
     def test_mv_hit_returns_aggregated_rows_with_percentages(
         self, mv_client: TestClient
@@ -248,25 +204,23 @@ class TestByFeatureMvPath:
             ),
         ]
 
-        with patch(
-            "app.phenopackets.routers.aggregations.features"
-            ".check_materialized_view_exists",
-            new=AsyncMock(return_value=True),
-        ):
-            from app.database import get_db
+        from app.database import get_db
 
-            async def _override_get_db():
-                session = AsyncMock()
-                session.execute = AsyncMock(
-                    return_value=_mock_db_execute_returning_mappings(mv_rows)
-                )
-                yield session
+        total_result = MagicMock()
+        total_result.scalar.return_value = 864
 
-            app.dependency_overrides[get_db] = _override_get_db
-            try:
-                response = mv_client.get("/api/v2/phenopackets/aggregate/by-feature")
-            finally:
-                app.dependency_overrides.clear()
+        async def _override_get_db():
+            session = AsyncMock()
+            session.execute = AsyncMock(
+                side_effect=[total_result, _mock_db_execute_returning_mappings(mv_rows)]
+            )
+            yield session
+
+        app.dependency_overrides[get_db] = _override_get_db
+        try:
+            response = mv_client.get("/api/v2/phenopackets/aggregate/by-feature")
+        finally:
+            app.dependency_overrides.clear()
 
         assert response.status_code == 200, response.text
         body = response.json()

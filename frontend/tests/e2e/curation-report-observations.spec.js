@@ -119,7 +119,7 @@ test('edits one report losslessly, previews, and resolves a deterministic confli
   await page.route('**/api/v2/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const path = url.pathname;
+    const path = url.pathname.replace(/\/+$/, '');
     const json = (body, status = 200, headers = {}) =>
       route.fulfill({
         status,
