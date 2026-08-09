@@ -118,6 +118,44 @@ async def test_correction_requires_a_precondition_and_server_stamps_audit_fields
     assert correction["createdAt"]
     assert correction["sourceManifestSha256"] == "sha256:fixture"
     assert correction["preimage"] == "born"
+    assert (
+        correction["correctionId"]
+        in response.json()["observations"][0]["case"]["cohort"]["correctionIds"]
+    )
+
+
+async def test_report_patch_cannot_overwrite_correction_owned_value(
+    async_client, db_session, admin_headers
+):
+    """A report replacement cannot bypass the append-only correction ledger."""
+    await _insert_curation_record(db_session)
+    corrected = await async_client.post(
+        "/api/v2/phenopackets/curation-api-317/curation/corrections",
+        json={
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "born",
+            "postimage": "fetus",
+            "reason": "Correct source normalization.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+    assert corrected.status_code == 200, corrected.text
+    observation = corrected.json()["observations"][0]
+    observation["case"]["cohort"]["value"] = "neonate"
+
+    response = await async_client.patch(
+        "/api/v2/phenopackets/curation-api-317/reports/report-1",
+        json={
+            "observation": observation,
+            "revision": 2,
+            "changeReason": "Attempt to overwrite corrected value.",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "immutable_source"
 
 
 async def test_report_patch_reprojects_and_preserves_unknown_legacy_root_keys(

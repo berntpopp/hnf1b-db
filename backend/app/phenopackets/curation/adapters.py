@@ -148,19 +148,8 @@ def _merge_projected_field(field: str, existing: Any, derived: Any) -> Any:
 
 
 def _profile_validation_input(block: dict[str, Any]) -> dict[str, Any]:
-    """Remove phenotype's derived source status before strict model parsing."""
-    prepared = deepcopy(block)
-    observations = prepared.get("observationsById")
-    if not isinstance(observations, dict):
-        return prepared
-    for observation in observations.values():
-        if not isinstance(observation, dict):
-            continue
-        for assessment in observation.get("phenotypes", []):
-            if isinstance(assessment, dict):
-                assessment.pop("sourceStatus", None)
-                assessment.pop("source_status", None)
-    return prepared
+    """Copy source truth for strict validation without weakening provenance."""
+    return deepcopy(block)
 
 
 def _active_projection_inputs(

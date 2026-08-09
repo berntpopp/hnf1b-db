@@ -139,6 +139,9 @@ class ResolutionAppendRequest(CurationApiModel):
                 "UNKNOWN_SEX",
             }:
                 raise ValueError("subject sex resolvedValue must be a GA4GH sex enum")
+        elif self.conflict_key.endswith(":modifiers"):
+            if not isinstance(self.resolved_value, tuple) or not self.resolved_value:
+                raise ValueError("modifier resolvedValue must be a non-empty term list")
         elif self.conflict_key.startswith("phenotype:"):
             if not isinstance(self.resolved_value, str) or self.resolved_value not in {
                 "PRESENT",

@@ -73,6 +73,19 @@ class CurationService:
         }
         if isinstance(existing, dict) and isinstance(proposed, dict):
             issues: list[CurationIssue] = []
+            if existing.get("correctionIds") and existing.get("value") != proposed.get(
+                "value"
+            ):
+                issues.append(
+                    CurationIssue(
+                        code="immutable_source",
+                        message=(
+                            "corrected normalized values are immutable; append a "
+                            "new correction instead"
+                        ),
+                        path=(*path, "value"),
+                    )
+                )
             for key in sorted(set(existing) | set(proposed)):
                 next_path = (*path, key)
                 if key in protected and existing.get(key) != proposed.get(key):
@@ -114,29 +127,8 @@ class CurationService:
 
     @staticmethod
     def _validation_payload(block: dict[str, Any]) -> dict[str, Any]:
-        """Prepare stored JSON for the profile model's source-status derivation.
-
-        ``PhenotypeAssessment`` derives ``sourceStatus`` from immutable raw
-        evidence. Its pre-validator therefore accepts an omitted value and
-        materializes the canonical one. Remove the serialised value before
-        revalidation so a stored, canonical API document does not provide both
-        its alias and its derived field.
-        """
-        payload = deepcopy(block)
-        observations = payload.get("observationsById")
-        if not isinstance(observations, dict):
-            return payload
-        for observation in observations.values():
-            if not isinstance(observation, dict):
-                continue
-            phenotypes = observation.get("phenotypes")
-            if not isinstance(phenotypes, list):
-                continue
-            for assessment in phenotypes:
-                if isinstance(assessment, dict):
-                    assessment.pop("sourceStatus", None)
-                    assessment.pop("source_status", None)
-        return payload
+        """Copy stored source truth without discarding contradictory evidence."""
+        return deepcopy(block)
 
     @classmethod
     def _validated_profile(cls, block: dict[str, Any]) -> Hnf1bCurationProfile:
@@ -524,6 +516,12 @@ class CurationService:
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "supersedesCorrectionId": request.supersedes_correction_id,
         }
+        target = self._pointer_value(candidate, request.json_pointer.rsplit("/", 1)[0])
+        if not isinstance(target, dict):
+            raise CurationServiceError(
+                "invalid_correction", "correction target must be an observed value"
+            )
+        target["correctionIds"] = [*target.get("correctionIds", []), correction_id]
         document = self._document_with_profile(
             record.phenopacket, self._candidate_profile(candidate)
         )

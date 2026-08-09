@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
+
 from app.phenopackets.curation.adapters import (
+    CurationProjectionError,
     _apply_active_corrections,
     canonicalize_curation_document,
 )
@@ -194,6 +197,55 @@ async def test_preview_rejects_immutable_source_change_without_writing(
     assert record.revision == 1
 
 
+async def test_modifier_resolution_persists_typed_ontology_terms(
+    async_client, db_session, admin_headers
+):
+    """Modifier conflicts accept and project an ontology-term resolvedValue tuple."""
+    record = await _insert_conflicting_record(db_session)
+    reports = record.phenopacket["hnf1bCuration"]["observationsById"]
+    reports["report-2"]["phenotypes"] = [_assessment("report-2", "PRESENT")]
+    reports["report-1"]["phenotypes"][0]["findings"][0]["modifiers"] = [
+        {"id": "HP:0012833", "label": "Unilateral"}
+    ]
+    reports["report-2"]["phenotypes"][0]["findings"][0]["modifiers"] = [
+        {"id": "HP:0012833", "label": "Unilateral"},
+        {"id": "HP:0012835", "label": "Left"},
+    ]
+    await db_session.commit()
+    url = "/api/v2/phenopackets/curation-projection-317/curation"
+    ledger = await async_client.get(url, headers=admin_headers)
+    issue = ledger.json()["projection"]["issues"][0]
+    assert issue["conflictKey"].endswith(":modifiers")
+
+    response = await async_client.post(
+        f"{url}/resolutions",
+        json={
+            "conflictKey": issue["conflictKey"],
+            "candidateSetDigest": issue["candidateSetDigest"],
+            "strategy": "resolved_value",
+            "resolvedValue": [
+                {"id": "HP:0012833", "label": "Unilateral"},
+                {"id": "HP:0012835", "label": "Left"},
+            ],
+            "reason": "Use the reviewed unilateral-left modifier set.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["resolutions"][0]["resolvedValue"] == [
+        {"id": "HP:0012833", "label": "Unilateral"},
+        {"id": "HP:0012835", "label": "Left"},
+    ]
+    assert (
+        response.json()["projection"]["phenopacket"]["phenotypicFeatures"][0][
+            "modifiers"
+        ]
+        == response.json()["resolutions"][0]["resolvedValue"]
+    )
+
+
 def test_correction_order_uses_created_timestamp_not_uuid_order() -> None:
     """Independent ledger keys are ordered by append time, then explicit ties."""
     block = _curation_document()["hnf1bCuration"]
@@ -225,6 +277,24 @@ def test_correction_order_uses_created_timestamp_not_uuid_order() -> None:
         corrected["observationsById"]["report-1"]["case"]["cohort"]["value"]
         == "neonate"
     )
+
+
+def test_canonicalization_rejects_contradictory_source_status() -> None:
+    """Raw source meaning and declared sourceStatus cannot be silently rewritten."""
+    document = _curation_document()
+    document["hnf1bCuration"]["observationsById"]["report-1"]["phenotypes"] = [
+        {
+            "assessmentId": "assessment-report-1",
+            "column": "RenalCysts",
+            "rawValue": "NR",
+            "sourceStatus": "stated",
+            "curationStatus": "UNCURATED",
+            "assessmentStatus": None,
+        }
+    ]
+
+    with pytest.raises(CurationProjectionError, match="sourceStatus conflicts"):
+        canonicalize_curation_document(document)
 
 
 def test_canonicalization_deep_merges_projected_fields() -> None:

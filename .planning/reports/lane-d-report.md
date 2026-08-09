@@ -56,9 +56,17 @@
   response model; derived phenotype source status now normalizes aliases before
   strict re-validation.
 
+## Final integrity follow-up
+
+- Correction-owned normalized values cannot be overwritten by report PATCH or
+  preview. Every correction atomically appends its ID to the target observed
+  value's immutable `correctionIds` backlink.
+- Modifier conflicts accept typed ontology-term resolved values; contradictory
+  raw source status is retained for strict validation and now fails closed.
+
 ## Verification
 
-- Backend: 44 focused tests passed (`test_domain_validator`, curation API,
+- Backend: 47 focused tests passed (`test_domain_validator`, curation API,
   OpenAPI contract, and projection tests); Ruff passed.
 - MCP: `make check` passed (445 tests, 11 deselected). Contract artifacts were
   regenerated from the refreshed OpenAPI snapshot.
