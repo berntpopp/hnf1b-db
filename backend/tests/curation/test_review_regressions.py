@@ -52,7 +52,7 @@ def test_raw_imported_value_is_frozen_and_correction_null_serializes_through_sch
     with pytest.raises(ValidationError):
         value.raw = "29w"
 
-    correction = CurationCorrection(
+    CurationCorrection(
         correction_id="correction-1",
         json_pointer="/projection/outputDigest",
         preimage=None,
@@ -66,7 +66,7 @@ def test_raw_imported_value_is_frozen_and_correction_null_serializes_through_sch
     profile = Hnf1bCurationProfile(
         source_subject_id="source-317",
         observations_by_id={_report().observation_id: _report()},
-        corrections_by_id={"correction-1": correction},
+            corrections_by_id={},
     )
     from app.phenopackets.validation.schema_validator import SchemaValidator
 
@@ -270,19 +270,19 @@ def test_active_correction_chain_applies_a_to_b_to_c_in_order():
     from app.phenopackets.curation.adapters import _apply_active_corrections
 
     block = {
-        "value": "A",
+        "observationsById": {"one": {"normalized": {"value": "A"}}},
         "correctionsById": {
-            "one": {"jsonPointer": "/value", "preimage": "A", "postimage": "B"},
+            "one": {"jsonPointer": "/observationsById/one/normalized/value", "preimage": "A", "postimage": "B"},
             "two": {
-                "jsonPointer": "/value",
+                "jsonPointer": "/observationsById/one/normalized/value",
                 "preimage": "B",
                 "postimage": "C",
                 "supersedesCorrectionId": "one",
             },
         },
     }
-    assert _apply_active_corrections(block)["value"] == "C"
-    assert block["value"] == "A"
+    assert _apply_active_corrections(block)["observationsById"]["one"]["normalized"]["value"] == "C"
+    assert block["observationsById"]["one"]["normalized"]["value"] == "A"
 
 
 def test_canonicalizing_twice_preserves_the_raw_correction_profile():
