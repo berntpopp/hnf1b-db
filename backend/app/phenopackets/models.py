@@ -65,6 +65,13 @@ class Phenopacket(Base):
     # Denormalized fields (computed from JSONB)
     subject_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     subject_sex: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    provenance_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="legacy_unbound",
+        server_default="legacy_unbound",
+        comment="Operational provenance only: source_bound, legacy_unbound, or manual",
+    )
 
     # Full-text search vector
     search_vector: Mapped[Optional[Any]] = mapped_column(
