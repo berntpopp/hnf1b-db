@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, TypeVar
@@ -90,7 +91,7 @@ class SourceManifestRef(CurationModel):
     @classmethod
     def validate_hmac(cls, value: str | None) -> str | None:
         """Require the explicitly keyed row-fingerprint representation."""
-        if value is not None and not value.startswith("hmac-sha256:"):
+        if value is not None and not re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", value):
             raise ValueError("rowHmacSha256 must use keyed hmac-sha256 format")
         return value
 

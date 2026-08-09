@@ -8,7 +8,13 @@ from typing import Any
 
 from app.phenopackets.curation.models import ReportObservation
 
-_VOLATILE_SOURCE_KEYS = {"rowNumber", "importRunId", "importedAt", "manifestSha256"}
+_VOLATILE_SOURCE_KEYS = {
+    "rowNumber",
+    "importRunId",
+    "importedAt",
+    "manifestSha256",
+    "rowHmacSha256",
+}
 
 
 def canonical_json(value: Any) -> str:

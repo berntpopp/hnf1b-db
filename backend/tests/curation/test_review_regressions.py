@@ -104,6 +104,14 @@ def test_identity_helpers_are_unambiguous_and_models_enforce_uuid_and_hmac_forma
             manifest_sha256="sha256:x",
             row_hmac_sha256="plain",
         )
+    with pytest.raises(ValidationError):
+        SourceManifestRef(
+            provider="x",
+            dataset_id="d",
+            sheet="s",
+            manifest_sha256="sha256:x",
+            row_hmac_sha256="hmac-sha256:abc",
+        )
 
 
 def test_profile_rejects_duplicate_observation_identity_and_projector_rejects_duplicate_input():
