@@ -79,8 +79,37 @@ class OntologySourceError(Exception):
     """
 
 
+def _validate_correction_entries(
+    entries: tuple[dict[str, str], ...],
+) -> tuple[dict[str, str], ...]:
+    """Validate mandatory correction evidence and non-negative accounting."""
+    keys = [entry["defect_key"] for entry in entries]
+    if not entries or len(keys) != len(set(keys)):
+        raise ValueError("ontology correction ledger must contain unique defect keys")
+    for entry in entries:
+        required = _CORRECTION_FIELDS - {"intended_id", "intended_label"}
+        if not all((entry[field] or "").strip() for field in required):
+            raise ValueError(f"ledger entry {entry['defect_key']} has a missing field")
+        if entry["correction_kind"] not in _CORRECTION_KINDS:
+            raise ValueError(
+                f"ledger entry {entry['defect_key']} has an invalid correction kind"
+            )
+        if entry["correction_kind"] != "semantic_unprojection" and (
+            not (entry["intended_id"] or "").strip()
+            or not (entry["intended_label"] or "").strip()
+        ):
+            raise ValueError(f"ledger entry {entry['defect_key']} has no intended term")
+        try:
+            count = int(entry["affected_count"])
+        except ValueError as error:
+            raise ValueError("affected_count must be numeric") from error
+        if count < 0:
+            raise ValueError("affected_count must be non-negative")
+    return entries
+
+
 @lru_cache(maxsize=1)
-def load_correction_ledger() -> tuple[dict[str, str], ...]:
+def _load_default_correction_ledger() -> tuple[dict[str, str], ...]:
     """Load the versioned correction ledger and reject malformed rows."""
     with _CORRECTIONS_PATH.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
@@ -88,22 +117,18 @@ def load_correction_ledger() -> tuple[dict[str, str], ...]:
             raise ValueError("ontology correction ledger has an invalid schema")
         entries = tuple(dict(row) for row in reader)
 
-    keys = [entry["defect_key"] for entry in entries]
-    if not entries or len(keys) != len(set(keys)):
-        raise ValueError("ontology correction ledger must contain unique defect keys")
-    for entry in entries:
-        if not all(entry[field] is not None for field in _CORRECTION_FIELDS):
-            raise ValueError(f"ledger entry {entry['defect_key']} has a missing field")
-        if entry["correction_kind"] not in _CORRECTION_KINDS:
-            raise ValueError(
-                f"ledger entry {entry['defect_key']} has an invalid correction kind"
-            )
-        if entry["correction_kind"] == "semantic_unprojection":
-            continue
-        if not entry["intended_id"] or not entry["intended_label"]:
-            raise ValueError(f"ledger entry {entry['defect_key']} has no intended term")
-        int(entry["affected_count"])
-    return entries
+    return _validate_correction_entries(entries)
+
+
+def load_correction_ledger(path: Path | None = None) -> tuple[dict[str, str], ...]:
+    """Load a default or supplied ledger so tests can validate malformed fixtures."""
+    if path is None:
+        return _load_default_correction_ledger()
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None or set(reader.fieldnames) != _CORRECTION_FIELDS:
+            raise ValueError("ontology correction ledger has an invalid schema")
+        return _validate_correction_entries(tuple(dict(row) for row in reader))
 
 
 def correction_counts(

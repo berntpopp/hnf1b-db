@@ -212,11 +212,14 @@ class SchemaValidator:
                         "source": {"$ref": "#/definitions/sourceManifestRef"},
                         "identifiers": {"$ref": "#/definitions/subjectObservation"},
                         "publication": {"type": ["object", "null"]},
+                        "case": {"type": ["object", "null"]},
                         "ages": {"type": ["object", "null"]},
                         "variant": {"type": ["object", "null"]},
                         "classification": {"type": ["object", "null"]},
+                        "diseases": {"type": "array", "items": {"type": "object"}},
                         "phenotypes": {"type": "array", "items": {"type": "object"}},
                         "sourceReview": {"type": ["object", "null"]},
+                        "notes": {"type": ["object", "null"]},
                     },
                 },
                 "curationCorrection": {
@@ -241,7 +244,7 @@ class SchemaValidator:
                         "reason": {"type": "string"},
                         "actorId": {"type": "integer"},
                         "createdAt": {"type": "string"},
-                        "supersedesCorrectionId": {"type": "string"},
+                        "supersedesCorrectionId": {"type": ["string", "null"]},
                     },
                 },
                 "projectionResolution": {
@@ -498,6 +501,21 @@ class SchemaValidator:
             List of validation error messages (empty if valid)
         """
         errors = []
+        curation = phenopacket.get("hnf1bCuration")
+        if isinstance(curation, dict) and (
+            "observationsById" in curation or "schemaVersion" in curation
+        ):
+            from pydantic import ValidationError
+
+            from app.phenopackets.curation.models import Hnf1bCurationProfile
+
+            try:
+                Hnf1bCurationProfile.model_validate(curation)
+            except ValidationError as error:
+                errors.extend(
+                    f"hnf1bCuration.{item['loc']}: {item['msg']}"
+                    for item in error.errors()
+                )
         for error in self.validator.iter_errors(phenopacket):
             error_path = ".".join(str(p) for p in error.path)
             errors.append(f"{error_path}: {error.message}")

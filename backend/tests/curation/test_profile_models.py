@@ -24,7 +24,7 @@ OBSERVATION_ID = "7ae87ce5-3b8f-5a22-927c-0d8f5a9c71c1"
 def report() -> ReportObservation:
     return ReportObservation(
         observation_id=OBSERVATION_ID,
-        origin="imported",
+        origin="manual",
         source=SourceManifestRef(
             provider="fixture",
             dataset_id="hnf1b-registry",

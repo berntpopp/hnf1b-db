@@ -98,6 +98,16 @@ _ALLOWED_STATES = (
     "INDETERMINATE",
     "NOT_ASSESSED",
 )
+with _VOCABULARY_PATH.open(newline="", encoding="utf-8") as _handle:
+    _PINNED_ROWS = list(csv.DictReader(_handle))
+_TERM_IDS_BY_COLUMN: dict[str, tuple[str, ...]] = {
+    column: tuple(
+        row["phenotype_id"]
+        for row in _PINNED_ROWS
+        if row["phenotype_category"] == column
+    )
+    for column in _SOURCE_COLUMNS
+}
 
 
 @dataclass(frozen=True)
@@ -122,18 +132,24 @@ class PhenotypeQuestion:
     allowed_laterality: str
 
 
-def _build_registry() -> tuple[
-    tuple[FindingDefinition, ...], tuple[PhenotypeQuestion, ...]
-]:
-    with _VOCABULARY_PATH.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
+def _build_registry(
+    rows: list[dict[str, str]] | None = None,
+) -> tuple[tuple[FindingDefinition, ...], tuple[PhenotypeQuestion, ...]]:
+    if rows is None:
+        with _VOCABULARY_PATH.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
     phenotype_rows = [row for row in rows if row["phenotype_category"] != "Modifier"]
     findings: list[FindingDefinition] = []
     by_column: dict[str, list[str]] = {column: [] for column in _SOURCE_COLUMNS}
     for row in phenotype_rows:
         column = row["phenotype_category"]
-        index = len(by_column[column])
-        definition_id = _DEFINITION_IDS[column][index]
+        definition_id = next(
+            definition_id
+            for expected_row, definition_id in zip(
+                _rows_for_column(column), _DEFINITION_IDS[column]
+            )
+            if expected_row == row["phenotype_id"]
+        )
         by_column[column].append(definition_id)
         findings.append(
             FindingDefinition(
@@ -155,6 +171,11 @@ def _build_registry() -> tuple[
         for column in _SOURCE_COLUMNS
     )
     return tuple(findings), questions
+
+
+def _rows_for_column(column: str) -> tuple[str, ...]:
+    """Return the explicitly pinned ontology IDs for a source question."""
+    return _TERM_IDS_BY_COLUMN[column]
 
 
 FINDING_DEFINITIONS, PHENOTYPE_QUESTIONS = _build_registry()

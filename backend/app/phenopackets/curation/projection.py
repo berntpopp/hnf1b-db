@@ -83,6 +83,8 @@ def project_individual(
     ordered = sorted(observations, key=lambda item: item.observation_id)
     if not ordered:
         raise ValueError("at least one observation is required for projection")
+    if len({item.observation_id for item in ordered}) != len(ordered):
+        raise ValueError("duplicate observationId in projection input")
     subject_ids = {observation.identifiers.individual_id for observation in ordered}
     if len(subject_ids) != 1:
         raise ValueError("all observations must have the same individualId")
@@ -109,6 +111,9 @@ def project_individual(
                 )
 
     conflicts: list[ProjectionConflict] = []
+    resolutions_by_key = {
+        resolution.conflict_key: resolution for resolution in resolutions
+    }
     stated_sexes = {sex for _, sex in sex_candidates}
     subject: dict[str, str] = {"id": subject_id}
     if len(stated_sexes) == 1:
@@ -120,15 +125,35 @@ def project_individual(
         candidates = feature_candidates[term_id]
         polarities = {candidate[1] for candidate in candidates}
         if len(polarities) > 1:
-            conflicts.append(
-                _conflict(
-                    f"phenotype:{term_id}:polarity",
-                    (
-                        (identifier, status.value)
-                        for identifier, status, _ in candidates
-                    ),
-                )
+            conflict = _conflict(
+                f"phenotype:{term_id}:polarity",
+                ((identifier, status.value) for identifier, status, _ in candidates),
             )
+            resolution = resolutions_by_key.get(conflict.conflict_key)
+            if resolution is not None:
+                if resolution.candidate_set_digest != conflict.candidate_set_digest:
+                    detail = (
+                        f"{resolution.resolution_id} is stale for "
+                        f"{conflict.conflict_key}"
+                    )
+                    raise StaleResolutionError(
+                        f"resolution {detail}"
+                    )
+                selected = [
+                    candidate
+                    for candidate in candidates
+                    if candidate[0] in set(resolution.selected_observation_ids)
+                ]
+                if not selected or len({candidate[1] for candidate in selected}) != 1:
+                    raise ValueError("resolution must select one clinical polarity")
+                status = selected[0][1]
+                feature = {
+                    "type": _term_json(selected[0][2].term),
+                    "excluded": status is AssessmentStatus.EXCLUDED,
+                }
+                features.append(feature)
+            else:
+                conflicts.append(conflict)
             continue
 
         status = next(iter(polarities))
@@ -156,7 +181,15 @@ def project_individual(
         features.append(feature)
 
     frozen_conflicts = tuple(sorted(conflicts, key=lambda item: item.conflict_key))
-    _validate_resolutions(frozen_conflicts, resolutions)
+    _validate_resolutions(
+        frozen_conflicts,
+        [
+            resolution
+            for resolution in resolutions
+            if resolution.conflict_key
+            in {item.conflict_key for item in frozen_conflicts}
+        ],
+    )
     phenopacket = {
         "id": f"phenopacket-{subject_id}",
         "subject": subject,

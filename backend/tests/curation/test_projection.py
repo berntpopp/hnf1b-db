@@ -15,7 +15,7 @@ from app.phenopackets.curation.projection import project_individual
 def observation(observation_id, status, modifiers=(), sex=None):
     return ReportObservation(
         observation_id=observation_id,
-        origin="imported",
+        origin="manual",
         source=SourceManifestRef(
             provider="fixture",
             dataset_id="registry",

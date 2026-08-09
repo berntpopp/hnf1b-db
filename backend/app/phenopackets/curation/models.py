@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _camel_case(name: str) -> str:
@@ -62,6 +62,10 @@ class ObservedValue(CurationModel, Generic[ValueT]):
     value: ValueT | None = None
     correction_ids: tuple[str, ...] = ()
 
+    model_config = ConfigDict(
+        extra="forbid", populate_by_name=True, alias_generator=_camel_case, frozen=True
+    )
+
 
 class SourceManifestRef(CurationModel):
     """Non-clinical provenance reference for one report observation."""
@@ -74,6 +78,14 @@ class SourceManifestRef(CurationModel):
     manifest_sha256: str
     import_run_id: str | None = None
     imported_at: datetime | None = None
+
+    @field_validator("row_hmac_sha256")
+    @classmethod
+    def validate_hmac(cls, value: str | None) -> str | None:
+        """Require the explicitly keyed row-fingerprint representation."""
+        if value is not None and not value.startswith("hmac-sha256:"):
+            raise ValueError("rowHmacSha256 must use keyed hmac-sha256 format")
+        return value
 
 
 class PublicationObservation(CurationModel):
@@ -102,6 +114,29 @@ class TemporalObservation(CurationModel):
     reported: ObservedValue[dict[str, Any]] | None = None
 
 
+class CaseObservation(CurationModel):
+    """All report-level case fields retained as typed source values."""
+
+    duplicate_check: ObservedValue[str] | None = None
+    problematic: ObservedValue[str] | None = None
+    cohort: ObservedValue[str] | None = None
+    family_history: ObservedValue[str] | None = None
+
+
+class NotesObservation(CurationModel):
+    """Report-level source notes that must not collapse to the case level."""
+
+    comment: ObservedValue[str] | None = None
+
+
+class DiseaseObservation(CurationModel):
+    """An explicit source/adjudicated diagnosis, never inferred from a variant."""
+
+    term: OntologyTerm
+    asserted: bool = True
+    onset: ObservedValue[dict[str, Any]] | None = None
+
+
 class VariantObservation(CurationModel):
     """Reported variant evidence with a separate validated normalized identity."""
 
@@ -109,6 +144,13 @@ class VariantObservation(CurationModel):
     reported: ObservedValue[str] | None = None
     source_id: ObservedValue[str] | None = None
     normalized: dict[str, Any] | None = None
+    hg19_info: ObservedValue[str] | None = None
+    hg19: ObservedValue[str] | None = None
+    hg38_info: ObservedValue[str] | None = None
+    hg38: ObservedValue[str] | None = None
+    varsome: ObservedValue[str] | None = None
+    detection_method: ObservedValue[str] | None = None
+    segregation: ObservedValue[str] | None = None
 
 
 class ClassificationObservation(CurationModel):
@@ -119,6 +161,7 @@ class ClassificationObservation(CurationModel):
     comment: ObservedValue[str] | None = None
     system: ObservedValue[str] | None = None
     date: ObservedValue[str] | None = None
+    contribution: ObservedValue[str] | None = None
 
 
 class OntologyTerm(CurationModel):
@@ -184,11 +227,49 @@ class ReportObservation(CurationModel):
     source: SourceManifestRef
     identifiers: SubjectObservation
     publication: PublicationObservation | None = None
+    case: CaseObservation | None = None
     ages: TemporalObservation | None = None
     variant: VariantObservation | None = None
     classification: ClassificationObservation | None = None
+    diseases: tuple[DiseaseObservation, ...] = ()
     phenotypes: tuple[PhenotypeAssessment, ...] = ()
     source_review: SourceReviewProvenance | None = None
+    notes: NotesObservation | None = None
+
+    @model_validator(mode="after")
+    def validate_imported_contract(self) -> "ReportObservation":
+        """Enforce complete source matrices and stable identities for imports."""
+        if self.origin != "imported":
+            return self
+        from app.phenopackets.curation.definitions import PHENOTYPE_QUESTIONS
+        from app.phenopackets.curation.identifiers import (
+            assessment_id_for,
+            observation_id_for,
+        )
+
+        if self.observation_id != observation_id_for(
+            self.source.provider, self.source.dataset_id, self.identifiers.report_id
+        ):
+            raise ValueError(
+                "imported observationId must be its UUIDv5 source identity"
+            )
+        expected_columns = {question.source_column for question in PHENOTYPE_QUESTIONS}
+        if (
+            len(self.phenotypes) != 30
+            or {item.column for item in self.phenotypes} != expected_columns
+        ):
+            raise ValueError(
+                "imported observations require exactly 30 known assessments"
+            )
+        for assessment in self.phenotypes:
+            expected_id = assessment_id_for(
+                self.observation_id, "phenotype", assessment.column, "0"
+            )
+            if assessment.assessment_id != expected_id:
+                raise ValueError(
+                    "imported assessmentId must be its UUIDv5 source identity"
+                )
+        return self
 
 
 class CurationCorrection(CurationModel):

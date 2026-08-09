@@ -17,11 +17,17 @@ def _canonical_component(value: str) -> str:
     return canonical
 
 
+def _framed_name(*values: str) -> str:
+    """Frame components to prevent delimiter-containing source keys colliding."""
+    return "".join(
+        f"{len(_canonical_component(value).encode('utf-8'))}:{_canonical_component(value)}"
+        for value in values
+    )
+
+
 def observation_id_for(source_system: str, dataset_id: str, report_id: str) -> str:
     """Derive a UUIDv5 observation identity from durable source identifiers."""
-    name = ":".join(
-        _canonical_component(value) for value in (source_system, dataset_id, report_id)
-    )
+    name = _framed_name(source_system, dataset_id, report_id)
     return str(uuid5(CURATION_NAMESPACE, name))
 
 
@@ -29,10 +35,7 @@ def assessment_id_for(
     observation_id: str, assessment_kind: str, source_field: str, stable_key: str
 ) -> str:
     """Derive an assessment UUIDv5 without row position or mutable content."""
-    name = ":".join(
-        _canonical_component(value)
-        for value in (observation_id, assessment_kind, source_field, stable_key)
-    )
+    name = _framed_name(observation_id, assessment_kind, source_field, stable_key)
     return str(uuid5(CURATION_NAMESPACE, name))
 
 

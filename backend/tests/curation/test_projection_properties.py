@@ -54,3 +54,26 @@ def test_stale_resolution_is_rejected_when_its_candidate_set_changes():
 
     with pytest.raises(StaleResolutionError):
         project_individual(reports, [stale], algorithm_version="1.0")
+
+
+def test_valid_resolution_selects_candidates_and_removes_the_resolved_conflict():
+    """A current curator decision must change projection, not merely be checked."""
+    reports = [
+        observation("report-a", AssessmentStatus.PRESENT),
+        observation("report-b", AssessmentStatus.EXCLUDED),
+    ]
+    unresolved = project_individual(reports, [], algorithm_version="1.0")
+    conflict = unresolved.blocking_conflicts[0]
+    resolution = ProjectionResolution(
+        resolution_id="resolution-2",
+        conflict_key=conflict.conflict_key,
+        candidate_set_digest=conflict.candidate_set_digest,
+        strategy="select_observations",
+        selected_observation_ids=("report-a",),
+        reason="Later imaging confirms presence.",
+        resolved_by_user_id=1,
+        resolved_at="2026-08-09T00:00:00Z",
+    )
+    resolved = project_individual(reports, [resolution], algorithm_version="1.0")
+    assert resolved.blocking_conflicts == ()
+    assert resolved.phenopacket["phenotypicFeatures"][0]["excluded"] is False
