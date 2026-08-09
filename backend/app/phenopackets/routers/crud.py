@@ -471,6 +471,7 @@ async def create_phenopacket(
         new_phenopacket = await service.create(
             phenopacket_data, actor_id=current_user.id
         )
+        await db.commit()
     except ServiceValidationError as exc:
         raise HTTPException(
             status_code=400, detail={"validation_errors": exc.errors}
@@ -620,13 +621,15 @@ async def delete_phenopacket(
     """
     service = PhenopacketService(PhenopacketRepository(db))
     try:
-        return await service.soft_delete(
+        response = await service.soft_delete(
             phenopacket_id,
             delete_request.change_reason,
             actor_id=current_user.id,
             actor_username=current_user.username,
             expected_revision=delete_request.revision,
         )
+        await db.commit()
+        return response
     except ServiceNotFound as exc:
         raise HTTPException(
             status_code=404,

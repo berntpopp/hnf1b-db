@@ -121,3 +121,56 @@ async def test_update_requires_revision_or_if_match(
 
     assert response.status_code == 428
     assert response.json()["detail"]["code"] == "precondition_required"
+
+
+@pytest.mark.asyncio
+async def test_publish_uses_the_current_editing_revision_not_historic_approval(
+    db_session, published_record, curator_user, admin_user
+):
+    """A historic approved row cannot make a later publish ambiguous."""
+    service = PhenopacketStateService(db_session)
+    historic_approved = PhenopacketRevision(
+        record_id=published_record.id,
+        revision_number=99,
+        state="approved",
+        content_jsonb={"id": published_record.phenopacket_id, "stage": "historic"},
+        change_reason="historic approval",
+        actor_id=admin_user.id,
+        from_state="in_review",
+        to_state="approved",
+    )
+    db_session.add(historic_approved)
+    await db_session.flush()
+
+    record = await service.edit_record(
+        published_record.id,
+        new_content={"id": published_record.phenopacket_id, "stage": "current"},
+        change_reason="edit",
+        expected_revision=published_record.revision,
+        actor=curator_user,
+    )
+    record, _ = await service.transition(
+        record.id,
+        to_state="in_review",
+        reason="review",
+        expected_revision=record.revision,
+        actor=curator_user,
+    )
+    record, approved = await service.transition(
+        record.id,
+        to_state="approved",
+        reason="approve",
+        expected_revision=record.revision,
+        actor=admin_user,
+    )
+
+    record, published = await service.transition(
+        record.id,
+        to_state="published",
+        reason="publish",
+        expected_revision=record.revision,
+        actor=admin_user,
+    )
+
+    assert published.parent_revision_id == approved.id
+    assert record.head_published_revision_id == published.id

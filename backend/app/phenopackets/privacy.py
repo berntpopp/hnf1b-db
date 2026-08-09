@@ -11,17 +11,27 @@ class PublicRepresentationError(ValueError):
 
 
 _EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
-_FORBIDDEN_KEY_PARTS = (
+_RESTRICTED_LOCAL_KEYS = {
+    "hnf1bcuration",
     "email",
     "reviewer",
+    "revieweremail",
+    "reviewerid",
     "comment",
+    "comments",
     "password",
     "credential",
-    "source",
-    "report",
+    "credentials",
+    "sourcereportid",
+    "sourcedatasetid",
+    "sourcesystem",
+    "sourceidentity",
     "raw",
-    "migration",
-)
+    "rawvalue",
+    "rawvalues",
+    "rawreport",
+    "migrationmetadata",
+}
 
 # Phenopackets v2 JSON field names. This is intentionally an allowlist shared
 # by every recursive level: an unrecognized key is never emitted publicly.
@@ -123,9 +133,7 @@ _TOP_LEVEL_KEYS = {
 def _forbidden_key(key: str) -> bool:
     """Return whether key represents local restricted provenance or PII."""
     lowered = key.lower()
-    return lowered == "hnf1bcuration" or any(
-        part in lowered for part in _FORBIDDEN_KEY_PARTS
-    )
+    return lowered in _RESTRICTED_LOCAL_KEYS
 
 
 def _redact(value: Any, *, top_level: bool = False) -> Any:
@@ -142,10 +150,6 @@ def _redact(value: Any, *, top_level: bool = False) -> Any:
         if _forbidden_key(key):
             continue
         if key not in (_TOP_LEVEL_KEYS if top_level else _GA4GH_KEYS):
-            if top_level:
-                raise PublicRepresentationError(
-                    f"unrecognized top-level public field {key!r}"
-                )
             continue
         result[key] = _redact(nested)
     return result
@@ -164,6 +168,23 @@ def redact_public_document(document: dict[str, Any]) -> dict[str, Any]:
 
 def sanitize_profile_document(document: dict[str, Any]) -> dict[str, Any]:
     """Return curator profile content after refusing credential/email leakage."""
-    if _EMAIL.search(str(document)):
-        raise PublicRepresentationError("profile contains an email-like value")
+
+    def check(value: Any, path: str = "$") -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                nested_path = f"{path}.{key}"
+                if _forbidden_key(key):
+                    raise PublicRepresentationError(
+                        f"profile contains restricted field at {nested_path}"
+                    )
+                check(nested, nested_path)
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                check(nested, f"{path}[{index}]")
+        elif isinstance(value, str) and _EMAIL.search(value):
+            raise PublicRepresentationError(
+                f"profile contains restricted email-like value at {path}"
+            )
+
+    check(document)
     return document

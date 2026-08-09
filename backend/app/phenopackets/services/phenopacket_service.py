@@ -374,7 +374,7 @@ class PhenopacketService:
                 changed_by_id=actor_id,
                 change_reason=change_reason,
             )
-            await self._repo.session.commit()
+            await self._repo.session.flush()
         except ValueError as exc:
             # Wave 5b Task 4: audit.create_audit_entry raises ValueError
             # when its post-INSERT SELECT returns None. Map to

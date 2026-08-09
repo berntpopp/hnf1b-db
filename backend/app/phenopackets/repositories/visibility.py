@@ -21,6 +21,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.privacy import redact_public_document
 
 
 def public_filter(stmt: Select) -> Select:
@@ -105,7 +106,7 @@ async def resolve_public_content(
             )
         )
     ).scalar_one()
-    return rev.content_jsonb
+    return redact_public_document(rev.content_jsonb)
 
 
 def resolve_curator_content(pp: Phenopacket) -> dict:

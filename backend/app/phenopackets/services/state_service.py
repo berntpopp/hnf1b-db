@@ -15,7 +15,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.exc import MultipleResultsFound, NoResultFound
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -378,10 +378,15 @@ class PhenopacketStateService:
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """§6.2 head-swap: promote the approved revision to published + head."""
+        if pp.editing_revision_id is None:
+            raise self.InvalidTransition(
+                "cannot publish: no active approved editing revision"
+            )
         try:
             approved = (
                 await self.db.execute(
                     select(PhenopacketRevision).where(
+                        PhenopacketRevision.id == pp.editing_revision_id,
                         PhenopacketRevision.record_id == pp.id,
                         PhenopacketRevision.state == "approved",
                     )
@@ -389,12 +394,7 @@ class PhenopacketStateService:
             ).scalar_one()
         except NoResultFound:
             raise self.InvalidTransition(
-                "cannot publish: no revision row with state='approved' found"
-            )
-        except MultipleResultsFound:
-            raise self.InvalidTransition(
-                "cannot publish: multiple approved revisions found"
-                " — data integrity violation"
+                "cannot publish: active editing revision is not an approved revision"
             )
 
         published = await self._append_revision(
