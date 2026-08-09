@@ -12,6 +12,7 @@ from .phenopacket_repository import PhenopacketRepository
 from .visibility import (
     curator_filter,
     public_filter,
+    public_head_query,
     resolve_curator_content,
     resolve_public_content,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "PhenopacketRepository",
     "curator_filter",
     "public_filter",
+    "public_head_query",
     "resolve_curator_content",
     "resolve_public_content",
 ]

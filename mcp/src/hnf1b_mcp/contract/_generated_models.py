@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, EmailStr, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, RootModel
 
 
 class AggregationResult(BaseModel):
@@ -15,6 +15,34 @@ class AggregationResult(BaseModel):
     hpo_id: Annotated[Optional[str], Field(title="Hpo Id")] = None
     label: Annotated[str, Field(title="Label")]
     percentage: Annotated[Optional[float], Field(title="Percentage")] = None
+
+
+class AssessmentStatus(
+    RootModel[
+        Literal[
+            "PRESENT",
+            "EXCLUDED",
+            "NOT_REPORTED",
+            "NOT_APPLICABLE",
+            "INDETERMINATE",
+            "NOT_ASSESSED",
+        ]
+    ]
+):
+    root: Annotated[
+        Literal[
+            "PRESENT",
+            "EXCLUDED",
+            "NOT_REPORTED",
+            "NOT_APPLICABLE",
+            "INDETERMINATE",
+            "NOT_ASSESSED",
+        ],
+        Field(
+            description="Explicit clinical assessment states for a source phenotype question.",
+            title="AssessmentStatus",
+        ),
+    ]
 
 
 class AuthorModel(BaseModel):
@@ -91,6 +119,32 @@ class CommentUpdate(BaseModel):
     mention_user_ids: Annotated[
         Optional[list[int]], Field(max_length=50, title="Mention User Ids")
     ] = None
+
+
+class CurationIssue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assessmentId: Annotated[Optional[str], Field(title="Assessmentid")] = None
+    candidateSetDigest: Annotated[Optional[str], Field(title="Candidatesetdigest")] = (
+        None
+    )
+    code: Annotated[str, Field(title="Code")]
+    conflictKey: Annotated[Optional[str], Field(title="Conflictkey")] = None
+    message: Annotated[str, Field(title="Message")]
+    observationId: Annotated[Optional[str], Field(title="Observationid")] = None
+    path: Annotated[Optional[list[str]], Field(title="Path")] = []
+    severity: Annotated[Optional[str], Field(title="Severity")] = "error"
+
+
+class CurationStatus(RootModel[Literal["UNCURATED", "CURATED"]]):
+    root: Annotated[
+        Literal["UNCURATED", "CURATED"],
+        Field(
+            description="Workflow state, intentionally separate from clinical assessment state.",
+            title="CurationStatus",
+        ),
+    ]
 
 
 class CursorLinksObject(BaseModel):
@@ -225,6 +279,10 @@ class InviteResponse(BaseModel):
     token: Annotated[Optional[str], Field(title="Token")] = None
 
 
+class JsonValue(RootModel[Any]):
+    root: Any
+
+
 class LinksObject(BaseModel):
     first: Annotated[str, Field(title="First")]
     last: Annotated[str, Field(title="Last")]
@@ -278,6 +336,24 @@ class MolecularConsequence(
             title="MolecularConsequence",
         ),
     ]
+
+
+class ObservationOrigin(RootModel[Literal["imported", "manual"]]):
+    root: Annotated[
+        Literal["imported", "manual"],
+        Field(
+            description="Permitted provenance of an observation.",
+            title="ObservationOrigin",
+        ),
+    ]
+
+
+class OntologyTerm(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[str, Field(title="Id")]
+    label: Annotated[str, Field(title="Label")]
 
 
 class PageMeta(BaseModel):
@@ -543,6 +619,26 @@ class PhenotypeComparison(BaseModel):
     ] = None
 
 
+class PhenotypeFinding(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    definitionId: Annotated[str, Field(title="Definitionid")]
+    modifiers: Annotated[Optional[list[OntologyTerm]], Field(title="Modifiers")] = []
+    sourceTerm: Optional[OntologyTerm] = None
+    term: OntologyTerm
+
+
+class ProjectionPayload(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    issues: Annotated[Optional[list[CurationIssue]], Field(title="Issues")] = []
+    observationsDigest: Annotated[str, Field(title="Observationsdigest")]
+    outputDigest: Annotated[str, Field(title="Outputdigest")]
+    phenopacket: Annotated[dict[str, Any], Field(title="Phenopacket")]
+
+
 class ProteinDomain(
     RootModel[
         Literal[
@@ -700,6 +796,16 @@ class ReferenceGenomeSchema(BaseModel):
     ] = None
 
 
+class ResolutionStrategy(RootModel[Literal["select_observations", "resolved_value"]]):
+    root: Annotated[
+        Literal["select_observations", "resolved_value"],
+        Field(
+            description="Typed curator actions that can be applied by the deterministic projector.",
+            title="ResolutionStrategy",
+        ),
+    ]
+
+
 class RoleResponse(BaseModel):
     description: Annotated[str, Field(title="Description")]
     permissions: Annotated[list[str], Field(title="Permissions")]
@@ -722,6 +828,47 @@ class SearchResultItem(BaseModel):
         str,
         Field(
             description="Entity type (Gene, Variant, Phenopacket, etc.)", title="Type"
+        ),
+    ]
+
+
+class SourceManifestRef(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ageReportedSemantics: Annotated[
+        Optional[Literal["encounter_age", "report_age", "unknown"]],
+        Field(title="Agereportedsemantics"),
+    ] = "unknown"
+    datasetId: Annotated[str, Field(title="Datasetid")]
+    importRunId: Annotated[Optional[str], Field(title="Importrunid")] = None
+    importedAt: Annotated[Optional[AwareDatetime], Field(title="Importedat")] = None
+    manifestSha256: Annotated[str, Field(title="Manifestsha256")]
+    provider: Annotated[str, Field(title="Provider")]
+    rowHmacSha256: Annotated[Optional[str], Field(title="Rowhmacsha256")] = None
+    rowNumber: Annotated[Optional[int], Field(title="Rownumber")] = None
+    sheet: Annotated[str, Field(title="Sheet")]
+
+
+class SourceReviewProvenance(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    reviewedOn: Annotated[Optional[str], Field(title="Reviewedon")] = None
+    reviewerDisplayLabel: Annotated[
+        Optional[str], Field(title="Reviewerdisplaylabel")
+    ] = None
+    reviewerId: Annotated[Optional[str], Field(title="Reviewerid")] = None
+
+
+class SourceStatus(
+    RootModel[Literal["stated", "not_reported", "not_applicable", "unknown", "blank"]]
+):
+    root: Annotated[
+        Literal["stated", "not_reported", "not_applicable", "unknown", "blank"],
+        Field(
+            description="Explicit source meaning for observed scalar cells.",
+            title="SourceStatus",
         ),
     ]
 
@@ -813,6 +960,18 @@ class SystemStatusResponse(BaseModel):
     timestamp: Annotated[
         str, Field(description="Current server timestamp", title="Timestamp")
     ]
+
+
+class TemporalValue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iso8601Duration: Annotated[Optional[str], Field(title="Iso8601Duration")] = None
+    kind: Annotated[
+        Literal["age", "gestationalAge", "ontologyClass", "unprojected"],
+        Field(title="Kind"),
+    ]
+    term: Optional[OntologyTerm] = None
 
 
 class Token(BaseModel):
@@ -1019,6 +1178,83 @@ class VariantValidationResponse(BaseModel):
     ] = None
 
 
+class VersionResponse(BaseModel):
+    api_path_version: Annotated[
+        str,
+        Field(
+            description="Major version of the REST API URL contract (the /api/v2 prefix).",
+            examples=["v2"],
+            title="Api Path Version",
+        ),
+    ]
+    api_version: Annotated[
+        str,
+        Field(
+            description="Application version (semver; beta 0.X.Y), single-sourced from pyproject.toml — never hardcoded in application code.",
+            examples=["0.1.1"],
+            title="Api Version",
+        ),
+    ]
+    db_schema_head: Annotated[
+        Optional[str],
+        Field(
+            description="Latest Alembic migration revision defined in the codebase (head), or null if it cannot be determined.",
+            title="Db Schema Head",
+        ),
+    ] = None
+    db_schema_in_sync: Annotated[
+        Optional[bool],
+        Field(
+            description="True when the applied DB revision matches the codebase head; null if either revision is unknown.",
+            title="Db Schema In Sync",
+        ),
+    ] = None
+    db_schema_revision: Annotated[
+        Optional[str],
+        Field(
+            description="Alembic migration revision currently applied to the database, or null if it cannot be determined.",
+            title="Db Schema Revision",
+        ),
+    ] = None
+    phenopacket_schema_version: Annotated[
+        str,
+        Field(
+            description="GA4GH Phenopackets schema version the API conforms to.",
+            examples=["2.0.0"],
+            title="Phenopacket Schema Version",
+        ),
+    ]
+
+
+class VocabularyItem(BaseModel):
+    description: Annotated[
+        Optional[str],
+        Field(description="Optional clarifying text", title="Description"),
+    ] = None
+    label: Annotated[
+        str, Field(description="Curator-facing label, e.g. 'MLPA'", title="Label")
+    ]
+    value: Annotated[str, Field(description="Stored token, e.g. 'mlpa'", title="Value")]
+
+
+class VocabularyResponse(BaseModel):
+    data: Annotated[list[VocabularyItem], Field(title="Data")]
+
+
+class VrsText(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    definition: Annotated[str, Field(min_length=1, title="Definition")]
+
+
+class VrsTextVariation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    text: VrsText
+
+
 class AutocompleteResponse(BaseModel):
     results: Annotated[Optional[list[SearchResultItem]], Field(title="Results")] = None
 
@@ -1046,8 +1282,69 @@ class ComparisonResult(BaseModel):
     ]
 
 
+class CorrectionAppendRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    jsonPointer: Annotated[str, Field(min_length=1, title="Jsonpointer")]
+    postimage: JsonValue
+    preimage: JsonValue
+    reason: Annotated[str, Field(min_length=1, title="Reason")]
+    revision: Annotated[Optional[int], Field(title="Revision")] = None
+    supersedesCorrectionId: Annotated[
+        Optional[str], Field(title="Supersedescorrectionid")
+    ] = None
+
+
+class CurationCorrection(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    actorId: Annotated[int, Field(title="Actorid")]
+    correctionId: Annotated[str, Field(title="Correctionid")]
+    createdAt: Annotated[AwareDatetime, Field(title="Createdat")]
+    jsonPointer: Annotated[str, Field(title="Jsonpointer")]
+    postimage: JsonValue
+    preimage: JsonValue
+    reason: Annotated[str, Field(title="Reason")]
+    sourceManifestSha256: Annotated[str, Field(title="Sourcemanifestsha256")]
+    supersedesCorrectionId: Annotated[
+        Optional[str], Field(title="Supersedescorrectionid")
+    ] = None
+
+
+class CurationError(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Annotated[str, Field(title="Code")]
+    errors: Annotated[list[CurationIssue], Field(title="Errors")]
+
+
+class CurationErrorEnvelope(BaseModel):
+    detail: CurationError
+    error_code: Annotated[str, Field(title="Error Code")]
+    request_id: Annotated[Optional[str], Field(title="Request Id")] = None
+
+
+class CurationPreviewResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    projection: ProjectionPayload
+    revision: Annotated[int, Field(title="Revision")]
+
+
 class CursorMetaObject(BaseModel):
     page: CursorPageMeta
+
+
+class EvidenceObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    evidenceCode: OntologyTerm
+    reference: Annotated[str, Field(title="Reference")]
 
 
 class GeneDetailSchema(BaseModel):
@@ -1122,7 +1419,224 @@ class MetaObject(BaseModel):
     page: PageMeta
 
 
+class ObservedValueTemporalValue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    correctionIds: Annotated[Optional[list[str]], Field(title="Correctionids")] = []
+    raw: Annotated[str, Field(title="Raw")]
+    sourceStatus: SourceStatus
+    value: Optional[TemporalValue] = None
+
+
+class ObservedValueStr(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    correctionIds: Annotated[Optional[list[str]], Field(title="Correctionids")] = []
+    raw: Annotated[str, Field(title="Raw")]
+    sourceStatus: SourceStatus
+    value: Annotated[Optional[str], Field(title="Value")] = None
+
+
+class PhenotypeAssessment(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assessmentId: Annotated[str, Field(title="Assessmentid")]
+    assessmentStatus: Optional[AssessmentStatus] = None
+    column: Annotated[str, Field(title="Column")]
+    correctionIds: Annotated[Optional[list[str]], Field(title="Correctionids")] = []
+    curationStatus: CurationStatus
+    evidence: Annotated[
+        Optional[list[EvidenceObservation]], Field(title="Evidence")
+    ] = []
+    findings: Annotated[Optional[list[PhenotypeFinding]], Field(title="Findings")] = []
+    onset: Optional[ObservedValueTemporalValue] = None
+    rawValue: Annotated[str, Field(title="Rawvalue")]
+    sourceStatus: SourceStatus
+
+
+class ProjectionResolution(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    candidateSetDigest: Annotated[str, Field(title="Candidatesetdigest")]
+    conflictKey: Annotated[str, Field(title="Conflictkey")]
+    reason: Annotated[str, Field(title="Reason")]
+    resolutionId: Annotated[str, Field(title="Resolutionid")]
+    resolvedAt: Annotated[AwareDatetime, Field(title="Resolvedat")]
+    resolvedByUserId: Annotated[int, Field(title="Resolvedbyuserid")]
+    resolvedValue: Annotated[
+        Optional[Union[str, list[OntologyTerm]]], Field(title="Resolvedvalue")
+    ] = None
+    selectedObservationIds: Annotated[
+        Optional[list[str]], Field(title="Selectedobservationids")
+    ] = []
+    strategy: ResolutionStrategy
+
+
+class PublicationObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    doi: Annotated[Optional[str], Field(title="Doi")] = None
+    pmid: Annotated[Optional[str], Field(title="Pmid")] = None
+    publicationType: Optional[ObservedValueStr] = None
+    sourceKey: Optional[ObservedValueStr] = None
+
+
+class ResolutionAppendRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    candidateSetDigest: Annotated[str, Field(min_length=1, title="Candidatesetdigest")]
+    conflictKey: Annotated[str, Field(min_length=1, title="Conflictkey")]
+    reason: Annotated[str, Field(min_length=1, title="Reason")]
+    resolvedValue: Annotated[
+        Optional[Union[str, list[OntologyTerm]]], Field(title="Resolvedvalue")
+    ] = None
+    revision: Annotated[Optional[int], Field(title="Revision")] = None
+    selectedObservationIds: Annotated[
+        Optional[list[str]], Field(title="Selectedobservationids")
+    ] = []
+    strategy: ResolutionStrategy
+
+
+class SubjectObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    individualId: Annotated[str, Field(title="Individualid")]
+    individualIdentifier: Optional[ObservedValueStr] = None
+    reportId: Annotated[str, Field(title="Reportid")]
+    sex: Optional[ObservedValueStr] = None
+    sourceSubjectId: Annotated[str, Field(title="Sourcesubjectid")]
+
+
+class TemporalObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    onset: Optional[ObservedValueTemporalValue] = None
+    reported: Optional[ObservedValueTemporalValue] = None
+
+
+class VrsDescriptor(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[str, Field(title="Id")]
+    variation: VrsTextVariation
+
+
+class CaseObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cohort: Optional[ObservedValueStr] = None
+    duplicateCheck: Optional[ObservedValueStr] = None
+    familyHistory: Optional[ObservedValueStr] = None
+    problematic: Optional[ObservedValueStr] = None
+
+
+class ClassificationObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    comment: Optional[ObservedValueStr] = None
+    contribution: Optional[ObservedValueStr] = None
+    criteria: Optional[ObservedValueStr] = None
+    date: Optional[ObservedValueStr] = None
+    system: Optional[ObservedValueStr] = None
+    verdict: Optional[ObservedValueStr] = None
+
+
+class DiseaseObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    asserted: Annotated[Optional[bool], Field(title="Asserted")] = True
+    onset: Optional[ObservedValueTemporalValue] = None
+    term: OntologyTerm
+
+
 class JsonApiResponse(BaseModel):
     data: Annotated[list[Any], Field(title="Data")]
     links: LinksObject
     meta: MetaObject
+
+
+class NotesObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    comment: Optional[ObservedValueStr] = None
+
+
+class VariantObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    detectionMethod: Optional[ObservedValueStr] = None
+    hg19: Optional[ObservedValueStr] = None
+    hg19Info: Optional[ObservedValueStr] = None
+    hg38: Optional[ObservedValueStr] = None
+    hg38Info: Optional[ObservedValueStr] = None
+    normalized: Optional[VrsDescriptor] = None
+    reported: Optional[ObservedValueStr] = None
+    segregation: Optional[ObservedValueStr] = None
+    sourceId: Optional[ObservedValueStr] = None
+    variantType: Optional[ObservedValueStr] = None
+    varsome: Optional[ObservedValueStr] = None
+
+
+class ReportObservation(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ages: Optional[TemporalObservation] = None
+    case: Optional[CaseObservation] = None
+    classification: Optional[ClassificationObservation] = None
+    diseases: Annotated[
+        Optional[list[DiseaseObservation]], Field(title="Diseases")
+    ] = []
+    identifiers: SubjectObservation
+    notes: Optional[NotesObservation] = None
+    observationId: Annotated[str, Field(title="Observationid")]
+    origin: ObservationOrigin
+    phenotypes: Annotated[
+        Optional[list[PhenotypeAssessment]], Field(title="Phenotypes")
+    ] = []
+    publication: Optional[PublicationObservation] = None
+    source: SourceManifestRef
+    sourceReview: Optional[SourceReviewProvenance] = None
+    variant: Optional[VariantObservation] = None
+
+
+class ReportPatchRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    changeReason: Annotated[str, Field(min_length=1, title="Changereason")]
+    observation: ReportObservation
+    revision: Annotated[Optional[int], Field(title="Revision")] = None
+
+
+class CurationLedgerResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    corrections: Annotated[list[CurationCorrection], Field(title="Corrections")]
+    observations: Annotated[list[ReportObservation], Field(title="Observations")]
+    phenopacketId: Annotated[str, Field(title="Phenopacketid")]
+    projection: ProjectionPayload
+    resolutions: Annotated[list[ProjectionResolution], Field(title="Resolutions")]
+    revision: Annotated[int, Field(title="Revision")]
+
+
+class ProjectionPreviewRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    observation: ReportObservation

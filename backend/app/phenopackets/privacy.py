@@ -1,0 +1,227 @@
+"""Fail-closed serialization helpers for public and curator representations."""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+
+class PublicRepresentationError(ValueError):
+    """A document cannot safely be emitted as a public representation."""
+
+
+_EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
+_RESTRICTED_LOCAL_KEYS = {
+    "hnf1bcuration",
+    "email",
+    "reviewer",
+    "revieweremail",
+    "reviewerid",
+    "comment",
+    "comments",
+    "password",
+    "credential",
+    "credentials",
+    "sourcereportid",
+    "sourcedatasetid",
+    "sourcesystem",
+    "sourceidentity",
+    "raw",
+    "rawvalue",
+    "rawvalues",
+    "rawreport",
+    "migrationmetadata",
+    "apikey",
+    "api_key",
+    "accesstoken",
+    "access_token",
+    "secret",
+    "clientsecret",
+    "client_secret",
+}
+
+# Phenopackets v2 JSON field names. This is intentionally an allowlist shared
+# by every recursive level: an unrecognized key is never emitted publicly.
+_GA4GH_KEYS = {
+    "id",
+    "label",
+    "description",
+    "subject",
+    "sex",
+    "gender",
+    "taxonomy",
+    "timeAtLastEncounter",
+    "alternateIds",
+    "dateOfBirth",
+    "ageAtCollection",
+    "phenotypicFeatures",
+    "type",
+    "excluded",
+    "severity",
+    "modifiers",
+    "onset",
+    "resolution",
+    "evidence",
+    "evidenceCode",
+    "reference",
+    "measurements",
+    "assay",
+    "value",
+    "timeObserved",
+    "procedure",
+    "interpretation",
+    "biosamples",
+    "sampledTissue",
+    "histologicalDiagnosis",
+    "individualId",
+    "diagnosticMarkers",
+    "interpretations",
+    "diagnosis",
+    "disease",
+    "genomicInterpretations",
+    "subjectOrBiosampleId",
+    "interpretationStatus",
+    "variantInterpretation",
+    "acmgPathogenicityClassification",
+    "therapeuticActionability",
+    "variationDescriptor",
+    "variation",
+    "geneContext",
+    "expressions",
+    "vcfRecord",
+    "moleculeContext",
+    "structuralType",
+    "allelicState",
+    "diseases",
+    "term",
+    "diseaseStage",
+    "clinicalTnmFinding",
+    "primarySite",
+    "metaData",
+    "created",
+    "createdBy",
+    "submittedBy",
+    "resources",
+    "name",
+    "namespacePrefix",
+    "url",
+    "version",
+    "iriPrefix",
+    "externalReferences",
+    "files",
+    "medicalActions",
+    "procedure",
+    "treatment",
+    "radiationTherapy",
+    "code",
+    "bodySite",
+    "laterality",
+    "uri",
+    "fileFormat",
+    "fileFormatVersion",
+    "individualToFileIdentifiers",
+    "htsFile",
+    "genomeAssembly",
+    "isObserved",
+    "age",
+    "ageRange",
+    "ontologyClass",
+    "timestamp",
+    "interval",
+    "start",
+    "end",
+}
+_TOP_LEVEL_KEYS = {
+    "id",
+    "subject",
+    "phenotypicFeatures",
+    "measurements",
+    "biosamples",
+    "interpretations",
+    "diseases",
+    "metaData",
+    "files",
+    "medicalActions",
+}
+
+
+def _forbidden_key(key: str) -> bool:
+    """Return whether key represents local restricted provenance or PII."""
+    normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+    return normalized in {
+        re.sub(r"[^a-z0-9]", "", restricted) for restricted in _RESTRICTED_LOCAL_KEYS
+    }
+
+
+def _redact(value: Any, *, top_level: bool = False) -> Any:
+    """Recursively remove only known local restricted keys from a document."""
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    if not isinstance(value, dict):
+        if isinstance(value, str) and _EMAIL.search(value):
+            return None
+        return value
+
+    result: dict[str, Any] = {}
+    for key, nested in value.items():
+        if _forbidden_key(key):
+            continue
+        result[key] = _redact(nested)
+    return result
+
+
+def redact_public_document(document: dict[str, Any]) -> dict[str, Any]:
+    """Return the recursive public GA4GH-safe projection of ``document``.
+
+    Local curation/provenance keys are recursively removed, including snake- /
+    camel-case aliases. All remaining fields are preserved so public list,
+    detail, search, related, and export representations cannot silently lose
+    valid GA4GH fields.
+    """
+    if not isinstance(document, dict):
+        raise PublicRepresentationError("phenopacket document must be an object")
+    return _redact(document, top_level=True)
+
+
+def strip_restricted_for_ga4gh(value: Any) -> Any:
+    """Remove only local restricted material, preserving parser-valid GA4GH keys."""
+    if isinstance(value, list):
+        return [strip_restricted_for_ga4gh(item) for item in value]
+    if not isinstance(value, dict):
+        if isinstance(value, str) and _EMAIL.search(value):
+            raise PublicRepresentationError(
+                "GA4GH representation contains email-like data"
+            )
+        return value
+    return {
+        key: strip_restricted_for_ga4gh(nested)
+        for key, nested in value.items()
+        if not _forbidden_key(key)
+    }
+
+
+def sanitize_profile_document(document: dict[str, Any]) -> dict[str, Any]:
+    """Return curator profile content after refusing credential/email leakage."""
+
+    def check(value: Any, path: str = "$") -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                nested_path = f"{path}.{key}"
+                if key.lower() == "hnf1bcuration":
+                    check(nested, nested_path)
+                    continue
+                if _forbidden_key(key):
+                    raise PublicRepresentationError(
+                        f"profile contains restricted field at {nested_path}"
+                    )
+                check(nested, nested_path)
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                check(nested, f"{path}[{index}]")
+        elif isinstance(value, str) and _EMAIL.search(value):
+            raise PublicRepresentationError(
+                f"profile contains restricted email-like value at {path}"
+            )
+
+    check(document)
+    return document

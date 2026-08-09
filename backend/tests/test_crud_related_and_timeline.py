@@ -147,17 +147,58 @@ class TestBuildEvidenceList:
 
 
 class TestCategoriseFeature:
-    """``_categorise_feature`` buckets HPO IDs into coarse categories."""
+    """``_categorise_feature`` buckets HPO IDs into coarse categories.
+
+    Every id below was resolved live against
+    https://ontology.jax.org/api/hp/terms/{id} before being classified --
+    see .superpowers/sdd/2026-07-30-ontology-data-quality/
+    task-timeline-report.md for the full resolution log. The parametrize
+    list covers the top ~10 most frequent stored feature ids (by descending
+    count in the dev corpus) plus at least one representative of every
+    category the categoriser can return.
+    """
 
     @pytest.mark.parametrize(
         ("hpo_id", "expected"),
         [
-            ("HP:0000107", "renal"),  # renal cyst
-            ("HP:0003111", "renal"),  # sodium concentration abnormality
-            ("HP:0004904", "diabetes"),
-            ("HP:0000079", "genital"),
-            ("HP:0000119", "genital"),
-            ("HP:0000001", "other"),
+            # --- Top ~10 stored terms, by frequency in the dev corpus ---
+            ("HP:0000107", "renal"),  # 657 -- Renal cyst
+            ("HP:0000003", "renal"),  # 596 -- Multicystic kidney dysplasia
+            ("HP:0000122", "renal"),  # 583 -- Unilateral renal agenesis
+            ("HP:0000089", "renal"),  # 575 -- Renal hypoplasia
+            ("HP:0004904", "diabetes"),  # 460 -- Maturity-onset diabetes
+            #                                     of the young
+            ("HP:0033132", "renal"),  # 460 -- Renal cortical
+            #                                   hyperechogenicity
+            # 329 -- Abnormality of the urinary system. Regression test for
+            # the defect this branch fixes: previously bucketed "genital"
+            # by a substring match ("HP:0000079" in hpo_id), disagreeing
+            # with the frontend's own fix for the same id (ageParser.js,
+            # commits be491ca / dd80641). This id is urinary tract, not
+            # genital.
+            ("HP:0000079", "renal"),
+            ("HP:0000078", "genital"),  # 303 -- Abnormality of the genital
+            #                                    system
+            ("HP:0012210", "renal"),  # 261 -- Abnormal renal morphology
+            ("HP:0002149", "metabolic"),  # 258 -- Hyperuricemia
+            # --- One representative per remaining category ---
+            ("HP:0003111", "metabolic"),  # Abnormal circulating electrolyte
+            #                                concentration -- previously
+            #                                mis-bucketed "renal" by
+            #                                substring match; a lab/
+            #                                metabolic finding, not a renal
+            #                                structural diagnosis
+            ("HP:0012758", "neuro"),  # Neurodevelopmental delay
+            ("HP:0002910", "hepatic"),  # Elevated circulating hepatic
+            #                              transaminase concentration
+            # HP:0000119 "Abnormality of the genitourinary system" is
+            # genuinely ambiguous (spans both renal and genital tracts).
+            # Bucketed renal to agree with the frontend's getOrganSystem,
+            # which classifies it renal via its 77-140 numeric range
+            # (unlike HP:0000078/HP:0000080, it is not carved out into the
+            # genital branch). Not in the current corpus.
+            ("HP:0000119", "renal"),
+            ("HP:0000001", "other"),  # root term -- negative control
             (None, "other"),
             ("", "other"),
         ],
@@ -264,7 +305,10 @@ def _make_phenopacket_row(
         subject_id=subject_id,
         subject_sex="MALE",
         created_by_id=None,
-        state=state,
+        # A record may not be inserted directly as published: b9 enforces a
+        # published-head pointer.  ``_add_head_revision`` performs the atomic
+        # promotion used by these fixtures.
+        state="draft" if state == "published" else state,
         revision=1,
     )
     if deleted:
@@ -299,6 +343,7 @@ async def _add_head_revision(db_session, row: Phenopacket, actor_id: int) -> Non
     )
     db_session.add(rev)
     await db_session.flush()
+    row.state = "published"
     row.head_published_revision_id = rev.id
 
 

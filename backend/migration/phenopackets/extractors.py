@@ -10,6 +10,7 @@ import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.evidence_builder import EvidenceBuilder
+from migration.phenopackets.laterality import ModifierVocabulary, parse_laterality
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.vrs.cnv_parser import CNVParser
@@ -28,15 +29,18 @@ class PhenotypeExtractor:
         self,
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
+        modifier_vocabulary: ModifierVocabulary | None = None,
     ):
         """Initialize phenotype extractor.
 
         Args:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
+            modifier_vocabulary: Versioned terms from ``Phenotype_modifier``.
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
+        self.modifier_vocabulary = modifier_vocabulary
         self.age_parser = AgeParser()
         self.evidence_builder = EvidenceBuilder(publication_mapper)
 
@@ -153,16 +157,23 @@ class PhenotypeExtractor:
                     if evidence:
                         phenotype["evidence"] = evidence
 
-                    # Add modifier if applicable (for bilateral/unilateral features)
-                    if value.lower() in ["bilateral", "unilateral", "left", "right"]:
-                        modifier_map = {
-                            "bilateral": {"id": "HP:0012832", "label": "Bilateral"},
-                            "unilateral": {"id": "HP:0012833", "label": "Unilateral"},
-                            "left": {"id": "HP:0012835", "label": "Left"},
-                            "right": {"id": "HP:0012834", "label": "Right"},
-                        }
-                        if value.lower() in modifier_map:
-                            phenotype["modifiers"] = [modifier_map[value.lower()]]
+                    # Add laterality modifiers.
+                    #
+                    # The source uses COMPOUND values, not bare tokens:
+                    #   bilateral               797
+                    #   unilateral unspecified  177
+                    #   unilateral left         119
+                    #   unilateral right        112
+                    #
+                    # An exact-match against ["bilateral","unilateral","left","right"]
+                    # therefore matched only "bilateral" and silently dropped 408
+                    # laterality annotations, leaving the feature present but
+                    # indistinguishable from "laterality not stated".
+                    modifiers = parse_laterality(
+                        value, vocabulary=self.modifier_vocabulary
+                    )
+                    if modifiers:
+                        phenotype["modifiers"] = modifiers
 
                     phenotypes.append(phenotype)
 
@@ -509,7 +520,7 @@ class VariantExtractor:
             "diagnosis": {
                 # Disease term assignment strategy:
                 # - For SNVs/indels: Empty disease field (assigned at phenopacket level)
-                # - For CNVs: Disease assigned by CNVParser (MONDO:0011593)
+                # - For CNVs: Disease assigned by CNVParser (MONDO:0007669)
                 # - Rationale: HNF1B SNVs don't always correlate to a single disease;
                 #   diagnosis depends on full phenotypic evidence reviewed at
                 #   phenopacket level (see builder_simple.py _build_diseases method)

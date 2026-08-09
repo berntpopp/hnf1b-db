@@ -50,7 +50,10 @@ export function onsetClassToAge(hpoId) {
   const onsetMapping = {
     'HP:0003577': 0, // Congenital onset
     'HP:0003623': 0, // Neonatal onset (0-4 weeks)
-    'HP:0034199': 0.08, // Neonatal onset (approx 1 month)
+    // HP:0034199 removed: it is "Late first trimester onset", not "Neonatal
+    // onset" as this map's comment claimed, and the stored corpus no longer
+    // uses it (docs/ontology-defect-report-2026-07-30.md T4; corrected to
+    // HP:0003577 "Congenital onset" by backend migration efa98cccfa51).
     'HP:0003593': 0.5, // Infantile onset (1-12 months)
     'HP:0410280': 3, // Pediatric onset (midpoint ~age 3)
     'HP:0003621': 5, // Juvenile onset (midpoint ~age 5)
@@ -60,7 +63,13 @@ export function onsetClassToAge(hpoId) {
     'HP:0003584': 65, // Late onset (midpoint ~age 65)
   };
 
-  return onsetMapping[hpoId] || null;
+  // `|| null` would silently turn a legitimate age of 0 (Congenital /
+  // Neonatal onset, i.e. birth) into `null`, since 0 is falsy in
+  // JavaScript -- an independent bug found while adding a test for this
+  // map (Task 6, ontology data-quality plan), not one of the three ways
+  // HP:0034199 itself was wrong. `hasOwnProperty` distinguishes "mapped to
+  // 0" from "not mapped at all".
+  return Object.prototype.hasOwnProperty.call(onsetMapping, hpoId) ? onsetMapping[hpoId] : null;
 }
 
 /**
@@ -123,6 +132,31 @@ export function getOrganSystem(hpoId) {
   // Extract numeric part for range-based categorization
   const numericId = parseInt(hpoId.replace('HP:', ''));
 
+  // Genital System
+  // HP:0000078 - Abnormality of the genital system
+  // HP:0000080 - Abnormality of reproductive system physiology
+  //
+  // Checked BEFORE the renal range below on purpose: these ids fall *inside*
+  // the renal ranges (77-140 and 795-850 respectively). With the renal check
+  // first, the renal branch always matched and returned before execution
+  // ever reached this block, so it was dead code -- e.g.
+  // getOrganSystem('HP:0000078') returned 'renal', confirmed by executing
+  // this module directly. Found while fixing the HP:0033133 -> HP:0033132
+  // renal-classification defect (docs/superpowers/plans/
+  // 2026-07-30-ontology-data-quality.md, C2).
+  //
+  // 79 is deliberately excluded from the first range: HP:0000079 is
+  // "Abnormality of the urinary system", not genital -- despite sitting
+  // numerically between the two genuinely-genital ids 78 and 80. Reordering
+  // this block ahead of the renal check (above) without carving 79 out
+  // regressed it from 'renal' (correct) to 'genital' (wrong) for the 329
+  // stored occurrences of this term, one of the six laterality-policy terms.
+  // Caught in review after the reorder landed; see the regression tests
+  // below pinning all four boundary ids (77/78/79/80).
+  if (numericId === 78 || numericId === 80 || (numericId >= 811 && numericId <= 815)) {
+    return 'genital';
+  }
+
   // Renal/Urinary System
   // HP:0000077 - Abnormality of the kidney (and all descendants)
   // HP:0000119 - Abnormality of the genitourinary system
@@ -137,16 +171,11 @@ export function getOrganSystem(hpoId) {
     (numericId >= 3774 && numericId <= 3780) || // Stage 5 CKD
     (numericId >= 12210 && numericId <= 12213) || // Abnormal renal morphology/physiology
     (numericId >= 12622 && numericId <= 12626) || // CKD stages
-    numericId === 33133 || // Renal cortical hyperechogenicity
+    numericId === 33132 || // Renal cortical hyperechogenicity (current corpus id since migration ca9950e)
+    numericId === 33133 || // Renal cortical hypoechogeneity (retired id; kept for historical documents)
     numericId === 100611 // Multiple glomerular cysts
   ) {
     return 'renal';
-  }
-
-  // Genital System
-  // HP:0000078-0080 - Abnormality of the genital system
-  if ((numericId >= 78 && numericId <= 80) || (numericId >= 811 && numericId <= 815)) {
-    return 'genital';
   }
 
   // Neurological/Neurodevelopmental

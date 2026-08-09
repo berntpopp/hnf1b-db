@@ -2,7 +2,7 @@
 
 Wave 7 D.1 Task 7. Tests cover:
 - §6.1 clone-to-draft on a published record
-- §6.3 in-place edit on draft (no new revision row)
+- §6.3 draft edit as an append-only revision
 - §6.4 simple state transitions
 - §6.2 publish (head-swap)
 - Error conditions: EditInProgress, RevisionMismatch, InvalidTransition
@@ -36,10 +36,14 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
         expected_revision=1,
         actor=curator_user,
     )
+    # State-service mutators flush internal revision inserts but leave the
+    # final working-copy/pointer assignment to the caller's transaction.
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     # working copy updated
-    assert published_record.phenopacket == {"id": "wave7-published-1", "a": 2}
+    assert published_record.phenopacket["id"] == "wave7-published-1"
+    assert published_record.phenopacket["a"] == 2
     # public head pointer UNCHANGED (I1)
     assert published_record.head_published_revision_id == old_head_id
     # edit pointer and owner set
@@ -64,8 +68,8 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
     )
     assert len(rows) == 2
     assert rows[1].to_state == "draft"
-    assert rows[1].is_head_published is False
-    assert rows[1].content_jsonb == new_content
+    assert rows[1].id != published_record.head_published_revision_id
+    assert rows[1].content_jsonb == published_record.phenopacket
 
 
 @pytest.mark.asyncio
@@ -114,13 +118,13 @@ async def test_clone_revision_mismatch(db_session, published_record, curator_use
 
 
 # ---------------------------------------------------------------------------
-# §6.3 — in-place edit on a draft (no new revision row)
+# §6.3 — draft edit creates an append-only revision row
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_user):
-    """§6.3: in-place save on draft doesn't create a revision row."""
+async def test_draft_save_appends_revision_row(db_session, draft_record, curator_user):
+    """§6.3: a draft save preserves prior revisions and appends one snapshot."""
     svc = PhenopacketStateService(db_session)
 
     # First transition: submit → in_review (creates row 1)
@@ -152,7 +156,7 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
         .all()
     )
 
-    # In-place save — should NOT add another row
+    # Saving a draft must not mutate the prior transition snapshot.
     await svc.edit_record(
         draft_record.id,
         new_content={"id": "wave7-draft-1", "x": "y"},
@@ -173,18 +177,21 @@ async def test_in_place_draft_save_no_new_row(db_session, draft_record, curator_
         .all()
     )
 
-    # No new row created; working copy updated
-    assert len(rows_after) == len(rows_before)
+    assert len(rows_after) == len(rows_before) + 1
+    assert rows_after[-1].event_type == "draft_saved"
+    assert rows_after[-1].parent_revision_id == rows_before[-1].id
+    await db_session.flush()
     await db_session.refresh(draft_record)
-    assert draft_record.phenopacket == {"id": "wave7-draft-1", "x": "y"}
+    assert draft_record.phenopacket["id"] == "wave7-draft-1"
+    assert draft_record.phenopacket["x"] == "y"
     assert draft_record.revision == 4  # bumped by save
 
 
 @pytest.mark.asyncio
-async def test_in_place_save_updates_editing_row_content(
+async def test_draft_save_leaves_previous_editing_row_immutable(
     db_session, draft_record, curator_user
 ):
-    """§6.3: in-place save updates content_jsonb of the existing in-progress row."""
+    """§6.3: a later draft save appends instead of rewriting its predecessor."""
     svc = PhenopacketStateService(db_session)
     # submit creates the editing row
     await svc.transition(
@@ -201,6 +208,7 @@ async def test_in_place_save_updates_editing_row_content(
         expected_revision=2,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     editing_id = draft_record.editing_revision_id
 
@@ -213,13 +221,24 @@ async def test_in_place_save_updates_editing_row_content(
         actor=curator_user,
     )
 
-    editing_row = (
+    previous_editing_row = (
         await db_session.execute(
             select(PhenopacketRevision).where(PhenopacketRevision.id == editing_id)
         )
     ).scalar_one()
-    assert editing_row.content_jsonb == new_content
-    assert editing_row.change_reason == "updated reason"
+    await db_session.flush()
+    await db_session.refresh(draft_record)
+    latest_editing_row = (
+        await db_session.execute(
+            select(PhenopacketRevision).where(
+                PhenopacketRevision.id == draft_record.editing_revision_id
+            )
+        )
+    ).scalar_one()
+    assert latest_editing_row.id != previous_editing_row.id
+    assert previous_editing_row.change_reason == "back"
+    assert latest_editing_row.change_reason == "updated reason"
+    assert latest_editing_row.content_jsonb == draft_record.phenopacket
 
 
 @pytest.mark.asyncio
@@ -298,6 +317,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
         expected_revision=1,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     assert draft_record.state == "in_review"
     assert draft_record.draft_owner_id == curator_user.id  # preserved through submit
@@ -310,6 +330,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     assert draft_record.state == "approved"
 
@@ -321,26 +342,23 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     assert draft_record.state == "published"
     assert draft_record.head_published_revision_id is not None
     assert draft_record.editing_revision_id is None  # cleared on publish
     assert draft_record.draft_owner_id is None  # I5: cleared on publish
 
-    # Only one head-published row
-    heads = (
-        (
-            await db_session.execute(
-                select(PhenopacketRevision).where(
-                    PhenopacketRevision.record_id == draft_record.id,
-                    PhenopacketRevision.is_head_published.is_(True),
-                )
+    # The record pointer is the sole head authority.
+    head = (
+        await db_session.execute(
+            select(PhenopacketRevision).where(
+                PhenopacketRevision.id == draft_record.head_published_revision_id
             )
         )
-        .scalars()
-        .all()
-    )
-    assert len(heads) == 1
+    ).scalar_one()
+    assert head.record_id == draft_record.id
+    assert head.state == "published"
 
 
 @pytest.mark.asyncio
@@ -354,6 +372,7 @@ async def test_archive_is_terminal(db_session, published_record, admin_user):
         expected_revision=1,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
     assert published_record.state == "archived"
     assert published_record.draft_owner_id is None  # cleared on archive

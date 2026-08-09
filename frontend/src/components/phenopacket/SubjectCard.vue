@@ -91,6 +91,7 @@
 
 <script>
 import { CARD_HEADERS, SEX_COLORS } from '@/utils/cardStyles';
+import { readEncounterAge, readEncounterGestationalAge, formatGestationalAge } from '@/utils/age';
 
 export default {
   name: 'SubjectCard',
@@ -115,11 +116,14 @@ export default {
     },
 
     age() {
-      const timeAtLastEncounter = this.subject.timeAtLastEncounter;
-      if (timeAtLastEncounter?.age?.iso8601duration) {
-        return this.formatISO8601Duration(timeAtLastEncounter.age.iso8601duration);
-      }
-      return null;
+      const duration = readEncounterAge(this.subject);
+      if (duration) return this.formatISO8601Duration(duration);
+
+      // Curation console Task 9: a fetus's timeAtLastEncounter carries
+      // {gestationalAge: {weeks, days}} instead of a duration -- see
+      // utils/age.js for why readEncounterAge alone can't read this shape.
+      const gestationalAge = readEncounterGestationalAge(this.subject);
+      return gestationalAge ? formatGestationalAge(gestationalAge) : null;
     },
 
     showKaryotypicSex() {

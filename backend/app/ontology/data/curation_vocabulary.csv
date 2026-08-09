@@ -1,0 +1,42 @@
+phenotype_category,phenotype_id,phenotype_name,phenotype_description
+RenalInsufficancy,HP:0012622,"chronic kidney disease, not specified",Functional anomaly of the kidney persisting for at least three months.
+RenalInsufficancy,HP:0012623,Stage 1 chronic kidney disease,A type of chronic kidney disease with normal or increased glomerular filtration rate (GFR at least 90 mL/min/1.73 m2).
+RenalInsufficancy,HP:0012624,Stage 2 chronic kidney disease,A type of chronic kidney disease with mildly reduced glomerular filtration rate (GFR 60-89 mL/min/1.73 m2).
+RenalInsufficancy,HP:0012625,Stage 3 chronic kidney disease,A type of chronic kidney disease with moderately reduced glomerular filtration rate (GFR 30-59 mL/min/1.73 m2).
+RenalInsufficancy,HP:0012626,Stage 4 chronic kidney disease,A type of chronic kidney disease with severely reduced glomerular filtration rate (GFR 15-29 mL/min/1.73 m2).
+RenalInsufficancy,HP:0003774,Stage 5 chronic kidney disease,A degree of kidney failure severe enough to require dialysis or kidney transplantation for survival characterized by a severe reduction in glomerular filtration rate (less than 15 ml/min/1.73 m2) and other manifestations including increased serum creatinine.
+Hyperechogenicity,HP:0033132,Renal cortical hyperechogenicity,Increased echogenecity of the kidney cortex.
+RenalCysts,HP:0000107,Renal cyst,A fluid filled sac in the kidney.
+MulticysticDysplasticKidney,HP:0000003,Multicystic kidney dysplasia,"Multicystic dysplasia of the kidney is characterized by multiple cysts of varying size in the kidney and the absence of a normal pelvicaliceal system. The condition is associated with ureteral or ureteropelvic atresia, and the affected kidney is nonfunctional."
+KidneyBiopsy,HP:0100611,Multiple glomerular cysts,The presence of many cysts in the glomerulus of the kidney related to dilatation of the Bowman's capsule.
+KidneyBiopsy,ORPHA:2260,Oligomeganephronia,"Oligomeganephronia is a developmental anomaly of the kidneys, and the most severe form of renal hypoplasia, characterized by a reduction of 80% in nephron number and a marked hypertrophy of the glomeruli and tubules."
+RenalHypoplasia,HP:0000089,Renal hypoplasia,Hypoplasia of the kidney.
+SolitaryKidney,HP:0000122,Unilateral renal agenesis,A unilateral form of agenesis of the kidney.
+UrinaryTractMalformation,HP:0000079,Abnormality of the urinary system,An abnormality of the urinary system.
+GenitalTractAbnormality,HP:0000078,Abnormality of the genital system,An abnormality of the genital system.
+AntenatalRenalAbnormalities,HP:0012210,Abnormal renal morphology,Any structural anomaly of the kidney.
+Hypomagnesemia,HP:0002917,Hypomagnesemia,An abnormally decreased magnesium concentration in the blood.
+Hypokalemia,HP:0002900,Hypokalemia,An abnormally decreased potassium concentration in the blood.
+Hyperuricemia,HP:0002149,Hyperuricemia,An abnormally high level of uric acid in the blood.
+Gout,HP:0001997,Gout,"Recurrent attacks of acute inflammatory arthritis of a joint or set of joints caused by elevated levels of uric acid in the blood which crystallize and are deposited in joints, tendons, and surrounding tissues."
+MODY,HP:0004904,Maturity-onset diabetes of the young,"The term Maturity-onset diabetes of the young (MODY) was initially used for patients diagnosed with fasting hyperglycemia that could be treated without insulin for more than two years, where the initial diagnosis was made at a young age (under 25 years). Thus, MODY combines characteristics of type 1 diabetes (young age at diagnosis) and type 2 diabetes (less insulin dependence than type 1 diabetes). The term MODY is now most often used to refer to a group of monogenic diseases with these characteristics. Here, the term is used to describe hyperglycemia diagnosed at a young age with no or minor insulin dependency, no evidence of insulin resistence, and lack of evidence of autoimmune destruction of the beta cells."
+PancreaticHypoplasia,HP:0002594,Pancreatic hypoplasia,Hypoplasia of the pancreas.
+ExocrinePancreaticInsufficiency,HP:0001738,Exocrine pancreatic insufficiency,Impaired function of the exocrine pancreas associated with a reduced ability to digest foods because of lack of digestive enzymes.
+Hyperparathyroidism,HP:0000843,Hyperparathyroidism,Excessive production of parathyroid hormone (PTH) by the parathyroid glands.
+NeurodevelopmentalDisorder,HP:0012758,Neurodevelopmental delay,
+MentalDisease,HP:0000708,Behavioral abnormality,"An abnormality of mental functioning including various affective, behavioural, cognitive and perceptual abnormalities."
+Seizures,HP:0001250,Seizure,A seizure is an intermittent abnormality of nervous system physiology characterised by a transient occurrence of signs and/or symptoms due to abnormal excessive or synchronous neuronal activity in the brain.
+BrainAbnormality,HP:0012443,Abnormality of brain morphology,"A structural abnormality of the brain, which has as its parts the forebrain, midbrain, and hindbrain."
+PrematureBirth,HP:0001622,Premature birth,The birth of a baby of less than 37 weeks of gestational age.
+CongenitalCardiacAnomalies,HP:0001627,Abnormal heart morphology,Any structural anomaly of the heart.
+EyeAbnormality,HP:0000478,Abnormality of the eye,"Any abnormality of the eye, including location, spacing, and intraocular abnormalities."
+ShortStature,HP:0004322,Short stature,"A height below that which is expected according to age and gender norms. Although there is no universally accepted definition of short stature, many refer to ""short stature"" as height more than 2 standard deviations below the mean for age and gender (or below the 3rd percentile for age and gender dependent norms)."
+MusculoskeletalFeatures,HP:0033127,Abnormality of the musculoskeletal system,"An anomaly of the musculoskeletal system, which consists of the bones of the skeleton, muscles, cartilage, tendons, ligaments, joints, and other connective tissue. The musculoskeletal system supports the weight of the body, maintains body position and produces movements of the body or of parts of the body."
+DysmorphicFeatures,HP:0001999,Abnormal facial shape,An abnormal morphology (form) of the face or its components.
+ElevatedHepaticTransaminase,HP:0002910,Elevated hepatic transaminase,Elevations of the levels of SGOT and SGPT in the serum. SGOT (serum glutamic oxaloacetic transaminase) and SGPT (serum glutamic pyruvic transaminase) are transaminases primarily found in the liver and heart and are released into the bloodstream as the result of liver or heart damage. SGOT and SGPT are used clinically mainly as markers of liver damage.
+AbnormalLiverPhysiology,HP:0031865,Abnormal liver physiology,Any functional anomaly of the liver.
+Modifier,HP:0003577,Congenital onset,A phenotypic abnormality that is present at birth.
+Modifier,HP:0012833,Unilateral,Being present on only the left or only the right side of the body.
+Modifier,HP:0012832,Bilateral,Being present on both sides of the body.
+Modifier,HP:0012835,Left,Being located on the left side of the body.
+Modifier,HP:0012834,Right,Being located on the right side of the body.

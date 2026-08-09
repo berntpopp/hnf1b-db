@@ -206,6 +206,18 @@ def _shape_individual(
 ) -> dict[str, Any]:
     """Shape a raw phenopacket API record into a compact individual dict.
 
+    Deliberately excludes ``phenopacket["hnf1bCuration"]`` — this function
+    builds ``out`` field-by-field rather than copying ``phenopacket``
+    wholesale, so the block is dropped by omission rather than by an
+    explicit filter. Made an explicit decision (curation data-model spec
+    §4.8) rather than left as an accident of field-by-field shaping: the MCP
+    surface is for public/external-agent consumption, ``full`` mode on
+    ``GET /phenopackets/{id}/export`` already requires curator access for
+    this exact block (Task 10), and curation provenance (who curated what,
+    when, by what detection method) is not useful to an external agent
+    querying case-level facts. Revisit only as a conscious contract change —
+    see ``test_mcp_output_excludes_curation_metadata``.
+
     Args:
         record: Raw API record from /phenopackets/{id}.
         include_phenotypes: Whether to include phenotypic_features.

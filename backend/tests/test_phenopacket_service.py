@@ -14,10 +14,12 @@ exercise SQLAlchemy's integrity constraints and audit chain end-to-end.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.phenopackets.models import (
     Phenopacket,
     PhenopacketCreate,
+    PhenopacketRevision,
     PhenopacketUpdate,
 )
 from app.phenopackets.repositories import PhenopacketRepository
@@ -87,7 +89,7 @@ class TestPhenopacketServiceCreate:
     """``PhenopacketService.create`` behaviour."""
 
     @pytest.mark.asyncio
-    async def test_create_returns_persisted_phenopacket(self, make_service):
+    async def test_create_returns_persisted_phenopacket(self, make_service, db_session):
         """A valid phenopacket is created and returned with the sanitised payload."""
         service = make_service()
         payload = PhenopacketCreate(
@@ -101,6 +103,16 @@ class TestPhenopacketServiceCreate:
         assert result.subject_id == "SUB-SERVICE-001"
         assert result.subject_sex == "MALE"
         assert result.created_by_id is None
+        revision = (
+            await db_session.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.record_id == result.id
+                )
+            )
+        ).scalar_one()
+        # Anonymous/batch creation remains supported, but the immutable ledger
+        # must never contain an unattributed revision.
+        assert revision.actor_id is not None
 
     @pytest.mark.asyncio
     async def test_create_unknown_sex_defaults_to_unknown(self, make_service):

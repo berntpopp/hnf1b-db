@@ -1,103 +1,33 @@
-"""HPO term mapping for phenotypic features with canonical label normalization."""
+"""HPO term mapping for phenotypic features."""
 
 import logging
 from typing import Dict, Optional
 
 import pandas as pd
 
+from app.ontology.conformance import OntologySourceError, check_source_row
 from migration.phenopackets.ontology_mapper import OntologyMapper
 
 logger = logging.getLogger(__name__)
 
 
 class HPOMapper(OntologyMapper):
-    """Maps phenotype categories to HPO terms with canonical label normalization.
+    """Maps phenotype categories to HPO terms.
 
     Implements OntologyMapper interface following Dependency Inversion Principle.
     High-level modules depend on this abstraction, not this concrete implementation.
-
-    Label Normalization:
-        When normalize_labels=True (default), the mapper fetches canonical labels
-        from the HPO API via HybridOntologyService. This ensures consistent labels
-        across all phenopackets, avoiding issues like HP:0012622 appearing as both
-        "Chronic kidney disease" and "chronic kidney disease, not specified".
     """
 
     def __init__(
         self,
         mappings: Optional[Dict[str, Dict[str, str]]] = None,
-        normalize_labels: bool = True,
     ):
         """Initialize with default or provided HPO mappings.
 
         Args:
             mappings: Optional pre-configured mappings. If None, uses defaults.
-            normalize_labels: If True, fetch canonical labels from HPO API.
-                            Defaults to True for data quality.
         """
-        self.normalize_labels = normalize_labels
-        self._canonical_labels: Dict[str, str] = {}
-        self._ontology_service = None  # Lazy-loaded to avoid circular imports
         self.hpo_mappings = mappings if mappings else self._init_default_hpo_mappings()
-
-    def _get_ontology_service(self):
-        """Lazy-load ontology service to avoid circular imports."""
-        if self._ontology_service is None:
-            try:
-                from app.services.ontology_service import ontology_service
-
-                self._ontology_service = ontology_service
-            except ImportError:
-                logger.warning(
-                    "Could not import ontology_service - canonical label "
-                    "normalization disabled"
-                )
-                self.normalize_labels = False
-        return self._ontology_service
-
-    def _get_canonical_label(self, hpo_id: str, fallback_label: str) -> str:
-        """Get canonical HPO label from API or local cache.
-
-        Uses HybridOntologyService which has multi-level caching:
-        1. Memory cache (instant)
-        2. File cache (fast)
-        3. HPO JAX API (authoritative)
-        4. OLS API (backup)
-        5. Local fallback (last resort)
-
-        Args:
-            hpo_id: HPO term ID (e.g., "HP:0012622")
-            fallback_label: Label to use if lookup fails
-
-        Returns:
-            Canonical label from HPO or fallback
-        """
-        if not self.normalize_labels:
-            return fallback_label
-
-        # Check internal cache first (faster than service lookup)
-        if hpo_id in self._canonical_labels:
-            return self._canonical_labels[hpo_id]
-
-        try:
-            service = self._get_ontology_service()
-            if service is None:
-                self._canonical_labels[hpo_id] = fallback_label
-                return fallback_label
-
-            term = service.get_term(hpo_id)
-
-            # Only use API label if it's valid (not "Unknown term:")
-            if term and not term.label.startswith("Unknown term:"):
-                self._canonical_labels[hpo_id] = term.label
-                return term.label
-
-        except Exception as e:
-            logger.debug(f"Failed to lookup canonical label for {hpo_id}: {e}")
-
-        # Cache fallback to avoid repeated failures
-        self._canonical_labels[hpo_id] = fallback_label
-        return fallback_label
 
     def _init_default_hpo_mappings(self) -> Dict[str, Dict[str, str]]:
         """Initialize default HPO term mappings for phenotypes.
@@ -133,30 +63,49 @@ class HPOMapper(OntologyMapper):
             "renalcysts": {"id": "HP:0000107", "label": "Renal cyst"},
             "renalhypoplasia": {"id": "HP:0000089", "label": "Renal hypoplasia"},
             "solitarykidney": {
-                "id": "HP:0004729",
-                "label": "Solitary functioning kidney",
+                # HP:0004729 is "Acute tubulointerstitial nephritis", not
+                # "Solitary functioning kidney" -- T8. The sheet maps
+                # SolitaryKidney -> HP:0000122 "Unilateral renal agenesis"
+                # (corpus stores it 583x); verified against HPO 2026-06-23.
+                "id": "HP:0000122",
+                "label": "Unilateral renal agenesis",
             },
             "multicysticdysplastickidney": {
                 "id": "HP:0000003",
                 "label": "Multicystic kidney dysplasia",
             },
             "hyperechogenicity": {
-                "id": "HP:0010935",
-                "label": "Increased echogenicity of kidneys",
+                # HP:0010935 does not exist in current HPO and appears in zero
+                # stored records; the sheet-driven path is authoritative. The
+                # correct term is HP:0033132 — note HP:0033133, which the source
+                # sheet names, is "Renal cortical hypoechogeneity", the opposite
+                # finding. Verified against HPO 2026-06-23.
+                "id": "HP:0033132",
+                "label": "Renal cortical hyperechogenicity",
             },
             "urinarytractmalformation": {
                 "id": "HP:0000079",
                 "label": "Abnormality of the urinary system",
             },
             "antenatalrenalabnormalities": {
-                "id": "HP:0010945",
-                "label": "Fetal renal anomaly",
+                # HP:0010945 is "Fetal pyelectasis", not "Fetal renal
+                # anomaly" -- T10. The sheet maps AntenatalRenalAbnormalities
+                # -> HP:0012210 "Abnormal renal morphology" (corpus stores it
+                # 261x); verified against HPO 2026-06-23.
+                "id": "HP:0012210",
+                "label": "Abnormal renal morphology",
             },
             "multiple glomerular cysts": {
                 "id": "HP:0100611",
                 "label": "Multiple glomerular cysts",
             },
-            "oligomeganephronia": {"id": "HP:0004719", "label": "Oligomeganephronia"},
+            "oligomeganephronia": {
+                # HP:0004719 is "Hyperechogenic kidneys", not
+                # "Oligomeganephronia" -- T9. The correct id is the Orphanet
+                # entry the sheet and corpus actually use, ORPHA:2260.
+                "id": "ORPHA:2260",
+                "label": "Oligomeganephronia",
+            },
             # Metabolic phenotypes
             "hypomagnesemia": {"id": "HP:0002917", "label": "Hypomagnesemia"},
             "hyperuricemia": {"id": "HP:0002149", "label": "Hyperuricemia"},
@@ -169,7 +118,11 @@ class HPOMapper(OntologyMapper):
                 "label": "Maturity-onset diabetes of the young",
             },
             "pancreatichypoplasia": {
-                "id": "HP:0100575",
+                # HP:0100575 is "Neoplasm of the gallbladder", not
+                # "Pancreatic hypoplasia" -- T11. The correct id for
+                # "Pancreatic hypoplasia" is HP:0002594 (corpus stores it
+                # 206x); verified against HPO 2026-06-23.
+                "id": "HP:0002594",
                 "label": "Pancreatic hypoplasia",
             },
             "exocrinepancreaticinsufficiency": {
@@ -224,41 +177,61 @@ class HPOMapper(OntologyMapper):
         }
 
     def build_from_dataframe(self, phenotypes_df: pd.DataFrame) -> None:
-        """Build HPO mappings from Phenotype sheet with canonical label normalization.
+        """Build HPO mappings from the Phenotype sheet.
+
+        Each row's identifier is checked against its own description via A1
+        (`check_source_row`, spec §3.3) before the mapping is used — the
+        description is a field label normalisation never touches, so it is
+        what catches a wrong identifier whose label has already been made to
+        agree with it. This is the check that would have failed the import
+        that produced HP:0033133; see
+        docs/ontology-defect-report-2026-07-30.md §4.1. Every offending row
+        is collected and reported together, not just the first, so one
+        failed import tells a curator everything that needs fixing.
 
         Args:
             phenotypes_df: DataFrame containing phenotype mappings
+
+        Raises:
+            OntologySourceError: if any row's identifier is not corroborated
+                by its own description (or, absent a description, its own
+                name) — see `app.ontology.conformance.check_source_row`.
         """
         if phenotypes_df is None or phenotypes_df.empty:
             logger.warning("No phenotype dataframe provided, using default mappings")
             return
 
         self.hpo_mappings = {}
-        normalized_count = 0
+        violations: list[str] = []
 
         for _, row in phenotypes_df.iterrows():
             category = row.get("phenotype_category")
             hpo_id = row.get("phenotype_id")
             source_label = row.get("phenotype_name")
+            description = row.get("phenotype_description")
 
             if pd.notna(category) and pd.notna(hpo_id):
-                # Get canonical label (normalizes to official HPO label)
-                fallback = source_label if pd.notna(source_label) else category
-                canonical_label = self._get_canonical_label(hpo_id, fallback)
+                violation = check_source_row(
+                    hpo_id,
+                    source_label if pd.notna(source_label) else "",
+                    description if pd.notna(description) else "",
+                )
+                if violation:
+                    violations.append(violation)
 
-                # Track normalization for logging
-                if pd.notna(source_label) and canonical_label != source_label:
-                    logger.debug(
-                        f"Normalized label for {hpo_id}: "
-                        f"'{source_label}' -> '{canonical_label}'"
-                    )
-                    normalized_count += 1
+                # The curator's name is written verbatim. Rewriting it to agree
+                # with the identifier is what inverted HP:0033133 across 460
+                # features; see docs/ontology-defect-report-2026-07-30.md §4.1.
+                # A name that disagrees with its identifier is a defect for a
+                # human to resolve — check_source_row (above) is what catches
+                # it at import time.
+                label = source_label if pd.notna(source_label) else category
 
                 # Normalize the category name to match column names in individuals sheet
                 normalized_category = self._normalize_column_name(category)
                 self.hpo_mappings[normalized_category] = {
                     "id": hpo_id,
-                    "label": canonical_label,
+                    "label": label,
                 }
 
                 # ALSO add mapping for the phenotype_name
@@ -267,12 +240,16 @@ class HPOMapper(OntologyMapper):
                     normalized_label = self._normalize_column_name(source_label)
                     self.hpo_mappings[normalized_label] = {
                         "id": hpo_id,
-                        "label": canonical_label,
+                        "label": label,
                     }
 
+        if violations:
+            raise OntologySourceError(
+                "Curation sheet rows name a term their identifier does not "
+                "denote:\n" + "\n".join(violations)
+            )
+
         logger.info(f"Built HPO mappings for {len(self.hpo_mappings)} phenotypes")
-        if normalized_count > 0:
-            logger.info(f"Normalized {normalized_count} HPO labels to canonical form")
 
     def normalize_key(self, key: str) -> str:
         """Normalize a phenotype key for lookup.

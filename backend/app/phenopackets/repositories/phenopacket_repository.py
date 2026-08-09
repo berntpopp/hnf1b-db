@@ -166,8 +166,8 @@ class PhenopacketRepository:
         self._session.add(phenopacket)
 
     async def commit_and_refresh(self, phenopacket: Phenopacket) -> None:
-        """Commit the current session and refresh ``phenopacket`` in place."""
-        await self._session.commit()
+        """Flush staged work and refresh ``phenopacket``; caller commits."""
+        await self._session.flush()
         await self._session.refresh(phenopacket)
 
     async def rollback(self) -> None:

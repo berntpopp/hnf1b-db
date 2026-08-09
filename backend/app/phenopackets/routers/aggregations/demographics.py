@@ -12,7 +12,6 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
-    check_materialized_view_exists,
     get_db,
     logger,
     text,
@@ -27,46 +26,24 @@ async def aggregate_sex_distribution(
 ):
     """Get sex distribution of subjects.
 
-    Performance: Uses mv_sex_distribution materialized view when available.
+    Always reads published-head snapshots. Legacy materialized views are based
+    on mutable working copies and are therefore not public-safe.
     """
-    # Try materialized view first (O(1) indexed lookup)
-    if await check_materialized_view_exists(db, "mv_sex_distribution"):
-        logger.debug("Using mv_sex_distribution materialized view")
-        result = await db.execute(
-            text("""
-                SELECT sex, count, percentage
-                FROM mv_sex_distribution
-                ORDER BY count DESC
-            """)
-        )
-        rows = result.mappings().all()
-        total = sum(int(row["count"]) for row in rows)
-        rows_with_pct = calculate_percentages(rows, total=total)
-
-        return [
-            AggregationResult(
-                label=row["sex"],
-                count=int(row["count"]),
-                percentage=row["percentage"],
-            )
-            for row in rows_with_pct
-        ]
-
-    # Fallback: Live query (simple, but still benefits from index)
-    logger.debug("Falling back to live query for sex distribution")
+    logger.debug("Reading published-head sex distribution")
     query = """
     SELECT
-        subject_sex as sex,
+        COALESCE(r.content_jsonb->'subject'->>'sex', 'Unknown') as sex,
         COUNT(*) as count
     FROM
-        phenopackets
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
     WHERE
-        deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
-        AND phenopacket_id NOT LIKE 'e2e-%'
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
-        subject_sex
+        COALESCE(r.content_jsonb->'subject'->>'sex', 'Unknown')
     ORDER BY
         count DESC
     """
@@ -98,13 +75,14 @@ async def aggregate_age_of_onset(
         disease->'onset'->'ontologyClass'->>'id' as onset_id,
         COUNT(*) as count
     FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'diseases') as disease
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+        jsonb_array_elements(r.content_jsonb->'diseases') as disease
     WHERE
-        deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
-        AND phenopacket_id NOT LIKE 'e2e-%'
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
         AND disease->'onset'->'ontologyClass'->>'label' IS NOT NULL
     GROUP BY
         disease->'onset'->'ontologyClass'->>'label',

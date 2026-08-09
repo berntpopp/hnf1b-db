@@ -10,11 +10,18 @@
       </h1>
 
       <v-card-text>
-        <!-- Error State -->
-        <v-alert v-if="error" type="error" variant="tonal" prominent class="mb-4">
+        <!-- Fatal: the form could not be built at all (vocabularies or the
+             record itself failed to load). Only this replaces the form. -->
+        <v-alert v-if="loadError" type="error" variant="tonal" prominent class="mb-4">
           <v-alert-title>Error</v-alert-title>
-          {{ error }}
+          {{ loadError }}
         </v-alert>
+
+        <!-- A recoverable error (validation, save failure) is NOT rendered
+             here. It renders once, next to the Save button the curator just
+             pressed, on a form that stays mounted -- this block used to be
+             `v-else-if="!error"`, so any such error unmounted every section
+             and left a fully entered case irrecoverable behind an alert. -->
 
         <!-- Loading State (Edit Mode) -->
         <div v-if="loading && isEditing">
@@ -25,8 +32,25 @@
           </div>
         </div>
 
+        <ReportObservationWorkspace
+          v-else-if="isEditing && curationMode !== 'legacy' && !loadError"
+          :phenopacket-id="$route.params.phenopacket_id"
+          :record-state="savedRecordState || 'draft'"
+          :user-role="authStore?.user?.role || 'curator'"
+          :inert="showUnsavedDialog ? '' : undefined"
+          @available="curationMode = 'ledger'"
+          @unavailable="activateLegacyMode"
+          @dirty-change="ledgerDirty = $event"
+          @published="handleLedgerPublished"
+        />
+
         <!-- Form -->
-        <v-form v-else-if="!error" ref="form" @submit.prevent="handleSubmit">
+        <v-form
+          v-else-if="!loadError"
+          ref="form"
+          :inert="showUnsavedDialog ? '' : undefined"
+          @submit.prevent="handleSubmit"
+        >
           <!-- Phenopacket ID (read-only for edit) -->
           <v-text-field
             v-model="phenopacket.id"
@@ -43,138 +67,293 @@
             class="mb-4"
           />
 
-          <!-- Subject Section -->
-          <v-card variant="outlined" class="mb-4">
-            <v-card-title class="bg-blue-lighten-5">
-              <v-icon left>mdi-account</v-icon>
-              Subject Information
-            </v-card-title>
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" md="6">
-                  <v-text-field
-                    v-model="phenopacket.subject.id"
-                    label="Subject ID *"
-                    :rules="[rules.required]"
-                    required
-                  />
-                </v-col>
-                <v-col cols="12" md="6">
-                  <v-select
-                    v-model="phenopacket.subject.sex"
-                    :items="vocabularies.sex.value"
-                    item-title="label"
-                    item-value="value"
-                    label="Sex *"
-                    :loading="vocabularies.loading.value"
-                    :disabled="vocabularies.loading.value"
-                    :rules="[rules.required]"
-                    required
-                  />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
-
-          <!-- Publications/Citations -->
-          <v-card variant="outlined" class="mb-4">
-            <v-card-title class="bg-orange-lighten-5">
-              <v-icon left>mdi-book-open-variant</v-icon>
-              Publications
-            </v-card-title>
-            <v-card-text>
-              <div v-for="(pub, index) in phenopacket.publications" :key="index" class="mb-3">
+          <v-row>
+            <!-- Curation sections -->
+            <v-col cols="12" md="8">
+              <CurationSection
+                id="case"
+                ref="caseSection"
+                title="Case"
+                :filled="caseCompleteness.filled"
+                :total="caseCompleteness.total"
+              >
                 <v-row>
-                  <v-col cols="12" md="10">
+                  <v-col cols="12" md="6">
                     <v-text-field
-                      v-model="pub.pmid"
-                      label="PubMed ID (PMID)"
-                      hint="Enter numeric PMID (e.g., 12345678)"
-                      persistent-hint
+                      v-model="phenopacket.subject.id"
+                      label="Subject ID *"
+                      :rules="[rules.required]"
+                      required
                     />
                   </v-col>
-                  <v-col cols="12" md="2" class="d-flex align-center">
-                    <v-btn
-                      color="error"
-                      icon="mdi-delete"
-                      variant="text"
-                      @click="removePublication(index)"
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.subject.sex"
+                      :items="vocabularies.sex.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Sex *"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      :rules="[rules.required]"
+                      required
                     />
                   </v-col>
                 </v-row>
-              </div>
-              <v-btn color="primary" prepend-icon="mdi-plus" @click="addPublication">
-                Add Publication
-              </v-btn>
-            </v-card-text>
-          </v-card>
 
-          <!-- Variant Information -->
-          <VariantAnnotationForm
-            v-model="phenopacket.interpretations"
-            :subject-id="phenopacket.subject?.id || ''"
-          />
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.cohort"
+                      :items="vocabularies.cohort.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Cohort"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-combobox
+                      v-model="phenopacket.subject.alternateIds"
+                      label="Individual identifiers"
+                      hint="Press enter to add an identifier"
+                      persistent-hint
+                      chips
+                      multiple
+                      closable-chips
+                    />
+                  </v-col>
+                </v-row>
 
-          <!-- Phenotypic Features Section -->
-          <PhenotypicFeaturesSection
-            v-model="phenopacket.phenotypicFeatures"
-            :form-submitted="formSubmitted"
-          />
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.publicationType"
+                      :items="vocabularies.publicationType.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Publication type"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="phenopacket.hnf1bCuration.familyHistory"
+                      :items="vocabularies.familyHistory.value"
+                      item-title="label"
+                      item-value="value"
+                      label="Family history"
+                      :loading="vocabularies.loading.value"
+                      :disabled="vocabularies.loading.value"
+                      clearable
+                    />
+                  </v-col>
+                </v-row>
 
-          <!-- Change Reason (Edit Mode Only) -->
-          <v-card v-if="isEditing" variant="outlined" class="mb-4">
-            <v-card-title class="bg-yellow-lighten-4">
-              <v-icon left>mdi-pencil-box-outline</v-icon>
-              Reason for Change
-            </v-card-title>
-            <v-card-text>
-              <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                All changes are tracked in the audit trail. Please provide a clear explanation for
-                this update.
-              </v-alert>
-              <v-textarea
-                v-model="changeReason"
-                label="Change Reason *"
-                placeholder="e.g., Adding new phenotype data, Correcting variant information, Updated diagnosis"
-                variant="outlined"
-                rows="3"
-                :rules="[rules.required, rules.minLength]"
-                hint="Required for audit trail. Minimum 5 characters."
-                persistent-hint
-                required
+                <div class="text-subtitle-2 text-medium-emphasis mt-4 mb-2">Publications</div>
+                <div v-for="(pub, index) in publications" :key="index" class="mb-3">
+                  <v-row>
+                    <v-col cols="12" md="10">
+                      <v-text-field
+                        v-model="pub.pmid"
+                        label="PubMed ID (PMID)"
+                        hint="Enter numeric PMID (e.g., 12345678)"
+                        persistent-hint
+                      />
+                    </v-col>
+                    <v-col cols="12" md="2" class="d-flex align-center">
+                      <v-btn
+                        color="error"
+                        icon="mdi-delete"
+                        variant="text"
+                        @click="removePublication(index)"
+                      />
+                    </v-col>
+                  </v-row>
+                </div>
+                <v-btn color="primary" prepend-icon="mdi-plus" @click="addPublication">
+                  Add Publication
+                </v-btn>
+              </CurationSection>
+
+              <CurationSection
+                id="variant"
+                ref="variantSection"
+                title="Variant"
+                :filled="variantCompleteness.filled"
+                :total="variantCompleteness.total"
               >
-                <template #prepend-inner>
-                  <v-icon>mdi-text-box</v-icon>
+                <VariantAnnotationForm
+                  v-model="phenopacket.interpretations"
+                  v-model:detection-method="phenopacket.hnf1bCuration.detectionMethod"
+                  :subject-id="phenopacket.subject?.id || ''"
+                  :detection-method-items="vocabularies.detectionMethod.value"
+                  :segregation-items="vocabularies.segregation.value"
+                  :allelic-state-items="vocabularies.allelicState.value"
+                  :vocabularies-loading="vocabularies.loading.value"
+                  @update:pending-edit="pendingVariantEdit = $event"
+                />
+              </CurationSection>
+
+              <CurationSection
+                id="classification"
+                ref="classificationSection"
+                title="Classification"
+                :filled="classificationCompleteness.filled"
+                :total="classificationCompleteness.total"
+              >
+                <ClassificationSection
+                  v-model="phenopacket.interpretations"
+                  v-model:classification-system="phenopacket.hnf1bCuration.classificationSystem"
+                  v-model:classification-date="phenopacket.hnf1bCuration.classificationDate"
+                  v-model:classification-comment="phenopacket.hnf1bCuration.classificationComment"
+                  :interpretation-status-items="vocabularies.interpretationStatus.value"
+                  :classification-system-items="vocabularies.classificationSystem.value"
+                  :vocabularies-loading="vocabularies.loading.value"
+                />
+              </CurationSection>
+
+              <CurationSection
+                id="phenotypes"
+                ref="phenotypesSection"
+                title="Phenotypes"
+                :filled="phenotypesCompleteness.filled"
+                :total="phenotypesCompleteness.total"
+              >
+                <PhenotypicFeaturesSection
+                  v-model="phenopacket.phenotypicFeatures"
+                  :form-submitted="formSubmitted"
+                  :evidence-code-items="vocabularies.evidenceCode.value"
+                  :anchoring-reference="anchoringReference"
+                />
+              </CurationSection>
+
+              <CurationSection
+                id="age"
+                ref="ageSection"
+                title="Age & Onset"
+                :filled="ageCompleteness.filled"
+                :total="ageCompleteness.total"
+              >
+                <AgeSection
+                  :diseases="phenopacket.diseases"
+                  :time-at-last-encounter="phenopacket.subject.timeAtLastEncounter"
+                  @update:diseases="(value) => (phenopacket.diseases = value)"
+                  @update:time-at-last-encounter="
+                    (value) => (phenopacket.subject.timeAtLastEncounter = value)
+                  "
+                />
+              </CurationSection>
+
+              <CurationSection
+                id="provenance"
+                ref="provenanceSection"
+                title="Provenance & Notes"
+                :filled="provenanceCompleteness.filled"
+                :total="provenanceCompleteness.total"
+              >
+                <ProvenanceSection
+                  :case-comment="phenopacket.hnf1bCuration.caseComment"
+                  :problematic="phenopacket.hnf1bCuration.problematic"
+                  :duplicate-check="phenopacket.hnf1bCuration.duplicateCheck"
+                  :curated-by="phenopacket.hnf1bCuration.curatedBy"
+                  :curated-at="phenopacket.hnf1bCuration.curatedAt"
+                  @update:case-comment="(value) => (phenopacket.hnf1bCuration.caseComment = value)"
+                  @update:problematic="(value) => (phenopacket.hnf1bCuration.problematic = value)"
+                  @update:duplicate-check="
+                    (value) => (phenopacket.hnf1bCuration.duplicateCheck = value)
+                  "
+                />
+              </CurationSection>
+
+              <!-- Change Reason (Edit Mode Only) -->
+              <v-card v-if="isEditing" variant="outlined" class="mb-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium">
+                  <v-icon left>mdi-pencil-box-outline</v-icon>
+                  Reason for Change
+                </v-card-title>
+                <v-card-text>
+                  <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+                    All changes are tracked in the audit trail. Please provide a clear explanation
+                    for this update.
+                  </v-alert>
+                  <v-textarea
+                    v-model="changeReason"
+                    label="Change Reason *"
+                    placeholder="e.g., Adding new phenotype data, Correcting variant information, Updated diagnosis"
+                    variant="outlined"
+                    rows="3"
+                    :rules="[rules.required, rules.minLength]"
+                    hint="Required for audit trail. Minimum 5 characters."
+                    persistent-hint
+                    required
+                  >
+                    <template #prepend-inner>
+                      <v-icon>mdi-text-box</v-icon>
+                    </template>
+                  </v-textarea>
+                </v-card-text>
+              </v-card>
+
+              <!-- Error Display -->
+              <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
+                {{ error }}
+                <template v-if="error.includes('Concurrent edit')">
+                  <v-btn
+                    color="white"
+                    variant="outlined"
+                    class="mt-2"
+                    prepend-icon="mdi-refresh"
+                    @click="loadPhenopacket"
+                  >
+                    Reload Latest Version
+                  </v-btn>
                 </template>
-              </v-textarea>
-            </v-card-text>
-          </v-card>
+              </v-alert>
 
-          <!-- Error Display -->
-          <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
-            {{ error }}
-            <template v-if="error.includes('Concurrent edit')">
-              <v-btn
-                color="white"
-                variant="outlined"
-                class="mt-2"
-                prepend-icon="mdi-refresh"
-                @click="loadPhenopacket"
-              >
-                Reload Latest Version
-              </v-btn>
-            </template>
-          </v-alert>
+              <!-- Actions -->
+              <v-card-actions>
+                <v-btn color="primary" type="submit" :loading="saving" size="large">
+                  <v-icon left>mdi-content-save</v-icon>
+                  {{ isEditing ? 'Update' : 'Create' }} Phenopacket
+                </v-btn>
+                <v-btn size="large" @click="$router.push('/phenopackets')"> Cancel </v-btn>
+              </v-card-actions>
+            </v-col>
 
-          <!-- Actions -->
-          <v-card-actions>
-            <v-btn color="primary" type="submit" :loading="saving" size="large">
-              <v-icon left>mdi-content-save</v-icon>
-              {{ isEditing ? 'Update' : 'Create' }} Phenopacket
-            </v-btn>
-            <v-btn size="large" @click="$router.push('/phenopackets')"> Cancel </v-btn>
-          </v-card-actions>
+            <!-- Sticky completeness rail -->
+            <v-col cols="12" md="4">
+              <CompletenessRail
+                :phenopacket="phenopacketForCompleteness"
+                :phenotypes-completeness="phenotypesCompleteness"
+                @navigate="onRailNavigate"
+              />
+            </v-col>
+          </v-row>
         </v-form>
+
+        <div
+          v-if="showUnsavedDialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-dialog-title"
+          class="leave-dialog-backdrop"
+          @keydown.esc="cancelLeave"
+          @keydown.tab="trapLeaveDialogFocus"
+        >
+          <div ref="leaveDialog" class="leave-dialog-card">
+            <h2 id="leave-dialog-title" class="text-h6">Unsaved changes</h2>
+            <p>Your current curation changes have not been saved. Leave this page?</p>
+            <v-btn ref="leaveDialogCancel" @click="cancelLeave">Keep editing</v-btn>
+            <v-btn color="error" data-action="confirm-leave" @click="confirmLeave">
+              Leave without saving
+            </v-btn>
+          </div>
+        </div>
       </v-card-text>
     </v-card>
   </v-container>
@@ -183,18 +362,53 @@
 <script>
 import { getPhenopacket, createPhenopacket, updatePhenopacket } from '@/api';
 import { usePhenopacketVocabularies } from '@/composables/usePhenopacketVocabularies';
+import { useAuthStore } from '@/stores/authStore';
 import PhenotypicFeaturesSection from '@/components/PhenotypicFeaturesSection.vue';
 import VariantAnnotationForm from '@/components/VariantAnnotationForm.vue';
+import CurationSection from '@/components/curation/CurationSection.vue';
+import CompletenessRail from '@/components/curation/CompletenessRail.vue';
+import ClassificationSection from '@/components/curation/ClassificationSection.vue';
+import AgeSection from '@/components/curation/AgeSection.vue';
+import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
+import ReportObservationWorkspace from '@/components/curation/reports/ReportObservationWorkspace.vue';
+import { computeSectionCompleteness } from '@/utils/curationFields';
+import { formatApiError } from '@/utils/apiError';
 
 export default {
   name: 'PhenopacketCreateEdit',
   components: {
     PhenotypicFeaturesSection,
     VariantAnnotationForm,
+    CurationSection,
+    CompletenessRail,
+    ClassificationSection,
+    AgeSection,
+    ProvenanceSection,
+    ReportObservationWorkspace,
+  },
+  // Vue Router 4-style in-component guard (works with the Options API used
+  // throughout this file). Prompts on navigate-away only when the live form
+  // state has actually diverged from what was loaded/initialized, and never
+  // on the save flow's own post-success redirect (see `justSaved`).
+  beforeRouteLeave(to, from, next) {
+    if (this.justSaved || !this.hasUnsavedChanges()) {
+      next();
+      return;
+    }
+    this.pendingRouteNext = next;
+    this.dialogInvoker = document.activeElement;
+    this.showUnsavedDialog = true;
+    this.$nextTick(() => this.$refs.leaveDialogCancel?.$el?.focus());
   },
   setup() {
     const vocabularies = usePhenopacketVocabularies();
-    return { vocabularies };
+    // Curation console Task 8 (design spec §3.6): the ONLY source
+    // `stampCuration()` reads for `hnf1bCuration.curatedBy` /
+    // `metaData.reviewer` -- the authenticated session's display name.
+    // There is deliberately no other path (see ProvenanceSection.vue's
+    // module doc, the no-reviewer-input-control non-negotiable).
+    const authStore = useAuthStore();
+    return { vocabularies, authStore };
   },
   data() {
     return {
@@ -203,10 +417,19 @@ export default {
         subject: {
           id: '',
           sex: 'UNKNOWN_SEX',
+          // Curation console Task 4 (design spec §3.1): chips input for
+          // IndividualIdentifier. Default [] so `v-model` on a fresh record
+          // never touches `undefined`.
+          alternateIds: [],
         },
         phenotypicFeatures: [],
         interpretations: [],
-        publications: [],
+        // Curation console Task 4 (design spec §3.1): cohort, publicationType,
+        // familyHistory land here. Typed fields only (schema_validator.py
+        // keeps `additionalProperties: false`) -- default {} so a fresh
+        // record's `v-model="phenopacket.hnf1bCuration.cohort"` etc. never
+        // throws on an absent parent object.
+        hnf1bCuration: {},
         metaData: {
           created: new Date().toISOString(),
           createdBy: 'HNF1B-DB Curation Interface',
@@ -222,14 +445,38 @@ export default {
           ],
         },
       },
+      // Editor-only state. Deliberately NOT on `phenopacket`: `publications` is
+      // not a Phenopackets v2 field, and buildSubmissionPhenopacket spreads that
+      // object wholesale. PMIDs are promoted to metaData.externalReferences on save.
+      publications: [],
       loading: true, // Start with loading true to prevent form flash
       saving: false,
       error: null,
+      // Separate from `error`: only a failure that makes the form
+      // unbuildable may replace it. Recoverable errors render above it.
+      loadError: null,
+      vocabularyLoadError: null,
       formSubmitted: false,
+      // True while the detailed variant editor holds typed-but-uncommitted
+      // changes; blocks submit so they are never silently dropped.
+      pendingVariantEdit: false,
       revision: null, // For optimistic locking
       changeReason: '', // For audit trail
       // Saved record state for toast message selection
       savedRecordState: null,
+      // Unsaved-changes guard (curation console Task 3, design spec §5): a
+      // JSON snapshot of {phenopacket, publications} taken right after the
+      // form finishes loading/initializing. beforeRouteLeave diffs the live
+      // state against this to decide whether to prompt.
+      initialSnapshot: null,
+      // Set true immediately before the post-save navigation so
+      // beforeRouteLeave doesn't prompt on the save flow's own redirect.
+      justSaved: false,
+      curationMode: 'probing',
+      ledgerDirty: false,
+      showUnsavedDialog: false,
+      pendingRouteNext: null,
+      dialogInvoker: null,
       rules: {
         required: (value) => !!value || 'Required field',
         minLength: (value) => (value && value.length >= 5) || 'Must be at least 5 characters',
@@ -240,6 +487,73 @@ export default {
     isEditing() {
       return !!this.$route.params.phenopacket_id;
     },
+    // Per-section completeness for the sections whose fields live in the
+    // shared CURATION_FIELDS registry (curationFields.js). All report 0/0
+    // until Tasks 4-8 register fields against these section ids -- that is
+    // correct, not a bug: the registry is the single source of truth, so
+    // these badges (and the CompletenessRail row below) update automatically
+    // once later tasks push entries in, with no further changes here.
+    caseCompleteness() {
+      return computeSectionCompleteness(this.phenopacket, 'case');
+    },
+    variantCompleteness() {
+      return computeSectionCompleteness(this.phenopacket, 'variant');
+    },
+    classificationCompleteness() {
+      return computeSectionCompleteness(this.phenopacket, 'classification');
+    },
+    ageCompleteness() {
+      return computeSectionCompleteness(this.phenopacket, 'age');
+    },
+    provenanceCompleteness() {
+      return computeSectionCompleteness(this.phenopacket, 'provenance');
+    },
+    // Phenotypes is deliberately NOT in CURATION_FIELDS (its completeness is
+    // dynamic per-case -- see curationFields.js). Curation console Task 7
+    // (design spec §3.4): `filled` = `total` = the number of entries in
+    // `phenotypicFeatures`. By construction of
+    // PhenotypicFeaturesSection.vue's own tri-state convention (`cycleState`
+    // /`getState`), an entry only exists once a curator has made an
+    // explicit present/excluded choice -- "unknown" has no entry at all --
+    // so every entry already IS "unambiguously curated" and this count
+    // never needs to distinguish present from excluded. There is no fixed
+    // universe size to divide by here (unlike the fixed-schema sections'
+    // CURATION_FIELDS registry, which counts against a known ~28-dimension
+    // total): the set of curatable HPO terms is open-ended across ~36 terms
+    // spanning organ-system groups, so this section is always N/N once
+    // anything has been entered, by design -- not a bug.
+    phenotypesCompleteness() {
+      const features = this.phenopacket.phenotypicFeatures || [];
+      return { filled: features.length, total: features.length };
+    },
+    // Curation console Task 7 (design spec §3.4; curation spec §7): the
+    // FIRST listed publication's PMID, formatted the same way
+    // mergedExternalReferences() formats PMIDs (`PMID:${pmid}`). Null when
+    // no publication row exists yet, or its PMID field is still blank --
+    // PhenotypicFeaturesSection uses null to mean "omit `evidence`
+    // entirely" rather than write a reference to nothing. Multi-publication
+    // attribution nuance is deliberately out of scope (curation spec §7).
+    anchoringReference() {
+      const pmid = `${this.publications[0]?.pmid || ''}`.trim();
+      return pmid ? `PMID:${pmid}` : null;
+    },
+    // The `publication` CURATION_FIELDS entry reads
+    // `metaData.externalReferences`, but a PMID the curator is actively
+    // typing lives in `this.publications` (component-local state) until
+    // save time -- see buildSubmissionPhenopacket/mergedExternalReferences.
+    // Feeding the raw `phenopacket` prop into CompletenessRail would show
+    // "not filled" while the curator is mid-entry. This computed overlays
+    // the same merge so the rail reflects in-progress state without
+    // mutating `phenopacket` itself.
+    phenopacketForCompleteness() {
+      return {
+        ...this.phenopacket,
+        metaData: {
+          ...this.phenopacket.metaData,
+          externalReferences: this.mergedExternalReferences(),
+        },
+      };
+    },
   },
   async mounted() {
     // Load controlled vocabularies from API
@@ -248,7 +562,8 @@ export default {
       window.logService.info('Loaded phenopacket vocabularies for form');
     } catch (err) {
       window.logService.error('Failed to load vocabularies', { error: err.message });
-      this.error = 'Failed to load form vocabularies. Please refresh the page.';
+      this.vocabularyLoadError = 'Failed to load form vocabularies. Please refresh the page.';
+      if (!this.isEditing) this.loadError = this.vocabularyLoadError;
     }
 
     if (this.isEditing) {
@@ -259,8 +574,99 @@ export default {
       // Leave ID empty for user to specify (required field will enforce entry)
       this.phenopacket.id = '';
     }
+
+    // Curation console Task 8 (design spec §3.6): stamp curatedBy/curatedAt
+    // (+ metaData.reviewer) immediately on mount, for BOTH create and edit --
+    // so the Provenance section's completeness badge reads filled as soon as
+    // the form is open, not only after an explicit save (there is no
+    // curator-facing control for either field to "fill" in the first
+    // place). Placed after the load/init branch above, before the snapshot
+    // below, so opening an existing record for edit and leaving without
+    // touching anything is not itself flagged as an unsaved change.
+    this.stampCuration();
+
+    // Snapshot the settled initial state for the unsaved-changes guard. Taken
+    // after both branches above so it reflects the actually-loaded record in
+    // edit mode, not the placeholder pre-load shape.
+    this.captureSnapshot();
   },
   methods: {
+    // Curation console Task 8 (design spec §3.6): the ONLY thing that reads
+    // the authenticated session's identity for curatedBy/reviewer. A plain
+    // method (not a `computed`) so it works identically whether called from
+    // a real mounted instance or via `PhenopacketCreateEdit.methods
+    // .stampCuration.call(ctx)` in a unit test, where `ctx` is a plain
+    // object with no Vue reactivity system behind it.
+    curatorDisplayName() {
+      return this.authStore?.user?.full_name || this.authStore?.user?.username || '';
+    },
+    // Curation console Task 8: stamps `hnf1bCuration.curatedBy`,
+    // `hnf1bCuration.curatedAt` and `metaData.reviewer` -- NEVER from a form
+    // field (see ProvenanceSection.vue's module doc, the
+    // no-reviewer-input-control non-negotiable). `curatedBy`/`metaData
+    // .reviewer` come from the session's display name; `curatedAt` from the
+    // client clock, since the backend does not stamp it server-side
+    // (verified: no `curated_at`/`curated_by` write path in
+    // backend/app/phenopackets/ -- only the JSON-schema type declaration).
+    // This matches the existing precedent for `metaData.created`/`createdBy`
+    // in this file's data(), which are likewise client-stamped. Called both
+    // in mounted() (so the completeness rail reflects it immediately) and
+    // again at the top of handleSubmit() (so curatedAt is the freshest
+    // client-observable timestamp at actual save time, not whenever the
+    // form happened to be opened).
+    stampCuration() {
+      const displayName = this.curatorDisplayName();
+      this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+      this.phenopacket.hnf1bCuration.curatedBy = displayName;
+      this.phenopacket.hnf1bCuration.curatedAt = new Date().toISOString();
+      this.phenopacket.metaData = this.phenopacket.metaData || {};
+      this.phenopacket.metaData.reviewer = displayName;
+    },
+    captureSnapshot() {
+      this.initialSnapshot = JSON.stringify({
+        phenopacket: this.phenopacket,
+        publications: this.publications,
+      });
+    },
+    hasUnsavedChanges() {
+      if (this.ledgerDirty) return true;
+      if (this.initialSnapshot === null) return false;
+      const current = JSON.stringify({
+        phenopacket: this.phenopacket,
+        publications: this.publications,
+      });
+      return current !== this.initialSnapshot;
+    },
+    confirmLeave() {
+      const next = this.pendingRouteNext;
+      this.pendingRouteNext = null;
+      this.showUnsavedDialog = false;
+      next?.();
+    },
+    cancelLeave() {
+      const next = this.pendingRouteNext;
+      this.pendingRouteNext = null;
+      this.showUnsavedDialog = false;
+      next?.(false);
+      this.$nextTick(() => this.dialogInvoker?.focus());
+    },
+    trapLeaveDialogFocus(event) {
+      const controls = [...(this.$refs.leaveDialog?.querySelectorAll('button') || [])];
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    activateLegacyMode() {
+      this.curationMode = 'legacy';
+      if (this.vocabularyLoadError) this.loadError = this.vocabularyLoadError;
+    },
     async loadPhenopacket() {
       this.loading = true;
       this.error = null;
@@ -271,15 +677,23 @@ export default {
         // Backend returns full phenopacket response with metadata
         this.phenopacket = response.data.phenopacket;
 
+        // Legacy records (curation console Task 4, design spec §3.1) may
+        // carry no hnf1bCuration block at all, or a subject with no
+        // alternateIds. Default both defensively so the new v-model
+        // bindings below never throw on a record older than this task.
+        this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+        this.phenopacket.subject = this.phenopacket.subject || {};
+        this.phenopacket.subject.alternateIds = this.phenopacket.subject.alternateIds || [];
+
         // Enable optimistic locking by capturing current revision
         this.revision = response.data.revision;
 
         // Capture state for toast message selection (Wave 7/D.1 §9.2)
-        this.savedRecordState = response.data.state ?? null;
+        this.savedRecordState = response.data.effective_state ?? response.data.state ?? null;
 
         // Load existing publications into the same state the template and
         // submit path use so edits stay round-trippable.
-        this.phenopacket.publications = (this.phenopacket.metaData?.externalReferences || [])
+        this.publications = (this.phenopacket.metaData?.externalReferences || [])
           .filter((ref) => ref.id?.startsWith('PMID:'))
           .map((ref) => ({
             pmid: ref.id.replace('PMID:', ''),
@@ -288,10 +702,17 @@ export default {
         window.logService.info('Phenopacket loaded for editing', {
           phenopacketId: this.phenopacket.id,
           revision: this.revision,
-          publicationsLoaded: this.phenopacket.publications.length,
+          publicationsLoaded: this.publications.length,
         });
+
+        // Re-baseline the unsaved-changes snapshot here too: this method is
+        // also called directly from the "Reload Latest Version" button after
+        // a 409 conflict, which replaces `phenopacket` wholesale without a
+        // remount. Without this, reloading would itself look like an
+        // unsaved change relative to the stale mount-time snapshot.
+        this.captureSnapshot();
       } catch (err) {
-        this.error = 'Failed to load phenopacket: ' + err.message;
+        this.loadError = 'Failed to load phenopacket: ' + err.message;
         window.logService.error('Failed to load phenopacket for editing', {
           error: err.message,
         });
@@ -301,32 +722,50 @@ export default {
     },
 
     addPublication() {
-      this.phenopacket.publications.push({
-        pmid: '',
-      });
+      this.publications.push({ pmid: '' });
+    },
+
+    handleLedgerPublished(result) {
+      this.savedRecordState = result?.effective_state ?? result?.state ?? 'published';
+      if (result?.revision !== undefined) this.revision = result.revision;
+      this.ledgerDirty = false;
     },
 
     removePublication(index) {
-      this.phenopacket.publications.splice(index, 1);
+      this.publications.splice(index, 1);
     },
 
-    buildSubmissionPhenopacket() {
+    // Merges `this.publications` (component-local PMID editor state -- see
+    // the `publications` data() comment) with any non-PMID external
+    // references already on `phenopacket.metaData`. Shared by
+    // buildSubmissionPhenopacket (save payload) and the
+    // phenopacketForCompleteness computed (completeness rail), so an
+    // in-progress PMID the curator hasn't saved yet still counts as filled
+    // there instead of only becoming visible after a save round-trip.
+    mergedExternalReferences() {
       const existingReferences = this.phenopacket.metaData?.externalReferences || [];
       const nonPmidExternalReferences = existingReferences.filter(
         (ref) => !ref.id?.startsWith('PMID:')
       );
-      const pmidExternalReferences = this.phenopacket.publications
+      const pmidExternalReferences = this.publications
         .map((pub) => `${pub.pmid || ''}`.trim())
         .filter(Boolean)
-        .map((pmid) => ({
-          id: `PMID:${pmid}`,
-        }));
+        .map((pmid) => ({ id: `PMID:${pmid}` }));
+
+      return [...nonPmidExternalReferences, ...pmidExternalReferences];
+    },
+
+    buildSubmissionPhenopacket() {
+      // `publications` is destructured out and discarded: it is not a Phenopackets
+      // v2 field, and records saved before this fix may carry it in the loaded
+      // document. `this.publications` (component state) is the source of truth.
+      const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
 
       return {
-        ...this.phenopacket,
+        ...phenopacket,
         metaData: {
-          ...(this.phenopacket.metaData || {}),
-          externalReferences: [...nonPmidExternalReferences, ...pmidExternalReferences],
+          ...(phenopacket.metaData || {}),
+          externalReferences: this.mergedExternalReferences(),
         },
       };
     },
@@ -337,6 +776,17 @@ export default {
       const { valid } = await this.$refs.form.validate();
       if (!valid) {
         this.error = 'Please fix validation errors';
+        return;
+      }
+
+      // The detailed variant editor is a sub-form: its contents reach the
+      // phenopacket only via its own "Save variant" button. Submitting with
+      // something typed there but not committed used to drop it without a
+      // word -- silently discarding curator input is the one failure this
+      // console must not have.
+      if (this.pendingVariantEdit) {
+        this.error =
+          'The variant editor has unsaved changes. Click "Save variant" to keep them, or Cancel to discard them, then save the record.';
         return;
       }
 
@@ -351,6 +801,12 @@ export default {
         this.error = 'Change reason is required for updates (minimum 5 characters)';
         return;
       }
+
+      // Curation console Task 8: refresh curatedAt to the freshest
+      // client-observable timestamp right before building the save payload
+      // (mounted() already stamped it once, but a curator may have spent
+      // real time in the form since then).
+      this.stampCuration();
 
       this.saving = true;
       this.error = null;
@@ -383,6 +839,9 @@ export default {
               ? 'Draft saved — submit for review when ready.'
               : 'Draft updated.';
           window.logService.info('Navigating to detail with save toast', { recordState, toastMsg });
+          // Mark as saved BEFORE navigating so beforeRouteLeave's diff check
+          // doesn't prompt "unsaved changes" on this success redirect.
+          this.justSaved = true;
           // Navigate to detail page using phenopacket_id (not database id)
           this.$router.push({
             path: `/phenopackets/${result.data.phenopacket_id}`,
@@ -400,6 +859,9 @@ export default {
           });
         }
 
+        // Mark as saved BEFORE navigating -- see the comment on the isEditing
+        // branch's push above.
+        this.justSaved = true;
         // Navigate to detail page using phenopacket_id (not database id)
         this.$router.push(`/phenopackets/${result.data.phenopacket_id}`);
       } catch (err) {
@@ -426,7 +888,10 @@ export default {
             status: err.response?.status,
           });
         } else {
-          this.error = 'Failed to save phenopacket: ' + (err.response?.data?.detail || err.message);
+          // formatApiError renders the backend's
+          // {validation_errors: [...]} body; plain concatenation produced
+          // "[object Object]" and threw away every reason the save failed.
+          this.error = `Failed to save phenopacket: ${formatApiError(err, 'Unknown error')}`;
           window.logService.error('Failed to save phenopacket', {
             error: err.message,
             status: err.response?.status,
@@ -436,6 +901,25 @@ export default {
         this.saving = false;
       }
     },
+
+    // CompletenessRail owns none of the CurationSection refs (it only knows
+    // section ids), so it emits @navigate and this view -- which does hold
+    // the refs -- force-expands the target section. Scrolling is handled by
+    // CompletenessRail itself via useAccessibleScroll.
+    onRailNavigate(sectionId) {
+      const sectionRefs = {
+        case: this.$refs.caseSection,
+        variant: this.$refs.variantSection,
+        classification: this.$refs.classificationSection,
+        phenotypes: this.$refs.phenotypesSection,
+        age: this.$refs.ageSection,
+        provenance: this.$refs.provenanceSection,
+      };
+      const section = sectionRefs[sectionId];
+      if (section && typeof section.expand === 'function') {
+        section.expand();
+      }
+    },
   },
 };
 </script>
@@ -443,5 +927,30 @@ export default {
 <style scoped>
 .v-card-title {
   font-weight: 600;
+}
+
+.leave-dialog-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.leave-dialog-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.leave-dialog-card h2,
+.leave-dialog-card p {
+  flex-basis: 100%;
 }
 </style>

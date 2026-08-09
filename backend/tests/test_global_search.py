@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.search.mv_refresh import (
     MVRefreshMiddleware,
     refresh_global_search_index,
@@ -38,7 +39,7 @@ from app.search.services import (
 
 
 @pytest.fixture
-async def search_test_data(db_session: AsyncSession):
+async def search_test_data(db_session: AsyncSession, admin_user):
     """Insert test data for search tests."""
     # Note: We skip gene insertion as it requires a valid genome_id FK reference
     # The existing data in the database should contain genes for search tests
@@ -81,28 +82,35 @@ async def search_test_data(db_session: AsyncSession):
         "metaData": {"externalReferences": [{"id": "PMID:88888"}]},
     }
 
-    # Wave 7 D.1: insert with state='published' so visibility filter passes.
-    # head_published_revision_id requires a revision row — use a CTE to
-    # create both atomically without needing a real actor FK.
-    await db_session.execute(
-        text("""
-        INSERT INTO phenopackets (
-            id, phenopacket_id, phenopacket, subject_id, subject_sex,
-            state, revision
-        )
-        VALUES (
-            gen_random_uuid(), :pid, CAST(:pp AS jsonb), :subj_id, :sex,
-            'published', 1
-        )
-        ON CONFLICT (phenopacket_id) DO NOTHING
-    """),
-        {
-            "pid": "PP_SEARCH_TEST_001",
-            "pp": json.dumps(phenopacket_json),
-            "subj_id": "SEARCH_SUBJ_001",
-            "sex": "FEMALE",
-        },
+    # A published record is constructed in production order: draft row,
+    # immutable published revision, then the head pointer/state promotion.
+    # Directly inserting a published row is intentionally rejected by b9.
+    record = Phenopacket(
+        phenopacket_id="PP_SEARCH_TEST_001",
+        phenopacket=phenopacket_json,
+        subject_id="SEARCH_SUBJ_001",
+        subject_sex="FEMALE",
+        state="draft",
+        revision=1,
+        created_by_id=admin_user.id,
     )
+    db_session.add(record)
+    await db_session.flush()
+    revision = PhenopacketRevision(
+        record_id=record.id,
+        revision_number=1,
+        state="published",
+        content_jsonb=phenopacket_json,
+        change_reason="search test fixture",
+        actor_id=admin_user.id,
+        from_state=None,
+        to_state="published",
+        event_type="created",
+    )
+    db_session.add(revision)
+    await db_session.flush()
+    record.state = "published"
+    record.head_published_revision_id = revision.id
 
     await db_session.commit()
 
@@ -114,15 +122,46 @@ async def search_test_data(db_session: AsyncSession):
 
     # Cleanup
     await db_session.execute(
-        text("DELETE FROM phenopackets WHERE phenopacket_id = 'PP_SEARCH_TEST_001'")
-    )
-    await db_session.execute(
         text("DELETE FROM publication_metadata WHERE pmid = 'PMID:88888'")
     )
     await db_session.commit()
 
     # Refresh MV after cleanup
     await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
+    await db_session.commit()
+
+
+async def _replace_published_head_content(
+    db_session: AsyncSession,
+    record: Phenopacket,
+    content: dict,
+) -> None:
+    """Append a published snapshot for a search fixture without mutation.
+
+    Search tests need controlled public content.  Updating the old head in
+    place would violate the append-only audit contract, so each scenario
+    atomically advances the record's published-head pointer instead.
+    """
+    previous_head = record.head_published_revision_id
+    assert previous_head is not None
+    next_revision = record.revision + 1
+    revision = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=previous_head,
+        revision_number=next_revision,
+        state="published",
+        content_jsonb=content,
+        change_reason="search test snapshot",
+        actor_id=record.created_by_id,
+        from_state="published",
+        to_state="published",
+        event_type="snapshot",
+    )
+    db_session.add(revision)
+    await db_session.flush()
+    record.phenopacket = content
+    record.revision = next_revision
+    record.head_published_revision_id = revision.id
     await db_session.commit()
 
 
@@ -902,18 +941,21 @@ class TestGlobalSearchPhenotypeText:
         self, async_client, db_session: AsyncSession, published_record
     ):
         """A published individual must be findable by its disease term label."""
-        await db_session.execute(
-            text(
-                "UPDATE phenopacket_revisions SET content_jsonb = "
-                "jsonb_set(content_jsonb, '{diseases}', "
-                '\'[{"term": {"id": "MONDO:0011593", '
-                '"label": "Renal cysts and diabetes syndrome"}}]\'::jsonb) '
-                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
-                "WHERE phenopacket_id = :pid)"
-            ),
-            {"pid": published_record.phenopacket_id},
+        await _replace_published_head_content(
+            db_session,
+            published_record,
+            {
+                **published_record.phenopacket,
+                "diseases": [
+                    {
+                        "term": {
+                            "id": "MONDO:0011593",
+                            "label": "Renal cysts and diabetes syndrome",
+                        }
+                    }
+                ],
+            },
         )
-        await db_session.commit()
         await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 
@@ -949,18 +991,21 @@ class TestGlobalSearchPhenotypeText:
         with ``Individual <subject/phenopacket id>`` and include the disease
         label so an LLM/consumer never sees a bare numeric id.
         """
-        await db_session.execute(
-            text(
-                "UPDATE phenopacket_revisions SET content_jsonb = "
-                "jsonb_set(content_jsonb, '{diseases}', "
-                '\'[{"term": {"id": "MONDO:0011593", '
-                '"label": "Renal cysts and diabetes syndrome"}}]\'::jsonb) '
-                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
-                "WHERE phenopacket_id = :pid)"
-            ),
-            {"pid": published_record.phenopacket_id},
+        await _replace_published_head_content(
+            db_session,
+            published_record,
+            {
+                **published_record.phenopacket,
+                "diseases": [
+                    {
+                        "term": {
+                            "id": "MONDO:0011593",
+                            "label": "Renal cysts and diabetes syndrome",
+                        }
+                    }
+                ],
+            },
         )
-        await db_session.commit()
         await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 
@@ -968,9 +1013,7 @@ class TestGlobalSearchPhenotypeText:
             label = await self._mv_label_for(
                 db_session, published_record.phenopacket_id
             )
-            assert label.startswith(f"Individual {published_record.phenopacket_id}"), (
-                label
-            )
+            assert label.startswith("Individual published-subject"), label
             assert "Renal cysts and diabetes syndrome" in label, label
         finally:
             await db_session.execute(
@@ -987,20 +1030,25 @@ class TestGlobalSearchPhenotypeText:
         The label must include the non-excluded phenotypicFeature label and
         must NOT pick the excluded one.
         """
-        await db_session.execute(
-            text(
-                "UPDATE phenopacket_revisions SET content_jsonb = "
-                "jsonb_set(content_jsonb, '{phenotypicFeatures}', "
-                '\'[{"type": {"id": "HP:0002149", '
-                '"label": "Hyperuricemia"}, "excluded": true}, '
-                '{"type": {"id": "HP:0012736", '
-                '"label": "Pancreatic hypoplasia"}}]\'::jsonb) '
-                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
-                "WHERE phenopacket_id = :pid)"
-            ),
-            {"pid": published_record.phenopacket_id},
+        await _replace_published_head_content(
+            db_session,
+            published_record,
+            {
+                **published_record.phenopacket,
+                "phenotypicFeatures": [
+                    {
+                        "type": {"id": "HP:0002149", "label": "Hyperuricemia"},
+                        "excluded": True,
+                    },
+                    {
+                        "type": {
+                            "id": "HP:0012736",
+                            "label": "Pancreatic hypoplasia",
+                        }
+                    },
+                ],
+            },
         )
-        await db_session.commit()
         await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 
@@ -1008,9 +1056,7 @@ class TestGlobalSearchPhenotypeText:
             label = await self._mv_label_for(
                 db_session, published_record.phenopacket_id
             )
-            assert label.startswith(f"Individual {published_record.phenopacket_id}"), (
-                label
-            )
+            assert label.startswith("Individual published-subject"), label
             assert "Pancreatic hypoplasia" in label, label
             assert "Hyperuricemia" not in label, label
         finally:
@@ -1036,7 +1082,7 @@ class TestGlobalSearchPhenotypeText:
             label = await self._mv_label_for(
                 db_session, published_record.phenopacket_id
             )
-            assert label == f"Individual {published_record.phenopacket_id}", label
+            assert label == "Individual published-subject", label
         finally:
             await db_session.execute(
                 text("REFRESH MATERIALIZED VIEW global_search_index")
@@ -1066,20 +1112,25 @@ class TestGlobalSearchPhenotypeText:
         match the ``simple``-config OR-prefix tsquery the route emits (the same
         constraint that makes the sibling test use "renal", not "cysts").
         """
-        await db_session.execute(
-            text(
-                "UPDATE phenopacket_revisions SET content_jsonb = "
-                "jsonb_set(content_jsonb, '{phenotypicFeatures}', "
-                '\'[{"type": {"id": "HP:0012736", '
-                '"label": "Pancreatic hypoplasia"}}, '
-                '{"type": {"id": "HP:0002149", '
-                '"label": "Hyperuricemia"}, "excluded": true}]\'::jsonb) '
-                "WHERE id = (SELECT head_published_revision_id FROM phenopackets "
-                "WHERE phenopacket_id = :pid)"
-            ),
-            {"pid": published_record.phenopacket_id},
+        await _replace_published_head_content(
+            db_session,
+            published_record,
+            {
+                **published_record.phenopacket,
+                "phenotypicFeatures": [
+                    {
+                        "type": {
+                            "id": "HP:0012736",
+                            "label": "Pancreatic hypoplasia",
+                        }
+                    },
+                    {
+                        "type": {"id": "HP:0002149", "label": "Hyperuricemia"},
+                        "excluded": True,
+                    },
+                ],
+            },
         )
-        await db_session.commit()
         await db_session.execute(text("REFRESH MATERIALIZED VIEW global_search_index"))
         await db_session.commit()
 

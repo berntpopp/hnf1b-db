@@ -325,9 +325,10 @@
 <script>
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { getPhenopacket, deletePhenopacket } from '@/api';
+import { getPhenopacket, deletePhenopacket, exportPhenopacket } from '@/api';
 import { useAuthStore } from '@/stores/authStore';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
+import { readEncounterAge, readEncounterGestationalAge, formatGestationalAge } from '@/utils/age';
 import SubjectCard from '@/components/phenopacket/SubjectCard.vue';
 import PhenotypicFeaturesCard from '@/components/phenopacket/PhenotypicFeaturesCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
@@ -446,12 +447,16 @@ export default {
       const subject = this.phenopacket?.subject;
       if (!subject) return 'N/A';
 
-      // Try timeAtLastEncounter first (ISO8601 duration format)
-      if (subject.timeAtLastEncounter?.age?.iso8601duration) {
-        return this.formatISO8601Duration(subject.timeAtLastEncounter.age.iso8601duration);
-      }
+      const encounterAge = readEncounterAge(subject);
+      if (encounterAge) return this.formatISO8601Duration(encounterAge);
 
-      // Try vitalStatus.timeOfDeath if deceased
+      // Curation console Task 9: a fetus's timeAtLastEncounter carries
+      // {gestationalAge: {weeks, days}} instead of a duration -- see
+      // utils/age.js for why readEncounterAge alone can't read this shape.
+      const gestationalAge = readEncounterGestationalAge(subject);
+      if (gestationalAge) return formatGestationalAge(gestationalAge);
+
+      // Deceased individuals may record only an age at death.
       if (subject.vitalStatus?.timeOfDeath?.age?.iso8601duration) {
         return this.formatISO8601Duration(subject.vitalStatus.timeOfDeath.age.iso8601duration);
       }
@@ -692,17 +697,18 @@ export default {
       }
     },
 
-    downloadJSON() {
+    async downloadJSON() {
       if (!this.phenopacket) return;
 
-      const dataStr = JSON.stringify(this.phenopacket, null, 2);
+      const response = await exportPhenopacket(this.phenopacket.id);
+      const dataStr = JSON.stringify(response.data, null, 2);
       const fileSizeKB = (new Blob([dataStr]).size / 1024).toFixed(2);
 
       window.logService.debug('Preparing phenopacket JSON download', {
         phenopacketId: this.phenopacket.id,
         fileName: `${this.phenopacket.id}.json`,
         fileSizeKB: fileSizeKB,
-        dataStructure: Object.keys(this.phenopacket),
+        dataStructure: Object.keys(response.data),
       });
 
       window.logService.info('Phenopacket JSON downloaded', {
@@ -721,23 +727,20 @@ export default {
       window.URL.revokeObjectURL(url);
     },
 
-    copyToClipboard() {
+    async copyToClipboard() {
       if (!this.phenopacket) return;
 
-      const jsonString = JSON.stringify(this.phenopacket, null, 2);
-      navigator.clipboard
-        .writeText(jsonString)
-        .then(() => {
-          window.logService.info('Phenopacket JSON copied to clipboard', {
-            phenopacketId: this.phenopacket.id,
-          });
-          // Could add a toast notification here
-        })
-        .catch((err) => {
-          window.logService.error('Failed to copy JSON to clipboard', {
-            error: err.message,
-          });
+      try {
+        const response = await exportPhenopacket(this.phenopacket.id);
+        await navigator.clipboard.writeText(JSON.stringify(response.data, null, 2));
+        window.logService.info('Phenopacket JSON copied to clipboard', {
+          phenopacketId: this.phenopacket.id,
         });
+      } catch (err) {
+        window.logService.error('Failed to copy server-redacted JSON to clipboard', {
+          error: err.message,
+        });
+      }
     },
 
     navigateToEdit() {

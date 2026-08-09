@@ -1,6 +1,6 @@
 """JSON Schema validation for Phenopackets v2."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from jsonschema import Draft7Validator
 
@@ -19,7 +19,7 @@ class SchemaValidator:
         Returns:
             GA4GH Phenopackets v2 JSON schema (camelCase format)
         """
-        return {
+        schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
             "required": ["id", "subject", "metaData"],
@@ -88,6 +88,54 @@ class SchemaValidator:
                         "externalReferences": {"type": "array"},
                     },
                 },
+                "hnf1bCuration": {
+                    "type": "object",
+                    "description": (
+                        "HNF1B-DB curated case-level facts. Namespaced and "
+                        "explicitly NOT GA4GH content: conformant export strips "
+                        "it. Stored inside the phenopacket so it inherits "
+                        "revisioning, audit and the optimistic lock. Values are "
+                        "checked against reference tables by the async domain "
+                        "validator, not here."
+                    ),
+                    "additionalProperties": False,
+                    "properties": {
+                        "cohort": {"type": "string"},
+                        "familyHistory": {"type": "string"},
+                        "detectionMethod": {"type": "string"},
+                        "curatedBy": {"type": "string"},
+                        "curatedAt": {"type": "string"},
+                        "publicationType": {"type": "string"},
+                        "classificationSystem": {"type": "string"},
+                        "classificationDate": {"type": "string"},
+                        "classificationComment": {"type": "string"},
+                        "caseComment": {"type": "string"},
+                        "problematic": {"type": "string"},
+                        "duplicateCheck": {"type": "string"},
+                        "schemaVersion": {"type": "string"},
+                        "definitionsVersion": {"type": "string"},
+                        "sourceSubjectId": {"type": "string"},
+                        "observationsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/reportObservation"
+                            },
+                        },
+                        "correctionsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/curationCorrection"
+                            },
+                        },
+                        "resolutionsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/projectionResolution"
+                            },
+                        },
+                        "projection": {"$ref": "#/definitions/projectionMetadata"},
+                    },
+                },
             },
             "definitions": {
                 "ontologyClass": {
@@ -96,6 +144,144 @@ class SchemaValidator:
                     "properties": {
                         "id": {"type": "string"},
                         "label": {"type": "string"},
+                    },
+                },
+                "sourceManifestRef": {
+                    "type": "object",
+                    "required": ["provider", "datasetId", "sheet", "manifestSha256"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "provider": {"type": "string"},
+                        "datasetId": {"type": "string"},
+                        "sheet": {"type": "string"},
+                        "rowNumber": {"type": ["integer", "null"]},
+                        "rowHmacSha256": {"type": ["string", "null"]},
+                        "manifestSha256": {"type": "string"},
+                        "importRunId": {"type": ["string", "null"]},
+                        "importedAt": {"type": ["string", "null"]},
+                    },
+                },
+                "subjectObservation": {
+                    "type": "object",
+                    "required": ["individualId", "sourceSubjectId", "reportId"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "individualId": {"type": "string"},
+                        "sourceSubjectId": {"type": "string"},
+                        "reportId": {"type": "string"},
+                        "individualIdentifier": {
+                            "anyOf": [
+                                {"$ref": "#/definitions/observedValue"},
+                                {"type": "null"},
+                            ]
+                        },
+                        "sex": {
+                            "anyOf": [
+                                {"$ref": "#/definitions/observedValue"},
+                                {"type": "null"},
+                            ]
+                        },
+                    },
+                },
+                "observedValue": {
+                    "type": "object",
+                    "required": ["raw", "sourceStatus"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "raw": {"type": "string"},
+                        "sourceStatus": {
+                            "enum": [
+                                "stated",
+                                "not_reported",
+                                "not_applicable",
+                                "unknown",
+                                "blank",
+                            ]
+                        },
+                        "value": {},
+                        "correctionIds": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                "reportObservation": {
+                    "type": "object",
+                    "required": ["observationId", "origin", "source", "identifiers"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "observationId": {"type": "string"},
+                        "origin": {"type": "string"},
+                        "source": {"$ref": "#/definitions/sourceManifestRef"},
+                        "identifiers": {"$ref": "#/definitions/subjectObservation"},
+                        "publication": {"type": ["object", "null"]},
+                        "case": {"type": ["object", "null"]},
+                        "ages": {"type": ["object", "null"]},
+                        "variant": {"type": ["object", "null"]},
+                        "classification": {"type": ["object", "null"]},
+                        "diseases": {"type": "array", "items": {"type": "object"}},
+                        "phenotypes": {"type": "array", "items": {"type": "object"}},
+                        "sourceReview": {"type": ["object", "null"]},
+                        "notes": {"type": ["object", "null"]},
+                    },
+                },
+                "curationCorrection": {
+                    "type": "object",
+                    "required": [
+                        "correctionId",
+                        "jsonPointer",
+                        "preimage",
+                        "postimage",
+                        "sourceManifestSha256",
+                        "reason",
+                        "actorId",
+                        "createdAt",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "correctionId": {"type": "string"},
+                        "jsonPointer": {"type": "string"},
+                        "preimage": {},
+                        "postimage": {},
+                        "sourceManifestSha256": {"type": "string"},
+                        "reason": {"type": "string"},
+                        "actorId": {"type": "integer"},
+                        "createdAt": {"type": "string"},
+                        "supersedesCorrectionId": {"type": ["string", "null"]},
+                    },
+                },
+                "projectionResolution": {
+                    "type": "object",
+                    "required": [
+                        "resolutionId",
+                        "conflictKey",
+                        "candidateSetDigest",
+                        "strategy",
+                        "reason",
+                        "resolvedByUserId",
+                        "resolvedAt",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "resolutionId": {"type": "string"},
+                        "conflictKey": {"type": "string"},
+                        "candidateSetDigest": {"type": "string"},
+                        "strategy": {"type": "string"},
+                        "selectedObservationIds": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "resolvedValue": {},
+                        "reason": {"type": "string"},
+                        "resolvedByUserId": {"type": "integer"},
+                        "resolvedAt": {"type": "string"},
+                    },
+                },
+                "projectionMetadata": {
+                    "type": "object",
+                    "required": ["algorithmVersion"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "algorithmVersion": {"type": "string"},
+                        "observationsDigest": {"type": ["string", "null"]},
+                        "outputDigest": {"type": ["string", "null"]},
                     },
                 },
                 "phenotypicFeature": {
@@ -149,7 +335,14 @@ class SchemaValidator:
                 },
                 "interpretation": {
                     "type": "object",
-                    "required": ["id", "progressStatus"],
+                    # "id" is deliberately NOT required: 365 of the 923 corpus
+                    # records have no id on their sole interpretation (measured
+                    # 2026-07-30). GA4GH's Interpretation.id is a plain string
+                    # field with no cardinality constraint of its own; this
+                    # schema was stricter than the corpus it validates. See
+                    # docs/adr/0003-ga4gh-conformance-debt.md — this is not one
+                    # of D1-D5, just an overly strict schema, so no ADR entry.
+                    "required": ["progressStatus"],
                     "properties": {
                         "id": {"type": "string"},
                         "progressStatus": {
@@ -204,7 +397,15 @@ class SchemaValidator:
                                         "variation": {"type": "object"},
                                         "label": {"type": "string"},
                                         "geneContext": {"type": "object"},
-                                        "moleculeContext": {"type": "string"},
+                                        "moleculeContext": {
+                                            "type": "string",
+                                            "enum": [
+                                                "unspecified_molecule_context",
+                                                "genomic",
+                                                "transcript",
+                                                "protein",
+                                            ],
+                                        },
                                         "allelicState": {
                                             "$ref": "#/definitions/ontologyClass"
                                         },
@@ -260,7 +461,19 @@ class SchemaValidator:
                 "timeElement": {
                     "type": "object",
                     "properties": {
-                        "age": {"type": "object"},
+                        # GA4GH's conformant shape is an object wrapping
+                        # iso8601duration, e.g. {"iso8601duration": "P13Y"}.
+                        # 672 phenotypicFeatures[].onset.age occurrences across
+                        # the corpus (measured 2026-07-30) instead store a bare
+                        # ISO-8601 duration string, e.g. "P13Y" directly. Accept
+                        # both shapes, matching how the frontend already reads
+                        # age (frontend/src/utils/age.js::readEncounterAge).
+                        # diseases[].onset.age never uses the bare-string form
+                        # in the corpus (216 uses, all object-shaped) and
+                        # subject.timeAtLastEncounter is validated only as
+                        # "type": "object" below (not through this $ref), so
+                        # neither needed a matching change.
+                        "age": {"type": ["object", "string"]},
                         "ageRange": {"type": "object"},
                         "ontologyClass": {"$ref": "#/definitions/ontologyClass"},
                         "timestamp": {"type": "string"},
@@ -277,6 +490,34 @@ class SchemaValidator:
                 },
             },
         }
+        # The curation extension is a closed persisted contract, not a loose
+        # JSON blob. Reuse Pydantic's schema so direct Draft7 validation and
+        # runtime model validation accept exactly the same fields (including
+        # nullable correction pre/post-images).
+        from app.phenopackets.curation.models import Hnf1bCurationProfile
+
+        properties = cast(Dict[str, Any], schema["properties"])
+        legacy_curation_schema = properties["hnf1bCuration"]
+        curation_schema = Hnf1bCurationProfile.model_json_schema(
+            by_alias=True, ref_template="#/$defs/{model}"
+        )
+        curation_schema["properties"]["schemaVersion"] = {"const": "2.0"}
+        curation_schema["required"] = [
+            *curation_schema.get("required", []),
+            "schemaVersion",
+        ]
+        legacy_curation_schema = {
+            **legacy_curation_schema,
+            "not": {
+                "properties": {"schemaVersion": {"const": "2.0"}},
+                "required": ["schemaVersion"],
+            },
+        }
+        properties["hnf1bCuration"] = {
+            "anyOf": [legacy_curation_schema, curation_schema]
+        }
+        schema["$defs"] = curation_schema.pop("$defs", {})
+        return schema
 
     def validate(self, phenopacket: Dict[str, Any]) -> List[str]:
         """Validate a phenopacket against the JSON schema.
@@ -288,9 +529,51 @@ class SchemaValidator:
             List of validation error messages (empty if valid)
         """
         errors = []
-        for error in self.validator.iter_errors(phenopacket):
-            error_path = ".".join(str(p) for p in error.path)
-            errors.append(f"{error_path}: {error.message}")
+        curation = phenopacket.get("hnf1bCuration")
+        if (
+            isinstance(curation, dict)
+            and "observationsById" in curation
+            and curation.get("schemaVersion") != "2.0"
+        ):
+            errors.append(
+                "hnf1bCuration: source observations require schemaVersion 2.0"
+            )
+        if isinstance(curation, dict) and curation.get("schemaVersion") == "2.0":
+            from pydantic import ValidationError
+
+            from app.phenopackets.curation.models import Hnf1bCurationProfile
+
+            try:
+                Hnf1bCurationProfile.model_validate(curation)
+            except ValidationError as error:
+                errors.extend(
+                    f"hnf1bCuration.{item['loc']}: {item['msg']}"
+                    for item in error.errors()
+                )
+            else:
+                from app.phenopackets.curation.adapters import (
+                    CurationProjectionError,
+                    canonicalize_curation_document,
+                )
+
+                try:
+                    canonical = canonicalize_curation_document(phenopacket)
+                    if any(
+                        field in phenopacket
+                        and phenopacket.get(field) != canonical.get(field)
+                        for field in (
+                            "subject",
+                            "phenotypicFeatures",
+                            "diseases",
+                            "interpretations",
+                        )
+                    ):
+                        errors.append("hnf1bCuration: canonical projection mismatch")
+                except CurationProjectionError as error:
+                    errors.append(f"hnf1bCuration: {error}")
+        for schema_error in self.validator.iter_errors(phenopacket):
+            error_path = ".".join(str(p) for p in schema_error.path)
+            errors.append(f"{error_path}: {schema_error.message}")
         return errors
 
     def is_valid(self, phenopacket: Dict[str, Any]) -> bool:
@@ -302,7 +585,10 @@ class SchemaValidator:
         Returns:
             True if valid, False otherwise
         """
-        return self.validator.is_valid(phenopacket)
+        # `validate()` first applies the closed Pydantic source-ledger contract;
+        # using Draft7Validator directly here used to let a partial imported
+        # observation pass through production write paths.
+        return not self.validate(phenopacket)
 
     def validate_sex(self, sex: str) -> bool:
         """Validate sex value against allowed values.
@@ -326,11 +612,10 @@ class SchemaValidator:
             True if valid interpretation status
         """
         valid_statuses = [
-            "UNKNOWN",
-            "PATHOGENIC",
-            "LIKELY_PATHOGENIC",
-            "UNCERTAIN_SIGNIFICANCE",
-            "LIKELY_BENIGN",
-            "BENIGN",
+            "UNKNOWN_STATUS",
+            "REJECTED",
+            "CANDIDATE",
+            "CONTRIBUTORY",
+            "CAUSATIVE",
         ]
         return status in valid_statuses

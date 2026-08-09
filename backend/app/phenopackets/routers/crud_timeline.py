@@ -123,16 +123,142 @@ def _build_evidence_list(feature: Dict[str, Any]) -> List[Dict[str, Any]]:
     return evidence_list
 
 
+# Category membership, by exact HPO id -- not substring matching. Every id
+# below was resolved live against https://ontology.jax.org/api/hp/terms/{id}
+# (field ``name``) before being assigned; none were carried over from a
+# previous comment or inferred from numeric proximity. The full id -> name
+# resolution log lives in
+# .superpowers/sdd/2026-07-30-ontology-data-quality/task-timeline-report.md.
+#
+# Built from a frequency count of every distinct stored
+# ``phenotypicFeatures[].type.id`` in the dev corpus (36 distinct ids). 30 of
+# them are bucketed below; the remaining 6 fall to "other" **deliberately**,
+# because they are extrarenal syndromic findings with no organ bucket here:
+# HP:0001622 premature birth (153), HP:0004322 short stature (151),
+# HP:0001999 abnormal facial shape (139), HP:0000478 abnormality of the eye
+# (109), HP:0033127 abnormality of the musculoskeletal system (104),
+# HP:0001627 abnormal heart morphology (83). "Other" is the right answer for
+# those; adding a bucket for them is a product decision, not a defect fix.
+#
+# A handful of ids below (HP:0000077, HP:0000080, HP:0000119, HP:0003111)
+# have zero stored occurrences today but are kept for parity with the
+# frontend's ``getOrganSystem`` (frontend/src/utils/ageParser.js) and because
+# the previous test suite already pinned them.
+
+_RENAL_IDS = frozenset(
+    {
+        "HP:0000107",  # Renal cyst
+        "HP:0000003",  # Multicystic kidney dysplasia
+        "HP:0000122",  # Unilateral renal agenesis
+        "HP:0000089",  # Renal hypoplasia
+        "HP:0033132",  # Renal cortical hyperechogenicity
+        # Abnormality of the urinary system -- urinary tract, not genital.
+        # The substring match this replaces mis-bucketed it as "genital"
+        # (329 stored occurrences); the frontend made and then corrected the
+        # identical mistake in ageParser.js (commits be491ca, dd80641), so
+        # this keeps backend and frontend agreeing on the same id.
+        "HP:0000079",
+        "HP:0012210",  # Abnormal renal morphology
+        "HP:0012622",  # Chronic kidney disease
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0100611",  # Multiple glomerular cysts
+        "HP:0000077",  # Abnormality of the kidney (not in current corpus)
+        # Abnormality of the genitourinary system -- genuinely ambiguous,
+        # spans both renal and genital tracts. Bucketed as renal to agree
+        # with the frontend's getOrganSystem, which classifies it renal via
+        # its 77-140 numeric range (it is not carved out the way HP:0000078
+        # / HP:0000080 are). Not in the current corpus.
+        "HP:0000119",
+        # Oligomeganephronia. HPO has no term for it, so the corpus stores the
+        # Orphanet one (75 occurrences) -- the same id the kidney-morphology
+        # query filters on (clinical_queries.py::MORPHOLOGY_TERM_LABELS). It is
+        # unambiguously a renal finding; leaving it out bucketed all 75 as
+        # "other". Non-HPO ids are legitimate here: this set is matched by
+        # exact id, and nothing about the bucket logic requires an HP prefix.
+        "ORPHA:2260",
+    }
+)
+
+_GENITAL_IDS = frozenset(
+    {
+        "HP:0000078",  # Abnormality of the genital system
+        "HP:0000080",  # Abnormality of reproductive system physiology
+        #                 (not in current corpus)
+    }
+)
+
+_DIABETES_IDS = frozenset(
+    {
+        "HP:0004904",  # Maturity-onset diabetes of the young
+        # Pancreatic hypoplasia / exocrine pancreatic insufficiency are
+        # grouped into the same bucket as MODY: in HNF1B disease biology all
+        # three are manifestations of one underlying pancreatic
+        # developmental defect, not independent findings.
+        "HP:0002594",  # Pancreatic hypoplasia
+        "HP:0001738",  # Exocrine pancreatic insufficiency
+    }
+)
+
+_METABOLIC_IDS = frozenset(
+    {
+        # Abnormal circulating electrolyte concentration -- an
+        # electrolyte/metabolic lab finding, not itself a renal structural
+        # or functional diagnosis. The substring match this replaces put it
+        # in "renal"; not in the current corpus.
+        "HP:0003111",
+        "HP:0002149",  # Hyperuricemia
+        "HP:0002917",  # Hypomagnesemia
+        "HP:0002900",  # Hypokalemia
+        "HP:0000843",  # Hyperparathyroidism (calcium/phosphate metabolism)
+        "HP:0001997",  # Gout (urate metabolism/deposition disorder)
+    }
+)
+
+_NEURO_IDS = frozenset(
+    {
+        "HP:0012758",  # Neurodevelopmental delay
+        "HP:0000708",  # Atypical behavior
+        "HP:0001250",  # Seizure
+        "HP:0012443",  # Abnormal brain morphology
+    }
+)
+
+_HEPATIC_IDS = frozenset(
+    {
+        "HP:0002910",  # Elevated circulating hepatic transaminase
+        #                 concentration
+        "HP:0031865",  # Abnormal liver physiology
+    }
+)
+
+
 def _categorise_feature(hpo_id: Optional[str]) -> str:
-    """Bucket a feature into a coarse category for the timeline UI."""
+    """Bucket a feature into a coarse category for the timeline UI.
+
+    Uses exact set membership, not substring matching -- ``"HP:0000079" in
+    hpo_id`` is a fragile test on the id *string* and a latent source of
+    false positives/negatives. See the module-level comment above the
+    category sets for how each id was resolved and why it landed where it
+    did.
+    """
     if not hpo_id:
         return "other"
-    if any(x in hpo_id for x in ["HP:0000107", "HP:0003111"]):
+    if hpo_id in _RENAL_IDS:
         return "renal"
-    if "HP:0004904" in hpo_id:
-        return "diabetes"
-    if "HP:0000079" in hpo_id or "HP:0000119" in hpo_id:
+    if hpo_id in _GENITAL_IDS:
         return "genital"
+    if hpo_id in _DIABETES_IDS:
+        return "diabetes"
+    if hpo_id in _METABOLIC_IDS:
+        return "metabolic"
+    if hpo_id in _NEURO_IDS:
+        return "neuro"
+    if hpo_id in _HEPATIC_IDS:
+        return "hepatic"
     return "other"
 
 

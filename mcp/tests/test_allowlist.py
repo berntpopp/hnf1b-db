@@ -27,6 +27,13 @@ def test_excluded_side_effecting():
     assert not is_allowed("/auth/login")
 
 
+def test_curation_ledger_paths_are_never_exposed_to_mcp():
+    """MCP consumes the canonical individual projection, not private reports."""
+    assert not is_allowed("/phenopackets/HNF1B-001/curation")
+    assert not is_allowed("/phenopackets/HNF1B-001/curation/preview")
+    assert not is_allowed("/phenopackets/HNF1B-001/reports/report-1")
+
+
 def test_assert_raises():
     with pytest.raises(PermissionError):
         assert_allowed("/admin/sync")

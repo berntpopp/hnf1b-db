@@ -1,0 +1,1146 @@
+# Source: HNF1B_DataCuration.xlsx sha256=0fcc5362148085ea0c55b682836c8f4ecef2b5be7f88a9038409f94d8a5061ec
+# Live source: Google Sheet 1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw
+# Built by scripts/build_laterality_fixture.py -- see that script's
+# docstring for the row-resolution rules. De-identified per ADR 0003:
+# individual_id, phenotype_column, hpo_id, laterality_value only.
+individual_id,phenotype_column,hpo_id,laterality_value
+1,Hyperechogenicity,HP:0033132,bilateral
+2,RenalCysts,HP:0000107,unilateral left
+4,RenalCysts,HP:0000107,bilateral
+4,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+5,RenalCysts,HP:0000107,bilateral
+6,RenalCysts,HP:0000107,bilateral
+7,RenalCysts,HP:0000107,bilateral
+8,RenalCysts,HP:0000107,bilateral
+9,RenalCysts,HP:0000107,bilateral
+10,RenalCysts,HP:0000107,bilateral
+11,RenalCysts,HP:0000107,bilateral
+12,RenalCysts,HP:0000107,bilateral
+13,RenalCysts,HP:0000107,bilateral
+14,RenalCysts,HP:0000107,bilateral
+15,RenalHypoplasia,HP:0000089,unilateral left
+15,SolitaryKidney,HP:0000122,unilateral right
+16,RenalHypoplasia,HP:0000089,unilateral right
+16,SolitaryKidney,HP:0000122,unilateral left
+16,UrinaryTractMalformation,HP:0000079,bilateral
+18,RenalCysts,HP:0000107,unilateral left
+19,RenalCysts,HP:0000107,unilateral left
+20,Hyperechogenicity,HP:0033132,bilateral
+21,Hyperechogenicity,HP:0033132,bilateral
+21,RenalCysts,HP:0000107,unilateral right
+22,Hyperechogenicity,HP:0033132,bilateral
+24,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+25,Hyperechogenicity,HP:0033132,bilateral
+25,RenalCysts,HP:0000107,bilateral
+25,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+26,Hyperechogenicity,HP:0033132,unilateral left
+26,RenalCysts,HP:0000107,unilateral left
+26,MulticysticDysplasticKidney,HP:0000003,unilateral right
+27,RenalCysts,HP:0000107,bilateral
+28,RenalCysts,HP:0000107,bilateral
+30,MulticysticDysplasticKidney,HP:0000003,bilateral
+31,RenalCysts,HP:0000107,bilateral
+33,MulticysticDysplasticKidney,HP:0000003,unilateral left
+33,SolitaryKidney,HP:0000122,unilateral left
+34,MulticysticDysplasticKidney,HP:0000003,unilateral left
+35,Hyperechogenicity,HP:0033132,bilateral
+36,Hyperechogenicity,HP:0033132,bilateral
+37,Hyperechogenicity,HP:0033132,bilateral
+38,SolitaryKidney,HP:0000122,unilateral right
+39,Hyperechogenicity,HP:0033132,bilateral
+39,RenalCysts,HP:0000107,bilateral
+39,MulticysticDysplasticKidney,HP:0000003,bilateral
+40,RenalCysts,HP:0000107,unilateral left
+40,RenalHypoplasia,HP:0000089,unilateral right
+41,RenalCysts,HP:0000107,bilateral
+43,RenalCysts,HP:0000107,bilateral
+44,RenalCysts,HP:0000107,bilateral
+45,RenalCysts,HP:0000107,bilateral
+45,MulticysticDysplasticKidney,HP:0000003,bilateral
+45,RenalHypoplasia,HP:0000089,bilateral
+46,RenalCysts,HP:0000107,bilateral
+47,Hyperechogenicity,HP:0033132,bilateral
+47,MulticysticDysplasticKidney,HP:0000003,bilateral
+52,MulticysticDysplasticKidney,HP:0000003,bilateral
+52,RenalHypoplasia,HP:0000089,bilateral
+54,RenalHypoplasia,HP:0000089,bilateral
+56,Hyperechogenicity,HP:0033132,bilateral
+59,RenalCysts,HP:0000107,bilateral
+62,Hyperechogenicity,HP:0033132,bilateral
+62,RenalCysts,HP:0000107,unilateral unspecified
+63,RenalCysts,HP:0000107,bilateral
+64,Hyperechogenicity,HP:0033132,bilateral
+64,RenalCysts,HP:0000107,unilateral left
+64,SolitaryKidney,HP:0000122,unilateral left
+65,RenalCysts,HP:0000107,bilateral
+65,RenalHypoplasia,HP:0000089,bilateral
+77,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+77,SolitaryKidney,HP:0000122,unilateral unspecified
+83,RenalCysts,HP:0000107,unilateral right
+83,MulticysticDysplasticKidney,HP:0000003,unilateral left
+84,RenalCysts,HP:0000107,bilateral
+85,MulticysticDysplasticKidney,HP:0000003,unilateral right
+85,RenalHypoplasia,HP:0000089,unilateral left
+86,Hyperechogenicity,HP:0033132,bilateral
+86,RenalCysts,HP:0000107,bilateral
+86,MulticysticDysplasticKidney,HP:0000003,bilateral
+86,RenalHypoplasia,HP:0000089,bilateral
+87,RenalCysts,HP:0000107,bilateral
+88,RenalCysts,HP:0000107,bilateral
+90,SolitaryKidney,HP:0000122,unilateral left
+90,UrinaryTractMalformation,HP:0000079,unilateral left
+91,RenalCysts,HP:0000107,bilateral
+91,MulticysticDysplasticKidney,HP:0000003,bilateral
+91,UrinaryTractMalformation,HP:0000079,bilateral
+92,RenalCysts,HP:0000107,bilateral
+92,MulticysticDysplasticKidney,HP:0000003,bilateral
+93,RenalCysts,HP:0000107,bilateral
+93,MulticysticDysplasticKidney,HP:0000003,bilateral
+93,RenalHypoplasia,HP:0000089,bilateral
+94,RenalCysts,HP:0000107,bilateral
+94,MulticysticDysplasticKidney,HP:0000003,bilateral
+94,RenalHypoplasia,HP:0000089,bilateral
+95,RenalCysts,HP:0000107,bilateral
+95,MulticysticDysplasticKidney,HP:0000003,bilateral
+99,RenalCysts,HP:0000107,unilateral unspecified
+100,RenalCysts,HP:0000107,unilateral unspecified
+100,SolitaryKidney,HP:0000122,unilateral unspecified
+100,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+101,RenalHypoplasia,HP:0000089,unilateral left
+102,RenalCysts,HP:0000107,unilateral left
+102,RenalHypoplasia,HP:0000089,unilateral right
+103,RenalCysts,HP:0000107,unilateral left
+103,RenalHypoplasia,HP:0000089,unilateral right
+105,Hyperechogenicity,HP:0033132,unilateral unspecified
+105,SolitaryKidney,HP:0000122,unilateral unspecified
+106,RenalCysts,HP:0000107,unilateral unspecified
+106,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+109,Hyperechogenicity,HP:0033132,bilateral
+109,RenalHypoplasia,HP:0000089,bilateral
+110,RenalCysts,HP:0000107,bilateral
+111,RenalCysts,HP:0000107,bilateral
+111,UrinaryTractMalformation,HP:0000079,bilateral
+112,SolitaryKidney,HP:0000122,unilateral unspecified
+113,RenalCysts,HP:0000107,bilateral
+114,Hyperechogenicity,HP:0033132,bilateral
+115,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+115,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+116,Hyperechogenicity,HP:0033132,unilateral unspecified
+116,RenalHypoplasia,HP:0000089,unilateral unspecified
+116,SolitaryKidney,HP:0000122,unilateral unspecified
+117,Hyperechogenicity,HP:0033132,bilateral
+117,RenalCysts,HP:0000107,bilateral
+117,RenalHypoplasia,HP:0000089,bilateral
+117,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+118,Hyperechogenicity,HP:0033132,bilateral
+118,RenalCysts,HP:0000107,bilateral
+119,RenalCysts,HP:0000107,bilateral
+120,MulticysticDysplasticKidney,HP:0000003,bilateral
+121,RenalCysts,HP:0000107,bilateral
+121,UrinaryTractMalformation,HP:0000079,bilateral
+124,MulticysticDysplasticKidney,HP:0000003,bilateral
+125,Hyperechogenicity,HP:0033132,bilateral
+125,RenalCysts,HP:0000107,bilateral
+126,RenalCysts,HP:0000107,bilateral
+127,Hyperechogenicity,HP:0033132,bilateral
+127,RenalCysts,HP:0000107,unilateral unspecified
+127,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+127,RenalHypoplasia,HP:0000089,unilateral unspecified
+127,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+128,Hyperechogenicity,HP:0033132,bilateral
+128,RenalCysts,HP:0000107,bilateral
+129,Hyperechogenicity,HP:0033132,unilateral unspecified
+129,RenalCysts,HP:0000107,unilateral unspecified
+129,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+130,RenalCysts,HP:0000107,bilateral
+130,RenalHypoplasia,HP:0000089,unilateral left
+131,Hyperechogenicity,HP:0033132,unilateral left
+131,RenalCysts,HP:0000107,unilateral left
+131,SolitaryKidney,HP:0000122,unilateral left
+133,Hyperechogenicity,HP:0033132,unilateral right
+133,MulticysticDysplasticKidney,HP:0000003,unilateral left
+134,MulticysticDysplasticKidney,HP:0000003,bilateral
+135,MulticysticDysplasticKidney,HP:0000003,bilateral
+135,UrinaryTractMalformation,HP:0000079,bilateral
+136,RenalCysts,HP:0000107,unilateral left
+136,MulticysticDysplasticKidney,HP:0000003,bilateral
+136,SolitaryKidney,HP:0000122,unilateral left
+136,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+137,MulticysticDysplasticKidney,HP:0000003,bilateral
+138,RenalCysts,HP:0000107,bilateral
+139,UrinaryTractMalformation,HP:0000079,bilateral
+140,RenalCysts,HP:0000107,bilateral
+140,UrinaryTractMalformation,HP:0000079,unilateral right
+142,MulticysticDysplasticKidney,HP:0000003,bilateral
+143,RenalCysts,HP:0000107,unilateral right
+144,Hyperechogenicity,HP:0033132,unilateral left
+144,MulticysticDysplasticKidney,HP:0000003,unilateral right
+147,RenalCysts,HP:0000107,bilateral
+147,RenalHypoplasia,HP:0000089,bilateral
+148,UrinaryTractMalformation,HP:0000079,bilateral
+156,RenalCysts,HP:0000107,bilateral
+158,RenalCysts,HP:0000107,bilateral
+159,Hyperechogenicity,HP:0033132,bilateral
+159,RenalCysts,HP:0000107,bilateral
+159,MulticysticDysplasticKidney,HP:0000003,bilateral
+160,RenalCysts,HP:0000107,bilateral
+162,Hyperechogenicity,HP:0033132,bilateral
+162,RenalCysts,HP:0000107,bilateral
+163,Hyperechogenicity,HP:0033132,bilateral
+163,RenalCysts,HP:0000107,bilateral
+164,Hyperechogenicity,HP:0033132,bilateral
+164,RenalCysts,HP:0000107,bilateral
+166,Hyperechogenicity,HP:0033132,bilateral
+166,RenalCysts,HP:0000107,bilateral
+167,Hyperechogenicity,HP:0033132,bilateral
+167,RenalCysts,HP:0000107,bilateral
+168,RenalCysts,HP:0000107,unilateral right
+168,MulticysticDysplasticKidney,HP:0000003,unilateral left
+169,Hyperechogenicity,HP:0033132,unilateral right
+169,MulticysticDysplasticKidney,HP:0000003,unilateral left
+169,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+172,Hyperechogenicity,HP:0033132,bilateral
+172,MulticysticDysplasticKidney,HP:0000003,bilateral
+184,Hyperechogenicity,HP:0033132,bilateral
+184,RenalCysts,HP:0000107,unilateral unspecified
+184,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+184,RenalHypoplasia,HP:0000089,bilateral
+187,Hyperechogenicity,HP:0033132,bilateral
+187,RenalCysts,HP:0000107,bilateral
+187,MulticysticDysplasticKidney,HP:0000003,bilateral
+188,Hyperechogenicity,HP:0033132,bilateral
+188,RenalCysts,HP:0000107,bilateral
+188,RenalHypoplasia,HP:0000089,bilateral
+192,RenalCysts,HP:0000107,bilateral
+193,Hyperechogenicity,HP:0033132,bilateral
+193,RenalCysts,HP:0000107,bilateral
+193,MulticysticDysplasticKidney,HP:0000003,bilateral
+194,MulticysticDysplasticKidney,HP:0000003,bilateral
+195,MulticysticDysplasticKidney,HP:0000003,bilateral
+196,MulticysticDysplasticKidney,HP:0000003,bilateral
+196,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+197,Hyperechogenicity,HP:0033132,bilateral
+197,MulticysticDysplasticKidney,HP:0000003,bilateral
+198,MulticysticDysplasticKidney,HP:0000003,bilateral
+199,Hyperechogenicity,HP:0033132,bilateral
+199,MulticysticDysplasticKidney,HP:0000003,bilateral
+200,RenalHypoplasia,HP:0000089,unilateral left
+200,UrinaryTractMalformation,HP:0000079,unilateral left
+201,RenalCysts,HP:0000107,bilateral
+201,MulticysticDysplasticKidney,HP:0000003,bilateral
+202,RenalCysts,HP:0000107,bilateral
+202,MulticysticDysplasticKidney,HP:0000003,bilateral
+203,RenalCysts,HP:0000107,bilateral
+203,RenalHypoplasia,HP:0000089,unilateral left
+204,RenalCysts,HP:0000107,bilateral
+204,RenalHypoplasia,HP:0000089,bilateral
+205,RenalCysts,HP:0000107,bilateral
+206,RenalCysts,HP:0000107,bilateral
+206,UrinaryTractMalformation,HP:0000079,bilateral
+208,UrinaryTractMalformation,HP:0000079,bilateral
+209,RenalCysts,HP:0000107,bilateral
+209,MulticysticDysplasticKidney,HP:0000003,bilateral
+209,UrinaryTractMalformation,HP:0000079,bilateral
+210,Hyperechogenicity,HP:0033132,bilateral
+210,RenalCysts,HP:0000107,bilateral
+210,RenalHypoplasia,HP:0000089,bilateral
+211,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+212,Hyperechogenicity,HP:0033132,bilateral
+212,RenalCysts,HP:0000107,bilateral
+212,MulticysticDysplasticKidney,HP:0000003,bilateral
+212,RenalHypoplasia,HP:0000089,bilateral
+212,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+216,RenalCysts,HP:0000107,bilateral
+216,MulticysticDysplasticKidney,HP:0000003,bilateral
+216,RenalHypoplasia,HP:0000089,bilateral
+220,MulticysticDysplasticKidney,HP:0000003,bilateral
+222,RenalHypoplasia,HP:0000089,bilateral
+223,RenalHypoplasia,HP:0000089,unilateral unspecified
+223,SolitaryKidney,HP:0000122,unilateral unspecified
+224,RenalHypoplasia,HP:0000089,bilateral
+224,UrinaryTractMalformation,HP:0000079,bilateral
+225,RenalHypoplasia,HP:0000089,bilateral
+226,RenalCysts,HP:0000107,bilateral
+226,UrinaryTractMalformation,HP:0000079,bilateral
+227,RenalHypoplasia,HP:0000089,bilateral
+228,RenalHypoplasia,HP:0000089,bilateral
+229,RenalCysts,HP:0000107,bilateral
+231,RenalCysts,HP:0000107,bilateral
+231,RenalHypoplasia,HP:0000089,bilateral
+232,RenalCysts,HP:0000107,bilateral
+232,RenalHypoplasia,HP:0000089,bilateral
+233,MulticysticDysplasticKidney,HP:0000003,unilateral left
+233,UrinaryTractMalformation,HP:0000079,unilateral right
+234,RenalCysts,HP:0000107,bilateral
+235,RenalCysts,HP:0000107,bilateral
+235,RenalHypoplasia,HP:0000089,bilateral
+236,RenalHypoplasia,HP:0000089,bilateral
+237,RenalCysts,HP:0000107,bilateral
+243,Hyperechogenicity,HP:0033132,bilateral
+243,RenalCysts,HP:0000107,bilateral
+243,MulticysticDysplasticKidney,HP:0000003,bilateral
+244,Hyperechogenicity,HP:0033132,unilateral right
+244,RenalCysts,HP:0000107,unilateral right
+244,MulticysticDysplasticKidney,HP:0000003,unilateral right
+244,RenalHypoplasia,HP:0000089,unilateral left
+244,SolitaryKidney,HP:0000122,unilateral right
+245,RenalCysts,HP:0000107,unilateral left
+246,RenalCysts,HP:0000107,bilateral
+247,RenalCysts,HP:0000107,bilateral
+249,Hyperechogenicity,HP:0033132,bilateral
+249,MulticysticDysplasticKidney,HP:0000003,bilateral
+250,RenalCysts,HP:0000107,bilateral
+251,RenalHypoplasia,HP:0000089,bilateral
+251,UrinaryTractMalformation,HP:0000079,bilateral
+252,RenalCysts,HP:0000107,unilateral left
+252,SolitaryKidney,HP:0000122,unilateral left
+252,UrinaryTractMalformation,HP:0000079,unilateral right
+256,Hyperechogenicity,HP:0033132,bilateral
+256,MulticysticDysplasticKidney,HP:0000003,bilateral
+256,RenalHypoplasia,HP:0000089,bilateral
+256,UrinaryTractMalformation,HP:0000079,unilateral right
+257,MulticysticDysplasticKidney,HP:0000003,bilateral
+259,Hyperechogenicity,HP:0033132,bilateral
+259,MulticysticDysplasticKidney,HP:0000003,bilateral
+262,Hyperechogenicity,HP:0033132,bilateral
+262,MulticysticDysplasticKidney,HP:0000003,bilateral
+263,Hyperechogenicity,HP:0033132,bilateral
+263,RenalCysts,HP:0000107,unilateral left
+265,Hyperechogenicity,HP:0033132,bilateral
+265,MulticysticDysplasticKidney,HP:0000003,bilateral
+266,Hyperechogenicity,HP:0033132,bilateral
+266,MulticysticDysplasticKidney,HP:0000003,bilateral
+267,Hyperechogenicity,HP:0033132,bilateral
+267,MulticysticDysplasticKidney,HP:0000003,bilateral
+268,Hyperechogenicity,HP:0033132,bilateral
+268,MulticysticDysplasticKidney,HP:0000003,bilateral
+269,Hyperechogenicity,HP:0033132,bilateral
+270,MulticysticDysplasticKidney,HP:0000003,bilateral
+271,UrinaryTractMalformation,HP:0000079,bilateral
+272,Hyperechogenicity,HP:0033132,bilateral
+272,MulticysticDysplasticKidney,HP:0000003,bilateral
+272,UrinaryTractMalformation,HP:0000079,unilateral right
+273,Hyperechogenicity,HP:0033132,bilateral
+274,Hyperechogenicity,HP:0033132,bilateral
+275,Hyperechogenicity,HP:0033132,bilateral
+275,MulticysticDysplasticKidney,HP:0000003,unilateral left
+276,Hyperechogenicity,HP:0033132,bilateral
+277,RenalHypoplasia,HP:0000089,bilateral
+278,SolitaryKidney,HP:0000122,unilateral left
+279,RenalHypoplasia,HP:0000089,unilateral left
+280,RenalHypoplasia,HP:0000089,bilateral
+282,RenalHypoplasia,HP:0000089,bilateral
+283,RenalHypoplasia,HP:0000089,bilateral
+284,RenalHypoplasia,HP:0000089,bilateral
+285,RenalHypoplasia,HP:0000089,bilateral
+286,Hyperechogenicity,HP:0033132,unilateral left
+286,MulticysticDysplasticKidney,HP:0000003,unilateral right
+288,RenalCysts,HP:0000107,unilateral left
+288,RenalHypoplasia,HP:0000089,bilateral
+289,RenalCysts,HP:0000107,unilateral left
+289,RenalHypoplasia,HP:0000089,unilateral left
+291,RenalCysts,HP:0000107,bilateral
+291,MulticysticDysplasticKidney,HP:0000003,bilateral
+291,RenalHypoplasia,HP:0000089,bilateral
+292,SolitaryKidney,HP:0000122,unilateral left
+293,Hyperechogenicity,HP:0033132,bilateral
+294,Hyperechogenicity,HP:0033132,unilateral right
+294,MulticysticDysplasticKidney,HP:0000003,unilateral left
+295,MulticysticDysplasticKidney,HP:0000003,bilateral
+297,RenalHypoplasia,HP:0000089,bilateral
+298,RenalHypoplasia,HP:0000089,bilateral
+299,RenalHypoplasia,HP:0000089,bilateral
+300,Hyperechogenicity,HP:0033132,bilateral
+301,RenalCysts,HP:0000107,unilateral right
+301,UrinaryTractMalformation,HP:0000079,unilateral right
+302,RenalCysts,HP:0000107,unilateral right
+302,SolitaryKidney,HP:0000122,unilateral right
+305,RenalHypoplasia,HP:0000089,unilateral right
+311,RenalCysts,HP:0000107,bilateral
+311,RenalHypoplasia,HP:0000089,bilateral
+311,UrinaryTractMalformation,HP:0000079,bilateral
+312,RenalCysts,HP:0000107,bilateral
+312,RenalHypoplasia,HP:0000089,bilateral
+314,RenalCysts,HP:0000107,bilateral
+316,MulticysticDysplasticKidney,HP:0000003,unilateral left
+316,SolitaryKidney,HP:0000122,unilateral left
+317,RenalCysts,HP:0000107,bilateral
+319,RenalHypoplasia,HP:0000089,bilateral
+319,UrinaryTractMalformation,HP:0000079,bilateral
+320,RenalCysts,HP:0000107,bilateral
+320,RenalHypoplasia,HP:0000089,bilateral
+320,UrinaryTractMalformation,HP:0000079,bilateral
+321,RenalCysts,HP:0000107,bilateral
+321,RenalHypoplasia,HP:0000089,bilateral
+321,UrinaryTractMalformation,HP:0000079,bilateral
+322,SolitaryKidney,HP:0000122,unilateral unspecified
+324,MulticysticDysplasticKidney,HP:0000003,bilateral
+325,RenalCysts,HP:0000107,bilateral
+326,RenalCysts,HP:0000107,unilateral left
+328,Hyperechogenicity,HP:0033132,unilateral right
+328,RenalCysts,HP:0000107,unilateral left
+328,MulticysticDysplasticKidney,HP:0000003,unilateral left
+328,RenalHypoplasia,HP:0000089,bilateral
+329,RenalCysts,HP:0000107,unilateral right
+329,RenalHypoplasia,HP:0000089,unilateral left
+330,Hyperechogenicity,HP:0033132,bilateral
+331,Hyperechogenicity,HP:0033132,bilateral
+332,Hyperechogenicity,HP:0033132,bilateral
+332,RenalCysts,HP:0000107,bilateral
+332,MulticysticDysplasticKidney,HP:0000003,bilateral
+332,RenalHypoplasia,HP:0000089,bilateral
+333,RenalCysts,HP:0000107,bilateral
+334,RenalCysts,HP:0000107,bilateral
+335,Hyperechogenicity,HP:0033132,bilateral
+335,RenalCysts,HP:0000107,bilateral
+336,RenalCysts,HP:0000107,bilateral
+336,MulticysticDysplasticKidney,HP:0000003,bilateral
+336,RenalHypoplasia,HP:0000089,bilateral
+338,RenalCysts,HP:0000107,bilateral
+339,RenalHypoplasia,HP:0000089,unilateral right
+340,Hyperechogenicity,HP:0033132,bilateral
+340,RenalHypoplasia,HP:0000089,bilateral
+341,RenalCysts,HP:0000107,unilateral right
+341,RenalHypoplasia,HP:0000089,bilateral
+343,Hyperechogenicity,HP:0033132,bilateral
+344,MulticysticDysplasticKidney,HP:0000003,bilateral
+344,RenalHypoplasia,HP:0000089,bilateral
+345,Hyperechogenicity,HP:0033132,bilateral
+345,RenalCysts,HP:0000107,bilateral
+345,MulticysticDysplasticKidney,HP:0000003,bilateral
+345,RenalHypoplasia,HP:0000089,bilateral
+346,RenalCysts,HP:0000107,bilateral
+346,RenalHypoplasia,HP:0000089,bilateral
+348,Hyperechogenicity,HP:0033132,bilateral
+348,RenalCysts,HP:0000107,bilateral
+348,RenalHypoplasia,HP:0000089,bilateral
+350,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+351,RenalCysts,HP:0000107,unilateral unspecified
+353,RenalCysts,HP:0000107,unilateral left
+353,RenalHypoplasia,HP:0000089,unilateral right
+353,SolitaryKidney,HP:0000122,unilateral left
+354,RenalCysts,HP:0000107,bilateral
+354,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+358,RenalCysts,HP:0000107,bilateral
+364,RenalCysts,HP:0000107,unilateral right
+364,RenalHypoplasia,HP:0000089,unilateral left
+365,Hyperechogenicity,HP:0033132,bilateral
+365,RenalCysts,HP:0000107,bilateral
+365,RenalHypoplasia,HP:0000089,bilateral
+366,RenalCysts,HP:0000107,unilateral left
+366,RenalHypoplasia,HP:0000089,unilateral left
+366,SolitaryKidney,HP:0000122,unilateral left
+368,RenalCysts,HP:0000107,unilateral unspecified
+368,RenalHypoplasia,HP:0000089,unilateral unspecified
+370,RenalCysts,HP:0000107,unilateral unspecified
+370,MulticysticDysplasticKidney,HP:0000003,bilateral
+370,RenalHypoplasia,HP:0000089,unilateral unspecified
+371,RenalHypoplasia,HP:0000089,bilateral
+372,RenalCysts,HP:0000107,bilateral
+373,RenalCysts,HP:0000107,bilateral
+374,RenalCysts,HP:0000107,unilateral unspecified
+374,RenalHypoplasia,HP:0000089,unilateral unspecified
+375,RenalCysts,HP:0000107,unilateral unspecified
+375,RenalHypoplasia,HP:0000089,unilateral unspecified
+376,RenalCysts,HP:0000107,unilateral unspecified
+376,SolitaryKidney,HP:0000122,unilateral unspecified
+377,RenalHypoplasia,HP:0000089,unilateral unspecified
+378,RenalCysts,HP:0000107,bilateral
+379,RenalCysts,HP:0000107,bilateral
+380,RenalHypoplasia,HP:0000089,unilateral unspecified
+381,RenalHypoplasia,HP:0000089,bilateral
+382,Hyperechogenicity,HP:0033132,bilateral
+389,RenalCysts,HP:0000107,bilateral
+390,RenalCysts,HP:0000107,bilateral
+391,RenalCysts,HP:0000107,bilateral
+391,RenalHypoplasia,HP:0000089,bilateral
+392,RenalCysts,HP:0000107,bilateral
+396,RenalCysts,HP:0000107,bilateral
+398,RenalCysts,HP:0000107,bilateral
+399,RenalHypoplasia,HP:0000089,bilateral
+400,RenalHypoplasia,HP:0000089,bilateral
+401,RenalHypoplasia,HP:0000089,bilateral
+403,RenalCysts,HP:0000107,bilateral
+405,RenalCysts,HP:0000107,bilateral
+406,RenalCysts,HP:0000107,unilateral left
+406,RenalHypoplasia,HP:0000089,unilateral right
+406,SolitaryKidney,HP:0000122,unilateral left
+406,UrinaryTractMalformation,HP:0000079,unilateral right
+407,RenalCysts,HP:0000107,bilateral
+408,Hyperechogenicity,HP:0033132,unilateral left
+408,RenalCysts,HP:0000107,unilateral right
+408,MulticysticDysplasticKidney,HP:0000003,unilateral right
+408,RenalHypoplasia,HP:0000089,unilateral right
+408,SolitaryKidney,HP:0000122,unilateral left
+408,UrinaryTractMalformation,HP:0000079,unilateral right
+409,Hyperechogenicity,HP:0033132,unilateral left
+409,RenalCysts,HP:0000107,unilateral right
+409,MulticysticDysplasticKidney,HP:0000003,unilateral right
+409,RenalHypoplasia,HP:0000089,unilateral right
+409,SolitaryKidney,HP:0000122,unilateral left
+409,UrinaryTractMalformation,HP:0000079,unilateral right
+412,SolitaryKidney,HP:0000122,unilateral left
+414,RenalCysts,HP:0000107,bilateral
+415,Hyperechogenicity,HP:0033132,bilateral
+415,RenalCysts,HP:0000107,bilateral
+416,Hyperechogenicity,HP:0033132,bilateral
+416,RenalCysts,HP:0000107,bilateral
+416,MulticysticDysplasticKidney,HP:0000003,bilateral
+416,UrinaryTractMalformation,HP:0000079,bilateral
+418,RenalCysts,HP:0000107,bilateral
+418,MulticysticDysplasticKidney,HP:0000003,bilateral
+418,RenalHypoplasia,HP:0000089,bilateral
+418,UrinaryTractMalformation,HP:0000079,bilateral
+419,RenalCysts,HP:0000107,bilateral
+420,MulticysticDysplasticKidney,HP:0000003,bilateral
+421,Hyperechogenicity,HP:0033132,bilateral
+422,MulticysticDysplasticKidney,HP:0000003,unilateral right
+422,SolitaryKidney,HP:0000122,unilateral right
+422,UrinaryTractMalformation,HP:0000079,unilateral left
+423,Hyperechogenicity,HP:0033132,bilateral
+423,RenalCysts,HP:0000107,bilateral
+423,RenalHypoplasia,HP:0000089,unilateral right
+423,UrinaryTractMalformation,HP:0000079,unilateral right
+424,RenalCysts,HP:0000107,unilateral unspecified
+430,RenalCysts,HP:0000107,bilateral
+430,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+431,RenalCysts,HP:0000107,bilateral
+431,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+433,RenalCysts,HP:0000107,unilateral unspecified
+435,RenalCysts,HP:0000107,bilateral
+437,RenalCysts,HP:0000107,bilateral
+439,RenalCysts,HP:0000107,bilateral
+440,RenalCysts,HP:0000107,bilateral
+442,RenalCysts,HP:0000107,bilateral
+443,RenalCysts,HP:0000107,unilateral unspecified
+443,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+444,RenalCysts,HP:0000107,bilateral
+445,RenalCysts,HP:0000107,bilateral
+445,MulticysticDysplasticKidney,HP:0000003,bilateral
+446,RenalHypoplasia,HP:0000089,bilateral
+449,RenalCysts,HP:0000107,bilateral
+450,RenalCysts,HP:0000107,unilateral right
+450,RenalHypoplasia,HP:0000089,unilateral left
+454,RenalCysts,HP:0000107,bilateral
+455,RenalCysts,HP:0000107,bilateral
+456,RenalCysts,HP:0000107,unilateral unspecified
+457,RenalCysts,HP:0000107,bilateral
+459,RenalCysts,HP:0000107,bilateral
+460,RenalCysts,HP:0000107,bilateral
+461,RenalCysts,HP:0000107,bilateral
+462,RenalHypoplasia,HP:0000089,bilateral
+463,RenalCysts,HP:0000107,unilateral left
+463,MulticysticDysplasticKidney,HP:0000003,unilateral right
+465,MulticysticDysplasticKidney,HP:0000003,unilateral left
+465,RenalHypoplasia,HP:0000089,unilateral right
+466,RenalCysts,HP:0000107,bilateral
+467,RenalCysts,HP:0000107,bilateral
+468,RenalCysts,HP:0000107,bilateral
+469,RenalCysts,HP:0000107,bilateral
+470,RenalCysts,HP:0000107,bilateral
+471,RenalHypoplasia,HP:0000089,bilateral
+472,RenalCysts,HP:0000107,bilateral
+473,RenalCysts,HP:0000107,bilateral
+474,RenalCysts,HP:0000107,unilateral left
+474,RenalHypoplasia,HP:0000089,bilateral
+474,UrinaryTractMalformation,HP:0000079,unilateral right
+475,RenalCysts,HP:0000107,bilateral
+476,RenalCysts,HP:0000107,bilateral
+477,RenalCysts,HP:0000107,bilateral
+478,RenalCysts,HP:0000107,bilateral
+478,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+479,RenalCysts,HP:0000107,bilateral
+480,Hyperechogenicity,HP:0033132,bilateral
+480,UrinaryTractMalformation,HP:0000079,bilateral
+481,RenalCysts,HP:0000107,bilateral
+481,UrinaryTractMalformation,HP:0000079,bilateral
+482,MulticysticDysplasticKidney,HP:0000003,unilateral left
+483,MulticysticDysplasticKidney,HP:0000003,unilateral right
+483,RenalHypoplasia,HP:0000089,unilateral left
+487,MulticysticDysplasticKidney,HP:0000003,bilateral
+488,MulticysticDysplasticKidney,HP:0000003,unilateral right
+488,RenalHypoplasia,HP:0000089,unilateral left
+490,RenalCysts,HP:0000107,bilateral
+491,RenalCysts,HP:0000107,unilateral left
+491,RenalHypoplasia,HP:0000089,unilateral right
+492,RenalCysts,HP:0000107,bilateral
+492,RenalHypoplasia,HP:0000089,bilateral
+493,RenalCysts,HP:0000107,bilateral
+494,MulticysticDysplasticKidney,HP:0000003,unilateral right
+496,Hyperechogenicity,HP:0033132,bilateral
+496,RenalCysts,HP:0000107,bilateral
+497,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+498,MulticysticDysplasticKidney,HP:0000003,bilateral
+498,UrinaryTractMalformation,HP:0000079,bilateral
+499,MulticysticDysplasticKidney,HP:0000003,bilateral
+499,UrinaryTractMalformation,HP:0000079,bilateral
+502,Hyperechogenicity,HP:0033132,bilateral
+502,RenalCysts,HP:0000107,bilateral
+502,UrinaryTractMalformation,HP:0000079,bilateral
+503,RenalCysts,HP:0000107,bilateral
+504,Hyperechogenicity,HP:0033132,unilateral right
+504,RenalCysts,HP:0000107,unilateral right
+504,MulticysticDysplasticKidney,HP:0000003,unilateral left
+504,UrinaryTractMalformation,HP:0000079,unilateral right
+505,Hyperechogenicity,HP:0033132,unilateral right
+505,RenalCysts,HP:0000107,unilateral right
+505,MulticysticDysplasticKidney,HP:0000003,unilateral left
+505,UrinaryTractMalformation,HP:0000079,unilateral right
+506,Hyperechogenicity,HP:0033132,bilateral
+506,RenalCysts,HP:0000107,bilateral
+506,RenalHypoplasia,HP:0000089,unilateral right
+509,Hyperechogenicity,HP:0033132,bilateral
+509,UrinaryTractMalformation,HP:0000079,bilateral
+510,Hyperechogenicity,HP:0033132,bilateral
+510,RenalCysts,HP:0000107,bilateral
+511,RenalCysts,HP:0000107,bilateral
+511,MulticysticDysplasticKidney,HP:0000003,bilateral
+512,Hyperechogenicity,HP:0033132,bilateral
+512,RenalCysts,HP:0000107,bilateral
+512,MulticysticDysplasticKidney,HP:0000003,bilateral
+513,Hyperechogenicity,HP:0033132,bilateral
+514,Hyperechogenicity,HP:0033132,bilateral
+514,RenalCysts,HP:0000107,bilateral
+514,MulticysticDysplasticKidney,HP:0000003,bilateral
+515,Hyperechogenicity,HP:0033132,bilateral
+515,RenalCysts,HP:0000107,bilateral
+516,RenalCysts,HP:0000107,unilateral unspecified
+516,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+516,RenalHypoplasia,HP:0000089,unilateral unspecified
+517,Hyperechogenicity,HP:0033132,bilateral
+517,RenalCysts,HP:0000107,bilateral
+518,Hyperechogenicity,HP:0033132,bilateral
+518,RenalCysts,HP:0000107,bilateral
+518,UrinaryTractMalformation,HP:0000079,unilateral left
+519,RenalCysts,HP:0000107,bilateral
+519,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+520,Hyperechogenicity,HP:0033132,bilateral
+520,RenalCysts,HP:0000107,bilateral
+522,Hyperechogenicity,HP:0033132,bilateral
+522,RenalCysts,HP:0000107,bilateral
+523,Hyperechogenicity,HP:0033132,unilateral unspecified
+523,RenalCysts,HP:0000107,unilateral unspecified
+523,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+524,Hyperechogenicity,HP:0033132,bilateral
+524,RenalCysts,HP:0000107,unilateral unspecified
+525,RenalCysts,HP:0000107,bilateral
+526,RenalCysts,HP:0000107,unilateral unspecified
+526,UrinaryTractMalformation,HP:0000079,bilateral
+527,RenalCysts,HP:0000107,bilateral
+528,UrinaryTractMalformation,HP:0000079,unilateral left
+529,RenalCysts,HP:0000107,bilateral
+530,RenalCysts,HP:0000107,bilateral
+531,RenalCysts,HP:0000107,unilateral left
+531,RenalHypoplasia,HP:0000089,unilateral left
+532,Hyperechogenicity,HP:0033132,bilateral
+532,RenalCysts,HP:0000107,bilateral
+532,MulticysticDysplasticKidney,HP:0000003,bilateral
+533,Hyperechogenicity,HP:0033132,bilateral
+533,RenalCysts,HP:0000107,bilateral
+534,RenalCysts,HP:0000107,bilateral
+535,Hyperechogenicity,HP:0033132,bilateral
+535,RenalCysts,HP:0000107,bilateral
+536,Hyperechogenicity,HP:0033132,bilateral
+536,RenalHypoplasia,HP:0000089,bilateral
+537,Hyperechogenicity,HP:0033132,bilateral
+537,RenalCysts,HP:0000107,bilateral
+538,Hyperechogenicity,HP:0033132,bilateral
+539,Hyperechogenicity,HP:0033132,bilateral
+539,RenalCysts,HP:0000107,bilateral
+542,Hyperechogenicity,HP:0033132,bilateral
+542,RenalCysts,HP:0000107,bilateral
+543,Hyperechogenicity,HP:0033132,bilateral
+544,Hyperechogenicity,HP:0033132,bilateral
+545,Hyperechogenicity,HP:0033132,bilateral
+546,Hyperechogenicity,HP:0033132,bilateral
+547,Hyperechogenicity,HP:0033132,unilateral unspecified
+547,RenalCysts,HP:0000107,unilateral unspecified
+547,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+547,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+551,MulticysticDysplasticKidney,HP:0000003,bilateral
+551,RenalHypoplasia,HP:0000089,bilateral
+552,Hyperechogenicity,HP:0033132,unilateral right
+552,RenalCysts,HP:0000107,unilateral right
+552,MulticysticDysplasticKidney,HP:0000003,unilateral left
+552,RenalHypoplasia,HP:0000089,unilateral right
+553,Hyperechogenicity,HP:0033132,bilateral
+553,RenalCysts,HP:0000107,unilateral unspecified
+554,Hyperechogenicity,HP:0033132,unilateral unspecified
+554,RenalCysts,HP:0000107,unilateral unspecified
+554,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+555,MulticysticDysplasticKidney,HP:0000003,unilateral right
+555,UrinaryTractMalformation,HP:0000079,bilateral
+556,Hyperechogenicity,HP:0033132,bilateral
+556,RenalCysts,HP:0000107,bilateral
+557,Hyperechogenicity,HP:0033132,bilateral
+557,RenalCysts,HP:0000107,bilateral
+557,RenalHypoplasia,HP:0000089,bilateral
+558,Hyperechogenicity,HP:0033132,bilateral
+558,RenalCysts,HP:0000107,bilateral
+558,RenalHypoplasia,HP:0000089,bilateral
+558,UrinaryTractMalformation,HP:0000079,bilateral
+559,Hyperechogenicity,HP:0033132,unilateral unspecified
+559,RenalCysts,HP:0000107,unilateral unspecified
+559,SolitaryKidney,HP:0000122,unilateral unspecified
+560,Hyperechogenicity,HP:0033132,bilateral
+561,Hyperechogenicity,HP:0033132,unilateral right
+561,RenalCysts,HP:0000107,unilateral right
+561,MulticysticDysplasticKidney,HP:0000003,unilateral right
+562,RenalCysts,HP:0000107,bilateral
+562,MulticysticDysplasticKidney,HP:0000003,bilateral
+563,RenalCysts,HP:0000107,bilateral
+563,MulticysticDysplasticKidney,HP:0000003,bilateral
+564,RenalCysts,HP:0000107,bilateral
+564,MulticysticDysplasticKidney,HP:0000003,bilateral
+565,MulticysticDysplasticKidney,HP:0000003,bilateral
+566,MulticysticDysplasticKidney,HP:0000003,bilateral
+567,MulticysticDysplasticKidney,HP:0000003,bilateral
+568,Hyperechogenicity,HP:0033132,bilateral
+568,MulticysticDysplasticKidney,HP:0000003,unilateral left
+569,UrinaryTractMalformation,HP:0000079,bilateral
+570,Hyperechogenicity,HP:0033132,unilateral unspecified
+570,RenalCysts,HP:0000107,unilateral unspecified
+570,SolitaryKidney,HP:0000122,unilateral unspecified
+571,RenalCysts,HP:0000107,unilateral right
+571,RenalHypoplasia,HP:0000089,unilateral right
+572,Hyperechogenicity,HP:0033132,bilateral
+572,RenalCysts,HP:0000107,bilateral
+572,MulticysticDysplasticKidney,HP:0000003,bilateral
+574,Hyperechogenicity,HP:0033132,bilateral
+574,RenalCysts,HP:0000107,bilateral
+575,RenalCysts,HP:0000107,bilateral
+576,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+577,Hyperechogenicity,HP:0033132,bilateral
+577,SolitaryKidney,HP:0000122,unilateral unspecified
+577,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+578,Hyperechogenicity,HP:0033132,bilateral
+578,RenalHypoplasia,HP:0000089,bilateral
+580,Hyperechogenicity,HP:0033132,bilateral
+580,RenalCysts,HP:0000107,bilateral
+581,RenalCysts,HP:0000107,bilateral
+582,RenalCysts,HP:0000107,bilateral
+582,RenalHypoplasia,HP:0000089,bilateral
+584,Hyperechogenicity,HP:0033132,bilateral
+584,RenalCysts,HP:0000107,bilateral
+584,UrinaryTractMalformation,HP:0000079,bilateral
+585,RenalCysts,HP:0000107,unilateral right
+585,UrinaryTractMalformation,HP:0000079,unilateral left
+587,Hyperechogenicity,HP:0033132,bilateral
+587,RenalCysts,HP:0000107,bilateral
+587,MulticysticDysplasticKidney,HP:0000003,bilateral
+588,Hyperechogenicity,HP:0033132,bilateral
+588,MulticysticDysplasticKidney,HP:0000003,bilateral
+589,Hyperechogenicity,HP:0033132,bilateral
+589,RenalCysts,HP:0000107,bilateral
+589,RenalHypoplasia,HP:0000089,bilateral
+590,RenalCysts,HP:0000107,bilateral
+591,Hyperechogenicity,HP:0033132,bilateral
+591,RenalCysts,HP:0000107,bilateral
+592,Hyperechogenicity,HP:0033132,bilateral
+592,RenalCysts,HP:0000107,bilateral
+592,MulticysticDysplasticKidney,HP:0000003,bilateral
+592,RenalHypoplasia,HP:0000089,bilateral
+593,Hyperechogenicity,HP:0033132,bilateral
+593,RenalCysts,HP:0000107,bilateral
+593,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+593,RenalHypoplasia,HP:0000089,bilateral
+594,Hyperechogenicity,HP:0033132,bilateral
+594,RenalCysts,HP:0000107,bilateral
+594,MulticysticDysplasticKidney,HP:0000003,bilateral
+594,RenalHypoplasia,HP:0000089,bilateral
+595,Hyperechogenicity,HP:0033132,bilateral
+595,RenalCysts,HP:0000107,bilateral
+595,RenalHypoplasia,HP:0000089,bilateral
+596,Hyperechogenicity,HP:0033132,bilateral
+596,RenalCysts,HP:0000107,bilateral
+596,MulticysticDysplasticKidney,HP:0000003,bilateral
+596,RenalHypoplasia,HP:0000089,bilateral
+597,RenalCysts,HP:0000107,bilateral
+597,RenalHypoplasia,HP:0000089,unilateral unspecified
+597,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+598,Hyperechogenicity,HP:0033132,bilateral
+598,RenalHypoplasia,HP:0000089,bilateral
+599,Hyperechogenicity,HP:0033132,bilateral
+600,Hyperechogenicity,HP:0033132,bilateral
+600,RenalCysts,HP:0000107,bilateral
+600,MulticysticDysplasticKidney,HP:0000003,bilateral
+600,RenalHypoplasia,HP:0000089,bilateral
+601,Hyperechogenicity,HP:0033132,bilateral
+601,RenalCysts,HP:0000107,bilateral
+601,UrinaryTractMalformation,HP:0000079,bilateral
+602,Hyperechogenicity,HP:0033132,bilateral
+602,RenalCysts,HP:0000107,bilateral
+602,RenalHypoplasia,HP:0000089,bilateral
+603,Hyperechogenicity,HP:0033132,bilateral
+603,RenalCysts,HP:0000107,bilateral
+603,MulticysticDysplasticKidney,HP:0000003,unilateral left
+603,RenalHypoplasia,HP:0000089,unilateral right
+603,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+604,Hyperechogenicity,HP:0033132,bilateral
+604,RenalCysts,HP:0000107,bilateral
+604,RenalHypoplasia,HP:0000089,bilateral
+605,Hyperechogenicity,HP:0033132,bilateral
+605,RenalCysts,HP:0000107,bilateral
+605,RenalHypoplasia,HP:0000089,bilateral
+605,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+606,Hyperechogenicity,HP:0033132,bilateral
+606,RenalCysts,HP:0000107,unilateral unspecified
+606,MulticysticDysplasticKidney,HP:0000003,bilateral
+607,Hyperechogenicity,HP:0033132,bilateral
+607,RenalCysts,HP:0000107,bilateral
+608,Hyperechogenicity,HP:0033132,bilateral
+608,RenalCysts,HP:0000107,bilateral
+608,RenalHypoplasia,HP:0000089,bilateral
+608,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+609,Hyperechogenicity,HP:0033132,bilateral
+609,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+609,RenalHypoplasia,HP:0000089,bilateral
+610,Hyperechogenicity,HP:0033132,bilateral
+610,RenalCysts,HP:0000107,unilateral unspecified
+611,Hyperechogenicity,HP:0033132,bilateral
+611,RenalCysts,HP:0000107,unilateral unspecified
+611,RenalHypoplasia,HP:0000089,bilateral
+612,Hyperechogenicity,HP:0033132,bilateral
+612,RenalCysts,HP:0000107,bilateral
+612,RenalHypoplasia,HP:0000089,bilateral
+613,MulticysticDysplasticKidney,HP:0000003,bilateral
+614,MulticysticDysplasticKidney,HP:0000003,bilateral
+615,RenalCysts,HP:0000107,bilateral
+616,RenalCysts,HP:0000107,bilateral
+616,MulticysticDysplasticKidney,HP:0000003,bilateral
+616,RenalHypoplasia,HP:0000089,bilateral
+620,Hyperechogenicity,HP:0033132,bilateral
+620,RenalCysts,HP:0000107,bilateral
+621,Hyperechogenicity,HP:0033132,bilateral
+621,RenalCysts,HP:0000107,bilateral
+621,RenalHypoplasia,HP:0000089,unilateral right
+622,RenalCysts,HP:0000107,bilateral
+622,RenalHypoplasia,HP:0000089,bilateral
+623,RenalCysts,HP:0000107,bilateral
+623,RenalHypoplasia,HP:0000089,bilateral
+624,RenalHypoplasia,HP:0000089,bilateral
+626,RenalCysts,HP:0000107,bilateral
+627,RenalCysts,HP:0000107,bilateral
+628,RenalCysts,HP:0000107,bilateral
+629,RenalCysts,HP:0000107,bilateral
+630,Hyperechogenicity,HP:0033132,bilateral
+630,RenalCysts,HP:0000107,bilateral
+633,RenalCysts,HP:0000107,bilateral
+634,MulticysticDysplasticKidney,HP:0000003,bilateral
+634,RenalHypoplasia,HP:0000089,unilateral left
+635,Hyperechogenicity,HP:0033132,bilateral
+635,RenalHypoplasia,HP:0000089,bilateral
+640,Hyperechogenicity,HP:0033132,bilateral
+640,MulticysticDysplasticKidney,HP:0000003,unilateral right
+640,RenalHypoplasia,HP:0000089,unilateral left
+642,RenalCysts,HP:0000107,bilateral
+643,RenalCysts,HP:0000107,bilateral
+644,RenalCysts,HP:0000107,bilateral
+645,RenalCysts,HP:0000107,unilateral right
+645,RenalHypoplasia,HP:0000089,unilateral left
+645,UrinaryTractMalformation,HP:0000079,unilateral left
+646,RenalHypoplasia,HP:0000089,bilateral
+647,RenalHypoplasia,HP:0000089,bilateral
+648,RenalCysts,HP:0000107,bilateral
+649,RenalCysts,HP:0000107,bilateral
+650,RenalCysts,HP:0000107,bilateral
+651,MulticysticDysplasticKidney,HP:0000003,bilateral
+654,Hyperechogenicity,HP:0033132,bilateral
+654,MulticysticDysplasticKidney,HP:0000003,bilateral
+654,RenalHypoplasia,HP:0000089,unilateral left
+655,Hyperechogenicity,HP:0033132,bilateral
+655,MulticysticDysplasticKidney,HP:0000003,unilateral right
+655,SolitaryKidney,HP:0000122,unilateral right
+655,UrinaryTractMalformation,HP:0000079,unilateral left
+656,MulticysticDysplasticKidney,HP:0000003,bilateral
+658,RenalCysts,HP:0000107,bilateral
+663,RenalCysts,HP:0000107,unilateral left
+663,RenalHypoplasia,HP:0000089,unilateral right
+664,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+673,RenalCysts,HP:0000107,bilateral
+674,RenalCysts,HP:0000107,bilateral
+675,RenalCysts,HP:0000107,bilateral
+676,RenalCysts,HP:0000107,bilateral
+677,RenalCysts,HP:0000107,bilateral
+678,RenalCysts,HP:0000107,bilateral
+681,RenalCysts,HP:0000107,bilateral
+682,RenalCysts,HP:0000107,bilateral
+689,RenalCysts,HP:0000107,bilateral
+690,RenalCysts,HP:0000107,bilateral
+691,RenalCysts,HP:0000107,bilateral
+692,RenalCysts,HP:0000107,bilateral
+693,RenalCysts,HP:0000107,bilateral
+694,RenalCysts,HP:0000107,bilateral
+695,RenalCysts,HP:0000107,bilateral
+696,RenalCysts,HP:0000107,bilateral
+698,RenalCysts,HP:0000107,bilateral
+699,MulticysticDysplasticKidney,HP:0000003,bilateral
+699,RenalHypoplasia,HP:0000089,bilateral
+700,RenalCysts,HP:0000107,bilateral
+701,MulticysticDysplasticKidney,HP:0000003,bilateral
+702,MulticysticDysplasticKidney,HP:0000003,bilateral
+704,RenalHypoplasia,HP:0000089,unilateral right
+713,RenalCysts,HP:0000107,unilateral unspecified
+714,Hyperechogenicity,HP:0033132,unilateral unspecified
+714,RenalCysts,HP:0000107,unilateral unspecified
+714,RenalHypoplasia,HP:0000089,unilateral unspecified
+715,Hyperechogenicity,HP:0033132,bilateral
+715,RenalCysts,HP:0000107,bilateral
+716,Hyperechogenicity,HP:0033132,bilateral
+716,RenalCysts,HP:0000107,bilateral
+718,Hyperechogenicity,HP:0033132,bilateral
+725,Hyperechogenicity,HP:0033132,unilateral left
+725,MulticysticDysplasticKidney,HP:0000003,unilateral left
+725,SolitaryKidney,HP:0000122,unilateral right
+726,RenalCysts,HP:0000107,bilateral
+728,UrinaryTractMalformation,HP:0000079,bilateral
+729,RenalCysts,HP:0000107,bilateral
+730,RenalCysts,HP:0000107,unilateral left
+730,SolitaryKidney,HP:0000122,unilateral left
+730,UrinaryTractMalformation,HP:0000079,unilateral right
+731,Hyperechogenicity,HP:0033132,bilateral
+731,RenalCysts,HP:0000107,unilateral left
+731,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+733,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+734,RenalCysts,HP:0000107,unilateral right
+735,RenalCysts,HP:0000107,unilateral right
+736,RenalCysts,HP:0000107,bilateral
+736,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+737,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+738,Hyperechogenicity,HP:0033132,bilateral
+738,RenalCysts,HP:0000107,bilateral
+738,MulticysticDysplasticKidney,HP:0000003,bilateral
+738,RenalHypoplasia,HP:0000089,unilateral unspecified
+738,UrinaryTractMalformation,HP:0000079,bilateral
+739,Hyperechogenicity,HP:0033132,bilateral
+739,RenalCysts,HP:0000107,bilateral
+739,MulticysticDysplasticKidney,HP:0000003,bilateral
+739,RenalHypoplasia,HP:0000089,unilateral unspecified
+739,UrinaryTractMalformation,HP:0000079,bilateral
+740,Hyperechogenicity,HP:0033132,unilateral unspecified
+740,RenalCysts,HP:0000107,bilateral
+740,MulticysticDysplasticKidney,HP:0000003,bilateral
+740,RenalHypoplasia,HP:0000089,bilateral
+741,Hyperechogenicity,HP:0033132,bilateral
+741,RenalCysts,HP:0000107,unilateral unspecified
+741,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+741,RenalHypoplasia,HP:0000089,unilateral unspecified
+742,Hyperechogenicity,HP:0033132,unilateral unspecified
+742,RenalCysts,HP:0000107,unilateral unspecified
+742,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+742,RenalHypoplasia,HP:0000089,unilateral unspecified
+742,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+743,Hyperechogenicity,HP:0033132,bilateral
+743,RenalCysts,HP:0000107,unilateral unspecified
+743,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+743,RenalHypoplasia,HP:0000089,bilateral
+743,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+744,RenalCysts,HP:0000107,bilateral
+744,RenalHypoplasia,HP:0000089,bilateral
+744,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+745,Hyperechogenicity,HP:0033132,bilateral
+745,RenalCysts,HP:0000107,bilateral
+745,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+746,Hyperechogenicity,HP:0033132,bilateral
+746,RenalCysts,HP:0000107,bilateral
+746,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+747,Hyperechogenicity,HP:0033132,bilateral
+747,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+750,RenalCysts,HP:0000107,bilateral
+751,RenalCysts,HP:0000107,bilateral
+752,RenalCysts,HP:0000107,unilateral left
+754,Hyperechogenicity,HP:0033132,bilateral
+754,RenalCysts,HP:0000107,bilateral
+754,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+755,Hyperechogenicity,HP:0033132,bilateral
+755,RenalCysts,HP:0000107,unilateral unspecified
+756,Hyperechogenicity,HP:0033132,bilateral
+756,RenalCysts,HP:0000107,bilateral
+757,Hyperechogenicity,HP:0033132,bilateral
+757,RenalCysts,HP:0000107,bilateral
+758,RenalCysts,HP:0000107,bilateral
+759,Hyperechogenicity,HP:0033132,bilateral
+759,RenalHypoplasia,HP:0000089,bilateral
+760,Hyperechogenicity,HP:0033132,bilateral
+760,RenalHypoplasia,HP:0000089,bilateral
+763,Hyperechogenicity,HP:0033132,bilateral
+764,Hyperechogenicity,HP:0033132,bilateral
+764,RenalCysts,HP:0000107,bilateral
+764,RenalHypoplasia,HP:0000089,unilateral left
+764,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+765,Hyperechogenicity,HP:0033132,bilateral
+765,RenalCysts,HP:0000107,bilateral
+765,UrinaryTractMalformation,HP:0000079,bilateral
+787,Hyperechogenicity,HP:0033132,bilateral
+789,UrinaryTractMalformation,HP:0000079,unilateral right
+793,MulticysticDysplasticKidney,HP:0000003,unilateral left
+794,RenalCysts,HP:0000107,bilateral
+795,Hyperechogenicity,HP:0033132,bilateral
+795,RenalCysts,HP:0000107,bilateral
+797,MulticysticDysplasticKidney,HP:0000003,bilateral
+798,RenalCysts,HP:0000107,unilateral unspecified
+798,RenalHypoplasia,HP:0000089,bilateral
+799,MulticysticDysplasticKidney,HP:0000003,bilateral
+800,RenalCysts,HP:0000107,unilateral unspecified
+800,RenalHypoplasia,HP:0000089,bilateral
+801,MulticysticDysplasticKidney,HP:0000003,bilateral
+802,MulticysticDysplasticKidney,HP:0000003,bilateral
+803,MulticysticDysplasticKidney,HP:0000003,bilateral
+804,MulticysticDysplasticKidney,HP:0000003,bilateral
+805,MulticysticDysplasticKidney,HP:0000003,bilateral
+806,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+806,SolitaryKidney,HP:0000122,unilateral unspecified
+807,MulticysticDysplasticKidney,HP:0000003,bilateral
+808,MulticysticDysplasticKidney,HP:0000003,bilateral
+809,MulticysticDysplasticKidney,HP:0000003,bilateral
+810,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+811,MulticysticDysplasticKidney,HP:0000003,bilateral
+812,MulticysticDysplasticKidney,HP:0000003,bilateral
+813,MulticysticDysplasticKidney,HP:0000003,bilateral
+814,MulticysticDysplasticKidney,HP:0000003,bilateral
+815,MulticysticDysplasticKidney,HP:0000003,bilateral
+816,MulticysticDysplasticKidney,HP:0000003,bilateral
+817,MulticysticDysplasticKidney,HP:0000003,bilateral
+818,MulticysticDysplasticKidney,HP:0000003,bilateral
+819,MulticysticDysplasticKidney,HP:0000003,bilateral
+820,MulticysticDysplasticKidney,HP:0000003,bilateral
+822,MulticysticDysplasticKidney,HP:0000003,bilateral
+823,MulticysticDysplasticKidney,HP:0000003,bilateral
+824,MulticysticDysplasticKidney,HP:0000003,bilateral
+825,MulticysticDysplasticKidney,HP:0000003,bilateral
+826,RenalHypoplasia,HP:0000089,bilateral
+827,MulticysticDysplasticKidney,HP:0000003,bilateral
+828,MulticysticDysplasticKidney,HP:0000003,bilateral
+829,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+829,RenalHypoplasia,HP:0000089,unilateral unspecified
+830,MulticysticDysplasticKidney,HP:0000003,bilateral
+831,MulticysticDysplasticKidney,HP:0000003,bilateral
+832,MulticysticDysplasticKidney,HP:0000003,bilateral
+833,MulticysticDysplasticKidney,HP:0000003,bilateral
+834,MulticysticDysplasticKidney,HP:0000003,bilateral
+835,MulticysticDysplasticKidney,HP:0000003,bilateral
+836,RenalHypoplasia,HP:0000089,bilateral
+837,MulticysticDysplasticKidney,HP:0000003,bilateral
+838,MulticysticDysplasticKidney,HP:0000003,bilateral
+839,MulticysticDysplasticKidney,HP:0000003,bilateral
+840,MulticysticDysplasticKidney,HP:0000003,bilateral
+841,MulticysticDysplasticKidney,HP:0000003,bilateral
+842,MulticysticDysplasticKidney,HP:0000003,bilateral
+843,MulticysticDysplasticKidney,HP:0000003,bilateral
+844,RenalHypoplasia,HP:0000089,unilateral unspecified
+844,SolitaryKidney,HP:0000122,unilateral unspecified
+845,MulticysticDysplasticKidney,HP:0000003,bilateral
+846,MulticysticDysplasticKidney,HP:0000003,bilateral
+847,RenalHypoplasia,HP:0000089,bilateral
+848,MulticysticDysplasticKidney,HP:0000003,bilateral
+849,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+849,SolitaryKidney,HP:0000122,unilateral unspecified
+850,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+850,SolitaryKidney,HP:0000122,unilateral unspecified
+851,MulticysticDysplasticKidney,HP:0000003,bilateral
+852,MulticysticDysplasticKidney,HP:0000003,bilateral
+853,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+853,RenalHypoplasia,HP:0000089,unilateral unspecified
+855,MulticysticDysplasticKidney,HP:0000003,bilateral
+856,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+856,SolitaryKidney,HP:0000122,unilateral unspecified
+858,MulticysticDysplasticKidney,HP:0000003,bilateral
+859,RenalCysts,HP:0000107,unilateral unspecified
+859,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+860,MulticysticDysplasticKidney,HP:0000003,bilateral
+861,RenalHypoplasia,HP:0000089,bilateral
+862,MulticysticDysplasticKidney,HP:0000003,bilateral
+862,UrinaryTractMalformation,HP:0000079,bilateral
+863,RenalHypoplasia,HP:0000089,bilateral
+863,UrinaryTractMalformation,HP:0000079,bilateral
+864,MulticysticDysplasticKidney,HP:0000003,bilateral
+865,MulticysticDysplasticKidney,HP:0000003,unilateral left
+865,RenalHypoplasia,HP:0000089,unilateral right
+866,RenalHypoplasia,HP:0000089,bilateral
+867,MulticysticDysplasticKidney,HP:0000003,unilateral left
+867,RenalHypoplasia,HP:0000089,bilateral
+867,SolitaryKidney,HP:0000122,unilateral left
+868,Hyperechogenicity,HP:0033132,bilateral
+868,RenalCysts,HP:0000107,bilateral
+868,RenalHypoplasia,HP:0000089,bilateral
+869,Hyperechogenicity,HP:0033132,bilateral
+869,RenalCysts,HP:0000107,bilateral
+869,RenalHypoplasia,HP:0000089,bilateral
+871,UrinaryTractMalformation,HP:0000079,bilateral
+872,MulticysticDysplasticKidney,HP:0000003,unilateral right
+872,RenalHypoplasia,HP:0000089,unilateral left
+873,UrinaryTractMalformation,HP:0000079,unilateral left
+874,UrinaryTractMalformation,HP:0000079,bilateral
+875,RenalCysts,HP:0000107,unilateral left
+875,UrinaryTractMalformation,HP:0000079,unilateral left
+876,RenalCysts,HP:0000107,unilateral unspecified
+877,RenalHypoplasia,HP:0000089,unilateral right
+878,RenalCysts,HP:0000107,bilateral
+880,RenalHypoplasia,HP:0000089,bilateral
+881,MulticysticDysplasticKidney,HP:0000003,bilateral
+883,RenalCysts,HP:0000107,bilateral
+884,RenalCysts,HP:0000107,bilateral
+885,RenalCysts,HP:0000107,bilateral
+888,SolitaryKidney,HP:0000122,unilateral right
+888,UrinaryTractMalformation,HP:0000079,unilateral right
+889,RenalCysts,HP:0000107,unilateral right
+889,MulticysticDysplasticKidney,HP:0000003,unilateral left
+890,RenalCysts,HP:0000107,bilateral
+892,MulticysticDysplasticKidney,HP:0000003,bilateral
+893,MulticysticDysplasticKidney,HP:0000003,bilateral
+894,MulticysticDysplasticKidney,HP:0000003,bilateral
+895,MulticysticDysplasticKidney,HP:0000003,bilateral
+896,MulticysticDysplasticKidney,HP:0000003,bilateral
+897,MulticysticDysplasticKidney,HP:0000003,bilateral
+898,MulticysticDysplasticKidney,HP:0000003,bilateral
+899,Hyperechogenicity,HP:0033132,bilateral
+900,Hyperechogenicity,HP:0033132,bilateral
+901,Hyperechogenicity,HP:0033132,bilateral
+902,Hyperechogenicity,HP:0033132,bilateral
+903,Hyperechogenicity,HP:0033132,bilateral
+905,MulticysticDysplasticKidney,HP:0000003,bilateral
+906,Hyperechogenicity,HP:0033132,bilateral
+907,MulticysticDysplasticKidney,HP:0000003,bilateral
+908,MulticysticDysplasticKidney,HP:0000003,bilateral
+910,MulticysticDysplasticKidney,HP:0000003,bilateral
+911,Hyperechogenicity,HP:0033132,bilateral
+912,MulticysticDysplasticKidney,HP:0000003,unilateral unspecified
+913,MulticysticDysplasticKidney,HP:0000003,bilateral
+914,SolitaryKidney,HP:0000122,unilateral unspecified
+915,RenalCysts,HP:0000107,bilateral
+916,RenalCysts,HP:0000107,bilateral
+917,RenalCysts,HP:0000107,unilateral right
+918,RenalCysts,HP:0000107,bilateral
+919,RenalCysts,HP:0000107,bilateral
+920,RenalCysts,HP:0000107,bilateral
+921,MulticysticDysplasticKidney,HP:0000003,unilateral right
+921,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+922,MulticysticDysplasticKidney,HP:0000003,unilateral right
+922,RenalHypoplasia,HP:0000089,unilateral unspecified
+922,SolitaryKidney,HP:0000122,unilateral unspecified
+922,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+923,Hyperechogenicity,HP:0033132,bilateral
+923,RenalCysts,HP:0000107,bilateral
+926,RenalCysts,HP:0000107,bilateral
+928,RenalHypoplasia,HP:0000089,unilateral unspecified
+928,SolitaryKidney,HP:0000122,unilateral unspecified
+928,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+929,RenalCysts,HP:0000107,bilateral
+930,RenalCysts,HP:0000107,unilateral left
+930,SolitaryKidney,HP:0000122,unilateral left
+930,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+931,RenalCysts,HP:0000107,unilateral left
+931,MulticysticDysplasticKidney,HP:0000003,unilateral right
+931,UrinaryTractMalformation,HP:0000079,unilateral unspecified
+932,MulticysticDysplasticKidney,HP:0000003,unilateral left
+933,MulticysticDysplasticKidney,HP:0000003,bilateral
+934,RenalHypoplasia,HP:0000089,unilateral right
+934,UrinaryTractMalformation,HP:0000079,unilateral right
+935,RenalCysts,HP:0000107,bilateral
+936,RenalCysts,HP:0000107,bilateral
+937,RenalCysts,HP:0000107,unilateral right
+939,RenalCysts,HP:0000107,bilateral
+941,RenalCysts,HP:0000107,bilateral
+942,RenalCysts,HP:0000107,unilateral right
+942,SolitaryKidney,HP:0000122,unilateral right
+942,UrinaryTractMalformation,HP:0000079,unilateral unspecified

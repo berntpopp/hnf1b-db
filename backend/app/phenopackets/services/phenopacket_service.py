@@ -23,23 +23,37 @@ script, admin CLI) without dragging FastAPI types into the service.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from app.models.user import User
 from app.phenopackets.models import (
     Phenopacket,
     PhenopacketCreate,
+    PhenopacketRevision,
     PhenopacketUpdate,
 )
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.services.state_service import PhenopacketStateService
+from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.audit import create_audit_entry
 
 logger = logging.getLogger(__name__)
+
+_SYSTEM_ACTOR_USERNAME = "system"
+_SYSTEM_ACTOR_EMAIL = "system@hnf1b-db.local"
+_SYSTEM_ACTOR_PASSWORD_HASH = (
+    "$argon2id$v=19$m=19456,t=2,p=1$0000000000000000$"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+)
 
 
 # =============================================================================
@@ -90,6 +104,30 @@ class ServiceDatabaseError(ServiceError):
     """Raised for unexpected SQLAlchemy errors that aren't integrity issues."""
 
 
+def stamp_curated_at(sanitized: Dict[str, Any]) -> None:
+    """Overwrite ``hnf1bCuration.curatedAt`` with the server clock, in place.
+
+    Curation console design spec §3.6: ``ReviewDate`` /
+    ``hnf1bCuration.curatedAt`` must be "auto-stamped, server clock", not
+    client-stamped. The curation console (plan Task 8,
+    ``PhenopacketCreateEdit.vue``'s ``stampCuration()``) still sets a client
+    ``Date.toISOString()`` value before submit -- that value is harmless
+    (it's overwritten here) and keeps the console's own optimistic UI
+    working before the round-trip completes -- but the persisted value must
+    come from the server so it cannot be forged or skewed by the caller's
+    clock, exactly like an HTTP request's own timestamp would be.
+
+    Deliberately narrow: only touches a block that is already present in
+    the sanitized payload. Never synthesizes an ``hnf1bCuration`` block for
+    a caller that submitted none (e.g. non-curation writers), and never
+    touches ``curatedBy`` or any other field -- those are out of scope for
+    this task (plan Task 9 §c).
+    """
+    block = sanitized.get("hnf1bCuration")
+    if isinstance(block, dict):
+        block["curatedAt"] = datetime.now(timezone.utc).isoformat()
+
+
 # =============================================================================
 # Service class
 # =============================================================================
@@ -103,6 +141,44 @@ class PhenopacketService:
         self._repo = repo
         self._validator = PhenopacketValidator()
         self._sanitizer = PhenopacketSanitizer()
+
+    async def _resolve_revision_actor_id(self, actor_id: Optional[int]) -> int:
+        """Return an attributable actor for an immutable revision.
+
+        API requests provide a real user id.  The legacy service API also
+        permits batch callers to pass ``None``; those writes are attributed to
+        the disabled, non-login ``system`` user rather than creating an
+        invalid anonymous revision.  The upsert is safe when two import
+        workers initialise a previously empty database concurrently.
+        """
+        if actor_id is not None:
+            return actor_id
+
+        stmt = (
+            insert(User)
+            .values(
+                username=_SYSTEM_ACTOR_USERNAME,
+                email=_SYSTEM_ACTOR_EMAIL,
+                hashed_password=_SYSTEM_ACTOR_PASSWORD_HASH,
+                full_name="System",
+                role="admin",
+                is_active=False,
+                is_verified=True,
+                is_fixture_user=False,
+            )
+            .on_conflict_do_nothing(index_elements=[User.username])
+            .returning(User.id)
+        )
+        created_id = (await self._repo.session.execute(stmt)).scalar_one_or_none()
+        if created_id is not None:
+            return int(created_id)
+
+        existing_id = await self._repo.session.scalar(
+            select(User.id).where(User.username == _SYSTEM_ACTOR_USERNAME)
+        )
+        if existing_id is None:
+            raise ServiceDatabaseError("system actor could not be resolved")
+        return int(existing_id)
 
     async def get(
         self, phenopacket_id: str, *, include_deleted: bool = False
@@ -141,9 +217,20 @@ class PhenopacketService:
             Any other SQLAlchemy error during commit.
         """
         sanitized = self._sanitizer.sanitize_phenopacket(payload.phenopacket)
+        stamp_curated_at(sanitized)
+        sanitized = PhenopacketStateService._canonicalize_for_persistence(
+            sanitized, publish=False
+        )
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)
+
+        # Reference-data checks that need the database (spec §4.5).
+        domain_errors = await DomainValidator(self._repo.session).validate(sanitized)
+        if domain_errors:
+            raise ServiceValidationError(domain_errors)
+
+        revision_actor_id = await self._resolve_revision_actor_id(actor_id)
 
         phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -151,12 +238,69 @@ class PhenopacketService:
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
             created_by_id=actor_id,
+            draft_owner_id=actor_id,
         )
         self._repo.add(phenopacket)
 
         # Emit CREATE audit row BEFORE the commit so it lands in the same
         # transaction as the phenopacket row.  If either fails, both roll back.
         try:
+            await self._repo.session.flush()
+            projection_payload = {
+                field: sanitized.get(field)
+                for field in (
+                    "id",
+                    "subject",
+                    "phenotypicFeatures",
+                    "diseases",
+                    "interpretations",
+                    "measurements",
+                    "metaData",
+                )
+                if field in sanitized
+            }
+            projection_hash = hashlib.sha256(
+                json.dumps(
+                    projection_payload, sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            ledger_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "parent_revision_id": None,
+                        "revision_number": phenopacket.revision,
+                        "state": "draft",
+                        "event_type": "created",
+                        "projection_hash": projection_hash,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            initial_revision = PhenopacketRevision(
+                record_id=phenopacket.id,
+                revision_number=phenopacket.revision,
+                state="draft",
+                content_jsonb=sanitized,
+                change_reason="Initial creation",
+                actor_id=revision_actor_id,
+                from_state=None,
+                to_state="draft",
+                event_type="created",
+                profile_schema_version=str(
+                    sanitized.get("hnf1bCuration", {}).get("schemaVersion", "legacy")
+                ),
+                projection_version=str(
+                    sanitized.get("hnf1bCuration", {})
+                    .get("projection", {})
+                    .get("algorithmVersion", "legacy")
+                ),
+                ledger_hash=ledger_hash,
+                projection_hash=projection_hash,
+            )
+            self._repo.session.add(initial_revision)
+            await self._repo.session.flush()
+            phenopacket.editing_revision_id = initial_revision.id
             await create_audit_entry(
                 db=self._repo.session,
                 phenopacket_id=phenopacket.phenopacket_id,
@@ -236,6 +380,7 @@ class PhenopacketService:
 
         old_phenopacket = existing.phenopacket.copy()
         sanitized = self._sanitizer.sanitize_phenopacket(payload.phenopacket)
+        stamp_curated_at(sanitized)
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)
@@ -342,7 +487,7 @@ class PhenopacketService:
                 changed_by_id=actor_id,
                 change_reason=change_reason,
             )
-            await self._repo.session.commit()
+            await self._repo.session.flush()
         except ValueError as exc:
             # Wave 5b Task 4: audit.create_audit_entry raises ValueError
             # when its post-INSERT SELECT returns None. Map to

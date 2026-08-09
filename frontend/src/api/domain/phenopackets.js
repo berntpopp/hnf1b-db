@@ -72,7 +72,13 @@ export const getPhenopackets = (params) => apiClient.get('/phenopackets/', { par
  * @param {string} id - Phenopacket ID
  * @returns {Promise} Axios promise with phenopacket document
  */
-export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${id}`);
+export const getPhenopacket = (id) => apiClient.get(`/phenopackets/${encodeURIComponent(id)}`);
+
+/** Fetch the authoritative server-redacted GA4GH representation for export actions. */
+export const exportPhenopacket = (id) =>
+  apiClient.get(`/phenopackets/${encodeURIComponent(id)}/export`, {
+    params: { representation: 'ga4gh' },
+  });
 
 /**
  * Get phenotype timeline for an individual phenopacket.

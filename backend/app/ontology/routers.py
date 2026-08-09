@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.ontology.schemas import VocabularyItem, VocabularyResponse
 
 router = APIRouter(prefix="/ontology", tags=["ontology"])
 
@@ -209,6 +210,94 @@ async def get_evidence_code_values(db: AsyncSession = Depends(get_db)):
         """SELECT id, label, description, category
            FROM evidence_code_values
            ORDER BY sort_order"""
+    )
+    result = await db.execute(query)
+    return {"data": [dict(row._mapping) for row in result.fetchall()]}
+
+
+_CURATION_VOCABULARIES = {
+    "cohort": "cohort_values",
+    "detection-method": "detection_method_values",
+    "segregation": "segregation_values",
+    "family-history": "family_history_values",
+    "publication-type": "publication_type_values",
+    "classification-system": "classification_system_values",
+}
+
+
+async def _fetch_curation_vocabulary(
+    db: AsyncSession, table: str
+) -> VocabularyResponse:
+    """Read one curation reference table in sort_order.
+
+    The table name comes from the module-level mapping, never from user input.
+    """
+    query = text(
+        f"SELECT value, label, description FROM {table} ORDER BY sort_order"  # noqa: S608
+    )
+    result = await db.execute(query)
+    return VocabularyResponse(
+        data=[VocabularyItem(**row._mapping) for row in result.fetchall()]
+    )
+
+
+@router.get("/vocabularies/cohort", response_model=VocabularyResponse)
+async def get_cohort_values(db: AsyncSession = Depends(get_db)):
+    """Get valid cohort values (born / fetus) for hnf1bCuration.cohort."""
+    return await _fetch_curation_vocabulary(db, _CURATION_VOCABULARIES["cohort"])
+
+
+@router.get("/vocabularies/detection-method", response_model=VocabularyResponse)
+async def get_detection_method_values(db: AsyncSession = Depends(get_db)):
+    """Get valid variant detection methods for hnf1bCuration.detectionMethod."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["detection-method"]
+    )
+
+
+@router.get("/vocabularies/segregation", response_model=VocabularyResponse)
+async def get_segregation_values(db: AsyncSession = Depends(get_db)):
+    """Get valid segregation origins for the variant segregation extension."""
+    return await _fetch_curation_vocabulary(db, _CURATION_VOCABULARIES["segregation"])
+
+
+@router.get("/vocabularies/family-history", response_model=VocabularyResponse)
+async def get_family_history_values(db: AsyncSession = Depends(get_db)):
+    """Get valid family history statuses for hnf1bCuration.familyHistory."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["family-history"]
+    )
+
+
+@router.get("/vocabularies/publication-type", response_model=VocabularyResponse)
+async def get_publication_type_values(db: AsyncSession = Depends(get_db)):
+    """Get valid publication types for hnf1bCuration.publicationType."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["publication-type"]
+    )
+
+
+@router.get("/vocabularies/classification-system", response_model=VocabularyResponse)
+async def get_classification_system_values(db: AsyncSession = Depends(get_db)):
+    """Get valid classification systems for hnf1bCuration.classificationSystem."""
+    return await _fetch_curation_vocabulary(
+        db, _CURATION_VOCABULARIES["classification-system"]
+    )
+
+
+@router.get("/laterality-policy")
+async def get_laterality_policy(db: AsyncSession = Depends(get_db)):
+    """Get the HPO modifiers each phenotype term admits.
+
+    Only terms that admit at least one modifier are returned; every other term
+    admits none. Consumed by the curation console to decide whether to render a
+    laterality control, and by the domain validator on the write path.
+    """
+    query = text(
+        """SELECT hpo_id, allowed_modifiers
+           FROM hpo_terms_lookup
+           WHERE cardinality(allowed_modifiers) > 0
+           ORDER BY hpo_id"""
     )
     result = await db.execute(query)
     return {"data": [dict(row._mapping) for row in result.fetchall()]}

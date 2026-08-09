@@ -10,6 +10,7 @@ import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.extractors import PhenotypeExtractor, VariantExtractor
+from migration.phenopackets.laterality import ModifierVocabulary
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.phenopackets.reviewer_mapper import ReviewerMapper
@@ -27,6 +28,7 @@ class PhenopacketBuilder:
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
         reviewer_mapper: Optional[ReviewerMapper] = None,
+        modifier_vocabulary: ModifierVocabulary | None = None,
     ):
         """Initialize phenopacket builder.
 
@@ -34,6 +36,7 @@ class PhenopacketBuilder:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
             reviewer_mapper: Reviewer name mapper for resolving emails to full names
+            modifier_vocabulary: Versioned terms from ``Phenotype_modifier``.
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
@@ -43,7 +46,9 @@ class PhenopacketBuilder:
 
         # Initialize extractors with injected dependencies
         self.phenotype_extractor = PhenotypeExtractor(
-            ontology_mapper, publication_mapper
+            ontology_mapper,
+            publication_mapper,
+            modifier_vocabulary=modifier_vocabulary,
         )
         self.variant_extractor = VariantExtractor(self.mondo_mappings)
 
@@ -51,19 +56,28 @@ class PhenopacketBuilder:
         """Initialize disease ontology mappings.
 
         All individuals in this database have HNF1B-related genetic findings.
-        MONDO:0011593 (Renal cysts and diabetes syndrome) is the umbrella term
-        for HNF1B-related disorder, also known as RCAD.
+        MONDO:0007669 (renal cysts and diabetes syndrome) is the umbrella term
+        for the HNF1B-related disorder, also known as RCAD.
+
+        Both ids used previously were wrong — right label, wrong term. Verified
+        against MONDO releases/2026-07-06:
+
+            MONDO:0011593 = "seizures, benign familial infantile, 2"
+            MONDO:0010953 = "Fanconi anemia complementation group E"
+
+        MONDO does not maintain RCAD and MODY5 as separate entities: resolving
+        "maturity-onset diabetes of the young type 5" returns MONDO:0007669,
+        whose definition reads "Renal cysts and diabetes syndrome (RCAD) is a
+        rare form of maturity-onset diabetes of the young (MODY)...". Both keys
+        therefore map to the same term; the RCAD/MODY5 distinction, if it is
+        needed for curation, belongs in a dedicated field rather than in two
+        disease annotations on one record.
         """
-        return {
-            "hnf1b_disorder": {
-                "id": "MONDO:0011593",
-                "label": "Renal cysts and diabetes syndrome",
-            },
-            "mody5": {
-                "id": "MONDO:0010953",
-                "label": "Maturity-onset diabetes of the young type 5",
-            },
+        rcad = {
+            "id": "MONDO:0007669",
+            "label": "renal cysts and diabetes syndrome",
         }
+        return {"hnf1b_disorder": dict(rcad), "mody5": dict(rcad)}
 
     def _safe_value(self, value: Any) -> Optional[str]:
         """Safely convert value to string, handling NaN."""
@@ -494,7 +508,7 @@ class PhenopacketBuilder:
         """Build diseases list for phenopacket.
 
         All individuals in this database have HNF1B-related genetic findings,
-        so MONDO:0011593 (Renal cysts and diabetes syndrome / RCAD) is included
+        so MONDO:0007669 (renal cysts and diabetes syndrome / RCAD) is included
         for all phenopackets as the base disease. Additional specific disease
         terms are added based on phenotypic evidence.
         """
@@ -705,7 +719,7 @@ class PhenopacketBuilder:
         """Generate sort key for onset (earlier onsets have smaller keys).
 
         Sort priority:
-        1. Prenatal (HP:0034199) - earliest
+        1. Congenital / prenatal (HP:0003577) - earliest
         2. Congenital/Birth (HP:0003577)
         3. Postnatal (HP:0003674)
         4. Infantile (HP:0003593)
@@ -729,8 +743,10 @@ class PhenopacketBuilder:
 
         # Define priority order
         hpo_priorities = {
-            "HP:0034199": 1,  # Prenatal
-            "HP:0003577": 2,  # Congenital
+            # Source "prenatal" and "congenital" both map to HP:0003577 —
+            # the Phenotype_modifier sheet lists "Prenatal onset" as a synonym
+            # of Congenital onset — so they share one priority.
+            "HP:0003577": 1,  # Congenital / prenatal
             "HP:0003674": 3,  # Postnatal
             "HP:0003593": 4,  # Infantile
             "HP:0011463": 5,  # Childhood

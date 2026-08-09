@@ -22,6 +22,11 @@ _RULES: list[tuple[re.Pattern[str], bool]] = [
     (re.compile(r"^/phenopackets/by-variant/[^/]+$"), False),
     (re.compile(r"^/phenopackets/by-publication/[^/]+$"), False),
     (re.compile(r"^/phenopackets/?$"), False),
+    # Export is a read of a single record; conformant mode is the default.
+    # Must precede the catch-all GET /{id} rule below among /phenopackets
+    # rules — that rule is regex-anchored to a single path segment so it
+    # would not actually match this one, but it stays first for clarity.
+    (re.compile(r"^/phenopackets/[^/]+/export$"), False),
     # GET /{id} — keep last among /phenopackets rules
     (re.compile(r"^/phenopackets/[^/]+$"), False),
     (re.compile(r"^/reference/genomes$"), False),
@@ -35,6 +40,8 @@ _RULES: list[tuple[re.Pattern[str], bool]] = [
     (re.compile(r"^/ontology/hpo/autocomplete$"), False),
     (re.compile(r"^/ontology/hpo/grouped$"), False),
     (re.compile(r"^/ontology/vocabularies/[a-z-]+$"), False),
+    # Per-term admissible HPO modifiers; read-only reference data.
+    (re.compile(r"^/ontology/laterality-policy$"), False),
     # Unified search (safe ONLY after Task A4 fixes the global_search_index MV).
     (re.compile(r"^/search/global$"), True),
     (re.compile(r"^/search/autocomplete$"), True),
@@ -65,7 +72,7 @@ _DENY = [
         r"^/info$",
         r"^/version$",
         # Per-phenopacket workflow/audit/revision routes — curation internals.
-        r"^/phenopackets/[^/]+/(audit|revisions|timeline|transitions)(/|$)",
+        r"^/phenopackets/[^/]+/(audit|curation|reports|revisions|timeline|transitions)(/|$)",
         # Statistical-comparison endpoint — not in the curated metric set.
         r"^/phenopackets/compare/",
         # SEO sitemaps — XML, not data.

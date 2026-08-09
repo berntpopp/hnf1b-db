@@ -16,62 +16,106 @@ from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------- HGVS
 
+# A transcript-relative position, optionally offset into an intron
+# (e.g. ``544``, ``544+3``, ``544-6``). Reused by the del/dup/ins/delins
+# patterns below so a single position group covers both exonic and
+# intronic variants — HGVS itself makes no distinction between the two
+# for these operators.
+_HGVS_C_POS = r"\d+[+\-]?\d*"
+
 _HGVS_C_PATTERNS = [
     # Substitution: c.544+1G>A (allows +/- offset)
     r"^(NM_\d+\.\d+:)?c\.([+\-*]?\d+[+\-]?\d*)([ATCG]>[ATCG])$",
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?del([ATCG]+)?$",  # Deletion
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?dup([ATCG]+)?$",  # Duplication
-    r"^(NM_\d+\.\d+:)?c\.\d+(_\d+)?ins([ATCG]+)$",  # Insertion
-    r"^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$",  # Intronic
+    rf"^(NM_\d+\.\d+:)?c\.{_HGVS_C_POS}(_{_HGVS_C_POS})?del([ATCG]+)?$",  # Deletion
+    rf"^(NM_\d+\.\d+:)?c\.{_HGVS_C_POS}(_{_HGVS_C_POS})?dup([ATCG]+)?$",  # Duplication
+    rf"^(NM_\d+\.\d+:)?c\.{_HGVS_C_POS}(_{_HGVS_C_POS})?ins([ATCG]+)$",  # Insertion
+    r"^(NM_\d+\.\d+:)?c\.\d+[+\-]\d+[ATCG]>[ATCG]$",  # Intronic substitution
+    # Deletion-insertion with literal deleted/inserted sequences, single
+    # position or range (e.g. ``c.1149delAinsTGGCC``,
+    # ``c.499_504delGCTCTGinsCCCCT`` — 2 corpus instances).
+    rf"^(NM_\d+\.\d+:)?c\.{_HGVS_C_POS}(_{_HGVS_C_POS})?del([ATCG]*)ins([ATCG]+)$",
 ]
 
 
 def validate_hgvs_c(value: str) -> bool:
     """Validate HGVS c. notation.
 
-    Examples: ``NM_000458.4:c.544+1G>A``, ``c.1234A>T``, ``c.123_456del``.
+    Examples: ``NM_000458.4:c.544+1G>A``, ``c.1234A>T``, ``c.123_456del``,
+    ``c.544+3_544+6del`` (intronic range), ``c.499_504delGCTCTGinsCCCCT``.
     """
     return any(bool(re.match(pattern, value)) for pattern in _HGVS_C_PATTERNS)
 
 
-_HGVS_P_PATTERN = (
-    r"^(NP_\d+\.\d+:)?p\."
-    r"([A-Z][a-z]{2}\d+[A-Z][a-z]{2}|"
-    r"[A-Z][a-z]{2}\d+\*|"
-    r"[A-Z][a-z]{2}\d+[A-Z][a-z]{2}fs|\?)$"
-)
+# A three-letter amino-acid code, e.g. ``Arg``, ``Leu``, or the
+# syntactically-identical-looking ``Ter`` (stop).
+_AA3 = r"[A-Z][a-z]{2}"
+
+_HGVS_P_PATTERNS = [
+    # Frameshift, with an optional ``Ter##`` new-stop-codon position
+    # (e.g. ``p.Pro328LeufsTer48`` — 83 corpus instances) alongside the
+    # bare ``fs`` form.
+    rf"^(NP_\d+\.\d+:)?p\.{_AA3}\d+{_AA3}fs(Ter\d+)?$",
+    rf"^(NP_\d+\.\d+:)?p\.{_AA3}\d+\*$",  # Nonsense
+    rf"^(NP_\d+\.\d+:)?p\.{_AA3}\d+{_AA3}$",  # Missense
+    r"^(NP_\d+\.\d+:)?p\.\?$",  # Unknown effect
+    # In-frame deletion, single residue (e.g. ``p.Gly239del``) or a range,
+    # the range form optionally a delins (e.g. ``p.Arg137_Lys161del``,
+    # ``p.Ala373_Gln383delinsGlu``).
+    rf"^(NP_\d+\.\d+:)?p\.{_AA3}\d+del$",
+    rf"^(NP_\d+\.\d+:)?p\.{_AA3}\d+_{_AA3}\d+del(ins(?:{_AA3})+)?$",
+]
 
 
 def validate_hgvs_p(value: str) -> bool:
     """Validate HGVS p. notation.
 
-    Examples: ``NP_000449.3:p.Arg181*``, ``p.Val123Phe``.
+    Examples: ``NP_000449.3:p.Arg181*``, ``p.Val123Phe``,
+    ``p.Pro328LeufsTer48``, ``p.Arg137_Lys161del``.
     """
-    return bool(re.match(_HGVS_P_PATTERN, value))
+    return any(bool(re.match(pattern, value)) for pattern in _HGVS_P_PATTERNS)
 
 
-_HGVS_G_PATTERN = r"^NC_\d+\.\d+:g\.\d+[ATCG]>[ATCG]$"
+_HGVS_G_PATTERNS = [
+    r"^NC_\d+\.\d+:g\.\d+[ATCG]>[ATCG]$",  # Substitution
+    r"^NC_\d+\.\d+:g\.\d+(_\d+)?del([ATCG]+)?$",  # Deletion
+    r"^NC_\d+\.\d+:g\.\d+(_\d+)?dup([ATCG]+)?$",  # Duplication
+    r"^NC_\d+\.\d+:g\.\d+(_\d+)?ins([ATCG]+)$",  # Insertion
+    # Deletion-insertion, single position or range (e.g.
+    # ``g.37710560_37710560delinsGGCCA``).
+    r"^NC_\d+\.\d+:g\.\d+(_\d+)?del([ATCG]*)ins([ATCG]+)$",
+]
 
 
 def validate_hgvs_g(value: str) -> bool:
     """Validate HGVS g. notation.
 
-    Example: ``NC_000017.11:g.36459258A>G``.
+    Examples: ``NC_000017.11:g.36459258A>G``,
+    ``NC_000017.11:g.37731657del``,
+    ``NC_000017.11:g.37739437_37739438insA``.
     """
-    return bool(re.match(_HGVS_G_PATTERN, value))
+    return any(bool(re.match(pattern, value)) for pattern in _HGVS_G_PATTERNS)
 
 
 # ----------------------------------------------------------------------- VCF
 
 _VCF_PATTERN = r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ATCG]+-([ATCG]+|<[A-Z]+>)$"
 
+# 5-field structural-variant form: chrom-start-END-ref-<SYMBOLIC ALT>. The
+# extra numeric field is the CNV's end coordinate; the corpus only ever
+# pairs it with a symbolic ALT (``<DEL>``/``<DUP>``), never a literal one.
+_VCF_CNV_PATTERN = r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-\d+-[ATCG]+-<[A-Z]+>$"
+
 
 def validate_vcf(value: str) -> bool:
     """Validate VCF format.
 
-    Examples: ``chr17-36459258-A-G``, ``17-36459258-A-G``.
+    Examples: ``chr17-36459258-A-G``, ``17-36459258-A-G`` (4-field), and
+    ``17-36459258-37832869-C-<DEL>`` (5-field CNV with an END coordinate
+    and a symbolic ALT).
     """
-    return bool(re.match(_VCF_PATTERN, value, re.IGNORECASE))
+    return bool(re.match(_VCF_PATTERN, value, re.IGNORECASE)) or bool(
+        re.match(_VCF_CNV_PATTERN, value, re.IGNORECASE)
+    )
 
 
 _VCF_FORMAT_PATTERN = re.compile(r"^(chr)?[\dXYM]+-\d+-[ACGT]+-[ACGT]+$", re.IGNORECASE)
@@ -102,13 +146,18 @@ def vcf_to_vep_format(vcf_variant: str) -> Optional[str]:
 
 # ---------------------------------------------------------------------- SPDI
 
-_SPDI_PATTERN = r"^NC_\d+\.\d+:\d+:[ATCG]*:[ATCG]+$"
+# SPDI's third field ("Deleted") is defined by the spec as either the
+# deleted *sequence* (``[ATCG]*``, empty for a pure insertion) or the
+# deleted *length* as a non-negative integer — the corpus uses the numeric
+# form exclusively (424 instances, e.g. ``NC_000017.11:37739585:1:C``).
+_SPDI_PATTERN = r"^NC_\d+\.\d+:\d+:([ATCG]*|\d+):[ATCG]+$"
 
 
 def validate_spdi(value: str) -> bool:
     """Validate SPDI notation.
 
-    Example: ``NC_000017.11:36459257:A:G``.
+    Examples: ``NC_000017.11:36459257:A:G`` (deleted sequence),
+    ``NC_000017.11:37739585:1:C`` (deleted length).
     """
     return bool(re.match(_SPDI_PATTERN, value))
 

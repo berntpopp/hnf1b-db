@@ -26,6 +26,7 @@ from app.phenopackets.models import Phenopacket
 from app.phenopackets.repositories.visibility import (
     curator_filter,
     public_filter,
+    public_head_query,
     resolve_curator_content,
     resolve_public_content,
 )
@@ -33,6 +34,13 @@ from app.phenopackets.repositories.visibility import (
 # ---------------------------------------------------------------------------
 # public_filter — invariants I3 + I7
 # ---------------------------------------------------------------------------
+
+
+def test_public_head_query_joins_immutable_snapshot():
+    """Public JSON filtering has an explicit published-head SQL source."""
+    compiled = str(public_head_query(select(Phenopacket)))
+    assert "phenopacket_revisions" in compiled
+    assert "head_published_revision_id" in compiled
 
 
 @pytest.mark.asyncio
@@ -84,6 +92,7 @@ async def test_curator_filter_excludes_archived_by_default(
         expected_revision=published_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
     assert published_record.state == "archived"
 
@@ -110,6 +119,7 @@ async def test_curator_filter_include_archived(
         expected_revision=published_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     stmt = curator_filter(select(Phenopacket), include_archived=True)
@@ -127,11 +137,7 @@ async def test_curator_filter_include_archived(
 
 @pytest.mark.asyncio
 async def test_resolve_public_content_dereferences_head(db_session, published_record):
-    """For a freshly published record with no active edit, resolve_public_content
-    returns the same content as pp.phenopacket (fast-path I1 check).
-    """
-    # published_record has editing_revision_id=None, state='published'
-    # → fast path: pp.phenopacket == head revision content
+    """Public output is redacted from the immutable head snapshot."""
     content = await resolve_public_content(db_session, published_record)
     assert content is not None
     assert content == published_record.phenopacket
@@ -157,6 +163,7 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
         expected_revision=published_record.revision,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     # Sanity: working copy changed

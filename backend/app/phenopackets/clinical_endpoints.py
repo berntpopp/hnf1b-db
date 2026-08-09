@@ -9,7 +9,7 @@ from sqlalchemy.sql import CompoundSelect, Select
 
 from app.database import get_db
 from app.phenopackets.clinical_queries import ClinicalQueries
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 
 router = APIRouter(prefix="/api/v2/clinical", tags=["clinical-features"])
 
@@ -144,7 +144,7 @@ async def get_diabetes_cases(
                 and_(
                     P2.phenopacket_id == Phenopacket.phenopacket_id,
                     func.jsonb_path_exists(
-                        P2.phenopacket,
+                        PhenopacketRevision.content_jsonb,
                         "$.phenotypicFeatures[*] ? (@.type.id == $hpo)",
                         func.jsonb_build_object("hpo", func.any_(complication_hpo)),
                     ),
@@ -270,7 +270,7 @@ async def get_pancreatic_abnormalities(
     if not include_diabetes:
         diabetes_exclusion = not_(
             func.jsonb_path_exists(
-                Phenopacket.phenopacket,
+                PhenopacketRevision.content_jsonb,
                 '$.diseases[*] ? (@.term.label like_regex "diabetes")',
             )
         )
@@ -288,23 +288,33 @@ async def get_pancreatic_abnormalities(
         diabetes_check = await db.scalar(
             select(
                 func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(
                         "'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"
                     ),
                 )
-            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+            )
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         exocrine_check = await db.scalar(
             select(
                 func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(
                         "'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"
                     ),
                 )
-            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+            )
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         features = row.features if hasattr(row, "features") else []
@@ -358,11 +368,16 @@ async def get_liver_abnormalities(
         lft_result = await db.scalar(
             select(
                 func.jsonb_path_query_array(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     "$.measurements[*] ? (@.assay.id == $loinc)",
                     func.jsonb_build_object("loinc", func.any_(lft_loinc)),
                 )
-            ).where(Phenopacket.phenopacket_id == row.phenopacket_id)
+            )
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
         )
 
         lft_labels = []

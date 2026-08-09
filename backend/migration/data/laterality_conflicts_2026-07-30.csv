@@ -1,0 +1,22 @@
+# Source: HNF1B_DataCuration.xlsx sha256=0fcc5362148085ea0c55b682836c8f4ecef2b5be7f88a9038409f94d8a5061ec
+# Individuals whose repeated sheet rows disagree on a laterality
+# column's value. Not restored automatically; needs curator review.
+individual_id,phenotype_column,hpo_id,conflicting_values
+27,UrinaryTractMalformation,HP:0000079,unilateral left|unilateral unspecified
+28,UrinaryTractMalformation,HP:0000079,unilateral left|unilateral unspecified
+117,MulticysticDysplasticKidney,HP:0000003,bilateral|unilateral unspecified
+158,Hyperechogenicity,HP:0033132,bilateral|unilateral unspecified
+158,MulticysticDysplasticKidney,HP:0000003,bilateral|unilateral unspecified
+158,UrinaryTractMalformation,HP:0000079,bilateral|unilateral unspecified
+193,UrinaryTractMalformation,HP:0000079,unilateral left|unilateral unspecified
+369,RenalCysts,HP:0000107,bilateral|unilateral unspecified
+462,RenalCysts,HP:0000107,bilateral|unilateral unspecified
+551,RenalCysts,HP:0000107,bilateral|unilateral left
+581,MulticysticDysplasticKidney,HP:0000003,bilateral|unilateral unspecified
+581,UrinaryTractMalformation,HP:0000079,bilateral|unilateral unspecified
+703,MulticysticDysplasticKidney,HP:0000003,bilateral|unilateral right
+703,RenalHypoplasia,HP:0000089,bilateral|unilateral right
+733,Hyperechogenicity,HP:0033132,bilateral|unilateral unspecified
+734,Hyperechogenicity,HP:0033132,bilateral|unilateral right
+734,RenalHypoplasia,HP:0000089,bilateral|unilateral right
+735,Hyperechogenicity,HP:0033132,bilateral|unilateral right

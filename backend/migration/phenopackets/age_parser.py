@@ -51,11 +51,28 @@ class AgeParser:
 
         age_str = str(age_str).strip().lower()
 
-        # Handle special onset terms
+        # Handle special onset terms.
+        #
+        # Two ids here were wrong, both in the same way: the label named the
+        # intended concept while the id denoted something else. Verified against
+        # HPO 2026-06-23.
+        #
+        #   HP:0034199 is "Late first trimester onset", NOT "Prenatal onset".
+        #     The source's own Phenotype_modifier sheet lists "Prenatal onset"
+        #     as a synonym of HP:0003577 Congenital onset, so that is the
+        #     intended term. (HP:0030674 "Antenatal onset" also exists, but the
+        #     curation vocabulary chose congenital.)
+        #
+        #   HP:0003674 is "Onset" — the abstract parent, defined as "The age
+        #     group in which disease manifestations appear". HPO has no generic
+        #     postnatal-onset term; its children are Congenital, Neonatal,
+        #     Infantile, Childhood, Adult, ... The id is kept because it is an
+        #     ancestor of any true onset and so is not false, but the label must
+        #     not claim a specificity the term does not carry.
         if age_str in ["prenatal", "pre-natal", "antenatal"]:
-            return {"ontologyClass": {"id": "HP:0034199", "label": "Prenatal onset"}}
+            return {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
         elif age_str in ["postnatal", "post-natal"]:
-            return {"ontologyClass": {"id": "HP:0003674", "label": "Postnatal onset"}}
+            return {"ontologyClass": {"id": "HP:0003674", "label": "Onset"}}
         elif age_str in ["congenital", "birth", "at birth", "newborn", "neonatal"]:
             return {"ontologyClass": {"id": "HP:0003577", "label": "Congenital onset"}}
         elif age_str in ["infantile", "infant", "infancy"]:

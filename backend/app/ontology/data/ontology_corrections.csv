@@ -1,0 +1,15 @@
+defect_key,location,wrong_id,wrong_label,intended_id,intended_label,correction_kind,ontology_release,evidence,affected_count,test_or_migration_reference
+T1,Phenotypes/Hyperechogenicity,HP:0033133,Renal cortical hypoechogeneity,HP:0033132,Renal cortical hyperechogenicity,identifier_change,HPO-2026-06-23,Source description exactly matches intended HPO definition,460,d4e8b1f60a27_fix_renal_echogenicity_hpo_term.py
+T2,phenopackets disease fields,MONDO:0011593,renal cysts and diabetes syndrome,MONDO:0007669,renal cysts and diabetes syndrome,identifier_change,MONDO-2026-07-06,Ontology audit and journal,864,efa98cccfa51_correct_ontology_terms.py
+T3,phenopackets disease fields,MONDO:0010953,Maturity-onset diabetes of the young type 5,MONDO:0007669,renal cysts and diabetes syndrome,identifier_change,MONDO-2026-07-06,Ontology audit and journal,261,efa98cccfa51_correct_ontology_terms.py
+T4,AgeOnset prenatal,HP:0034199,Prenatal onset,HP:0030674,Antenatal onset,identifier_change,HPO-2026-06-23,HPO onset semantics audit,1068,efa98cccfa51_correct_ontology_terms.py
+T5,AgeOnset postnatal,HP:0003674,Postnatal onset,,,semantic_unprojection,HPO-2026-06-23,HPO has no generic postnatal concept,445,efa98cccfa51_correct_ontology_terms.py
+T6,ontology_service.py,HP:0003149,Hyperuricemia,HP:0002149,Hyperuricemia,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_ontology_conformance.py
+T7,hpo_mapper default,HP:0010935,Increased echogenicity of kidneys,HP:0033132,Renal cortical hyperechogenicity,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_ontology_conformance.py
+T8,hpo_mapper default,HP:0004729,Solitary functioning kidney,HP:0000122,Unilateral renal agenesis,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_ontology_conformance.py
+T9,hpo_mapper default,HP:0004719,Oligomeganephronia,ORPHA:2260,Oligomeganephronia,identifier_change,ORPHA-2026-07-06,Ontology audit,0,tests/test_ontology_conformance.py
+T10,hpo_mapper default,HP:0010945,Fetal renal anomaly,HP:0012210,Abnormal renal morphology,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_ontology_conformance.py
+T11,hpo_mapper default,HP:0100575,Pancreatic hypoplasia,HP:0002594,Pancreatic hypoplasia,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_ontology_conformance.py
+T12,HPOTermsConfig.any_kidney,HP:0000108,Multiple glomerular cysts,HP:0100611,Multiple glomerular cysts,identifier_change,HPO-2026-06-23,Ontology audit,0,tests/test_hpo_terms_config_conformance.py
+T13,HPOTermsConfig.any_kidney,HP:0001970,Oligomeganephronia,ORPHA:2260,Oligomeganephronia,identifier_change,ORPHA-2026-07-06,Ontology audit,0,tests/test_hpo_terms_config_conformance.py
+L1,ECO evidence labels,ECO:0000033,author statement,ECO:0000033,author statement supported by traceable reference,label_only,ECO-2026-06-23,Pinned ontology label audit,0,tests/test_ontology_conformance.py

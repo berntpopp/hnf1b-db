@@ -1512,6 +1512,16 @@ class TestValidationMethods:
         )  # Duplication with sequence
         assert validator._validate_hgvs_c("c.123_456insATCG") is True  # Insertion
         assert validator._validate_hgvs_c("c.544-2A>G") is True  # Intronic with minus
+        # Intronic deletion, single position and range (18+6 corpus
+        # instances, e.g. NM_000458.4:c.544+3_544+6del).
+        assert validator._validate_hgvs_c("NM_000458.4:c.544+2dup") is True
+        assert validator._validate_hgvs_c("NM_000458.4:c.544+3_544+6del") is True
+        # Deletion-insertion with literal sequences on both sides (2 corpus
+        # instances).
+        assert validator._validate_hgvs_c("NM_000458.4:c.1149delAinsTGGCC") is True
+        assert (
+            validator._validate_hgvs_c("NM_000458.4:c.499_504delGCTCTGinsCCCCT") is True
+        )
 
     def test_validate_hgvs_c_invalid(self):
         """Test HGVS c. notation validation with invalid inputs."""
@@ -1523,6 +1533,11 @@ class TestValidationMethods:
             validator._validate_hgvs_c("NM_000458.4:p.Arg181*") is False
         )  # Wrong type
         assert validator._validate_hgvs_c("m.123A>G") is False  # Mitochondrial (not c.)
+        assert validator._validate_hgvs_c("not a variant at all") is False  # Garbage
+        assert validator._validate_hgvs_c("c.123delXYZ") is False  # Non-ACGT sequence
+        assert (
+            validator._validate_hgvs_c("NM_000458.4:c.499_504delGCTCTGins") is False
+        )  # delins missing inserted sequence
 
     def test_validate_hgvs_p_valid(self):
         """Test HGVS p. notation validation with valid inputs."""
@@ -1534,6 +1549,16 @@ class TestValidationMethods:
         assert validator._validate_hgvs_p("p.Arg181Ter") is True  # Ter instead of *
         assert validator._validate_hgvs_p("p.Gly182Serfs") is True  # Frameshift
         assert validator._validate_hgvs_p("p.?") is True  # Unknown effect
+        # Frameshift with an explicit new-stop-codon position (83 corpus
+        # instances, e.g. NP_000449.3:p.Pro328LeufsTer48).
+        assert validator._validate_hgvs_p("NP_000449.3:p.Pro328LeufsTer48") is True
+        # In-frame deletion: single residue, range, and range delins (7
+        # corpus instances total).
+        assert validator._validate_hgvs_p("NP_000449.3:p.Gly239del") is True
+        assert validator._validate_hgvs_p("NP_000449.3:p.Arg137_Lys161del") is True
+        assert (
+            validator._validate_hgvs_p("NP_000449.3:p.Ala373_Gln383delinsGlu") is True
+        )
 
     def test_validate_hgvs_p_invalid(self):
         """Test HGVS p. notation validation with invalid inputs."""
@@ -1543,6 +1568,8 @@ class TestValidationMethods:
         assert validator._validate_hgvs_p("pArg181Ter") is False  # Missing dot
         assert validator._validate_hgvs_p("p.A181*") is False  # Single letter code
         assert validator._validate_hgvs_p("NM_000458.4:c.544G>A") is False  # Wrong type
+        assert validator._validate_hgvs_p("not a variant at all") is False  # Garbage
+        assert validator._validate_hgvs_p("p.A181del") is False  # Single letter + del
 
     def test_validate_hgvs_g_valid(self):
         """Test HGVS g. notation validation with valid inputs."""
@@ -1550,6 +1577,15 @@ class TestValidationMethods:
 
         # Valid HGVS g. notations
         assert validator._validate_hgvs_g("NC_000017.11:g.36459258A>G") is True
+        # Deletion, no ref/alt bases — 43 corpus instances (e.g.
+        # NC_000017.11:g.37731657del). Widened 2026-07-31 per
+        # docs/adr/0003-ga4gh-conformance-debt.md: the corpus's real
+        # notation, not a substitution, and SPDI/HGVS both permit a bare
+        # "del" with no explicit deleted sequence.
+        assert validator._validate_hgvs_g("NC_000017.11:g.36459258del") is True
+        assert (
+            validator._validate_hgvs_g("NC_000017.11:g.37739437_37739438insA") is True
+        )  # Range insertion
 
     def test_validate_hgvs_g_invalid(self):
         """Test HGVS g. notation validation with invalid inputs."""
@@ -1557,9 +1593,8 @@ class TestValidationMethods:
 
         # Invalid HGVS g. notations
         assert validator._validate_hgvs_g("chr17:g.36459258A>G") is False  # chr prefix
-        assert (
-            validator._validate_hgvs_g("NC_000017.11:g.36459258del") is False
-        )  # Not substitution
+        assert validator._validate_hgvs_g("NC_000017.11:g.36459258") is False  # No op
+        assert validator._validate_hgvs_g("g.36459258del") is False  # Missing NC_
 
     def test_validate_spdi_valid(self):
         """Test SPDI notation validation with valid inputs."""
@@ -1568,6 +1603,11 @@ class TestValidationMethods:
         # Valid SPDI notations
         assert validator._validate_spdi("NC_000017.11:36459257:A:G") is True
         assert validator._validate_spdi("NC_000017.11:36459257::G") is True  # Insertion
+        # Deleted-length form (424 corpus instances, e.g.
+        # NC_000017.11:37739585:1:C) — SPDI's third field may be the
+        # deleted *sequence* or the deleted *length*.
+        assert validator._validate_spdi("NC_000017.11:37739585:1:C") is True
+        assert validator._validate_spdi("NC_000017.11:37731798:5:AG") is True
 
     def test_validate_spdi_invalid(self):
         """Test SPDI notation validation with invalid inputs."""
@@ -1576,6 +1616,16 @@ class TestValidationMethods:
         # Invalid SPDI notations
         assert validator._validate_spdi("17:36459257:A:G") is False  # Missing NC_
         assert validator._validate_spdi("NC_000017.11-36459257-A-G") is False  # Dashes
+        assert validator._validate_spdi("not an spdi string") is False  # Garbage
+        assert (
+            validator._validate_spdi("NC_000017.11:37739585:1") is False
+        )  # Too few fields
+        assert (
+            validator._validate_spdi("NC_000017.11:-5:1:C") is False
+        )  # Negative position
+        assert (
+            validator._validate_spdi("NC_000017.11:36459257:-1:C") is False
+        )  # Negative deleted-length
 
     def test_validate_vcf_valid(self):
         """Test VCF format validation with valid inputs."""
@@ -1585,6 +1635,10 @@ class TestValidationMethods:
         assert validator._validate_vcf("17-36459258-A-G") is True
         assert validator._validate_vcf("chr17-36459258-A-G") is True
         assert validator._validate_vcf("X-123456-G-C") is True
+        # 5-field CNV form: chrom-start-END-ref-<SYMBOLIC ALT> (440 corpus
+        # instances, e.g. 17-36459258-37832869-C-<DEL>).
+        assert validator._validate_vcf("17-36459258-37832869-C-<DEL>") is True
+        assert validator._validate_vcf("17-37710502-37710663-C-<DUP>") is True
 
     def test_validate_vcf_invalid(self):
         """Test VCF format validation with invalid inputs."""
@@ -1594,6 +1648,16 @@ class TestValidationMethods:
         assert validator._validate_vcf("17:36459258:A:G") is False  # Colons
         assert validator._validate_vcf("17-abc-A-G") is False  # Non-numeric pos
         assert validator._validate_vcf("99-36459258-A-G") is False  # Invalid chr
+        assert validator._validate_vcf("not a vcf string") is False  # Garbage
+        assert (
+            validator._validate_vcf("17-36459258-37832869-C-DEL") is False
+        )  # 5-field, symbolic ALT missing angle brackets
+        assert (
+            validator._validate_vcf("17-36459258-abc-C-<DEL>") is False
+        )  # 5-field, non-numeric END
+        assert (
+            validator._validate_vcf("17--36459258-C-<DEL>") is False
+        )  # Negative-looking coordinate
 
     def test_is_ga4gh_cnv_notation_valid(self):
         """Test GA4GH CNV notation validation."""

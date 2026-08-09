@@ -120,9 +120,7 @@ async def test_create_then_update_yields_create_audit_row(
     actions = [row.action for row in result]
     assert actions == ["CREATE"]
 
-    # The PUT change is tracked via phenopacket_revisions (state-machine audit trail).
-    # _inplace_save on a fresh draft (no editing_revision_id) does not create
-    # a new revision row — it only bumps pp.revision and overwrites the content.
+    # The CREATE and PUT changes are both tracked via immutable revision rows.
     rev_result = await db_session.execute(
         text("""
             SELECT revision_number
@@ -134,5 +132,4 @@ async def test_create_then_update_yields_create_audit_row(
         """)
     )
     rev_numbers = [row.revision_number for row in rev_result]
-    # No revision rows: _inplace_save with editing_revision_id=NULL skips row insert
-    assert rev_numbers == []
+    assert rev_numbers == [1, 2]

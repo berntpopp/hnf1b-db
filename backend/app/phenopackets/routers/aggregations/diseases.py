@@ -12,7 +12,6 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
-    check_materialized_view_exists,
     get_db,
     logger,
     settings,
@@ -28,47 +27,24 @@ async def aggregate_by_disease(
 ):
     """Aggregate phenopackets by disease.
 
-    Performance: Uses mv_disease_aggregation materialized view when available.
+    Always reads published-head snapshots. Legacy materialized views are based
+    on mutable working copies and are therefore not public-safe.
     """
-    # Try materialized view first (O(1) indexed lookup)
-    if await check_materialized_view_exists(db, "mv_disease_aggregation"):
-        logger.debug("Using mv_disease_aggregation materialized view")
-        result = await db.execute(
-            text("""
-                SELECT disease_id, label, count, percentage
-                FROM mv_disease_aggregation
-                ORDER BY count DESC
-            """)
-        )
-        rows = result.mappings().all()
-        total = sum(int(row["count"]) for row in rows)
-        rows_with_pct = calculate_percentages(rows, total=total)
-
-        return [
-            AggregationResult(
-                label=row["label"] or row["disease_id"],
-                count=int(row["count"]),
-                percentage=row["percentage"],
-                details={"disease_id": row["disease_id"]},
-            )
-            for row in rows_with_pct
-        ]
-
-    # Fallback: Live JSONB query (O(n) scan)
-    logger.debug("Falling back to live JSONB query for disease aggregation")
+    logger.debug("Reading published-head disease aggregation")
     query = """
     SELECT
         disease->'term'->>'id' as disease_id,
         disease->'term'->>'label' as label,
         COUNT(*) as count
     FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'diseases') as disease
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+        jsonb_array_elements(r.content_jsonb->'diseases') as disease
     WHERE
-        deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
-        AND phenopacket_id NOT LIKE 'e2e-%'
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
         disease->'term'->>'id',
         disease->'term'->>'label'
@@ -118,13 +94,14 @@ async def aggregate_kidney_stages(
         MIN(feature->'type'->>'label') as label,
         COUNT(*) as count
     FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+        jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') as feature
     WHERE
-        deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
-        AND phenopacket_id NOT LIKE 'e2e-%'
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
         AND feature->'type'->>'id' IN ({placeholders})
         AND NOT COALESCE((feature->>'excluded')::boolean, false)
     GROUP BY

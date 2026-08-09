@@ -10,6 +10,7 @@ import {
   parseClassificationCriteria,
   acmgChipColor,
   cnvChipColor,
+  buildClassificationCriteriaString,
   ACMG_CRITERIA,
 } from '@/utils/acmgCriteria';
 
@@ -78,6 +79,59 @@ describe('parseClassificationCriteria — empty/null', () => {
     const r = parseClassificationCriteria(null, null);
     expect(r.guideline).toBe('ACMG'); // default guideline
     expect(r.pathogenic).toEqual([]);
+  });
+});
+
+// ── Task 6: serializing curator picks back into the stored string format ──
+// The reverse of parseClassificationCriteria's ACMG branch. Real corpus
+// example verified via psql (curation console plan Task 6 briefing):
+// variantInterpretation.extensions[classification_criteria].value.criteria
+// === "PM1_Moderate, PM2_Supporting, PP2_Supporting, PP3_Supporting"
+describe('buildClassificationCriteriaString', () => {
+  it('round-trips a real stored corpus value', () => {
+    const entries = [
+      { code: 'PM1', strength: 'Moderate' },
+      { code: 'PM2', strength: 'Supporting' },
+      { code: 'PP2', strength: 'Supporting' },
+      { code: 'PP3', strength: 'Supporting' },
+    ];
+    expect(buildClassificationCriteriaString(entries)).toBe(
+      'PM1_Moderate, PM2_Supporting, PP2_Supporting, PP3_Supporting'
+    );
+  });
+
+  it('is the exact inverse of parseClassificationCriteria for a round trip', () => {
+    const raw = 'PM1_Moderate, PM2_Supporting, PP3_Supporting, PS2_Strong, BP4_Supporting';
+    const parsed = parseClassificationCriteria(raw, 'ACMG');
+    const entries = [...parsed.pathogenic, ...parsed.benign].map((e) => ({
+      code: e.code,
+      strength: e.strength,
+    }));
+    // Order isn't guaranteed to match the original raw string once split into
+    // pathogenic/benign groups, so compare token sets rather than the exact
+    // string here -- the exact-order case is covered by the test above.
+    const rebuilt = buildClassificationCriteriaString(entries);
+    expect(rebuilt.split(', ').sort()).toEqual(raw.split(', ').sort());
+  });
+
+  it('omits the underscore for a criterion with no strength', () => {
+    expect(buildClassificationCriteriaString([{ code: 'BP4', strength: '' }])).toBe('BP4');
+    expect(buildClassificationCriteriaString([{ code: 'BP4' }])).toBe('BP4');
+  });
+
+  it('returns an empty string for no entries', () => {
+    expect(buildClassificationCriteriaString([])).toBe('');
+    expect(buildClassificationCriteriaString(null)).toBe('');
+    expect(buildClassificationCriteriaString(undefined)).toBe('');
+  });
+
+  it('joins multiple entries with ", " (comma-space), matching the stored format', () => {
+    expect(
+      buildClassificationCriteriaString([
+        { code: 'PS2', strength: 'Strong' },
+        { code: 'PM1', strength: 'Moderate' },
+      ])
+    ).toBe('PS2_Strong, PM1_Moderate');
   });
 });
 

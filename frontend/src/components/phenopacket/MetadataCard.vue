@@ -211,23 +211,26 @@ export default {
     enhancedUpdates() {
       if (!this.metaData.updates) return [];
 
-      // Get all PMIDs from external references (sorted)
-      const pmids = (this.metaData.externalReferences || [])
-        .filter((ref) => ref.id && ref.id.startsWith('PMID:'))
-        .map((ref) => ({
-          id: ref.id,
-          number: this.getPmidNumber(ref.id),
-        }));
-
-      // Map updates with their corresponding PMID by array index
-      // Backend creates both arrays in same iteration order (sorted chronologically)
-      return this.metaData.updates.map((update, index) => {
+      const references = this.metaData.externalReferences || [];
+      return this.metaData.updates.map((update) => {
+        const publicationId =
+          typeof update.publication === 'string'
+            ? update.publication
+            : update.publication?.id || null;
+        const publication = references.find(
+          (reference) =>
+            publicationId &&
+            (reference.id === publicationId || reference.reference === publicationId)
+        );
+        const pmid = publication?.id?.startsWith('PMID:')
+          ? { id: publication.id, number: this.getPmidNumber(publication.id) }
+          : null;
         return {
           timestamp: update.timestamp,
           comment: update.comment,
           reviewer: update.reviewer,
           publication: update.publication,
-          pmid: pmids[index] || null,
+          pmid,
         };
       });
     },

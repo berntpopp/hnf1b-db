@@ -50,8 +50,9 @@ async def aggregate_variant_pathogenicity(
             gi->>'interpretationStatus' as classification,
             COUNT(DISTINCT vd->>'id') as count
         FROM
-            phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+            jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
             LATERAL (
                 SELECT gi->'variantInterpretation'->'variationDescriptor' as vd
@@ -71,8 +72,9 @@ async def aggregate_variant_pathogenicity(
             gi->>'interpretationStatus' as classification,
             COUNT(*) as count
         FROM
-            phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+            jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
         WHERE
             {PUBLIC_FILTER_FRAGMENT}
@@ -128,8 +130,9 @@ async def aggregate_variant_types(
                 vd->>'id' as variant_id,
                 {VARIANT_TYPE_CASE} as variant_type
             FROM
-                phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+                phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(
                     interp->'diagnosis'->'genomicInterpretations'
                 ) as gi,
@@ -154,8 +157,9 @@ async def aggregate_variant_types(
             {VARIANT_TYPE_CASE} as variant_type,
             COUNT(*) as count
         FROM
-            phenopackets p,
-            jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+            jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
             jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
             LATERAL (
                 SELECT gi->'variantInterpretation'->'variationDescriptor' as vd

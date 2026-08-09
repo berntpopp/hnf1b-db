@@ -31,6 +31,11 @@ durable reference documentation only.
 
 ## Current Active Set
 
+- `reviews/2026-08-09-pr-422-cross-layer-review.md` — merge-blocking clinical data, backend, frontend, privacy, and dependency review
+- `specs/2026-08-09-source-faithful-individual-curation-design.md` — one-individual/one-Phenopacket, multiple-report-observation target contract
+- `roadmaps/2026-08-09-pr-422-remediation-roadmap.md` — parallel remediation sequencing and gates
+- `plans/2026-08-09-source-observation-implementation-plan.md` — detailed TDD plan across importer, database, API, MCP, and frontend
+- `plans/2026-08-09-dependency-security-consolidation-plan.md` — coherent Dependabot/action/alert integration plan
 - `plans/2026-04-15-release-hardening-and-8plus-plan.md` — current source of truth for release-readiness sequencing and go/no-go criteria
 - `reviews/2026-04-17-ui-ux-design-review.md` — current UI/UX assessment after PR #263; still contains actionable medium/low follow-ups
 

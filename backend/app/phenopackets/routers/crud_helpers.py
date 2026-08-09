@@ -9,9 +9,10 @@ parse strings.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, func
+from sqlalchemy import Integer, case, func
 
 from app.phenopackets.models import Phenopacket
 
@@ -45,7 +46,7 @@ def get_natural_sort_clauses(column, descending: bool = False) -> list:
     return [text_prefix.asc(), numeric_suffix.asc()]
 
 
-def parse_sort_parameter(sort: str) -> list:
+def parse_sort_parameter(sort: str, *, content: Any = None) -> list:
     """Parse a JSON:API sort parameter into SQLAlchemy order clauses.
 
     ``sort`` is a comma-separated list of field names; prefix a field
@@ -53,28 +54,49 @@ def parse_sort_parameter(sort: str) -> list:
     :data:`ALLOWED_SORT_FIELDS` are accepted — unknown fields produce
     a 400 with the full allow-list in the error detail.
     """
+    # The generated columns are derived from the mutable working copy. Public
+    # callers instead sort on the joined published-head JSON snapshot.
+    sort_fields: dict[str, Any] = dict(ALLOWED_SORT_FIELDS)
+    if content is not None:
+        sort_fields = {
+            "created_at": Phenopacket.created_at,
+            "subject_id": content["subject"]["id"].astext,
+            "subject_sex": content["subject"]["sex"].astext,
+            "features_count": func.coalesce(
+                func.jsonb_array_length(content["phenotypicFeatures"]), 0
+            ),
+            "has_variant": case(
+                (
+                    func.coalesce(
+                        func.jsonb_array_length(content["interpretations"]), 0
+                    )
+                    > 0,
+                    True,
+                ),
+                else_=False,
+            ),
+        }
+
     order_clauses: list = []
     for raw in sort.split(","):
         field = raw.strip()
         descending = field.startswith("-")
         field_name = field[1:] if descending else field
 
-        if field_name not in ALLOWED_SORT_FIELDS:
-            allowed = ", ".join(ALLOWED_SORT_FIELDS.keys())
+        if field_name not in sort_fields:
+            allowed = ", ".join(sort_fields.keys())
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid sort field: {field_name}. Allowed: {allowed}",
             )
 
-        sort_column = ALLOWED_SORT_FIELDS[field_name]
+        sort_column = sort_fields[field_name]
 
         # Apply natural sorting for subject_id to handle IDs like
         # "Var1", "Var2", "Var10" — extracts numeric suffix and sorts
         # numerically.
         if field_name == "subject_id":
-            order_clauses.extend(
-                get_natural_sort_clauses(Phenopacket.subject_id, descending)
-            )
+            order_clauses.extend(get_natural_sort_clauses(sort_column, descending))
         else:
             if descending:
                 order_clauses.append(sort_column.desc())

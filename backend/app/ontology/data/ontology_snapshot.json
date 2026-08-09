@@ -1,0 +1,961 @@
+{
+  "_generated_against": {
+    "eco": "unknown",
+    "geno": "2026-02-02",
+    "hp": "2026-06-23",
+    "mondo": "2026-07-06",
+    "ordo": "4.9",
+    "so": "unknown"
+  },
+  "terms": {
+    "ECO:0000033": {
+      "definition": "A type of author statement in which the author makes a statement that is not supported by information in that particular publication, but rather can be traced to a reference cited by that publication.",
+      "name": "author statement supported by traceable reference",
+      "synonyms": [
+        "traceable author statement"
+      ]
+    },
+    "GENO:0000135": {
+      "definition": "A zygosity quality inhering in a 'single locus complement' where the copies of the feature at this location have at least one difference in sequence  (in a eukaryotic diploid genome, this means having two distinct alleles on each of the two homologous chromosomes, one inherited from each parent).",
+      "name": "heterozygous",
+      "synonyms": []
+    },
+    "HP:0000003": {
+      "definition": "Multicystic dysplasia of the kidney is characterized by multiple cysts of varying size in the kidney and the absence of a normal pelvicaliceal system. The condition is associated with ureteral or ureteropelvic atresia, and the affected kidney is nonfunctional.",
+      "name": "Multicystic kidney dysplasia",
+      "synonyms": [
+        "Multicystic dysplastic kidney",
+        "Multicystic kidneys",
+        "Multicystic renal dysplasia"
+      ]
+    },
+    "HP:0000078": {
+      "definition": "An abnormality of the genital system.",
+      "name": "Abnormality of the genital system",
+      "synonyms": [
+        "Genital abnormalities",
+        "Genital abnormality",
+        "Genital anomalies",
+        "Genital defects",
+        "Abnormality of the reproductive system"
+      ]
+    },
+    "HP:0000079": {
+      "definition": "An abnormality of the urinary system.",
+      "name": "Abnormality of the urinary system",
+      "synonyms": [
+        "Urinary tract abnormalities",
+        "Urinary tract abnormality",
+        "Urinary tract anomalies"
+      ]
+    },
+    "HP:0000083": {
+      "definition": "A reduction in the level of performance of the kidneys in areas of function comprising the concentration of urine, removal of wastes, the maintenance of electrolyte balance, homeostasis of blood pressure, and calcium metabolism.",
+      "name": "Renal insufficiency",
+      "synonyms": [
+        "Renal failure",
+        "Renal failure in adulthood"
+      ]
+    },
+    "HP:0000089": {
+      "definition": "Hypoplasia of the kidney.",
+      "name": "Renal hypoplasia",
+      "synonyms": [
+        "Hypoplastic kidney",
+        "Hypoplastic kidneys",
+        "Small kidneys",
+        "Underdeveloped kidneys"
+      ]
+    },
+    "HP:0000107": {
+      "definition": "A fluid filled sac in the kidney.",
+      "name": "Renal cyst",
+      "synonyms": [
+        "Kidney cyst",
+        "Cystic kidney disease",
+        "Cystic kidneys",
+        "Renal cysts"
+      ]
+    },
+    "HP:0000110": {
+      "definition": "The presence of developmental dysplasia of the kidney.",
+      "name": "Renal dysplasia",
+      "synonyms": [
+        "Dysplastic kidneys",
+        "Renal adysplasia"
+      ]
+    },
+    "HP:0000113": {
+      "definition": "The presence of multiple cysts in both kidneys.",
+      "name": "Polycystic kidney dysplasia",
+      "synonyms": [
+        "Polycystic kidneys",
+        "Polycystic kidney disease"
+      ]
+    },
+    "HP:0000122": {
+      "definition": "A unilateral form of agenesis of the kidney.",
+      "name": "Unilateral renal agenesis",
+      "synonyms": [
+        "Absent kidney on one side",
+        "Missing one kidney",
+        "Single kidney",
+        "Unilateral kidney agenesis"
+      ]
+    },
+    "HP:0000478": {
+      "definition": "Any abnormality of the eye, including location, spacing, and intraocular abnormalities.",
+      "name": "Abnormality of the eye",
+      "synonyms": [
+        "Abnormal eye",
+        "Abnormality of the eye",
+        "Eye disease"
+      ]
+    },
+    "HP:0000708": {
+      "definition": "Atypical behavior is an abnormality in a person's actions that can be controlled or modulated by the will of the individual. While abnormal behaviors can be difficult to control, they are distinct from other abnormal actions that cannot be affected by the individual's will.",
+      "name": "Atypical behavior",
+      "synonyms": [
+        "Behavioral abnormality",
+        "Behavioral changes",
+        "Behavioral disorders",
+        "Behavioral disturbances",
+        "Behavioral problems",
+        "Behavioral symptoms",
+        "Behavioral/psychiatric abnormalities",
+        "Behavioural abnormality",
+        "Behavioural changes",
+        "Behavioural disorders",
+        "Behavioural disturbances",
+        "Behavioural problems",
+        "Behavioural symptoms",
+        "Behavioural/Psychiatric abnormality",
+        "Psychiatric disorders",
+        "Psychiatric disturbances"
+      ]
+    },
+    "HP:0000819": {
+      "definition": "A group of abnormalities characterized by hyperglycemia and glucose intolerance.",
+      "name": "Diabetes mellitus",
+      "synonyms": []
+    },
+    "HP:0000843": {
+      "definition": "Excessive production of parathyroid hormone (PTH) by the parathyroid glands.",
+      "name": "Hyperparathyroidism",
+      "synonyms": [
+        "Elevated blood parathyroid hormone level"
+      ]
+    },
+    "HP:0001250": {
+      "definition": "A seizure is an intermittent abnormality of nervous system physiology characterized by a transient occurrence of signs and/or symptoms due to abnormal excessive or synchronous neuronal activity in the brain.",
+      "name": "Seizure",
+      "synonyms": [
+        "Epileptic seizure",
+        "Seizures",
+        "Epilepsy"
+      ]
+    },
+    "HP:0001622": {
+      "definition": "The birth of a baby of less than 37 weeks of gestational age.",
+      "name": "Premature birth",
+      "synonyms": [
+        "Premature birth",
+        "Premature delivery",
+        "Premature delivery of affected infants",
+        "Preterm birth",
+        "Preterm delivery",
+        "Shortened gestation time"
+      ]
+    },
+    "HP:0001627": {
+      "definition": "Any structural anomaly of the heart.",
+      "name": "Abnormal heart morphology",
+      "synonyms": [
+        "Abnormality of cardiac morphology",
+        "Abnormality of the heart",
+        "Abnormally shaped heart",
+        "Cardiac abnormality",
+        "Cardiac anomalies",
+        "Cardiac anomaly",
+        "Congenital heart defect",
+        "Congenital heart defects",
+        "Heart defect"
+      ]
+    },
+    "HP:0001732": {
+      "definition": "An abnormality of the pancreas.",
+      "name": "Abnormality of the pancreas",
+      "synonyms": [
+        "Abnormality of the pancreas",
+        "Pancreatic disease"
+      ]
+    },
+    "HP:0001737": {
+      "definition": "A cyst of the pancreas that possess a lining of mucous epithelium.",
+      "name": "Pancreatic cysts",
+      "synonyms": [
+        "Pancreatic cysts",
+        "Multiple pancreatic cysts",
+        "Pancreatic cyst"
+      ]
+    },
+    "HP:0001738": {
+      "definition": "Impaired function of the exocrine pancreas associated with a reduced ability to digest foods because of lack of digestive enzymes.",
+      "name": "Exocrine pancreatic insufficiency",
+      "synonyms": [
+        "Inability to properly digest food due to lack of pancreatic digestive enzymes",
+        "Pancreatic insufficiency"
+      ]
+    },
+    "HP:0001997": {
+      "definition": "Recurrent attacks of acute inflammatory arthritis of a joint or set of joints caused by elevated levels of uric acid in the blood which crystallize and are deposited in joints, tendons, and surrounding tissues.",
+      "name": "Gout",
+      "synonyms": [
+        "Gouty arthritis"
+      ]
+    },
+    "HP:0001999": {
+      "definition": "An abnormal morphology (form) of the face or its components.",
+      "name": "Abnormal facial shape",
+      "synonyms": [
+        "Deformity of face",
+        "Malformation of face",
+        "Abnormal facial shape",
+        "Abnormal morphology of the face",
+        "Distinctive facies",
+        "Dysmorphic facial features",
+        "Dysmorphic facies",
+        "Facial dysmorphism",
+        "Unusual facial appearance",
+        "Unusual facies",
+        "Distortion of face",
+        "Funny looking face"
+      ]
+    },
+    "HP:0002149": {
+      "definition": "The concentration of uric acid in the blood circulation is above the upper limit of normal.",
+      "name": "Hyperuricemia",
+      "synonyms": [
+        "Elevated uric acid concentration",
+        "Elevated uric acid level",
+        "Elevated uric acid level in blood",
+        "High blood uric acid level",
+        "Hyperuricaemia",
+        "Hyperuricemia",
+        "Increased uric acid concentration",
+        "Increased uric acid level",
+        "Increased uric acid level in blood"
+      ]
+    },
+    "HP:0002594": {
+      "definition": "Hypoplasia of the pancreas.",
+      "name": "Pancreatic hypoplasia",
+      "synonyms": [
+        "Hypoplastic pancreas",
+        "Underdeveloped pancreas"
+      ]
+    },
+    "HP:0002900": {
+      "definition": "The concentration of potassium(1+) in the blood circulation is below the lower limit of normal.",
+      "name": "Hypokalemia",
+      "synonyms": [
+        "Decreased potassium(1+) concentration",
+        "Decreased potassium(1+) level",
+        "Decreased potassium(1+) level in blood",
+        "Hypokalemia",
+        "Low blood potassium levels",
+        "Reduced potassium(1+) concentration",
+        "Reduced potassium(1+) level",
+        "Reduced potassium(1+) level in blood"
+      ]
+    },
+    "HP:0002910": {
+      "definition": "Elevations of the levels of SGOT and SGPT in the serum. SGOT (serum glutamic oxaloacetic transaminase) and SGPT (serum glutamic pyruvic transaminase) are transaminases primarily found in the liver and heart and are released into the bloodstream as the result of liver or heart damage. SGOT and SGPT are used clinically mainly as markers of liver damage.",
+      "name": "Elevated circulating hepatic transaminase concentration",
+      "synonyms": [
+        "Abnormal liver enzymes",
+        "Abnormal liver function",
+        "Abnormal liver function tests",
+        "Elevated circulating hepatic transaminase activity",
+        "Elevated liver enzymes",
+        "Elevated serum transaminases",
+        "Elevated transaminases",
+        "High liver enzymes",
+        "Increased liver enzymes",
+        "Increased liver function tests",
+        "Increased transaminases",
+        "Raised liver enzymes",
+        "Subclinical abnormal liver function tests",
+        "Elevated liver function tests"
+      ]
+    },
+    "HP:0002917": {
+      "definition": "The concentration of magnesium in the blood circulation is below the lower limit of normal.",
+      "name": "Hypomagnesemia",
+      "synonyms": [
+        "Decreased magnesium(2+) concentration",
+        "Decreased magnesium(2+) level",
+        "Decreased magnesium(2+) level in blood",
+        "Hypomagnesemia",
+        "Low blood Mg levels",
+        "Low blood magnesium levels",
+        "Reduced magnesium(2+) concentration",
+        "Reduced magnesium(2+) level",
+        "Reduced magnesium(2+) level in blood"
+      ]
+    },
+    "HP:0003577": {
+      "definition": "A phenotypic abnormality that is present at birth.",
+      "name": "Congenital onset",
+      "synonyms": [
+        "Onset at birth",
+        "Symptoms present at birth"
+      ]
+    },
+    "HP:0003581": {
+      "definition": "Onset of disease manifestations in adulthood, defined here as at the age of 16 years or later.",
+      "name": "Adult onset",
+      "synonyms": [
+        "Onset in adulthood",
+        "Onset in early adulthood",
+        "Symptoms begin in adulthood"
+      ]
+    },
+    "HP:0003593": {
+      "definition": "Onset of signs or symptoms of disease between 28 days to one year of life.",
+      "name": "Infantile onset",
+      "synonyms": [
+        "Infantile onset",
+        "Onset in first year of life",
+        "Onset in infancy"
+      ]
+    },
+    "HP:0003674": {
+      "definition": "The age group in which disease manifestations appear.",
+      "name": "Onset",
+      "synonyms": [
+        "Age of onset",
+        "Age symptoms begin"
+      ]
+    },
+    "HP:0003774": {
+      "definition": "A degree of kidney failure severe enough to require dialysis or kidney transplantation for survival characterized by a severe reduction in glomerular filtration rate (less than 15 ml/min/1.73 m2) and other manifestations including increased serum creatinine.",
+      "name": "Stage 5 chronic kidney disease",
+      "synonyms": [
+        "Chronic renal failure",
+        "End stage renal disease",
+        "End stage renal failure",
+        "End-stage renal disease",
+        "End-stage renal failure",
+        "Stage 5 chronic kidney disease",
+        "Renal failure, endstage"
+      ]
+    },
+    "HP:0004322": {
+      "definition": "A height below that which is expected according to age and gender norms. Although there is no universally accepted definition of short stature, many refer to \"short stature\" as height more than 2 standard deviations below the mean for age and gender (or below the 3rd percentile for age and gender dependent norms).",
+      "name": "Short stature",
+      "synonyms": [
+        "Decreased body height",
+        "Height less than 3rd percentile",
+        "Short stature",
+        "Small stature",
+        "Stature below 3rd percentile"
+      ]
+    },
+    "HP:0004904": {
+      "definition": "The term Maturity-onset diabetes of the young (MODY) was initially used for patients diagnosed with fasting hyperglycemia that could be treated without insulin for more than two years, where the initial diagnosis was made at a young age (under 25 years). Thus, MODY combines characteristics of type 1 diabetes (young age at diagnosis) and type 2 diabetes (less insulin dependence than type 1 diabetes). The term MODY is now most often used to refer to a group of monogenic diseases with these characteristics. Here, the term is used to describe hyperglycemia diagnosed at a young age with no or minor insulin dependency, no evidence of insulin resistance, and lack of evidence of autoimmune destruction of the beta cells.",
+      "name": "Maturity-onset diabetes of the young",
+      "synonyms": [
+        "Maturity onset diabetes of the young",
+        "MODY"
+      ]
+    },
+    "HP:0011463": {
+      "definition": "Onset of disease at the age of between 1 and 5 years.",
+      "name": "Childhood onset",
+      "synonyms": [
+        "Symptoms begin in childhood"
+      ]
+    },
+    "HP:0012210": {
+      "definition": "Any structural anomaly of the kidney.",
+      "name": "Abnormal renal morphology",
+      "synonyms": [
+        "Abnormal kidney morphology",
+        "Abnormally shaped kidney",
+        "Kidney malformation",
+        "Kidney structure issue",
+        "Renal malformation",
+        "Structural anomalies of the renal tract",
+        "Structural kidney abnormalities",
+        "Structural renal anomalies"
+      ]
+    },
+    "HP:0012443": {
+      "definition": "A structural abnormality of the brain, which has as its parts the forebrain, midbrain, and hindbrain.",
+      "name": "Abnormal brain morphology",
+      "synonyms": [
+        "Abnormal shape of brain",
+        "Abnormality of brain morphology",
+        "Abnormality of the brain"
+      ]
+    },
+    "HP:0012622": {
+      "definition": "Functional anomaly of the kidney persisting for at least three months.",
+      "name": "Chronic kidney disease",
+      "synonyms": [
+        "CKD",
+        "Chronic kidney disease",
+        "Loss of renal function",
+        "Progressive renal failure",
+        "Progressive renal insufficiency",
+        "Renal failure, progressive",
+        "Renal insufficiency, progressive"
+      ]
+    },
+    "HP:0012623": {
+      "definition": "A type of chronic kidney disease with normal or increased glomerular filtration rate (GFR at least 90 mL/min/1.73 m2).",
+      "name": "Stage 1 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012624": {
+      "definition": "A type of chronic kidney disease with mildly reduced glomerular filtration rate (GFR 60-89 mL/min/1.73 m2).",
+      "name": "Stage 2 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012625": {
+      "definition": "A type of chronic kidney disease with moderately reduced glomerular filtration rate (GFR 30-59 mL/min/1.73 m2).",
+      "name": "Stage 3 chronic kidney disease",
+      "synonyms": []
+    },
+    "HP:0012626": {
+      "definition": "A type of chronic kidney disease with severely reduced glomerular filtration rate (GFR 15-29 mL/min/1.73 m2).",
+      "name": "Stage 4 chronic kidney disease",
+      "synonyms": [
+        "Stage 4 chronic kidney disease"
+      ]
+    },
+    "HP:0012758": {
+      "definition": "Neurodevelopmental delay (NDD) refers to delays in the maturation of the brain and central nervous system; infants and young children with NDD may experience delays in the development of one or more skills including gross motor abilities, fine-motor coordination, language abilities and ability to solve increasingly complex problems.",
+      "name": "Neurodevelopmental delay",
+      "synonyms": [
+        "NDD"
+      ]
+    },
+    "HP:0012759": {
+      "definition": "A deviation from normal of the neurological development of a child, which may include any or all of the aspects of the development of personal, social, gross or fine motor, and cognitive abilities.",
+      "name": "Neurodevelopmental abnormality",
+      "synonyms": []
+    },
+    "HP:0012832": {
+      "definition": "Being present on both sides of the body.",
+      "name": "Bilateral",
+      "synonyms": []
+    },
+    "HP:0012833": {
+      "definition": "Being present on only the left or only the right side of the body.",
+      "name": "Unilateral",
+      "synonyms": []
+    },
+    "HP:0012834": {
+      "definition": "Being located on the right side of the body.",
+      "name": "Right",
+      "synonyms": [
+        "Right-sided"
+      ]
+    },
+    "HP:0012835": {
+      "definition": "Being located on the left side of the body.",
+      "name": "Left",
+      "synonyms": [
+        "Left-sided"
+      ]
+    },
+    "HP:0031865": {
+      "definition": "Any functional anomaly of the liver.",
+      "name": "Abnormal liver physiology",
+      "synonyms": [
+        "Abnormal hepatic physiology"
+      ]
+    },
+    "HP:0033127": {
+      "definition": "An anomaly of the musculoskeletal system, which consists of the bones of the skeleton, muscles, cartilage, tendons, ligaments, joints, and other connective tissue. The musculoskeletal system supports the weight of the body, maintains body position and produces movements of the body or of parts of the body.",
+      "name": "Abnormality of the musculoskeletal system",
+      "synonyms": []
+    },
+    "HP:0033132": {
+      "definition": "Increased echogenecity of the kidney cortex.",
+      "name": "Renal cortical hyperechogenicity",
+      "synonyms": []
+    },
+    "HP:0033133": {
+      "definition": "",
+      "name": "Renal cortical hypoechogeneity",
+      "synonyms": [
+        "Hypoechogenic renal cortex"
+      ]
+    },
+    "HP:0100611": {
+      "definition": "The presence of many cysts in the glomerulus of the kidney related to dilatation of the Bowman's capsule.",
+      "name": "Multiple glomerular cysts",
+      "synonyms": [
+        "Glomerulocystic kidney disease"
+      ]
+    },
+    "MONDO:0005147": {
+      "definition": "A chronic condition characterized by minimal or absent production of insulin by the pancreas.",
+      "name": "type 1 diabetes mellitus",
+      "synonyms": [
+        "diabetes mellitis type 1",
+        "diabetes mellitis type I",
+        "IDDM",
+        "T1D",
+        "T1DM",
+        "immune mediated diabetes",
+        "insulin dependent diabetes",
+        "juvenile diabetes",
+        "type 1 diabetes",
+        "type I diabetes mellitus",
+        "type I diabetes"
+      ]
+    },
+    "MONDO:0007669": {
+      "definition": "Renal cysts and diabetes syndrome (RCAD) is a rare form of maturity-onset diabetes of the young (MODY) characterized clinically by heterogeneous cystic renal disease and early-onset familial non-autoimmune diabetes. Pancreatic atrophy, liver dysfunction and genital tract anomalies are also features of the syndrome.",
+      "name": "renal cysts and diabetes syndrome",
+      "synonyms": [
+        "HNF1B-related renal cysts and diabetes syndrome",
+        "renal cysts-maturity-onset diabetes of the young syndrome",
+        "CAKUT with diabetes",
+        "FJHN atypical",
+        "HNF1B-MODY",
+        "MODY type 5",
+        "MODY5",
+        "RCAD syndrome",
+        "RCAD",
+        "congenital anomalies of the kidney and urinary tract with diabetes",
+        "hepatocyte nuclear Factor 1-beta-associated monogenic diabetes",
+        "maturity onset diabetes of the Young, type 5",
+        "renal cysts and diabetes syndrome",
+        "renal dysfunction-early-onset diabetes syndrome"
+      ]
+    },
+    "ORPHA:2260": {
+      "definition": "A rare kidney malformation characterized by a reduction of 80% in nephron number and a marked hypertrophy of the glomeruli and tubules.",
+      "name": "Oligomeganephronia",
+      "synonyms": [
+        "Oligomeganephronic renal hypoplasia"
+      ]
+    },
+    "SO:0000159": {
+      "definition": "The point at which one or more contiguous nucleotides were excised.",
+      "name": "deletion",
+      "synonyms": [
+        "deleted_sequence",
+        "nucleotide deletion",
+        "nucleotide_deletion"
+      ]
+    },
+    "SO:0000667": {
+      "definition": "The sequence of one or more nucleotides added between two adjacent nucleotides in the sequence.",
+      "name": "insertion",
+      "synonyms": [
+        "nucleotide insertion",
+        "nucleotide_insertion",
+        "insertion"
+      ]
+    },
+    "SO:0001483": {
+      "definition": "SNVs are single nucleotide positions in genomic DNA at which different sequence alternatives exist.",
+      "name": "SNV",
+      "synonyms": [
+        "single nucleotide variant"
+      ]
+    },
+    "SO:0001567": {
+      "definition": "A sequence variant where at least one base in the terminator codon is changed, but the terminator remains.",
+      "name": "stop_retained_variant",
+      "synonyms": [
+        "stop retained variant",
+        "Jannovar:stop_retained_variant",
+        "VAAST:stop_retained",
+        "VAAST:stop_retained_variant",
+        "VEP:stop_retained_variant",
+        "snpEff:NON_SYNONYMOUS_STOP",
+        "snpEff:SYNONYMOUS_STOP"
+      ]
+    },
+    "SO:0001574": {
+      "definition": "A splice variant that changes the 2 base region at the 3' end of an intron.",
+      "name": "splice_acceptor_variant",
+      "synonyms": [
+        "splice acceptor variant",
+        "Jannovar:splice_acceptor_variant",
+        "Seattleseq:splice-acceptor",
+        "VAAST:splice_acceptor_variant",
+        "VEP:splice_acceptor_variant",
+        "snpEff:SPLICE_SITE_ACCEPTOR"
+      ]
+    },
+    "SO:0001575": {
+      "definition": "A splice variant that changes the 2 base pair region at the 5' end of an intron.",
+      "name": "splice_donor_variant",
+      "synonyms": [
+        "splice donor variant",
+        "Jannovar:splice_donor_variant",
+        "Seattleseq:splice-donor",
+        "VAAST:splice_donor_variant",
+        "VEP:splice_donor_variant",
+        "snpEff:SPLICE_SITE_DONOR"
+      ]
+    },
+    "SO:0001578": {
+      "definition": "EBI term: Stop lost - In coding sequence, resulting in the loss of a stop codon.",
+      "name": "stop_lost",
+      "synonyms": [
+        "stop codon lost",
+        "ANNOVAR:stoploss",
+        "Jannovar:stop_lost",
+        "Seattleseq:stop-lost",
+        "Seattleseq:stop-lost-near-splice",
+        "VAAST:stop_lost",
+        "VAT:removedStop",
+        "VEP:stop_lost",
+        "snpEff:STOP_LOST",
+        "stop lost"
+      ]
+    },
+    "SO:0001580": {
+      "definition": "A sequence variant that changes the coding sequence.",
+      "name": "coding_sequence_variant",
+      "synonyms": [
+        "coding sequence variant",
+        "coding variant",
+        "codon variant",
+        "codon_variant",
+        "Jannovar:coding_sequence_variant",
+        "Seattleseq:coding",
+        "VAAST:coding_sequence_variant",
+        "VEP:coding_sequence_variant",
+        "snpEff:CDS",
+        "snpEff:CODON_CHANGE"
+      ]
+    },
+    "SO:0001583": {
+      "definition": "EBI term: Non-synonymous SNPs. SNPs that are located in the coding sequence and result in an amino acid change in the encoded peptide sequence. A change that causes a non_synonymous_codon can be more than 3 bases - for example 4 base substitution.",
+      "name": "missense_variant",
+      "synonyms": [
+        "missense codon",
+        "ANNOVAR:nonsynonymous SNV",
+        "Jannovar:missense_variant",
+        "Seattleseq:missense",
+        "Seattleseq:missense-near-splice",
+        "VAAST:missense_variant",
+        "VAAST:non_synonymous_codon",
+        "VAT:nonsynonymous",
+        "VEP:missense_variant",
+        "missense",
+        "snpEff:NON_SYNONYMOUS_CODING"
+      ]
+    },
+    "SO:0001587": {
+      "definition": "EBI term: Stop gained - In coding sequence, resulting in the gain of a stop codon (i.e. leading to a shortened peptide sequence).",
+      "name": "stop_gained",
+      "synonyms": [
+        "nonsense codon",
+        "stop codon gained",
+        "ANNOVAR:stopgain",
+        "Jannovar:stop_gained",
+        "Seattleseq:stop-gained",
+        "Seattleseq:stop-gained-near-splice",
+        "VAAST:stop_gained",
+        "VAT:prematureStop",
+        "VEP:stop_gained",
+        "nonsense",
+        "snpEff:STOP_GAINED",
+        "stop gained"
+      ]
+    },
+    "SO:0001589": {
+      "definition": "EBI term:Frameshift variations - In coding sequence, resulting in a frameshift.",
+      "name": "frameshift_variant",
+      "synonyms": [
+        "ANNOVAR:frameshift substitution",
+        "frameshift variant",
+        "ANNOVAR:frameshift block substitution",
+        "Jannovar:frameshift_variant",
+        "Seattleseq:frameshift",
+        "Seattleseq:frameshift-near-splice",
+        "VAAST:frameshift_variant",
+        "VAT:deletionFS",
+        "VAT:insertionFS",
+        "VEP:frameshift_variant",
+        "frameshift_",
+        "frameshift_coding",
+        "snpEff:FRAME_SHIFT"
+      ]
+    },
+    "SO:0001619": {
+      "definition": "Within non-coding gene - Located within a gene that does not code for a protein.",
+      "name": "non_coding_transcript_variant",
+      "synonyms": [
+        "nc transcript variant",
+        "non coding transcript variant",
+        "ANNOVAR:ncRNA",
+        "Jannovar:non_coding_transcript_variant",
+        "VEP:non_coding_transcript_variant",
+        "within_non_coding_gene"
+      ]
+    },
+    "SO:0001620": {
+      "definition": "EBI term: Within mature miRNA - Located within a microRNA.",
+      "name": "mature_miRNA_variant",
+      "synonyms": [
+        "mature miRNA variant",
+        "VEP:mature_miRNA_variant",
+        "snpEff:MICRO_RNA",
+        "within_mature_miRNA"
+      ]
+    },
+    "SO:0001621": {
+      "definition": "A variant in a transcript that is the target of nonsense-mediated mRNA decay.",
+      "name": "NMD_transcript_variant",
+      "synonyms": [
+        "NMD transcript variant",
+        "Nonsense mediated decay transcript variant",
+        "NMD_transcript",
+        "VEP:NMD_transcript_variant"
+      ]
+    },
+    "SO:0001623": {
+      "definition": "EBI term: 5prime UTR variations - In 5prime UTR (untranslated region).",
+      "name": "5_prime_UTR_variant",
+      "synonyms": [
+        "5'UTR variant",
+        "five prime UTR variant",
+        "5PRIME_UTR",
+        "ANNOVAR:UTR5",
+        "Jannovar:5_prime_utr_variant",
+        "Seattleseq:5-prime-UTR",
+        "VAAST:5_prime_UTR_variant",
+        "VAAST:five_prime_UTR_variant",
+        "VEP:5_prime_UTR_variant",
+        "snpEff:UTR_5_PRIME",
+        "untranslated-5"
+      ]
+    },
+    "SO:0001624": {
+      "definition": "EBI term 3prime UTR variations - In 3prime UTR.",
+      "name": "3_prime_UTR_variant",
+      "synonyms": [
+        "3'UTR variant",
+        "three prime UTR variant",
+        "3PRIME_UTR",
+        "ANNOVAR:UTR3",
+        "Jannovar:3_prime_utr_variant",
+        "Seattleseq:3-prime-UTR",
+        "VAAST:3_prime_UTR_variant",
+        "VAAST:three_prime_UTR_variant",
+        "VEP:3_prime_UTR_variant",
+        "snpEff:UTR_3_PRIME",
+        "untranslated-3"
+      ]
+    },
+    "SO:0001626": {
+      "definition": "EBI term: Partial codon - Located within the final, incomplete codon of a transcript with a shortened coding sequence where the end is unknown.",
+      "name": "incomplete_terminal_codon_variant",
+      "synonyms": [
+        "incomplete terminal codon variant",
+        "VEP:incomplete_terminal_codon_variant",
+        "partial_codon"
+      ]
+    },
+    "SO:0001627": {
+      "definition": "EBI term: Intronic variations - In intron.",
+      "name": "intron_variant",
+      "synonyms": [
+        "intron variant",
+        "ANNOVAR:intronic",
+        "Jannovar:intron_variant",
+        "Seattleseq:intron",
+        "Seattleseq:intron-near-splice",
+        "VAAST:intron_variant",
+        "VEP:intron_variant",
+        "intron_",
+        "intronic",
+        "snpEff:INTRON"
+      ]
+    },
+    "SO:0001628": {
+      "definition": "EBI term Intergenic variations - More than 5 kb either upstream or downstream of a transcript.",
+      "name": "intergenic_variant",
+      "synonyms": [
+        "intergenic variant",
+        "ANNOVAR:intergenic",
+        "Jannovar:intergenic_variant",
+        "Seattleseq:intergenic",
+        "VEP:intergenic_variant",
+        "intergenic",
+        "snpEff:INTERGENIC"
+      ]
+    },
+    "SO:0001630": {
+      "definition": "EBI term: splice site - 1-3 bps into an exon or 3-8 bps into an intron.",
+      "name": "splice_region_variant",
+      "synonyms": [
+        "ANNOVAR:splicing",
+        "Jannovar:splice_region_variant",
+        "VAAST:splice_region_variant",
+        "VEP:splice_region_variant",
+        "snpEff:SPLICE_SITE_BRANCH",
+        "snpEff:SPLICE_SITE_BRANCH_U12",
+        "snpEff:SPLICE_SITE_REGION",
+        "splice region variant"
+      ]
+    },
+    "SO:0001631": {
+      "definition": "Different groups annotate up and downstream to different lengths. The subtypes are specific and are backed up with cross references.",
+      "name": "upstream_gene_variant",
+      "synonyms": [
+        "upstream gene variant",
+        "ANNOVAR:upstream",
+        "Jannovar:upstream_gene_variant",
+        "VEP:upstream_gene_variant",
+        "snpEff:UPSTREAM"
+      ]
+    },
+    "SO:0001632": {
+      "definition": "Different groups annotate up and downstream to different lengths. The subtypes are specific and are backed up with cross references.",
+      "name": "downstream_gene_variant",
+      "synonyms": [
+        "downstream gene variant",
+        "ANNOVAR:downstream",
+        "Jannovar:downstream_gene_variant",
+        "VEP:downstream_gene_variant",
+        "snpEff:DOWNSTREAM"
+      ]
+    },
+    "SO:0001792": {
+      "definition": "A sequence variant that changes non-coding exon sequence in a non-coding transcript.",
+      "name": "non_coding_transcript_exon_variant",
+      "synonyms": [
+        "non coding transcript exon variant",
+        "ANNOVAR:ncRNA_exonic",
+        "Jannovar:non_coding_transcript_exon_variant",
+        "Seattleseq:non-coding-exon",
+        "Seattleseq:non-coding-exon-near-splice",
+        "VEP:non_coding_transcript_exon_variant",
+        "non_coding_transcript_exon_variant",
+        "snpEff:non_coding_exon_variant"
+      ]
+    },
+    "SO:0001818": {
+      "definition": "A sequence_variant which is predicted to change the protein encoded in the coding sequence.",
+      "name": "protein_altering_variant",
+      "synonyms": [
+        "protein altering variant",
+        "VEP:protein_altering_variant"
+      ]
+    },
+    "SO:0001819": {
+      "definition": "EBI term: Synonymous SNPs - In coding sequence, not resulting in an amino acid change (i.e. silent mutation).\nThis term is sometimes used synonomously with the more general term 'silent mutation', although a silent mutation may occur in non coding sequence. The best practice is to annotate to the most specific term.",
+      "name": "synonymous_variant",
+      "synonyms": [
+        "silent mutation",
+        "silent substitution",
+        "silent_mutation",
+        "synonymous codon",
+        "synonymous_coding",
+        "synonymous_codon",
+        "ANNOVAR:synonymous SNV",
+        "Jannovar:synonymous_variant",
+        "Seattleseq:synonymous",
+        "Seattleseq:synonymous-near-splice",
+        "VAAST:synonymous_codon",
+        "VAAST:synonymous_variant",
+        "VAT:synonymous",
+        "VEP:synonymous_variant",
+        "coding-synon",
+        "snpEff:SYNONYMOUS_CODING"
+      ]
+    },
+    "SO:0001821": {
+      "definition": "An inframe non synonymous variant that inserts bases into in the coding sequence.",
+      "name": "inframe_insertion",
+      "synonyms": [
+        "inframe codon gain",
+        "inframe increase in CDS length",
+        "inframe insertion",
+        "inframe_codon_gain",
+        "ANNOVAR:nonframeshift insertion",
+        "Jannovar:inframe_insertion",
+        "VAT:insertionNFS",
+        "VEP:inframe_insertion",
+        "snpEFF:CODON_INSERTION"
+      ]
+    },
+    "SO:0001822": {
+      "definition": "An inframe non synonymous variant that deletes bases from the coding sequence.",
+      "name": "inframe_deletion",
+      "synonyms": [
+        "inframe codon loss",
+        "inframe decrease in CDS length",
+        "inframe deletion",
+        "inframe_codon_loss",
+        "ANNOVAR:nonframeshift deletion",
+        "Jannovar:inframe_deletion",
+        "VAT:deletionNFS",
+        "VEP:inframe_deletion",
+        "snpEff:CODON_DELETION"
+      ]
+    },
+    "SO:0001889": {
+      "definition": "Created in conjunction with the EBI.",
+      "name": "transcript_amplification",
+      "synonyms": [
+        "transcript amplification",
+        "VEP:transcript_amplification"
+      ]
+    },
+    "SO:0001893": {
+      "definition": "Created in conjunction with the EBI.",
+      "name": "transcript_ablation",
+      "synonyms": [
+        "transcript ablation",
+        "Jannovar:transcript_ablation",
+        "VEP:transcript_ablation"
+      ]
+    },
+    "SO:0002012": {
+      "definition": "Request from Uma Devi Paila, UVA. This term should not be applied to incomplete transcripts.",
+      "name": "start_lost",
+      "synonyms": [
+        "Jannovar:start_lost",
+        "VEP:start_lost",
+        "snpEff:START_LOST"
+      ]
+    },
+    "SO:0002019": {
+      "definition": "Requested by Uma Paila as this term is annotated by snpEff. This would be used for non_AUG start codon annotation.",
+      "name": "start_retained_variant",
+      "synonyms": [
+        "snpEff:SYNONYMOUS_START"
+      ]
+    },
+    "SO:1000032": {
+      "definition": "Indels can have a different number of bases than the corresponding reference sequence. The term name was changed from indel to delins on 2/24/2019 to align with the HGVS nomenclature term for a deletion-insertion. Indel was causing confusion in the annotation community (github issue 445). The HGVS nomenclature definition of deletion-insertion (delins) is a sequence change where, compared to a reference sequence, one or more nucleotides are replaced by one or more other nucleotides and which is not a substitution, inversion or conversion.",
+      "name": "delins",
+      "synonyms": [
+        "deletion-insertion",
+        "indel"
+      ]
+    },
+    "SO:1000035": {
+      "definition": "An insertion which derives from, or is identical in sequence to, nucleotides present at a known location in the genome.",
+      "name": "duplication",
+      "synonyms": [
+        "nucleotide duplication",
+        "nucleotide_duplication"
+      ]
+    }
+  }
+}

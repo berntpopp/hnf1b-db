@@ -222,9 +222,10 @@ class HPOTermsConfig(BaseModel):
         "HP:0000107",  # Renal cyst
         "HP:0000122",  # Unilateral renal agenesis
         "HP:0012210",  # Abnormal renal morphology
-        "HP:0033133",  # Renal cortical hypoechogeneity
-        "HP:0000108",  # Multiple glomerular cysts
-        "HP:0001970",  # Oligomeganephronia
+        "HP:0033132",  # Renal cortical hyperechogenicity
+        "HP:0100611",  # Multiple glomerular cysts
+        "ORPHA:2260",  # Oligomeganephronia
+        "HP:0000079",  # Abnormality of the urinary system
     ]
 
     # MODY (Maturity-onset diabetes of the young)
@@ -233,11 +234,11 @@ class HPOTermsConfig(BaseModel):
     # CKD stage terms
     ckd_stages: List[str] = [
         "HP:0012622",  # Chronic kidney disease (unspecified)
-        "HP:0012623",  # Stage 1 CKD
-        "HP:0012624",  # Stage 2 CKD
-        "HP:0012625",  # Stage 3 CKD
-        "HP:0012626",  # Stage 4 CKD
-        "HP:0003774",  # Stage 5 CKD
+        "HP:0012623",  # Stage 1 chronic kidney disease
+        "HP:0012624",  # Stage 2 chronic kidney disease
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
     ]
 
     # Kidney failure (Stage 4 and Stage 5 CKD)
@@ -245,9 +246,9 @@ class HPOTermsConfig(BaseModel):
 
     # CKD Stage 3+ (for survival analysis endpoint)
     ckd_stage_3_plus: List[str] = [
-        "HP:0012625",  # Stage 3 CKD
-        "HP:0012626",  # Stage 4 CKD
-        "HP:0003774",  # Stage 5 CKD
+        "HP:0012625",  # Stage 3 chronic kidney disease
+        "HP:0012626",  # Stage 4 chronic kidney disease
+        "HP:0003774",  # Stage 5 chronic kidney disease
     ]
 
     # Stage 5 CKD only (ESRD)
@@ -256,9 +257,9 @@ class HPOTermsConfig(BaseModel):
     # Scalar aliases for individual CKD stages — used where the call site
     # wants a single HPO ID string rather than a list (e.g. raw-SQL
     # literal filters or human-readable metadata descriptions).
-    chronic_kidney_disease: str = "HP:0012622"  # CKD unspecified
-    ckd_stage_4: str = "HP:0012626"  # Stage 4 CKD
-    ckd_stage_5: str = "HP:0003774"  # Stage 5 CKD / ESRD
+    chronic_kidney_disease: str = "HP:0012622"  # Chronic kidney disease (unspecified)
+    ckd_stage_4: str = "HP:0012626"  # Stage 4 chronic kidney disease
+    ckd_stage_5: str = "HP:0003774"  # Stage 5 chronic kidney disease
 
 
 class SecurityConfig(BaseModel):
@@ -423,6 +424,21 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     ALLOW_REDIS_FALLBACK: Optional[bool] = None
     PUBMED_API_KEY: Optional[str] = None
+
+    # Source import authority is explicit and disabled by default.  These are
+    # identifiers, never credentials; remote imports remain gated until the
+    # atomic import service is invoked by an operational command.
+    SOURCE_IMPORT_ENABLED: bool = False
+    SOURCE_SPREADSHEET_ID: str = ""
+    SOURCE_INDIVIDUALS_GID: str = ""
+    SOURCE_PHENOTYPES_GID: str = ""
+    SOURCE_PHENOTYPE_MODIFIER_GID: str = ""
+    SOURCE_PUBLICATIONS_GID: str = ""
+    SOURCE_IMPORT_FIXTURE_DIR: str = ""
+    SOURCE_IMPORT_MANIFEST_SHA256: str = ""
+    SOURCE_IMPORT_ROW_HMAC_KEY: str = ""
+    SOURCE_IMPORT_REVIEWER_MAPPING_JSON: str = ""
+    SOURCE_IMPORT_ACTOR_ID: int | None = None
 
     # SMTP credentials (for email delivery)
     SMTP_HOST: str = ""

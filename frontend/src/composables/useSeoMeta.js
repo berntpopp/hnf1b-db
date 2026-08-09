@@ -230,7 +230,7 @@ export function useVariantStructuredData(variant) {
           alternateName: ['RCAD', 'MODY5', 'HNF1B-related disorder'],
           code: {
             '@type': 'MedicalCode',
-            codeValue: 'MONDO:0010894',
+            codeValue: 'MONDO:0007669',
             codingSystem: 'MONDO',
           },
         },

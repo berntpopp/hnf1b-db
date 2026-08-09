@@ -158,6 +158,7 @@ async def test_delete_fails_when_revision_changes_before_commit(
             loaded = await service.get("delete-revision-race")
             assert loaded is not None
             assert loaded.revision == 1
+            stale_revision = loaded.revision
             stale_ready.set()
             await update_done.wait()
 
@@ -167,12 +168,12 @@ async def test_delete_fails_when_revision_changes_before_commit(
                     "stale delete",
                     actor_id=admin_user.id,
                     actor_username=admin_user.username,
-                    expected_revision=loaded.revision,
+                    expected_revision=stale_revision,
                 )
 
             assert exc_info.value.code == "revision_mismatch"
             assert exc_info.value.detail["current_revision"] == 2
-            assert exc_info.value.detail["expected_revision"] == 1
+            assert exc_info.value.detail["expected_revision"] == stale_revision
 
     async def actor_b_update() -> None:
         await stale_ready.wait()
@@ -196,6 +197,8 @@ async def test_delete_fails_when_revision_changes_before_commit(
                 actor_id=admin_user.id,
             )
             assert updated.revision == 2
+            # Service mutators participate in the caller transaction.
+            await session.commit()
         update_done.set()
 
     await __import__("asyncio").gather(actor_a_delete(), actor_b_update())
@@ -235,6 +238,7 @@ async def test_transition_fails_cleanly_when_delete_wins_after_preread(
             repo = PhenopacketRepository(session)
             loaded = await repo.get_by_id("transition-delete-race")
             assert loaded is not None
+            stale_revision = loaded.revision
             preread_complete.set()
             await delete_complete.wait()
 
@@ -244,7 +248,7 @@ async def test_transition_fails_cleanly_when_delete_wins_after_preread(
                     loaded.id,
                     to_state="in_review",
                     reason="submit after stale preread",
-                    expected_revision=loaded.revision,
+                    expected_revision=stale_revision,
                     actor=admin_user,
                 )
 
@@ -260,6 +264,7 @@ async def test_transition_fails_cleanly_when_delete_wins_after_preread(
                 expected_revision=1,
             )
             assert result["deleted_at"] is not None
+            await session.commit()
         delete_complete.set()
 
     await __import__("asyncio").gather(actor_a_transition(), actor_b_delete())
@@ -292,6 +297,7 @@ async def test_edit_fails_cleanly_when_delete_wins_after_preread(
             repo = PhenopacketRepository(session)
             loaded = await repo.get_by_id("edit-delete-race")
             assert loaded is not None
+            stale_revision = loaded.revision
             preread_complete.set()
             await delete_complete.wait()
 
@@ -308,7 +314,7 @@ async def test_edit_fails_cleanly_when_delete_wins_after_preread(
                         ],
                     },
                     change_reason="edit after stale preread",
-                    expected_revision=loaded.revision,
+                    expected_revision=stale_revision,
                     actor=admin_user,
                 )
 
@@ -324,6 +330,7 @@ async def test_edit_fails_cleanly_when_delete_wins_after_preread(
                 expected_revision=1,
             )
             assert result["deleted_at"] is not None
+            await session.commit()
         delete_complete.set()
 
     await __import__("asyncio").gather(actor_a_edit(), actor_b_delete())

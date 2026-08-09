@@ -17,6 +17,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy import update as sa_update
 
+from app.phenopackets.curation.import_models import (
+    ImportRunStatus,
+    SourceDataset,
+    SourceImportRun,
+    SourceSnapshot,
+)
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.services.state_service import PhenopacketStateService
 
@@ -40,6 +46,9 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
         expected_revision=1,
         actor=curator_user,
     )
+    # State-service mutators deliberately do not commit; flush its final
+    # working-copy/pointer assignments before reloading the record.
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     # state is still 'published'
@@ -56,6 +65,51 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
     assert head.content_jsonb != published_record.phenopacket  # ← the invariant
 
 
+@pytest.mark.asyncio
+async def test_edit_record_persists_trusted_import_run_provenance(
+    db_session, draft_record, curator_user
+):
+    """The import pipeline can attach its run identity to the written revision."""
+    dataset = SourceDataset(
+        source_system="fixture",
+        dataset_key="import-run-provenance",
+        subject_namespace="fixture",
+    )
+    db_session.add(dataset)
+    await db_session.flush()
+    snapshot = SourceSnapshot(
+        dataset_id=dataset.id,
+        manifest_sha256="a" * 64,
+        source_manifest={"sha256": "a" * 64},
+        expected_counts={},
+    )
+    db_session.add(snapshot)
+    await db_session.flush()
+    run = SourceImportRun(
+        snapshot_id=snapshot.id,
+        transformer_version="test",
+        projection_version="test",
+        status=ImportRunStatus.APPLYING.value,
+        actor_id=curator_user.id,
+    )
+    db_session.add(run)
+    await db_session.flush()
+
+    service = PhenopacketStateService(db_session)
+    await service.edit_record(
+        draft_record.id,
+        new_content={"id": "draft-1", "a": "source-import"},
+        change_reason="source import",
+        expected_revision=draft_record.revision,
+        actor=curator_user,
+        import_run_id=run.id,
+    )
+
+    latest = await service._latest_revision_row(draft_record.id)
+    assert latest is not None
+    assert latest.import_run_id == run.id
+
+
 # ---------------------------------------------------------------------------
 # I2 — at most one head-published row per record (partial unique index)
 # ---------------------------------------------------------------------------
@@ -65,7 +119,7 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
 async def test_I2_at_most_one_head_published_per_record(
     db_session, draft_record, curator_user, admin_user
 ):
-    """I2: after submit→approve→publish, exactly one row has is_head_published=TRUE.
+    """I2: after submit→approve→publish, the sole head is pointer-authoritative.
 
     Uses draft_record (not published_record) to exercise the full publish path
     without hitting the unsupported 'published→in_review' transition.
@@ -80,6 +134,7 @@ async def test_I2_at_most_one_head_published_per_record(
         expected_revision=1,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     await svc.transition(
         draft_record.id,
@@ -88,6 +143,7 @@ async def test_I2_at_most_one_head_published_per_record(
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     await svc.transition(
         draft_record.id,
@@ -96,20 +152,17 @@ async def test_I2_at_most_one_head_published_per_record(
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
 
-    heads = (
-        (
-            await db_session.execute(
-                select(PhenopacketRevision).where(
-                    PhenopacketRevision.record_id == draft_record.id,
-                    PhenopacketRevision.is_head_published.is_(True),
-                )
+    head = (
+        await db_session.execute(
+            select(PhenopacketRevision).where(
+                PhenopacketRevision.id == draft_record.head_published_revision_id
             )
         )
-        .scalars()
-        .all()
-    )
-    assert len(heads) == 1  # ← the invariant
+    ).scalar_one()
+    assert head.record_id == draft_record.id
+    assert head.state == "published"
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +172,7 @@ async def test_I2_at_most_one_head_published_per_record(
 
 @pytest.mark.asyncio
 async def test_I3_head_pointer_state_consistency(db_session, published_record):
-    """I3: for a published record the head row is_head_published=TRUE and to_state='published'."""
+    """I3: a published record's pointer targets its published head row."""
     head = (
         await db_session.execute(
             select(PhenopacketRevision).where(
@@ -127,7 +180,8 @@ async def test_I3_head_pointer_state_consistency(db_session, published_record):
             )
         )
     ).scalar_one()
-    assert head.is_head_published is True
+    assert head.id == published_record.head_published_revision_id
+    assert head.state == "published"
     assert head.to_state == "published"
     assert published_record.state == "published"
     assert published_record.head_published_revision_id is not None
@@ -198,6 +252,7 @@ async def test_I5b_draft_owner_cleared_on_publish(
         expected_revision=1,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     await svc.transition(
         draft_record.id,
@@ -206,6 +261,7 @@ async def test_I5b_draft_owner_cleared_on_publish(
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
     await svc.transition(
         draft_record.id,
@@ -214,6 +270,7 @@ async def test_I5b_draft_owner_cleared_on_publish(
         expected_revision=draft_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(draft_record)
 
     assert draft_record.draft_owner_id is None  # ← the invariant
@@ -225,23 +282,22 @@ async def test_I5b_draft_owner_cleared_on_publish(
 
 
 @pytest.mark.asyncio
-async def test_I6_gaps_in_revision_numbers_after_inplace_saves(
+async def test_I6_inplace_saves_append_revision_numbers(
     db_session, draft_record, curator_user
 ):
-    """I6: in-place saves bump phenopackets.revision but never insert rows.
+    """I6: in-place saves append immutable rows without revision-number gaps.
 
     Sequence:
       start: revision=1
-      in-place save → revision=2 (no row)
-      in-place save → revision=3 (no row)
-      submit (→ in_review) → revision=4, row with revision_number=4
+      in-place save → revision=2 (new row)
+      in-place save → revision=3 (new row)
+      submit (→ in_review) → revision=4 (new row)
 
-    So the only revision row has revision_number=4 — a gap of [2,3] is expected.
+    Every state-affecting write has an immutable audit snapshot.
     """
     svc = PhenopacketStateService(db_session)
 
-    # Two in-place saves on the raw draft (no editing_revision_id yet — row is
-    # created at submit time, not at draft-save time per spec §6.3 note)
+    # Two in-place saves on the raw draft append snapshots.
     await svc.edit_record(
         draft_record.id,
         new_content={"x": 1},
@@ -256,7 +312,7 @@ async def test_I6_gaps_in_revision_numbers_after_inplace_saves(
         expected_revision=2,
         actor=curator_user,
     )
-    # submit — creates the first (and only) transition row
+    # submit appends the state-transition row
     await svc.transition(
         draft_record.id,
         to_state="in_review",
@@ -277,8 +333,7 @@ async def test_I6_gaps_in_revision_numbers_after_inplace_saves(
         .all()
     )
 
-    # Only the submit created a row; its revision_number = 4
-    assert rows == [4]
+    assert rows == [2, 3, 4]
 
 
 # ---------------------------------------------------------------------------

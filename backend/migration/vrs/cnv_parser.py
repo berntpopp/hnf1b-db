@@ -375,8 +375,10 @@ class CNVParser:
             "progressStatus": "COMPLETED",
             "diagnosis": {
                 "disease": {
-                    "id": "MONDO:0011593",
-                    "label": "Renal cysts and diabetes syndrome",
+                    # MONDO:0011593 was wrong here — it denotes "seizures,
+                    # benign familial infantile, 2". Verified 2026-07-30.
+                    "id": "MONDO:0007669",
+                    "label": "renal cysts and diabetes syndrome",
                 },
                 "genomicInterpretations": [
                     {

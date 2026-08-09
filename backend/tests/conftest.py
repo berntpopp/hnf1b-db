@@ -124,6 +124,14 @@ _MUTABLE_TABLES: tuple[str, ...] = (
     "comment_edits",
     "comments",
     "phenopacket_audit",
+    # Source-import evidence tables: children must be removed before their
+    # revision, record, run, snapshot, dataset, and actor parents.
+    "source_correction_registry",
+    "source_report_bindings",
+    "phenopacket_subject_bindings",
+    "source_import_runs",
+    "source_snapshots",
+    "source_datasets",
     "phenopacket_revisions",
     "phenopackets",
     "variant_annotations",
@@ -537,8 +545,19 @@ async def published_record(db_session, admin_user):
 
     pp = Phenopacket(
         phenopacket_id="wave7-published-1",
-        phenopacket={"id": "wave7-published-1", "a": 1},
-        state="published",
+        phenopacket={
+            "id": "wave7-published-1",
+            "subject": {"id": "published-subject", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-08-09T00:00:00Z",
+                "createdBy": "test",
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
+            },
+        },
+        # Build a valid transaction in the same order as production: insert
+        # the never-published record, append its immutable published snapshot,
+        # then atomically promote the record and pointer together.
+        state="draft",
         revision=1,
         created_by_id=admin_user.id,
         # draft_owner_id stays NULL — matches migration 3 behaviour
@@ -550,7 +569,15 @@ async def published_record(db_session, admin_user):
         record_id=pp.id,
         revision_number=1,
         state="published",
-        content_jsonb={"id": "wave7-published-1", "a": 1},
+        content_jsonb={
+            "id": "wave7-published-1",
+            "subject": {"id": "published-subject", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-08-09T00:00:00Z",
+                "createdBy": "test",
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
+            },
+        },
         change_reason="init",
         actor_id=admin_user.id,
         from_state=None,
@@ -560,6 +587,7 @@ async def published_record(db_session, admin_user):
     db_session.add(rev)
     await db_session.flush()
 
+    pp.state = "published"
     pp.head_published_revision_id = rev.id
     await db_session.commit()
     await db_session.refresh(pp)
@@ -599,6 +627,10 @@ async def clone_in_progress_record(db_session, published_record, curator_user):
         expected_revision=published_record.revision,
         actor=curator_user,
     )
+    # State-service mutators deliberately only flush/participate in the
+    # caller's transaction. This fixture calls the service directly, so flush
+    # before refreshing the ORM instance.
+    await db_session.flush()
     await db_session.refresh(published_record)
     return {
         "record": published_record,

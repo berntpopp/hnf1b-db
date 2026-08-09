@@ -37,6 +37,7 @@ from sqlalchemy import create_engine
 # regardless of test-collection import order.
 import app.comments.models  # noqa: F401
 import app.models.user  # noqa: F401
+import app.phenopackets.curation.import_models  # noqa: F401
 import app.phenopackets.models  # noqa: F401
 import app.reference.models  # noqa: F401
 from app.core.config import settings
@@ -48,13 +49,20 @@ from app.database import Base
 _RAW_SQL_TABLES = {
     "alembic_version",
     "allelic_state_values",
+    "classification_system_values",
+    "cohort_values",
+    "detection_method_values",
     "evidence_code_values",
+    "family_history_values",
     "hpo_terms_lookup",
     "interpretation_status_values",
+    "ontology_migration_journal",
     "progress_status_values",
     "publication_metadata",
     "publication_fulltext",
     "publication_fulltext_embeddings",
+    "publication_type_values",
+    "segregation_values",
     "sex_values",
     "variant_annotations",
 }

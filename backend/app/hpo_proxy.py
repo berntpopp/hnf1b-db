@@ -20,6 +20,36 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2/hpo", tags=["hpo"])
 
+# Common HPO terms for HNF1B, served by GET /common-terms to phenotype
+# selectors. Module-level (not built inline inside the endpoint) so
+# `backend/tests/test_hpo_proxy_common_terms_conformance.py` can import and
+# sweep every entry through `app.ontology.conformance.check_label` (A3) --
+# the eighth hardcoded ontology map found in this codebase (spec §3.3),
+# mirroring `ADDITIONAL_TERMS` in `app/services/ontology_service.py`, which
+# exists as a module constant for the same reason.
+COMMON_HPO_TERMS: dict[str, list[dict[str, str]]] = {
+    "renal": [
+        {"id": "HP:0000083", "label": "Renal insufficiency"},
+        {"id": "HP:0000107", "label": "Renal cyst"},
+        {"id": "HP:0012622", "label": "Chronic kidney disease"},
+        {"id": "HP:0000089", "label": "Renal hypoplasia"},
+        {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
+    ],
+    "metabolic": [
+        {"id": "HP:0000819", "label": "Diabetes mellitus"},
+        {"id": "HP:0002917", "label": "Hypomagnesemia"},
+        {"id": "HP:0002149", "label": "Hyperuricemia"},
+        {"id": "HP:0001997", "label": "Gout"},
+        {"id": "HP:0004904", "label": "Maturity-onset diabetes of the young"},
+    ],
+    "developmental": [
+        {"id": "HP:0000078", "label": "Genital abnormality"},
+        {"id": "HP:0001737", "label": "Pancreatic cysts"},
+        {"id": "HP:0001738", "label": "Exocrine pancreatic insufficiency"},
+        {"id": "HP:0001732", "label": "Abnormality of the pancreas"},
+    ],
+}
+
 
 class HPOTerm(BaseModel):
     """HPO term model."""
@@ -229,36 +259,12 @@ async def get_common_hpo_terms(
     Returns:
         List of common HPO terms
     """
-    # Common HPO terms for HNF1B
-    common_terms = {
-        "renal": [
-            {"id": "HP:0000083", "label": "Renal insufficiency"},
-            {"id": "HP:0000107", "label": "Renal cyst"},
-            {"id": "HP:0012622", "label": "Chronic kidney disease"},
-            {"id": "HP:0000089", "label": "Renal hypoplasia"},
-            {"id": "HP:0100611", "label": "Multiple glomerular cysts"},
-        ],
-        "metabolic": [
-            {"id": "HP:0000819", "label": "Diabetes mellitus"},
-            {"id": "HP:0002917", "label": "Hypomagnesemia"},
-            {"id": "HP:0002149", "label": "Hyperuricemia"},
-            {"id": "HP:0001997", "label": "Gout"},
-            {"id": "HP:0004904", "label": "Maturity-onset diabetes of the young"},
-        ],
-        "developmental": [
-            {"id": "HP:0000078", "label": "Genital abnormality"},
-            {"id": "HP:0001737", "label": "Pancreatic cysts"},
-            {"id": "HP:0001738", "label": "Exocrine pancreatic insufficiency"},
-            {"id": "HP:0001732", "label": "Abnormality of the pancreas"},
-        ],
-    }
-
-    if category and category in common_terms:
-        return common_terms[category]
+    if category and category in COMMON_HPO_TERMS:
+        return COMMON_HPO_TERMS[category]
 
     # Return all common terms if no category specified
     all_terms = []
-    for terms in common_terms.values():
+    for terms in COMMON_HPO_TERMS.values():
         all_terms.extend(terms)
     return all_terms
 
