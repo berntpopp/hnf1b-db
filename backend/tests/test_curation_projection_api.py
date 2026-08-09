@@ -228,16 +228,34 @@ def test_correction_order_uses_created_timestamp_not_uuid_order() -> None:
 
 
 def test_canonicalization_deep_merges_projected_fields() -> None:
-    """Derived GA4GH values update their keys without erasing legacy siblings."""
+    """Canonical fields replace stale values while legacy siblings survive."""
     document = _curation_document()
-    document["subject"] = {"id": "old", "legacySubjectMarker": {"keep": True}}
-    document["metaData"] = {"created": "old", "legacyMetaMarker": "keep"}
+    document["subject"] = {
+        "id": "old",
+        "sex": "FEMALE",
+        "timeAtLastEncounter": {"age": {"iso8601duration": "P42Y"}},
+        "legacySubjectMarker": {"keep": True},
+    }
+    document["phenotypicFeatures"] = [{"type": {"id": "HP:9999999"}}]
+    document["diseases"] = [{"term": {"id": "MONDO:9999999"}}]
+    document["interpretations"] = [{"id": "legacy-interpretation"}]
+    document["metaData"] = {
+        "created": "old",
+        "createdBy": "legacy",
+        "legacyMetaMarker": "keep",
+    }
 
     canonical = canonicalize_curation_document(document)
 
     assert canonical["subject"]["id"] == "317"
     assert canonical["subject"]["legacySubjectMarker"] == {"keep": True}
+    assert "sex" not in canonical["subject"]
+    assert "timeAtLastEncounter" not in canonical["subject"]
+    assert canonical["phenotypicFeatures"] == []
+    assert canonical["diseases"] == []
+    assert canonical["interpretations"] == []
     assert canonical["metaData"]["legacyMetaMarker"] == "keep"
+    assert canonical["metaData"]["createdBy"] == "HNF1B-DB deterministic projection"
 
 
 async def test_correction_invalidates_resolution_digest_and_reopens_conflict(

@@ -116,13 +116,34 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
     return corrected
 
 
-def _deep_merge(existing: Any, derived: Any) -> Any:
-    """Overlay canonical GA4GH fields while retaining legacy nested siblings."""
-    if not isinstance(existing, dict) or not isinstance(derived, dict):
+_PROJECTOR_OWNED_FIELDS = {
+    "subject": {
+        "id",
+        "alternateIds",
+        "sex",
+        "karyotypicSex",
+        "taxonomy",
+        "timeAtLastEncounter",
+    },
+    "metaData": {
+        "created",
+        "createdBy",
+        "resources",
+        "phenopacketSchemaVersion",
+        "externalReferences",
+    },
+}
+
+
+def _merge_projected_field(field: str, existing: Any, derived: Any) -> Any:
+    """Replace projector-owned values while retaining unowned legacy siblings."""
+    owned = _PROJECTOR_OWNED_FIELDS.get(field)
+    if owned is None or not isinstance(existing, dict) or not isinstance(derived, dict):
         return deepcopy(derived)
-    merged = deepcopy(existing)
-    for key, value in derived.items():
-        merged[key] = _deep_merge(merged.get(key), value)
+    merged = {
+        key: deepcopy(value) for key, value in existing.items() if key not in owned
+    }
+    merged.update(deepcopy(derived))
     return merged
 
 
@@ -232,7 +253,9 @@ def canonicalize_curation_document(
         "interpretations",
         "metaData",
     ):
-        canonical[field] = _deep_merge(document.get(field), result.phenopacket[field])
+        canonical[field] = _merge_projected_field(
+            field, document.get(field), result.phenopacket[field]
+        )
     canonical["id"] = document.get("id", result.phenopacket["id"])
     # Corrections are an overlay for projection. Persist their original raw
     # source profile so re-canonicalizing is idempotent rather than applying a

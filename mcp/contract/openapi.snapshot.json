@@ -842,8 +842,7 @@
           },
           "observations": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ReportObservation"
             },
             "title": "Observations",
             "type": "array"

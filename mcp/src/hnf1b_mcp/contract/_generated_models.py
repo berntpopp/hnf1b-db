@@ -1552,18 +1552,6 @@ class ClassificationObservation(BaseModel):
     verdict: Optional[ObservedValueStr] = None
 
 
-class CurationLedgerResponse(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    corrections: Annotated[list[CurationCorrection], Field(title="Corrections")]
-    observations: Annotated[list[dict[str, Any]], Field(title="Observations")]
-    phenopacketId: Annotated[str, Field(title="Phenopacketid")]
-    projection: ProjectionPayload
-    resolutions: Annotated[list[ProjectionResolution], Field(title="Resolutions")]
-    revision: Annotated[int, Field(title="Revision")]
-
-
 class DiseaseObservation(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1633,6 +1621,18 @@ class ReportPatchRequest(BaseModel):
     changeReason: Annotated[str, Field(min_length=1, title="Changereason")]
     observation: ReportObservation
     revision: Annotated[Optional[int], Field(title="Revision")] = None
+
+
+class CurationLedgerResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    corrections: Annotated[list[CurationCorrection], Field(title="Corrections")]
+    observations: Annotated[list[ReportObservation], Field(title="Observations")]
+    phenopacketId: Annotated[str, Field(title="Phenopacketid")]
+    projection: ProjectionPayload
+    resolutions: Annotated[list[ProjectionResolution], Field(title="Resolutions")]
+    revision: Annotated[int, Field(title="Revision")]
 
 
 class ProjectionPreviewRequest(BaseModel):

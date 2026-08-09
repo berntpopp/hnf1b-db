@@ -46,6 +46,16 @@
 - OpenAPI now documents the actual runtime curation error envelope for 404,
   409, 422, and 428 responses.
 
+## Final acceptance follow-up
+
+- Canonicalization preserves unowned legacy nested keys but replaces all
+  projector-owned subject, feature, disease, interpretation, and metadata
+  fields exactly, removing stale sex and encounter values when projection no
+  longer supplies them.
+- Ledger observations are again typed as `ReportObservation` in the OpenAPI
+  response model; derived phenotype source status now normalizes aliases before
+  strict re-validation.
+
 ## Verification
 
 - Backend: 44 focused tests passed (`test_domain_validator`, curation API,

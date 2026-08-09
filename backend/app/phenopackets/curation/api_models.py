@@ -71,11 +71,7 @@ class CurationLedgerResponse(CurationApiModel):
 
     phenopacket_id: str
     revision: int
-    # Source-status is derived by the profile model but retained in the
-    # serialized source ledger. Keep this exact, forward-compatible evidence
-    # object opaque at the response boundary rather than re-parsing it and
-    # accidentally rejecting its derived field.
-    observations: tuple[dict[str, Any], ...]
+    observations: tuple[ReportObservation, ...]
     corrections: tuple[CurationCorrection, ...]
     resolutions: tuple[ProjectionResolution, ...]
     projection: ProjectionPayload
