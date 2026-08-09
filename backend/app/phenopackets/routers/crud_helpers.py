@@ -56,7 +56,7 @@ def parse_sort_parameter(sort: str, *, content: Any = None) -> list:
     """
     # The generated columns are derived from the mutable working copy. Public
     # callers instead sort on the joined published-head JSON snapshot.
-    sort_fields = ALLOWED_SORT_FIELDS
+    sort_fields: dict[str, Any] = dict(ALLOWED_SORT_FIELDS)
     if content is not None:
         sort_fields = {
             "created_at": Phenopacket.created_at,

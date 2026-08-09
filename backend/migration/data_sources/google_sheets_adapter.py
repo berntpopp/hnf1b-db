@@ -82,7 +82,7 @@ class GoogleSheetsSourceAdapter:
                 raise SourceFetchError(
                     f"configured sheet {name} returned unsafe content type"
                 )
-            if raw.lstrip().casefold().startswith(b"<html"):
+            if raw.lstrip().lower().startswith(b"<html"):
                 raise SourceFetchError(f"configured sheet {name} returned HTML")
             raw_sheets[name] = raw
         try:
