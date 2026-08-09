@@ -37,3 +37,5 @@
 - Verification: `ruff check` passed and the targeted suite ran 35 tests
   successfully. Pytest also emitted pre-existing temporary Docker-fixture
   cleanup warnings; no source import test used network access.
+- Alembic smoke verification ran in an isolated worker database; all six
+  operational tables were present after `upgrade head`.
