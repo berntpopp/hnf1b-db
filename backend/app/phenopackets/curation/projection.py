@@ -346,7 +346,9 @@ def project_individual(
         observation = variant_observations[0]
         contribution = (
             observation.classification.contribution.value
-            if observation.classification and observation.classification.contribution
+            if observation.classification
+            and observation.classification.contribution
+            and observation.classification.contribution.source_status.value == "stated"
             else "UNKNOWN"
         )
         if contribution == "UNKNOWN":
@@ -361,7 +363,9 @@ def project_individual(
             raise ValueError("contribution must be a GA4GH interpretation status")
         acmg = (
             observation.classification.verdict.value
-            if observation.classification and observation.classification.verdict
+            if observation.classification
+            and observation.classification.verdict
+            and observation.classification.verdict.source_status.value == "stated"
             else None
         )
         variant_interpretation: dict[str, Any] = {"variationDescriptor": descriptor}

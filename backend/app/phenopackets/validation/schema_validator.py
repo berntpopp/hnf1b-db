@@ -496,10 +496,25 @@ class SchemaValidator:
         # nullable correction pre/post-images).
         from app.phenopackets.curation.models import Hnf1bCurationProfile
 
+        legacy_curation_schema = schema["properties"]["hnf1bCuration"]
         curation_schema = Hnf1bCurationProfile.model_json_schema(
             by_alias=True, ref_template="#/$defs/{model}"
         )
-        schema["properties"]["hnf1bCuration"] = curation_schema
+        curation_schema["properties"]["schemaVersion"] = {"const": "2.0"}
+        curation_schema["required"] = [
+            *curation_schema.get("required", []),
+            "schemaVersion",
+        ]
+        legacy_curation_schema = {
+            **legacy_curation_schema,
+            "not": {
+                "properties": {"schemaVersion": {"const": "2.0"}},
+                "required": ["schemaVersion"],
+            },
+        }
+        schema["properties"]["hnf1bCuration"] = {
+            "anyOf": [legacy_curation_schema, curation_schema]
+        }
         schema["$defs"] = curation_schema.pop("$defs", {})
         return schema
 
@@ -514,9 +529,7 @@ class SchemaValidator:
         """
         errors = []
         curation = phenopacket.get("hnf1bCuration")
-        if isinstance(curation, dict) and (
-            "observationsById" in curation or "schemaVersion" in curation
-        ):
+        if isinstance(curation, dict) and curation.get("schemaVersion") == "2.0":
             from pydantic import ValidationError
 
             from app.phenopackets.curation.models import Hnf1bCurationProfile
