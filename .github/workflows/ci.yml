@@ -178,6 +178,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify dependency consistency
+        working-directory: frontend
+        run: npm run check:dependencies
+
       - name: Run tests (vitest)
         working-directory: frontend
         run: npm test
