@@ -29,14 +29,25 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
     corrections = corrected.get("correctionsById", {})
     if not isinstance(corrections, dict):
         return corrected
-    superseded = {
-        item.get("supersedesCorrectionId")
-        for item in corrections.values()
-        if isinstance(item, dict) and item.get("supersedesCorrectionId")
-    }
-    for correction_id, correction in sorted(corrections.items()):
-        if correction_id in superseded:
-            continue
+    ordered_ids: list[str] = []
+    remaining = dict(corrections)
+    while remaining:
+        ready = [
+            key
+            for key, item in remaining.items()
+            if not isinstance(item, dict)
+            or not item.get("supersedesCorrectionId")
+            or item["supersedesCorrectionId"] in ordered_ids
+        ]
+        if not ready:
+            raise CurationProjectionError(
+                "invalid_correction", "correction chain cycle"
+            )
+        for key in sorted(ready):
+            ordered_ids.append(key)
+            remaining.pop(key)
+    for correction_id in ordered_ids:
+        correction = corrections[correction_id]
         if not isinstance(correction, dict):
             raise CurationProjectionError("invalid_correction", "invalid correction")
         pointer = correction.get("jsonPointer")
@@ -54,10 +65,10 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
                 target = target[int(part)] if isinstance(target, list) else target[part]
             leaf = parts[-1]
             current = target[int(leaf)] if isinstance(target, list) else target[leaf]
-        except (IndexError, KeyError, ValueError):
-            # A correction can target a retired source path; it remains
-            # auditable but has no current source value to transform.
-            continue
+        except (IndexError, KeyError, TypeError, ValueError) as error:
+            raise CurationProjectionError(
+                "invalid_correction", "invalid correction pointer traversal"
+            ) from error
         if current != correction.get("preimage"):
             raise CurationProjectionError(
                 "correction_preimage_mismatch", "correction preimage does not match"
@@ -115,7 +126,10 @@ def canonicalize_curation_document(
     ):
         canonical[field] = result.phenopacket[field]
     canonical["id"] = document.get("id", result.phenopacket["id"])
-    canonical_block = profile.model_dump(by_alias=True, mode="json")
+    # Corrections are an overlay for projection. Persist their original raw
+    # source profile so re-canonicalizing is idempotent rather than applying a
+    # postimage as though it were a fresh preimage.
+    canonical_block = deepcopy(block)
     canonical_block["projection"] = ProjectionMetadata(
         algorithm_version=profile.projection.algorithm_version,
         observations_digest=result.observations_digest,

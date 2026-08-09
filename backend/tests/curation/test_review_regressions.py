@@ -54,9 +54,9 @@ def test_raw_imported_value_is_frozen_and_correction_null_serializes_through_sch
 
     correction = CurationCorrection(
         correction_id="correction-1",
-        json_pointer="/x",
+        json_pointer="/projection/outputDigest",
         preimage=None,
-        postimage={"value": "P28W"},
+        postimage="digest",
         source_manifest_sha256="sha256:one",
         reason="Parsed source unit.",
         actor_id=1,

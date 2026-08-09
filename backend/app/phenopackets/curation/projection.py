@@ -393,8 +393,11 @@ def project_individual(
                 if field == "contribution"
                 and item.classification
                 and item.classification.contribution
+                and item.classification.contribution.source_status.value == "stated"
                 else item.classification.verdict.value
-                if item.classification and item.classification.verdict
+                if item.classification
+                and item.classification.verdict
+                and item.classification.verdict.source_status.value == "stated"
                 else None
                 for item in selected_classifications
             }

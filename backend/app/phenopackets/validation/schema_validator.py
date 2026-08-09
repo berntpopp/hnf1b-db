@@ -1,6 +1,6 @@
 """JSON Schema validation for Phenopackets v2."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from jsonschema import Draft7Validator
 
@@ -496,7 +496,8 @@ class SchemaValidator:
         # nullable correction pre/post-images).
         from app.phenopackets.curation.models import Hnf1bCurationProfile
 
-        legacy_curation_schema = schema["properties"]["hnf1bCuration"]
+        properties = cast(Dict[str, Any], schema["properties"])
+        legacy_curation_schema = properties["hnf1bCuration"]
         curation_schema = Hnf1bCurationProfile.model_json_schema(
             by_alias=True, ref_template="#/$defs/{model}"
         )
@@ -512,7 +513,7 @@ class SchemaValidator:
                 "required": ["schemaVersion"],
             },
         }
-        schema["properties"]["hnf1bCuration"] = {
+        properties["hnf1bCuration"] = {
             "anyOf": [legacy_curation_schema, curation_schema]
         }
         schema["$defs"] = curation_schema.pop("$defs", {})
@@ -570,9 +571,9 @@ class SchemaValidator:
                         errors.append("hnf1bCuration: canonical projection mismatch")
                 except CurationProjectionError as error:
                     errors.append(f"hnf1bCuration: {error}")
-        for error in self.validator.iter_errors(phenopacket):
-            error_path = ".".join(str(p) for p in error.path)
-            errors.append(f"{error_path}: {error.message}")
+        for schema_error in self.validator.iter_errors(phenopacket):
+            error_path = ".".join(str(p) for p in schema_error.path)
+            errors.append(f"{error_path}: {schema_error.message}")
         return errors
 
     def is_valid(self, phenopacket: Dict[str, Any]) -> bool:
