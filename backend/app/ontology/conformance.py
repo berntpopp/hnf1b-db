@@ -67,6 +67,7 @@ _CORRECTION_FIELDS = {
     "test_or_migration_reference",
 }
 _CORRECTION_KINDS = {"identifier_change", "label_only", "semantic_unprojection"}
+_BACKEND_ROOT = _DATA_DIR.parents[2]
 
 
 class OntologySourceError(Exception):
@@ -108,6 +109,16 @@ def _validate_correction_entries(
             raise ValueError("affected_count must be numeric") from error
         if count < 0:
             raise ValueError("affected_count must be non-negative")
+        reference = entry["test_or_migration_reference"]
+        reference_path = (
+            _BACKEND_ROOT / "alembic" / "versions" / reference
+            if reference.endswith(".py") and not reference.startswith("tests/")
+            else _BACKEND_ROOT / reference
+        )
+        if not reference_path.is_file():
+            raise ValueError(
+                f"ledger entry {entry['defect_key']} has a missing executable reference"
+            )
     return entries
 
 
