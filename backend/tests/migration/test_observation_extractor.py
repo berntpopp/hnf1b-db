@@ -1,7 +1,28 @@
 """Source-row extraction preserves typed evidence without reviewer emails."""
 
-from migration.phenopackets.observation_extractor import extract_observation
+import pytest
+
+from migration.phenopackets.laterality import (
+    ModifierVocabularyError,
+    modifier_vocabulary_from_rows,
+)
+from migration.phenopackets.observation_extractor import (
+    ObservationExtractionError,
+    extract_observation,
+)
 from migration.phenopackets.source_column_map import SOURCE_COLUMNS
+
+
+def _modifier_vocabulary():
+    return modifier_vocabulary_from_rows(
+        [
+            {"modifier": "Bilateral", "modifier_id": "HP:0012832"},
+            {"modifier": "Unilateral", "modifier_id": "HP:0012833"},
+            {"modifier": "Left", "modifier_id": "HP:0012835"},
+            {"modifier": "Right", "modifier_id": "HP:0012834"},
+        ],
+        version_sha256="a" * 64,
+    )
 
 
 def _row() -> dict[str, str]:
@@ -53,6 +74,7 @@ def test_extractor_builds_one_lossless_typed_observation_with_thirty_assessments
         manifest_sha256="sha256:fixture",
         row_hmac_key=b"test-only-key",
         reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
+        modifier_vocabulary=_modifier_vocabulary(),
     )
 
     assert observation.identifiers.report_id == "RPT-001"
@@ -78,8 +100,38 @@ def test_extractor_preserves_categorical_definition_and_solitary_kidney_laterali
         row, row_number=7, source_system="local_fixture", dataset_key="hnf1b-registry",
         manifest_sha256="sha256:fixture", row_hmac_key=b"test-only-key",
         reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
+        modifier_vocabulary=_modifier_vocabulary(),
     )
     ckd = next(item for item in observation.phenotypes if item.column == "RenalInsufficancy")
     solitary = next(item for item in observation.phenotypes if item.column == "SolitaryKidney")
     assert ckd.findings[0].term.id == "HP:0003774"
     assert [modifier.id for modifier in solitary.findings[0].modifiers] == ["HP:0012833", "HP:0012835"]
+
+
+def test_extractor_refuses_laterality_without_versioned_source_modifiers():
+    with pytest.raises(ObservationExtractionError) as error:
+        extract_observation(
+            _row(),
+            row_number=7,
+            source_system="local_fixture",
+            dataset_key="hnf1b-registry",
+            manifest_sha256="sha256:fixture",
+            row_hmac_key=b"test-only-key",
+            reviewer_mapping={
+                "reviewer@example.test": ("reviewer-1", "Source reviewer 1")
+            },
+        )
+
+    assert isinstance(error.value.__cause__, ModifierVocabularyError)
+
+
+def test_modifier_vocabulary_rejects_non_hpo_modifier_identifiers():
+    rows = [
+        {"modifier": "Bilateral", "modifier_id": "not-an-hpo-id"},
+        {"modifier": "Unilateral", "modifier_id": "HP:0012833"},
+        {"modifier": "Left", "modifier_id": "HP:0012835"},
+        {"modifier": "Right", "modifier_id": "HP:0012834"},
+    ]
+
+    with pytest.raises(ModifierVocabularyError, match="invalid source modifier"):
+        modifier_vocabulary_from_rows(rows, version_sha256="a" * 64)

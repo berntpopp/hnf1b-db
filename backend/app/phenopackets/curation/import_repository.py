@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.phenopackets.curation.import_models import (
+    ImportPayloadError,
     ImportRunStatus,
     SourceCorrectionRegistry,
     SourceDataset,
@@ -18,6 +19,7 @@ from app.phenopackets.curation.import_models import (
     SourceSnapshot,
     sanitize_operational_payload,
 )
+from migration.source_manifest import SourceManifest, SourceManifestPayload
 
 
 class SourceBindingConflict(ValueError):
@@ -59,7 +61,7 @@ class ImportRepository:
         *,
         dataset_id: UUID,
         manifest_sha256: str,
-        source_manifest: dict[str, Any],
+        source_manifest: SourceManifest | SourceManifestPayload,
         expected_counts: dict[str, Any] | None = None,
     ) -> SourceSnapshot:
         """Persist a sanitized structural manifest and return its immutable identity."""
@@ -73,10 +75,17 @@ class ImportRepository:
         ).scalar_one_or_none()
         if existing is not None:
             return existing
+        manifest_payload = (
+            source_manifest
+            if isinstance(source_manifest, SourceManifestPayload)
+            else SourceManifestPayload.from_manifest(source_manifest)
+        )
+        if manifest_sha256 != manifest_payload.sha256:
+            raise ImportPayloadError("snapshot digest does not match manifest")
         snapshot = SourceSnapshot(
             dataset_id=dataset_id,
             manifest_sha256=manifest_sha256,
-            source_manifest=sanitize_operational_payload(source_manifest),
+            source_manifest=manifest_payload.to_storage(),
             expected_counts=sanitize_operational_payload(expected_counts or {}),
         )
         self.db.add(snapshot)

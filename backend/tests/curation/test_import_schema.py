@@ -11,13 +11,13 @@ from app.phenopackets.curation.import_models import (
 
 def test_import_run_payload_retains_count_only_operational_metadata():
     payload = sanitize_operational_payload(
-        {"built": 939, "stored": 864, "conflicts": 18, "manifest": "sha256:abc"}
+        {"built": 939, "stored": 864, "conflicts": 18, "manifest": "a" * 64}
     )
     assert payload == {
         "built": 939,
         "stored": 864,
         "conflicts": 18,
-        "manifest": "sha256:abc",
+        "manifest": "a" * 64,
     }
     assert ImportRunStatus.APPLIED.value == "applied"
 
@@ -31,6 +31,7 @@ def test_import_run_payload_retains_count_only_operational_metadata():
         {"comment": "linkable source text"},
         {"message": "password=hunter2"},
         {"message": "Family A / II-2; rare clinical comment"},
+        {"manifest": "sha256:abc"},
     ],
 )
 def test_import_run_payload_rejects_clinical_or_secret_content(payload):

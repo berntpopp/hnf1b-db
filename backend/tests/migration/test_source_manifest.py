@@ -5,8 +5,10 @@ import hashlib
 import pytest
 
 from migration.source_manifest import (
+    EXPECTED_HEADERS,
     REQUIRED_SHEETS,
     SourceManifestError,
+    SourceManifestPayload,
     build_source_manifest,
 )
 
@@ -133,3 +135,51 @@ def test_manifest_hashes_all_raw_sheets_and_never_returns_partial_data():
             )
         ).hexdigest()
     )
+
+
+def test_manifest_payload_preserves_only_structural_metadata_and_row_counts():
+    sheets = {
+        "Individuals": _csv(list(EXPECTED_HEADERS["Individuals"]), ["source-subject"] * 60),
+        "Phenotypes": _csv(list(EXPECTED_HEADERS["Phenotypes"])),
+        "Phenotype_modifier": _csv(["modifier", "modifier_id"], ["Left", "HP:1"]),
+        "Publications": _csv(list(EXPECTED_HEADERS["Publications"])),
+    }
+    manifest = build_source_manifest(
+        source_system="fixture",
+        dataset_key="hnf1b-registry",
+        sheets=sheets,
+        header_validation=False,
+    )
+
+    payload = SourceManifestPayload.from_manifest(manifest).to_storage()
+
+    assert payload["sha256"] == manifest.sha256
+    assert payload["sheets"]["Individuals"]["row_count"] == 1
+    assert "source-subject" not in repr(payload)
+
+
+def test_manifest_payload_rejects_non_sha256_digest():
+    with pytest.raises(SourceManifestError, match="SHA-256"):
+        SourceManifestPayload(
+            source_system="fixture",
+            dataset_key="hnf1b-registry",
+            sha256="not-a-digest",
+            sheets={},
+        )
+
+
+def test_manifest_payload_rechecks_exact_sheet_contract_before_persistence():
+    manifest = build_source_manifest(
+        source_system="fixture",
+        dataset_key="hnf1b-registry",
+        header_validation=False,
+        sheets={
+            "Individuals": _csv(["unexpected"]),
+            "Phenotypes": _csv(["phenotype_category"]),
+            "Phenotype_modifier": _csv(["modifier"]),
+            "Publications": _csv(["publication_id"]),
+        },
+    )
+
+    with pytest.raises(SourceManifestError, match="required headers"):
+        SourceManifestPayload.from_manifest(manifest)

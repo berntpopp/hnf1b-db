@@ -36,19 +36,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ontology.conformance import check_label
-from migration.phenopackets.laterality import BILATERAL as _BILATERAL_MODIFIER
-from migration.phenopackets.laterality import LEFT as _LEFT_MODIFIER
-from migration.phenopackets.laterality import RIGHT as _RIGHT_MODIFIER
-from migration.phenopackets.laterality import UNILATERAL as _UNILATERAL_MODIFIER
 
-# Application code imports the four modifier ids from the shared, live
-# module rather than redeclaring them (ontology data-quality plan, Task 7
-# Step 3). Alembic migrations do the opposite — they redeclare the literals
-# inline, because a migration must be a frozen snapshot of its own intent.
-BILATERAL = _BILATERAL_MODIFIER["id"]
-UNILATERAL = _UNILATERAL_MODIFIER["id"]
-LEFT = _LEFT_MODIFIER["id"]
-RIGHT = _RIGHT_MODIFIER["id"]
+# These are the stable ontology identifiers enforced for curator-authored
+# documents. They are deliberately separate from the importer's source-owned
+# ``Phenotype_modifier`` vocabulary, which has no hardcoded fallback.
+BILATERAL = "HP:0012832"
+UNILATERAL = "HP:0012833"
+LEFT = "HP:0012835"
+RIGHT = "HP:0012834"
 _SIDED = {UNILATERAL, LEFT, RIGHT}
 
 

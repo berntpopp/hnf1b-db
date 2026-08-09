@@ -20,7 +20,10 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.core.config import settings
-from migration.phenopackets.laterality import parse_laterality
+from migration.phenopackets.laterality import (
+    modifier_vocabulary_from_rows,
+    parse_laterality,
+)
 
 _MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]
@@ -68,7 +71,9 @@ def test_frozen_parser_matches_the_shared_implementation():
         "left",  # bare, no "unilateral" -> unparseable per parse_laterality
     ]
     for value in samples:
-        assert MIGRATION._parse_laterality(value) == parse_laterality(value), value
+        assert MIGRATION._parse_laterality(value) == parse_laterality(
+            value, vocabulary=_HISTORICAL_MODIFIER_VOCABULARY
+        ), value
 
 
 def _feature(hpo_id: str, label: str, modifiers: list[dict] | None = None) -> dict:
@@ -82,6 +87,14 @@ BILATERAL = {"id": "HP:0012832", "label": "Bilateral"}
 UNILATERAL = {"id": "HP:0012833", "label": "Unilateral"}
 LEFT = {"id": "HP:0012835", "label": "Left"}
 RIGHT = {"id": "HP:0012834", "label": "Right"}
+
+_HISTORICAL_MODIFIER_VOCABULARY = modifier_vocabulary_from_rows(
+    [
+        {"modifier": value["label"], "modifier_id": value["id"]}
+        for value in (BILATERAL, UNILATERAL, LEFT, RIGHT)
+    ],
+    version_sha256="0" * 64,
+)
 
 RENAL_CYST = "HP:0000107"
 HYPERECHOGENICITY = "HP:0033132"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import re
 from dataclasses import dataclass
 from io import StringIO
 from typing import Mapping, Sequence
@@ -97,6 +98,8 @@ EXPECTED_HEADERS: dict[str, tuple[str, ...]] = {
 }
 
 _FORBIDDEN_HEADER_PARTS = ("password", "passwd", "secret", "token", "credential")
+_SHA256 = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
+_OPERATIONAL_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_-]{0,79}$", re.IGNORECASE)
 
 
 class SourceManifestError(ValueError):
@@ -121,6 +124,68 @@ class SourceManifest:
     dataset_key: str
     sha256: str
     sheets: Mapping[str, SheetManifest]
+
+
+@dataclass(frozen=True)
+class SourceManifestPayload:
+    """Closed structural payload permitted in ``source_snapshots.source_manifest``.
+
+    The payload intentionally contains no source cells. Its textual values are
+    restricted to configured operational identities, known sheet/header names,
+    and full SHA-256 digests.
+    """
+
+    source_system: str
+    dataset_key: str
+    sha256: str
+    sheets: Mapping[str, SheetManifest]
+
+    def __post_init__(self) -> None:
+        """Reject any payload shape outside the approved structural schema."""
+        if not _OPERATIONAL_IDENTIFIER.fullmatch(self.source_system):
+            raise SourceManifestError("invalid source system identifier")
+        if not _OPERATIONAL_IDENTIFIER.fullmatch(self.dataset_key):
+            raise SourceManifestError("invalid dataset key")
+        if not _SHA256.fullmatch(self.sha256):
+            raise SourceManifestError("manifest digest must be SHA-256")
+        if set(self.sheets) != REQUIRED_SHEETS:
+            raise SourceManifestError("manifest payload requires every source sheet")
+        for name, sheet in self.sheets.items():
+            if name not in REQUIRED_SHEETS or sheet.name != name:
+                raise SourceManifestError("invalid manifest sheet identity")
+            if not _SHA256.fullmatch(sheet.sha256):
+                raise SourceManifestError("sheet digest must be SHA-256")
+            if sheet.row_count < 0:
+                raise SourceManifestError("sheet row count cannot be negative")
+            validate_sheet_headers(
+                name, sheet.headers, expected_headers=EXPECTED_HEADERS[name]
+            )
+
+    @classmethod
+    def from_manifest(cls, manifest: SourceManifest) -> "SourceManifestPayload":
+        """Convert a validated manifest into its database-safe representation."""
+        return cls(
+            source_system=manifest.source_system,
+            dataset_key=manifest.dataset_key,
+            sha256=manifest.sha256,
+            sheets=manifest.sheets,
+        )
+
+    def to_storage(self) -> dict[str, object]:
+        """Return the exact JSONB shape for immutable snapshot persistence."""
+        return {
+            "source_system": self.source_system,
+            "dataset_key": self.dataset_key,
+            "sha256": self.sha256,
+            "sheets": {
+                name: {
+                    "sha256": sheet.sha256,
+                    "headers": list(sheet.headers),
+                    "row_count": sheet.row_count,
+                }
+                for name, sheet in sorted(self.sheets.items())
+            },
+        }
 
 
 def _normalise_headers(headers: Sequence[str]) -> tuple[str, ...]:

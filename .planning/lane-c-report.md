@@ -255,3 +255,22 @@ existing async event-loop deprecation warning.
 - Phenotype extraction now rejects unrecognised single/multi values, retains all
   recognised multi-biopsy findings, and attaches negative status to every
   applicable configured definition rather than silently choosing a first one.
+
+## Remaining blocker completion — 2026-08-09
+
+- `Phenotype_modifier` is now parsed from the validated snapshot during
+  `load_data()`. Laterality parsing requires the resulting complete,
+  content-addressed vocabulary and has no built-in source-term fallback.
+- Added the closed `SourceManifestPayload` persistence shape: it retains only
+  configured operational identifiers, exact structural headers, non-negative
+  row counts, and real 64-hex SHA-256 digests. The repository accepts that
+  typed manifest and persists the row counts without raw source cells.
+- Tightened generic import-run payload digests to exactly 64 hexadecimal
+  characters. Repository integration now has an async persistence regression.
+- `edit_record()` now carries a trusted `import_run_id` through both draft
+  paths to the append-only revision row; its FK migration remains additive.
+
+Fresh verification: focused source-import/provenance plus frozen-laterality
+regression suite: **54 passed** (one existing async event-loop warning);
+targeted Ruff: passed; isolated test-database Alembic downgrade to
+`b9f422b00003` and upgrade to `c0f422b00004`: passed.

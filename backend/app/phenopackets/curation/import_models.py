@@ -44,7 +44,7 @@ _FORBIDDEN_PAYLOAD_KEY = re.compile(
     r"(?:password|passwd|secret|token|credential|email|comment|raw|row|clinical)",
     re.IGNORECASE,
 )
-_SAFE_TEXT = re.compile(r"^(?:sha256:)?[a-f0-9]+$", re.IGNORECASE)
+_SAFE_TEXT = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
 
 
 def sanitize_operational_payload(payload: Mapping[str, Any]) -> dict[str, Any]:

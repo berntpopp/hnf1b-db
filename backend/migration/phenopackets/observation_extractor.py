@@ -35,7 +35,11 @@ from app.phenopackets.curation.models import (
     TemporalObservation,
     VariantObservation,
 )
-from migration.phenopackets.laterality import parse_laterality
+from migration.phenopackets.laterality import (
+    ModifierVocabulary,
+    ModifierVocabularyError,
+    parse_laterality,
+)
 from migration.phenopackets.source_column_map import SOURCE_COLUMNS
 from migration.phenopackets.strict_age_parser import AgeParseError, parse_source_age
 
@@ -90,7 +94,10 @@ def _age(value: Any, *, context: str | None = None) -> ObservedValue[Any]:
 
 
 def _phenotypes(
-    observation_id: str, row: Mapping[str, Any]
+    observation_id: str,
+    row: Mapping[str, Any],
+    *,
+    modifier_vocabulary: ModifierVocabulary | None,
 ) -> tuple[PhenotypeAssessment, ...]:
     definitions = {item.definition_id: item for item in FINDING_DEFINITIONS}
     assessments: list[PhenotypeAssessment] = []
@@ -117,8 +124,12 @@ def _phenotypes(
             matches = [item for item in candidates if item.term_label.casefold() in lowered]
             if lowered in {"no", "none", "absent", "negative"}:
                 matches = candidates
+            try:
+                laterality = parse_laterality(raw, vocabulary=modifier_vocabulary)
+            except ModifierVocabularyError as exc:
+                raise ObservationExtractionError("source laterality is not importable") from exc
             if len(candidates) == 1 and not matches:
-                if lowered not in {"yes", "present", "positive"} and not parse_laterality(raw):
+                if lowered not in {"yes", "present", "positive"} and not laterality:
                     raise ObservationExtractionError(
                         f"unknown phenotype value for {question.source_column}"
                     )
@@ -129,7 +140,7 @@ def _phenotypes(
                 )
             modifiers = tuple(
                 OntologyTerm(id=item["id"], label=item["label"])
-                for item in parse_laterality(raw)
+                for item in laterality
             )
             findings = tuple(
                 PhenotypeFinding(
@@ -163,6 +174,7 @@ def extract_observation(
     manifest_sha256: str,
     row_hmac_key: bytes,
     reviewer_mapping: Mapping[str, tuple[str, str]],
+    modifier_vocabulary: ModifierVocabulary | None = None,
 ) -> ReportObservation:
     """Return one complete observation or fail without retaining source emails."""
     missing = sorted(
@@ -240,7 +252,9 @@ def extract_observation(
             system=_observed(row["system_classification"]),
             date=_observed(row["date_classification"]),
         ),
-        phenotypes=_phenotypes(observation_id, row),
+        phenotypes=_phenotypes(
+            observation_id, row, modifier_vocabulary=modifier_vocabulary
+        ),
         source_review=SourceReviewProvenance(
             reviewer_id=mapped_reviewer[0],
             reviewer_display_label=mapped_reviewer[1],

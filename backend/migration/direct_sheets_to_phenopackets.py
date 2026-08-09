@@ -25,6 +25,10 @@ from migration.data_sources.source_adapter import SourceAdapter
 from migration.database.storage import PhenopacketStorage
 from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
+from migration.phenopackets.laterality import (
+    ModifierVocabulary,
+    modifier_vocabulary_from_rows,
+)
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 
@@ -78,6 +82,7 @@ class DirectSheetsToPhenopackets:
         self.individuals_df: Optional[pd.DataFrame] = None
         self.phenotypes_df: Optional[pd.DataFrame] = None
         self.publications_df: Optional[pd.DataFrame] = None
+        self.modifier_vocabulary: ModifierVocabulary | None = None
 
     async def load_data(self) -> None:
         """Load one complete, validated source snapshot through the adapter."""
@@ -91,6 +96,13 @@ class DirectSheetsToPhenopackets:
         self.phenotypes_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Phenotypes"]))
         if isinstance(self.ontology_mapper, HPOMapper):
             self.ontology_mapper.build_from_dataframe(self.phenotypes_df)
+        modifier_df = pd.read_csv(
+            BytesIO(snapshot.raw_sheets["Phenotype_modifier"]), dtype=str
+        ).fillna("")
+        self.modifier_vocabulary = modifier_vocabulary_from_rows(
+            modifier_df.to_dict(orient="records"),
+            version_sha256=snapshot.manifest.sheets["Phenotype_modifier"].sha256,
+        )
         self.publications_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Publications"]))
         self.publication_mapper = PublicationMapper(self.publications_df)
 
