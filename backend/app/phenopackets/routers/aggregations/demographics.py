@@ -32,7 +32,7 @@ async def aggregate_sex_distribution(
     logger.debug("Reading published-head sex distribution")
     query = """
     SELECT
-        r.content_jsonb->'subject'->>'sex' as sex,
+        COALESCE(r.content_jsonb->'subject'->>'sex', 'Unknown') as sex,
         COUNT(*) as count
     FROM
         phenopackets p
@@ -43,7 +43,7 @@ async def aggregate_sex_distribution(
         AND p.head_published_revision_id IS NOT NULL
         AND p.phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
-        r.content_jsonb->'subject'->>'sex'
+        COALESCE(r.content_jsonb->'subject'->>'sex', 'Unknown')
     ORDER BY
         count DESC
     """

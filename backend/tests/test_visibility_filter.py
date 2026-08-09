@@ -92,6 +92,7 @@ async def test_curator_filter_excludes_archived_by_default(
         expected_revision=published_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
     assert published_record.state == "archived"
 
@@ -118,6 +119,7 @@ async def test_curator_filter_include_archived(
         expected_revision=published_record.revision,
         actor=admin_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     stmt = curator_filter(select(Phenopacket), include_archived=True)
@@ -135,14 +137,10 @@ async def test_curator_filter_include_archived(
 
 @pytest.mark.asyncio
 async def test_resolve_public_content_dereferences_head(db_session, published_record):
-    """For a freshly published record with no active edit, resolve_public_content
-    returns the same content as pp.phenopacket (fast-path I1 check).
-    """
-    # published_record has editing_revision_id=None, state='published'
-    # → fast path: pp.phenopacket == head revision content
+    """Public output is redacted from the immutable head snapshot."""
     content = await resolve_public_content(db_session, published_record)
     assert content is not None
-    assert content == published_record.phenopacket
+    assert content == {"id": published_record.phenopacket_id}
 
 
 @pytest.mark.asyncio
@@ -152,7 +150,7 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
     """After clone-to-draft, resolve_public_content returns the OLD head revision
     content, not the current working copy (I1 test at the repository level).
     """
-    original_public_content = dict(published_record.phenopacket)
+    original_public_content = {"id": published_record.phenopacket_id}
 
     from app.phenopackets.services.state_service import PhenopacketStateService
 
@@ -165,6 +163,7 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
         expected_revision=published_record.revision,
         actor=curator_user,
     )
+    await db_session.flush()
     await db_session.refresh(published_record)
 
     # Sanity: working copy changed

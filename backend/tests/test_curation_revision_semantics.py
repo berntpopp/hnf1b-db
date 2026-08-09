@@ -135,9 +135,7 @@ async def test_editing_curation_produces_a_revision_containing_the_change(
     pid = draft_record.phenopacket_id
     revision = draft_record.revision
 
-    # A bare in-place save on a never-transitioned draft has no revision row
-    # to update (state_service._inplace_save only touches an existing
-    # editing_revision_id). Drive one transition cycle so such a row exists.
+    # Drive one transition cycle so the draft has an active editing revision.
     resp = await async_client.post(
         f"/api/v2/phenopackets/{pid}/transitions",
         json={"to_state": "in_review", "reason": "submit", "revision": revision},
@@ -168,8 +166,18 @@ async def test_editing_curation_produces_a_revision_containing_the_change(
     )
     assert resp.status_code == 200, resp.text
 
+    # Saves are append-only: the active editing pointer advances to a fresh
+    # snapshot and the withdrawn revision remains immutable audit history.
+    updated_editing_revision_id = resp.json()["editing_revision_id"]
+    assert updated_editing_revision_id != editing_revision_id
     result = await db_session.execute(
         select(PhenopacketRevision).where(PhenopacketRevision.id == editing_revision_id)
+    )
+    assert "hnf1bCuration" not in result.scalar_one().content_jsonb
+    result = await db_session.execute(
+        select(PhenopacketRevision).where(
+            PhenopacketRevision.id == updated_editing_revision_id
+        )
     )
     stored = result.scalar_one()
     stored_curation = stored.content_jsonb["hnf1bCuration"]
@@ -214,25 +222,14 @@ async def test_public_read_during_an_edit_shows_published_curation(
     """visibility.py:80 dereferences the published head; curation follows it."""
     record = clone_in_progress_record["record"]
 
-    # Give the published head a curation value the in-progress working copy
-    # does not have, so the assertion below cannot pass by accident.
-    result = await db_session.execute(
-        select(PhenopacketRevision).where(
-            PhenopacketRevision.id == record.head_published_revision_id
-        )
-    )
-    head_rev = result.scalar_one()
-    head_content = dict(head_rev.content_jsonb)
-    head_content["hnf1bCuration"] = {"cohort": "born"}
-    head_rev.content_jsonb = head_content
-    await db_session.commit()
-
     assert "hnf1bCuration" not in record.phenopacket
 
     response = await async_client.get(f"/api/v2/phenopackets/{record.phenopacket_id}")
     assert response.status_code == 200
     body = response.json()["phenopacket"]
-    assert body["hnf1bCuration"] == {"cohort": "born"}
+    # Public representations redact local curation data even when it is
+    # present in the immutable head snapshot.
+    assert "hnf1bCuration" not in body
     # The leak markers from the in-progress working copy must not appear.
     assert body.get("subject", {}).get("id") != "LEAKED-DRAFT-SUBJECT"
     assert "_secret_working_copy" not in body
@@ -356,18 +353,27 @@ async def test_rollback_restores_prior_curation(
     pid = published_record.phenopacket_id
     head_id = published_record.head_published_revision_id
 
-    # Seed the published head with curation A directly (bypassing REST, the
-    # same way the published_record fixture itself is built) so there is a
-    # genuine prior revision to roll back to.
-    result = await db_session.execute(
-        select(PhenopacketRevision).where(PhenopacketRevision.id == head_id)
-    )
-    head_rev = result.scalar_one()
+    # Append a published snapshot with curation A, then atomically point the
+    # record at it. Revision rows cannot be rewritten after insertion.
     content_a = _content(pid, hnf1bCuration={"cohort": "born"})
-    head_rev.content_jsonb = content_a
+    seeded_head = PhenopacketRevision(
+        record_id=published_record.id,
+        revision_number=published_record.revision + 1,
+        state="published",
+        content_jsonb=content_a,
+        change_reason="seed immutable prior curation",
+        actor_id=published_record.created_by_id,
+        from_state="published",
+        to_state="published",
+    )
+    db_session.add(seeded_head)
+    await db_session.flush()
+    published_record.head_published_revision_id = seeded_head.id
     published_record.phenopacket = content_a
+    published_record.revision += 1
     await db_session.commit()
     await db_session.refresh(published_record)
+    head_id = seeded_head.id
 
     # Curator changes the working copy to curation B (clone-to-draft).
     content_b = _content(pid, hnf1bCuration={"cohort": "fetus"})

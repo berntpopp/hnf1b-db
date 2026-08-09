@@ -599,6 +599,10 @@ async def clone_in_progress_record(db_session, published_record, curator_user):
         expected_revision=published_record.revision,
         actor=curator_user,
     )
+    # State-service mutators deliberately only flush/participate in the
+    # caller's transaction. This fixture calls the service directly, so flush
+    # before refreshing the ORM instance.
+    await db_session.flush()
     await db_session.refresh(published_record)
     return {
         "record": published_record,
