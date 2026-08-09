@@ -86,6 +86,9 @@ def _validate_correction_entries(
     keys = [entry["defect_key"] for entry in entries]
     if not entries or len(keys) != len(set(keys)):
         raise ValueError("ontology correction ledger must contain unique defect keys")
+    present_kinds = {entry["correction_kind"] for entry in entries}
+    if present_kinds != _CORRECTION_KINDS:
+        raise ValueError("ontology correction ledger must cover every correction kind")
     for entry in entries:
         required = _CORRECTION_FIELDS - {"intended_id", "intended_label"}
         if not all((entry[field] or "").strip() for field in required):
