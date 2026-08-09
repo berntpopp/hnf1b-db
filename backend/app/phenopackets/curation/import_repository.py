@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.phenopackets.curation.import_models import (
@@ -227,6 +227,31 @@ class ImportRepository:
                 .with_for_update()
             )
         ).scalar_one_or_none()
+
+    async def retire_missing_bindings(
+        self,
+        *,
+        dataset_id: UUID,
+        source_subject_ids: set[str],
+        report_ids: set[str],
+    ) -> None:
+        """Retire bindings absent from one complete, successfully staged snapshot."""
+        await self.db.execute(
+            update(SourceReportBinding)
+            .where(
+                SourceReportBinding.dataset_id == dataset_id,
+                SourceReportBinding.active.is_(True),
+                SourceReportBinding.report_id.not_in(report_ids),
+            )
+            .values(active=False)
+        )
+        await self.db.execute(
+            delete(PhenopacketSubjectBinding).where(
+                PhenopacketSubjectBinding.dataset_id == dataset_id,
+                PhenopacketSubjectBinding.source_subject_id.not_in(source_subject_ids),
+            )
+        )
+        await self.db.flush()
 
     async def register_correction(
         self,

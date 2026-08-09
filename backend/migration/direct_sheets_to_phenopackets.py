@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -65,6 +65,23 @@ class SourceImportCliConfiguration:
     row_hmac_key: bytes
     reviewer_mapping: Mapping[str, tuple[str, str]]
     actor_id: int
+
+
+ApplySourceImport = Callable[[AsyncSession, User], Awaitable[object]]
+
+
+async def run_source_import_transaction(
+    session: AsyncSession,
+    *,
+    actor_id: int,
+    apply: ApplySourceImport,
+) -> object:
+    """Run a source import in the caller-owned transaction and commit once."""
+    async with session.begin():
+        actor = await session.get(User, actor_id)
+        if actor is None:
+            raise RuntimeError("configured source import actor does not exist")
+        return await apply(session, actor)
 
 
 def source_import_cli_configuration(config: Any) -> SourceImportCliConfiguration:
@@ -485,15 +502,16 @@ async def main():
         row_hmac_key=configuration.row_hmac_key,
     )
     async with async_session_maker() as session:
-        actor = await session.get(User, configuration.actor_id)
-        if actor is None:
-            raise RuntimeError("configured source import actor does not exist")
-        await migration.migrate(
-            limit=limit,
-            test_mode=test_mode,
-            dry_run=dry_run,
-            db=session,
-            actor=actor,
+        await run_source_import_transaction(
+            session,
+            actor_id=configuration.actor_id,
+            apply=lambda transaction_session, actor: migration.migrate(
+                limit=limit,
+                test_mode=test_mode,
+                dry_run=dry_run,
+                db=transaction_session,
+                actor=actor,
+            ),
         )
 
 

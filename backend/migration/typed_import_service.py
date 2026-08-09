@@ -86,6 +86,10 @@ class TypedObservationImportService:
             for observation in subject_observations:
                 if observation.identifiers.source_subject_id != subject_id:
                     raise TypedImportApplyError("observation map key violates provenance")
+                if observation.identifiers.individual_id != subject_id:
+                    raise TypedImportApplyError(
+                        "observation individual identity violates subject binding"
+                    )
                 if (
                     observation.source.provider != manifest.source_system
                     or observation.source.dataset_id != manifest.dataset_key
@@ -114,7 +118,11 @@ class TypedObservationImportService:
 
     @staticmethod
     def _document_for_subject(
-        subject_id: str, observations: list[ReportObservation]
+        subject_id: str,
+        observations: list[ReportObservation],
+        *,
+        corrections_by_id: Mapping[str, Any] | None = None,
+        resolutions_by_id: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Store the v2 profile ledger and its deterministic GA4GH projection."""
         profile = Hnf1bCurationProfile(
@@ -122,15 +130,30 @@ class TypedObservationImportService:
             observations_by_id={
                 str(observation.observation_id): observation for observation in observations
             },
+            corrections_by_id=dict(corrections_by_id or {}),
+            resolutions_by_id=dict(resolutions_by_id or {}),
         )
         projection = project_individual(
-            observations, [], algorithm_version=PROJECTION_VERSION
+            observations,
+            list(profile.resolutions_by_id.values()),
+            algorithm_version=PROJECTION_VERSION,
         )
         if projection.blocking_conflicts:
             raise TypedImportApplyError("source projection has unresolved conflicts")
         document: dict[str, Any] = dict(projection.phenopacket)
         document["hnf1bCuration"] = profile.model_dump(by_alias=True, mode="json")
         return canonicalize_curation_document(document)
+
+    @staticmethod
+    def _has_correction_for_observation(
+        profile: Hnf1bCurationProfile, observation_id: str
+    ) -> bool:
+        """Return whether one changed report has a curator-owned correction."""
+        prefix = f"/observationsById/{observation_id}/"
+        return any(
+            correction.json_pointer.startswith(prefix)
+            for correction in profile.corrections_by_id.values()
+        )
 
     async def _already_applied(self, snapshot_id: Any) -> bool:
         """Return whether this exact transform/projection snapshot is complete."""
@@ -195,8 +218,10 @@ class TypedObservationImportService:
                 binding = await repository.get_subject_binding(
                     dataset_id=dataset.id, source_subject_id=subject_id
                 )
-                document = self._document_for_subject(subject_id, subject_observations)
                 if binding is None:
+                    document = self._document_for_subject(
+                        subject_id, subject_observations
+                    )
                     record = Phenopacket(
                         phenopacket_id=document["id"],
                         phenopacket=document,
@@ -247,9 +272,20 @@ class TypedObservationImportService:
                                 prior_row_hmac=prior.source.row_hmac_sha256 or "",
                                 incoming_row_hmac=observation.source.row_hmac_sha256 or "",
                                 has_active_draft=False,
-                                has_correction=bool(current.corrections_by_id),
-                                has_resolution_dependency=bool(current.resolutions_by_id),
+                                has_correction=self._has_correction_for_observation(
+                                    current, str(observation.observation_id)
+                                ),
+                                # A persisted resolution is passed back into
+                                # deterministic projection below. It remains
+                                # only if its candidate digest is still valid.
+                                has_resolution_dependency=False,
                             )
+                    document = self._document_for_subject(
+                        subject_id,
+                        subject_observations,
+                        corrections_by_id=current.corrections_by_id,
+                        resolutions_by_id=current.resolutions_by_id,
+                    )
                     await self._checkpoint("record")
                     record = await state.edit_record(
                         record.id,
@@ -269,6 +305,13 @@ class TypedObservationImportService:
                         observation_id=observation.observation_id,
                         run_id=run.id,
                     )
+            await repository.retire_missing_bindings(
+                dataset_id=dataset.id,
+                source_subject_ids=set(observations_by_subject),
+                report_ids={
+                    observation.identifiers.report_id for observation in observations
+                },
+            )
             await self._checkpoint("binding")
             await repository.finish_run(
                 run,

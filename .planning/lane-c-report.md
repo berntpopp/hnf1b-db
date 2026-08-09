@@ -342,3 +342,32 @@ Fresh verification: typed DB migration/apply smoke **15 passed** on a fresh
 isolated `hnf1b_user` worker database; Alembic completed
 `c0f422b00004 -> b9f422b00003 -> c0f422b00004`; targeted Ruff passed; mypy
 reported **Success: no issues found in 9 source files**.
+
+## Final reimport transaction completion — 2026-08-09
+
+- The source-import CLI now owns the outer async transaction explicitly. It
+  resolves the accountable actor inside `session.begin()`, calls the typed
+  apply through a savepoint, commits exactly once on success, and rolls the
+  entire operation back on every exception. Separate-session PostgreSQL
+  regressions prove both durable successful persistence and no committed run
+  after an injected failure.
+- A complete changed snapshot now retires every omitted active report binding
+  and removes omitted subject bindings in the same transaction as the new
+  revisions. Regressions cover removal of one report from a two-report subject
+  and replacement of a prior subject; no active binding can then reference an
+  observation absent from the stored complete profile.
+- Reimport now validates `individual_id == source_subject_id ==` the
+  `observations_by_subject` map key before any operational write. Changed
+  records carry their correction chain and valid, digest-verified projection
+  resolutions through the canonical projection into the next state-service
+  revision; stale resolutions remain fail-closed in the projector rather than
+  being silently discarded. Exact-snapshot no-ops leave curator overlays
+  untouched.
+
+Fresh verification: focused importer/direct-source/curation suite: **81
+passed**; transaction-specific isolated PostgreSQL suite: **19 passed**;
+Ruff: passed; mypy: **Success: no issues found in 3 source files**. On an
+empty isolated `hnf1b_user` database, Alembic completed
+`c0f422b00004 -> b9f422b00003 -> c0f422b00004`. A separate smoke against a
+database with committed source-import evidence correctly refused downgrade,
+as designed.
