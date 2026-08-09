@@ -73,7 +73,7 @@ class PhenopacketStateService:
         integrated, and adapter-defined legacy packets are copied unchanged.
         """
         try:
-            from app.phenopackets.curation.adapters import (  # type: ignore[import-not-found]
+            from app.phenopackets.curation.adapters import (
                 CurationProjectionError,
                 canonicalize_curation_document,
             )
@@ -136,6 +136,7 @@ class PhenopacketStateService:
         to_state: str,
         event_type: str,
         parent_revision_id: int | None = None,
+        import_run_id: UUID | None = None,
     ) -> PhenopacketRevision:
         """Append and flush a revision; never update historical revision rows."""
         parent = parent_revision_id
@@ -185,6 +186,7 @@ class PhenopacketStateService:
             change_patch=change_patch,
             change_reason=change_reason,
             actor_id=actor.id,
+            import_run_id=import_run_id,
             from_state=from_state,
             to_state=to_state,
             event_type=event_type,
@@ -229,6 +231,7 @@ class PhenopacketStateService:
         change_reason: str,
         expected_revision: int,
         actor: User,
+        import_run_id: UUID | None = None,
     ) -> Phenopacket:
         """Save new content to a phenopacket.
 
@@ -243,10 +246,14 @@ class PhenopacketStateService:
         effective = await self._effective_state(pp)
 
         if effective == "published":
-            return await self._clone_to_draft(pp, new_content, change_reason, actor)
+            return await self._clone_to_draft(
+                pp, new_content, change_reason, actor, import_run_id=import_run_id
+            )
 
         if effective in ("draft", "changes_requested"):
-            return await self._inplace_save(pp, new_content, change_reason, actor)
+            return await self._inplace_save(
+                pp, new_content, change_reason, actor, import_run_id=import_run_id
+            )
 
         if effective in ("in_review", "approved"):
             raise self.InvalidTransition(
@@ -265,6 +272,8 @@ class PhenopacketStateService:
         new_content: dict[str, Any],
         change_reason: str,
         actor: User,
+        *,
+        import_run_id: UUID | None = None,
     ) -> Phenopacket:
         """§6.1 transaction: insert a draft revision row, update working copy."""
         if pp.editing_revision_id is not None:
@@ -293,6 +302,7 @@ class PhenopacketStateService:
             from_state="published",
             to_state="draft",
             event_type="draft_created",
+            import_run_id=import_run_id,
         )
 
         pp.phenopacket = new_content
@@ -308,6 +318,8 @@ class PhenopacketStateService:
         new_content: dict[str, Any],
         change_reason: str,
         actor: User,
+        *,
+        import_run_id: UUID | None = None,
     ) -> Phenopacket:
         """§6.3 transaction: bump revision + overwrite working copy, no new row."""
         # Ownership check — §6.3: actor must be owner OR admin; no NULL carve-out.
@@ -335,6 +347,7 @@ class PhenopacketStateService:
             from_state=await self._effective_state(pp),
             to_state=await self._effective_state(pp),
             event_type="draft_saved",
+            import_run_id=import_run_id,
         )
         pp.phenopacket = new_content
         pp.editing_revision_id = revision.id

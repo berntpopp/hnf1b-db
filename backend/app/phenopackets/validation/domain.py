@@ -42,10 +42,8 @@ from migration.phenopackets.laterality import LEFT as _LEFT_MODIFIER
 from migration.phenopackets.laterality import RIGHT as _RIGHT_MODIFIER
 from migration.phenopackets.laterality import UNILATERAL as _UNILATERAL_MODIFIER
 
-# Application code imports the four modifier ids from the shared, live
-# module rather than redeclaring them (ontology data-quality plan, Task 7
-# Step 3). Alembic migrations do the opposite — they redeclare the literals
-# inline, because a migration must be a frozen snapshot of its own intent.
+# Application code imports the shared identifiers rather than keeping a
+# second hardcoded modifier vocabulary in the curator validation path.
 BILATERAL = _BILATERAL_MODIFIER["id"]
 UNILATERAL = _UNILATERAL_MODIFIER["id"]
 LEFT = _LEFT_MODIFIER["id"]

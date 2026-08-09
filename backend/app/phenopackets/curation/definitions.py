@@ -88,6 +88,7 @@ _LATERALITY_COLUMNS = {
     "RenalCysts",
     "MulticysticDysplasticKidney",
     "RenalHypoplasia",
+    "SolitaryKidney",
     "UrinaryTractMalformation",
 }
 _ALLOWED_STATES = (

@@ -17,6 +17,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy import update as sa_update
 
+from app.phenopackets.curation.import_models import (
+    ImportRunStatus,
+    SourceDataset,
+    SourceImportRun,
+    SourceSnapshot,
+)
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.services.state_service import PhenopacketStateService
 
@@ -57,6 +63,51 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
         )
     ).scalar_one()
     assert head.content_jsonb != published_record.phenopacket  # ← the invariant
+
+
+@pytest.mark.asyncio
+async def test_edit_record_persists_trusted_import_run_provenance(
+    db_session, draft_record, curator_user
+):
+    """The import pipeline can attach its run identity to the written revision."""
+    dataset = SourceDataset(
+        source_system="fixture",
+        dataset_key="import-run-provenance",
+        subject_namespace="fixture",
+    )
+    db_session.add(dataset)
+    await db_session.flush()
+    snapshot = SourceSnapshot(
+        dataset_id=dataset.id,
+        manifest_sha256="a" * 64,
+        source_manifest={"sha256": "a" * 64},
+        expected_counts={},
+    )
+    db_session.add(snapshot)
+    await db_session.flush()
+    run = SourceImportRun(
+        snapshot_id=snapshot.id,
+        transformer_version="test",
+        projection_version="test",
+        status=ImportRunStatus.APPLYING.value,
+        actor_id=curator_user.id,
+    )
+    db_session.add(run)
+    await db_session.flush()
+
+    service = PhenopacketStateService(db_session)
+    await service.edit_record(
+        draft_record.id,
+        new_content={"id": "draft-1", "a": "source-import"},
+        change_reason="source import",
+        expected_revision=draft_record.revision,
+        actor=curator_user,
+        import_run_id=run.id,
+    )
+
+    latest = await service._latest_revision_row(draft_record.id)
+    assert latest is not None
+    assert latest.import_run_id == run.id
 
 
 # ---------------------------------------------------------------------------

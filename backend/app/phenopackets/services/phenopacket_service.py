@@ -249,7 +249,7 @@ class PhenopacketService:
                 ledger_hash=ledger_hash,
                 projection_hash=projection_hash,
             )
-            self._repo.add(initial_revision)
+            self._repo.session.add(initial_revision)
             await self._repo.session.flush()
             phenopacket.editing_revision_id = initial_revision.id
             await create_audit_entry(

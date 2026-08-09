@@ -124,6 +124,14 @@ _MUTABLE_TABLES: tuple[str, ...] = (
     "comment_edits",
     "comments",
     "phenopacket_audit",
+    # Source-import evidence tables: children must be removed before their
+    # revision, record, run, snapshot, dataset, and actor parents.
+    "source_correction_registry",
+    "source_report_bindings",
+    "phenopacket_subject_bindings",
+    "source_import_runs",
+    "source_snapshots",
+    "source_datasets",
     "phenopacket_revisions",
     "phenopackets",
     "variant_annotations",
