@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -50,6 +51,19 @@ def _project_time(value: Any) -> dict[str, Any] | None:
         return {"age": {"iso8601duration": value.iso8601_duration}}
     # Gestational and locally unprojected source times stay in the source ledger.
     return None
+
+
+def _comparable_duration_days(value: Any) -> int | None:
+    """Return a conservative sortable duration only for explicit age values."""
+    if value is None or value.kind != "age" or not value.iso8601_duration:
+        return None
+    match = re.fullmatch(
+        r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?", value.iso8601_duration
+    )
+    if match is None:
+        return None
+    years, months, weeks, days = (int(part or 0) for part in match.groups())
+    return years * 365 + months * 30 + weeks * 7 + days
 
 
 def _conflict(
@@ -149,7 +163,7 @@ def project_individual(
         resolution.conflict_key: resolution for resolution in resolutions
     }
     stated_sexes = {sex for _, sex in sex_candidates}
-    subject: dict[str, str] = {"id": subject_id}
+    subject: dict[str, Any] = {"id": subject_id}
     if len(stated_sexes) == 1:
         subject["sex"] = next(iter(stated_sexes))
     elif len(stated_sexes) > 1:
@@ -186,17 +200,17 @@ def project_individual(
             )
             if resolution is not None:
                 if resolution.strategy is ResolutionStrategy.SELECT_OBSERVATIONS:
-                    selected = [
+                    selected_candidates: list[tuple[str, AssessmentStatus, Any]] = [
                         candidate
                         for candidate in candidates
                         if candidate[0] in set(resolution.selected_observation_ids)
                     ]
                     if (
-                        not selected
-                        or len({candidate[1] for candidate in selected}) != 1
+                        not selected_candidates
+                        or len({candidate[1] for candidate in selected_candidates}) != 1
                     ):
                         raise ValueError("resolution must select one clinical polarity")
-                    candidates = selected
+                    candidates = selected_candidates
                 elif resolution.resolved_value in {"PRESENT", "EXCLUDED"}:
                     candidates = [
                         candidate
@@ -333,38 +347,68 @@ def project_individual(
             and observation.classification.verdict.source_status.value == "stated"
         }
         if len(contributions) > 1 or len(verdicts) > 1:
-            conflicts.append(
-                _conflict(
-                    f"variant:{descriptor_id}:classification",
+            conflict = _conflict(
+                f"variant:{descriptor_id}:classification",
+                (
                     (
-                        (
-                            item.observation_id,
-                            {
-                                "contribution": (
-                                    item.classification.contribution.value
-                                    if item.classification
-                                    and item.classification.contribution
-                                    and (
-                                        item.classification.contribution.source_status.value
-                                        == "stated"
-                                    )
-                                    else None
-                                ),
-                                "verdict": (
-                                    item.classification.verdict.value
-                                    if item.classification
-                                    and item.classification.verdict
-                                    and item.classification.verdict.source_status.value
+                        item.observation_id,
+                        {
+                            "contribution": (
+                                item.classification.contribution.value
+                                if item.classification
+                                and item.classification.contribution
+                                and (
+                                    item.classification.contribution.source_status.value
                                     == "stated"
-                                    else None
-                                ),
-                            },
-                        )
-                        for item in variant_observations
-                    ),
-                )
+                                )
+                                else None
+                            ),
+                            "verdict": (
+                                item.classification.verdict.value
+                                if item.classification
+                                and item.classification.verdict
+                                and item.classification.verdict.source_status.value
+                                == "stated"
+                                else None
+                            ),
+                        },
+                    )
+                    for item in variant_observations
+                ),
             )
-            continue
+            resolution = _resolution_for(
+                conflict, resolutions_by_key, applied_resolution_keys
+            )
+            if resolution is None:
+                conflicts.append(conflict)
+                continue
+            if resolution.strategy is not ResolutionStrategy.SELECT_OBSERVATIONS:
+                raise ValueError(
+                    "classification conflicts require selected observations"
+                )
+            variant_observations = [
+                item
+                for item in variant_observations
+                if item.observation_id in set(resolution.selected_observation_ids)
+            ]
+            if not variant_observations:
+                raise ValueError("classification resolution selects no observations")
+            contributions = {
+                item.classification.contribution.value
+                for item in variant_observations
+                if item.classification
+                and item.classification.contribution
+                and item.classification.contribution.source_status.value == "stated"
+            }
+            verdicts = {
+                item.classification.verdict.value
+                for item in variant_observations
+                if item.classification
+                and item.classification.verdict
+                and item.classification.verdict.source_status.value == "stated"
+            }
+            if len(contributions) > 1 or len(verdicts) > 1:
+                raise ValueError("classification resolution remains ambiguous")
         observation = variant_observations[0]
         contribution = (
             observation.classification.contribution.value
@@ -427,7 +471,7 @@ def project_individual(
             )
         }
     )
-    phenopacket = {
+    phenopacket: dict[str, Any] = {
         "id": f"phenopacket-{subject_id}",
         "subject": subject,
         "phenotypicFeatures": features,
@@ -453,19 +497,20 @@ def project_individual(
             "externalReferences": [{"id": reference} for reference in references],
         },
     }
-    reported_age = next(
-        (
-            observation.ages.reported.value
-            for observation in ordered
-            if observation.source.reported_age_is_encounter_age
-            if observation.ages is not None
-            and observation.ages.reported is not None
-            and observation.ages.reported.source_status.value == "stated"
-            and observation.ages.reported.value is not None
-            and _project_time(observation.ages.reported.value) is not None
-        ),
-        None,
-    )
+    comparable_reported_ages = [
+        (days, observation.ages.reported.value)
+        for observation in ordered
+        if observation.source.age_reported_semantics == "encounter_age"
+        and observation.ages is not None
+        and observation.ages.reported is not None
+        and observation.ages.reported.source_status.value == "stated"
+        and observation.ages.reported.value is not None
+        and (days := _comparable_duration_days(observation.ages.reported.value))
+        is not None
+    ]
+    reported_age = max(
+        comparable_reported_ages, default=(0, None), key=lambda item: item[0]
+    )[1]
     projected_reported_age = _project_time(reported_age)
     if projected_reported_age is not None:
         phenopacket["subject"]["timeAtLastEncounter"] = projected_reported_age

@@ -100,7 +100,9 @@ class SourceManifestRef(CurationModel):
     manifest_sha256: str
     import_run_id: str | None = None
     imported_at: datetime | None = None
-    reported_age_is_encounter_age: bool = False
+    age_reported_semantics: Literal["encounter_age", "report_age", "unknown"] = (
+        "unknown"
+    )
 
     @field_validator("row_hmac_sha256")
     @classmethod

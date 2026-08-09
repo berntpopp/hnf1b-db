@@ -5,8 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from google.protobuf.json_format import ParseDict
-from phenopackets import Phenopacket
+from google.protobuf.json_format import ParseDict  # type: ignore[import-untyped]
+from phenopackets import Phenopacket  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.phenopackets.curation.models import Hnf1bCurationProfile, ProjectionMetadata
