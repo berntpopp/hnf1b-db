@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from copy import deepcopy
 from typing import Any, cast
 from uuid import UUID
 
@@ -60,6 +61,34 @@ class PhenopacketStateService:
     def __init__(self, db: AsyncSession) -> None:
         """Initialise with an async database session."""
         self.db = db
+
+    @staticmethod
+    def _canonicalize_for_persistence(content: dict[str, Any]) -> dict[str, Any]:
+        """Apply Lane A's v2 projection adapter when it is available.
+
+        The adapter is intentionally imported lazily: this state-machine
+        branch remains independently runnable until the curation package is
+        integrated, and adapter-defined legacy packets are copied unchanged.
+        """
+        try:
+            from app.phenopackets.curation.adapters import (  # type: ignore[import-not-found]
+                CurationProjectionError,
+                canonicalize_curation_document,
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name in {
+                "app.phenopackets.curation",
+                "app.phenopackets.curation.adapters",
+            }:
+                return deepcopy(content)
+            raise
+
+        try:
+            return canonicalize_curation_document(content)
+        except CurationProjectionError as exc:
+            raise PhenopacketStateService.InvalidTransition(
+                f"invalid curation projection: {exc}"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -178,6 +207,7 @@ class PhenopacketStateService:
         - effective == 'archived'                          → 409 invalid_transition.
         """
         pp = await self._lock_and_check(record_id, expected_revision)
+        new_content = self._canonicalize_for_persistence(new_content)
         effective = await self._effective_state(pp)
 
         if effective == "published":
@@ -408,11 +438,12 @@ class PhenopacketStateService:
                 "cannot publish: active editing revision is not an approved revision"
             )
 
+        published_content = self._canonicalize_for_persistence(approved.content_jsonb)
         published = await self._append_revision(
             pp,
             state="published",
-            content=approved.content_jsonb,
-            change_patch=compute_json_patch(pp.phenopacket, approved.content_jsonb),
+            content=published_content,
+            change_patch=compute_json_patch(pp.phenopacket, published_content),
             change_reason=reason,
             actor=actor,
             from_state="approved",
@@ -421,7 +452,7 @@ class PhenopacketStateService:
             parent_revision_id=approved.id,
         )
         pp.state = "published"
-        pp.phenopacket = approved.content_jsonb
+        pp.phenopacket = published_content
         pp.head_published_revision_id = published.id
         pp.editing_revision_id = None  # cleared on publish (§6.2 step 10)
         pp.draft_owner_id = None  # I5: cleared on publish
