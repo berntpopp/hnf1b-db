@@ -136,6 +136,7 @@ class PhenopacketStateService:
         to_state: str,
         event_type: str,
         parent_revision_id: int | None = None,
+        import_run_id: UUID | None = None,
     ) -> PhenopacketRevision:
         """Append and flush a revision; never update historical revision rows."""
         parent = parent_revision_id
@@ -185,6 +186,7 @@ class PhenopacketStateService:
             change_patch=change_patch,
             change_reason=change_reason,
             actor_id=actor.id,
+            import_run_id=import_run_id,
             from_state=from_state,
             to_state=to_state,
             event_type=event_type,

@@ -134,6 +134,7 @@ class DirectSheetsToPhenopackets:
 
         logger.info(f"Processing {len(individual_groups)} individuals...")
 
+        errors: list[str] = []
         for individual_id, group_df in tqdm(
             individual_groups, desc="Building phenopackets"
         ):
@@ -152,8 +153,10 @@ class DirectSheetsToPhenopackets:
                 individual_count += 1
 
             except Exception as e:
-                logger.error(f"Error processing individual {individual_id}: {e}")
-                continue
+                errors.append(f"individual {individual_id}: {e}")
+
+        if errors:
+            raise RuntimeError("source build failed; no partial output: " + "; ".join(errors))
 
         logger.info(f"Built {len(phenopackets)} phenopackets")
         return phenopackets
@@ -204,6 +207,8 @@ class DirectSheetsToPhenopackets:
             dry_run: If True, output to JSON file instead of database
         """
         try:
+            if not settings.SOURCE_IMPORT_ENABLED:
+                raise RuntimeError("source import is disabled by configuration")
             # Load all data
             await self.load_data()
 

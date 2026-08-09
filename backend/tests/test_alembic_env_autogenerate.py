@@ -37,8 +37,8 @@ from sqlalchemy import create_engine
 # regardless of test-collection import order.
 import app.comments.models  # noqa: F401
 import app.models.user  # noqa: F401
-import app.phenopackets.models  # noqa: F401
 import app.phenopackets.curation.import_models  # noqa: F401
+import app.phenopackets.models  # noqa: F401
 import app.reference.models  # noqa: F401
 from app.core.config import settings
 from app.database import Base

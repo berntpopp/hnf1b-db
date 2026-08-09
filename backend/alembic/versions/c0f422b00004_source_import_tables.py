@@ -107,6 +107,18 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("status = 'applied'"),
     )
+    op.add_column(
+        "phenopacket_revisions",
+        sa.Column("import_run_id", postgresql.UUID(as_uuid=True), nullable=True),
+    )
+    op.create_foreign_key(
+        "fk_phenopacket_revisions_import_run",
+        "phenopacket_revisions",
+        "source_import_runs",
+        ["import_run_id"],
+        ["id"],
+        ondelete="RESTRICT",
+    )
     op.create_table(
         "phenopacket_subject_bindings",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -152,6 +164,12 @@ def downgrade() -> None:
         raise RuntimeError(
             "refusing source-import downgrade after activation; use head-pointer rollback/PITR"
         )
+    op.drop_constraint(
+        "fk_phenopacket_revisions_import_run",
+        "phenopacket_revisions",
+        type_="foreignkey",
+    )
+    op.drop_column("phenopacket_revisions", "import_run_id")
     for table in (
         "source_correction_registry",
         "source_report_bindings",

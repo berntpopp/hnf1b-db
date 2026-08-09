@@ -29,6 +29,8 @@ def test_import_run_payload_retains_count_only_operational_metadata():
         {"raw_row": {"individual_id": "317"}},
         {"password": "never-store"},
         {"comment": "linkable source text"},
+        {"message": "password=hunter2"},
+        {"message": "Family A / II-2; rare clinical comment"},
     ],
 )
 def test_import_run_payload_rejects_clinical_or_secret_content(payload):

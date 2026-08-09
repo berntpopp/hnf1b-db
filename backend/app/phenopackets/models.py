@@ -320,6 +320,11 @@ class PhenopacketRevision(Base):
         ForeignKey("users.id"),
         nullable=False,
     )
+    import_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("source_import_runs.id", ondelete="RESTRICT", use_alter=True),
+        nullable=True,
+    )
     from_state: Mapped[Optional[str]] = mapped_column(Text)
     to_state: Mapped[str] = mapped_column(Text, nullable=False)
     event_type: Mapped[str] = mapped_column(

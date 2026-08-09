@@ -92,9 +92,9 @@ def test_manifest_rejects_unknown_and_duplicate_individual_headers():
     ]
     source = {
         "Individuals": _csv(required_headers + ["unexpected"]),
-        "Phenotypes": _csv(["category", "phenotype_id", "phenotype_name"]),
+        "Phenotypes": _csv(["phenotype_category", "phenotype_id", "phenotype_name", "phenotype_description"]),
         "Phenotype_modifier": _csv(["modifier", "modifier_id"]),
-        "Publications": _csv(["publication", "pmid", "doi"]),
+        "Publications": _csv(["publication_id", "publication_alias", "PMID", "DOI"]),
     }
 
     with pytest.raises(SourceManifestError, match="unknown headers"):
@@ -113,9 +113,9 @@ def test_manifest_hashes_all_raw_sheets_and_never_returns_partial_data():
     """The declared snapshot hash commits the complete immutable source input."""
     sheets = {
         "Individuals": _csv(["individual_id"]),
-        "Phenotypes": _csv(["category", "phenotype_id", "phenotype_name"]),
+        "Phenotypes": _csv(["phenotype_category", "phenotype_id", "phenotype_name", "phenotype_description"]),
         "Phenotype_modifier": _csv(["modifier", "modifier_id"]),
-        "Publications": _csv(["publication", "pmid", "doi"]),
+        "Publications": _csv(["publication_id", "publication_alias", "PMID", "DOI"]),
     }
     manifest = build_source_manifest(
         source_system="fixture",

@@ -12,6 +12,11 @@ def test_week_tokens_are_gestational_ages(raw):
     assert parsed.iso8601_duration == "P" + raw.split("w")[0].strip() + "W"
 
 
+def test_week_tokens_require_prenatal_or_fetal_context():
+    with pytest.raises(AgeParseError):
+        parse_source_age("12 weeks", context="adult")
+
+
 def test_prenatal_maps_to_antenatal_onset_and_postnatal_stays_unprojected():
     assert parse_source_age("prenatal").term.id == "HP:0030674"
     assert parse_source_age("postnatal").kind == "unprojected"

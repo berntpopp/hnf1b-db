@@ -44,7 +44,7 @@ _FORBIDDEN_PAYLOAD_KEY = re.compile(
     r"(?:password|passwd|secret|token|credential|email|comment|raw|row|clinical)",
     re.IGNORECASE,
 )
-_EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
+_SAFE_TEXT = re.compile(r"^(?:sha256:)?[a-f0-9]+$", re.IGNORECASE)
 
 
 def sanitize_operational_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -64,9 +64,9 @@ def sanitize_operational_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(value, list):
             return [visit(item, path) for item in value]
         if isinstance(value, str):
-            if _EMAIL.search(value):
+            if not _SAFE_TEXT.fullmatch(value):
                 raise ImportPayloadError(
-                    f"email-like value in operational payload at {path}"
+                    f"unsafe string in operational payload at {path}"
                 )
             return value
         if value is None or isinstance(value, (bool, int, float)):

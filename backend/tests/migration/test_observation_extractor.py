@@ -15,7 +15,7 @@ def _row() -> dict[str, str]:
             "PublicationType": "case report",
             "DupCheck": "no",
             "Problematic": "no",
-            "Cohort": "adult",
+            "Cohort": "fetus",
             "Sex": "female",
             "FamilyHistory": "unknown",
             "AgeOnset": "28w",
@@ -68,3 +68,18 @@ def test_extractor_builds_one_lossless_typed_observation_with_thirty_assessments
     serialized = observation.model_dump_json()
     assert "reviewer@example.test" not in serialized
     assert "source hg19 info" in serialized
+
+
+def test_extractor_preserves_categorical_definition_and_solitary_kidney_laterality():
+    row = _row()
+    row["RenalInsufficancy"] = "Stage 5 chronic kidney disease"
+    row["SolitaryKidney"] = "unilateral left"
+    observation = extract_observation(
+        row, row_number=7, source_system="local_fixture", dataset_key="hnf1b-registry",
+        manifest_sha256="sha256:fixture", row_hmac_key=b"test-only-key",
+        reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
+    )
+    ckd = next(item for item in observation.phenotypes if item.column == "RenalInsufficancy")
+    solitary = next(item for item in observation.phenotypes if item.column == "SolitaryKidney")
+    assert ckd.findings[0].term.id == "HP:0003774"
+    assert [modifier.id for modifier in solitary.findings[0].modifiers] == ["HP:0012833", "HP:0012835"]

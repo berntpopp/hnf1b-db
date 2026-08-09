@@ -1,41 +1,247 @@
-# PR #422 Lane C Report
+# PR #422 Lane C review — `b34d50f`
 
-## Increment 1 — source boundary and operational schema
+## Verdict
 
-- Added a fail-closed manifest/source-adapter boundary. It requires all four
-  configured sheets, validates content type and closed headers, hashes exact
-  raw bytes, and rejects credential-like/reviewer-email headers before parsing.
-- Added a complete 60-column map, strict source age parsing, and typed
-  per-row observation extraction with 30 phenotype assessments and no reviewer
-  email retained in the observation.
-- Added additive operational dataset, snapshot, import-run, subject-binding,
-  report-binding, and correction-registry models plus Alembic revision
-  `c0f422b00004`. Existing records default to `legacy_unbound` provenance.
-- Verification: `ruff check` passed and the targeted source/import suite ran
-  26 tests successfully. All tests use injected bytes or in-memory rows; none
-  contacts a live sheet.
+**Request changes.** The increment establishes useful fail-closed scaffolding and
+the legacy CLI no longer has a reachable database-write branch, but it does not
+meet design §§3.2, 6, 7, 10–11 or Tasks 0, 6–9, and 16. In particular, the
+closed manifest is incompatible with the repository's current source schemas,
+the extractor can assign false phenotype concepts and rejects known laterality
+rows, and the operational-payload boundary can persist secret/clinical strings.
 
-## Remaining Lane C work
+There is currently no reachable partial **database** import: the legacy apply
+branch raises and the new apply service is not wired. That safe containment is
+not equivalent to an atomic import implementation. A partial legacy dry-run
+artifact is still reachable.
 
-- Wire the staged atomic import callback to the shared state-service bulk
-  primitive once its cross-lane contract is finalized; the old raw SQL apply
-  path is disabled.
-- Add database-backed failure/idempotence integration tests against that bulk
-  state-service contract.
-- Add the de-identified pinned fixture and backfill scripts only after the
-  shared import/state contracts are ready.
+## Severity-ranked findings
 
-## Increment 2 — containment and reimport preflight
+### High — the fail-closed manifest rejects the current source contracts
 
-- Removed embedded sheet authority and the reviewer-account creation path from
-  the legacy orchestrator. Remote IDs now come only from explicit settings and
-  the old raw storage writer fails closed.
-- Added transaction-owned atomic apply orchestration and reimport policy:
-  count mismatches abort before a write, injected application failures trigger
-  rollback, equal row HMACs are no-ops, and active drafts/corrections/resolution
-  dependencies block changed source rows.
-- Verification: `ruff check` passed and the targeted suite ran 35 tests
-  successfully. Pytest also emitted pre-existing temporary Docker-fixture
-  cleanup warnings; no source import test used network access.
-- Alembic smoke verification ran in an isolated worker database; all six
-  operational tables were present after `upgrade head`.
+`backend/migration/source_manifest.py:87-92` requires
+`Phenotypes=(category, phenotype_id, phenotype_name)` and
+`Publications=(publication, pmid, doi)`. Current code and the pinned vocabulary
+use `phenotype_category`, `phenotype_description`, `publication_id`,
+`publication_alias`, `PMID`, and `DOI`
+(`backend/migration/phenopackets/hpo_mapper.py:207-211`,
+`backend/migration/phenopackets/publication_mapper.py:29-38, 62-80`, and
+`backend/app/ontology/data/curation_vocabulary.csv:1`). A direct probe of those
+current headers fails with missing `category` / missing lowercase publication
+headers. The new tests only use the newly invented header triples and therefore
+do not exercise the real adapter contract. Unless an authorized snapshot proves
+a newly changed schema, every configured import is blocked before ontology or
+publication validation.
+
+This is a code defect, not the deliberate external blocker caused by the known
+`HP:0033133` live-source row.
+
+### High — phenotype extraction is clinically incorrect and fail-open
+
+`backend/migration/phenopackets/observation_extractor.py:95-129` always selects
+`question.definition_ids[0]` for any non-NA/NR/negative token. Consequently:
+
+- `RenalInsufficancy="Stage 5 chronic kidney disease"` becomes
+  `HP:0012622` (CKD unspecified), not `HP:0003774`.
+- An unknown value such as `unexpected-category` is accepted as PRESENT and is
+  also assigned `HP:0012622`, rather than failing domain validation.
+- `KidneyBiopsy` cannot select oligomeganephronia vs multiple glomerular cysts
+  and cannot preserve a source value that asserts both findings.
+
+This violates the typed observation, domain-validation, and no-label-laundering
+contracts even though the raw string is retained. Tests cover only plain NR plus
+one `RenalCysts` laterality token and miss categorical values.
+
+### High — all 408 compound laterality assertions cannot be extracted
+
+The parser itself returns the correct two modifiers for `unilateral left/right`,
+but the definition registry excludes `SolitaryKidney` from
+`_LATERALITY_COLUMNS` (`backend/app/phenopackets/curation/definitions.py:86-92`).
+The committed audit file contains 47 compound `SolitaryKidney` assertions. A
+synthetic source row with `SolitaryKidney="unilateral left"` fails Pydantic
+validation with “source phenotype definition does not allow laterality.” Thus
+the claimed 408-row conservation is impossible. The extractor also ignores the
+loaded `Phenotype_modifier` sheet and uses hardcoded mappings, contrary to Task
+7's versioned-source requirement.
+
+### High — operational persistence does not enforce the privacy contract
+
+`sanitize_operational_payload()` rejects suspicious **keys** and email-shaped
+string values, but permits secrets and linkable clinical text under an innocuous
+key (`backend/app/phenopackets/curation/import_models.py:43-74`). For example,
+both `{"message": "password=hunter2"}` and
+`{"message": "Family A / II-2; rare clinical comment"}` are accepted, and
+`ImportRepository.finish_run()` persists the result
+(`backend/app/phenopackets/curation/import_repository.py:106-125`). This does not
+satisfy “no passwords, comments, raw clinical payloads, or reviewer identifiers
+in run summaries/errors.” A closed typed run-summary/error schema is needed;
+substring checks on keys are insufficient.
+
+The reviewer-account import was removed, and a serialized observation does not
+contain the raw reviewer email. No changed test captures logs to prove the Task
+0 logging requirement, however, and the operational persistence defect above is
+independently reproducible.
+
+### High — the legacy CLI still has a partial-output path and ignores its gate
+
+The database-write branch is genuinely disabled at
+`backend/migration/direct_sheets_to_phenopackets.py:219-223`. However:
+
+- `SOURCE_IMPORT_ENABLED=False` is declared but never read; invoking the CLI
+  still fetches and builds from the remote source.
+- `build_phenopackets()` catches per-individual exceptions and continues
+  (`:137-159`).
+- `--dry-run` writes whatever subset was built and exits successfully
+  (`:211-218`).
+
+Therefore the code does not meet Task 9's “replace catch-and-continue” and
+“CLI nonzero unless built/stored/verified counts match” requirements. It is safe
+from partial database writes today, but not from partial migration artifacts or
+unauthorized remote-source processing.
+
+### Medium — week parsing ignores the required clinical context
+
+`parse_source_age()` accepts a `context` argument but never uses it and maps
+every `w/wk/wks/week/weeks` token to gestational age
+(`backend/migration/phenopackets/strict_age_parser.py:21-37`). The extractor
+does not pass cohort/prenatal context. Thus `AgeReported="12 weeks"` for a
+postnatal infant becomes gestational age, contrary to design §4.5, which limits
+week-as-gestational semantics to prenatal/fetal context. The required `28w` and
+`35wks` regressions pass, prenatal maps to Antenatal onset, postnatal remains
+unprojected, and AgeReported is not copied into phenotype onset; the broader age
+semantics are still incomplete.
+
+### Medium — the 60-column map is structural, not source-faithful
+
+There are exactly 60 unique header/path entries, and the extractor retains raw
+values for those cells. Several required typed meanings are absent:
+
+- publication lookup is not used; `Publication` is naively treated as a PMID
+  and DOI is always absent (`observation_extractor.py:197-201`);
+- per-phenotype evidence is never constructed;
+- normalized VRS/GA4GH variant data and parser/mapping/ontology versions and
+  warnings are absent;
+- source modifier mappings are not consumed.
+
+Accordingly, the `len(SOURCE_COLUMNS) == 60` test proves column enumeration, not
+the Task 8 conservation semantics or §11 clinical regressions.
+
+### Medium — the new “atomic” service is not transaction-owning or complete
+
+`AtomicObservationImportService` accepts an arbitrary per-record callback and
+an optional rollback (`backend/migration/import_service.py:40-77`). It starts no
+transaction, cannot prevent a callback from committing, takes no advisory/row
+locks, writes no bindings/revisions/audit state, performs no in-transaction
+re-read/MV/search verification, and does not commit once after verification.
+Its test asserts that a Python rollback callback was invoked, not that zero
+database changes remain. This API should not be wired as-is.
+
+The absence of wiring is a safe, deliberate shared-state-service blocker. The
+unsafe atomicity claim/API surface is a defect. There is no current clinical
+apply path, so this finding describes readiness rather than an active partial
+database mutation.
+
+### Medium — import-run provenance is missing from revisions
+
+Task 6 and design §7 require `phenopacket_revisions.import_run_id` with a foreign
+key to `source_import_runs`. Neither the ORM nor
+`c0f422b00004_source_import_tables.py` adds it. The six operational tables and
+their principal uniqueness constraints are otherwise present: immutable
+snapshot uniqueness, retryable attempts plus one partial-unique applied run,
+dataset subject uniqueness, dataset report uniqueness, and record-observation
+uniqueness.
+
+The migration downgrade is guarded only by an environment variable
+(`c0f422b00004_source_import_tables.py:149-167`); setting it after activation
+would still delete correction evidence. That is not an enforceable
+pre-activation check.
+
+### Medium — the manifest model cannot be persisted through its repository
+
+`get_or_create_snapshot()` sends `source_manifest` through
+`sanitize_operational_payload()` (`import_repository.py:57-83`). A normal
+`dataclasses.asdict(SourceManifest)` is rejected because tuples such as
+`headers` are unsupported (and `row_count` also matches the forbidden `row`
+key). The repository has no serializer for the manifest it is designed to
+store. Existing tests never pass a real `SourceManifest` through the repository.
+
+### Low — repository lint is not green
+
+`uv run ruff check .` fails with I001 in
+`backend/tests/test_alembic_env_autogenerate.py:26-44` because the newly added
+curation model import is out of order. The report's unqualified “ruff check
+passed” statement is not reproducible at `b34d50f`.
+
+## Acceptance matrix
+
+| Requirement | Result |
+| --- | --- |
+| Forbidden public-sheet columns fail closed | Partial. Five substrings are rejected, but credential equivalents such as `api_key`/`auth` are not covered, and tests exercise a non-fetched `Reviewers` shape rather than the complete configured source. |
+| No reviewer/secret persistence or logging | Fail. Reviewer account creation/raw email observation storage are removed, but operational payloads accept secret/clinical strings; no log-capture regression exists. |
+| Exact 60-column mapping | Structural pass, semantic fail. Sixty paths exist, but categorical phenotype, publication/evidence, modifier, and normalized variant semantics are incomplete or wrong. |
+| Age semantics | Partial. Named regressions pass; prenatal/fetal context is ignored for week units. |
+| Laterality semantics | Fail. Compound pairs work for covered columns, but 47 known SolitaryKidney rows cannot validate and source modifier mappings are ignored. |
+| Operational uniqueness/migration | Partial. Six tables, major uniques, applied-run partial index, Alembic head, and metadata registration are present; revision `import_run_id`, enforceable downgrade safety, and real repository integration are absent. |
+| Legacy apply disabled | Database apply pass. Remote fetch/build and partial dry-run paths remain reachable; the feature flag is unused. |
+| No partial import path | Database currently safe because no new apply is wired and legacy DB apply raises. End-to-end atomic import is not implemented; partial dry-run output remains. |
+| 939/864/28,170/408 conservation and Task 16 backfill | Not implemented or verifiable without the pinned fixture/backfill pipeline. |
+
+## Safe deliberate external/configuration blockers
+
+These are not implementation defects by themselves and should remain fail-closed:
+
+- confirmation that credential-bearing public columns were removed and affected
+  credentials rotated;
+- an authorized immutable source snapshot and SHA-256, audited stable unique
+  `report_id`, row-HMAC secret, approved pseudonymous reviewer mapping, and
+  legal/privacy approval for linkable comments/identifiers;
+- correction or explicitly reviewed ledger handling of the known live
+  `HP:0033133`/renal cortical hyperechogenicity contradiction;
+- the shared state-service bulk transaction primitive, database-backed failure
+  injection tests, de-identified pinned 939-row fixture, and Task 16 forward
+  backfill/adjudication artifacts.
+
+Those blockers justify keeping apply disabled. They do not explain the source
+schema mismatch, clinical extraction defects, sanitizer weakness, missing
+revision FK, or partial dry-run behavior.
+
+## Verification evidence
+
+- Reviewed frozen diff `8a691bf..b34d50f` and the requested design/plan sections.
+- Focused changed suite: **36 passed**, 4 warnings.
+- Legacy direct-migration suite: **12 passed**, 1 warning.
+- `uv run alembic heads`: `c0f422b00004 (head)`.
+- `git diff --check 8a691bf..b34d50f`: passed.
+- `uv run ruff check .`: **failed**, one I001 error plus two pre-existing invalid
+  `noqa` warnings.
+- Reproduction probes confirmed the current header contract rejection, Stage 5
+  -> CKD-unspecified misclassification, unknown categorical acceptance,
+  SolitaryKidney laterality validation failure, normal manifest serialization
+  rejection, and acceptance of secret/clinical message strings.
+
+## Spec/quality conclusion
+
+The increment is a useful containment scaffold, but it is not source-faithful,
+atomic, privacy-complete, or backfill-ready. **Spec verdict: does not meet the
+selected sections/tasks. Quality verdict: request changes before integration.**
+
+## Review response — 2026-08-09
+
+- Corrected the closed source contracts to the repository-authoritative
+  phenotype and publication headers; headers remain exact and fail closed.
+- Made gestational week syntax require fetal/prenatal context, threaded cohort
+  context into extraction, and added categorical CKD matching plus explicit
+  failure for unknown multi-definition categorical values.
+- Added `SolitaryKidney` to the allowed compound-laterality registry so all
+  documented unilateral rows can retain both modifiers.
+- Tightened operational payload strings to digest-only values, blocking secret
+  and clinical free text regardless of innocuous key names.
+- Enforced `SOURCE_IMPORT_ENABLED` before source loading and changed legacy
+  build failures to abort before dry-run output is written.
+- Added `phenopacket_revisions.import_run_id` ORM/migration FK and optional
+  state-service revision metadata plumbing; corrected Alembic downgrade order.
+- Fixed the reported Ruff import ordering issue.
+
+Fresh verification: focused plus legacy migration tests: **40 passed**;
+isolated Alembic worker-database smoke: **1 passed**; `ruff check app migration
+tests/test_alembic_env_autogenerate.py`: passed. Test runs emitted only the
+existing async event-loop deprecation warning.

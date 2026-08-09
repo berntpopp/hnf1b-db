@@ -75,7 +75,7 @@ def _observed(value: Any, *, normalized: Any | None = None) -> ObservedValue[Any
     )
 
 
-def _age(value: Any) -> ObservedValue[Any]:
+def _age(value: Any, *, context: str | None = None) -> ObservedValue[Any]:
     observed = _observed(value)
     if observed.source_status is not SourceStatus.STATED:
         return observed
@@ -83,7 +83,7 @@ def _age(value: Any) -> ObservedValue[Any]:
         return ObservedValue(
             raw=observed.raw,
             source_status=SourceStatus.STATED,
-            value=parse_source_age(observed.raw),
+            value=parse_source_age(observed.raw, context=context),
         )
     except AgeParseError as exc:
         raise ObservationExtractionError(str(exc)) from exc
@@ -113,16 +113,26 @@ def _phenotypes(
                 if lowered in {"no", "none", "absent", "negative"}
                 else AssessmentStatus.PRESENT
             )
-            definition = definitions[question.definition_ids[0]]
+            candidates = [definitions[item] for item in question.definition_ids]
+            if question.source_column == "RenalInsufficancy":
+                match = next((item for item in candidates if item.term_label.casefold() in lowered), None)
+            else:
+                match = next((item for item in candidates if item.term_label.casefold() in lowered), None)
+                if match is None and len(candidates) == 1:
+                    match = candidates[0]
+            if match is None:
+                raise ObservationExtractionError(
+                    f"unknown categorical value for {question.source_column}: {raw!r}"
+                )
             modifiers = tuple(
                 OntologyTerm(id=item["id"], label=item["label"])
                 for item in parse_laterality(raw)
             )
             findings = (
                 PhenotypeFinding(
-                    definition_id=definition.definition_id,
+                    definition_id=match.definition_id,
                     term=OntologyTerm(
-                        id=definition.term_id, label=definition.term_label
+                        id=match.term_id, label=match.term_label
                     ),
                     modifiers=modifiers,
                 ),
@@ -206,7 +216,8 @@ def extract_observation(
             family_history=_observed(row["FamilyHistory"]),
         ),
         ages=TemporalObservation(
-            onset=_age(row["AgeOnset"]), reported=_age(row["AgeReported"])
+            onset=_age(row["AgeOnset"], context=_string(row["Cohort"])),
+            reported=_age(row["AgeReported"], context=_string(row["Cohort"])),
         ),
         variant=VariantObservation(
             variant_type=_observed(row["VariantType"]),

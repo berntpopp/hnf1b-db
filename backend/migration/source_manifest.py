@@ -86,9 +86,14 @@ INDIVIDUALS_HEADERS = (
 
 EXPECTED_HEADERS: dict[str, tuple[str, ...]] = {
     "Individuals": INDIVIDUALS_HEADERS,
-    "Phenotypes": ("category", "phenotype_id", "phenotype_name"),
+    "Phenotypes": (
+        "phenotype_category",
+        "phenotype_id",
+        "phenotype_name",
+        "phenotype_description",
+    ),
     "Phenotype_modifier": ("modifier", "modifier_id"),
-    "Publications": ("publication", "pmid", "doi"),
+    "Publications": ("publication_id", "publication_alias", "PMID", "DOI"),
 }
 
 _FORBIDDEN_HEADER_PARTS = ("password", "passwd", "secret", "token", "credential")
