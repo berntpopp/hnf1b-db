@@ -44,6 +44,7 @@ docs/ontology-defect-report-2026-07-30.md.
 
 from __future__ import annotations
 
+import csv
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -51,6 +52,21 @@ from typing import Optional
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 _SNAPSHOT_PATH = _DATA_DIR / "ontology_snapshot.json"
+_CORRECTIONS_PATH = _DATA_DIR / "ontology_corrections.csv"
+_CORRECTION_FIELDS = {
+    "defect_key",
+    "location",
+    "wrong_id",
+    "wrong_label",
+    "intended_id",
+    "intended_label",
+    "correction_kind",
+    "ontology_release",
+    "evidence",
+    "affected_count",
+    "test_or_migration_reference",
+}
+_CORRECTION_KINDS = {"identifier_change", "label_only", "semantic_unprojection"}
 
 
 class OntologySourceError(Exception):
@@ -61,6 +77,44 @@ class OntologySourceError(Exception):
     import reports every bad row a curator needs to fix — not just the
     first one encountered.
     """
+
+
+@lru_cache(maxsize=1)
+def load_correction_ledger() -> tuple[dict[str, str], ...]:
+    """Load the versioned correction ledger and reject malformed rows."""
+    with _CORRECTIONS_PATH.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None or set(reader.fieldnames) != _CORRECTION_FIELDS:
+            raise ValueError("ontology correction ledger has an invalid schema")
+        entries = tuple(dict(row) for row in reader)
+
+    keys = [entry["defect_key"] for entry in entries]
+    if not entries or len(keys) != len(set(keys)):
+        raise ValueError("ontology correction ledger must contain unique defect keys")
+    for entry in entries:
+        if not all(entry[field] is not None for field in _CORRECTION_FIELDS):
+            raise ValueError(f"ledger entry {entry['defect_key']} has a missing field")
+        if entry["correction_kind"] not in _CORRECTION_KINDS:
+            raise ValueError(
+                f"ledger entry {entry['defect_key']} has an invalid correction kind"
+            )
+        if entry["correction_kind"] == "semantic_unprojection":
+            continue
+        if not entry["intended_id"] or not entry["intended_label"]:
+            raise ValueError(f"ledger entry {entry['defect_key']} has no intended term")
+        int(entry["affected_count"])
+    return entries
+
+
+def correction_counts(
+    entries: tuple[dict[str, str], ...] | None = None,
+) -> dict[str, int]:
+    """Return correction-kind totals derived directly from the ledger."""
+    source = load_correction_ledger() if entries is None else entries
+    return {
+        kind: sum(entry["correction_kind"] == kind for entry in source)
+        for kind in _CORRECTION_KINDS
+    }
 
 
 # The JSONB paths A3 walks, across both authoritative copies

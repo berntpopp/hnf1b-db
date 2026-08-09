@@ -112,6 +112,28 @@ class SchemaValidator:
                         "caseComment": {"type": "string"},
                         "problematic": {"type": "string"},
                         "duplicateCheck": {"type": "string"},
+                        "schemaVersion": {"type": "string"},
+                        "definitionsVersion": {"type": "string"},
+                        "sourceSubjectId": {"type": "string"},
+                        "observationsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/reportObservation"
+                            },
+                        },
+                        "correctionsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/curationCorrection"
+                            },
+                        },
+                        "resolutionsById": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/projectionResolution"
+                            },
+                        },
+                        "projection": {"$ref": "#/definitions/projectionMetadata"},
                     },
                 },
             },
@@ -122,6 +144,141 @@ class SchemaValidator:
                     "properties": {
                         "id": {"type": "string"},
                         "label": {"type": "string"},
+                    },
+                },
+                "sourceManifestRef": {
+                    "type": "object",
+                    "required": ["provider", "datasetId", "sheet", "manifestSha256"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "provider": {"type": "string"},
+                        "datasetId": {"type": "string"},
+                        "sheet": {"type": "string"},
+                        "rowNumber": {"type": ["integer", "null"]},
+                        "rowHmacSha256": {"type": ["string", "null"]},
+                        "manifestSha256": {"type": "string"},
+                        "importRunId": {"type": ["string", "null"]},
+                        "importedAt": {"type": ["string", "null"]},
+                    },
+                },
+                "subjectObservation": {
+                    "type": "object",
+                    "required": ["individualId", "sourceSubjectId", "reportId"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "individualId": {"type": "string"},
+                        "sourceSubjectId": {"type": "string"},
+                        "reportId": {"type": "string"},
+                        "individualIdentifier": {
+                            "anyOf": [
+                                {"$ref": "#/definitions/observedValue"},
+                                {"type": "null"},
+                            ]
+                        },
+                        "sex": {
+                            "anyOf": [
+                                {"$ref": "#/definitions/observedValue"},
+                                {"type": "null"},
+                            ]
+                        },
+                    },
+                },
+                "observedValue": {
+                    "type": "object",
+                    "required": ["raw", "sourceStatus"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "raw": {"type": "string"},
+                        "sourceStatus": {
+                            "enum": [
+                                "stated",
+                                "not_reported",
+                                "not_applicable",
+                                "unknown",
+                                "blank",
+                            ]
+                        },
+                        "value": {},
+                        "correctionIds": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                "reportObservation": {
+                    "type": "object",
+                    "required": ["observationId", "origin", "source", "identifiers"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "observationId": {"type": "string"},
+                        "origin": {"type": "string"},
+                        "source": {"$ref": "#/definitions/sourceManifestRef"},
+                        "identifiers": {"$ref": "#/definitions/subjectObservation"},
+                        "publication": {"type": ["object", "null"]},
+                        "ages": {"type": ["object", "null"]},
+                        "variant": {"type": ["object", "null"]},
+                        "classification": {"type": ["object", "null"]},
+                        "phenotypes": {"type": "array", "items": {"type": "object"}},
+                        "sourceReview": {"type": ["object", "null"]},
+                    },
+                },
+                "curationCorrection": {
+                    "type": "object",
+                    "required": [
+                        "correctionId",
+                        "jsonPointer",
+                        "preimage",
+                        "postimage",
+                        "sourceManifestSha256",
+                        "reason",
+                        "actorId",
+                        "createdAt",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "correctionId": {"type": "string"},
+                        "jsonPointer": {"type": "string"},
+                        "preimage": {},
+                        "postimage": {},
+                        "sourceManifestSha256": {"type": "string"},
+                        "reason": {"type": "string"},
+                        "actorId": {"type": "integer"},
+                        "createdAt": {"type": "string"},
+                        "supersedesCorrectionId": {"type": "string"},
+                    },
+                },
+                "projectionResolution": {
+                    "type": "object",
+                    "required": [
+                        "resolutionId",
+                        "conflictKey",
+                        "candidateSetDigest",
+                        "strategy",
+                        "reason",
+                        "resolvedByUserId",
+                        "resolvedAt",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "resolutionId": {"type": "string"},
+                        "conflictKey": {"type": "string"},
+                        "candidateSetDigest": {"type": "string"},
+                        "strategy": {"type": "string"},
+                        "selectedObservationIds": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "resolvedValue": {},
+                        "reason": {"type": "string"},
+                        "resolvedByUserId": {"type": "integer"},
+                        "resolvedAt": {"type": "string"},
+                    },
+                },
+                "projectionMetadata": {
+                    "type": "object",
+                    "required": ["algorithmVersion"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "algorithmVersion": {"type": "string"},
+                        "observationsDigest": {"type": ["string", "null"]},
+                        "outputDigest": {"type": ["string", "null"]},
                     },
                 },
                 "phenotypicFeature": {

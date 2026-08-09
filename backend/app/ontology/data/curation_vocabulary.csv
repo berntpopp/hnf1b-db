@@ -5,7 +5,7 @@ RenalInsufficancy,HP:0012624,Stage 2 chronic kidney disease,A type of chronic ki
 RenalInsufficancy,HP:0012625,Stage 3 chronic kidney disease,A type of chronic kidney disease with moderately reduced glomerular filtration rate (GFR 30-59 mL/min/1.73 m2).
 RenalInsufficancy,HP:0012626,Stage 4 chronic kidney disease,A type of chronic kidney disease with severely reduced glomerular filtration rate (GFR 15-29 mL/min/1.73 m2).
 RenalInsufficancy,HP:0003774,Stage 5 chronic kidney disease,A degree of kidney failure severe enough to require dialysis or kidney transplantation for survival characterized by a severe reduction in glomerular filtration rate (less than 15 ml/min/1.73 m2) and other manifestations including increased serum creatinine.
-Hyperechogenicity,HP:0033133,Renal cortical hyperechogenicity,Increased echogenecity of the kidney cortex.
+Hyperechogenicity,HP:0033132,Renal cortical hyperechogenicity,Increased echogenecity of the kidney cortex.
 RenalCysts,HP:0000107,Renal cyst,A fluid filled sac in the kidney.
 MulticysticDysplasticKidney,HP:0000003,Multicystic kidney dysplasia,"Multicystic dysplasia of the kidney is characterized by multiple cysts of varying size in the kidney and the absence of a normal pelvicaliceal system. The condition is associated with ureteral or ureteropelvic atresia, and the affected kidney is nonfunctional."
 KidneyBiopsy,HP:0100611,Multiple glomerular cysts,The presence of many cysts in the glomerulus of the kidney related to dilatation of the Bowman's capsule.
