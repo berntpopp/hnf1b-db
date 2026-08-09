@@ -240,6 +240,16 @@ def project_individual(
             if observation.classification and observation.classification.contribution
             else "UNKNOWN"
         )
+        if contribution == "UNKNOWN":
+            contribution = "UNKNOWN_STATUS"
+        if contribution not in {
+            "UNKNOWN_STATUS",
+            "REJECTED",
+            "CANDIDATE",
+            "CONTRIBUTORY",
+            "CAUSATIVE",
+        }:
+            raise ValueError("contribution must be a GA4GH interpretation status")
         acmg = (
             observation.classification.verdict.value
             if observation.classification and observation.classification.verdict
