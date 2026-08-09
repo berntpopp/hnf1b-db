@@ -16,8 +16,16 @@ from app.phenopackets.curation.projection import project_individual
 class CurationProjectionError(ValueError):
     """Raised when v2 source truth cannot produce the claimed public packet."""
 
+    def __init__(self, code: str, detail: str, *, conflicts: tuple[Any, ...] = ()):
+        """Preserve a machine-readable error code and optional conflicts."""
+        super().__init__(detail)
+        self.code = code
+        self.conflicts = conflicts
 
-def canonicalize_curation_document(document: dict[str, Any]) -> dict[str, Any]:
+
+def canonicalize_curation_document(
+    document: dict[str, Any], *, publish: bool = False
+) -> dict[str, Any]:
     """Return a canonical v2 projection, leaving legacy documents untouched.
 
     Write/publish callers use this before persistence.  It deliberately
@@ -30,19 +38,26 @@ def canonicalize_curation_document(document: dict[str, Any]) -> dict[str, Any]:
     try:
         profile = Hnf1bCurationProfile.model_validate(block)
     except ValidationError as error:
-        raise CurationProjectionError(str(error)) from error
-    result = project_individual(
-        list(profile.observations_by_id.values()),
-        list(profile.resolutions_by_id.values()),
-        algorithm_version=profile.projection.algorithm_version,
-    )
-    if result.blocking_conflicts:
-        raise CurationProjectionError("curation projection has blocking conflicts")
+        raise CurationProjectionError("invalid_profile", str(error)) from error
+    try:
+        result = project_individual(
+            list(profile.observations_by_id.values()),
+            list(profile.resolutions_by_id.values()),
+            algorithm_version=profile.projection.algorithm_version,
+        )
+    except (ValueError, TypeError) as error:
+        raise CurationProjectionError("projection_error", str(error)) from error
+    if result.blocking_conflicts and publish:
+        raise CurationProjectionError(
+            "blocking_conflicts",
+            "curation projection has blocking conflicts",
+            conflicts=result.blocking_conflicts,
+        )
     try:
         ParseDict(result.phenopacket, Phenopacket())
     except Exception as error:  # protobuf provides several concrete error types
         raise CurationProjectionError(
-            "canonical projection is not GA4GH-valid"
+            "parser_error", "canonical projection is not GA4GH-valid"
         ) from error
     canonical = deepcopy(document)
     for field in (
