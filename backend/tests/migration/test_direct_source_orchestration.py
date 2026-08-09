@@ -1,11 +1,19 @@
 """The legacy CLI must fail closed instead of importing reviewer accounts or rows."""
 
 import inspect
+import json
 
+import pandas as pd
 import pytest
 
 from migration.data_sources.source_adapter import SourceSnapshot
-from migration.direct_sheets_to_phenopackets import DirectSheetsToPhenopackets
+from migration.direct_sheets_to_phenopackets import (
+    DirectSheetsToPhenopackets,
+    write_dry_run_atomically,
+)
+from migration.phenopackets.builder_simple import PhenopacketBuilder
+from migration.phenopackets.hpo_mapper import HPOMapper
+from migration.phenopackets.laterality import modifier_vocabulary_from_rows
 from migration.source_manifest import EXPECTED_HEADERS, build_source_manifest
 
 
@@ -69,3 +77,51 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
     assert migration.modifier_vocabulary.version_sha256 == manifest.sheets[
         "Phenotype_modifier"
     ].sha256
+    assert (
+        migration.phenopacket_builder.phenotype_extractor.modifier_vocabulary
+        == migration.modifier_vocabulary
+    )
+
+
+def test_production_builder_uses_injected_source_modifier_vocabulary():
+    vocabulary = modifier_vocabulary_from_rows(
+        [
+            {"modifier": "Bilateral", "modifier_id": "HP:0012832"},
+            {"modifier": "Unilateral", "modifier_id": "HP:0012833"},
+            {"modifier": "Left", "modifier_id": "HP:0012835"},
+            {"modifier": "Right", "modifier_id": "HP:0012834"},
+        ],
+        version_sha256="a" * 64,
+    )
+    builder = PhenopacketBuilder(
+        HPOMapper(), modifier_vocabulary=vocabulary
+    )
+
+    phenopacket = builder.build_phenopacket(
+        "source-subject", pd.DataFrame([{"RenalCysts": "unilateral left"}])
+    )
+
+    renal_cyst = next(
+        feature
+        for feature in phenopacket["phenotypicFeatures"]
+        if feature["type"]["id"] == "HP:0000107"
+    )
+    assert [modifier["id"] for modifier in renal_cyst["modifiers"]] == [
+        "HP:0012833",
+        "HP:0012835",
+    ]
+
+
+def test_dry_run_publication_is_atomic_when_serialization_fails(tmp_path, monkeypatch):
+    destination = tmp_path / "phenopackets.json"
+
+    def fail_dump(*_args, **_kwargs):
+        raise OSError("injected serialization failure")
+
+    monkeypatch.setattr(json, "dump", fail_dump)
+
+    with pytest.raises(OSError, match="injected serialization failure"):
+        write_dry_run_atomically(destination, [{"id": "fixture"}])
+
+    assert not destination.exists()
+    assert list(tmp_path.iterdir()) == []

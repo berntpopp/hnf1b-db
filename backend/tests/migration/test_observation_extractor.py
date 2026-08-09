@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.phenopackets.curation.models import AssessmentStatus
 from migration.phenopackets.laterality import (
     ModifierVocabularyError,
     modifier_vocabulary_from_rows,
@@ -135,3 +136,23 @@ def test_modifier_vocabulary_rejects_non_hpo_modifier_identifiers():
 
     with pytest.raises(ModifierVocabularyError, match="invalid source modifier"):
         modifier_vocabulary_from_rows(rows, version_sha256="a" * 64)
+
+
+def test_kidney_biopsy_no_is_explicitly_not_assessed_not_two_negative_findings():
+    row = _row()
+    row["KidneyBiopsy"] = "no"
+
+    observation = extract_observation(
+        row,
+        row_number=7,
+        source_system="local_fixture",
+        dataset_key="hnf1b-registry",
+        manifest_sha256="sha256:fixture",
+        row_hmac_key=b"test-only-key",
+        reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
+        modifier_vocabulary=_modifier_vocabulary(),
+    )
+
+    biopsy = next(item for item in observation.phenotypes if item.column == "KidneyBiopsy")
+    assert biopsy.assessment_status is AssessmentStatus.NOT_ASSESSED
+    assert biopsy.findings == ()

@@ -113,6 +113,10 @@ def _phenotypes(
             curation, status = CurationStatus.CURATED, AssessmentStatus.NOT_REPORTED
         elif lowered in _NOT_APPLICABLE:
             curation, status = CurationStatus.CURATED, AssessmentStatus.NOT_APPLICABLE
+        elif question.source_column == "KidneyBiopsy" and lowered == "no":
+            # ``no`` records no biopsy assessment, not an adjudication that both
+            # mutually distinct biopsy findings are absent.
+            curation, status = CurationStatus.CURATED, AssessmentStatus.NOT_ASSESSED
         else:
             curation = CurationStatus.CURATED
             status = (

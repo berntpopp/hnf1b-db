@@ -10,6 +10,7 @@ import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.extractors import PhenotypeExtractor, VariantExtractor
+from migration.phenopackets.laterality import ModifierVocabulary
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.phenopackets.reviewer_mapper import ReviewerMapper
@@ -27,6 +28,7 @@ class PhenopacketBuilder:
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
         reviewer_mapper: Optional[ReviewerMapper] = None,
+        modifier_vocabulary: ModifierVocabulary | None = None,
     ):
         """Initialize phenopacket builder.
 
@@ -34,6 +36,7 @@ class PhenopacketBuilder:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
             reviewer_mapper: Reviewer name mapper for resolving emails to full names
+            modifier_vocabulary: Versioned terms from ``Phenotype_modifier``.
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
@@ -43,7 +46,9 @@ class PhenopacketBuilder:
 
         # Initialize extractors with injected dependencies
         self.phenotype_extractor = PhenotypeExtractor(
-            ontology_mapper, publication_mapper
+            ontology_mapper,
+            publication_mapper,
+            modifier_vocabulary=modifier_vocabulary,
         )
         self.variant_extractor = VariantExtractor(self.mondo_mappings)
 

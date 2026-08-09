@@ -274,3 +274,20 @@ Fresh verification: focused source-import/provenance plus frozen-laterality
 regression suite: **54 passed** (one existing async event-loop warning);
 targeted Ruff: passed; isolated test-database Alembic downgrade to
 `b9f422b00003` and upgrade to `c0f422b00004`: passed.
+
+## Final acceptance follow-up — 2026-08-09
+
+- The loaded, versioned modifier vocabulary is now injected through the active
+  direct builder into its production phenotype extractor; compound laterality
+  rows therefore build with source-supplied terms rather than a fallback.
+- `KidneyBiopsy = no` is retained as a typed, curated `NOT_ASSESSED`
+  observation without inventing two excluded pathology findings.
+- Dry-run JSON uses a same-directory temporary file, flush/fsync, and atomic
+  replacement; serializer failure removes the temporary artifact and leaves no
+  visible output.
+- The source-import migration downgrade now queries operational-table counts,
+  imported revision links, and `source_bound` records. Any evidence blocks the
+  destructive rollback; the former environment-variable override is removed.
+
+Fresh verification: focused acceptance regressions: **26 passed**; targeted
+Ruff: passed; clean isolated Alembic downgrade/upgrade smoke: passed.

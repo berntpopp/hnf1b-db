@@ -7,8 +7,6 @@ Create Date: 2026-08-09
 
 from __future__ import annotations
 
-import os
-
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -27,6 +25,37 @@ OPERATIONAL_TABLES = {
     "source_report_bindings",
     "source_correction_registry",
 }
+
+
+def assert_pre_activation_source_import_downgrade(bind) -> None:
+    """Refuse a destructive rollback once any source evidence exists."""
+    state = (
+        bind.execute(
+            sa.text(
+                """
+                SELECT
+                    (SELECT count(*) FROM source_datasets)
+                    + (SELECT count(*) FROM source_snapshots)
+                    + (SELECT count(*) FROM source_import_runs)
+                    + (SELECT count(*) FROM phenopacket_subject_bindings)
+                    + (SELECT count(*) FROM source_report_bindings)
+                    + (SELECT count(*) FROM source_correction_registry)
+                    AS operational_rows,
+                    (SELECT count(*) FROM phenopacket_revisions
+                     WHERE import_run_id IS NOT NULL) AS imported_revisions,
+                    (SELECT count(*) FROM phenopackets
+                     WHERE provenance_status = 'source_bound') AS source_bound_records
+                """
+            )
+        )
+        .mappings()
+        .one()
+    )
+    if any(state.values()):
+        raise RuntimeError(
+            "refusing source-import downgrade: database contains source-import evidence; "
+            "use head-pointer rollback/PITR"
+        )
 
 
 def upgrade() -> None:
@@ -160,10 +189,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Permit pre-activation schema rollback only; never delete activated evidence."""
-    if os.environ.get("ALLOW_PREACTIVATION_SOURCE_IMPORT_DOWNGRADE") != "1":
-        raise RuntimeError(
-            "refusing source-import downgrade after activation; use head-pointer rollback/PITR"
-        )
+    assert_pre_activation_source_import_downgrade(op.get_bind())
     op.drop_constraint(
         "fk_phenopacket_revisions_import_run",
         "phenopacket_revisions",

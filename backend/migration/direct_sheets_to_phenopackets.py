@@ -13,6 +13,8 @@ import logging
 import os
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -36,6 +38,31 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def write_dry_run_atomically(
+    destination: Path, phenopackets: list[dict[str, Any]]
+) -> None:
+    """Publish a complete dry-run artifact or leave no output behind."""
+    temporary: Path | None = None
+    try:
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(phenopackets, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
 
 
 class DirectSheetsToPhenopackets:
@@ -108,7 +135,9 @@ class DirectSheetsToPhenopackets:
 
         # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(
-            self.ontology_mapper, self.publication_mapper
+            self.ontology_mapper,
+            self.publication_mapper,
+            modifier_vocabulary=self.modifier_vocabulary,
         )
 
     def _is_valid_id(self, value: Any) -> bool:
@@ -231,9 +260,10 @@ class DirectSheetsToPhenopackets:
 
             if dry_run:
                 # Save to JSON file for inspection
-                output_file = f"phenopackets_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(output_file, "w") as f:
-                    json.dump(phenopackets, f, indent=2)
+                output_file = Path(
+                    f"phenopackets_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                )
+                write_dry_run_atomically(output_file, phenopackets)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
                 raise RuntimeError(
