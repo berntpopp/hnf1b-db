@@ -1,9 +1,8 @@
 """PhenopacketStateService — the four §6 transaction sequences.
 
-Every public method opens a single async transaction, acquires
-``SELECT ... FOR UPDATE`` on the phenopacket row, checks the optimistic lock,
-runs the guard matrix, mutates pointers + revisions + state atomically, then
-commits.
+Every public method acquires ``SELECT ... FOR UPDATE`` on the phenopacket row,
+checks the optimistic lock, and stages one append-only revision. Callers own
+the surrounding transaction and are solely responsible for committing.
 
 Spec reference:
   .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §6.
@@ -11,12 +10,15 @@ Spec reference:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+from copy import deepcopy
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError, MultipleResultsFound, NoResultFound
+from sqlalchemy import select
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -60,6 +62,36 @@ class PhenopacketStateService:
         """Initialise with an async database session."""
         self.db = db
 
+    @staticmethod
+    def _canonicalize_for_persistence(
+        content: dict[str, Any], *, publish: bool = False
+    ) -> dict[str, Any]:
+        """Apply Lane A's v2 projection adapter when it is available.
+
+        The adapter is intentionally imported lazily: this state-machine
+        branch remains independently runnable until the curation package is
+        integrated, and adapter-defined legacy packets are copied unchanged.
+        """
+        try:
+            from app.phenopackets.curation.adapters import (  # type: ignore[import-not-found]
+                CurationProjectionError,
+                canonicalize_curation_document,
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name in {
+                "app.phenopackets.curation",
+                "app.phenopackets.curation.adapters",
+            }:
+                return deepcopy(content)
+            raise
+
+        try:
+            return canonicalize_curation_document(content, publish=publish)
+        except CurationProjectionError as exc:
+            raise PhenopacketStateService.InvalidTransition(
+                f"invalid curation projection: {exc}"
+            ) from exc
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -90,6 +122,82 @@ class PhenopacketStateService:
             .order_by(PhenopacketRevision.revision_number.desc())
         )
         return result.scalars().first()
+
+    async def _append_revision(
+        self,
+        pp: Phenopacket,
+        *,
+        state: str,
+        content: dict[str, Any],
+        change_patch: list[dict[str, Any]] | None,
+        change_reason: str,
+        actor: User,
+        from_state: str | None,
+        to_state: str,
+        event_type: str,
+        parent_revision_id: int | None = None,
+    ) -> PhenopacketRevision:
+        """Append and flush a revision; never update historical revision rows."""
+        parent = parent_revision_id
+        if parent is None:
+            latest = await self._latest_revision_row(pp.id)
+            parent = latest.id if latest is not None else None
+        pp.revision += 1
+        curation = content.get("hnf1bCuration", {})
+        projection_payload = {
+            field: content.get(field)
+            for field in (
+                "id",
+                "subject",
+                "phenotypicFeatures",
+                "diseases",
+                "interpretations",
+                "measurements",
+                "metaData",
+            )
+            if field in content
+        }
+        projection_hash = hashlib.sha256(
+            json.dumps(
+                projection_payload, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        ledger_payload = {
+            "parent_revision_id": parent,
+            "revision_number": pp.revision,
+            "state": state,
+            "event_type": event_type,
+            "from_state": from_state,
+            "to_state": to_state,
+            "change_reason": change_reason,
+            "change_patch": change_patch,
+            "projection_hash": projection_hash,
+        }
+        ledger_hash = hashlib.sha256(
+            json.dumps(ledger_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        revision = PhenopacketRevision(
+            record_id=pp.id,
+            parent_revision_id=parent,
+            revision_number=pp.revision,
+            state=state,
+            content_jsonb=content,
+            change_patch=change_patch,
+            change_reason=change_reason,
+            actor_id=actor.id,
+            from_state=from_state,
+            to_state=to_state,
+            event_type=event_type,
+            profile_schema_version=str(curation.get("schemaVersion", "legacy")),
+            projection_version=str(
+                curation.get("projection", {}).get("algorithmVersion", "legacy")
+            ),
+            ledger_hash=ledger_hash,
+            projection_hash=projection_hash,
+        )
+        self.db.add(revision)
+        await self.db.flush()
+        return revision
 
     async def _effective_state(self, pp: Phenopacket) -> State:
         """Return the state governing edit-cycle decisions for this phenopacket.
@@ -131,6 +239,7 @@ class PhenopacketStateService:
         - effective == 'archived'                          → 409 invalid_transition.
         """
         pp = await self._lock_and_check(record_id, expected_revision)
+        new_content = self._canonicalize_for_persistence(new_content)
         effective = await self._effective_state(pp)
 
         if effective == "published":
@@ -174,28 +283,23 @@ class PhenopacketStateService:
         ).scalar_one()
         patch = compute_json_patch(head_row.content_jsonb, new_content)
 
-        pp.revision += 1
-        rev = PhenopacketRevision(
-            record_id=pp.id,
-            revision_number=pp.revision,
+        rev = await self._append_revision(
+            pp,
             state="draft",
-            content_jsonb=new_content,
+            content=new_content,
             change_patch=patch,
             change_reason=change_reason,
-            actor_id=actor.id,
+            actor=actor,
             from_state="published",
             to_state="draft",
-            is_head_published=False,
+            event_type="draft_created",
         )
-        self.db.add(rev)
-        await self.db.flush()  # obtain rev.id before writing the FK
 
         pp.phenopacket = new_content
         pp.editing_revision_id = rev.id
         pp.draft_owner_id = actor.id
         # state stays 'published'; head_published_revision_id unchanged
 
-        await self.db.commit()
         return pp
 
     async def _inplace_save(
@@ -215,23 +319,25 @@ class PhenopacketStateService:
                 f"actor {actor.id} is not the draft owner ({pp.draft_owner_id})"
             )
 
-        pp.revision += 1
+        previous = await self._latest_revision_row(pp.id)
+        patch = (
+            compute_json_patch(previous.content_jsonb, new_content)
+            if previous is not None
+            else None
+        )
+        revision = await self._append_revision(
+            pp,
+            state=await self._effective_state(pp),
+            content=new_content,
+            change_patch=patch,
+            change_reason=change_reason,
+            actor=actor,
+            from_state=await self._effective_state(pp),
+            to_state=await self._effective_state(pp),
+            event_type="draft_saved",
+        )
         pp.phenopacket = new_content
-
-        # If there's an in-progress revision row, update its content in-place
-        if pp.editing_revision_id:
-            editing = (
-                await self.db.execute(
-                    select(PhenopacketRevision).where(
-                        PhenopacketRevision.id == pp.editing_revision_id
-                    )
-                )
-            ).scalar_one()
-            editing.content_jsonb = new_content
-            editing.change_reason = change_reason
-            # revision_number on the row is intentionally NOT updated (I6: gaps)
-
-        await self.db.commit()
+        pp.editing_revision_id = revision.id
         return pp
 
     # ------------------------------------------------------------------
@@ -310,22 +416,17 @@ class PhenopacketStateService:
         ).scalar_one_or_none()
         patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
 
-        pp.revision += 1
-
-        rev = PhenopacketRevision(
-            record_id=pp.id,
-            revision_number=pp.revision,
+        rev = await self._append_revision(
+            pp,
             state=to_state,
-            content_jsonb=pp.phenopacket,
+            content=pp.phenopacket,
             change_patch=patch,
             change_reason=reason,
-            actor_id=actor.id,
+            actor=actor,
             from_state=from_state,
             to_state=to_state,
-            is_head_published=False,
+            event_type="state_transition",
         )
-        self.db.add(rev)
-        await self.db.flush()  # get rev.id
 
         # I8: pp.state advances only for never-published records OR archive.
         if pp.head_published_revision_id is None or to_state == "archived":
@@ -341,7 +442,6 @@ class PhenopacketStateService:
             # so the curator can continue owning through the review cycle.
             pp.editing_revision_id = rev.id
 
-        await self.db.commit()
         return pp, rev
 
     async def _publish(
@@ -351,10 +451,15 @@ class PhenopacketStateService:
         actor: User,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """§6.2 head-swap: promote the approved revision to published + head."""
+        if pp.editing_revision_id is None:
+            raise self.InvalidTransition(
+                "cannot publish: no active approved editing revision"
+            )
         try:
             approved = (
                 await self.db.execute(
                     select(PhenopacketRevision).where(
+                        PhenopacketRevision.id == pp.editing_revision_id,
                         PhenopacketRevision.record_id == pp.id,
                         PhenopacketRevision.state == "approved",
                     )
@@ -362,43 +467,28 @@ class PhenopacketStateService:
             ).scalar_one()
         except NoResultFound:
             raise self.InvalidTransition(
-                "cannot publish: no revision row with state='approved' found"
-            )
-        except MultipleResultsFound:
-            raise self.InvalidTransition(
-                "cannot publish: multiple approved revisions found"
-                " — data integrity violation"
+                "cannot publish: active editing revision is not an approved revision"
             )
 
-        # Clear any previous head-published flag for this record
-        await self.db.execute(
-            update(PhenopacketRevision)
-            .where(
-                PhenopacketRevision.record_id == pp.id,
-                PhenopacketRevision.is_head_published.is_(True),
-            )
-            .values(is_head_published=False)
+        published_content = self._canonicalize_for_persistence(
+            approved.content_jsonb, publish=True
         )
-
-        # Re-use the approved row: update its state + is_head_published
-        approved.state = "published"
-        approved.to_state = "published"
-        approved.is_head_published = True
-        approved.change_reason = reason
-
-        pp.revision += 1
+        published = await self._append_revision(
+            pp,
+            state="published",
+            content=published_content,
+            change_patch=compute_json_patch(pp.phenopacket, published_content),
+            change_reason=reason,
+            actor=actor,
+            from_state="approved",
+            to_state="published",
+            event_type="published",
+            parent_revision_id=approved.id,
+        )
         pp.state = "published"
-        pp.phenopacket = approved.content_jsonb
-        pp.head_published_revision_id = approved.id
+        pp.phenopacket = published_content
+        pp.head_published_revision_id = published.id
         pp.editing_revision_id = None  # cleared on publish (§6.2 step 10)
         pp.draft_owner_id = None  # I5: cleared on publish
 
-        try:
-            await self.db.commit()
-        except IntegrityError as exc:
-            # ux_head_published_per_record unique violation — concurrent publish
-            raise self.InvalidTransition(
-                "concurrent publish detected; please retry"
-            ) from exc
-
-        return pp, approved
+        return pp, published

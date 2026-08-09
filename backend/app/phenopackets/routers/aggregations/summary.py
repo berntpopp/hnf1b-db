@@ -65,12 +65,13 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             f"""
             SELECT COUNT(*)
-            FROM phenopackets
-            WHERE deleted_at IS NULL
-              AND state = 'published'
-              AND head_published_revision_id IS NOT NULL
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+            WHERE p.deleted_at IS NULL
+              AND p.state = 'published'
+              AND p.head_published_revision_id IS NOT NULL
               {_NO_E2E}
-              AND jsonb_array_length(phenopacket->'interpretations') > 0
+              AND jsonb_array_length(r.content_jsonb->'interpretations') > 0
         """
         )
     )
@@ -81,11 +82,12 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             f"""
             SELECT COUNT(DISTINCT feature->'type'->>'id')
-            FROM phenopackets,
-                 jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
-            WHERE deleted_at IS NULL
-              AND state = 'published'
-              AND head_published_revision_id IS NOT NULL
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                 jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') as feature
+            WHERE p.deleted_at IS NULL
+              AND p.state = 'published'
+              AND p.head_published_revision_id IS NOT NULL
               {_NO_E2E}
               AND feature->'type'->>'id' IS NOT NULL
         """
@@ -100,13 +102,14 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             f"""
             SELECT COUNT(DISTINCT ext_ref->>'id')
-            FROM phenopackets,
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
                  jsonb_array_elements(
-                     phenopacket->'metaData'->'externalReferences'
+                     r.content_jsonb->'metaData'->'externalReferences'
                  ) as ext_ref
-            WHERE deleted_at IS NULL
-              AND state = 'published'
-              AND head_published_revision_id IS NOT NULL
+            WHERE p.deleted_at IS NULL
+              AND p.state = 'published'
+              AND p.head_published_revision_id IS NOT NULL
               {_NO_E2E}
               AND ext_ref->>'id' LIKE 'PMID:%'
         """
@@ -121,13 +124,14 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             f"""
             SELECT COUNT(DISTINCT ext_ref->>'id')
-            FROM phenopackets,
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
                  jsonb_array_elements(
-                     phenopacket->'metaData'->'externalReferences'
+                     r.content_jsonb->'metaData'->'externalReferences'
                  ) as ext_ref
-            WHERE deleted_at IS NULL
-              AND state = 'published'
-              AND head_published_revision_id IS NOT NULL
+            WHERE p.deleted_at IS NULL
+              AND p.state = 'published'
+              AND p.head_published_revision_id IS NOT NULL
               {_NO_E2E}
               AND ext_ref->>'id' IS NOT NULL
         """
@@ -145,8 +149,9 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             """
             SELECT COUNT(DISTINCT vd->>'id')
-            FROM phenopackets p,
-                 jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                 jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                  jsonb_array_elements(
                     interp->'diagnosis'->'genomicInterpretations'
                 ) as gi,
@@ -169,14 +174,15 @@ async def get_summary_statistics(db: AsyncSession = Depends(get_db)):
         text(
             """
             SELECT
-                subject_sex,
+                r.content_jsonb->'subject'->>'sex' AS subject_sex,
                 COUNT(*) as count
-            FROM phenopackets
-            WHERE deleted_at IS NULL
-              AND state = 'published'
-              AND head_published_revision_id IS NOT NULL
-              AND phenopacket_id NOT LIKE 'e2e-%'
-            GROUP BY subject_sex
+            FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+            WHERE p.deleted_at IS NULL
+              AND p.state = 'published'
+              AND p.head_published_revision_id IS NOT NULL
+              AND p.phenopacket_id NOT LIKE 'e2e-%'
+            GROUP BY r.content_jsonb->'subject'->>'sex'
         """
         )
     )

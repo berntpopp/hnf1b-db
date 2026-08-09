@@ -23,6 +23,8 @@ script, admin CLI) without dragging FastAPI types into the service.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -33,9 +35,11 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.phenopackets.models import (
     Phenopacket,
     PhenopacketCreate,
+    PhenopacketRevision,
     PhenopacketUpdate,
 )
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.audit import create_audit_entry
@@ -167,6 +171,9 @@ class PhenopacketService:
         """
         sanitized = self._sanitizer.sanitize_phenopacket(payload.phenopacket)
         stamp_curated_at(sanitized)
+        sanitized = PhenopacketStateService._canonicalize_for_persistence(
+            sanitized, publish=False
+        )
         errors = self._validator.validate(sanitized)
         if errors:
             raise ServiceValidationError(errors)
@@ -182,12 +189,69 @@ class PhenopacketService:
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
             created_by_id=actor_id,
+            draft_owner_id=actor_id,
         )
         self._repo.add(phenopacket)
 
         # Emit CREATE audit row BEFORE the commit so it lands in the same
         # transaction as the phenopacket row.  If either fails, both roll back.
         try:
+            await self._repo.session.flush()
+            projection_payload = {
+                field: sanitized.get(field)
+                for field in (
+                    "id",
+                    "subject",
+                    "phenotypicFeatures",
+                    "diseases",
+                    "interpretations",
+                    "measurements",
+                    "metaData",
+                )
+                if field in sanitized
+            }
+            projection_hash = hashlib.sha256(
+                json.dumps(
+                    projection_payload, sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            ledger_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "parent_revision_id": None,
+                        "revision_number": phenopacket.revision,
+                        "state": "draft",
+                        "event_type": "created",
+                        "projection_hash": projection_hash,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            initial_revision = PhenopacketRevision(
+                record_id=phenopacket.id,
+                revision_number=phenopacket.revision,
+                state="draft",
+                content_jsonb=sanitized,
+                change_reason="Initial creation",
+                actor_id=actor_id,
+                from_state=None,
+                to_state="draft",
+                event_type="created",
+                profile_schema_version=str(
+                    sanitized.get("hnf1bCuration", {}).get("schemaVersion", "legacy")
+                ),
+                projection_version=str(
+                    sanitized.get("hnf1bCuration", {})
+                    .get("projection", {})
+                    .get("algorithmVersion", "legacy")
+                ),
+                ledger_hash=ledger_hash,
+                projection_hash=projection_hash,
+            )
+            self._repo.add(initial_revision)
+            await self._repo.session.flush()
+            phenopacket.editing_revision_id = initial_revision.id
             await create_audit_entry(
                 db=self._repo.session,
                 phenopacket_id=phenopacket.phenopacket_id,
@@ -374,7 +438,7 @@ class PhenopacketService:
                 changed_by_id=actor_id,
                 change_reason=change_reason,
             )
-            await self._repo.session.commit()
+            await self._repo.session.flush()
         except ValueError as exc:
             # Wave 5b Task 4: audit.create_audit_entry raises ValueError
             # when its post-INSERT SELECT returns None. Map to

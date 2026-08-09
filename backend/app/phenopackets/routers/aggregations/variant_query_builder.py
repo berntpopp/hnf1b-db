@@ -378,8 +378,9 @@ class VariantQueryBuilder:
                 vd->'geneContext'->>'symbol' as gene_symbol,
                 p.id as phenopacket_id
             FROM
-                phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') interp,
+                phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') gi,
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral
@@ -445,8 +446,9 @@ class VariantQueryBuilder:
                 vd->'extensions' as vep_extensions,
                 p.id as phenopacket_id
             FROM
-                phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') interp,
+                phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') gi,
                 LATERAL (SELECT gi->'variantInterpretation' as vi) vi_lateral,
                 LATERAL (SELECT vi_lateral.vi->'variationDescriptor' as vd) vd_lateral

@@ -23,9 +23,9 @@ Wave 7 D.1 additions:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -39,6 +39,7 @@ from app.phenopackets.models import (
     PhenopacketCreate,
     PhenopacketDelete,
     PhenopacketResponse,
+    PhenopacketRevision,
     PhenopacketUpdate,
 )
 from app.phenopackets.query_builders import (
@@ -49,7 +50,7 @@ from app.phenopackets.query_builders import (
 from app.phenopackets.repositories import (
     PhenopacketRepository,
     curator_filter,
-    public_filter,
+    public_head_query,
     resolve_curator_content,
     resolve_public_content,
 )
@@ -61,6 +62,11 @@ from app.phenopackets.services.phenopacket_service import (
     ServiceNotFound,
     ServiceValidationError,
     stamp_curated_at,
+)
+from app.phenopackets.services.representation_service import (
+    RepresentationValidationError,
+    normalized_representation,
+    represent,
 )
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
@@ -161,17 +167,20 @@ async def list_phenopackets(
         # Public listing also drops synthetic e2e-* fixtures so they never
         # appear in anonymous discovery/browse. Single-record GET below keeps
         # them (the e2e lifecycle self-check reads its own record by id).
-        query = public_filter(base_stmt).where(
+        query = public_head_query(base_stmt).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
         )
 
     # Apply sex and variant filters
-    query = add_sex_filter(query, filter_sex)
-    query = add_has_variants_filter(query, filter_has_variants)
+    public_json_column = PhenopacketRevision.content_jsonb if not is_curator else None
+    query = add_sex_filter(query, filter_sex, content=public_json_column)
+    query = add_has_variants_filter(
+        query, filter_has_variants, content=public_json_column
+    )
 
     # Apply sort
     if sort:
-        sort_clauses = parse_sort_parameter(sort)
+        sort_clauses = parse_sort_parameter(sort, content=public_json_column)
         query = query.order_by(
             *sort_clauses,
             Phenopacket.created_at.desc(),
@@ -185,11 +194,13 @@ async def list_phenopackets(
     if is_curator:
         count_base = curator_filter(count_base)
     else:
-        count_base = public_filter(count_base).where(
+        count_base = public_head_query(count_base).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
         )
-    count_base = add_sex_filter(count_base, filter_sex)
-    count_base = add_has_variants_filter(count_base, filter_has_variants)
+    count_base = add_sex_filter(count_base, filter_sex, content=public_json_column)
+    count_base = add_has_variants_filter(
+        count_base, filter_has_variants, content=public_json_column
+    )
     count_result = await db.execute(count_base)
     total_count = int(count_result.scalar() or 0)
 
@@ -295,7 +306,7 @@ async def get_phenopackets_batch(
     if is_curator:
         stmt = curator_filter(stmt)
     else:
-        stmt = public_filter(stmt)
+        stmt = public_head_query(stmt)
 
     result = await db.execute(stmt)
     phenopackets_list = list(result.scalars().all())
@@ -350,7 +361,7 @@ async def get_phenopacket(
     if is_curator:
         stmt = curator_filter(stmt)
     else:
-        stmt = public_filter(stmt)
+        stmt = public_head_query(stmt)
 
     result = await db.execute(stmt)
     pp = result.scalar_one_or_none()
@@ -379,7 +390,8 @@ async def get_phenopacket(
 @router.get("/{phenopacket_id}/export")
 async def export_phenopacket(
     phenopacket_id: str,
-    mode: Literal["conformant", "full"] = "conformant",
+    representation: str = Query("ga4gh"),
+    mode: Optional[str] = Query(None, deprecated=True),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
@@ -401,22 +413,30 @@ async def export_phenopacket(
     HNF1B-DB-specific curation has been stripped.
     """
     is_curator = is_curator_or_admin(current_user)
+    try:
+        selected_representation = normalized_representation(mode or representation)
+    except RepresentationValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     stmt = select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
-    stmt = curator_filter(stmt) if is_curator else public_filter(stmt)
+    stmt = (
+        curator_filter(stmt)
+        if selected_representation == "profile" and is_curator
+        else public_head_query(stmt)
+    )
 
     result = await db.execute(stmt)
     pp = result.scalar_one_or_none()
     if pp is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
-    if mode == "full" and not is_curator:
+    if selected_representation == "profile" and not is_curator:
         raise HTTPException(
             status_code=403,
-            detail="full export requires curator access",
+            detail="profile export requires curator access",
         )
 
-    if is_curator:
+    if selected_representation == "profile":
         document = dict(resolve_curator_content(pp))
     else:
         public_content = await resolve_public_content(db, pp)
@@ -424,9 +444,13 @@ async def export_phenopacket(
             raise HTTPException(status_code=404, detail="Phenopacket not found")
         document = dict(public_content)
 
-    if mode == "conformant":
-        document.pop("hnf1bCuration", None)
-    return document
+    try:
+        return represent(document, selected_representation)
+    except RepresentationValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_representation", "message": str(exc)},
+        ) from exc
 
 
 # =============================================================================
@@ -453,6 +477,7 @@ async def create_phenopacket(
         new_phenopacket = await service.create(
             phenopacket_data, actor_id=current_user.id
         )
+        await db.commit()
     except ServiceValidationError as exc:
         raise HTTPException(
             status_code=400, detail={"validation_errors": exc.errors}
@@ -468,6 +493,7 @@ async def create_phenopacket(
 async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -495,6 +521,28 @@ async def update_phenopacket(
         403: Forbidden (not draft owner)
         400: Validation error
     """
+    if phenopacket_data.revision is None and if_match is None:
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "code": "precondition_required",
+                "message": "revision or If-Match is required",
+            },
+        )
+    if phenopacket_data.revision is None:
+        try:
+            expected_revision = int(if_match.strip('"'))  # type: ignore[union-attr]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=428,
+                detail={
+                    "code": "precondition_required",
+                    "message": "If-Match must contain a revision",
+                },
+            ) from exc
+    else:
+        expected_revision = phenopacket_data.revision
+
     repo = PhenopacketRepository(db)
     pp = await repo.get_by_id(phenopacket_id)
     if pp is None:
@@ -509,6 +557,15 @@ async def update_phenopacket(
     # PhenopacketStateService.edit_record); see stamp_curated_at's docstring
     # for why it's safe to always overwrite here.
     stamp_curated_at(sanitized)
+    try:
+        sanitized = PhenopacketStateService._canonicalize_for_persistence(
+            sanitized, publish=False
+        )
+    except PhenopacketStateService.InvalidTransition as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"validation_errors": [str(exc)]},
+        ) from exc
     errors = validator.validate(sanitized)
     if errors:
         raise HTTPException(status_code=400, detail={"validation_errors": errors})
@@ -525,13 +582,10 @@ async def update_phenopacket(
             pp.id,
             new_content=sanitized,
             change_reason=phenopacket_data.change_reason,
-            expected_revision=(
-                phenopacket_data.revision
-                if phenopacket_data.revision is not None
-                else pp.revision
-            ),
+            expected_revision=expected_revision,
             actor=current_user,
         )
+        await db.commit()
     except PhenopacketStateService.RecordNotFound as exc:
         raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:
@@ -582,13 +636,15 @@ async def delete_phenopacket(
     """
     service = PhenopacketService(PhenopacketRepository(db))
     try:
-        return await service.soft_delete(
+        response = await service.soft_delete(
             phenopacket_id,
             delete_request.change_reason,
             actor_id=current_user.id,
             actor_username=current_user.username,
             expected_revision=delete_request.revision,
         )
+        await db.commit()
+        return response
     except ServiceNotFound as exc:
         raise HTTPException(
             status_code=404,

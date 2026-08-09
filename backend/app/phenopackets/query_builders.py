@@ -15,7 +15,12 @@ from sqlalchemy.sql import Select
 from app.phenopackets.models import Phenopacket, PhenopacketResponse
 
 
-def add_has_variants_filter(query: Select, has_variants: Optional[bool]) -> Select:
+def add_has_variants_filter(
+    query: Select,
+    has_variants: Optional[bool],
+    *,
+    content: Any = None,
+) -> Select:
     """Add filter for phenopackets with/without variants.
 
     Used in: list_phenopackets, search_phenopackets
@@ -23,6 +28,8 @@ def add_has_variants_filter(query: Select, has_variants: Optional[bool]) -> Sele
     Args:
         query: SQLAlchemy select query object
         has_variants: True (has variants), False (no variants), None (all)
+        content: Optional JSONB column to filter; public callers pass the
+            published-head revision content.
 
     Returns:
         Modified query object with filter applied
@@ -35,20 +42,21 @@ def add_has_variants_filter(query: Select, has_variants: Optional[bool]) -> Sele
     if has_variants is None:
         return query
 
+    content = content if content is not None else Phenopacket.phenopacket
     if has_variants:
-        return query.where(
-            func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]) > 0
-        )
+        return query.where(func.jsonb_array_length(content["interpretations"]) > 0)
 
     return query.where(
-        func.coalesce(
-            func.jsonb_array_length(Phenopacket.phenopacket["interpretations"]), 0
-        )
-        == 0
+        func.coalesce(func.jsonb_array_length(content["interpretations"]), 0) == 0
     )
 
 
-def add_sex_filter(query: Select, sex: Optional[str]) -> Select:
+def add_sex_filter(
+    query: Select,
+    sex: Optional[str],
+    *,
+    content: Any = None,
+) -> Select:
     """Add sex filter to query using generated column.
 
     Used in: list_phenopackets, search_phenopackets, aggregate endpoints
@@ -56,6 +64,8 @@ def add_sex_filter(query: Select, sex: Optional[str]) -> Select:
     Args:
         query: SQLAlchemy select query object
         sex: 'MALE', 'FEMALE', 'OTHER_SEX', 'UNKNOWN_SEX', or None
+        content: Optional JSONB column to filter; public callers pass the
+            published-head revision content.
 
     Returns:
         Modified query object with sex filter applied
@@ -65,6 +75,8 @@ def add_sex_filter(query: Select, sex: Optional[str]) -> Select:
         query = add_sex_filter(query, sex='MALE')
         # Uses optimized generated column: subject_sex
     """
+    if sex and content is not None:
+        return query.where(content["subject"]["sex"].astext == sex)
     if sex:
         return query.where(Phenopacket.subject_sex == sex)
     return query

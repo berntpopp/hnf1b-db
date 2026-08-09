@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     BigInteger,
-    Boolean,
     Computed,
     DateTime,
     ForeignKey,
@@ -299,6 +298,11 @@ class PhenopacketRevision(Base):
         ForeignKey("phenopackets.id", ondelete="CASCADE"),
         nullable=False,
     )
+    parent_revision_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("phenopacket_revisions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
     state: Mapped[str] = mapped_column(Text, nullable=False)
     content_jsonb: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -311,9 +315,13 @@ class PhenopacketRevision(Base):
     )
     from_state: Mapped[Optional[str]] = mapped_column(Text)
     to_state: Mapped[str] = mapped_column(Text, nullable=False)
-    is_head_published: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
+    event_type: Mapped[str] = mapped_column(
+        Text, nullable=False, default="snapshot", server_default="snapshot"
     )
+    profile_schema_version: Mapped[Optional[str]] = mapped_column(String(40))
+    projection_version: Mapped[Optional[str]] = mapped_column(String(40))
+    ledger_hash: Mapped[Optional[str]] = mapped_column(String(128))
+    projection_hash: Mapped[Optional[str]] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -321,6 +329,18 @@ class PhenopacketRevision(Base):
     )
 
     actor: Mapped["User"] = relationship("User", foreign_keys=[actor_id], viewonly=True)
+
+    # Kept as a transient compatibility shim for legacy ORM call sites while
+    # migrations remove the stored flag. The only persisted head authority is
+    # ``Phenopacket.head_published_revision_id``.
+    @property
+    def is_head_published(self) -> bool:
+        """Return the legacy constructor hint; never use it for authorization."""
+        return getattr(self, "_legacy_is_head_published", False)
+
+    @is_head_published.setter
+    def is_head_published(self, value: bool) -> None:
+        self._legacy_is_head_published = value
 
 
 # The relationships above reference ``User`` by string name. SQLAlchemy resolves
