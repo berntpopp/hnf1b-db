@@ -139,9 +139,7 @@ def project_individual(
                         f"{resolution.resolution_id} is stale for "
                         f"{conflict.conflict_key}"
                     )
-                    raise StaleResolutionError(
-                        f"resolution {detail}"
-                    )
+                    raise StaleResolutionError(f"resolution {detail}")
                 selected = [
                     candidate
                     for candidate in candidates
@@ -167,6 +165,37 @@ def project_individual(
             "type": _term_json(representative.term),
             "excluded": status is AssessmentStatus.EXCLUDED,
         }
+        assessment_evidence = [
+            item
+            for observation in ordered
+            for assessment in observation.phenotypes
+            if assessment.assessment_status is status
+            and any(finding.term.id == term_id for finding in assessment.findings)
+            for item in assessment.evidence
+        ]
+        if assessment_evidence:
+            feature["evidence"] = [
+                {
+                    "reference": {"id": item.reference},
+                    "evidenceCode": _term_json(item.evidence_code),
+                }
+                for item in sorted(assessment_evidence, key=lambda item: item.reference)
+            ]
+        onset = next(
+            (
+                assessment.onset.value
+                for observation in ordered
+                for assessment in observation.phenotypes
+                if assessment.assessment_status is status
+                and any(finding.term.id == term_id for finding in assessment.findings)
+                and assessment.onset is not None
+                and assessment.onset.source_status.value == "stated"
+                and assessment.onset.value is not None
+            ),
+            None,
+        )
+        if onset and onset.get("kind") == "ontologyClass":
+            feature["onset"] = {"ontologyClass": onset["term"]}
         if len(modifier_sets) == 1 and next(iter(modifier_sets)):
             feature["modifiers"] = [
                 {"id": identifier, "label": label}
@@ -193,17 +222,81 @@ def project_individual(
             if item.conflict_key not in applied_resolution_keys
         ],
     )
+    diseases = sorted(
+        {
+            (disease.term.id, disease.term.label)
+            for observation in ordered
+            for disease in observation.diseases
+            if disease.asserted
+        }
+    )
+    interpretations = []
+    for observation in ordered:
+        if observation.variant is None or observation.variant.normalized is None:
+            continue
+        descriptor = observation.variant.normalized
+        contribution = (
+            observation.classification.contribution.value
+            if observation.classification and observation.classification.contribution
+            else "UNKNOWN"
+        )
+        acmg = (
+            observation.classification.verdict.value
+            if observation.classification and observation.classification.verdict
+            else None
+        )
+        variant_interpretation: dict[str, Any] = {"variationDescriptor": descriptor}
+        if acmg is not None:
+            variant_interpretation["acmgPathogenicityClassification"] = acmg
+        interpretations.append(
+            {
+                "id": f"interpretation-{observation.observation_id}",
+                "progressStatus": "COMPLETED",
+                "diagnosis": {
+                    "genomicInterpretations": [
+                        {
+                            "subjectOrBiosampleId": subject_id,
+                            "interpretationStatus": contribution,
+                            "variantInterpretation": variant_interpretation,
+                        }
+                    ]
+                },
+            }
+        )
+    references = sorted(
+        {
+            reference
+            for observation in ordered
+            if observation.publication
+            for reference in (
+                (
+                    [f"PMID:{observation.publication.pmid}"]
+                    if observation.publication.pmid
+                    else []
+                )
+                + (
+                    [f"DOI:{observation.publication.doi}"]
+                    if observation.publication.doi
+                    else []
+                )
+            )
+        }
+    )
     phenopacket = {
         "id": f"phenopacket-{subject_id}",
         "subject": subject,
         "phenotypicFeatures": features,
-        "diseases": [],
-        "interpretations": [],
+        "diseases": [
+            {"term": {"id": identifier, "label": label}}
+            for identifier, label in diseases
+        ],
+        "interpretations": interpretations,
         "metaData": {
             "created": "2026-01-01T00:00:00Z",
             "createdBy": "HNF1B-DB deterministic projection",
             "resources": [],
             "phenopacketSchemaVersion": "2.0",
+            "externalReferences": [{"id": reference} for reference in references],
         },
     }
     input_digest = observation_digest(ordered)

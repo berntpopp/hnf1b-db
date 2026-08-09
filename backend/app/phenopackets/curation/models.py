@@ -187,6 +187,13 @@ class PhenotypeFinding(CurationModel):
     modifiers: tuple[OntologyTerm, ...] = ()
 
 
+class EvidenceObservation(CurationModel):
+    """A report-specific evidence reference with an explicit ECO term."""
+
+    reference: str
+    evidence_code: OntologyTerm
+
+
 class PhenotypeAssessment(CurationModel):
     """One explicit source-question assessment."""
 
@@ -196,6 +203,8 @@ class PhenotypeAssessment(CurationModel):
     curation_status: CurationStatus
     assessment_status: AssessmentStatus | None
     findings: tuple[PhenotypeFinding, ...] = ()
+    evidence: tuple[EvidenceObservation, ...] = ()
+    onset: ObservedValue[dict[str, Any]] | None = None
     correction_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
