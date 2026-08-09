@@ -12,34 +12,26 @@ import json
 import logging
 import os
 from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from migration.data_sources.google_sheets import GoogleSheetsLoader
+from app.core.config import settings
+from migration.data_sources.google_sheets_adapter import GoogleSheetsSourceAdapter
+from migration.data_sources.source_adapter import SourceAdapter
 from migration.database.storage import PhenopacketStorage
 from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
-from migration.phenopackets.reviewer_mapper import ReviewerMapper
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-# Google Sheets configuration
-SPREADSHEET_ID = "1jE4-HmyAh1FUK6Ph7AuHt2UDVW2mTINTWXBtAWqhVSw"
-GID_CONFIG = {
-    "individuals": "0",
-    "phenotypes": "1119329208",
-    "modifiers": "1350764936",
-    "publications": "1670256162",
-    "reviewers": "1321366018",
-}
 
 
 class DirectSheetsToPhenopackets:
@@ -50,7 +42,10 @@ class DirectSheetsToPhenopackets:
     """
 
     def __init__(
-        self, target_db_url: str, ontology_mapper: Optional[OntologyMapper] = None
+        self,
+        target_db_url: str,
+        ontology_mapper: Optional[OntologyMapper] = None,
+        source_adapter: SourceAdapter | None = None,
     ):
         """Initialize migration with target database.
 
@@ -58,137 +53,49 @@ class DirectSheetsToPhenopackets:
             target_db_url: Database connection URL
             ontology_mapper: Optional ontology mapper (defaults to HPOMapper if not provided).
                             Allows dependency injection for testing and flexibility.
+            source_adapter: Complete source snapshot adapter; defaults to the
+                explicitly configured remote adapter.
         """
-        # Initialize components
-        self.sheets_loader = GoogleSheetsLoader(SPREADSHEET_ID, GID_CONFIG)
+        # The legacy raw-storage writer is intentionally disabled. New applies
+        # must use the staged atomic import service and state-service methods.
+        self.legacy_apply_is_disabled = True
+        self.source_adapter = source_adapter or GoogleSheetsSourceAdapter(
+            spreadsheet_id=settings.SOURCE_SPREADSHEET_ID,
+            gids={
+                "Individuals": settings.SOURCE_INDIVIDUALS_GID,
+                "Phenotypes": settings.SOURCE_PHENOTYPES_GID,
+                "Phenotype_modifier": settings.SOURCE_PHENOTYPE_MODIFIER_GID,
+                "Publications": settings.SOURCE_PUBLICATIONS_GID,
+            },
+        )
         self.storage = PhenopacketStorage(target_db_url)
         # Use provided mapper or default to HPOMapper (concrete implementation)
         self.ontology_mapper = ontology_mapper if ontology_mapper else HPOMapper()
         self.publication_mapper: Optional[PublicationMapper] = None
-        self.reviewer_mapper: Optional[ReviewerMapper] = None
         self.phenopacket_builder: Optional[PhenopacketBuilder] = None
 
         # Data storage
         self.individuals_df: Optional[pd.DataFrame] = None
         self.phenotypes_df: Optional[pd.DataFrame] = None
         self.publications_df: Optional[pd.DataFrame] = None
-        self.reviewers_df: Optional[pd.DataFrame] = None
 
     async def load_data(self) -> None:
-        """Load all data from Google Sheets."""
-        logger.info("Loading data from Google Sheets...")
-
-        # Load individuals sheet
-        self.individuals_df = self.sheets_loader.load_sheet("individuals")
-        if self.individuals_df is None:
-            raise ValueError("Failed to load individuals sheet")
+        """Load one complete, validated source snapshot through the adapter."""
+        snapshot = await self.source_adapter.load()
+        self.individuals_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Individuals"]))
 
         logger.info(f"Loaded {len(self.individuals_df)} rows from individuals sheet")
 
-        # Load phenotypes sheet for HPO mappings
-        self.phenotypes_df = self.sheets_loader.load_sheet("phenotypes")
-        if self.phenotypes_df is not None:
-            # Build HPO mappings from dataframe if ontology_mapper is HPOMapper
-            if isinstance(self.ontology_mapper, HPOMapper):
-                self.ontology_mapper.build_from_dataframe(self.phenotypes_df)
-        else:
-            logger.warning("Using default HPO mappings")
-
-        # Load publications (optional)
-        self.publications_df = self.sheets_loader.load_sheet("publications")
-        if self.publications_df is not None:
-            self.publication_mapper = PublicationMapper(self.publications_df)
-        else:
-            logger.warning("No publication data loaded")
-
-        # Load reviewers (for curation attribution)
-        self.reviewers_df = self.sheets_loader.load_sheet("reviewers")
-        if self.reviewers_df is not None:
-            self.reviewer_mapper = ReviewerMapper(self.reviewers_df)
-            logger.info(f"Loaded {len(self.reviewers_df)} reviewers")
-        else:
-            logger.warning(
-                "No reviewer data loaded - curation attribution will be skipped"
-            )
+        self.phenotypes_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Phenotypes"]))
+        if isinstance(self.ontology_mapper, HPOMapper):
+            self.ontology_mapper.build_from_dataframe(self.phenotypes_df)
+        self.publications_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Publications"]))
+        self.publication_mapper = PublicationMapper(self.publications_df)
 
         # Initialize phenopacket builder with injected dependencies (DIP)
         self.phenopacket_builder = PhenopacketBuilder(
-            self.ontology_mapper, self.publication_mapper, self.reviewer_mapper
+            self.ontology_mapper, self.publication_mapper
         )
-
-    async def import_reviewers_as_users(self) -> Dict[str, int]:
-        """Import reviewers from Google Sheets as user accounts.
-
-        Creates user accounts for all reviewers in the Reviewers sheet,
-        enabling proper curation attribution via the reviewed_by FK.
-
-        Returns:
-            Dictionary mapping reviewer email -> user ID
-
-        Raises:
-            ValueError: If reviewer data not loaded or database session unavailable
-        """
-        if self.reviewers_df is None or self.reviewer_mapper is None:
-            logger.warning("No reviewer data available - skipping user import")
-            return {}
-
-        logger.info("Importing reviewers as user accounts...")
-
-        # Import UserImportService here to avoid circular imports
-        from app.auth.user_import_service import UserImportService
-
-        # Prepare reviewer data for batch import
-        reviewer_data_list = []
-
-        for _, reviewer_row in self.reviewers_df.iterrows():
-            email = reviewer_row.get("email")
-            if not email or pd.isna(email):
-                logger.warning("Skipping reviewer with missing email")
-                continue
-
-            # Generate username from email
-            username = self.reviewer_mapper.generate_username(email)
-
-            # Get full name
-            full_name = self.reviewer_mapper.get_full_name(email)
-
-            # Get role
-            role = self.reviewer_mapper.get_role(email)
-
-            # Get ORCID
-            orcid = self.reviewer_mapper.get_orcid(email)
-
-            reviewer_data_list.append(
-                {
-                    "email": email,
-                    "username": username,
-                    "full_name": full_name,
-                    "role": role,
-                    "orcid": orcid,
-                }
-            )
-
-        # Import users using the storage's database session
-        email_to_user_id = {}
-
-        # Get database session from storage
-        async with self.storage.async_session() as db:
-            users = await UserImportService.create_or_update_curator_batch(
-                db=db, reviewer_data_list=reviewer_data_list
-            )
-
-            # Commit the transaction
-            await db.commit()
-
-            # Build email -> user ID mapping
-            for user in users:
-                email_to_user_id[user.email] = user.id
-
-        logger.info(
-            f"Successfully imported {len(email_to_user_id)} reviewers as user accounts"
-        )
-
-        return email_to_user_id
 
     def _is_valid_id(self, value: Any) -> bool:
         """Check if an ID value is valid (not NaN, empty, or whitespace)."""
@@ -300,16 +207,6 @@ class DirectSheetsToPhenopackets:
             # Load all data
             await self.load_data()
 
-            # Import reviewers as user accounts (before building phenopackets)
-            # This ensures users exist before we link phenopackets to them
-            if not dry_run:
-                email_to_user_id = await self.import_reviewers_as_users()
-                logger.info(
-                    f"Reviewer import complete: {len(email_to_user_id)} users created/updated"
-                )
-            else:
-                logger.info("Dry run mode - skipping reviewer import")
-
             # Build phenopackets
             phenopackets = self.build_phenopackets(limit=limit)
 
@@ -320,11 +217,9 @@ class DirectSheetsToPhenopackets:
                     json.dump(phenopackets, f, indent=2)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
-                # Store phenopackets in database with reviewer attribution and audit trail
-                await self.storage.store_phenopackets(
-                    phenopackets=phenopackets,
-                    reviewer_mapper=self.reviewer_mapper,
-                    create_audit=True,  # Create audit entries for initial import
+                raise RuntimeError(
+                    "legacy direct import is disabled; use the atomic observation "
+                    "import service after staging and validation"
                 )
 
             # Generate summary report

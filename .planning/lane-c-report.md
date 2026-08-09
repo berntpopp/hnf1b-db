@@ -17,8 +17,23 @@
 
 ## Remaining Lane C work
 
-- Replace the legacy direct Sheets orchestration and reviewer-account import.
-- Implement transactional staging/apply/reimport using the state-service
-  primitive and add failure/idempotence integration tests.
+- Wire the staged atomic import callback to the shared state-service bulk
+  primitive once its cross-lane contract is finalized; the old raw SQL apply
+  path is disabled.
+- Add database-backed failure/idempotence integration tests against that bulk
+  state-service contract.
 - Add the de-identified pinned fixture and backfill scripts only after the
   shared import/state contracts are ready.
+
+## Increment 2 — containment and reimport preflight
+
+- Removed embedded sheet authority and the reviewer-account creation path from
+  the legacy orchestrator. Remote IDs now come only from explicit settings and
+  the old raw storage writer fails closed.
+- Added transaction-owned atomic apply orchestration and reimport policy:
+  count mismatches abort before a write, injected application failures trigger
+  rollback, equal row HMACs are no-ops, and active drafts/corrections/resolution
+  dependencies block changed source rows.
+- Verification: `ruff check` passed and the targeted suite ran 35 tests
+  successfully. Pytest also emitted pre-existing temporary Docker-fixture
+  cleanup warnings; no source import test used network access.
