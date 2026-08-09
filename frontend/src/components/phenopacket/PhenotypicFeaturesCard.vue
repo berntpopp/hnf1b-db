@@ -1,5 +1,6 @@
 <!-- src/components/phenopacket/PhenotypicFeaturesCard.vue -->
 <template>
+  <!-- eslint-disable vue/html-closing-bracket-newline -->
   <v-card outlined>
     <v-card-title class="text-subtitle-1 py-2 bg-green-lighten-5">
       <v-icon left color="success" size="small"> mdi-medical-bag </v-icon>
@@ -52,6 +53,13 @@
               </span>
               <span v-if="feature.excluded" class="feature-excluded-label text-caption ml-1">
                 (excluded)
+              </span>
+              <span
+                v-for="(evidence, evidenceIndex) in feature.evidence || []"
+                :key="`chip-evidence-${evidenceIndex}`"
+                class="feature-evidence text-caption ml-1"
+              >
+                {{ evidence.reference?.id }}
               </span>
 
               <!-- Modifier indicators -->
@@ -106,6 +114,25 @@
             <div v-if="hasModifiers(feature)" class="tooltip-row">
               <v-icon size="x-small" class="mr-1">mdi-tag-multiple</v-icon>
               <span>{{ getModifiersText(feature) }}</span>
+            </div>
+
+            <div
+              v-for="(evidence, evidenceIndex) in feature.evidence || []"
+              :key="`evidence-${evidenceIndex}`"
+              class="tooltip-row"
+            >
+              <v-icon size="x-small" class="mr-1">mdi-book-open-variant</v-icon>
+              <span>
+                Evidence:
+                {{ evidence.evidenceCode?.label || evidence.evidenceCode?.id || 'Source' }}
+                <a
+                  v-if="evidence.reference?.id"
+                  :href="evidenceUrl(evidence.reference.id)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >{{ evidence.reference.id }}</a
+                >
+              </span>
             </div>
 
             <div class="tooltip-footer">
@@ -245,6 +272,14 @@ export default {
       if (hpoId && hpoId.startsWith('HP:')) {
         return `https://hpo.jax.org/app/browse/term/${hpoId}`;
       }
+      return '#';
+    },
+
+    evidenceUrl(referenceId) {
+      if (referenceId.startsWith('PMID:')) {
+        return `https://pubmed.ncbi.nlm.nih.gov/${referenceId.slice(5)}/`;
+      }
+      if (referenceId.startsWith('DOI:')) return `https://doi.org/${referenceId.slice(4)}`;
       return '#';
     },
 

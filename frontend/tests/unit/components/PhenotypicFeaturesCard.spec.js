@@ -107,4 +107,22 @@ describe('PhenotypicFeaturesCard — excluded features (Task 9)', () => {
       .find((c) => c.props('color') === 'error');
     expect(excludedChip).toBeTruthy();
   });
+
+  it('renders each projected feature evidence reference and code', () => {
+    const wrapper = mountCard([
+      {
+        type: { id: 'HP:0000107', label: 'Renal cyst' },
+        excluded: false,
+        evidence: [
+          {
+            evidenceCode: { id: 'ECO:0006013', label: 'traceable author statement' },
+            reference: { id: 'PMID:123' },
+          },
+        ],
+      },
+    ]);
+
+    expect(wrapper.text()).toContain('PMID:123');
+    expect(wrapper.vm.evidenceUrl('PMID:123')).toBe('https://pubmed.ncbi.nlm.nih.gov/123/');
+  });
 });

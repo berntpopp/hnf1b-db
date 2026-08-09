@@ -7,6 +7,7 @@ import PagePhenopacket from '@/views/PagePhenopacket.vue';
 vi.mock('@/api', () => ({
   getPhenopacket: vi.fn(),
   deletePhenopacket: vi.fn(),
+  exportPhenopacket: vi.fn(),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -29,7 +30,7 @@ vi.mock('vue-router', () => ({
   useRoute: vi.fn(),
 }));
 
-import { getPhenopacket } from '@/api';
+import { exportPhenopacket, getPhenopacket } from '@/api';
 import { useAuthStore } from '@/stores/authStore';
 import { usePhenopacketState } from '@/composables/usePhenopacketState';
 import { useRoute } from 'vue-router';
@@ -86,6 +87,7 @@ describe('PagePhenopacket', () => {
     });
 
     getPhenopacket.mockResolvedValue({ data: basePhenopacketResponse });
+    exportPhenopacket.mockResolvedValue({ data: basePhenopacketResponse.phenopacket });
 
     usePhenopacketState.mockReturnValue({
       revisions: { value: [] },
@@ -96,6 +98,28 @@ describe('PagePhenopacket', () => {
       loadHistory: loadHistoryMock,
       loadRevisions: vi.fn(),
     });
+  });
+
+  it('copies only the authoritative server-redacted export representation', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    exportPhenopacket.mockResolvedValue({
+      data: { id: 'PP-001', subject: { id: 'SUB-001' } },
+    });
+    const ctx = {
+      phenopacket: { id: 'PP-001', hnf1bCuration: { observationsById: { private: {} } } },
+    };
+
+    await PagePhenopacket.methods.copyToClipboard.call(ctx);
+
+    expect(exportPhenopacket).toHaveBeenCalledWith('PP-001');
+    expect(writeText).toHaveBeenCalledWith(
+      JSON.stringify({ id: 'PP-001', subject: { id: 'SUB-001' } }, null, 2)
+    );
+    expect(writeText.mock.calls[0][0]).not.toContain('hnf1bCuration');
   });
 
   it('shows the History tab for curator users', async () => {
