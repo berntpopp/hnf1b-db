@@ -346,32 +346,33 @@ def project_individual(
             and observation.classification.verdict is not None
             and observation.classification.verdict.source_status.value == "stated"
         }
-        if len(contributions) > 1 or len(verdicts) > 1:
+        resolved_values: dict[str, str | None] = {
+            "contribution": next(iter(contributions), None),
+            "acmg": next(iter(verdicts), None),
+        }
+        for field, values in (("contribution", contributions), ("acmg", verdicts)):
+            if len(values) <= 1:
+                continue
             conflict = _conflict(
-                f"variant:{descriptor_id}:classification",
+                f"variant:{descriptor_id}:{field}",
                 (
                     (
                         item.observation_id,
-                        {
-                            "contribution": (
-                                item.classification.contribution.value
-                                if item.classification
-                                and item.classification.contribution
-                                and (
-                                    item.classification.contribution.source_status.value
-                                    == "stated"
-                                )
-                                else None
-                            ),
-                            "verdict": (
-                                item.classification.verdict.value
-                                if item.classification
-                                and item.classification.verdict
-                                and item.classification.verdict.source_status.value
-                                == "stated"
-                                else None
-                            ),
-                        },
+                        (
+                            item.classification.contribution.value
+                            if field == "contribution"
+                            and item.classification
+                            and item.classification.contribution
+                            and item.classification.contribution.source_status.value
+                            == "stated"
+                            else item.classification.verdict.value
+                            if field == "acmg"
+                            and item.classification
+                            and item.classification.verdict
+                            and item.classification.verdict.source_status.value
+                            == "stated"
+                            else None
+                        ),
                     )
                     for item in variant_observations
                 ),
@@ -382,41 +383,31 @@ def project_individual(
             if resolution is None:
                 conflicts.append(conflict)
                 continue
-            if resolution.strategy is not ResolutionStrategy.SELECT_OBSERVATIONS:
-                raise ValueError(
-                    "classification conflicts require selected observations"
-                )
-            variant_observations = [
+            selected_classifications = [
                 item
                 for item in variant_observations
                 if item.observation_id in set(resolution.selected_observation_ids)
             ]
-            if not variant_observations:
-                raise ValueError("classification resolution selects no observations")
-            contributions = {
+            selected_values = {
                 item.classification.contribution.value
-                for item in variant_observations
-                if item.classification
+                if field == "contribution"
+                and item.classification
                 and item.classification.contribution
-                and item.classification.contribution.source_status.value == "stated"
+                else item.classification.verdict.value
+                if item.classification and item.classification.verdict
+                else None
+                for item in selected_classifications
             }
-            verdicts = {
-                item.classification.verdict.value
-                for item in variant_observations
-                if item.classification
-                and item.classification.verdict
-                and item.classification.verdict.source_status.value == "stated"
-            }
-            if len(contributions) > 1 or len(verdicts) > 1:
-                raise ValueError("classification resolution remains ambiguous")
-        observation = variant_observations[0]
-        contribution = (
-            observation.classification.contribution.value
-            if observation.classification
-            and observation.classification.contribution
-            and observation.classification.contribution.source_status.value == "stated"
-            else "UNKNOWN"
-        )
+            selected_values.discard(None)
+            if len(selected_values) != 1:
+                raise ValueError("classification resolution must select one value")
+            resolved_values[field] = next(iter(selected_values))
+        if any(
+            conflict.conflict_key.startswith(f"variant:{descriptor_id}:")
+            for conflict in conflicts
+        ):
+            continue
+        contribution = resolved_values["contribution"] or "UNKNOWN"
         if contribution == "UNKNOWN":
             contribution = "UNKNOWN_STATUS"
         if contribution not in {
@@ -427,13 +418,7 @@ def project_individual(
             "CAUSATIVE",
         }:
             raise ValueError("contribution must be a GA4GH interpretation status")
-        acmg = (
-            observation.classification.verdict.value
-            if observation.classification
-            and observation.classification.verdict
-            and observation.classification.verdict.source_status.value == "stated"
-            else None
-        )
+        acmg = resolved_values["acmg"]
         variant_interpretation: dict[str, Any] = {"variationDescriptor": descriptor}
         if acmg is not None:
             variant_interpretation["acmgPathogenicityClassification"] = acmg
