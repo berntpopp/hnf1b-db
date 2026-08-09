@@ -89,17 +89,17 @@ dev:  ## Install dependencies including dev and test groups
 	cd backend && uv sync --group dev --group test
 
 test:  ## Run tests
-	cd backend && uv run pytest
+	cd backend && uv run --group dev --group test pytest
 
 lint:  ## Run linting (ruff)
-	cd backend && uv run ruff check .
+	cd backend && uv run --group dev --group test ruff check .
 
 format:  ## Format code (ruff)
 	cd backend && uv run ruff format .
 	cd backend && uv run ruff check --fix .
 
 typecheck:  ## Run type checking (mypy)
-	cd backend && uv run mypy app/ migration/
+	cd backend && uv run --group dev --group test mypy app/ migration/
 
 server:  ## Start development server
 	cd backend && uv run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
