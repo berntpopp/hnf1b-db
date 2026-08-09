@@ -143,3 +143,62 @@ def test_vrs_descriptor_identity_must_be_exact_when_reports_are_grouped():
 
     with pytest.raises(ValueError, match="VRS descriptor id"):
         project_individual([first, malformed], [], algorithm_version="1.0")
+
+
+def test_resolving_acmg_leaves_independent_contribution_conflict_blocking():
+    """ACMG selection cannot silently choose the causal contribution status."""
+    from datetime import datetime, timezone
+
+    from app.phenopackets.curation.models import ProjectionResolution
+
+    def report(identifier: str, verdict: str, contribution: str) -> ReportObservation:
+        return ReportObservation(
+            observation_id=identifier,
+            origin="manual",
+            source=SourceManifestRef(
+                provider="manual", dataset_id="d", sheet="s", manifest_sha256="sha256:m"
+            ),
+            identifiers=SubjectObservation(
+                individual_id="317", source_subject_id="s", report_id=identifier
+            ),
+            variant=VariantObservation(
+                normalized={
+                    "id": "ga4gh:VA.same",
+                    "variation": {"text": {"definition": "same"}},
+                }
+            ),
+            classification=ClassificationObservation(
+                verdict=ObservedValue(
+                    raw=verdict, source_status="stated", value=verdict
+                ),
+                contribution=ObservedValue(
+                    raw=contribution, source_status="stated", value=contribution
+                ),
+            ),
+        )
+
+    reports = [
+        report("one", "PATHOGENIC", "CAUSATIVE"),
+        report("two", "BENIGN", "CANDIDATE"),
+    ]
+    initial = project_individual(reports, [], algorithm_version="1.0")
+    acmg = next(
+        conflict
+        for conflict in initial.blocking_conflicts
+        if conflict.conflict_key.endswith(":acmg")
+    )
+    resolution = ProjectionResolution(
+        resolution_id="resolve-acmg",
+        conflict_key=acmg.conflict_key,
+        candidate_set_digest=acmg.candidate_set_digest,
+        strategy="select_observations",
+        selected_observation_ids=("one",),
+        reason="source review",
+        resolved_by_user_id=1,
+        resolved_at=datetime.now(timezone.utc),
+    )
+    resolved = project_individual(reports, [resolution], algorithm_version="1.0")
+    assert resolved.phenopacket["interpretations"] == []
+    assert [item.conflict_key for item in resolved.blocking_conflicts] == [
+        "variant:ga4gh:VA.same:contribution"
+    ]
