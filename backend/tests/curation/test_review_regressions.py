@@ -206,7 +206,18 @@ def test_identity_helpers_are_unambiguous_and_models_enforce_uuid_and_hmac_forma
 
 def test_profile_rejects_duplicate_observation_identity_and_projector_rejects_duplicate_input():
     """Both JSON map and in-memory projection boundaries reject duplicate observations."""
-    report = _report()
+    report = _report().model_copy(
+        update={
+            "identifiers": SubjectObservation(
+                individual_id="317",
+                source_subject_id="source-317",
+                report_id="RPT-1",
+                individual_identifier=ObservedValue(
+                    raw="old", source_status="stated", value="old"
+                ),
+            )
+        }
+    )
     with pytest.raises(ValidationError):
         Hnf1bCurationProfile(
             source_subject_id="source-317",
@@ -278,12 +289,21 @@ def test_canonicalizing_twice_preserves_the_raw_correction_profile():
     """The persisted raw profile is not rewritten with correction postimages."""
     from app.phenopackets.curation.adapters import canonicalize_curation_document
 
-    report = _report()
+    report = _report().model_copy(
+        update={
+            "identifiers": SubjectObservation(
+                individual_id="317", source_subject_id="source-317", report_id="RPT-1",
+                individual_identifier=ObservedValue(raw="old", source_status="stated", value="old"),
+            )
+        }
+    )
     correction = CurationCorrection(
         correction_id="digest-correction",
-        json_pointer=f"/observationsById/{report.observation_id}/source/sheet",
-        preimage="Individuals",
-        postimage="Corrected individuals",
+        json_pointer=(
+            f"/observationsById/{report.observation_id}/identifiers/individualIdentifier/value"
+        ),
+        preimage="old",
+        postimage="corrected",
         source_manifest_sha256="sha256:one",
         reason="test",
         actor_id=1,
@@ -309,7 +329,7 @@ def test_canonicalizing_twice_preserves_the_raw_correction_profile():
     assert twice == once
     assert (
         once["hnf1bCuration"]["correctionsById"]["digest-correction"]["preimage"]
-        == "Individuals"
+        == "old"
     )
 
 
@@ -330,6 +350,25 @@ def test_malformed_scalar_correction_pointer_has_structured_error_code():
                         "preimage": "A",
                         "postimage": "B",
                     }
+                },
+            }
+        )
+    assert error.value.code == "invalid_correction"
+
+
+def test_correction_cannot_target_raw_source_or_provenance_fields():
+    """Corrections are limited to normalized value leaves, never source truth."""
+    from app.phenopackets.curation.adapters import (
+        CurationProjectionError,
+        _apply_active_corrections,
+    )
+
+    with pytest.raises(CurationProjectionError, match="immutable source") as error:
+        _apply_active_corrections(
+            {
+                "raw": "A",
+                "correctionsById": {
+                    "bad": {"jsonPointer": "/raw", "preimage": "A", "postimage": "B"}
                 },
             }
         )

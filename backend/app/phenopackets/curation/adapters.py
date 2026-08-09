@@ -55,6 +55,24 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
             raise CurationProjectionError(
                 "invalid_correction", "invalid correction pointer"
             )
+        if (
+            not pointer.startswith("/observationsById/")
+            or not pointer.endswith("/value")
+            or any(
+                forbidden in pointer
+                for forbidden in (
+                    "/raw",
+                    "/source/",
+                    "/correctionsById",
+                    "/resolutionsById",
+                    "/projection",
+                    "/audit",
+                )
+            )
+        ):
+            raise CurationProjectionError(
+                "invalid_correction", "correction pointer targets immutable source data"
+            )
         parts = [
             part.replace("~1", "/").replace("~0", "~")
             for part in pointer[1:].split("/")
