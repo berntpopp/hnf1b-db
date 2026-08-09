@@ -53,7 +53,11 @@ from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.database import async_session_maker  # noqa: E402
-from app.ontology.conformance import ONTOLOGY_PATHS, check_label  # noqa: E402
+from app.ontology.conformance import (  # noqa: E402
+    ONTOLOGY_PATHS,
+    check_label,
+    correction_counts,
+)
 
 _HPO_LOOKUP_PATH = "hpo_terms_lookup.hpo_id"
 
@@ -159,6 +163,9 @@ class Report:
 async def run_preflight() -> Report:
     """Build the full deterministic report by querying the corpus once."""
     report = Report()
+    report.header("Ontology correction ledger")
+    for kind, count in sorted(correction_counts().items()):
+        report.line(f"{kind}: {count}")
     async with async_session_maker() as session:
         records = await _fetch_working_and_head(session)
         hpo_lookup_rows = await _fetch_hpo_terms_lookup(session)

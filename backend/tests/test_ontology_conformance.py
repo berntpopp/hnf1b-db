@@ -129,8 +129,9 @@ def test_check_source_row_against_the_real_curation_vocabulary():
     Running every row of the committed `curation_vocabulary.csv` through
     `check_source_row` is what caught A1's rule-2-never-runs regression: 7
     of 8 "violations" it once reported were paraphrase mismatches on rows
-    whose name matched the canonical name/synonym exactly, and only
-    HP:0033133 (T1) is a genuine defect.
+    whose name matched the canonical name/synonym exactly. The correction
+    ledger remediates T1 in this shipped vocabulary; a separately supplied,
+    unapproved T1 row remains rejected by the focused tests above.
     """
     violations = []
     with _CURATION_VOCABULARY_CSV.open(newline="", encoding="utf-8") as fh:
@@ -152,14 +153,7 @@ def test_check_source_row_against_the_real_curation_vocabulary():
         if violation:
             violations.append((row["phenotype_id"], violation))
 
-    assert len(violations) == 1, (
-        f"expected exactly one violation (the T1 defect), got "
-        f"{len(violations)}: {violations}"
-    )
-
-    term_id, violation = violations[0]
-    assert term_id == "HP:0033133"
-    assert "HP:0033132" in violation, "must name the term the description describes"
+    assert violations == [], f"shipped vocabulary must be source-conformant: {violations}"
 
 
 def test_ontology_service_hardcoded_terms_are_conformant():
