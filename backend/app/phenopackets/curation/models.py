@@ -7,7 +7,14 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 
 
 def _camel_case(name: str) -> str:
@@ -583,8 +590,8 @@ class CurationCorrection(CurationModel):
 
     correction_id: str
     json_pointer: str
-    preimage: Any
-    postimage: Any
+    preimage: JsonValue
+    postimage: JsonValue
     source_manifest_sha256: str
     reason: str
     actor_id: int
