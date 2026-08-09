@@ -528,6 +528,27 @@ class SchemaValidator:
                     f"hnf1bCuration.{item['loc']}: {item['msg']}"
                     for item in error.errors()
                 )
+            else:
+                from app.phenopackets.curation.adapters import (
+                    CurationProjectionError,
+                    canonicalize_curation_document,
+                )
+
+                try:
+                    canonical = canonicalize_curation_document(phenopacket)
+                    if any(
+                        field in phenopacket
+                        and phenopacket.get(field) != canonical.get(field)
+                        for field in (
+                            "subject",
+                            "phenotypicFeatures",
+                            "diseases",
+                            "interpretations",
+                        )
+                    ):
+                        errors.append("hnf1bCuration: canonical projection mismatch")
+                except CurationProjectionError as error:
+                    errors.append(f"hnf1bCuration: {error}")
         for error in self.validator.iter_errors(phenopacket):
             error_path = ".".join(str(p) for p in error.path)
             errors.append(f"{error_path}: {error.message}")
