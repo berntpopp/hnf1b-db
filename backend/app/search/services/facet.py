@@ -56,27 +56,41 @@ class FacetService:
         # Visibility filter: curators see draft+published; anon sees published only.
         # ------------------------------------------------------------------
         if is_curator:
-            base_conditions = ["deleted_at IS NULL", "state != 'archived'"]
+            source = "phenopackets p"
+            content = "p.phenopacket"
+            base_conditions = ["p.deleted_at IS NULL", "p.state != 'archived'"]
         else:
+            # Never derive a public search facet from the mutable working
+            # copy: draft edits can intentionally diverge from the head.
+            source = (
+                "phenopackets p JOIN phenopacket_revisions r "
+                "ON r.id = p.head_published_revision_id"
+            )
+            content = "r.content_jsonb"
             base_conditions = [
-                "deleted_at IS NULL",
-                "state = 'published'",
-                "head_published_revision_id IS NOT NULL",
+                "p.deleted_at IS NULL",
+                "p.state = 'published'",
+                "p.head_published_revision_id IS NOT NULL",
             ]
         params: dict[str, Any] = {}
 
         if query:
             base_conditions.append(
-                "search_vector @@ plainto_tsquery('english', :query)"
+                (
+                    "p.search_vector @@ plainto_tsquery('english', :query)"
+                    if is_curator
+                    else "to_tsvector('english', r.content_jsonb::text) "
+                    "@@ plainto_tsquery('english', :query)"
+                )
             )
             params["query"] = query
 
         if hpo_id:
-            base_conditions.append("phenopacket->'phenotypicFeatures' @> :hpo_filter")
+            base_conditions.append(f"{content}->'phenotypicFeatures' @> :hpo_filter")
             params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
 
         if gene:
-            base_conditions.append("phenopacket->'interpretations' @> :gene_filter")
+            base_conditions.append(f"{content}->'interpretations' @> :gene_filter")
             params["gene_filter"] = json.dumps(
                 [
                     {
@@ -98,7 +112,7 @@ class FacetService:
         if pmid:
             pmid_val = pmid if pmid.startswith("PMID:") else f"PMID:{pmid}"
             base_conditions.append(
-                "phenopacket->'metaData'->'externalReferences' @> :pmid_filter"
+                f"{content}->'metaData'->'externalReferences' @> :pmid_filter"
             )
             params["pmid_filter"] = json.dumps([{"id": pmid_val}])
 
@@ -108,25 +122,23 @@ class FacetService:
         # by the sex facet so it still shows counts for all sexes.
         filtered_conditions = list(base_conditions)
         if sex:
-            filtered_conditions.append("subject_sex = :sex")
+            filtered_conditions.append(f"{content}->'subject'->>'sex' = :sex")
             params["sex"] = sex
         filtered_where = " AND ".join(filtered_conditions)
         sex_facet_where = " AND ".join(base_conditions)
 
         # For LATERAL-joined queries the table is aliased as ``p`` so we
         # need a qualified version of the sex predicate.
-        filtered_where_p = filtered_where.replace(
-            "subject_sex = :sex", "p.subject_sex = :sex"
-        )
+        filtered_where_p = filtered_where
 
         # Params to use for queries that don't reference :sex (sex facet).
         params_no_sex = {k: v for k, v in params.items() if k != "sex"}
 
         sex_sql = text(f"""
-            SELECT subject_sex AS value, COUNT(*) AS count
-            FROM phenopackets
+            SELECT {content}->'subject'->>'sex' AS value, COUNT(*) AS count
+            FROM {source}
             WHERE {sex_facet_where}
-            GROUP BY subject_sex
+            GROUP BY {content}->'subject'->>'sex'
             ORDER BY count DESC
         """)
         sex_result = await self.db.execute(sex_sql, params_no_sex)
@@ -136,7 +148,7 @@ class FacetService:
         ]
 
         # Has variants facet — now correctly applies the sex filter.
-        interp_path = "phenopacket->'interpretations'"
+        interp_path = f"{content}->'interpretations'"
         variants_sql = text(f"""
             SELECT
                 CASE
@@ -146,7 +158,7 @@ class FacetService:
                     THEN true ELSE false
                 END AS value,
                 COUNT(*) AS count
-            FROM phenopackets
+            FROM {source}
             WHERE {filtered_where}
             GROUP BY value
             ORDER BY value DESC
@@ -168,9 +180,9 @@ class FacetService:
         # Pathogenicity facet.
         pathogenicity_sql = text(f"""
             SELECT {acmg_path} AS value, COUNT(DISTINCT p.id) AS count
-            FROM phenopackets p
+            FROM {source}
             CROSS JOIN LATERAL jsonb_array_elements(
-                COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
+                COALESCE({content}->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
             WHERE {filtered_where_p}
@@ -192,9 +204,9 @@ class FacetService:
         )
         genes_sql = text(f"""
             SELECT {gene_symbol_path} AS value, COUNT(DISTINCT p.id) AS count
-            FROM phenopackets p
+            FROM {source}
             CROSS JOIN LATERAL jsonb_array_elements(
-                COALESCE(p.phenopacket->'interpretations', '[]'::jsonb)
+                COALESCE({content}->'interpretations', '[]'::jsonb)
             ) AS interp
             CROSS JOIN LATERAL jsonb_array_elements({gi_join}) AS gi
             WHERE {filtered_where_p}
@@ -215,9 +227,9 @@ class FacetService:
                 pf.value->'type'->>'id' AS hpo_id,
                 pf.value->'type'->>'label' AS label,
                 COUNT(DISTINCT p.id) AS count
-            FROM phenopackets p
+            FROM {source}
             CROSS JOIN LATERAL jsonb_array_elements(
-                COALESCE(p.phenopacket->'phenotypicFeatures', '[]'::jsonb)) AS pf
+                COALESCE({content}->'phenotypicFeatures', '[]'::jsonb)) AS pf
             WHERE {filtered_where_p}
             AND pf.value->'type'->>'id' IS NOT NULL
             GROUP BY hpo_id, label

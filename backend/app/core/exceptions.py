@@ -79,6 +79,26 @@ async def validation_exception_handler(
     """Convert pydantic validation errors into the standardized shape."""
     assert isinstance(exc, RequestValidationError)
     errors = exc.errors()
+    is_curation_write = "/curation" in request.url.path or (
+        "/phenopackets/" in request.url.path and "/reports/" in request.url.path
+    )
+    if is_curation_write:
+        return _build_error_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "code": "invalid_request",
+                "errors": [
+                    {
+                        "code": "invalid_request",
+                        "message": err["msg"],
+                        "path": [str(part) for part in err["loc"]],
+                    }
+                    for err in errors
+                ],
+            },
+            error_code="validation_error",
+            request=request,
+        )
     detail = "; ".join(
         f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in errors
     )

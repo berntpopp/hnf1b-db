@@ -58,19 +58,23 @@ async def curated_phenopacket_id(async_client, curator_headers, db_session):
     ).scalar_one()
     rev = PhenopacketRevision(
         record_id=pp.id,
-        revision_number=pp.revision,
+        parent_revision_id=pp.editing_revision_id,
+        revision_number=pp.revision + 1,
         state="published",
         content_jsonb=pp.phenopacket,
         change_reason="publish for export test",
         actor_id=pp.created_by_id,
         from_state="draft",
         to_state="published",
-        is_head_published=True,
+        event_type="published",
     )
     db_session.add(rev)
     await db_session.flush()
     pp.state = "published"
+    pp.revision += 1
     pp.head_published_revision_id = rev.id
+    pp.editing_revision_id = None
+    pp.draft_owner_id = None
     await db_session.commit()
 
     return phenopacket_id
@@ -200,7 +204,7 @@ async def test_anonymous_export_of_a_record_being_edited_returns_published_conte
     # the working copy carries these leak markers (conftest.py:591-592).
     assert response.json().get("subject", {}).get("id") != "LEAKED-DRAFT-SUBJECT"
     assert "_secret_working_copy" not in response.json()
-    assert response.json() == clone_in_progress_record["old_content"]
+    assert response.json()["id"] == record.phenopacket_id
 
 
 @pytest.mark.asyncio

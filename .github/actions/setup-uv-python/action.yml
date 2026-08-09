@@ -40,4 +40,4 @@ runs:
         for g in ${{ inputs.groups }}; do
           groups="$groups --group $g"
         done
-        uv sync $groups
+        uv sync --locked $groups

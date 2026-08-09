@@ -497,6 +497,13 @@ cd frontend && npx vitest run \
 
 ## Task 14: Implement the phenotype matrix, compound laterality, conflicts, and preview
 
+**Implementation decision (2026-08-09):** The verified current definition
+registry and backend contract tests classify `KidneyBiopsy` as `one_of`, while
+this older task text says “biopsy multi-finding”. Per the repository trust
+order, the implemented frontend follows the registry's `one_of` contract.
+Reconcile the clinical-design prose with the approved registry before changing
+that behavior; do not silently make the UI multi-select.
+
 **Create**
 
 - `frontend/src/components/curation/reports/PhenotypeAssessmentMatrix.vue`
@@ -512,7 +519,7 @@ cd frontend && npx vitest run \
 
 **TDD steps**
 
-1. Render 30 source questions, 36 possible definitions, CKD single-select, biopsy multi-finding, filtering, and separate workflow/clinical status controls.
+1. Render 30 source questions, 36 possible definitions, CKD single-select, the registry-defined KidneyBiopsy cardinality, filtering, and separate workflow/clinical status controls.
 2. Implement composite laterality and load/save full arrays; include all four source forms.
 3. Add scoped “mark remaining not reported” with confirmation and undo. Never bulk-mark N/A.
 4. Show conflict candidates side-by-side with report/publication/date/raw/normalized/evidence and require resolution rationale.

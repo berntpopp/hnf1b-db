@@ -20,7 +20,10 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.core.config import settings
-from migration.phenopackets.laterality import parse_laterality
+from migration.phenopackets.laterality import (
+    modifier_vocabulary_from_rows,
+    parse_laterality,
+)
 
 _MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]
@@ -64,11 +67,21 @@ def test_frozen_parser_matches_the_shared_implementation():
         "no",
         "not reported",
         "unknown",
-        "bilateral and unilateral",  # contradictory -> unparseable
-        "left",  # bare, no "unilateral" -> unparseable per parse_laterality
     ]
     for value in samples:
-        assert MIGRATION._parse_laterality(value) == parse_laterality(value), value
+        assert MIGRATION._parse_laterality(value) == parse_laterality(
+            value, vocabulary=_HISTORICAL_MODIFIER_VOCABULARY
+        ), value
+
+    # The historical migration treated malformed qualifiers as an unparseable
+    # no-op.  The active source importer must reject them so it cannot silently
+    # alter laterality semantics in a new pinned snapshot.
+    with pytest.raises(ValueError, match="invalid laterality qualifier"):
+        parse_laterality(
+            "bilateral and unilateral", vocabulary=_HISTORICAL_MODIFIER_VOCABULARY
+        )
+    with pytest.raises(ValueError, match="invalid laterality qualifier"):
+        parse_laterality("left", vocabulary=_HISTORICAL_MODIFIER_VOCABULARY)
 
 
 def _feature(hpo_id: str, label: str, modifiers: list[dict] | None = None) -> dict:
@@ -83,6 +96,14 @@ UNILATERAL = {"id": "HP:0012833", "label": "Unilateral"}
 LEFT = {"id": "HP:0012835", "label": "Left"}
 RIGHT = {"id": "HP:0012834", "label": "Right"}
 
+_HISTORICAL_MODIFIER_VOCABULARY = modifier_vocabulary_from_rows(
+    [
+        {"modifier": value["label"], "modifier_id": value["id"]}
+        for value in (BILATERAL, UNILATERAL, LEFT, RIGHT)
+    ],
+    version_sha256="0" * 64,
+)
+
 RENAL_CYST = "HP:0000107"
 HYPERECHOGENICITY = "HP:0033132"
 SOLITARY_KIDNEY = "HP:0000122"
@@ -95,6 +116,11 @@ def sync_conn():
     conn = engine.connect()
     trans = conn.begin()
     try:
+        # This migration predates the append-only revision triggers.  Running
+        # its frozen historical SQL against a database at current head must
+        # emulate that prior schema rule; the surrounding transaction rolls
+        # the temporary trigger state back after each test.
+        conn.execute(text("ALTER TABLE phenopacket_revisions DISABLE TRIGGER USER"))
         yield conn
     finally:
         trans.rollback()
@@ -126,9 +152,9 @@ def _seed_phenopacket(
         text(
             "INSERT INTO phenopacket_revisions "
             "(record_id, revision_number, state, content_jsonb, change_reason, "
-            " actor_id, to_state, is_head_published) "
+            " actor_id, to_state) "
             "VALUES (:record_id, 1, 'published', cast(:doc as jsonb), 'seed', "
-            " :actor_id, 'published', true) "
+            " :actor_id, 'published') "
             "RETURNING id"
         ),
         {"record_id": pp_id, "doc": json.dumps(doc), "actor_id": actor_id},

@@ -10,7 +10,7 @@ import pandas as pd
 
 from migration.phenopackets.age_parser import AgeParser
 from migration.phenopackets.evidence_builder import EvidenceBuilder
-from migration.phenopackets.laterality import parse_laterality
+from migration.phenopackets.laterality import ModifierVocabulary, parse_laterality
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 from migration.vrs.cnv_parser import CNVParser
@@ -29,15 +29,18 @@ class PhenotypeExtractor:
         self,
         ontology_mapper: OntologyMapper,
         publication_mapper: Optional[PublicationMapper] = None,
+        modifier_vocabulary: ModifierVocabulary | None = None,
     ):
         """Initialize phenotype extractor.
 
         Args:
             ontology_mapper: Ontology term mapper (abstraction, not concrete class)
             publication_mapper: Publication reference mapper
+            modifier_vocabulary: Versioned terms from ``Phenotype_modifier``.
         """
         self.ontology_mapper = ontology_mapper
         self.publication_mapper = publication_mapper
+        self.modifier_vocabulary = modifier_vocabulary
         self.age_parser = AgeParser()
         self.evidence_builder = EvidenceBuilder(publication_mapper)
 
@@ -166,7 +169,9 @@ class PhenotypeExtractor:
                     # therefore matched only "bilateral" and silently dropped 408
                     # laterality annotations, leaving the feature present but
                     # indistinguishable from "laterality not stated".
-                    modifiers = parse_laterality(value)
+                    modifiers = parse_laterality(
+                        value, vocabulary=self.modifier_vocabulary
+                    )
                     if modifiers:
                         phenotype["modifiers"] = modifiers
 

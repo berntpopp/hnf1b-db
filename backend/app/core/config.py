@@ -425,6 +425,21 @@ class Settings(BaseSettings):
     ALLOW_REDIS_FALLBACK: Optional[bool] = None
     PUBMED_API_KEY: Optional[str] = None
 
+    # Source import authority is explicit and disabled by default.  These are
+    # identifiers, never credentials; remote imports remain gated until the
+    # atomic import service is invoked by an operational command.
+    SOURCE_IMPORT_ENABLED: bool = False
+    SOURCE_SPREADSHEET_ID: str = ""
+    SOURCE_INDIVIDUALS_GID: str = ""
+    SOURCE_PHENOTYPES_GID: str = ""
+    SOURCE_PHENOTYPE_MODIFIER_GID: str = ""
+    SOURCE_PUBLICATIONS_GID: str = ""
+    SOURCE_IMPORT_FIXTURE_DIR: str = ""
+    SOURCE_IMPORT_MANIFEST_SHA256: str = ""
+    SOURCE_IMPORT_ROW_HMAC_KEY: str = ""
+    SOURCE_IMPORT_REVIEWER_MAPPING_JSON: str = ""
+    SOURCE_IMPORT_ACTOR_ID: int | None = None
+
     # SMTP credentials (for email delivery)
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

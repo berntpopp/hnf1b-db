@@ -59,6 +59,24 @@ try:
     from app.models.user import (
         User as User,
     )
+    from app.phenopackets.curation.import_models import (
+        PhenopacketSubjectBinding as PhenopacketSubjectBinding,
+    )
+    from app.phenopackets.curation.import_models import (
+        SourceCorrectionRegistry as SourceCorrectionRegistry,
+    )
+    from app.phenopackets.curation.import_models import (
+        SourceDataset as SourceDataset,
+    )
+    from app.phenopackets.curation.import_models import (
+        SourceImportRun as SourceImportRun,
+    )
+    from app.phenopackets.curation.import_models import (
+        SourceReportBinding as SourceReportBinding,
+    )
+    from app.phenopackets.curation.import_models import (
+        SourceSnapshot as SourceSnapshot,
+    )
 
     # Phenopackets package (6 models).
     from app.phenopackets.models import (

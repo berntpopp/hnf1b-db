@@ -1,4 +1,4 @@
-.PHONY: help install dev check-env test lint format typecheck server clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test dev-seed-users refresh-ontology-snapshot
+.PHONY: help install dev check-env test lint format typecheck server export-requirements check-requirements-drift clean db-migrate db-upgrade db-reset db-init db-test-init db-create-admin phenopackets-migrate phenopackets-migrate-test phenopackets-migrate-dry vep-enrich vep-enrich-dry vep-enrich-test variants-sync variants-sync-dry variants-sync-test dev-seed-users refresh-ontology-snapshot
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -12,7 +12,7 @@ dev:  ## Install dependencies including dev and test groups
 
 check-env:  ## Verify virtual environment integrity
 	@echo "🔍 Checking virtual environment..."
-	@uv run python -c "import sys; sys.exit(0 if '.venv' in sys.executable else 1)" || \
+	@uv run --group dev --group test python -c "import sys; sys.exit(0 if '.venv' in sys.executable else 1)" || \
 		(echo "❌ ERROR: Not using project venv!"; \
 		 echo "Current: $$(uv run which python)"; \
 		 echo "Expected: $$(pwd)/.venv/bin/python"; \
@@ -21,7 +21,7 @@ check-env:  ## Verify virtual environment integrity
 		 exit 1)
 	@echo "✅ Virtual environment OK"
 	@echo "🔍 Checking critical dependencies..."
-	@uv run python -c "import asyncpg, pytest" 2>/dev/null || \
+	@uv run --group dev --group test python -c "import asyncpg, pytest" 2>/dev/null || \
 		(echo "❌ ERROR: Missing dependencies!"; \
 		 echo "FIX: uv sync --group dev --group test"; \
 		 exit 1)
@@ -29,26 +29,41 @@ check-env:  ## Verify virtual environment integrity
 	@echo "✅ Environment is healthy"
 
 test: check-env  ## Run tests (excluding benchmarks and live-network guards)
-	uv run pytest -m "not benchmark and not network"
+	uv run --group dev --group test pytest -m "not benchmark and not network"
 
 test-network: check-env  ## Run live-network guard tests (hits external APIs, e.g. HPO ontology)
-	uv run pytest -m network -v
+	uv run --group dev --group test pytest -m network -v
 
 test-all: check-env  ## Run all tests including benchmarks
-	uv run pytest
+	uv run --group dev --group test pytest
 
 test-benchmark: check-env  ## Run only benchmark tests
-	uv run pytest -m benchmark -v -s
+	uv run --group dev --group test pytest -m benchmark -v -s
 
 lint: check-env  ## Run linting (ruff)
-	uv run ruff check .
+	uv run --group dev --group test ruff check .
 
 format:  ## Format code (ruff)
 	uv run ruff format .
 	uv run ruff check --fix .
 
 typecheck: check-env  ## Run type checking (mypy)
-	uv run mypy app/ migration/
+	uv run --group dev --group test mypy app/ migration/
+
+export-requirements:  ## Regenerate requirements exports from uv.lock
+	uv export --locked --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file requirements.txt
+	uv export --locked --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file requirements-dev.txt
+
+check-requirements-drift:  ## Verify requirements exports match uv.lock
+	@export_dir=$$(mktemp -d); trap 'rm -rf "$$export_dir"' EXIT; \
+	uv export --locked --quiet --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file "$$export_dir/requirements.txt"; \
+	uv export --locked --quiet --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file "$$export_dir/requirements-dev.txt"; \
+	sed '1,2d' requirements.txt > "$$export_dir/committed-requirements.txt"; \
+	sed '1,2d' "$$export_dir/requirements.txt" > "$$export_dir/generated-requirements.txt"; \
+	diff -u "$$export_dir/committed-requirements.txt" "$$export_dir/generated-requirements.txt"; \
+	sed '1,2d' requirements-dev.txt > "$$export_dir/committed-requirements-dev.txt"; \
+	sed '1,2d' "$$export_dir/requirements-dev.txt" > "$$export_dir/generated-requirements-dev.txt"; \
+	diff -u "$$export_dir/committed-requirements-dev.txt" "$$export_dir/generated-requirements-dev.txt"
 
 server:  ## Start development server
 	uv run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -80,7 +95,8 @@ db-test-init:  ## Create and migrate the dedicated test database (hnf1b_phenopac
 		docker exec hnf1b_db psql -U hnf1b_user -d postgres \
 		-c "CREATE DATABASE hnf1b_phenopackets_test OWNER hnf1b_user;"
 	@echo "🗄️  Applying migrations to test database..."
-	DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets_test \
+	ENVIRONMENT=development \
+		DATABASE_URL=postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets_test \
 		JWT_SECRET=test-secret-key-for-local-pytest \
 		ADMIN_PASSWORD=TestAdminPass!2026 \
 		uv run alembic upgrade head
