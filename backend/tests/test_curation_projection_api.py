@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from app.phenopackets.curation.adapters import (
+    _apply_active_corrections,
+    canonicalize_curation_document,
+)
 from app.phenopackets.models import Phenopacket
 from tests.test_curation_observation_api import _curation_document
 
@@ -146,6 +150,94 @@ async def test_resolution_appends_only_for_current_conflict_digest(
     assert response.json()["revision"] == 2
     assert len(response.json()["resolutions"]) == 1
     assert response.json()["projection"]["issues"] == []
+
+    superseding = await async_client.post(
+        "/api/v2/phenopackets/curation-projection-317/curation/resolutions",
+        json={
+            "conflictKey": issue["conflictKey"],
+            "candidateSetDigest": issue["candidateSetDigest"],
+            "strategy": "select_observations",
+            "selectedObservationIds": ["report-2"],
+            "reason": "Supersede the prior choice after curator review.",
+            "revision": 2,
+        },
+        headers=admin_headers,
+    )
+
+    assert superseding.status_code == 200, superseding.text
+    assert len(superseding.json()["resolutions"]) == 2
+    assert superseding.json()["projection"]["issues"] == []
+    assert superseding.json()["projection"]["phenopacket"]["phenotypicFeatures"][0][
+        "excluded"
+    ]
+
+
+async def test_preview_rejects_immutable_source_change_without_writing(
+    async_client, db_session, admin_headers
+):
+    """Preview follows report PATCH source-evidence validation without writing."""
+    record = await _insert_conflicting_record(db_session)
+    observation = deepcopy(
+        record.phenopacket["hnf1bCuration"]["observationsById"]["report-2"]
+    )
+    observation["phenotypes"][0]["rawValue"] = "no"
+
+    response = await async_client.post(
+        "/api/v2/phenopackets/curation-projection-317/curation/preview",
+        json={"observation": observation},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "immutable_source"
+    await db_session.refresh(record)
+    assert record.revision == 1
+
+
+def test_correction_order_uses_created_timestamp_not_uuid_order() -> None:
+    """Independent ledger keys are ordered by append time, then explicit ties."""
+    block = _curation_document()["hnf1bCuration"]
+    block["correctionsById"] = {
+        "z-first": {
+            "correctionId": "z-first",
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "born",
+            "postimage": "fetus",
+            "sourceManifestSha256": "sha256:fixture",
+            "reason": "First append.",
+            "actorId": 1,
+            "createdAt": "2026-08-09T00:00:00+00:00",
+        },
+        "a-second": {
+            "correctionId": "a-second",
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "fetus",
+            "postimage": "neonate",
+            "sourceManifestSha256": "sha256:fixture",
+            "reason": "Second append.",
+            "actorId": 1,
+            "createdAt": "2026-08-10T00:00:00+00:00",
+        },
+    }
+
+    corrected = _apply_active_corrections(block)
+    assert (
+        corrected["observationsById"]["report-1"]["case"]["cohort"]["value"]
+        == "neonate"
+    )
+
+
+def test_canonicalization_deep_merges_projected_fields() -> None:
+    """Derived GA4GH values update their keys without erasing legacy siblings."""
+    document = _curation_document()
+    document["subject"] = {"id": "old", "legacySubjectMarker": {"keep": True}}
+    document["metaData"] = {"created": "old", "legacyMetaMarker": "keep"}
+
+    canonical = canonicalize_curation_document(document)
+
+    assert canonical["subject"]["id"] == "317"
+    assert canonical["subject"]["legacySubjectMarker"] == {"keep": True}
+    assert canonical["metaData"]["legacyMetaMarker"] == "keep"
 
 
 async def test_correction_invalidates_resolution_digest_and_reopens_conflict(

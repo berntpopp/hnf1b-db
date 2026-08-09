@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from app.phenopackets.models import Phenopacket
 
 
@@ -101,6 +103,8 @@ async def test_correction_requires_a_precondition_and_server_stamps_audit_fields
         headers=admin_headers,
     )
     assert missing.status_code == 428
+    assert missing.json()["detail"]["code"] == "precondition_required"
+    assert missing.json()["detail"]["errors"]
 
     response = await async_client.post(
         "/api/v2/phenopackets/curation-api-317/curation/corrections",
@@ -311,3 +315,119 @@ async def test_curation_request_validation_uses_structured_422_errors(
     detail = response.json()["detail"]
     assert detail["code"] == "invalid_request"
     assert detail["errors"][0]["path"]
+
+
+async def test_resolution_resolved_value_is_typed_at_request_boundary(
+    async_client, db_session, admin_headers
+):
+    """Conflict-specific resolved values fail as structured request errors."""
+    await _insert_curation_record(db_session)
+
+    response = await async_client.post(
+        "/api/v2/phenopackets/curation-api-317/curation/resolutions",
+        json={
+            "conflictKey": "subject:sex",
+            "candidateSetDigest": "sha256:fixture",
+            "strategy": "resolved_value",
+            "resolvedValue": "not-a-ga4gh-sex",
+            "reason": "Exercise typed resolved values.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "invalid_request"
+
+
+async def test_correction_requires_explicit_predecessor_for_same_value(
+    async_client, db_session, admin_headers
+):
+    """Sequential corrections have a deterministic explicit predecessor chain."""
+    await _insert_curation_record(db_session)
+    url = "/api/v2/phenopackets/curation-api-317/curation/corrections"
+    first = await async_client.post(
+        url,
+        json={
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "born",
+            "postimage": "fetus",
+            "reason": "First correction.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+    assert first.status_code == 200, first.text
+    correction_id = first.json()["corrections"][0]["correctionId"]
+
+    missing_predecessor = await async_client.post(
+        url,
+        json={
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "fetus",
+            "postimage": "neonate",
+            "reason": "Missing explicit predecessor.",
+            "revision": 2,
+        },
+        headers=admin_headers,
+    )
+    assert missing_predecessor.status_code == 422
+    assert (
+        missing_predecessor.json()["detail"]["code"]
+        == "correction_predecessor_required"
+    )
+
+    chained = await async_client.post(
+        url,
+        json={
+            "jsonPointer": "/observationsById/report-1/case/cohort/value",
+            "preimage": "fetus",
+            "postimage": "neonate",
+            "reason": "Explicitly supersede the first correction.",
+            "supersedesCorrectionId": correction_id,
+            "revision": 2,
+        },
+        headers=admin_headers,
+    )
+    assert chained.status_code == 200, chained.text
+    assert len(chained.json()["corrections"]) == 2
+
+
+async def test_preview_runs_domain_and_parser_validation_without_writing(
+    async_client, db_session, admin_headers
+):
+    """Preview executes the report write validation pipeline without a revision."""
+    record = await _insert_curation_record(db_session)
+    report = record.phenopacket["hnf1bCuration"]["observationsById"]["report-1"]
+    report["classification"] = {
+        "system": {"raw": "ACMG", "sourceStatus": "stated", "value": "ACMG"}
+    }
+    report["identifiers"]["sex"] = {
+        "raw": "M",
+        "sourceStatus": "stated",
+        "value": "MALE",
+    }
+    await db_session.commit()
+    url = "/api/v2/phenopackets/curation-api-317/curation/preview"
+
+    invalid_domain = deepcopy(report)
+    invalid_domain["classification"]["system"]["value"] = "not-a-system"
+    domain_response = await async_client.post(
+        url, json={"observation": invalid_domain}, headers=admin_headers
+    )
+    assert domain_response.status_code == 422, domain_response.text
+    assert domain_response.json()["detail"]["code"] == "invalid_domain"
+
+    # A pre-existing malformed normalized value can occur in legacy source
+    # truth. Preview must still take the canonical parser path before it
+    # returns an otherwise plausible projection.
+    report["identifiers"]["sex"]["value"] = "not-a-ga4gh-sex"
+    await db_session.commit()
+    invalid_parser = deepcopy(report)
+    parser_response = await async_client.post(
+        url, json={"observation": invalid_parser}, headers=admin_headers
+    )
+    assert parser_response.status_code == 422, parser_response.text
+    assert parser_response.json()["detail"]["code"] == "parser_error"
+    await db_session.refresh(record)
+    assert record.revision == 1

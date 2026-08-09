@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.phenopackets.curation.models import (
     CurationCorrection,
@@ -47,6 +47,14 @@ class CurationError(CurationApiModel):
 
     code: str
     errors: tuple[CurationIssue, ...]
+
+
+class CurationErrorEnvelope(BaseModel):
+    """The application's runtime envelope around a curation error payload."""
+
+    detail: CurationError
+    error_code: str
+    request_id: str | None = None
 
 
 class ProjectionPayload(CurationApiModel):
@@ -112,28 +120,52 @@ class ResolutionAppendRequest(CurationApiModel):
     candidate_set_digest: str = Field(min_length=1)
     strategy: ResolutionStrategy
     selected_observation_ids: tuple[str, ...] = ()
-    resolved_value: str | tuple[dict[str, str], ...] | None = None
+    resolved_value: str | tuple[OntologyTerm, ...] | None = None
     reason: str = Field(min_length=1)
     revision: int | None = None
+
+    @model_validator(mode="after")
+    def validate_resolution_payload(self) -> "ResolutionAppendRequest":
+        """Reject strategy/value combinations before a ledger write is attempted."""
+        if self.strategy is ResolutionStrategy.SELECT_OBSERVATIONS:
+            if not self.selected_observation_ids or self.resolved_value is not None:
+                raise ValueError(
+                    "select_observations requires selectedObservationIds only"
+                )
+            return self
+        if self.selected_observation_ids or self.resolved_value is None:
+            raise ValueError("resolved_value requires resolvedValue only")
+        if self.conflict_key == "subject:sex":
+            if not isinstance(self.resolved_value, str) or self.resolved_value not in {
+                "MALE",
+                "FEMALE",
+                "OTHER_SEX",
+                "UNKNOWN_SEX",
+            }:
+                raise ValueError("subject sex resolvedValue must be a GA4GH sex enum")
+        elif self.conflict_key.startswith("phenotype:"):
+            if not isinstance(self.resolved_value, str) or self.resolved_value not in {
+                "PRESENT",
+                "EXCLUDED",
+            }:
+                raise ValueError(
+                    "phenotype polarity resolvedValue must be PRESENT or EXCLUDED"
+                )
+        elif isinstance(self.resolved_value, str):
+            raise ValueError("resolvedValue must be ontology terms for this conflict")
+        return self
 
     def as_resolution_payload(
         self, *, resolution_id: str, actor_id: int, resolved_at: Any
     ) -> ProjectionResolution:
         """Build the stored resolution with server-owned audit fields."""
-        resolved_value: str | tuple[OntologyTerm, ...] | None
-        if isinstance(self.resolved_value, tuple):
-            resolved_value = tuple(
-                OntologyTerm.model_validate(item) for item in self.resolved_value
-            )
-        else:
-            resolved_value = self.resolved_value
         return ProjectionResolution(
             resolution_id=resolution_id,
             conflict_key=self.conflict_key,
             candidate_set_digest=self.candidate_set_digest,
             strategy=self.strategy,
             selected_observation_ids=self.selected_observation_ids,
-            resolved_value=resolved_value,
+            resolved_value=self.resolved_value,
             reason=self.reason,
             resolved_by_user_id=actor_id,
             resolved_at=resolved_at,

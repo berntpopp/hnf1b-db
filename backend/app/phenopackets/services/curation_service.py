@@ -204,6 +204,27 @@ class CurationService:
                 ),
             ) from exc
 
+    @staticmethod
+    def _baseline_projection(profile: Hnf1bCurationProfile) -> Any:
+        """Project corrected evidence without resolutions for current candidates."""
+        try:
+            observations, _ = _active_projection_inputs(profile)
+            return project_individual(
+                observations,
+                [],
+                algorithm_version=profile.projection.algorithm_version,
+            )
+        except (CurationProjectionError, TypeError, ValueError) as exc:
+            raise CurationServiceError(
+                "projection_error",
+                str(exc),
+                CurationIssue(
+                    code="projection_error",
+                    message=str(exc),
+                    path=("projection",),
+                ),
+            ) from exc
+
     @classmethod
     def _issues(cls, profile: Hnf1bCurationProfile) -> tuple[CurationIssue, ...]:
         result = cls._projection(profile)
@@ -358,7 +379,7 @@ class CurationService:
             },
         }
 
-    def preview(
+    async def preview(
         self, record: Phenopacket, request: ProjectionPreviewRequest
     ) -> dict[str, Any]:
         """Return the projection for an unsaved one-observation replacement."""
@@ -367,11 +388,24 @@ class CurationService:
             raise CurationServiceError(
                 "observation_not_found", "observation is not part of this phenopacket"
             )
+        existing = profile.observations_by_id[request.observation.observation_id]
+        immutable_issues = self._source_immutability_issues(
+            existing.model_dump(by_alias=True, mode="json"),
+            request.observation.model_dump(by_alias=True, mode="json"),
+        )
+        if immutable_issues:
+            raise CurationServiceError(
+                "immutable_source",
+                "source evidence must be changed through append-only correction APIs",
+                *immutable_issues,
+            )
         profiles = profile.model_dump(by_alias=True, mode="json")
         profiles["observationsById"][request.observation.observation_id] = (
             request.observation.model_dump(by_alias=True, mode="json")
         )
         candidate = self._candidate_profile(profiles)
+        document = self._document_with_profile(record.phenopacket, candidate)
+        await self._validate_domain(document)
         result = self._projection(candidate)
         return {
             "revision": record.revision,
@@ -442,6 +476,33 @@ class CurationService:
             raise CurationServiceError(
                 "observation_not_found", "correction references an unknown observation"
             )
+        same_pointer = {
+            correction_id: correction
+            for correction_id, correction in profile.corrections_by_id.items()
+            if correction.json_pointer == request.json_pointer
+        }
+        if same_pointer and request.supersedes_correction_id is None:
+            raise CurationServiceError(
+                "correction_predecessor_required",
+                "a correction must explicitly supersede the prior append "
+                "for this value",
+            )
+        if request.supersedes_correction_id is not None:
+            predecessor = same_pointer.get(request.supersedes_correction_id)
+            if predecessor is None:
+                raise CurationServiceError(
+                    "invalid_correction",
+                    "supersedesCorrectionId must name a correction for this value",
+                )
+            if any(
+                correction.supersedes_correction_id == request.supersedes_correction_id
+                for correction in same_pointer.values()
+            ):
+                raise CurationServiceError(
+                    "correction_predecessor_required",
+                    "supersedesCorrectionId must name the current correction-chain "
+                    "head",
+                )
         applied = _apply_active_corrections(
             profile.model_dump(by_alias=True, mode="json")
         )
@@ -487,7 +548,7 @@ class CurationService:
         conflict = next(
             (
                 item
-                for item in self._projection(profile).blocking_conflicts
+                for item in self._baseline_projection(profile).blocking_conflicts
                 if item.conflict_key == request.conflict_key
             ),
             None,

@@ -29,9 +29,26 @@
   object remains forward-compatible/opaque because it includes the model's
   derived source-status field verbatim.
 
+## Re-review follow-up
+
+- A resolution may now supersede an already active decision for the same
+  current conflict/digest. The ledger preserves both entries and projection
+  deterministically selects the newest append.
+- `resolvedValue` is parsed as typed ontology terms or constrained to the
+  conflict's permitted string values at the request boundary. Invalid payloads
+  use the structured 422 envelope.
+- Preview now executes the same immutability, canonicalization/parser, and
+  database-domain checks as report PATCH without persisting a revision.
+- Canonical GA4GH fields are deep-merged into stored content, preserving
+  legacy nested siblings. Correction ordering is deterministic by append
+  timestamp (then ID) and subsequent corrections require an explicit current
+  predecessor.
+- OpenAPI now documents the actual runtime curation error envelope for 404,
+  409, 422, and 428 responses.
+
 ## Verification
 
-- Backend: 38 focused tests passed (`test_domain_validator`, curation API,
+- Backend: 44 focused tests passed (`test_domain_validator`, curation API,
   OpenAPI contract, and projection tests); Ruff passed.
 - MCP: `make check` passed (445 tests, 11 deselected). Contract artifacts were
   regenerated from the refreshed OpenAPI snapshot.

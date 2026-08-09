@@ -700,6 +700,58 @@
         "title": "CurationCorrection",
         "type": "object"
       },
+      "CurationError": {
+        "additionalProperties": false,
+        "description": "Stable structured error envelope returned by curation routes.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/CurationIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "errors"
+        ],
+        "title": "CurationError",
+        "type": "object"
+      },
+      "CurationErrorEnvelope": {
+        "description": "The application's runtime envelope around a curation error payload.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/CurationError"
+          },
+          "error_code": {
+            "title": "Error Code",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "detail",
+          "error_code"
+        ],
+        "title": "CurationErrorEnvelope",
+        "type": "object"
+      },
       "CurationIssue": {
         "additionalProperties": false,
         "description": "A machine-addressable validation or projection issue.",
@@ -3605,10 +3657,7 @@
               },
               {
                 "items": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object"
+                  "$ref": "#/components/schemas/OntologyTerm"
                 },
                 "type": "array"
               },
@@ -9693,15 +9742,45 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "security": [
@@ -9767,15 +9846,45 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "security": [
@@ -9825,15 +9934,45 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "security": [
@@ -9899,15 +10038,45 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "security": [
@@ -10051,15 +10220,45 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "security": [

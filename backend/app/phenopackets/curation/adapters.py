@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from google.protobuf.json_format import ParseDict  # type: ignore[import-untyped]
@@ -43,7 +44,24 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
             raise CurationProjectionError(
                 "invalid_correction", "correction chain cycle"
             )
-        for key in sorted(ready):
+
+        def append_order(key: str) -> tuple[datetime, str]:
+            item = remaining[key]
+            if not isinstance(item, dict) or not isinstance(item.get("createdAt"), str):
+                raise CurationProjectionError(
+                    "invalid_correction", "correction requires an append timestamp"
+                )
+            try:
+                timestamp = datetime.fromisoformat(
+                    item["createdAt"].replace("Z", "+00:00")
+                )
+            except ValueError as error:
+                raise CurationProjectionError(
+                    "invalid_correction", "correction has an invalid append timestamp"
+                ) from error
+            return timestamp, key
+
+        for key in sorted(ready, key=append_order):
             ordered_ids.append(key)
             remaining.pop(key)
     for correction_id in ordered_ids:
@@ -96,6 +114,16 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
         else:
             target[leaf] = correction.get("postimage")
     return corrected
+
+
+def _deep_merge(existing: Any, derived: Any) -> Any:
+    """Overlay canonical GA4GH fields while retaining legacy nested siblings."""
+    if not isinstance(existing, dict) or not isinstance(derived, dict):
+        return deepcopy(derived)
+    merged = deepcopy(existing)
+    for key, value in derived.items():
+        merged[key] = _deep_merge(merged.get(key), value)
+    return merged
 
 
 def _profile_validation_input(block: dict[str, Any]) -> dict[str, Any]:
@@ -204,7 +232,7 @@ def canonicalize_curation_document(
         "interpretations",
         "metaData",
     ):
-        canonical[field] = result.phenopacket[field]
+        canonical[field] = _deep_merge(document.get(field), result.phenopacket[field])
     canonical["id"] = document.get("id", result.phenopacket["id"])
     # Corrections are an overlay for projection. Persist their original raw
     # source profile so re-canonicalizing is idempotent rather than applying a

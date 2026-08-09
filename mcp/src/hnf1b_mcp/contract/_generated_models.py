@@ -1313,6 +1313,20 @@ class CurationCorrection(BaseModel):
     ] = None
 
 
+class CurationError(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Annotated[str, Field(title="Code")]
+    errors: Annotated[list[CurationIssue], Field(title="Errors")]
+
+
+class CurationErrorEnvelope(BaseModel):
+    detail: CurationError
+    error_code: Annotated[str, Field(title="Error Code")]
+    request_id: Annotated[Optional[str], Field(title="Request Id")] = None
+
+
 class CurationPreviewResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1480,7 +1494,7 @@ class ResolutionAppendRequest(BaseModel):
     conflictKey: Annotated[str, Field(min_length=1, title="Conflictkey")]
     reason: Annotated[str, Field(min_length=1, title="Reason")]
     resolvedValue: Annotated[
-        Optional[Union[str, list[dict[str, str]]]], Field(title="Resolvedvalue")
+        Optional[Union[str, list[OntologyTerm]]], Field(title="Resolvedvalue")
     ] = None
     revision: Annotated[Optional[int], Field(title="Revision")] = None
     selectedObservationIds: Annotated[

@@ -13,6 +13,8 @@ from app.models.user import User
 from app.phenopackets.curation.api_models import (
     CorrectionAppendRequest,
     CurationError,
+    CurationErrorEnvelope,
+    CurationIssue,
     CurationLedgerResponse,
     CurationPreviewResponse,
     ProjectionPreviewRequest,
@@ -28,6 +30,18 @@ from app.phenopackets.services.state_service import PhenopacketStateService
 
 router = APIRouter(tags=["phenopackets-curation"])
 
+_CURATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    status: {"model": CurationErrorEnvelope} for status in (404, 409, 422, 428)
+}
+
+
+def _curation_error_detail(code: str, message: str) -> dict[str, Any]:
+    """Produce the inner structured payload used by every curation error."""
+    return CurationError(
+        code=code,
+        errors=(CurationIssue(code=code, message=message),),
+    ).model_dump(mode="json")
+
 
 def _expected_revision(revision: int | None, if_match: str | None) -> int:
     """Read a required revision from body or strong ETag precondition."""
@@ -36,27 +50,28 @@ def _expected_revision(revision: int | None, if_match: str | None) -> int:
     if if_match is None:
         raise HTTPException(
             status_code=428,
-            detail={
-                "code": "precondition_required",
-                "message": "revision or If-Match is required",
-            },
+            detail=_curation_error_detail(
+                "precondition_required", "revision or If-Match is required"
+            ),
         )
     try:
         return int(if_match.strip().strip('"'))
     except ValueError as exc:
         raise HTTPException(
             status_code=428,
-            detail={
-                "code": "precondition_required",
-                "message": "If-Match must contain a revision",
-            },
+            detail=_curation_error_detail(
+                "precondition_required", "If-Match must contain a revision"
+            ),
         ) from exc
 
 
 async def _record_or_404(db: AsyncSession, phenopacket_id: str):
     record = await PhenopacketRepository(db).get_by_id(phenopacket_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="Phenopacket not found")
+        raise HTTPException(
+            status_code=404,
+            detail=_curation_error_detail("not_found", "Phenopacket not found"),
+        )
     return record
 
 
@@ -73,31 +88,38 @@ def _raise_service_error(error: CurationServiceError) -> NoReturn:
 
 def _map_state_error(error: Exception) -> NoReturn:
     if isinstance(error, PhenopacketStateService.RecordNotFound):
-        raise HTTPException(status_code=404, detail="Phenopacket not found") from error
+        raise HTTPException(
+            status_code=404,
+            detail=_curation_error_detail("not_found", "Phenopacket not found"),
+        ) from error
     if isinstance(error, PhenopacketStateService.RevisionMismatch):
         raise HTTPException(
             status_code=409,
-            detail={"code": "revision_mismatch", "message": str(error)},
+            detail=_curation_error_detail("revision_mismatch", str(error)),
         ) from error
     if isinstance(error, PhenopacketStateService.EditInProgress):
         raise HTTPException(
             status_code=409,
-            detail={"code": "edit_in_progress", "message": str(error)},
+            detail=_curation_error_detail("edit_in_progress", str(error)),
         ) from error
     if isinstance(error, PhenopacketStateService.ForbiddenNotOwner):
         raise HTTPException(
             status_code=403,
-            detail={"code": "forbidden_not_owner", "message": str(error)},
+            detail=_curation_error_detail("forbidden_not_owner", str(error)),
         ) from error
     if isinstance(error, PhenopacketStateService.InvalidTransition):
         raise HTTPException(
             status_code=409,
-            detail={"code": "invalid_transition", "message": str(error)},
+            detail=_curation_error_detail("invalid_transition", str(error)),
         ) from error
     raise error
 
 
-@router.get("/{phenopacket_id}/curation", response_model=CurationLedgerResponse)
+@router.get(
+    "/{phenopacket_id}/curation",
+    response_model=CurationLedgerResponse,
+    responses=_CURATION_ERROR_RESPONSES,
+)
 async def get_curation(
     phenopacket_id: str,
     response: Response,
@@ -115,7 +137,9 @@ async def get_curation(
 
 
 @router.post(
-    "/{phenopacket_id}/curation/preview", response_model=CurationPreviewResponse
+    "/{phenopacket_id}/curation/preview",
+    response_model=CurationPreviewResponse,
+    responses=_CURATION_ERROR_RESPONSES,
 )
 async def preview_curation(
     phenopacket_id: str,
@@ -126,7 +150,7 @@ async def preview_curation(
     """Validate and project an unsaved observation replacement without writing."""
     record = await _record_or_404(db, phenopacket_id)
     try:
-        return CurationService(db).preview(record, body)
+        return await CurationService(db).preview(record, body)
     except CurationServiceError as error:
         _raise_service_error(error)
 
@@ -144,6 +168,7 @@ async def _write_response(
 @router.patch(
     "/{phenopacket_id}/reports/{observation_id}",
     response_model=CurationLedgerResponse,
+    responses=_CURATION_ERROR_RESPONSES,
 )
 async def patch_report(
     phenopacket_id: str,
@@ -156,7 +181,12 @@ async def patch_report(
 ) -> dict[str, Any]:
     """Save exactly one observation through the append-only state service."""
     if body.observation.observation_id != observation_id:
-        raise HTTPException(status_code=422, detail={"code": "observation_id_mismatch"})
+        raise HTTPException(
+            status_code=422,
+            detail=_curation_error_detail(
+                "observation_id_mismatch", "observationId must match the route path"
+            ),
+        )
     record = await _record_or_404(db, phenopacket_id)
     try:
         updated = await CurationService(db).replace_report(
@@ -178,6 +208,7 @@ async def patch_report(
 @router.post(
     "/{phenopacket_id}/curation/corrections",
     response_model=CurationLedgerResponse,
+    responses=_CURATION_ERROR_RESPONSES,
 )
 async def append_correction(
     phenopacket_id: str,
@@ -209,6 +240,7 @@ async def append_correction(
 @router.post(
     "/{phenopacket_id}/curation/resolutions",
     response_model=CurationLedgerResponse,
+    responses=_CURATION_ERROR_RESPONSES,
 )
 async def append_resolution(
     phenopacket_id: str,
