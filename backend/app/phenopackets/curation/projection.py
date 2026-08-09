@@ -293,15 +293,6 @@ def project_individual(
                 raise ValueError("modifier resolvedValue must be a modifier list")
         features.append(feature)
 
-    frozen_conflicts = tuple(sorted(conflicts, key=lambda item: item.conflict_key))
-    _validate_resolutions(
-        frozen_conflicts,
-        [
-            item
-            for item in resolutions
-            if item.conflict_key not in applied_resolution_keys
-        ],
-    )
     diseases_by_term: dict[tuple[str, str], Any] = {}
     for observation in ordered:
         for disease in observation.diseases:
@@ -342,7 +333,38 @@ def project_individual(
             and observation.classification.verdict.source_status.value == "stated"
         }
         if len(contributions) > 1 or len(verdicts) > 1:
-            raise ValueError("conflicting classifications for one VRS descriptor")
+            conflicts.append(
+                _conflict(
+                    f"variant:{descriptor_id}:classification",
+                    (
+                        (
+                            item.observation_id,
+                            {
+                                "contribution": (
+                                    item.classification.contribution.value
+                                    if item.classification
+                                    and item.classification.contribution
+                                    and (
+                                        item.classification.contribution.source_status.value
+                                        == "stated"
+                                    )
+                                    else None
+                                ),
+                                "verdict": (
+                                    item.classification.verdict.value
+                                    if item.classification
+                                    and item.classification.verdict
+                                    and item.classification.verdict.source_status.value
+                                    == "stated"
+                                    else None
+                                ),
+                            },
+                        )
+                        for item in variant_observations
+                    ),
+                )
+            )
+            continue
         observation = variant_observations[0]
         contribution = (
             observation.classification.contribution.value
@@ -435,6 +457,7 @@ def project_individual(
         (
             observation.ages.reported.value
             for observation in ordered
+            if observation.source.reported_age_is_encounter_age
             if observation.ages is not None
             and observation.ages.reported is not None
             and observation.ages.reported.source_status.value == "stated"
@@ -447,6 +470,15 @@ def project_individual(
     if projected_reported_age is not None:
         phenopacket["subject"]["timeAtLastEncounter"] = projected_reported_age
     input_digest = observation_digest(ordered)
+    frozen_conflicts = tuple(sorted(conflicts, key=lambda item: item.conflict_key))
+    _validate_resolutions(
+        frozen_conflicts,
+        [
+            item
+            for item in resolutions
+            if item.conflict_key not in applied_resolution_keys
+        ],
+    )
     output_digest = sha256_digest(
         {"algorithmVersion": algorithm_version, "phenopacket": phenopacket}
     )

@@ -100,6 +100,7 @@ class SourceManifestRef(CurationModel):
     manifest_sha256: str
     import_run_id: str | None = None
     imported_at: datetime | None = None
+    reported_age_is_encounter_age: bool = False
 
     @field_validator("row_hmac_sha256")
     @classmethod
