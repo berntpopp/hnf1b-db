@@ -74,9 +74,10 @@ def upgrade() -> None:
                 FROM phenopackets packet
                 LEFT JOIN phenopacket_revisions head
                   ON head.id = packet.head_published_revision_id
-                WHERE packet.state = 'published'
-                  AND (head.id IS NULL OR head.record_id <> packet.id
-                       OR head.state <> 'published')
+                WHERE (packet.state = 'published' AND head.id IS NULL)
+                   OR (packet.head_published_revision_id IS NOT NULL
+                       AND (head.id IS NULL OR head.record_id <> packet.id
+                            OR head.state <> 'published'))
             ) THEN
                 RAISE EXCEPTION 'published phenopacket has invalid head pointer';
             END IF;
@@ -87,6 +88,7 @@ def upgrade() -> None:
                   ON editing.id = packet.editing_revision_id
                 WHERE editing.record_id <> packet.id
                    OR editing.state NOT IN ('draft', 'in_review', 'changes_requested', 'approved')
+                   OR packet.state = 'archived'
             ) THEN
                 RAISE EXCEPTION 'phenopacket has invalid editing revision pointer';
             END IF;

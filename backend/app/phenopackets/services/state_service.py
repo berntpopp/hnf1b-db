@@ -10,6 +10,8 @@ Spec reference:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import Any, cast
 from uuid import UUID
@@ -110,6 +112,9 @@ class PhenopacketStateService:
             latest = await self._latest_revision_row(pp.id)
             parent = latest.id if latest is not None else None
         pp.revision += 1
+        curation = content.get("hnf1bCuration", {})
+        canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
+        content_hash = hashlib.sha256(canonical.encode()).hexdigest()
         revision = PhenopacketRevision(
             record_id=pp.id,
             parent_revision_id=parent,
@@ -122,6 +127,12 @@ class PhenopacketStateService:
             from_state=from_state,
             to_state=to_state,
             event_type=event_type,
+            profile_schema_version=str(curation.get("schemaVersion", "legacy")),
+            projection_version=str(
+                curation.get("projection", {}).get("algorithmVersion", "legacy")
+            ),
+            ledger_hash=content_hash,
+            projection_hash=content_hash,
         )
         self.db.add(revision)
         await self.db.flush()

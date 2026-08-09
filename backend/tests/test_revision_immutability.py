@@ -44,6 +44,9 @@ async def test_draft_save_appends_without_mutating_prior_revision(
         revision for revision in revisions if revision.id == first_draft_id
     )
     assert first_draft.content_jsonb["stage"] == "first"
+    assert first_draft.ledger_hash
+    assert first_draft.projection_hash
+    assert first_draft.profile_schema_version == "legacy"
     assert record.editing_revision_id != first_draft_id
     assert [revision.revision_number for revision in revisions] == [1, 2, 3]
 

@@ -13,8 +13,8 @@ from phenopackets import Phenopacket as Ga4ghPhenopacket  # type: ignore[import-
 
 from app.phenopackets.privacy import (
     PublicRepresentationError,
-    redact_public_document,
     sanitize_profile_document,
+    strip_restricted_for_ga4gh,
 )
 
 Representation = Literal["ga4gh", "profile"]
@@ -36,7 +36,7 @@ def normalized_representation(mode: str) -> Representation:
 def ga4gh_representation(document: dict[str, Any]) -> dict[str, Any]:
     """Redact local data and prove the result parses as Phenopackets v2."""
     try:
-        public = redact_public_document(document)
+        public = strip_restricted_for_ga4gh(document)
         message = ParseDict(public, Ga4ghPhenopacket(), ignore_unknown_fields=False)
     except (ParseError, PublicRepresentationError, TypeError, ValueError) as exc:
         raise RepresentationValidationError(str(exc)) from exc

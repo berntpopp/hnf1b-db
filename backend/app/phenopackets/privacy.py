@@ -181,6 +181,23 @@ def redact_public_document(document: dict[str, Any]) -> dict[str, Any]:
     return _redact(document, top_level=True)
 
 
+def strip_restricted_for_ga4gh(value: Any) -> Any:
+    """Remove only local restricted material, preserving parser-valid GA4GH keys."""
+    if isinstance(value, list):
+        return [strip_restricted_for_ga4gh(item) for item in value]
+    if not isinstance(value, dict):
+        if isinstance(value, str) and _EMAIL.search(value):
+            raise PublicRepresentationError(
+                "GA4GH representation contains email-like data"
+            )
+        return value
+    return {
+        key: strip_restricted_for_ga4gh(nested)
+        for key, nested in value.items()
+        if not _forbidden_key(key)
+    }
+
+
 def sanitize_profile_document(document: dict[str, Any]) -> dict[str, Any]:
     """Return curator profile content after refusing credential/email leakage."""
 
