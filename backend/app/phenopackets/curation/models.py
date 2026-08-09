@@ -661,6 +661,18 @@ class Hnf1bCurationProfile(CurationModel):
         for key, correction in self.corrections_by_id.items():
             if key != correction.correction_id:
                 raise ValueError("correctionsById key must equal correctionId")
+            if (
+                correction.supersedes_correction_id is not None
+                and correction.supersedes_correction_id not in self.corrections_by_id
+            ):
+                raise ValueError("correction supersedes an unknown correction")
+        superseded = [
+            correction.supersedes_correction_id
+            for correction in self.corrections_by_id.values()
+            if correction.supersedes_correction_id is not None
+        ]
+        if len(superseded) != len(set(superseded)):
+            raise ValueError("a correction may be superseded only once")
         for key, resolution in self.resolutions_by_id.items():
             if key != resolution.resolution_id:
                 raise ValueError("resolutionsById key must equal resolutionId")
