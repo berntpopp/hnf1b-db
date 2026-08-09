@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from google.protobuf.json_format import ParseDict  # type: ignore[import-untyped]
@@ -43,7 +44,24 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
             raise CurationProjectionError(
                 "invalid_correction", "correction chain cycle"
             )
-        for key in sorted(ready):
+
+        def append_order(key: str) -> tuple[datetime, str]:
+            item = remaining[key]
+            if not isinstance(item, dict) or not isinstance(item.get("createdAt"), str):
+                raise CurationProjectionError(
+                    "invalid_correction", "correction requires an append timestamp"
+                )
+            try:
+                timestamp = datetime.fromisoformat(
+                    item["createdAt"].replace("Z", "+00:00")
+                )
+            except ValueError as error:
+                raise CurationProjectionError(
+                    "invalid_correction", "correction has an invalid append timestamp"
+                ) from error
+            return timestamp, key
+
+        for key in sorted(ready, key=append_order):
             ordered_ids.append(key)
             remaining.pop(key)
     for correction_id in ordered_ids:
@@ -98,6 +116,87 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
     return corrected
 
 
+_PROJECTOR_OWNED_FIELDS = {
+    "subject": {
+        "id",
+        "alternateIds",
+        "sex",
+        "karyotypicSex",
+        "taxonomy",
+        "timeAtLastEncounter",
+    },
+    "metaData": {
+        "created",
+        "createdBy",
+        "resources",
+        "phenopacketSchemaVersion",
+        "externalReferences",
+    },
+}
+
+
+def _merge_projected_field(field: str, existing: Any, derived: Any) -> Any:
+    """Replace projector-owned values while retaining unowned legacy siblings."""
+    owned = _PROJECTOR_OWNED_FIELDS.get(field)
+    if owned is None or not isinstance(existing, dict) or not isinstance(derived, dict):
+        return deepcopy(derived)
+    merged = {
+        key: deepcopy(value) for key, value in existing.items() if key not in owned
+    }
+    merged.update(deepcopy(derived))
+    return merged
+
+
+def _profile_validation_input(block: dict[str, Any]) -> dict[str, Any]:
+    """Copy source truth for strict validation without weakening provenance."""
+    return deepcopy(block)
+
+
+def _active_projection_inputs(
+    profile: Hnf1bCurationProfile,
+) -> tuple[list[Any], list[Any]]:
+    """Return corrected observations and only current, non-superseded resolutions.
+
+    The ledger retains every resolution entry for audit. Projection, however,
+    may use only the newest decision for a conflict whose candidate digest is
+    still current; a changed correction therefore reopens the conflict instead
+    of making the entire packet unparsable.
+    """
+    try:
+        corrected_profile = Hnf1bCurationProfile.model_validate(
+            _profile_validation_input(
+                _apply_active_corrections(
+                    profile.model_dump(by_alias=True, mode="json")
+                )
+            )
+        )
+    except ValidationError as error:
+        raise CurationProjectionError("invalid_correction", str(error)) from error
+    observations = list(corrected_profile.observations_by_id.values())
+    try:
+        baseline = project_individual(
+            observations, [], algorithm_version=profile.projection.algorithm_version
+        )
+    except (TypeError, ValueError) as error:
+        raise CurationProjectionError("projection_error", str(error)) from error
+    conflicts = {item.conflict_key: item for item in baseline.blocking_conflicts}
+    newest_by_key: dict[str, Any] = {}
+    for resolution in profile.resolutions_by_id.values():
+        previous = newest_by_key.get(resolution.conflict_key)
+        if previous is None or (resolution.resolved_at, resolution.resolution_id) > (
+            previous.resolved_at,
+            previous.resolution_id,
+        ):
+            newest_by_key[resolution.conflict_key] = resolution
+    active = [
+        resolution
+        for key, resolution in newest_by_key.items()
+        if key in conflicts
+        and resolution.candidate_set_digest == conflicts[key].candidate_set_digest
+    ]
+    return observations, active
+
+
 def canonicalize_curation_document(
     document: dict[str, Any], *, publish: bool = False
 ) -> dict[str, Any]:
@@ -111,13 +210,14 @@ def canonicalize_curation_document(
     if not isinstance(block, dict) or "observationsById" not in block:
         return deepcopy(document)
     try:
-        profile = Hnf1bCurationProfile.model_validate(_apply_active_corrections(block))
+        profile = Hnf1bCurationProfile.model_validate(_profile_validation_input(block))
     except ValidationError as error:
         raise CurationProjectionError("invalid_profile", str(error)) from error
     try:
+        observations, active_resolutions = _active_projection_inputs(profile)
         result = project_individual(
-            list(profile.observations_by_id.values()),
-            list(profile.resolutions_by_id.values()),
+            observations,
+            active_resolutions,
             algorithm_version=profile.projection.algorithm_version,
         )
     except (ValueError, TypeError) as error:
@@ -142,7 +242,9 @@ def canonicalize_curation_document(
         "interpretations",
         "metaData",
     ):
-        canonical[field] = result.phenopacket[field]
+        canonical[field] = _merge_projected_field(
+            field, document.get(field), result.phenopacket[field]
+        )
     canonical["id"] = document.get("id", result.phenopacket["id"])
     # Corrections are an overlay for projection. Persist their original raw
     # source profile so re-canonicalizing is idempotent rather than applying a

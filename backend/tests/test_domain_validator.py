@@ -51,6 +51,31 @@ async def test_accepts_valid_curation(db_session):
 
 
 @pytest.mark.asyncio
+async def test_rejects_invalid_source_observation_vocabularies_and_date(db_session):
+    """The v2 ledger validates its own controlled values, not only projections."""
+    errors = await DomainValidator(db_session).validate(
+        packet(
+            hnf1bCuration={
+                "observationsById": {
+                    "report-1": {
+                        "publication": {"publicationType": {"value": "blog_post"}},
+                        "classification": {
+                            "system": {"value": "made_up"},
+                            "date": {"value": "2026-99-99"},
+                        },
+                    }
+                }
+            }
+        )
+    )
+    assert any("publicationType" in error and "blog_post" in error for error in errors)
+    assert any(
+        "classification.system" in error and "made_up" in error for error in errors
+    )
+    assert any("classification.date" in error for error in errors)
+
+
+@pytest.mark.asyncio
 async def test_rejects_unknown_enum_value(db_session):
     errors = await DomainValidator(db_session).validate(
         packet(hnf1bCuration={"detectionMethod": "telepathy"})

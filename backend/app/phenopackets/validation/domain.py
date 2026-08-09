@@ -30,6 +30,7 @@ protection against typos and copy-paste id/label mismatches on the terms
 this validator already touches.
 """
 
+from datetime import date
 from typing import Any, Dict, List
 
 from sqlalchemy import text
@@ -81,8 +82,69 @@ class DomainValidator:
         """Return human-readable problems; empty list means valid."""
         errors: List[str] = []
         errors.extend(await self._validate_curation(phenopacket))
+        errors.extend(await self._validate_source_observations(phenopacket))
         errors.extend(await self._validate_segregation(phenopacket))
         errors.extend(await self._validate_laterality(phenopacket))
+        return errors
+
+    async def _validate_source_observations(
+        self, phenopacket: Dict[str, Any]
+    ) -> List[str]:
+        """Validate controlled values that remain scoped to each source report."""
+        block = phenopacket.get("hnf1bCuration")
+        if not isinstance(block, dict):
+            return []
+        observations = block.get("observationsById")
+        if not isinstance(observations, dict):
+            return []
+        publication_types = await self._allowed("publication_type_values")
+        classification_systems = await self._allowed("classification_system_values")
+        errors: List[str] = []
+        for observation_id, observation in observations.items():
+            if not isinstance(observation, dict):
+                continue
+            publication = observation.get("publication")
+            publication_type = (
+                publication.get("publicationType")
+                if isinstance(publication, dict)
+                else None
+            )
+            value = (
+                publication_type.get("value")
+                if isinstance(publication_type, dict)
+                else None
+            )
+            if value is not None and value not in publication_types:
+                errors.append(
+                    f"observationsById.{observation_id}.publication.publicationType: "
+                    f"{value!r} is not valid. Allowed: {', '.join(publication_types)}"
+                )
+            classification = observation.get("classification")
+            if not isinstance(classification, dict):
+                continue
+            system = classification.get("system")
+            system_value = system.get("value") if isinstance(system, dict) else None
+            if system_value is not None and system_value not in classification_systems:
+                errors.append(
+                    f"observationsById.{observation_id}.classification.system: "
+                    f"{system_value!r} is not valid. Allowed: "
+                    f"{', '.join(classification_systems)}"
+                )
+            classification_date = classification.get("date")
+            date_value = (
+                classification_date.get("value")
+                if isinstance(classification_date, dict)
+                else None
+            )
+            if date_value is None:
+                continue
+            try:
+                date.fromisoformat(str(date_value))
+            except ValueError:
+                errors.append(
+                    f"observationsById.{observation_id}.classification.date: "
+                    f"{date_value!r} must be an ISO-8601 date"
+                )
         return errors
 
     async def _allowed(self, table: str) -> List[str]:

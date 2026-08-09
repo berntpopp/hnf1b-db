@@ -306,6 +306,11 @@ class PhenotypeAssessment(CurationModel):
         if provided is not None and provided != implied:
             raise ValueError("sourceStatus conflicts with the raw source cell")
         value = dict(data)
+        # Normalize aliases to one internal spelling before strict parsing.
+        # Keeping both keys makes the derived snake-case field look like an
+        # unexpected extra when an already serialized ledger is re-validated.
+        value.pop("sourceStatus", None)
+        value.pop("source_status", None)
         value["source_status"] = implied
         return value
 
