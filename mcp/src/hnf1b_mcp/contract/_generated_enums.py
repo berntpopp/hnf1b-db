@@ -12,6 +12,26 @@ from typing import Literal
 
 # --- component schema enums ---
 
+AssessmentStatus = Literal[
+    "PRESENT",
+    "EXCLUDED",
+    "NOT_REPORTED",
+    "NOT_APPLICABLE",
+    "INDETERMINATE",
+    "NOT_ASSESSED",
+]
+ASSESSMENT_STATUS_VALUES: tuple[str, ...] = (
+    "PRESENT",
+    "EXCLUDED",
+    "NOT_REPORTED",
+    "NOT_APPLICABLE",
+    "INDETERMINATE",
+    "NOT_ASSESSED",
+)
+
+CurationStatus = Literal["UNCURATED", "CURATED"]
+CURATION_STATUS_VALUES: tuple[str, ...] = ("UNCURATED", "CURATED")
+
 MolecularConsequence = Literal[
     "Frameshift",
     "Nonsense",
@@ -37,6 +57,9 @@ MOLECULAR_CONSEQUENCE_VALUES: tuple[str, ...] = (
     "Coding Sequence Variant",
 )
 
+ObservationOrigin = Literal["imported", "manual"]
+OBSERVATION_ORIGIN_VALUES: tuple[str, ...] = ("imported", "manual")
+
 ProteinDomain = Literal[
     "Dimerization Domain",
     "POU-Specific Domain",
@@ -48,6 +71,18 @@ PROTEIN_DOMAIN_VALUES: tuple[str, ...] = (
     "POU-Specific Domain",
     "POU Homeodomain",
     "Transactivation Domain",
+)
+
+ResolutionStrategy = Literal["select_observations", "resolved_value"]
+RESOLUTION_STRATEGY_VALUES: tuple[str, ...] = ("select_observations", "resolved_value")
+
+SourceStatus = Literal["stated", "not_reported", "not_applicable", "unknown", "blank"]
+SOURCE_STATUS_VALUES: tuple[str, ...] = (
+    "stated",
+    "not_reported",
+    "not_applicable",
+    "unknown",
+    "blank",
 )
 
 VariantClassification = Literal[
@@ -95,9 +130,6 @@ COMPARISON_VALUES: tuple[str, ...] = (
 
 DiabetesType = Literal["Type 1", "Type 2", "MODY"]
 DIABETES_TYPE_VALUES: tuple[str, ...] = ("Type 1", "Type 2", "MODY")
-
-Mode = Literal["conformant", "full"]
-MODE_VALUES: tuple[str, ...] = ("conformant", "full")
 
 ReportingMode = Literal["all_cases", "reported_only"]
 REPORTING_MODE_VALUES: tuple[str, ...] = ("all_cases", "reported_only")

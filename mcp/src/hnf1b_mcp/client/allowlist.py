@@ -72,7 +72,7 @@ _DENY = [
         r"^/info$",
         r"^/version$",
         # Per-phenopacket workflow/audit/revision routes — curation internals.
-        r"^/phenopackets/[^/]+/(audit|revisions|timeline|transitions)(/|$)",
+        r"^/phenopackets/[^/]+/(audit|curation|reports|revisions|timeline|transitions)(/|$)",
         # Statistical-comparison endpoint — not in the curated metric set.
         r"^/phenopackets/compare/",
         # SEO sitemaps — XML, not data.

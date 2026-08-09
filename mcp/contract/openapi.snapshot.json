@@ -54,6 +54,19 @@
         "title": "AggregationResult",
         "type": "object"
       },
+      "AssessmentStatus": {
+        "description": "Explicit clinical assessment states for a source phenotype question.",
+        "enum": [
+          "PRESENT",
+          "EXCLUDED",
+          "NOT_REPORTED",
+          "NOT_APPLICABLE",
+          "INDETERMINATE",
+          "NOT_ASSESSED"
+        ],
+        "title": "AssessmentStatus",
+        "type": "string"
+      },
       "AuthorModel": {
         "description": "Author information.",
         "properties": {
@@ -148,6 +161,122 @@
           "failed_count"
         ],
         "title": "BatchRecodeResponse",
+        "type": "object"
+      },
+      "CaseObservation": {
+        "additionalProperties": false,
+        "description": "All report-level case fields retained as typed source values.",
+        "properties": {
+          "cohort": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duplicateCheck": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "familyHistory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problematic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CaseObservation",
+        "type": "object"
+      },
+      "ClassificationObservation": {
+        "additionalProperties": false,
+        "description": "Classification evidence that remains tied to the source report/variant.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criteria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ClassificationObservation",
         "type": "object"
       },
       "CommentCreate": {
@@ -459,6 +588,67 @@
         "title": "ComparisonResult",
         "type": "object"
       },
+      "CorrectionAppendRequest": {
+        "additionalProperties": false,
+        "description": "Client-controlled portion of a new append-only correction.",
+        "properties": {
+          "jsonPointer": {
+            "minLength": 1,
+            "title": "Jsonpointer",
+            "type": "string"
+          },
+          "postimage": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "preimage": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "supersedesCorrectionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedescorrectionid"
+          }
+        },
+        "required": [
+          "jsonPointer",
+          "preimage",
+          "postimage",
+          "reason"
+        ],
+        "title": "CorrectionAppendRequest",
+        "type": "object"
+      },
+      "CurationStatus": {
+        "description": "Workflow state, intentionally separate from clinical assessment state.",
+        "enum": [
+          "UNCURATED",
+          "CURATED"
+        ],
+        "title": "CurationStatus",
+        "type": "string"
+      },
       "CursorLinksObject": {
         "description": "JSON:API links object for cursor pagination navigation.\n\nAttributes:\n    self: Link to current page\n    first: Link to first page\n    prev: Link to previous page (None if no previous page)\n    next: Link to next page (None if no next page)",
         "properties": {
@@ -617,6 +807,54 @@
           "pending"
         ],
         "title": "DataSyncStatus",
+        "type": "object"
+      },
+      "DiseaseObservation": {
+        "additionalProperties": false,
+        "description": "An explicit source/adjudicated diagnosis, never inferred from a variant.",
+        "properties": {
+          "asserted": {
+            "default": true,
+            "title": "Asserted",
+            "type": "boolean"
+          },
+          "onset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_TemporalValue_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "term": {
+            "$ref": "#/components/schemas/OntologyTerm"
+          }
+        },
+        "required": [
+          "term"
+        ],
+        "title": "DiseaseObservation",
+        "type": "object"
+      },
+      "EvidenceObservation": {
+        "additionalProperties": false,
+        "description": "A report-specific evidence reference with an explicit ECO term.",
+        "properties": {
+          "evidenceCode": {
+            "$ref": "#/components/schemas/OntologyTerm"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "evidenceCode"
+        ],
+        "title": "EvidenceObservation",
         "type": "object"
       },
       "ExonSchema": {
@@ -1235,6 +1473,7 @@
         "title": "JsonApiResponse",
         "type": "object"
       },
+      "JsonValue": {},
       "LinksObject": {
         "description": "JSON:API links object for pagination navigation.\n\nAttributes:\n    self: Link to current page\n    first: Link to first page\n    prev: Link to previous page (None if on first page)\n    next: Link to next page (None if on last page)\n    last: Link to last page",
         "properties": {
@@ -1365,6 +1604,126 @@
         ],
         "title": "MolecularConsequence",
         "type": "string"
+      },
+      "NotesObservation": {
+        "additionalProperties": false,
+        "description": "Report-level source notes that must not collapse to the case level.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "NotesObservation",
+        "type": "object"
+      },
+      "ObservationOrigin": {
+        "description": "Permitted provenance of an observation.",
+        "enum": [
+          "imported",
+          "manual"
+        ],
+        "title": "ObservationOrigin",
+        "type": "string"
+      },
+      "ObservedValue_TemporalValue_": {
+        "additionalProperties": false,
+        "properties": {
+          "correctionIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Correctionids",
+            "type": "array"
+          },
+          "raw": {
+            "title": "Raw",
+            "type": "string"
+          },
+          "sourceStatus": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemporalValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "raw",
+          "sourceStatus"
+        ],
+        "title": "ObservedValue[TemporalValue]",
+        "type": "object"
+      },
+      "ObservedValue_str_": {
+        "additionalProperties": false,
+        "properties": {
+          "correctionIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Correctionids",
+            "type": "array"
+          },
+          "raw": {
+            "title": "Raw",
+            "type": "string"
+          },
+          "sourceStatus": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "raw",
+          "sourceStatus"
+        ],
+        "title": "ObservedValue[str]",
+        "type": "object"
+      },
+      "OntologyTerm": {
+        "additionalProperties": false,
+        "description": "Ontology term reference stored in a local observation.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "OntologyTerm",
+        "type": "object"
       },
       "PageMeta": {
         "description": "Pagination metadata for offset-based pagination.\n\nAttributes:\n    current_page: Current page number (1-indexed)\n    page_size: Number of items per page\n    total_pages: Total number of pages available\n    total_records: Total number of records matching filters",
@@ -1989,6 +2348,84 @@
         "title": "PhenopacketUpdate",
         "type": "object"
       },
+      "PhenotypeAssessment": {
+        "additionalProperties": false,
+        "description": "One explicit source-question assessment.",
+        "properties": {
+          "assessmentId": {
+            "title": "Assessmentid",
+            "type": "string"
+          },
+          "assessmentStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "correctionIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Correctionids",
+            "type": "array"
+          },
+          "curationStatus": {
+            "$ref": "#/components/schemas/CurationStatus"
+          },
+          "evidence": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EvidenceObservation"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "findings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PhenotypeFinding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "onset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_TemporalValue_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rawValue": {
+            "title": "Rawvalue",
+            "type": "string"
+          },
+          "sourceStatus": {
+            "$ref": "#/components/schemas/SourceStatus"
+          }
+        },
+        "required": [
+          "assessmentId",
+          "column",
+          "rawValue",
+          "sourceStatus",
+          "curationStatus",
+          "assessmentStatus"
+        ],
+        "title": "PhenotypeAssessment",
+        "type": "object"
+      },
       "PhenotypeComparison": {
         "description": "Phenotype presence/absence comparison between two groups.",
         "properties": {
@@ -2122,6 +2559,57 @@
           "significant"
         ],
         "title": "PhenotypeComparison",
+        "type": "object"
+      },
+      "PhenotypeFinding": {
+        "additionalProperties": false,
+        "description": "Mapped finding, including a stable local definition ID.",
+        "properties": {
+          "definitionId": {
+            "title": "Definitionid",
+            "type": "string"
+          },
+          "modifiers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OntologyTerm"
+            },
+            "title": "Modifiers",
+            "type": "array"
+          },
+          "sourceTerm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OntologyTerm"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "term": {
+            "$ref": "#/components/schemas/OntologyTerm"
+          }
+        },
+        "required": [
+          "definitionId",
+          "term"
+        ],
+        "title": "PhenotypeFinding",
+        "type": "object"
+      },
+      "ProjectionPreviewRequest": {
+        "additionalProperties": false,
+        "description": "Project an unsaved replacement for a single source observation.",
+        "properties": {
+          "observation": {
+            "$ref": "#/components/schemas/ReportObservation"
+          }
+        },
+        "required": [
+          "observation"
+        ],
+        "title": "ProjectionPreviewRequest",
         "type": "object"
       },
       "ProteinDomain": {
@@ -2463,6 +2951,56 @@
         "title": "PublicationMetadataResponse",
         "type": "object"
       },
+      "PublicationObservation": {
+        "additionalProperties": false,
+        "description": "Source publication identity and optional resolved official references.",
+        "properties": {
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "pmid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmid"
+          },
+          "publicationType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PublicationObservation",
+        "type": "object"
+      },
       "ReferenceGenomeSchema": {
         "description": "Reference genome assembly schema.",
         "properties": {
@@ -2588,6 +3126,230 @@
         "title": "ReferenceGenomeSchema",
         "type": "object"
       },
+      "ReportObservation": {
+        "additionalProperties": false,
+        "description": "One publication/report row attached to one biological individual.",
+        "properties": {
+          "ages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemporalObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diseases": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DiseaseObservation"
+            },
+            "title": "Diseases",
+            "type": "array"
+          },
+          "identifiers": {
+            "$ref": "#/components/schemas/SubjectObservation"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotesObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observationId": {
+            "title": "Observationid",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ObservationOrigin"
+          },
+          "phenotypes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PhenotypeAssessment"
+            },
+            "title": "Phenotypes",
+            "type": "array"
+          },
+          "publication": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicationObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceManifestRef"
+          },
+          "sourceReview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceReviewProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VariantObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "observationId",
+          "origin",
+          "source",
+          "identifiers"
+        ],
+        "title": "ReportObservation",
+        "type": "object"
+      },
+      "ReportPatchRequest": {
+        "additionalProperties": false,
+        "description": "Replace one report observation while retaining the rest of the ledger.",
+        "properties": {
+          "changeReason": {
+            "minLength": 1,
+            "title": "Changereason",
+            "type": "string"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/ReportObservation"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "observation",
+          "changeReason"
+        ],
+        "title": "ReportPatchRequest",
+        "type": "object"
+      },
+      "ResolutionAppendRequest": {
+        "additionalProperties": false,
+        "description": "Client-controlled portion of a new append-only resolution.",
+        "properties": {
+          "candidateSetDigest": {
+            "minLength": 1,
+            "title": "Candidatesetdigest",
+            "type": "string"
+          },
+          "conflictKey": {
+            "minLength": 1,
+            "title": "Conflictkey",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolvedValue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedvalue"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "selectedObservationIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Selectedobservationids",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/ResolutionStrategy"
+          }
+        },
+        "required": [
+          "conflictKey",
+          "candidateSetDigest",
+          "strategy",
+          "reason"
+        ],
+        "title": "ResolutionAppendRequest",
+        "type": "object"
+      },
+      "ResolutionStrategy": {
+        "description": "Typed curator actions that can be applied by the deterministic projector.",
+        "enum": [
+          "select_observations",
+          "resolved_value"
+        ],
+        "title": "ResolutionStrategy",
+        "type": "string"
+      },
       "RoleResponse": {
         "description": "Role definition response.",
         "properties": {
@@ -2676,6 +3438,189 @@
           "type"
         ],
         "title": "SearchResultItem",
+        "type": "object"
+      },
+      "SourceManifestRef": {
+        "additionalProperties": false,
+        "description": "Non-clinical provenance reference for one report observation.",
+        "properties": {
+          "ageReportedSemantics": {
+            "default": "unknown",
+            "enum": [
+              "encounter_age",
+              "report_age",
+              "unknown"
+            ],
+            "title": "Agereportedsemantics",
+            "type": "string"
+          },
+          "datasetId": {
+            "title": "Datasetid",
+            "type": "string"
+          },
+          "importRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importrunid"
+          },
+          "importedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importedat"
+          },
+          "manifestSha256": {
+            "title": "Manifestsha256",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "rowHmacSha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rowhmacsha256"
+          },
+          "rowNumber": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rownumber"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "datasetId",
+          "sheet",
+          "manifestSha256"
+        ],
+        "title": "SourceManifestRef",
+        "type": "object"
+      },
+      "SourceReviewProvenance": {
+        "additionalProperties": false,
+        "description": "Mapped reviewer provenance; raw reviewer emails are intentionally absent.",
+        "properties": {
+          "reviewedOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewedon"
+          },
+          "reviewerDisplayLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewerdisplaylabel"
+          },
+          "reviewerId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewerid"
+          }
+        },
+        "title": "SourceReviewProvenance",
+        "type": "object"
+      },
+      "SourceStatus": {
+        "description": "Explicit source meaning for observed scalar cells.",
+        "enum": [
+          "stated",
+          "not_reported",
+          "not_applicable",
+          "unknown",
+          "blank"
+        ],
+        "title": "SourceStatus",
+        "type": "string"
+      },
+      "SubjectObservation": {
+        "additionalProperties": false,
+        "description": "Typed subject and report roles; report ID is not an alternate subject ID.",
+        "properties": {
+          "individualId": {
+            "title": "Individualid",
+            "type": "string"
+          },
+          "individualIdentifier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reportId": {
+            "title": "Reportid",
+            "type": "string"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceSubjectId": {
+            "title": "Sourcesubjectid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "individualId",
+          "sourceSubjectId",
+          "reportId"
+        ],
+        "title": "SubjectObservation",
         "type": "object"
       },
       "SyncProgressResponse": {
@@ -2932,6 +3877,76 @@
           "sync_status"
         ],
         "title": "SystemStatusResponse",
+        "type": "object"
+      },
+      "TemporalObservation": {
+        "additionalProperties": false,
+        "description": "Raw temporal source value and validated typed representation.",
+        "properties": {
+          "onset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_TemporalValue_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_TemporalValue_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "TemporalObservation",
+        "type": "object"
+      },
+      "TemporalValue": {
+        "additionalProperties": false,
+        "description": "Closed representation of a source age, gestational age, or ontology onset.",
+        "properties": {
+          "iso8601Duration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso8601Duration"
+          },
+          "kind": {
+            "enum": [
+              "age",
+              "gestationalAge",
+              "ontologyClass",
+              "unprojected"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OntologyTerm"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TemporalValue",
         "type": "object"
       },
       "Token": {
@@ -3510,6 +4525,124 @@
         "title": "VariantClassification",
         "type": "string"
       },
+      "VariantObservation": {
+        "additionalProperties": false,
+        "description": "Reported variant evidence with a separate validated normalized identity.",
+        "properties": {
+          "detectionMethod": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hg19": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hg19Info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hg38": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hg38Info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "normalized": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VrsDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "segregation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "variantType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "varsome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedValue_str_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "VariantObservation",
+        "type": "object"
+      },
       "VariantType": {
         "description": "Structural type of a variant.\n\nMirrors the GA4GH/VRS-style structural type values stored on variation\ndescriptors in the phenopacket data.",
         "enum": [
@@ -3740,6 +4873,55 @@
           "data"
         ],
         "title": "VocabularyResponse",
+        "type": "object"
+      },
+      "VrsDescriptor": {
+        "additionalProperties": false,
+        "description": "A stable VRS descriptor whose GA4GH identifier names its exact variation.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "variation": {
+            "$ref": "#/components/schemas/VrsTextVariation"
+          }
+        },
+        "required": [
+          "id",
+          "variation"
+        ],
+        "title": "VrsDescriptor",
+        "type": "object"
+      },
+      "VrsText": {
+        "additionalProperties": false,
+        "description": "The VRS text variation form supported by source-faithful imports.",
+        "properties": {
+          "definition": {
+            "minLength": 1,
+            "title": "Definition",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "VrsText",
+        "type": "object"
+      },
+      "VrsTextVariation": {
+        "additionalProperties": false,
+        "description": "Closed VRS variation wrapper; no arbitrary JSON can enter the ledger.",
+        "properties": {
+          "text": {
+            "$ref": "#/components/schemas/VrsText"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VrsTextVariation",
         "type": "object"
       }
     },
@@ -6944,7 +8126,7 @@
     },
     "/api/v2/phenopackets/aggregate/by-disease": {
       "get": {
-        "description": "Aggregate phenopackets by disease.\n\nPerformance: Uses mv_disease_aggregation materialized view when available.",
+        "description": "Aggregate phenopackets by disease.\n\nAlways reads published-head snapshots. Legacy materialized views are based\non mutable working copies and are therefore not public-safe.",
         "operationId": "aggregate_by_disease_api_v2_phenopackets_aggregate_by_disease_get",
         "responses": {
           "200": {
@@ -6970,7 +8152,7 @@
     },
     "/api/v2/phenopackets/aggregate/by-feature": {
       "get": {
-        "description": "Aggregate phenopackets by phenotypic features.\n\nReturns phenotypic features with three counts:\n- present_count: Features reported as present (excluded=false)\n- absent_count: Features reported as absent (excluded=true)\n- not_reported_count: Phenopackets without this feature reported\n\nThe main 'count' field represents present_count for backwards compatibility.\n\nPerformance: Uses mv_feature_aggregation materialized view when available.",
+        "description": "Aggregate phenopackets by phenotypic features.\n\nReturns phenotypic features with three counts:\n- present_count: Features reported as present (excluded=false)\n- absent_count: Features reported as absent (excluded=true)\n- not_reported_count: Phenopackets without this feature reported\n\nThe main 'count' field represents present_count for backwards compatibility.\n\nAlways reads published-head snapshots. Legacy materialized views are based\non mutable working copies and are therefore not public-safe.",
         "operationId": "aggregate_by_feature_api_v2_phenopackets_aggregate_by_feature_get",
         "responses": {
           "200": {
@@ -7129,7 +8311,7 @@
     },
     "/api/v2/phenopackets/aggregate/sex-distribution": {
       "get": {
-        "description": "Get sex distribution of subjects.\n\nPerformance: Uses mv_sex_distribution materialized view when available.",
+        "description": "Get sex distribution of subjects.\n\nAlways reads published-head snapshots. Legacy materialized views are based\non mutable working copies and are therefore not public-safe.",
         "operationId": "aggregate_sex_distribution_api_v2_phenopackets_aggregate_sex_distribution_get",
         "responses": {
           "200": {
@@ -8063,6 +9245,22 @@
               "title": "Phenopacket Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -8160,6 +9358,268 @@
         ]
       }
     },
+    "/api/v2/phenopackets/{phenopacket_id}/curation": {
+      "get": {
+        "description": "Return the full private ledger and deterministic canonical projection.",
+        "operationId": "get_curation_api_v2_phenopackets__phenopacket_id__curation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Curation Api V2 Phenopackets  Phenopacket Id  Curation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Curation",
+        "tags": [
+          "phenopackets-curation"
+        ]
+      }
+    },
+    "/api/v2/phenopackets/{phenopacket_id}/curation/corrections": {
+      "post": {
+        "description": "Append a correction; source raw fields and prior corrections remain immutable.",
+        "operationId": "append_correction_api_v2_phenopackets__phenopacket_id__curation_corrections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionAppendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Append Correction Api V2 Phenopackets  Phenopacket Id  Curation Corrections Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Append Correction",
+        "tags": [
+          "phenopackets-curation"
+        ]
+      }
+    },
+    "/api/v2/phenopackets/{phenopacket_id}/curation/preview": {
+      "post": {
+        "description": "Validate and project an unsaved observation replacement without writing.",
+        "operationId": "preview_curation_api_v2_phenopackets__phenopacket_id__curation_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Preview Curation Api V2 Phenopackets  Phenopacket Id  Curation Preview Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Curation",
+        "tags": [
+          "phenopackets-curation"
+        ]
+      }
+    },
+    "/api/v2/phenopackets/{phenopacket_id}/curation/resolutions": {
+      "post": {
+        "description": "Append a resolution only when its conflict candidate digest is current.",
+        "operationId": "append_resolution_api_v2_phenopackets__phenopacket_id__curation_resolutions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolutionAppendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Append Resolution Api V2 Phenopackets  Phenopacket Id  Curation Resolutions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Append Resolution",
+        "tags": [
+          "phenopackets-curation"
+        ]
+      }
+    },
     "/api/v2/phenopackets/{phenopacket_id}/export": {
       "get": {
         "description": "Export one phenopacket document.\n\nVisibility mirrors the detail GET (``get_phenopacket`` above) exactly:\nanonymous and viewer callers see published content only, dereferenced\nthrough ``resolve_public_content`` (which follows\n``head_published_revision_id``), so an in-progress clone-to-draft edit\nis never exported to a non-curator caller.\n\n``full`` additionally returns the ``hnf1bCuration`` block and therefore\nrequires curator access \u2014 it is internal curation metadata, not part of\nthe public record.\n\n``conformant`` (default) removes that block. It is **not** a claim of\nGA4GH Phenopackets v2 validity: the corpus retains the nonconformances\nrecorded in docs/adr/0003-ga4gh-conformance-debt.md. It only means that\nHNF1B-DB-specific curation has been stripped.",
@@ -8176,16 +9636,30 @@
           },
           {
             "in": "query",
+            "name": "representation",
+            "required": false,
+            "schema": {
+              "default": "ga4gh",
+              "title": "Representation",
+              "type": "string"
+            }
+          },
+          {
+            "deprecated": true,
+            "in": "query",
             "name": "mode",
             "required": false,
             "schema": {
-              "default": "conformant",
-              "enum": [
-                "conformant",
-                "full"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "title": "Mode",
-              "type": "string"
+              "deprecated": true,
+              "title": "Mode"
             }
           }
         ],
@@ -8212,6 +9686,91 @@
         "summary": "Export Phenopacket",
         "tags": [
           "phenopackets-crud"
+        ]
+      }
+    },
+    "/api/v2/phenopackets/{phenopacket_id}/reports/{observation_id}": {
+      "patch": {
+        "description": "Save exactly one observation through the append-only state service.",
+        "operationId": "patch_report_api_v2_phenopackets__phenopacket_id__reports__observation_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phenopacket_id",
+            "required": true,
+            "schema": {
+              "title": "Phenopacket Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "observation_id",
+            "required": true,
+            "schema": {
+              "title": "Observation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Report Api V2 Phenopackets  Phenopacket Id  Reports  Observation Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Report",
+        "tags": [
+          "phenopackets-curation"
         ]
       }
     },

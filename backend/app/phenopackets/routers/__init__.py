@@ -19,6 +19,7 @@ from .comparisons import router as comparisons_router
 from .crud import router as crud_router
 from .crud_related import router as crud_related_router
 from .crud_timeline import router as crud_timeline_router
+from .curation import router as curation_router
 from .search import router as search_router
 from .transitions import router as transitions_router
 
@@ -37,6 +38,7 @@ router.include_router(search_router)
 router.include_router(crud_related_router)
 router.include_router(crud_timeline_router)
 router.include_router(transitions_router)
+router.include_router(curation_router)
 router.include_router(crud_router)
 router.include_router(aggregations_router)
 router.include_router(comparisons_router)
