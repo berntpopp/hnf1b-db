@@ -31,6 +31,7 @@ from app.phenopackets.models import (
     PhenopacketAuditResponse,
     PhenopacketRevision,
 )
+from app.phenopackets.privacy import redact_public_document
 from app.phenopackets.repositories import PhenopacketRepository
 from app.phenopackets.routers.crud_helpers import validate_pmid
 
@@ -182,7 +183,7 @@ async def get_phenopackets_by_variant(
         {
             "phenopacket_id": row["phenopacket_id"],
             "version": row["version"],
-            "phenopacket": row["phenopacket"],
+            "phenopacket": redact_public_document(row["phenopacket"]),
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
             "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
             "schema_version": row["schema_version"],
@@ -309,7 +310,10 @@ async def get_by_publication(
 
         return {
             "data": [
-                {"phenopacket_id": row.phenopacket_id, "phenopacket": row.phenopacket}
+                {
+                    "phenopacket_id": row.phenopacket_id,
+                    "phenopacket": redact_public_document(row.phenopacket),
+                }
                 for row in rows
             ],
             "total": total,

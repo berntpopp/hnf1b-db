@@ -31,6 +31,13 @@ _RESTRICTED_LOCAL_KEYS = {
     "rawvalues",
     "rawreport",
     "migrationmetadata",
+    "apikey",
+    "api_key",
+    "accesstoken",
+    "access_token",
+    "secret",
+    "clientsecret",
+    "client_secret",
 }
 
 # Phenopackets v2 JSON field names. This is intentionally an allowlist shared
@@ -102,6 +109,13 @@ _GA4GH_KEYS = {
     "iriPrefix",
     "externalReferences",
     "files",
+    "medicalActions",
+    "procedure",
+    "treatment",
+    "radiationTherapy",
+    "code",
+    "bodySite",
+    "laterality",
     "uri",
     "fileFormat",
     "fileFormatVersion",
@@ -127,6 +141,7 @@ _TOP_LEVEL_KEYS = {
     "diseases",
     "metaData",
     "files",
+    "medicalActions",
 }
 
 
@@ -137,12 +152,12 @@ def _forbidden_key(key: str) -> bool:
 
 
 def _redact(value: Any, *, top_level: bool = False) -> Any:
-    """Recursively emit only allowlisted keys and reject forbidden values."""
+    """Recursively remove only known local restricted keys from a document."""
     if isinstance(value, list):
         return [_redact(item) for item in value]
     if not isinstance(value, dict):
         if isinstance(value, str) and _EMAIL.search(value):
-            raise PublicRepresentationError("email-like values are not public")
+            return None
         return value
 
     result: dict[str, Any] = {}
@@ -173,6 +188,9 @@ def sanitize_profile_document(document: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, dict):
             for key, nested in value.items():
                 nested_path = f"{path}.{key}"
+                if key.lower() == "hnf1bcuration":
+                    check(nested, nested_path)
+                    continue
                 if _forbidden_key(key):
                     raise PublicRepresentationError(
                         f"profile contains restricted field at {nested_path}"

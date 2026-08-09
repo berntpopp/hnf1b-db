@@ -11,6 +11,7 @@ from app.auth.dependencies import get_optional_user, is_curator_or_admin
 from app.database import get_db
 from app.models.json_api import JsonApiCursorResponse
 from app.models.user import User
+from app.phenopackets.privacy import redact_public_document
 from app.utils.pagination import (
     build_cursor_response,
     decode_cursor,
@@ -243,7 +244,9 @@ async def search_phenopackets(
         {
             "id": pp.phenopacket_id,
             "type": "phenopacket",
-            "attributes": pp.phenopacket,
+            "attributes": (
+                redact_public_document(pp.phenopacket) if anonymous else pp.phenopacket
+            ),
             "meta": {"search_rank": pp.search_rank if q else None},
         }
         for pp in rows

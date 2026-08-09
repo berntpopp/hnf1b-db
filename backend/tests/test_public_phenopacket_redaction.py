@@ -72,3 +72,22 @@ def test_profile_rejects_nested_credential_and_raw_source_values():
         sanitize_profile_document(
             {"hnf1bCuration": {"observationsById": {"x": {"raw": "secret"}}}}
         )
+
+
+def test_profile_permits_sanitized_curation_but_rejects_token_variants():
+    """Local curation is profile-safe after sanitization; credentials never are."""
+    document = {"hnf1bCuration": {"projection": {"algorithmVersion": "1"}}}
+    assert sanitize_profile_document(document) == document
+    with pytest.raises(PublicRepresentationError, match="restricted"):
+        sanitize_profile_document({"hnf1bCuration": {"apiKey": "secret"}})
+
+
+def test_ga4gh_representation_preserves_medical_actions():
+    """Parser-valid GA4GH fields are retained rather than allowlist-truncated."""
+    document = {
+        "id": "pp-1",
+        "subject": {"id": "1"},
+        "medicalActions": [{"procedure": {"code": {"id": "NCIT:C25218"}}}],
+        "metaData": {"created": "2026-08-09T00:00:00Z", "createdBy": "system"},
+    }
+    assert "medicalActions" in ga4gh_representation(document)
