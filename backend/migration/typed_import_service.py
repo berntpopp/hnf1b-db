@@ -78,14 +78,18 @@ class TypedObservationImportService:
     ) -> list[ReportObservation]:
         """Validate a complete pinned source ledger before any database write."""
         observations = cls._flatten(observations_by_subject)
-        if not observations or any(not items for items in observations_by_subject.values()):
+        if not observations or any(
+            not items for items in observations_by_subject.values()
+        ):
             raise TypedImportApplyError("typed import requires complete observations")
         if manifest.sheets["Individuals"].row_count != len(observations):
             raise TypedImportApplyError("manifest observation count invariant failed")
         for subject_id, subject_observations in observations_by_subject.items():
             for observation in subject_observations:
                 if observation.identifiers.source_subject_id != subject_id:
-                    raise TypedImportApplyError("observation map key violates provenance")
+                    raise TypedImportApplyError(
+                        "observation map key violates provenance"
+                    )
                 if observation.identifiers.individual_id != subject_id:
                     raise TypedImportApplyError(
                         "observation individual identity violates subject binding"
@@ -128,7 +132,8 @@ class TypedObservationImportService:
         profile = Hnf1bCurationProfile(
             source_subject_id=subject_id,
             observations_by_id={
-                str(observation.observation_id): observation for observation in observations
+                str(observation.observation_id): observation
+                for observation in observations
             },
             corrections_by_id=dict(corrections_by_id or {}),
             resolutions_by_id=dict(resolutions_by_id or {}),
@@ -176,7 +181,9 @@ class TypedObservationImportService:
     ) -> TypedImportApplyResult:
         """Create operational provenance and clinical revisions atomically."""
         observations = self._validate_input(manifest, observations_by_subject)
-        transaction = self.db.begin_nested() if self.db.in_transaction() else self.db.begin()
+        transaction = (
+            self.db.begin_nested() if self.db.in_transaction() else self.db.begin()
+        )
         async with transaction:
             repository = ImportRepository(self.db)
             dataset = await repository.get_or_create_dataset(
@@ -211,7 +218,9 @@ class TypedObservationImportService:
             await self.db.flush()
             await self._checkpoint("run")
             state = PhenopacketStateService(self.db)
-            for subject_id, source_observations in sorted(observations_by_subject.items()):
+            for subject_id, source_observations in sorted(
+                observations_by_subject.items()
+            ):
                 subject_observations = self._with_import_run(
                     source_observations, str(run.id)
                 )
@@ -256,10 +265,14 @@ class TypedObservationImportService:
                 else:
                     existing_record = await self.db.get(Phenopacket, binding.record_id)
                     if existing_record is None:
-                        raise TypedImportApplyError("source binding points to no record")
+                        raise TypedImportApplyError(
+                            "source binding points to no record"
+                        )
                     record = existing_record
                     if record.editing_revision_id is not None:
-                        raise ReimportConflict("changed source overlaps an active draft")
+                        raise ReimportConflict(
+                            "changed source overlaps an active draft"
+                        )
                     current = Hnf1bCurationProfile.model_validate(
                         record.phenopacket["hnf1bCuration"]
                     )
@@ -270,7 +283,8 @@ class TypedObservationImportService:
                         if prior is not None:
                             classify_reimport(
                                 prior_row_hmac=prior.source.row_hmac_sha256 or "",
-                                incoming_row_hmac=observation.source.row_hmac_sha256 or "",
+                                incoming_row_hmac=observation.source.row_hmac_sha256
+                                or "",
                                 has_active_draft=False,
                                 has_correction=self._has_correction_for_observation(
                                     current, str(observation.observation_id)

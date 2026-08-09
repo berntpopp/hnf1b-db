@@ -94,7 +94,9 @@ def source_import_cli_configuration(config: Any) -> SourceImportCliConfiguration
     if not target_db_url:
         raise RuntimeError("source import requires a configured database URL")
     if not fixture_dir or not Path(fixture_dir).is_dir():
-        raise RuntimeError("source import requires a configured pinned fixture directory")
+        raise RuntimeError(
+            "source import requires a configured pinned fixture directory"
+        )
     if not _SHA256.fullmatch(manifest_sha256):
         raise RuntimeError("source import requires a pinned SHA-256 manifest")
     if len(row_hmac_key) < 16:
@@ -104,7 +106,9 @@ def source_import_cli_configuration(config: Any) -> SourceImportCliConfiguration
     try:
         raw_mapping = json.loads(config.SOURCE_IMPORT_REVIEWER_MAPPING_JSON)
     except (TypeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("source import requires a configured reviewer mapping") from exc
+        raise RuntimeError(
+            "source import requires a configured reviewer mapping"
+        ) from exc
     if not isinstance(raw_mapping, dict) or not raw_mapping:
         raise RuntimeError("source import requires a configured reviewer mapping")
     reviewer_mapping: dict[str, tuple[str, str]] = {}
@@ -230,7 +234,6 @@ class DirectSheetsToPhenopackets:
             self.publications_df.to_dict(orient="records")
         )
 
-
     def _build_typed_observations(
         self, *, limit: int | None = None
     ) -> dict[str, list[Any]]:
@@ -242,7 +245,9 @@ class DirectSheetsToPhenopackets:
         if self.publication_mapping is None:
             raise RuntimeError("source publication mapping has not been loaded")
         if not self.reviewer_mapping or self.row_hmac_key is None:
-            raise RuntimeError("approved reviewer mapping and row HMAC key are required")
+            raise RuntimeError(
+                "approved reviewer mapping and row HMAC key are required"
+            )
 
         observations_by_subject: dict[str, list[Any]] = {}
         for row_number, (_, row) in enumerate(self.individuals_df.iterrows(), start=2):
@@ -267,7 +272,9 @@ class DirectSheetsToPhenopackets:
             raise RuntimeError("test dry-run limit must be positive")
         return dict(sorted(observations_by_subject.items())[:limit])
 
-    def build_typed_phenopackets(self, *, limit: int | None = None) -> list[dict[str, Any]]:
+    def build_typed_phenopackets(
+        self, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Project validated observations without exporting source-ledger fields."""
         observations_by_subject = self._build_typed_observations(limit=limit)
         return self._project_typed_observations(observations_by_subject)
@@ -279,9 +286,7 @@ class DirectSheetsToPhenopackets:
         """Project a validated ledger without using the legacy builder."""
         output: list[dict[str, Any]] = []
         for observations in observations_by_subject.values():
-            projection = project_individual(
-                observations, [], algorithm_version="1.0"
-            )
+            projection = project_individual(observations, [], algorithm_version="1.0")
             if projection.blocking_conflicts:
                 raise RuntimeError("source projection has unresolved conflicts")
             output.append(projection.phenopacket)
@@ -357,7 +362,9 @@ class DirectSheetsToPhenopackets:
                 errors.append("invalid source individual identifier")
                 continue
             if limit:
-                raise RuntimeError("limited source imports are forbidden outside fixture mode")
+                raise RuntimeError(
+                    "limited source imports are forbidden outside fixture mode"
+                )
 
             try:
                 # Build phenopacket for this individual
@@ -445,7 +452,9 @@ class DirectSheetsToPhenopackets:
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
                 if db is None or actor is None:
-                    raise RuntimeError("typed apply requires an injected session and actor")
+                    raise RuntimeError(
+                        "typed apply requires an injected session and actor"
+                    )
                 await self.apply_typed(
                     db, actor=actor, observations_by_subject=observations_by_subject
                 )

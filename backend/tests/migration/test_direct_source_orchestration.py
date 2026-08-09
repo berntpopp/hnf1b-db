@@ -52,7 +52,8 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
     raw_sheets = {
         "Individuals": _csv(EXPECTED_HEADERS["Individuals"]),
         "Phenotypes": _csv(
-            EXPECTED_HEADERS["Phenotypes"], ["RenalCysts", "HP:0000107", "Renal cyst", ""]
+            EXPECTED_HEADERS["Phenotypes"],
+            ["RenalCysts", "HP:0000107", "Renal cyst", ""],
         ),
         "Phenotype_modifier": _csv(
             EXPECTED_HEADERS["Phenotype_modifier"], ["Bilateral", "HP:0012832"]
@@ -81,9 +82,10 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
 
     await migration.load_data()
 
-    assert migration.modifier_vocabulary.version_sha256 == manifest.sheets[
-        "Phenotype_modifier"
-    ].sha256
+    assert (
+        migration.modifier_vocabulary.version_sha256
+        == manifest.sheets["Phenotype_modifier"].sha256
+    )
     assert migration.phenopacket_builder is None
     assert migration.publication_mapping["family-study"].pmid == "123456"
     assert migration.publication_mapping["family-study"].doi == "10.1000/family.study"
@@ -112,9 +114,7 @@ def test_production_builder_uses_injected_source_modifier_vocabulary():
         ],
         version_sha256="a" * 64,
     )
-    builder = PhenopacketBuilder(
-        HPOMapper(), modifier_vocabulary=vocabulary
-    )
+    builder = PhenopacketBuilder(HPOMapper(), modifier_vocabulary=vocabulary)
 
     phenopacket = builder.build_phenopacket(
         "source-subject", pd.DataFrame([{"RenalCysts": "unilateral left"}])
@@ -147,10 +147,7 @@ def test_dry_run_publication_is_atomic_when_serialization_fails(tmp_path, monkey
 
 
 def test_typed_direct_output_omits_reviewer_email_and_comment():
-    raw_sheets = {
-        name: _csv(headers)
-        for name, headers in EXPECTED_HEADERS.items()
-    }
+    raw_sheets = {name: _csv(headers) for name, headers in EXPECTED_HEADERS.items()}
     manifest = build_source_manifest(
         source_system="local_fixture", dataset_key="hnf1b-registry", sheets=raw_sheets
     )
@@ -207,7 +204,9 @@ def test_typed_direct_output_omits_reviewer_email_and_comment():
 
 
 @pytest.mark.asyncio
-async def test_migrate_uses_typed_apply_when_session_and_actor_are_injected(monkeypatch):
+async def test_migrate_uses_typed_apply_when_session_and_actor_are_injected(
+    monkeypatch,
+):
     migration = DirectSheetsToPhenopackets(
         "postgresql+asyncpg://test:test@localhost/test_db"
     )
@@ -224,7 +223,9 @@ async def test_migrate_uses_typed_apply_when_session_and_actor_are_injected(monk
         "migration.direct_sheets_to_phenopackets.settings.SOURCE_IMPORT_ENABLED", True
     )
     monkeypatch.setattr(migration, "load_data", load_data)
-    monkeypatch.setattr(migration, "_build_typed_observations", lambda **_: observations)
+    monkeypatch.setattr(
+        migration, "_build_typed_observations", lambda **_: observations
+    )
     monkeypatch.setattr(migration, "_project_typed_observations", lambda _: [])
     monkeypatch.setattr(migration.storage, "close", lambda: _async_none())
     monkeypatch.setattr(migration, "apply_typed", apply_typed)

@@ -96,9 +96,7 @@ def parse_sort_parameter(sort: str, *, content: Any = None) -> list:
         # "Var1", "Var2", "Var10" — extracts numeric suffix and sorts
         # numerically.
         if field_name == "subject_id":
-            order_clauses.extend(
-                get_natural_sort_clauses(sort_column, descending)
-            )
+            order_clauses.extend(get_natural_sort_clauses(sort_column, descending))
         else:
             if descending:
                 order_clauses.append(sort_column.desc())

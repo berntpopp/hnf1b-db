@@ -149,8 +149,7 @@ def _forbidden_key(key: str) -> bool:
     """Return whether key represents local restricted provenance or PII."""
     normalized = re.sub(r"[^a-z0-9]", "", key.lower())
     return normalized in {
-        re.sub(r"[^a-z0-9]", "", restricted)
-        for restricted in _RESTRICTED_LOCAL_KEYS
+        re.sub(r"[^a-z0-9]", "", restricted) for restricted in _RESTRICTED_LOCAL_KEYS
     }
 
 

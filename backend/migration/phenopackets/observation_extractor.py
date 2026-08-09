@@ -57,9 +57,7 @@ class ObservationExtractionError(ValueError):
 _NOT_REPORTED = {"nr", "not reported"}
 _NOT_APPLICABLE = {"na", "n/a", "not applicable"}
 _PSEUDONYMOUS_REVIEWER_ID = re.compile(r"^reviewer-[a-z0-9][a-z0-9-]{0,62}$")
-_PSEUDONYMOUS_REVIEWER_LABEL = re.compile(
-    r"^(?:[Ss]ource )?[Rr]eviewer [0-9]+$"
-)
+_PSEUDONYMOUS_REVIEWER_LABEL = re.compile(r"^(?:[Ss]ource )?[Rr]eviewer [0-9]+$")
 
 
 def _string(value: Any) -> str:
@@ -161,13 +159,17 @@ def _phenotypes(
                 else AssessmentStatus.PRESENT
             )
             candidates = [definitions[item] for item in question.definition_ids]
-            matches = [item for item in candidates if item.term_label.casefold() in lowered]
+            matches = [
+                item for item in candidates if item.term_label.casefold() in lowered
+            ]
             if lowered in {"no", "none", "absent", "negative"}:
                 matches = candidates
             try:
                 laterality = parse_laterality(raw, vocabulary=modifier_vocabulary)
             except ModifierVocabularyError as exc:
-                raise ObservationExtractionError("source laterality is not importable") from exc
+                raise ObservationExtractionError(
+                    "source laterality is not importable"
+                ) from exc
             if len(candidates) == 1 and not matches:
                 if lowered not in {"yes", "present", "positive"} and not laterality:
                     raise ObservationExtractionError(
@@ -179,8 +181,7 @@ def _phenotypes(
                     f"unknown categorical value for {question.source_column}"
                 )
             modifiers = tuple(
-                OntologyTerm(id=item["id"], label=item["label"])
-                for item in laterality
+                OntologyTerm(id=item["id"], label=item["label"]) for item in laterality
             )
             findings = tuple(
                 PhenotypeFinding(
@@ -194,11 +195,11 @@ def _phenotypes(
             PhenotypeAssessment(
                 assessment_id=assessment_id_for(
                     observation_id, "phenotype", question.source_column, "0"
-            ),
-            column=question.source_column,
-            raw_value=raw,
-            source_status=_observed(raw).source_status,
-            curation_status=curation,
+                ),
+                column=question.source_column,
+                raw_value=raw,
+                source_status=_observed(raw).source_status,
+                curation_status=curation,
                 assessment_status=status,
                 findings=findings,
             )
@@ -242,7 +243,9 @@ def extract_observation(
             row["Publication"], mapping=publication_mapping
         )
     except PublicationMappingError as exc:
-        raise ObservationExtractionError("source publication alias is not importable") from exc
+        raise ObservationExtractionError(
+            "source publication alias is not importable"
+        ) from exc
     return ReportObservation(
         observation_id=observation_id,
         origin=ObservationOrigin.IMPORTED,

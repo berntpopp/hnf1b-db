@@ -76,7 +76,8 @@ def _input(
                 "KidneyBiopsy": "no",
                 "Comment": (
                     "changed source comment"
-                    if changed and (changed_report is None or changed_report == report_id)
+                    if changed
+                    and (changed_report is None or changed_report == report_id)
                     else "NR"
                 ),
             }
@@ -116,14 +117,18 @@ def _with_renal_cyst_status(observation, status: AssessmentStatus):
 @pytest.mark.parametrize(
     "failure_stage", ["dataset", "snapshot", "run", "record", "revision", "binding"]
 )
-async def test_typed_apply_rolls_back_every_stage(db_session, curator_user, failure_stage):
+async def test_typed_apply_rolls_back_every_stage(
+    db_session, curator_user, failure_stage
+):
     manifest, observations = _input()
 
     async def fail(stage: str) -> None:
         if stage == failure_stage:
             raise RuntimeError("injected failure")
 
-    service = TypedObservationImportService(db_session, actor=curator_user, stage_hook=fail)
+    service = TypedObservationImportService(
+        db_session, actor=curator_user, stage_hook=fail
+    )
     with pytest.raises(RuntimeError, match="injected failure"):
         await service.apply(manifest=manifest, observations_by_subject=observations)
 
@@ -155,15 +160,25 @@ async def test_typed_apply_persists_complete_accounting(db_session, curator_user
     assert revision.import_run_id == run.id
     profile = record.phenopacket["hnf1bCuration"]
     assert profile["schemaVersion"] == "2.0"
-    assert set(profile["observationsById"]) == {str(observations["source-subject"][0].observation_id)}
+    assert set(profile["observationsById"]) == {
+        str(observations["source-subject"][0].observation_id)
+    }
     stored_source = next(iter(profile["observationsById"].values()))["source"]
     assert stored_source["provider"] == manifest.source_system
     assert stored_source["datasetId"] == manifest.dataset_key
     assert stored_source["manifestSha256"] == manifest.sha256
     assert stored_source["importRunId"] == str(run.id)
     assert profile["projection"]["algorithmVersion"] == "1.0"
-    assert await db_session.scalar(select(func.count()).select_from(PhenopacketSubjectBinding)) == 1
-    assert await db_session.scalar(select(func.count()).select_from(SourceReportBinding)) == 1
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(PhenopacketSubjectBinding)
+        )
+        == 1
+    )
+    assert (
+        await db_session.scalar(select(func.count()).select_from(SourceReportBinding))
+        == 1
+    )
 
 
 @pytest.mark.asyncio
@@ -176,8 +191,13 @@ async def test_typed_apply_is_a_noop_for_an_exact_snapshot_rerun(
     await service.apply(manifest=manifest, observations_by_subject=observations)
     await service.apply(manifest=manifest, observations_by_subject=observations)
 
-    assert await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
-    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 1
+    assert (
+        await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
+    )
+    assert (
+        await db_session.scalar(select(func.count()).select_from(PhenopacketRevision))
+        == 1
+    )
 
 
 @pytest.mark.asyncio
@@ -239,8 +259,13 @@ async def test_changed_snapshot_refuses_to_overwrite_an_active_import_draft(
             manifest=changed_manifest, observations_by_subject=changed_observations
         )
 
-    assert await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
-    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 1
+    assert (
+        await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
+    )
+    assert (
+        await db_session.scalar(select(func.count()).select_from(PhenopacketRevision))
+        == 1
+    )
 
 
 @pytest.mark.asyncio
@@ -251,7 +276,9 @@ async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
     service = TypedObservationImportService(db_session, actor=curator_user)
     await service.apply(manifest=manifest, observations_by_subject=observations)
     record = (await db_session.execute(select(Phenopacket))).scalar_one()
-    initial_revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
+    initial_revision = (
+        await db_session.execute(select(PhenopacketRevision))
+    ).scalar_one()
     record.state = "published"
     record.head_published_revision_id = initial_revision.id
     record.editing_revision_id = None
@@ -264,7 +291,10 @@ async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
 
     assert result.applied is True
     assert await db_session.scalar(select(func.count()).select_from(Phenopacket)) == 1
-    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 2
+    assert (
+        await db_session.scalar(select(func.count()).select_from(PhenopacketRevision))
+        == 2
+    )
 
 
 @pytest.mark.asyncio
@@ -290,17 +320,23 @@ async def test_complete_changed_snapshot_retires_missing_report_binding(
     )
 
     bindings = (
-        await db_session.execute(
-            select(SourceReportBinding).order_by(SourceReportBinding.report_id)
+        (
+            await db_session.execute(
+                select(SourceReportBinding).order_by(SourceReportBinding.report_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert [(binding.report_id, binding.active) for binding in bindings] == [
         ("source-report-1", True),
         ("source-report-2", False),
     ]
-    profile = (await db_session.execute(select(Phenopacket))).scalar_one().phenopacket[
-        "hnf1bCuration"
-    ]
+    profile = (
+        (await db_session.execute(select(Phenopacket)))
+        .scalar_one()
+        .phenopacket["hnf1bCuration"]
+    )
     assert len(profile["observationsById"]) == 1
 
 
@@ -322,12 +358,16 @@ async def test_complete_changed_snapshot_retires_missing_subject_binding(
     )
 
     subject_bindings = (
-        await db_session.execute(
-            select(PhenopacketSubjectBinding.source_subject_id).order_by(
-                PhenopacketSubjectBinding.source_subject_id
+        (
+            await db_session.execute(
+                select(PhenopacketSubjectBinding.source_subject_id).order_by(
+                    PhenopacketSubjectBinding.source_subject_id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     report_bindings = (
         await db_session.execute(
             select(SourceReportBinding.report_id, SourceReportBinding.active).order_by(
@@ -351,7 +391,9 @@ async def test_changed_snapshot_preserves_unaffected_curator_correction(
     service = TypedObservationImportService(db_session, actor=curator_user)
     await service.apply(manifest=manifest, observations_by_subject=observations)
     record = (await db_session.execute(select(Phenopacket))).scalar_one()
-    initial_revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
+    initial_revision = (
+        await db_session.execute(select(PhenopacketRevision))
+    ).scalar_one()
     observation_id = str(observations["source-subject"][0].observation_id)
     current = Hnf1bCurationProfile.model_validate(record.phenopacket["hnf1bCuration"])
     correction = CurationCorrection(
@@ -385,9 +427,11 @@ async def test_changed_snapshot_preserves_unaffected_curator_correction(
         manifest=changed_manifest, observations_by_subject=changed_observations
     )
 
-    profile = (await db_session.execute(select(Phenopacket))).scalar_one().phenopacket[
-        "hnf1bCuration"
-    ]
+    profile = (
+        (await db_session.execute(select(Phenopacket)))
+        .scalar_one()
+        .phenopacket["hnf1bCuration"]
+    )
     assert profile["correctionsById"]["correction-one"]["postimage"] == "no"
 
 
@@ -400,7 +444,9 @@ async def test_changed_snapshot_preserves_a_valid_curator_resolution(
     service = TypedObservationImportService(db_session, actor=curator_user)
     await service.apply(manifest=manifest, observations_by_subject=observations)
     record = (await db_session.execute(select(Phenopacket))).scalar_one()
-    initial_revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
+    initial_revision = (
+        await db_session.execute(select(PhenopacketRevision))
+    ).scalar_one()
 
     conflicted = [
         observations["source-subject"][0],
@@ -408,7 +454,9 @@ async def test_changed_snapshot_preserves_a_valid_curator_resolution(
             observations["source-subject"][1], AssessmentStatus.EXCLUDED
         ),
     ]
-    conflict = project_individual(conflicted, [], algorithm_version="1.0").blocking_conflicts[0]
+    conflict = project_individual(
+        conflicted, [], algorithm_version="1.0"
+    ).blocking_conflicts[0]
     resolution = ProjectionResolution(
         resolution_id="resolution-one",
         conflict_key=conflict.conflict_key,
@@ -447,9 +495,11 @@ async def test_changed_snapshot_preserves_a_valid_curator_resolution(
         manifest=changed_manifest, observations_by_subject=changed_observations
     )
 
-    profile = (await db_session.execute(select(Phenopacket))).scalar_one().phenopacket[
-        "hnf1bCuration"
-    ]
+    profile = (
+        (await db_session.execute(select(Phenopacket)))
+        .scalar_one()
+        .phenopacket["hnf1bCuration"]
+    )
     assert profile["resolutionsById"]["resolution-one"]["conflictKey"] == (
         "phenotype:HP:0000107:polarity"
     )
@@ -483,14 +533,21 @@ async def test_exact_snapshot_noop_leaves_curator_overlay_untouched(
     }
     await db_session.flush()
 
-    result = await service.apply(manifest=manifest, observations_by_subject=observations)
+    result = await service.apply(
+        manifest=manifest, observations_by_subject=observations
+    )
 
     assert result.applied is False
-    profile = (await db_session.execute(select(Phenopacket))).scalar_one().phenopacket[
-        "hnf1bCuration"
-    ]
+    profile = (
+        (await db_session.execute(select(Phenopacket)))
+        .scalar_one()
+        .phenopacket["hnf1bCuration"]
+    )
     assert "correction-noop" in profile["correctionsById"]
-    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 1
+    assert (
+        await db_session.scalar(select(func.count()).select_from(PhenopacketRevision))
+        == 1
+    )
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,9 @@ def parse_source_age(raw: str, *, context: str | None = None) -> TemporalValue:
     week_match = _WEEKS.fullmatch(value)
     if week_match:
         if (context or "").casefold() not in {"prenatal", "fetal", "fetus"}:
-            raise AgeParseError("gestational week syntax requires prenatal/fetal context")
+            raise AgeParseError(
+                "gestational week syntax requires prenatal/fetal context"
+            )
         return TemporalValue(
             kind="gestationalAge",
             iso8601_duration=f"P{week_match.group('value')}W",

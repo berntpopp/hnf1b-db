@@ -92,7 +92,9 @@ def parse_laterality(
             raise ModifierVocabularyError("invalid laterality qualifier")
         return []
     tokens = tuple(text.split())
-    if not any(token in {"bilateral", "unilateral", "left", "right"} for token in tokens):
+    if not any(
+        token in {"bilateral", "unilateral", "left", "right"} for token in tokens
+    ):
         return []
     allowed = {
         ("bilateral",): ("bilateral",),
@@ -108,7 +110,9 @@ def parse_laterality(
     if keys is None:
         raise ModifierVocabularyError("invalid laterality qualifier")
     if vocabulary is None:
-        raise ModifierVocabularyError("laterality requires a source modifier vocabulary")
+        raise ModifierVocabularyError(
+            "laterality requires a source modifier vocabulary"
+        )
     return [
         {"id": vocabulary.terms[key][0], "label": vocabulary.terms[key][1]}
         for key in keys

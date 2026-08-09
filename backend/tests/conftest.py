@@ -551,9 +551,7 @@ async def published_record(db_session, admin_user):
             "metaData": {
                 "created": "2026-08-09T00:00:00Z",
                 "createdBy": "test",
-                "resources": [
-                    {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
-                ],
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
             },
         },
         # Build a valid transaction in the same order as production: insert
@@ -577,9 +575,7 @@ async def published_record(db_session, admin_user):
             "metaData": {
                 "created": "2026-08-09T00:00:00Z",
                 "createdBy": "test",
-                "resources": [
-                    {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
-                ],
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
             },
         },
         change_reason="init",

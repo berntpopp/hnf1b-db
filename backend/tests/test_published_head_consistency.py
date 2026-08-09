@@ -21,9 +21,7 @@ async def test_public_resolution_uses_head_even_without_an_active_draft(
         "metaData": {
             "created": "2026-08-09T00:00:00Z",
             "createdBy": "test",
-            "resources": [
-                {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
-            ],
+            "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
         },
     }
     assert public != published_record.phenopacket

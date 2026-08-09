@@ -101,7 +101,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.ForeignKeyConstraint(["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("dataset_id", "manifest_sha256"),
     )
     op.create_table(
@@ -110,7 +112,9 @@ def upgrade() -> None:
         sa.Column("snapshot_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("transformer_version", sa.String(length=80), nullable=False),
         sa.Column("projection_version", sa.String(length=80), nullable=False),
-        sa.Column("status", sa.String(length=16), nullable=False, server_default="staged"),
+        sa.Column(
+            "status", sa.String(length=16), nullable=False, server_default="staged"
+        ),
         sa.Column("observed_counts", postgresql.JSONB()),
         sa.Column("summary_jsonb", postgresql.JSONB()),
         sa.Column("error_report", postgresql.JSONB()),
@@ -126,7 +130,9 @@ def upgrade() -> None:
             "status IN ('staged', 'validated', 'applying', 'applied', 'failed')",
             name="ck_source_import_run_status",
         ),
-        sa.ForeignKeyConstraint(["snapshot_id"], ["source_snapshots.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["snapshot_id"], ["source_snapshots.id"], ondelete="RESTRICT"
+        ),
         sa.ForeignKeyConstraint(["actor_id"], ["users.id"], ondelete="SET NULL"),
     )
     op.create_index(
@@ -154,8 +160,12 @@ def upgrade() -> None:
         sa.Column("record_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("dataset_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("source_subject_id", sa.Text(), nullable=False),
-        sa.ForeignKeyConstraint(["record_id"], ["phenopackets.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["record_id"], ["phenopackets.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("dataset_id", "source_subject_id"),
     )
     op.create_table(
@@ -168,10 +178,18 @@ def upgrade() -> None:
         sa.Column("first_seen_run_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("last_seen_run_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.ForeignKeyConstraint(["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["record_id"], ["phenopackets.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["first_seen_run_id"], ["source_import_runs.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["last_seen_run_id"], ["source_import_runs.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["dataset_id"], ["source_datasets.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["record_id"], ["phenopackets.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["first_seen_run_id"], ["source_import_runs.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["last_seen_run_id"], ["source_import_runs.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("dataset_id", "report_id"),
         sa.UniqueConstraint("record_id", "observation_id"),
     )
@@ -182,8 +200,12 @@ def upgrade() -> None:
         sa.Column("observation_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("canonical_sha256", sa.String(length=64), nullable=False),
         sa.Column("created_revision_id", sa.BigInteger(), nullable=False),
-        sa.ForeignKeyConstraint(["record_id"], ["phenopackets.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["created_revision_id"], ["phenopacket_revisions.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["record_id"], ["phenopackets.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_revision_id"], ["phenopacket_revisions.id"], ondelete="RESTRICT"
+        ),
     )
 
 

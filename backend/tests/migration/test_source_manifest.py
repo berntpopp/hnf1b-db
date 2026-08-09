@@ -94,7 +94,14 @@ def test_manifest_rejects_unknown_and_duplicate_individual_headers():
     ]
     source = {
         "Individuals": _csv(required_headers + ["unexpected"]),
-        "Phenotypes": _csv(["phenotype_category", "phenotype_id", "phenotype_name", "phenotype_description"]),
+        "Phenotypes": _csv(
+            [
+                "phenotype_category",
+                "phenotype_id",
+                "phenotype_name",
+                "phenotype_description",
+            ]
+        ),
         "Phenotype_modifier": _csv(["modifier", "modifier_id"]),
         "Publications": _csv(["publication_id", "publication_alias", "PMID", "DOI"]),
     }
@@ -115,7 +122,14 @@ def test_manifest_hashes_all_raw_sheets_and_never_returns_partial_data():
     """The declared snapshot hash commits the complete immutable source input."""
     sheets = {
         "Individuals": _csv(["individual_id"]),
-        "Phenotypes": _csv(["phenotype_category", "phenotype_id", "phenotype_name", "phenotype_description"]),
+        "Phenotypes": _csv(
+            [
+                "phenotype_category",
+                "phenotype_id",
+                "phenotype_name",
+                "phenotype_description",
+            ]
+        ),
         "Phenotype_modifier": _csv(["modifier", "modifier_id"]),
         "Publications": _csv(["publication_id", "publication_alias", "PMID", "DOI"]),
     }
@@ -139,7 +153,9 @@ def test_manifest_hashes_all_raw_sheets_and_never_returns_partial_data():
 
 def test_manifest_payload_preserves_only_structural_metadata_and_row_counts():
     sheets = {
-        "Individuals": _csv(list(EXPECTED_HEADERS["Individuals"]), ["source-subject"] * 60),
+        "Individuals": _csv(
+            list(EXPECTED_HEADERS["Individuals"]), ["source-subject"] * 60
+        ),
         "Phenotypes": _csv(list(EXPECTED_HEADERS["Phenotypes"])),
         "Phenotype_modifier": _csv(["modifier", "modifier_id"], ["Left", "HP:1"]),
         "Publications": _csv(list(EXPECTED_HEADERS["Publications"])),

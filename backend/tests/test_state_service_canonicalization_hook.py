@@ -32,10 +32,16 @@ def test_canonicalization_hook_passes_publish_policy_to_v2_adapter(monkeypatch):
     adapter.canonicalize_curation_document = canonicalize_curation_document
     monkeypatch.setitem(sys.modules, "app.phenopackets.curation.adapters", adapter)
 
-    assert PhenopacketStateService._canonicalize_for_persistence(
-        {"id": "v2-1"}, publish=False
-    )["canonical"] is False
-    assert PhenopacketStateService._canonicalize_for_persistence(
-        {"id": "v2-1"}, publish=True
-    )["canonical"] is True
+    assert (
+        PhenopacketStateService._canonicalize_for_persistence(
+            {"id": "v2-1"}, publish=False
+        )["canonical"]
+        is False
+    )
+    assert (
+        PhenopacketStateService._canonicalize_for_persistence(
+            {"id": "v2-1"}, publish=True
+        )["canonical"]
+        is True
+    )
     assert calls == [False, True]

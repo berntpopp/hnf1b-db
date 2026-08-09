@@ -153,7 +153,9 @@ def test_check_source_row_against_the_real_curation_vocabulary():
         if violation:
             violations.append((row["phenotype_id"], violation))
 
-    assert violations == [], f"shipped vocabulary must be source-conformant: {violations}"
+    assert violations == [], (
+        f"shipped vocabulary must be source-conformant: {violations}"
+    )
 
 
 def test_ontology_service_hardcoded_terms_are_conformant():

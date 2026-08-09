@@ -102,15 +102,26 @@ def test_extractor_preserves_categorical_definition_and_solitary_kidney_laterali
     row["RenalInsufficancy"] = "Stage 5 chronic kidney disease"
     row["SolitaryKidney"] = "unilateral left"
     observation = extract_observation(
-        row, row_number=7, source_system="local_fixture", dataset_key="hnf1b-registry",
-        manifest_sha256="sha256:fixture", row_hmac_key=b"test-only-key",
+        row,
+        row_number=7,
+        source_system="local_fixture",
+        dataset_key="hnf1b-registry",
+        manifest_sha256="sha256:fixture",
+        row_hmac_key=b"test-only-key",
         reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
         modifier_vocabulary=_modifier_vocabulary(),
     )
-    ckd = next(item for item in observation.phenotypes if item.column == "RenalInsufficancy")
-    solitary = next(item for item in observation.phenotypes if item.column == "SolitaryKidney")
+    ckd = next(
+        item for item in observation.phenotypes if item.column == "RenalInsufficancy"
+    )
+    solitary = next(
+        item for item in observation.phenotypes if item.column == "SolitaryKidney"
+    )
     assert ckd.findings[0].term.id == "HP:0003774"
-    assert [modifier.id for modifier in solitary.findings[0].modifiers] == ["HP:0012833", "HP:0012835"]
+    assert [modifier.id for modifier in solitary.findings[0].modifiers] == [
+        "HP:0012833",
+        "HP:0012835",
+    ]
 
 
 def test_extractor_refuses_laterality_without_versioned_source_modifiers():
@@ -169,7 +180,9 @@ def test_kidney_biopsy_no_is_explicitly_not_assessed_not_two_negative_findings()
         modifier_vocabulary=_modifier_vocabulary(),
     )
 
-    biopsy = next(item for item in observation.phenotypes if item.column == "KidneyBiopsy")
+    biopsy = next(
+        item for item in observation.phenotypes if item.column == "KidneyBiopsy"
+    )
     assert biopsy.assessment_status is AssessmentStatus.NOT_ASSESSED
     assert biopsy.findings == ()
 
@@ -261,9 +274,7 @@ def test_extractor_rejects_noncanonical_or_conflicting_laterality(value):
             dataset_key="hnf1b-registry",
             manifest_sha256="sha256:fixture",
             row_hmac_key=b"test-only-key",
-            reviewer_mapping={
-                "reviewer@example.test": ("reviewer-1", "Reviewer 1")
-            },
+            reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Reviewer 1")},
             modifier_vocabulary=_modifier_vocabulary(),
         )
 
