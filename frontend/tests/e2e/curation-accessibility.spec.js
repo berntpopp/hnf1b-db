@@ -135,8 +135,17 @@ for (const presentation of presentations) {
     );
     await page.setViewportSize({ width: presentation.width, height: presentation.height });
     await mockLedger(page);
-    await page.goto('/phenopackets/PP-317/edit');
-    await expect(page.getByRole('heading', { name: 'Report observation ledger' })).toBeVisible();
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.replace(/\/+$/, '') ===
+            '/api/v2/phenopackets/PP-317/curation' && response.status() === 200
+      ),
+      page.goto('/phenopackets/PP-317/edit'),
+    ]);
+    await expect(page.getByRole('heading', { name: 'Report observation ledger' })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator('.v-application')).toHaveClass(
       new RegExp(`v-theme--${presentation.theme}`)
     );

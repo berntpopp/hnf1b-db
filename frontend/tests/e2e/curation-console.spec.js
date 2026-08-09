@@ -1304,7 +1304,7 @@ test.describe('3. Adversarial pass', () => {
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     const leaveDialog = page.getByRole('dialog', { name: 'Unsaved changes' });
     await expect(leaveDialog).toBeVisible();
-    await expect(leaveDialog).toContainText('unsaved');
+    await expect(leaveDialog).toContainText('Unsaved');
     await leaveDialog.getByRole('button', { name: 'Keep editing' }).click();
     await expect(page).toHaveURL(/\/phenopackets\/create$/);
 
