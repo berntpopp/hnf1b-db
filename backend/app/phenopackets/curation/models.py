@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,7 +20,7 @@ class CurationModel(BaseModel):
     """Closed stored-profile model with JSON aliases matching the specification."""
 
     model_config = ConfigDict(
-        extra="forbid", populate_by_name=True, alias_generator=_camel_case
+        extra="forbid", populate_by_name=True, alias_generator=_camel_case, frozen=True
     )
 
 
@@ -115,11 +115,36 @@ class SubjectObservation(CurationModel):
     sex: ObservedValue[str] | None = None
 
 
+class TemporalValue(CurationModel):
+    """Closed representation of a source age, gestational age, or ontology onset."""
+
+    kind: Literal["age", "gestationalAge", "ontologyClass", "unprojected"]
+    iso8601_duration: str | None = None
+    term: OntologyTerm | None = None
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> "TemporalValue":
+        """Disallow free-form temporal dictionaries in imported evidence."""
+        if self.kind in {"age", "gestationalAge"}:
+            if not self.iso8601_duration or self.term is not None:
+                raise ValueError(
+                    "duration temporal values require only iso8601Duration"
+                )
+        elif self.kind == "ontologyClass":
+            if self.term is None or self.iso8601_duration is not None:
+                raise ValueError("ontology temporal values require only term")
+        elif self.iso8601_duration is not None or self.term is not None:
+            raise ValueError(
+                "unprojected temporal values cannot contain projected data"
+            )
+        return self
+
+
 class TemporalObservation(CurationModel):
     """Raw temporal source value and validated typed representation."""
 
-    onset: ObservedValue[dict[str, Any]] | None = None
-    reported: ObservedValue[dict[str, Any]] | None = None
+    onset: ObservedValue[TemporalValue] | None = None
+    reported: ObservedValue[TemporalValue] | None = None
 
 
 class CaseObservation(CurationModel):
@@ -142,7 +167,7 @@ class DiseaseObservation(CurationModel):
 
     term: OntologyTerm
     asserted: bool = True
-    onset: ObservedValue[dict[str, Any]] | None = None
+    onset: ObservedValue[TemporalValue] | None = None
 
 
 class VariantObservation(CurationModel):
@@ -201,12 +226,35 @@ class PhenotypeAssessment(CurationModel):
     assessment_id: str
     column: str
     raw_value: str
+    source_status: SourceStatus
     curation_status: CurationStatus
     assessment_status: AssessmentStatus | None
     findings: tuple[PhenotypeFinding, ...] = ()
     evidence: tuple[EvidenceObservation, ...] = ()
-    onset: ObservedValue[dict[str, Any]] | None = None
+    onset: ObservedValue[TemporalValue] | None = None
     correction_ids: tuple[str, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_source_status(cls, data: Any) -> Any:
+        """Make the source's NA/NR/blank meanings impossible to curate as positive."""
+        if not isinstance(data, dict):
+            return data
+        raw = str(data.get("raw_value", data.get("rawValue", ""))).strip().upper()
+        implied = {
+            "": SourceStatus.BLANK.value,
+            "NA": SourceStatus.NOT_APPLICABLE.value,
+            "N/A": SourceStatus.NOT_APPLICABLE.value,
+            "NOT APPLICABLE": SourceStatus.NOT_APPLICABLE.value,
+            "NR": SourceStatus.NOT_REPORTED.value,
+            "NOT REPORTED": SourceStatus.NOT_REPORTED.value,
+        }.get(raw, SourceStatus.STATED.value)
+        provided = data.get("source_status", data.get("sourceStatus"))
+        if provided is not None and provided != implied:
+            raise ValueError("sourceStatus conflicts with the raw source cell")
+        value = dict(data)
+        value["source_status"] = implied
+        return value
 
     @model_validator(mode="after")
     def validate_status_axes(self) -> "PhenotypeAssessment":
@@ -225,6 +273,60 @@ class PhenotypeAssessment(CurationModel):
             raise ValueError(
                 "curated phenotype assessments require an assessmentStatus"
             )
+        if (
+            self.assessment_status
+            not in {
+                AssessmentStatus.PRESENT,
+                AssessmentStatus.EXCLUDED,
+            }
+            and self.findings
+        ):
+            raise ValueError("non-positive phenotype states cannot contain findings")
+        if (
+            self.assessment_status
+            in {
+                AssessmentStatus.PRESENT,
+                AssessmentStatus.EXCLUDED,
+            }
+            and not self.findings
+        ):
+            raise ValueError("positive phenotype states require a finding")
+        if self.source_status in {
+            SourceStatus.NOT_REPORTED,
+            SourceStatus.NOT_APPLICABLE,
+            SourceStatus.BLANK,
+        } and self.assessment_status in {
+            AssessmentStatus.PRESENT,
+            AssessmentStatus.EXCLUDED,
+        }:
+            raise ValueError("NA/NR/blank source states cannot be PRESENT or EXCLUDED")
+        if self.curation_status is CurationStatus.CURATED:
+            from app.phenopackets.curation.definitions import (
+                FINDING_DEFINITIONS,
+                PHENOTYPE_QUESTIONS,
+            )
+
+            questions = {item.source_column: item for item in PHENOTYPE_QUESTIONS}
+            definitions = {item.definition_id: item for item in FINDING_DEFINITIONS}
+            question = questions.get(self.column)
+            if question is None:
+                raise ValueError(
+                    "phenotype assessment column is not a source definition"
+                )
+            if len(self.findings) > 1 and question.finding_cardinality == "single":
+                raise ValueError("source phenotype definition accepts one finding")
+            for finding in self.findings:
+                definition = definitions.get(finding.definition_id)
+                if (
+                    definition is None
+                    or finding.definition_id not in question.definition_ids
+                    or finding.term.id != definition.term_id
+                ):
+                    raise ValueError("finding does not match source definition")
+                if finding.modifiers and question.allowed_laterality == "none":
+                    raise ValueError(
+                        "source phenotype definition does not allow laterality"
+                    )
         return self
 
 
@@ -264,11 +366,36 @@ class ReportObservation(CurationModel):
             observation_id_for,
         )
 
+        if self.source.row_hmac_sha256 is None:
+            raise ValueError("imported observations require rowHmacSha256")
         if self.observation_id != observation_id_for(
             self.source.provider, self.source.dataset_id, self.identifiers.report_id
         ):
             raise ValueError(
                 "imported observationId must be its UUIDv5 source identity"
+            )
+        required_sections = {
+            "publication": self.publication,
+            "case": self.case,
+            "ages": self.ages,
+            "variant": self.variant,
+            "classification": self.classification,
+            "sourceReview": self.source_review,
+            "notes": self.notes,
+        }
+        missing_sections = sorted(
+            name for name, value in required_sections.items() if value is None
+        )
+        if missing_sections:
+            raise ValueError(
+                "imported observations require source sections: "
+                + ", ".join(missing_sections)
+            )
+        missing_fields = _missing_imported_source_fields(self)
+        if missing_fields:
+            raise ValueError(
+                "imported observations require all source dimensions: "
+                + ", ".join(missing_fields)
             )
         expected_columns = {question.source_column for question in PHENOTYPE_QUESTIONS}
         if (
@@ -287,6 +414,98 @@ class ReportObservation(CurationModel):
                     "imported assessmentId must be its UUIDv5 source identity"
                 )
         return self
+
+
+def _missing_imported_source_fields(observation: ReportObservation) -> list[str]:
+    """Return mandatory imported spreadsheet dimensions that would otherwise vanish."""
+    required: tuple[tuple[str, object | None], ...] = (
+        (
+            "identifiers.individualIdentifier",
+            observation.identifiers.individual_identifier,
+        ),
+        ("identifiers.sex", observation.identifiers.sex),
+        (
+            "publication.sourceKey",
+            observation.publication.source_key if observation.publication else None,
+        ),
+        (
+            "publication.publicationType",
+            observation.publication.publication_type
+            if observation.publication
+            else None,
+        ),
+        (
+            "case.duplicateCheck",
+            observation.case.duplicate_check if observation.case else None,
+        ),
+        (
+            "case.problematic",
+            observation.case.problematic if observation.case else None,
+        ),
+        ("case.cohort", observation.case.cohort if observation.case else None),
+        (
+            "case.familyHistory",
+            observation.case.family_history if observation.case else None,
+        ),
+        ("ages.onset", observation.ages.onset if observation.ages else None),
+        ("ages.reported", observation.ages.reported if observation.ages else None),
+        (
+            "variant.variantType",
+            observation.variant.variant_type if observation.variant else None,
+        ),
+        (
+            "variant.reported",
+            observation.variant.reported if observation.variant else None,
+        ),
+        (
+            "variant.sourceId",
+            observation.variant.source_id if observation.variant else None,
+        ),
+        (
+            "variant.hg19Info",
+            observation.variant.hg19_info if observation.variant else None,
+        ),
+        ("variant.hg19", observation.variant.hg19 if observation.variant else None),
+        (
+            "variant.hg38Info",
+            observation.variant.hg38_info if observation.variant else None,
+        ),
+        ("variant.hg38", observation.variant.hg38 if observation.variant else None),
+        (
+            "variant.varsome",
+            observation.variant.varsome if observation.variant else None,
+        ),
+        (
+            "variant.detectionMethod",
+            observation.variant.detection_method if observation.variant else None,
+        ),
+        (
+            "variant.segregation",
+            observation.variant.segregation if observation.variant else None,
+        ),
+        (
+            "classification.verdict",
+            observation.classification.verdict if observation.classification else None,
+        ),
+        (
+            "classification.criteria",
+            observation.classification.criteria if observation.classification else None,
+        ),
+        (
+            "classification.comment",
+            observation.classification.comment if observation.classification else None,
+        ),
+        (
+            "classification.system",
+            observation.classification.system if observation.classification else None,
+        ),
+        (
+            "classification.date",
+            observation.classification.date if observation.classification else None,
+        ),
+        ("notes.comment", observation.notes.comment if observation.notes else None),
+    )
+    return [name for name, value in required if value is None]
 
 
 class CurationCorrection(CurationModel):

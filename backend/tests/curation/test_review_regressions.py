@@ -15,7 +15,9 @@ from app.phenopackets.curation.identifiers import (
     row_hmac_sha256,
 )
 from app.phenopackets.curation.models import (
+    AssessmentStatus,
     CurationCorrection,
+    CurationStatus,
     Hnf1bCurationProfile,
     ObservedValue,
     ReportObservation,
@@ -87,6 +89,70 @@ def test_imported_report_requires_exactly_the_30_known_assessments_and_canonical
     base["origin"] = "imported"
     with pytest.raises(ValidationError):
         ReportObservation.model_validate(base)
+
+
+def test_imported_report_rejects_missing_required_source_sections_and_row_hmac():
+    """A source import cannot serialize a syntactically valid partial ledger."""
+    base = _report("RPT-import").model_dump()
+    base["origin"] = "imported"
+    base["phenotypes"] = []
+    base["source"]["row_hmac_sha256"] = None
+    with pytest.raises(ValidationError, match="rowHmacSha256"):
+        ReportObservation.model_validate(base)
+
+
+def test_observed_source_values_are_deeply_immutable():
+    """Typed source values cannot retain a mutable dict below a frozen cell."""
+    from app.phenopackets.curation.models import TemporalValue
+
+    value = ObservedValue(
+        raw="28 weeks",
+        source_status="stated",
+        value=TemporalValue(kind="age", iso8601_duration="P28W"),
+    )
+    with pytest.raises(ValidationError):
+        value.value.iso8601_duration = "P29W"
+
+
+def test_nonpositive_source_status_cannot_create_a_present_finding():
+    """NA/NR source cells stay non-clinical even when a curator supplies a finding."""
+    from app.phenopackets.curation.models import PhenotypeAssessment
+
+    with pytest.raises(ValidationError, match="cannot contain findings"):
+        PhenotypeAssessment(
+            assessment_id="a",
+            column="RenalCysts",
+            raw_value="NR",
+            curation_status=CurationStatus.CURATED,
+            assessment_status=AssessmentStatus.NOT_REPORTED,
+            findings=(
+                {
+                    "definitionId": "renal-cyst",
+                    "term": {"id": "HP:0000107", "label": "Renal cyst"},
+                },
+            ),
+        )
+
+
+def test_laterality_is_rejected_for_a_non_lateralized_source_question():
+    """Modifiers are constrained by the source definition, not arbitrary HPO terms."""
+    from app.phenopackets.curation.models import PhenotypeAssessment
+
+    with pytest.raises(ValidationError, match="does not allow laterality"):
+        PhenotypeAssessment(
+            assessment_id="a",
+            column="Hypomagnesemia",
+            raw_value="yes",
+            curation_status=CurationStatus.CURATED,
+            assessment_status=AssessmentStatus.PRESENT,
+            findings=(
+                {
+                    "definitionId": "hypomagnesemia",
+                    "term": {"id": "HP:0002917", "label": "Hypomagnesemia"},
+                    "modifiers": ({"id": "HP:0012832", "label": "Bilateral"},),
+                },
+            ),
+        )
 
 
 def test_identity_helpers_are_unambiguous_and_models_enforce_uuid_and_hmac_formats():
