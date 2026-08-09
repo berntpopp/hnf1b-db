@@ -98,15 +98,46 @@ _ALLOWED_STATES = (
     "INDETERMINATE",
     "NOT_ASSESSED",
 )
-with _VOCABULARY_PATH.open(newline="", encoding="utf-8") as _handle:
-    _PINNED_ROWS = list(csv.DictReader(_handle))
-_TERM_IDS_BY_COLUMN: dict[str, tuple[str, ...]] = {
-    column: tuple(
-        row["phenotype_id"]
-        for row in _PINNED_ROWS
-        if row["phenotype_category"] == column
-    )
-    for column in _SOURCE_COLUMNS
+# This is deliberately a definition-id -> ontology-id manifest, rather than a
+# CSV row position. The vocabulary CSV supplies labels and a checked copy of
+# the rows, but cannot silently reassign a persisted definition ID.
+_TERM_ID_BY_DEFINITION = {
+    "ckd-unspecified": "HP:0012622",
+    "ckd-stage-1": "HP:0012623",
+    "ckd-stage-2": "HP:0012624",
+    "ckd-stage-3": "HP:0012625",
+    "ckd-stage-4": "HP:0012626",
+    "ckd-stage-5": "HP:0003774",
+    "renal-cortical-hyperechogenicity": "HP:0033132",
+    "renal-cyst": "HP:0000107",
+    "multicystic-kidney-dysplasia": "HP:0000003",
+    "multiple-glomerular-cysts": "HP:0100611",
+    "oligomeganephronia": "ORPHA:2260",
+    "renal-hypoplasia": "HP:0000089",
+    "unilateral-renal-agenesis": "HP:0000122",
+    "urinary-system-abnormality": "HP:0000079",
+    "genital-system-abnormality": "HP:0000078",
+    "abnormal-renal-morphology": "HP:0012210",
+    "hypomagnesemia": "HP:0002917",
+    "hypokalemia": "HP:0002900",
+    "hyperuricemia": "HP:0002149",
+    "gout": "HP:0001997",
+    "maturity-onset-diabetes-young": "HP:0004904",
+    "pancreatic-hypoplasia": "HP:0002594",
+    "exocrine-pancreatic-insufficiency": "HP:0001738",
+    "hyperparathyroidism": "HP:0000843",
+    "neurodevelopmental-delay": "HP:0012758",
+    "behavioral-abnormality": "HP:0000708",
+    "seizure": "HP:0001250",
+    "abnormal-brain-morphology": "HP:0012443",
+    "premature-birth": "HP:0001622",
+    "abnormal-heart-morphology": "HP:0001627",
+    "abnormality-of-eye": "HP:0000478",
+    "short-stature": "HP:0004322",
+    "musculoskeletal-system-abnormality": "HP:0033127",
+    "abnormal-facial-shape": "HP:0001999",
+    "elevated-hepatic-transaminase": "HP:0002910",
+    "abnormal-liver-physiology": "HP:0031865",
 }
 
 
@@ -138,29 +169,28 @@ def _build_registry(
     if rows is None:
         with _VOCABULARY_PATH.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
-    phenotype_rows = [row for row in rows if row["phenotype_category"] != "Modifier"]
+    rows_by_term = {row["phenotype_id"]: row for row in rows}
     findings: list[FindingDefinition] = []
     by_column: dict[str, list[str]] = {column: [] for column in _SOURCE_COLUMNS}
-    for row in phenotype_rows:
-        column = row["phenotype_category"]
-        definition_id = next(
-            definition_id
-            for expected_row, definition_id in zip(
-                _rows_for_column(column), _DEFINITION_IDS[column]
+    for column in _SOURCE_COLUMNS:
+        for definition_id in _DEFINITION_IDS[column]:
+            term_id = _TERM_ID_BY_DEFINITION[definition_id]
+            row = rows_by_term.get(term_id)
+            if row is None or row["phenotype_category"] != column:
+                raise ValueError(
+                    f"vocabulary does not match pinned definition {definition_id}"
+                )
+            by_column[column].append(definition_id)
+            findings.append(
+                FindingDefinition(
+                    definition_id,
+                    column,
+                    term_id,
+                    row["phenotype_name"],
+                    _ALLOWED_STATES,
+                    "compound" if column in _LATERALITY_COLUMNS else "none",
+                )
             )
-            if expected_row == row["phenotype_id"]
-        )
-        by_column[column].append(definition_id)
-        findings.append(
-            FindingDefinition(
-                definition_id,
-                column,
-                row["phenotype_id"],
-                row["phenotype_name"],
-                _ALLOWED_STATES,
-                "compound" if column in _LATERALITY_COLUMNS else "none",
-            )
-        )
     questions = tuple(
         PhenotypeQuestion(
             column,
@@ -171,11 +201,6 @@ def _build_registry(
         for column in _SOURCE_COLUMNS
     )
     return tuple(findings), questions
-
-
-def _rows_for_column(column: str) -> tuple[str, ...]:
-    """Return the explicitly pinned ontology IDs for a source question."""
-    return _TERM_IDS_BY_COLUMN[column]
 
 
 FINDING_DEFINITIONS, PHENOTYPE_QUESTIONS = _build_registry()

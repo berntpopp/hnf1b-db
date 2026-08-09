@@ -547,8 +547,35 @@ def _missing_imported_source_fields(observation: ReportObservation) -> list[str]
             observation.classification.date if observation.classification else None,
         ),
         ("notes.comment", observation.notes.comment if observation.notes else None),
+        (
+            "sourceReview.reviewerId",
+            observation.source_review.reviewer_id
+            if observation.source_review
+            else None,
+        ),
+        (
+            "sourceReview.reviewerDisplayLabel",
+            (
+                observation.source_review.reviewer_display_label
+                if observation.source_review
+                else None
+            ),
+        ),
+        (
+            "sourceReview.reviewedOn",
+            observation.source_review.reviewed_on
+            if observation.source_review
+            else None,
+        ),
     )
-    return [name for name, value in required if value is None]
+    missing = [name for name, value in required if value is None]
+    identity_fields = {
+        "identifiers.individualId": observation.identifiers.individual_id,
+        "identifiers.sourceSubjectId": observation.identifiers.source_subject_id,
+        "identifiers.reportId": observation.identifiers.report_id,
+    }
+    missing.extend(name for name, value in identity_fields.items() if not value.strip())
+    return missing
 
 
 class CurationCorrection(CurationModel):

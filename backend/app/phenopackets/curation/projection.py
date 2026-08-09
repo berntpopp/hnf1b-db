@@ -196,25 +196,26 @@ def project_individual(
                         or len({candidate[1] for candidate in selected}) != 1
                     ):
                         raise ValueError("resolution must select one clinical polarity")
-                    status = selected[0][1]
-                    representative = selected[0][2]
+                    candidates = selected
                 elif resolution.resolved_value in {"PRESENT", "EXCLUDED"}:
-                    status = AssessmentStatus(resolution.resolved_value)
-                    representative = candidates[0][2]
+                    candidates = [
+                        candidate
+                        for candidate in candidates
+                        if candidate[1] is AssessmentStatus(resolution.resolved_value)
+                    ]
+                    if not candidates:
+                        raise ValueError(
+                            "phenotype resolvedValue must be a candidate polarity"
+                        )
                 else:
                     raise ValueError(
                         "phenotype polarity resolvedValue must be PRESENT or EXCLUDED"
                     )
-                feature = {
-                    "type": _term_json(representative.term),
-                    "excluded": status is AssessmentStatus.EXCLUDED,
-                }
-                features.append(feature)
             else:
                 conflicts.append(conflict)
-            continue
+                continue
 
-        status = next(iter(polarities))
+        status = next(iter({candidate[1] for candidate in candidates}))
         representative = candidates[0][2]
         modifier_sets = {_modifier_key(finding) for _, _, finding in candidates}
         feature: dict[str, Any] = {
