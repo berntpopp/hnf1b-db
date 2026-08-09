@@ -19,7 +19,7 @@ class SchemaValidator:
         Returns:
             GA4GH Phenopackets v2 JSON schema (camelCase format)
         """
-        return {
+        schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
             "required": ["id", "subject", "metaData"],
@@ -490,6 +490,18 @@ class SchemaValidator:
                 },
             },
         }
+        # The curation extension is a closed persisted contract, not a loose
+        # JSON blob. Reuse Pydantic's schema so direct Draft7 validation and
+        # runtime model validation accept exactly the same fields (including
+        # nullable correction pre/post-images).
+        from app.phenopackets.curation.models import Hnf1bCurationProfile
+
+        curation_schema = Hnf1bCurationProfile.model_json_schema(
+            by_alias=True, ref_template="#/$defs/{model}"
+        )
+        schema["properties"]["hnf1bCuration"] = curation_schema
+        schema["$defs"] = curation_schema.pop("$defs", {})
+        return schema
 
     def validate(self, phenopacket: Dict[str, Any]) -> List[str]:
         """Validate a phenopacket against the JSON schema.
@@ -530,7 +542,10 @@ class SchemaValidator:
         Returns:
             True if valid, False otherwise
         """
-        return self.validator.is_valid(phenopacket)
+        # `validate()` first applies the closed Pydantic source-ledger contract;
+        # using Draft7Validator directly here used to let a partial imported
+        # observation pass through production write paths.
+        return not self.validate(phenopacket)
 
     def validate_sex(self, sex: str) -> bool:
         """Validate sex value against allowed values.
@@ -554,11 +569,10 @@ class SchemaValidator:
             True if valid interpretation status
         """
         valid_statuses = [
-            "UNKNOWN",
-            "PATHOGENIC",
-            "LIKELY_PATHOGENIC",
-            "UNCERTAIN_SIGNIFICANCE",
-            "LIKELY_BENIGN",
-            "BENIGN",
+            "UNKNOWN_STATUS",
+            "REJECTED",
+            "CANDIDATE",
+            "CONTRIBUTORY",
+            "CAUSATIVE",
         ]
         return status in valid_statuses

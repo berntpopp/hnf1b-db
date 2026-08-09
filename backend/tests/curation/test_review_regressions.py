@@ -101,6 +101,30 @@ def test_imported_report_rejects_missing_required_source_sections_and_row_hmac()
         ReportObservation.model_validate(base)
 
 
+def test_schema_is_valid_runs_the_closed_curation_model_not_only_json_schema():
+    """Production boolean validation must reject an imported partial source ledger."""
+    from app.phenopackets.validation.schema_validator import SchemaValidator
+
+    base = _report("RPT-import").model_dump(by_alias=True)
+    base["origin"] = "imported"
+    document = {
+        "id": "packet",
+        "subject": {"id": "317"},
+        "metaData": {
+            "created": "2026-08-09T00:00:00Z",
+            "createdBy": "t",
+            "resources": [],
+        },
+        "hnf1bCuration": {
+            "schemaVersion": "2.0",
+            "definitionsVersion": "hnf1b-phenotypes/1",
+            "sourceSubjectId": "source-317",
+            "observationsById": {base["observationId"]: base},
+        },
+    }
+    assert not SchemaValidator().is_valid(document)
+
+
 def test_observed_source_values_are_deeply_immutable():
     """Typed source values cannot retain a mutable dict below a frozen cell."""
     from app.phenopackets.curation.models import TemporalValue

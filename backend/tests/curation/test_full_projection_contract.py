@@ -108,4 +108,38 @@ def test_projection_emits_typed_disease_variant_classification_references_eviden
         == "PMID:12345"
     )
     parsed = ParseDict(result.phenopacket, Phenopacket())
-    assert parsed.interpretations[0].diagnosis.genomic_interpretations[0].subject_or_biosample_id == "317"
+    assert (
+        parsed.interpretations[0]
+        .diagnosis.genomic_interpretations[0]
+        .subject_or_biosample_id
+        == "317"
+    )
+
+
+def test_vrs_descriptor_identity_must_be_exact_when_reports_are_grouped():
+    """A claimed VRS ID cannot group two non-identical variation payloads."""
+
+    def report(identifier: str, expression: str) -> ReportObservation:
+        return ReportObservation(
+            observation_id=identifier,
+            origin="manual",
+            source=SourceManifestRef(
+                provider="manual", dataset_id="d", sheet="s", manifest_sha256="sha256:m"
+            ),
+            identifiers=SubjectObservation(
+                individual_id="317", source_subject_id="s-317", report_id=identifier
+            ),
+            variant=VariantObservation(
+                normalized={
+                    "id": "ga4gh:VA.abc",
+                    "variation": {"text": {"definition": expression}},
+                }
+            ),
+        )
+
+    first = report("manual-first", "first expression")
+    malformed = report("manual-second", "different expression")
+    import pytest
+
+    with pytest.raises(ValueError, match="VRS descriptor id"):
+        project_individual([first, malformed], [], algorithm_version="1.0")

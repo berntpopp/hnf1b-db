@@ -11,6 +11,7 @@ from app.phenopackets.curation.models import (
     AssessmentStatus,
     ProjectionResolution,
     ReportObservation,
+    ResolutionStrategy,
 )
 
 
@@ -37,6 +38,18 @@ def _modifier_key(finding: Any) -> tuple[tuple[str, str], ...]:
     return tuple(
         sorted((modifier.id, modifier.label) for modifier in finding.modifiers)
     )
+
+
+def _project_time(value: Any) -> dict[str, Any] | None:
+    """Project only GA4GH-supported typed time semantics from a source cell."""
+    if value is None:
+        return None
+    if value.kind == "ontologyClass":
+        return {"ontologyClass": _term_json(value.term)}
+    if value.kind == "age":
+        return {"age": {"iso8601duration": value.iso8601_duration}}
+    # Gestational and locally unprojected source times stay in the source ledger.
+    return None
 
 
 def _conflict(
@@ -66,6 +79,24 @@ def _validate_resolutions(
                 "resolution "
                 f"{resolution.resolution_id} is stale for {resolution.conflict_key}"
             )
+
+
+def _resolution_for(
+    conflict: ProjectionConflict,
+    resolutions: dict[str, ProjectionResolution],
+    applied: set[str],
+) -> ProjectionResolution | None:
+    """Return a current resolution, rejecting stale decisions before projection."""
+    resolution = resolutions.get(conflict.conflict_key)
+    if resolution is None:
+        return None
+    if resolution.candidate_set_digest != conflict.candidate_set_digest:
+        raise StaleResolutionError(
+            f"resolution {resolution.resolution_id} is stale for "
+            f"{conflict.conflict_key}"
+        )
+    applied.add(conflict.conflict_key)
+    return resolution
 
 
 def project_individual(
@@ -122,7 +153,25 @@ def project_individual(
     if len(stated_sexes) == 1:
         subject["sex"] = next(iter(stated_sexes))
     elif len(stated_sexes) > 1:
-        conflicts.append(_conflict("subject:sex", sex_candidates))
+        conflict = _conflict("subject:sex", sex_candidates)
+        resolution = _resolution_for(
+            conflict, resolutions_by_key, applied_resolution_keys
+        )
+        if resolution is None:
+            conflicts.append(conflict)
+        elif resolution.strategy is ResolutionStrategy.SELECT_OBSERVATIONS:
+            selected = [
+                value
+                for identifier, value in sex_candidates
+                if identifier in set(resolution.selected_observation_ids)
+            ]
+            if len(set(selected)) != 1:
+                raise ValueError("sex resolution must select one clinical sex")
+            subject["sex"] = selected[0]
+        elif isinstance(resolution.resolved_value, str):
+            subject["sex"] = resolution.resolved_value
+        else:
+            raise ValueError("subject sex resolvedValue must be a sex string")
     features: list[dict[str, Any]] = []
     for term_id in sorted(feature_candidates):
         candidates = feature_candidates[term_id]
@@ -132,25 +181,32 @@ def project_individual(
                 f"phenotype:{term_id}:polarity",
                 ((identifier, status.value) for identifier, status, _ in candidates),
             )
-            resolution = resolutions_by_key.get(conflict.conflict_key)
+            resolution = _resolution_for(
+                conflict, resolutions_by_key, applied_resolution_keys
+            )
             if resolution is not None:
-                if resolution.candidate_set_digest != conflict.candidate_set_digest:
-                    detail = (
-                        f"{resolution.resolution_id} is stale for "
-                        f"{conflict.conflict_key}"
+                if resolution.strategy is ResolutionStrategy.SELECT_OBSERVATIONS:
+                    selected = [
+                        candidate
+                        for candidate in candidates
+                        if candidate[0] in set(resolution.selected_observation_ids)
+                    ]
+                    if (
+                        not selected
+                        or len({candidate[1] for candidate in selected}) != 1
+                    ):
+                        raise ValueError("resolution must select one clinical polarity")
+                    status = selected[0][1]
+                    representative = selected[0][2]
+                elif resolution.resolved_value in {"PRESENT", "EXCLUDED"}:
+                    status = AssessmentStatus(resolution.resolved_value)
+                    representative = candidates[0][2]
+                else:
+                    raise ValueError(
+                        "phenotype polarity resolvedValue must be PRESENT or EXCLUDED"
                     )
-                    raise StaleResolutionError(f"resolution {detail}")
-                selected = [
-                    candidate
-                    for candidate in candidates
-                    if candidate[0] in set(resolution.selected_observation_ids)
-                ]
-                if not selected or len({candidate[1] for candidate in selected}) != 1:
-                    raise ValueError("resolution must select one clinical polarity")
-                applied_resolution_keys.add(conflict.conflict_key)
-                status = selected[0][1]
                 feature = {
-                    "type": _term_json(selected[0][2].term),
+                    "type": _term_json(representative.term),
                     "excluded": status is AssessmentStatus.EXCLUDED,
                 }
                 features.append(feature)
@@ -194,23 +250,46 @@ def project_individual(
             ),
             None,
         )
-        if onset and onset.get("kind") == "ontologyClass":
-            feature["onset"] = {"ontologyClass": onset["term"]}
+        projected_onset = _project_time(onset)
+        if projected_onset is not None:
+            feature["onset"] = projected_onset
         if len(modifier_sets) == 1 and next(iter(modifier_sets)):
             feature["modifiers"] = [
                 {"id": identifier, "label": label}
                 for identifier, label in next(iter(modifier_sets))
             ]
         elif len(modifier_sets) > 1:
-            conflicts.append(
-                _conflict(
-                    f"phenotype:{term_id}:modifiers",
-                    (
-                        (identifier, _modifier_key(finding))
-                        for identifier, _, finding in candidates
-                    ),
-                )
+            conflict = _conflict(
+                f"phenotype:{term_id}:modifiers",
+                (
+                    (identifier, _modifier_key(finding))
+                    for identifier, _, finding in candidates
+                ),
             )
+            resolution = _resolution_for(
+                conflict, resolutions_by_key, applied_resolution_keys
+            )
+            if resolution is None:
+                conflicts.append(conflict)
+            elif resolution.strategy is ResolutionStrategy.SELECT_OBSERVATIONS:
+                selected = [
+                    finding
+                    for identifier, _, finding in candidates
+                    if identifier in set(resolution.selected_observation_ids)
+                ]
+                selected_sets = {_modifier_key(finding) for finding in selected}
+                if len(selected_sets) != 1:
+                    raise ValueError("modifier resolution must select one modifier set")
+                feature["modifiers"] = [
+                    {"id": identifier, "label": label}
+                    for identifier, label in next(iter(selected_sets))
+                ]
+            elif isinstance(resolution.resolved_value, tuple):
+                feature["modifiers"] = [
+                    _term_json(modifier) for modifier in resolution.resolved_value
+                ]
+            else:
+                raise ValueError("modifier resolvedValue must be a modifier list")
         features.append(feature)
 
     frozen_conflicts = tuple(sorted(conflicts, key=lambda item: item.conflict_key))
@@ -222,19 +301,32 @@ def project_individual(
             if item.conflict_key not in applied_resolution_keys
         ],
     )
-    diseases = sorted(
-        {
-            (disease.term.id, disease.term.label)
-            for observation in ordered
-            for disease in observation.diseases
-            if disease.asserted
-        }
-    )
-    interpretations = []
+    diseases_by_term: dict[tuple[str, str], Any] = {}
+    for observation in ordered:
+        for disease in observation.diseases:
+            if disease.asserted:
+                diseases_by_term.setdefault(
+                    (disease.term.id, disease.term.label), disease
+                )
+    descriptors_by_id: dict[str, dict[str, Any]] = {}
+    descriptor_observations: dict[str, list[ReportObservation]] = {}
     for observation in ordered:
         if observation.variant is None or observation.variant.normalized is None:
             continue
-        descriptor = observation.variant.normalized
+        typed_descriptor = observation.variant.normalized
+        descriptor = typed_descriptor.model_dump(by_alias=True, mode="json")
+        descriptor_id = typed_descriptor.id
+        previous = descriptors_by_id.get(descriptor_id)
+        if previous is not None and previous != descriptor:
+            raise ValueError("VRS descriptor id maps to non-identical variations")
+        descriptors_by_id[descriptor_id] = descriptor
+        descriptor_observations.setdefault(descriptor_id, []).append(observation)
+
+    interpretations = []
+    for descriptor_id in sorted(descriptors_by_id):
+        descriptor = descriptors_by_id[descriptor_id]
+        variant_observations = descriptor_observations[descriptor_id]
+        observation = variant_observations[0]
         contribution = (
             observation.classification.contribution.value
             if observation.classification and observation.classification.contribution
@@ -260,7 +352,7 @@ def project_individual(
             variant_interpretation["acmgPathogenicityClassification"] = acmg
         interpretations.append(
             {
-                "id": f"interpretation-{observation.observation_id}",
+                "id": f"interpretation-{descriptor_id}",
                 "progressStatus": "COMPLETED",
                 "diagnosis": {
                     "genomicInterpretations": [
@@ -297,8 +389,17 @@ def project_individual(
         "subject": subject,
         "phenotypicFeatures": features,
         "diseases": [
-            {"term": {"id": identifier, "label": label}}
-            for identifier, label in diseases
+            {
+                "term": _term_json(disease.term),
+                **(
+                    {"onset": _project_time(disease.onset.value)}
+                    if disease.onset is not None
+                    and disease.onset.source_status.value == "stated"
+                    and _project_time(disease.onset.value) is not None
+                    else {}
+                ),
+            }
+            for _, disease in sorted(diseases_by_term.items())
         ],
         "interpretations": interpretations,
         "metaData": {
@@ -309,6 +410,21 @@ def project_individual(
             "externalReferences": [{"id": reference} for reference in references],
         },
     }
+    reported_age = next(
+        (
+            observation.ages.reported.value
+            for observation in ordered
+            if observation.ages is not None
+            and observation.ages.reported is not None
+            and observation.ages.reported.source_status.value == "stated"
+            and observation.ages.reported.value is not None
+            and _project_time(observation.ages.reported.value) is not None
+        ),
+        None,
+    )
+    projected_reported_age = _project_time(reported_age)
+    if projected_reported_age is not None:
+        phenopacket["subject"]["timeAtLastEncounter"] = projected_reported_age
     input_digest = observation_digest(ordered)
     output_digest = sha256_digest(
         {"algorithmVersion": algorithm_version, "phenopacket": phenopacket}

@@ -59,6 +59,13 @@ class ObservationOrigin(str, Enum):
     MANUAL = "manual"
 
 
+class ResolutionStrategy(str, Enum):
+    """Typed curator actions that can be applied by the deterministic projector."""
+
+    SELECT_OBSERVATIONS = "select_observations"
+    RESOLVED_VALUE = "resolved_value"
+
+
 ValueT = TypeVar("ValueT")
 
 
@@ -170,13 +177,40 @@ class DiseaseObservation(CurationModel):
     onset: ObservedValue[TemporalValue] | None = None
 
 
+class VrsText(CurationModel):
+    """The VRS text variation form supported by source-faithful imports."""
+
+    definition: str = Field(min_length=1)
+
+
+class VrsTextVariation(CurationModel):
+    """Closed VRS variation wrapper; no arbitrary JSON can enter the ledger."""
+
+    text: VrsText
+
+
+class VrsDescriptor(CurationModel):
+    """A stable VRS descriptor whose GA4GH identifier names its exact variation."""
+
+    id: str
+    variation: VrsTextVariation
+
+    @field_validator("id")
+    @classmethod
+    def validate_vrs_id(cls, value: str) -> str:
+        """Require canonical GA4GH VRS allele identity syntax."""
+        if not re.fullmatch(r"ga4gh:VA\.[A-Za-z0-9_-]+", value):
+            raise ValueError("VRS descriptor id must be a ga4gh:VA identifier")
+        return value
+
+
 class VariantObservation(CurationModel):
     """Reported variant evidence with a separate validated normalized identity."""
 
     variant_type: ObservedValue[str] | None = None
     reported: ObservedValue[str] | None = None
     source_id: ObservedValue[str] | None = None
-    normalized: dict[str, Any] | None = None
+    normalized: VrsDescriptor | None = None
     hg19_info: ObservedValue[str] | None = None
     hg19: ObservedValue[str] | None = None
     hg38_info: ObservedValue[str] | None = None
@@ -218,6 +252,15 @@ class EvidenceObservation(CurationModel):
 
     reference: str
     evidence_code: OntologyTerm
+
+    @model_validator(mode="after")
+    def validate_reference_and_eco(self) -> "EvidenceObservation":
+        """Keep source evidence references and ECO terms projectable to GA4GH."""
+        if not re.fullmatch(r"(?:PMID:\d+|DOI:10\.\S+)", self.reference):
+            raise ValueError("evidence reference must be PMID:<digits> or DOI:<doi>")
+        if not re.fullmatch(r"ECO:\d{7}", self.evidence_code.id):
+            raise ValueError("evidence code must be an ECO term")
+        return self
 
 
 class PhenotypeAssessment(CurationModel):
@@ -528,9 +571,9 @@ class ProjectionResolution(CurationModel):
     resolution_id: str
     conflict_key: str
     candidate_set_digest: str
-    strategy: str
+    strategy: ResolutionStrategy
     selected_observation_ids: tuple[str, ...] = ()
-    resolved_value: Any = None
+    resolved_value: str | tuple[OntologyTerm, ...] | None = None
     reason: str
     resolved_by_user_id: int
     resolved_at: datetime
@@ -538,11 +581,15 @@ class ProjectionResolution(CurationModel):
     @model_validator(mode="after")
     def validate_payload(self) -> "ProjectionResolution":
         """Require an explicit, non-empty payload for supported strategies."""
-        if self.strategy not in {"select_observations", "resolved_value"}:
-            raise ValueError("unsupported resolution strategy")
-        if self.strategy == "select_observations" and not self.selected_observation_ids:
+        if (
+            self.strategy is ResolutionStrategy.SELECT_OBSERVATIONS
+            and not self.selected_observation_ids
+        ):
             raise ValueError("select_observations requires selectedObservationIds")
-        if self.strategy == "resolved_value" and self.resolved_value is None:
+        if (
+            self.strategy is ResolutionStrategy.RESOLVED_VALUE
+            and self.resolved_value is None
+        ):
             raise ValueError("resolved_value requires resolvedValue")
         return self
 
