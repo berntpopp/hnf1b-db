@@ -180,7 +180,7 @@ async def list_phenopackets(
 
     # Apply sort
     if sort:
-        sort_clauses = parse_sort_parameter(sort)
+        sort_clauses = parse_sort_parameter(sort, content=public_json_column)
         query = query.order_by(
             *sort_clauses,
             Phenopacket.created_at.desc(),
@@ -557,6 +557,15 @@ async def update_phenopacket(
     # PhenopacketStateService.edit_record); see stamp_curated_at's docstring
     # for why it's safe to always overwrite here.
     stamp_curated_at(sanitized)
+    try:
+        sanitized = PhenopacketStateService._canonicalize_for_persistence(
+            sanitized, publish=False
+        )
+    except PhenopacketStateService.InvalidTransition as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"validation_errors": [str(exc)]},
+        ) from exc
     errors = validator.validate(sanitized)
     if errors:
         raise HTTPException(status_code=400, detail={"validation_errors": errors})

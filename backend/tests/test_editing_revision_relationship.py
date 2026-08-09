@@ -11,19 +11,9 @@ from app.phenopackets.models import Phenopacket, PhenopacketRevision
 
 
 @pytest.mark.asyncio
-async def test_editing_revision_lazy_none_when_id_null(db_session, admin_user):
+async def test_editing_revision_lazy_none_when_id_null(db_session, published_record):
     """With editing_revision_id NULL, editing_revision is None (no query needed)."""
-    pp = Phenopacket(
-        phenopacket_id="d2-task1-null-rev",
-        phenopacket={"id": "d2-task1-null-rev"},
-        state="published",
-        revision=1,
-        created_by_id=admin_user.id,
-        # editing_revision_id stays NULL
-    )
-    db_session.add(pp)
-    await db_session.commit()
-    await db_session.refresh(pp)
+    pp = published_record
 
     stmt = (
         select(Phenopacket)
@@ -36,28 +26,21 @@ async def test_editing_revision_lazy_none_when_id_null(db_session, admin_user):
 
 
 @pytest.mark.asyncio
-async def test_editing_revision_resolves_when_set(db_session, admin_user):
+async def test_editing_revision_resolves_when_set(
+    db_session, admin_user, published_record
+):
     """With editing_revision_id set, eager load populates the relationship."""
-    pp = Phenopacket(
-        phenopacket_id="d2-task1-with-rev",
-        phenopacket={"id": "d2-task1-with-rev"},
-        state="published",
-        revision=1,
-        created_by_id=admin_user.id,
-    )
-    db_session.add(pp)
-    await db_session.flush()
+    pp = published_record
 
     rev = PhenopacketRevision(
         record_id=pp.id,
-        revision_number=2,
+        revision_number=pp.revision + 1,
         state="draft",
         content_jsonb={"id": "d2-task1-with-rev"},
         change_reason="clone-to-draft",
         actor_id=admin_user.id,
         from_state="published",
         to_state="draft",
-        is_head_published=False,
     )
     db_session.add(rev)
     await db_session.flush()

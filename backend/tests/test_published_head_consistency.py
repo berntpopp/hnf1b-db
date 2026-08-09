@@ -15,5 +15,15 @@ async def test_public_resolution_uses_head_even_without_an_active_draft(
 
     public = await resolve_public_content(db_session, published_record)
 
-    assert public == {"id": published_record.phenopacket_id}
+    assert public == {
+        "id": published_record.phenopacket_id,
+        "subject": {"id": "published-subject", "sex": "FEMALE"},
+        "metaData": {
+            "created": "2026-08-09T00:00:00Z",
+            "createdBy": "test",
+            "resources": [
+                {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
+            ],
+        },
+    }
     assert public != published_record.phenopacket

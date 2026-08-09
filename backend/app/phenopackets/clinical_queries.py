@@ -45,6 +45,15 @@ class ClinicalQueries:
     """Reusable clinical query patterns - DRY principle."""
 
     @staticmethod
+    def _public_head(query: Select) -> Select:
+        """Restrict clinical discovery queries to visible published heads."""
+        return query.where(
+            Phenopacket.deleted_at.is_(None),
+            Phenopacket.state == "published",
+            Phenopacket.head_published_revision_id.is_not(None),
+        )
+
+    @staticmethod
     def get_phenotype_features_query(
         hpo_terms: List[str], stage: Optional[str] = None
     ) -> Select:
@@ -121,7 +130,7 @@ class ClinicalQueries:
             )
             conditions.append(stage_condition)
 
-        return query.where(and_(*conditions))
+        return ClinicalQueries._public_head(query).where(and_(*conditions))
 
     @staticmethod
     def exclude_transplant_cases(query: Select) -> Select:
@@ -224,7 +233,7 @@ class ClinicalQueries:
             else true()
         )
 
-        return query
+        return ClinicalQueries._public_head(query)
 
     @staticmethod
     def filter_by_sex(query: Select, sex: str) -> Select:
@@ -303,7 +312,7 @@ class ClinicalQueries:
         if conditions:
             query = query.where(or_(*conditions))
 
-        return query
+        return ClinicalQueries._public_head(query)
 
     @staticmethod
     def get_measurement_cases(
@@ -362,7 +371,7 @@ class ClinicalQueries:
             )
             conditions.append(interpretation_condition)
 
-        return query.where(and_(*conditions))
+        return ClinicalQueries._public_head(query).where(and_(*conditions))
 
     @staticmethod
     def get_morphology_features(morphology_type: Optional[str] = None) -> Select:
@@ -426,7 +435,7 @@ class ClinicalQueries:
         if hpo_conditions:
             query = query.where(or_(*hpo_conditions))
 
-        return query
+        return ClinicalQueries._public_head(query)
 
     @staticmethod
     def get_multisystem_involvement(min_systems: int = 2) -> Select:
@@ -515,7 +524,7 @@ class ClinicalQueries:
             .where(system_count >= min_systems)
         )
 
-        return query
+        return ClinicalQueries._public_head(query)
 
     @staticmethod
     async def execute_and_format(

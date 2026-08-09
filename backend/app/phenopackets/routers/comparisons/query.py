@@ -44,8 +44,9 @@ def build_phenotype_distribution_query(
         + """ THEN 'group2'
                 ELSE NULL
             END as variant_group
-        FROM phenopackets p,
-             jsonb_array_elements(p.phenopacket->'interpretations') AS interp,
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+             jsonb_array_elements(r.content_jsonb->'interpretations') AS interp,
              jsonb_array_elements(interp.value#>'{diagnosis,genomicInterpretations}') AS gen_interp
         WHERE p.deleted_at IS NULL
           AND p.state = 'published'
@@ -67,8 +68,9 @@ def build_phenotype_distribution_query(
             NOT COALESCE((pf.value->>'excluded')::boolean, false) as is_present,
             COALESCE((pf.value->>'excluded')::boolean, false) as is_absent
         FROM variant_classification vc
-        JOIN phenopackets p ON p.id = vc.phenopacket_internal_id,
-             jsonb_array_elements(p.phenopacket->'phenotypicFeatures') AS pf
+        JOIN phenopackets p ON p.id = vc.phenopacket_internal_id
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+             jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') AS pf
         WHERE vc.variant_group IS NOT NULL
     ),
     phenotype_counts AS (

@@ -537,8 +537,21 @@ async def published_record(db_session, admin_user):
 
     pp = Phenopacket(
         phenopacket_id="wave7-published-1",
-        phenopacket={"id": "wave7-published-1", "a": 1},
-        state="published",
+        phenopacket={
+            "id": "wave7-published-1",
+            "subject": {"id": "published-subject", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-08-09T00:00:00Z",
+                "createdBy": "test",
+                "resources": [
+                    {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
+                ],
+            },
+        },
+        # Build a valid transaction in the same order as production: insert
+        # the never-published record, append its immutable published snapshot,
+        # then atomically promote the record and pointer together.
+        state="draft",
         revision=1,
         created_by_id=admin_user.id,
         # draft_owner_id stays NULL — matches migration 3 behaviour
@@ -550,7 +563,17 @@ async def published_record(db_session, admin_user):
         record_id=pp.id,
         revision_number=1,
         state="published",
-        content_jsonb={"id": "wave7-published-1", "a": 1},
+        content_jsonb={
+            "id": "wave7-published-1",
+            "subject": {"id": "published-subject", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-08-09T00:00:00Z",
+                "createdBy": "test",
+                "resources": [
+                    {"id": "hp", "name": "HPO", "namespacePrefix": "HP"}
+                ],
+            },
+        },
         change_reason="init",
         actor_id=admin_user.id,
         from_state=None,
@@ -560,6 +583,7 @@ async def published_record(db_session, admin_user):
     db_session.add(rev)
     await db_session.flush()
 
+    pp.state = "published"
     pp.head_published_revision_id = rev.id
     await db_session.commit()
     await db_session.refresh(pp)

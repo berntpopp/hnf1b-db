@@ -52,8 +52,45 @@ async def test_database_rejects_head_pointer_for_another_record(
     )
     db_session.add(other_revision)
     await db_session.flush()
+    # Complete the second record before exercising the cross-record pointer;
+    # deferred validation observes the final transaction state.
+    other.head_published_revision_id = other_revision.id
 
     published_record.head_published_revision_id = other_revision.id
-    with pytest.raises(DBAPIError, match="must belong to its record"):
+    with pytest.raises(DBAPIError, match="must be a published revision of its record"):
+        await db_session.commit()
+    await db_session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_nonpublished_head_and_published_row_without_head(
+    db_session, published_record, admin_user
+):
+    """Head/state pointer semantics hold even for direct SQLAlchemy writes."""
+    draft = PhenopacketRevision(
+        record_id=published_record.id,
+        revision_number=published_record.revision + 1,
+        state="draft",
+        content_jsonb={"id": published_record.phenopacket_id},
+        change_reason="invalid head",
+        actor_id=admin_user.id,
+        from_state="published",
+        to_state="draft",
+    )
+    db_session.add(draft)
+    await db_session.flush()
+    published_record.head_published_revision_id = draft.id
+    with pytest.raises(DBAPIError, match="published revision"):
+        await db_session.commit()
+    await db_session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_published_editing_pointer_and_archived_edit(
+    db_session, published_record, admin_user
+):
+    """Editing pointers must refer to an editable revision and never survive archive."""
+    published_record.editing_revision_id = published_record.head_published_revision_id
+    with pytest.raises(DBAPIError, match="editable revision"):
         await db_session.commit()
     await db_session.rollback()

@@ -258,7 +258,7 @@ async def get_by_publication(
     params = {"pmid_filter": pmid_filter, "skip": skip, "limit": limit}
 
     if sex:
-        query += " AND p.subject_sex = :sex"
+        query += " AND r.content_jsonb->'subject'->>'sex' = :sex"
         params["sex"] = sex
 
     if has_variants is not None:
@@ -281,7 +281,7 @@ async def get_by_publication(
     """
 
     if sex:
-        count_query += " AND p.subject_sex = :sex"
+        count_query += " AND r.content_jsonb->'subject'->>'sex' = :sex"
     if has_variants is not None:
         if has_variants:
             count_query += (

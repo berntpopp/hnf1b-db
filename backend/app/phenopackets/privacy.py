@@ -147,8 +147,11 @@ _TOP_LEVEL_KEYS = {
 
 def _forbidden_key(key: str) -> bool:
     """Return whether key represents local restricted provenance or PII."""
-    lowered = key.lower()
-    return lowered in _RESTRICTED_LOCAL_KEYS
+    normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+    return normalized in {
+        re.sub(r"[^a-z0-9]", "", restricted)
+        for restricted in _RESTRICTED_LOCAL_KEYS
+    }
 
 
 def _redact(value: Any, *, top_level: bool = False) -> Any:
@@ -164,8 +167,6 @@ def _redact(value: Any, *, top_level: bool = False) -> Any:
     for key, nested in value.items():
         if _forbidden_key(key):
             continue
-        if key not in (_TOP_LEVEL_KEYS if top_level else _GA4GH_KEYS):
-            continue
         result[key] = _redact(nested)
     return result
 
@@ -173,8 +174,10 @@ def _redact(value: Any, *, top_level: bool = False) -> Any:
 def redact_public_document(document: dict[str, Any]) -> dict[str, Any]:
     """Return the recursive public GA4GH-safe projection of ``document``.
 
-    Local curation/provenance keys and unrecognized fields are default-denied;
-    values that look like email addresses make the representation fail closed.
+    Local curation/provenance keys are recursively removed, including snake- /
+    camel-case aliases. All remaining fields are preserved so public list,
+    detail, search, related, and export representations cannot silently lose
+    valid GA4GH fields.
     """
     if not isinstance(document, dict):
         raise PublicRepresentationError("phenopacket document must be an object")

@@ -140,7 +140,7 @@ async def test_resolve_public_content_dereferences_head(db_session, published_re
     """Public output is redacted from the immutable head snapshot."""
     content = await resolve_public_content(db_session, published_record)
     assert content is not None
-    assert content == {"id": published_record.phenopacket_id}
+    assert content == published_record.phenopacket
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
     """After clone-to-draft, resolve_public_content returns the OLD head revision
     content, not the current working copy (I1 test at the repository level).
     """
-    original_public_content = {"id": published_record.phenopacket_id}
+    original_public_content = dict(published_record.phenopacket)
 
     from app.phenopackets.services.state_service import PhenopacketStateService
 

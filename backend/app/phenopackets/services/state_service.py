@@ -63,7 +63,9 @@ class PhenopacketStateService:
         self.db = db
 
     @staticmethod
-    def _canonicalize_for_persistence(content: dict[str, Any]) -> dict[str, Any]:
+    def _canonicalize_for_persistence(
+        content: dict[str, Any], *, publish: bool = False
+    ) -> dict[str, Any]:
         """Apply Lane A's v2 projection adapter when it is available.
 
         The adapter is intentionally imported lazily: this state-machine
@@ -84,7 +86,7 @@ class PhenopacketStateService:
             raise
 
         try:
-            return canonicalize_curation_document(content)
+            return canonicalize_curation_document(content, publish=publish)
         except CurationProjectionError as exc:
             raise PhenopacketStateService.InvalidTransition(
                 f"invalid curation projection: {exc}"
@@ -142,8 +144,38 @@ class PhenopacketStateService:
             parent = latest.id if latest is not None else None
         pp.revision += 1
         curation = content.get("hnf1bCuration", {})
-        canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
-        content_hash = hashlib.sha256(canonical.encode()).hexdigest()
+        projection_payload = {
+            field: content.get(field)
+            for field in (
+                "id",
+                "subject",
+                "phenotypicFeatures",
+                "diseases",
+                "interpretations",
+                "measurements",
+                "metaData",
+            )
+            if field in content
+        }
+        projection_hash = hashlib.sha256(
+            json.dumps(
+                projection_payload, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        ledger_payload = {
+            "parent_revision_id": parent,
+            "revision_number": pp.revision,
+            "state": state,
+            "event_type": event_type,
+            "from_state": from_state,
+            "to_state": to_state,
+            "change_reason": change_reason,
+            "change_patch": change_patch,
+            "projection_hash": projection_hash,
+        }
+        ledger_hash = hashlib.sha256(
+            json.dumps(ledger_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         revision = PhenopacketRevision(
             record_id=pp.id,
             parent_revision_id=parent,
@@ -160,8 +192,8 @@ class PhenopacketStateService:
             projection_version=str(
                 curation.get("projection", {}).get("algorithmVersion", "legacy")
             ),
-            ledger_hash=content_hash,
-            projection_hash=content_hash,
+            ledger_hash=ledger_hash,
+            projection_hash=projection_hash,
         )
         self.db.add(revision)
         await self.db.flush()
@@ -438,7 +470,9 @@ class PhenopacketStateService:
                 "cannot publish: active editing revision is not an approved revision"
             )
 
-        published_content = self._canonicalize_for_persistence(approved.content_jsonb)
+        published_content = self._canonicalize_for_persistence(
+            approved.content_jsonb, publish=True
+        )
         published = await self._append_revision(
             pp,
             state="published",

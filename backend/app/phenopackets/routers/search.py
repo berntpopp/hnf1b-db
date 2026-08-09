@@ -134,7 +134,10 @@ async def search_phenopackets(
             )
             params["hpo_id_val"] = hpo_id
     if sex:
-        where_conditions.append("p.subject_sex = :sex")
+        sex_column = (
+            f"{content_col}->'subject'->>'sex'" if anonymous else "p.subject_sex"
+        )
+        where_conditions.append(f"{sex_column} = :sex")
         params["sex"] = sex
     if gene:
         where_conditions.append(f"{content_col}->'interpretations' @> :gene_filter")
@@ -354,8 +357,13 @@ async def get_search_facets(
         where_conditions.append(f"{content_col}->'phenotypicFeatures' @> :hpo_filter")
         params["hpo_filter"] = json.dumps([{"type": {"id": hpo_id}}])
 
+    sex_condition = None
     if sex:
-        where_conditions.append("p.subject_sex = :sex")
+        sex_column = (
+            f"{content_col}->'subject'->>'sex'" if anonymous else "p.subject_sex"
+        )
+        sex_condition = f"{sex_column} = :sex"
+        where_conditions.append(sex_condition)
         params["sex"] = sex
 
     if gene:
@@ -387,12 +395,15 @@ async def get_search_facets(
     where_clause = f"WHERE {' AND '.join(where_conditions)}"
 
     # Get sex distribution (don't apply sex filter for sex facet)
-    sex_where = " AND ".join([c for c in where_conditions if "p.subject_sex" not in c])
+    sex_where = " AND ".join(c for c in where_conditions if c != sex_condition)
+    facet_sex_column = (
+        f"{content_col}->'subject'->>'sex'" if anonymous else "p.subject_sex"
+    )
     sex_query = f"""
-        SELECT p.subject_sex AS value, COUNT(*) AS count
+        SELECT {facet_sex_column} AS value, COUNT(*) AS count
         {from_phenopackets}
         WHERE {sex_where}
-        GROUP BY p.subject_sex
+        GROUP BY {facet_sex_column}
         ORDER BY count DESC
     """
     sex_result = await db.execute(text(sex_query), params)

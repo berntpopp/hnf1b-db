@@ -34,10 +34,11 @@ def test_public_redaction_removes_nested_private_curation_and_reviewer_values():
     assert "sourceReportId" not in public["interpretations"][0]["diagnosis"]
 
 
-def test_public_redaction_drops_unknown_top_level_keys():
-    """The public serializer fails closed instead of forwarding novel fields."""
+def test_public_redaction_preserves_unknown_parser_valid_fields():
+    """The common serializer is non-lossy except for targeted local secrets."""
     assert redact_public_document({"id": "pp-1", "unrecognizedPublicField": {}}) == {
-        "id": "pp-1"
+        "id": "pp-1",
+        "unrecognizedPublicField": {},
     }
 
 
@@ -78,8 +79,9 @@ def test_profile_permits_sanitized_curation_but_rejects_token_variants():
     """Local curation is profile-safe after sanitization; credentials never are."""
     document = {"hnf1bCuration": {"projection": {"algorithmVersion": "1"}}}
     assert sanitize_profile_document(document) == document
-    with pytest.raises(PublicRepresentationError, match="restricted"):
-        sanitize_profile_document({"hnf1bCuration": {"apiKey": "secret"}})
+    for key in ("apiKey", "api_key", "accessToken", "access_token", "clientSecret"):
+        with pytest.raises(PublicRepresentationError, match="restricted"):
+            sanitize_profile_document({"hnf1bCuration": {key: "secret"}})
 
 
 def test_ga4gh_representation_preserves_medical_actions():

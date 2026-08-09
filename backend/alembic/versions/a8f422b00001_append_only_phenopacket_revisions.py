@@ -147,20 +147,34 @@ def upgrade() -> None:
         """
         CREATE FUNCTION validate_phenopacket_revision_pointer()
         RETURNS trigger AS $$
+        DECLARE
+            packet phenopackets%ROWTYPE;
         BEGIN
-            IF NEW.head_published_revision_id IS NOT NULL AND NOT EXISTS (
+            -- Constraint triggers are deferred.  Inspect the final stored row,
+            -- rather than NEW, because an insert may be completed by a later
+            -- update in the same transaction before COMMIT.
+            SELECT * INTO packet FROM phenopackets WHERE id = NEW.id;
+            IF packet.head_published_revision_id IS NOT NULL AND NOT EXISTS (
                 SELECT 1 FROM phenopacket_revisions revision
-                WHERE revision.id = NEW.head_published_revision_id
-                  AND revision.record_id = NEW.id
+                WHERE revision.id = packet.head_published_revision_id
+                  AND revision.record_id = packet.id
+                  AND revision.state = 'published'
             ) THEN
-                RAISE EXCEPTION 'head_published_revision_id must belong to its record';
+                RAISE EXCEPTION 'head_published_revision_id must be a published revision of its record';
             END IF;
-            IF NEW.editing_revision_id IS NOT NULL AND NOT EXISTS (
+            IF packet.state = 'published' AND packet.head_published_revision_id IS NULL THEN
+                RAISE EXCEPTION 'published phenopacket requires head_published_revision_id';
+            END IF;
+            IF packet.editing_revision_id IS NOT NULL AND NOT EXISTS (
                 SELECT 1 FROM phenopacket_revisions revision
-                WHERE revision.id = NEW.editing_revision_id
-                  AND revision.record_id = NEW.id
+                WHERE revision.id = packet.editing_revision_id
+                  AND revision.record_id = packet.id
+                  AND revision.state IN ('draft', 'in_review', 'changes_requested', 'approved')
             ) THEN
-                RAISE EXCEPTION 'editing_revision_id must belong to its record';
+                RAISE EXCEPTION 'editing_revision_id must be an editable revision of its record';
+            END IF;
+            IF packet.state = 'archived' AND packet.editing_revision_id IS NOT NULL THEN
+                RAISE EXCEPTION 'archived phenopacket cannot retain editing_revision_id';
             END IF;
             RETURN NEW;
         END;
@@ -170,7 +184,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE CONSTRAINT TRIGGER phenopackets_revision_pointer_owner
-        AFTER INSERT OR UPDATE OF head_published_revision_id, editing_revision_id
+        AFTER INSERT OR UPDATE OF head_published_revision_id, editing_revision_id, state
         ON phenopackets DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW EXECUTE FUNCTION validate_phenopacket_revision_pointer();
         """
