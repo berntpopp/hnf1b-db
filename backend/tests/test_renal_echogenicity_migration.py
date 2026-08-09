@@ -50,6 +50,10 @@ def sync_conn():
     conn = engine.connect()
     trans = conn.begin()
     try:
+        # The migration predates append-only revision snapshots and rewrites
+        # the historical head in place. Scope this emulation to the fixture's
+        # rolled-back transaction; production revisions remain immutable.
+        conn.execute(text("ALTER TABLE phenopacket_revisions DISABLE TRIGGER USER"))
         yield conn
     finally:
         trans.rollback()
@@ -96,7 +100,7 @@ def _seed_record_with_two_revisions(
     """Seed a phenopacket with a superseded (non-head) revision AND a head one.
 
     ``old_doc`` becomes revision 1 (superseded, immutable history); ``head_doc``
-    becomes revision 2 (``is_head_published``); ``working_doc`` becomes
+    becomes revision 2 (selected by ``head_published_revision_id``); ``working_doc`` becomes
     ``phenopackets.phenopacket`` (the working copy). Mirrors the seeding
     pattern in ``tests/test_ontology_term_migration.py`` /
     ``tests/test_laterality_backfill.py`` with an extra non-head revision.
@@ -117,9 +121,9 @@ def _seed_record_with_two_revisions(
         text(
             "INSERT INTO phenopacket_revisions "
             "(record_id, revision_number, state, content_jsonb, change_reason, "
-            " actor_id, to_state, is_head_published) "
+            " actor_id, to_state) "
             "VALUES (:record_id, 1, 'published', cast(:doc as jsonb), 'seed', "
-            " :actor_id, 'published', false) "
+            " :actor_id, 'published') "
             "RETURNING id"
         ),
         {"record_id": pp_id, "doc": json.dumps(old_doc), "actor_id": actor_id},
@@ -128,9 +132,9 @@ def _seed_record_with_two_revisions(
         text(
             "INSERT INTO phenopacket_revisions "
             "(record_id, revision_number, state, content_jsonb, change_reason, "
-            " actor_id, to_state, is_head_published) "
+            " actor_id, to_state) "
             "VALUES (:record_id, 2, 'published', cast(:doc as jsonb), 'seed', "
-            " :actor_id, 'published', true) "
+            " :actor_id, 'published') "
             "RETURNING id"
         ),
         {"record_id": pp_id, "doc": json.dumps(head_doc), "actor_id": actor_id},

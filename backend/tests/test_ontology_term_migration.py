@@ -157,6 +157,10 @@ def sync_conn():
     conn = engine.connect()
     trans = conn.begin()
     try:
+        # This historical migration rewrites the then-current head snapshot.
+        # At the present schema head revisions are immutable, so emulate the
+        # historical constraint set only inside this rolled-back transaction.
+        conn.execute(text("ALTER TABLE phenopacket_revisions DISABLE TRIGGER USER"))
         yield conn
     finally:
         trans.rollback()
@@ -195,9 +199,9 @@ def _seed(conn, docs: dict[str, dict]) -> dict[str, dict]:
             text(
                 "INSERT INTO phenopacket_revisions "
                 "(record_id, revision_number, state, content_jsonb, change_reason, "
-                " actor_id, to_state, is_head_published) "
+                " actor_id, to_state) "
                 "VALUES (:record_id, 1, 'published', cast(:doc as jsonb), 'seed', "
-                " :actor_id, 'published', true) "
+                " :actor_id, 'published') "
                 "RETURNING id"
             ),
             {"record_id": pp_id, "doc": json.dumps(doc), "actor_id": actor_id},

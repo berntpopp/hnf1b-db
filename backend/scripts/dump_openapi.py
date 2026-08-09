@@ -11,6 +11,7 @@ snapshot against the live schema; refresh it by piping this script's stdout into
 that file whenever the API surface intentionally changes.
 """
 
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -18,7 +19,10 @@ from pathlib import Path
 # Ensure the backend package root is importable when run as a standalone script.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.main import app  # noqa: E402
+# Application startup intentionally emits development notices. Keep those on
+# stderr so this command remains safe to pipe directly into the JSON snapshot.
+with contextlib.redirect_stdout(sys.stderr):
+    from app.main import app  # noqa: E402
 
 
 def main() -> None:

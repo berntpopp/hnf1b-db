@@ -5,7 +5,7 @@ Spec §10.3 — verifies that migration 3 seeds pre-D.1 phenopackets to:
   • phenopackets.head_published_revision_id IS NOT NULL
   • phenopackets.draft_owner_id IS NULL          (invariant I5)
   • phenopackets.editing_revision_id IS NULL
-  • exactly one phenopacket_revisions row per record with is_head_published=TRUE
+  • exactly one published revision selected by the record's head pointer
   • that revision has change_reason = 'Migrated from pre-D.1 data model'
 
 Strategy: the test DB already has migrations applied. We simulate the
@@ -118,11 +118,11 @@ async def test_migration_3_seeds_pre_d1_records_as_published(
             """
             INSERT INTO phenopacket_revisions (
                 record_id, revision_number, state, content_jsonb, change_patch,
-                change_reason, actor_id, from_state, to_state, is_head_published, created_at
+                change_reason, actor_id, from_state, to_state, created_at
             )
             SELECT
                 id, revision, 'published', phenopacket, NULL,
-                'Migrated from pre-D.1 data model', :sys, NULL, 'published', TRUE, NOW()
+                'Migrated from pre-D.1 data model', :sys, NULL, 'published', NOW()
             FROM phenopackets
             WHERE id = ANY(:ids)
             """
@@ -143,7 +143,7 @@ async def test_migration_3_seeds_pre_d1_records_as_published(
                 editing_revision_id = NULL
             FROM phenopacket_revisions r
             WHERE r.record_id = p.id
-              AND r.is_head_published = TRUE
+              AND r.state = 'published'
               AND p.id = ANY(:ids)
             """
         ),
@@ -183,14 +183,19 @@ async def test_migration_3_seeds_pre_d1_records_as_published(
             f"editing_revision_id must be NULL on migrated record {pid}"
         )
 
-        # Exactly one head-published revision row per record
+        # The current schema has one authoritative head pointer rather than
+        # the removed ``is_head_published`` flag.  It must select exactly one
+        # published revision for this record.
         head_result = await db_session.execute(
             text(
                 "SELECT id, state, to_state, from_state, change_reason, actor_id "
                 "FROM phenopacket_revisions "
-                "WHERE record_id = :row_id AND is_head_published = TRUE"
+                "WHERE id = :head_revision_id AND record_id = :row_id"
             ),
-            {"row_id": row_uuid},
+            {
+                "row_id": row_uuid,
+                "head_revision_id": pp_row.head_published_revision_id,
+            },
         )
         head_rows = head_result.fetchall()
 
