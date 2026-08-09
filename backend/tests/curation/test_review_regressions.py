@@ -66,7 +66,7 @@ def test_raw_imported_value_is_frozen_and_correction_null_serializes_through_sch
     profile = Hnf1bCurationProfile(
         source_subject_id="source-317",
         observations_by_id={_report().observation_id: _report()},
-            corrections_by_id={},
+        corrections_by_id={},
     )
     from app.phenopackets.validation.schema_validator import SchemaValidator
 
@@ -272,16 +272,27 @@ def test_active_correction_chain_applies_a_to_b_to_c_in_order():
     block = {
         "observationsById": {"one": {"normalized": {"value": "A"}}},
         "correctionsById": {
-            "one": {"jsonPointer": "/observationsById/one/normalized/value", "preimage": "A", "postimage": "B"},
+            "one": {
+                "jsonPointer": "/observationsById/one/normalized/value",
+                "preimage": "A",
+                "postimage": "B",
+                "createdAt": "2026-08-09T00:00:00Z",
+            },
             "two": {
                 "jsonPointer": "/observationsById/one/normalized/value",
                 "preimage": "B",
                 "postimage": "C",
                 "supersedesCorrectionId": "one",
+                "createdAt": "2026-08-09T00:00:01Z",
             },
         },
     }
-    assert _apply_active_corrections(block)["observationsById"]["one"]["normalized"]["value"] == "C"
+    assert (
+        _apply_active_corrections(block)["observationsById"]["one"]["normalized"][
+            "value"
+        ]
+        == "C"
+    )
     assert block["observationsById"]["one"]["normalized"]["value"] == "A"
 
 
@@ -292,8 +303,12 @@ def test_canonicalizing_twice_preserves_the_raw_correction_profile():
     report = _report().model_copy(
         update={
             "identifiers": SubjectObservation(
-                individual_id="317", source_subject_id="source-317", report_id="RPT-1",
-                individual_identifier=ObservedValue(raw="old", source_status="stated", value="old"),
+                individual_id="317",
+                source_subject_id="source-317",
+                report_id="RPT-1",
+                individual_identifier=ObservedValue(
+                    raw="old", source_status="stated", value="old"
+                ),
             )
         }
     )
@@ -349,6 +364,7 @@ def test_malformed_scalar_correction_pointer_has_structured_error_code():
                         "jsonPointer": "/value/x",
                         "preimage": "A",
                         "postimage": "B",
+                        "createdAt": "2026-08-09T00:00:00Z",
                     }
                 },
             }
