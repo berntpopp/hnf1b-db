@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -22,15 +23,14 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 
 from app.core.config import settings
-from migration.data_sources.google_sheets_adapter import GoogleSheetsSourceAdapter
+from app.phenopackets.curation.projection import project_individual
 from migration.data_sources.source_adapter import SourceAdapter
 from migration.database.storage import PhenopacketStorage
-from migration.phenopackets.builder_simple import PhenopacketBuilder
-from migration.phenopackets.hpo_mapper import HPOMapper
 from migration.phenopackets.laterality import (
     ModifierVocabulary,
     modifier_vocabulary_from_rows,
 )
+from migration.phenopackets.observation_extractor import extract_observation
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapper import PublicationMapper
 
@@ -77,6 +77,8 @@ class DirectSheetsToPhenopackets:
         target_db_url: str,
         ontology_mapper: Optional[OntologyMapper] = None,
         source_adapter: SourceAdapter | None = None,
+        reviewer_mapping: Mapping[str, tuple[str, str]] | None = None,
+        row_hmac_key: bytes | None = None,
     ):
         """Initialize migration with target database.
 
@@ -84,45 +86,44 @@ class DirectSheetsToPhenopackets:
             target_db_url: Database connection URL
             ontology_mapper: Optional ontology mapper (defaults to HPOMapper if not provided).
                             Allows dependency injection for testing and flexibility.
-            source_adapter: Complete source snapshot adapter; defaults to the
-                explicitly configured remote adapter.
+            source_adapter: Required complete pinned source snapshot adapter.
+            reviewer_mapping: Approved pseudonymous reviewer mapping only.
+            row_hmac_key: Key for non-reversible per-row source fingerprints.
         """
         # The legacy raw-storage writer is intentionally disabled. New applies
         # must use the staged atomic import service and state-service methods.
         self.legacy_apply_is_disabled = True
-        self.source_adapter = source_adapter or GoogleSheetsSourceAdapter(
-            spreadsheet_id=settings.SOURCE_SPREADSHEET_ID,
-            gids={
-                "Individuals": settings.SOURCE_INDIVIDUALS_GID,
-                "Phenotypes": settings.SOURCE_PHENOTYPES_GID,
-                "Phenotype_modifier": settings.SOURCE_PHENOTYPE_MODIFIER_GID,
-                "Publications": settings.SOURCE_PUBLICATIONS_GID,
-            },
-        )
+        # Migration input must be an approved, immutable snapshot adapter.
+        # Google Sheets may be probed separately for drift but is never a
+        # direct migration authority.
+        self.source_adapter = source_adapter
+        self.reviewer_mapping = dict(reviewer_mapping or {})
+        self.row_hmac_key = row_hmac_key
         self.storage = PhenopacketStorage(target_db_url)
-        # Use provided mapper or default to HPOMapper (concrete implementation)
-        self.ontology_mapper = ontology_mapper if ontology_mapper else HPOMapper()
+        self.ontology_mapper = ontology_mapper
         self.publication_mapper: Optional[PublicationMapper] = None
-        self.phenopacket_builder: Optional[PhenopacketBuilder] = None
+        self.phenopacket_builder = None
 
         # Data storage
         self.individuals_df: Optional[pd.DataFrame] = None
         self.phenotypes_df: Optional[pd.DataFrame] = None
         self.publications_df: Optional[pd.DataFrame] = None
         self.modifier_vocabulary: ModifierVocabulary | None = None
+        self._source_manifest = None
 
     async def load_data(self) -> None:
         """Load one complete, validated source snapshot through the adapter."""
         if not settings.SOURCE_IMPORT_ENABLED:
             raise RuntimeError("source import is disabled by configuration")
+        if self.source_adapter is None:
+            raise RuntimeError("a pinned source snapshot adapter is required")
         snapshot = await self.source_adapter.load()
+        self._source_manifest = snapshot.manifest
         self.individuals_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Individuals"]))
 
         logger.info(f"Loaded {len(self.individuals_df)} rows from individuals sheet")
 
         self.phenotypes_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Phenotypes"]))
-        if isinstance(self.ontology_mapper, HPOMapper):
-            self.ontology_mapper.build_from_dataframe(self.phenotypes_df)
         modifier_df = pd.read_csv(
             BytesIO(snapshot.raw_sheets["Phenotype_modifier"]), dtype=str
         ).fillna("")
@@ -133,12 +134,41 @@ class DirectSheetsToPhenopackets:
         self.publications_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Publications"]))
         self.publication_mapper = PublicationMapper(self.publications_df)
 
-        # Initialize phenopacket builder with injected dependencies (DIP)
-        self.phenopacket_builder = PhenopacketBuilder(
-            self.ontology_mapper,
-            self.publication_mapper,
-            modifier_vocabulary=self.modifier_vocabulary,
-        )
+
+    def build_typed_phenopackets(self) -> list[dict[str, Any]]:
+        """Project validated observations without exporting source-ledger fields."""
+        if self.individuals_df is None or self._source_manifest is None:
+            raise RuntimeError("source snapshot has not been loaded")
+        if self.modifier_vocabulary is None:
+            raise RuntimeError("source modifier vocabulary has not been loaded")
+        if not self.reviewer_mapping or self.row_hmac_key is None:
+            raise RuntimeError("approved reviewer mapping and row HMAC key are required")
+
+        observations_by_subject: dict[str, list[Any]] = {}
+        for row_number, (_, row) in enumerate(self.individuals_df.iterrows(), start=2):
+            observation = extract_observation(
+                row.to_dict(),
+                row_number=row_number,
+                source_system=self._source_manifest.source_system,
+                dataset_key=self._source_manifest.dataset_key,
+                manifest_sha256=self._source_manifest.sha256,
+                row_hmac_key=self.row_hmac_key,
+                reviewer_mapping=self.reviewer_mapping,
+                modifier_vocabulary=self.modifier_vocabulary,
+            )
+            observations_by_subject.setdefault(
+                observation.identifiers.source_subject_id, []
+            ).append(observation)
+
+        output: list[dict[str, Any]] = []
+        for observations in observations_by_subject.values():
+            projection = project_individual(
+                observations, [], algorithm_version="source-import-v1"
+            )
+            if projection.blocking_conflicts:
+                raise RuntimeError("source projection has unresolved conflicts")
+            output.append(projection.phenopacket)
+        return output
 
     def _is_valid_id(self, value: Any) -> bool:
         """Check if an ID value is valid (not NaN, empty, or whitespace)."""
@@ -156,6 +186,10 @@ class DirectSheetsToPhenopackets:
         Returns:
             List of phenopacket dictionaries
         """
+        # The legacy builder stores raw reviewer metadata and cannot participate
+        # in the typed, privacy-safe import pipeline.
+        raise RuntimeError("legacy phenopacket builder is disabled")
+
         # Ensure data has been loaded (must call load_data() first)
         assert self.individuals_df is not None, (
             "Must call load_data() before building phenopackets"
@@ -256,7 +290,9 @@ class DirectSheetsToPhenopackets:
             await self.load_data()
 
             # Build phenopackets
-            phenopackets = self.build_phenopackets(limit=limit)
+            if limit:
+                raise RuntimeError("limited source imports are forbidden outside fixture mode")
+            phenopackets = self.build_typed_phenopackets()
 
             if dry_run:
                 # Save to JSON file for inspection

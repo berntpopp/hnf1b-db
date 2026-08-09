@@ -138,6 +138,18 @@ def test_modifier_vocabulary_rejects_non_hpo_modifier_identifiers():
         modifier_vocabulary_from_rows(rows, version_sha256="a" * 64)
 
 
+def test_modifier_vocabulary_rejects_swapped_known_hpo_terms():
+    rows = [
+        {"modifier": "Bilateral", "modifier_id": "HP:0012833"},
+        {"modifier": "Unilateral", "modifier_id": "HP:0012832"},
+        {"modifier": "Left", "modifier_id": "HP:0012835"},
+        {"modifier": "Right", "modifier_id": "HP:0012834"},
+    ]
+
+    with pytest.raises(ModifierVocabularyError, match="does not match"):
+        modifier_vocabulary_from_rows(rows, version_sha256="a" * 64)
+
+
 def test_kidney_biopsy_no_is_explicitly_not_assessed_not_two_negative_findings():
     row = _row()
     row["KidneyBiopsy"] = "no"

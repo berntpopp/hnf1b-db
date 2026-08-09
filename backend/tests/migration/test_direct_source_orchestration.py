@@ -14,6 +14,7 @@ from migration.direct_sheets_to_phenopackets import (
 from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
 from migration.phenopackets.laterality import modifier_vocabulary_from_rows
+from migration.phenopackets.source_column_map import SOURCE_COLUMNS
 from migration.source_manifest import EXPECTED_HEADERS, build_source_manifest
 
 
@@ -77,10 +78,20 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
     assert migration.modifier_vocabulary.version_sha256 == manifest.sheets[
         "Phenotype_modifier"
     ].sha256
-    assert (
-        migration.phenopacket_builder.phenotype_extractor.modifier_vocabulary
-        == migration.modifier_vocabulary
+    assert migration.phenopacket_builder is None
+
+
+@pytest.mark.asyncio
+async def test_direct_import_refuses_to_use_live_google_adapter_as_input(monkeypatch):
+    migration = DirectSheetsToPhenopackets(
+        "postgresql+asyncpg://test:test@localhost/test_db"
     )
+    monkeypatch.setattr(
+        "migration.direct_sheets_to_phenopackets.settings.SOURCE_IMPORT_ENABLED", True
+    )
+
+    with pytest.raises(RuntimeError, match="pinned source snapshot"):
+        await migration.load_data()
 
 
 def test_production_builder_uses_injected_source_modifier_vocabulary():
@@ -125,3 +136,48 @@ def test_dry_run_publication_is_atomic_when_serialization_fails(tmp_path, monkey
 
     assert not destination.exists()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_typed_direct_output_omits_reviewer_email_and_comment():
+    raw_sheets = {
+        name: _csv(headers)
+        for name, headers in EXPECTED_HEADERS.items()
+    }
+    manifest = build_source_manifest(
+        source_system="local_fixture", dataset_key="hnf1b-registry", sheets=raw_sheets
+    )
+    row = {entry.header: "NR" for entry in SOURCE_COLUMNS}
+    row.update(
+        {
+            "individual_id": "fixture-subject",
+            "report_id": "fixture-report",
+            "ReviewBy": "reviewer@example.test",
+            "ReviewDate": "2026-08-09",
+            "Comment": "source-only comment",
+            "RenalCysts": "unilateral left",
+            "KidneyBiopsy": "no",
+        }
+    )
+    migration = DirectSheetsToPhenopackets(
+        "postgresql+asyncpg://test:test@localhost/test_db",
+        reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Reviewer 1")},
+        row_hmac_key=b"test-only-key",
+    )
+    migration.individuals_df = pd.DataFrame([row])
+    migration._source_manifest = manifest
+    migration.modifier_vocabulary = modifier_vocabulary_from_rows(
+        [
+            {"modifier": "Bilateral", "modifier_id": "HP:0012832"},
+            {"modifier": "Unilateral", "modifier_id": "HP:0012833"},
+            {"modifier": "Left", "modifier_id": "HP:0012835"},
+            {"modifier": "Right", "modifier_id": "HP:0012834"},
+        ],
+        version_sha256=manifest.sheets["Phenotype_modifier"].sha256,
+    )
+
+    output = migration.build_typed_phenopackets()
+
+    serialized = str(output)
+    assert "reviewer@example.test" not in serialized
+    assert "source-only comment" not in serialized
+    assert output[0]["phenotypicFeatures"][0]["modifiers"][0]["id"] == "HP:0012833"

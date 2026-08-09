@@ -10,6 +10,12 @@ from typing import Any
 _SHA256 = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
 _HPO_ID = re.compile(r"^HP:\d{7}$", re.IGNORECASE)
 _REQUIRED_MODIFIERS = ("bilateral", "unilateral", "left", "right")
+_EXPECTED_TERMS = {
+    "bilateral": ("HP:0012832", "Bilateral"),
+    "unilateral": ("HP:0012833", "Unilateral"),
+    "left": ("HP:0012835", "Left"),
+    "right": ("HP:0012834", "Right"),
+}
 _NON_LATERALITY = {
     "",
     "no",
@@ -51,6 +57,9 @@ def modifier_vocabulary_from_rows(
             continue
         if not _HPO_ID.fullmatch(term_id) or key in terms:
             raise ModifierVocabularyError("invalid source modifier vocabulary")
+        expected_id, expected_label = _EXPECTED_TERMS[key]
+        if term_id != expected_id or label != expected_label:
+            raise ModifierVocabularyError("source modifier does not match HPO meaning")
         terms[key] = (term_id, label)
     if set(terms) != set(_REQUIRED_MODIFIERS):
         raise ModifierVocabularyError("source modifier vocabulary is incomplete")
