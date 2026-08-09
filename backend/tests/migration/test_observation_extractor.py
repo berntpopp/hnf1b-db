@@ -243,3 +243,44 @@ def test_publication_mapping_refuses_ambiguous_aliases():
                 },
             ]
         )
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["bilateral left", "unilateral left right", "left unilateral", "unilateral-left"],
+)
+def test_extractor_rejects_noncanonical_or_conflicting_laterality(value):
+    row = _row()
+    row["RenalCysts"] = value
+
+    with pytest.raises(ObservationExtractionError, match="laterality"):
+        extract_observation(
+            row,
+            row_number=7,
+            source_system="local_fixture",
+            dataset_key="hnf1b-registry",
+            manifest_sha256="sha256:fixture",
+            row_hmac_key=b"test-only-key",
+            reviewer_mapping={
+                "reviewer@example.test": ("reviewer-1", "Reviewer 1")
+            },
+            modifier_vocabulary=_modifier_vocabulary(),
+        )
+
+
+@pytest.mark.parametrize(
+    "reviewer",
+    [("", "Reviewer 1"), ("reviewer-1", ""), ("reviewer@example.test", "Reviewer 1")],
+)
+def test_extractor_rejects_nonpseudonymous_reviewer_mapping_values(reviewer):
+    with pytest.raises(ObservationExtractionError, match="pseudonymous"):
+        extract_observation(
+            _row(),
+            row_number=7,
+            source_system="local_fixture",
+            dataset_key="hnf1b-registry",
+            manifest_sha256="sha256:fixture",
+            row_hmac_key=b"test-only-key",
+            reviewer_mapping={"reviewer@example.test": reviewer},
+            modifier_vocabulary=_modifier_vocabulary(),
+        )

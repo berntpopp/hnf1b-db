@@ -2,6 +2,7 @@
 
 import inspect
 import json
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from migration.data_sources.source_adapter import SourceSnapshot
 from migration.direct_sheets_to_phenopackets import (
     DirectSheetsToPhenopackets,
+    source_import_cli_configuration,
     write_dry_run_atomically,
 )
 from migration.phenopackets.builder_simple import PhenopacketBuilder
@@ -202,3 +204,68 @@ def test_typed_direct_output_omits_reviewer_email_and_comment():
         "PMID:123456",
         "DOI:10.1000/family.study",
     }
+
+
+@pytest.mark.asyncio
+async def test_migrate_uses_typed_apply_when_session_and_actor_are_injected(monkeypatch):
+    migration = DirectSheetsToPhenopackets(
+        "postgresql+asyncpg://test:test@localhost/test_db"
+    )
+    observations = {"fixture-subject": []}
+    applied: list[tuple[object, object, object]] = []
+
+    async def load_data():
+        migration._source_manifest = object()
+
+    async def apply_typed(db, *, actor, observations_by_subject):
+        applied.append((db, actor, observations_by_subject))
+
+    monkeypatch.setattr(
+        "migration.direct_sheets_to_phenopackets.settings.SOURCE_IMPORT_ENABLED", True
+    )
+    monkeypatch.setattr(migration, "load_data", load_data)
+    monkeypatch.setattr(migration, "_build_typed_observations", lambda **_: observations)
+    monkeypatch.setattr(migration, "_project_typed_observations", lambda _: [])
+    monkeypatch.setattr(migration.storage, "close", lambda: _async_none())
+    monkeypatch.setattr(migration, "apply_typed", apply_typed)
+
+    session, actor = object(), object()
+    await migration.migrate(db=session, actor=actor)
+
+    assert applied == [(session, actor, observations)]
+
+
+async def _async_none() -> None:
+    return None
+
+
+def test_cli_configuration_requires_pinned_local_snapshot_and_safe_identities(tmp_path):
+    settings = SimpleNamespace(
+        DATABASE_URL="postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_test",
+        SOURCE_IMPORT_FIXTURE_DIR=str(tmp_path),
+        SOURCE_IMPORT_MANIFEST_SHA256="a" * 64,
+        SOURCE_IMPORT_ROW_HMAC_KEY="fixture-hmac-key-not-a-real-secret",
+        SOURCE_IMPORT_REVIEWER_MAPPING_JSON=json.dumps(
+            {"reviewer@example.test": ["reviewer-1", "Reviewer 1"]}
+        ),
+        SOURCE_IMPORT_ACTOR_ID=7,
+    )
+
+    configured = source_import_cli_configuration(settings)
+
+    assert configured.actor_id == 7
+    assert configured.adapter.expected_manifest_sha256 == "a" * 64
+    assert configured.reviewer_mapping == {
+        "reviewer@example.test": ("reviewer-1", "Reviewer 1")
+    }
+
+    settings.SOURCE_IMPORT_ROW_HMAC_KEY = ""
+    with pytest.raises(RuntimeError, match="HMAC"):
+        source_import_cli_configuration(settings)
+
+    settings.SOURCE_IMPORT_ROW_HMAC_KEY = "fixture-hmac-key-not-a-real-secret"
+    settings.SOURCE_IMPORT_REVIEWER_MAPPING_JSON = json.dumps(
+        {"reviewer@example.test": ["reviewer@example.test", "Reviewer 1"]}
+    )
+    with pytest.raises(RuntimeError, match="reviewer mapping"):
+        source_import_cli_configuration(settings)

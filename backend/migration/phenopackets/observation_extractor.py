@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
@@ -55,6 +56,10 @@ class ObservationExtractionError(ValueError):
 
 _NOT_REPORTED = {"nr", "not reported"}
 _NOT_APPLICABLE = {"na", "n/a", "not applicable"}
+_PSEUDONYMOUS_REVIEWER_ID = re.compile(r"^reviewer-[a-z0-9][a-z0-9-]{0,62}$")
+_PSEUDONYMOUS_REVIEWER_LABEL = re.compile(
+    r"^(?:[Ss]ource )?[Rr]eviewer [0-9]+$"
+)
 
 
 def _string(value: Any) -> str:
@@ -96,6 +101,32 @@ def _age(value: Any, *, context: str | None = None) -> ObservedValue[Any]:
         )
     except AgeParseError as exc:
         raise ObservationExtractionError(str(exc)) from exc
+
+
+def _approved_reviewer(
+    mapping: Mapping[str, tuple[str, str]], source_reviewer: str
+) -> tuple[str, str]:
+    """Return a configured opaque reviewer reference, never a direct identity."""
+    reviewer = mapping.get(source_reviewer)
+    if reviewer is None:
+        raise ObservationExtractionError(
+            "source reviewer has no approved pseudonymous mapping"
+        )
+    reviewer_id, display_label = reviewer
+    if (
+        not _PSEUDONYMOUS_REVIEWER_ID.fullmatch(reviewer_id)
+        or not _PSEUDONYMOUS_REVIEWER_LABEL.fullmatch(display_label)
+        or "@" in reviewer_id
+        or "@" in display_label
+    ):
+        raise ObservationExtractionError("reviewer mapping is not pseudonymous")
+    return reviewer
+
+
+def validate_reviewer_mapping(mapping: Mapping[str, tuple[str, str]]) -> None:
+    """Validate every configured reviewer value before source loading begins."""
+    for source_reviewer in mapping:
+        _approved_reviewer(mapping, source_reviewer)
 
 
 def _phenotypes(
@@ -163,10 +194,11 @@ def _phenotypes(
             PhenotypeAssessment(
                 assessment_id=assessment_id_for(
                     observation_id, "phenotype", question.source_column, "0"
-                ),
-                column=question.source_column,
-                raw_value=raw,
-                curation_status=curation,
+            ),
+            column=question.source_column,
+            raw_value=raw,
+            source_status=_observed(raw).source_status,
+            curation_status=curation,
                 assessment_status=status,
                 findings=findings,
             )
@@ -199,11 +231,7 @@ def extract_observation(
     if not individual_id or not report_id:
         raise ObservationExtractionError("individual_id and report_id are required")
     reviewer_source = _string(row["ReviewBy"])
-    mapped_reviewer = reviewer_mapping.get(reviewer_source)
-    if mapped_reviewer is None:
-        raise ObservationExtractionError(
-            "source reviewer has no approved pseudonymous mapping"
-        )
+    mapped_reviewer = _approved_reviewer(reviewer_mapping, reviewer_source)
     observation_id = observation_id_for(source_system, dataset_key, report_id)
     row_fingerprint = row_hmac_sha256(
         "\x1f".join(_string(row[item.header]) for item in SOURCE_COLUMNS).encode(),

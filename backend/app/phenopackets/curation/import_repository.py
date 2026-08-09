@@ -140,10 +140,11 @@ class ImportRepository:
         dataset_id: UUID,
         report_id: str,
         record_id: UUID,
-        observation_id: UUID,
+        observation_id: UUID | str,
         run_id: UUID,
     ) -> SourceReportBinding:
         """Create or refresh a report binding without allowing reassignment."""
+        canonical_observation_id = UUID(str(observation_id))
         binding = (
             await self.db.execute(
                 select(SourceReportBinding)
@@ -157,7 +158,7 @@ class ImportRepository:
         if binding is not None:
             if (
                 binding.record_id != record_id
-                or binding.observation_id != observation_id
+                or binding.observation_id != canonical_observation_id
             ):
                 raise SourceBindingConflict(
                     "source report cannot move to a different record"
@@ -170,7 +171,7 @@ class ImportRepository:
             dataset_id=dataset_id,
             report_id=report_id,
             record_id=record_id,
-            observation_id=observation_id,
+            observation_id=canonical_observation_id,
             first_seen_run_id=run_id,
             last_seen_run_id=run_id,
             active=True,
@@ -211,6 +212,21 @@ class ImportRepository:
         self.db.add(binding)
         await self.db.flush()
         return binding
+
+    async def get_subject_binding(
+        self, *, dataset_id: UUID, source_subject_id: str
+    ) -> PhenopacketSubjectBinding | None:
+        """Lock and return the stable binding for one source subject."""
+        return (
+            await self.db.execute(
+                select(PhenopacketSubjectBinding)
+                .where(
+                    PhenopacketSubjectBinding.dataset_id == dataset_id,
+                    PhenopacketSubjectBinding.source_subject_id == source_subject_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
 
     async def register_correction(
         self,

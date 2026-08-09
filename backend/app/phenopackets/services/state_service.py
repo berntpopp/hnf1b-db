@@ -73,7 +73,7 @@ class PhenopacketStateService:
         integrated, and adapter-defined legacy packets are copied unchanged.
         """
         try:
-            from app.phenopackets.curation.adapters import (  # type: ignore[import-not-found]
+            from app.phenopackets.curation.adapters import (
                 CurationProjectionError,
                 canonicalize_curation_document,
             )

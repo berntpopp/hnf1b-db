@@ -434,6 +434,11 @@ class Settings(BaseSettings):
     SOURCE_PHENOTYPES_GID: str = ""
     SOURCE_PHENOTYPE_MODIFIER_GID: str = ""
     SOURCE_PUBLICATIONS_GID: str = ""
+    SOURCE_IMPORT_FIXTURE_DIR: str = ""
+    SOURCE_IMPORT_MANIFEST_SHA256: str = ""
+    SOURCE_IMPORT_ROW_HMAC_KEY: str = ""
+    SOURCE_IMPORT_REVIEWER_MAPPING_JSON: str = ""
+    SOURCE_IMPORT_ACTOR_ID: int | None = None
 
     # SMTP credentials (for email delivery)
     SMTP_HOST: str = ""

@@ -22,8 +22,10 @@ def _csv(headers: tuple[str, ...]) -> bytes:
     return (",".join(headers) + "\n" + ",".join(["NR"] * len(headers)) + "\n").encode()
 
 
-def _input():
+def _input(*, changed: bool = False):
     raw = {name: _csv(headers) for name, headers in EXPECTED_HEADERS.items()}
+    if changed:
+        raw["Individuals"] = raw["Individuals"].replace(b"\n", b"\r\n")
     manifest = build_source_manifest(
         source_system="fixture", dataset_key="hnf1b-registry", sheets=raw
     )
@@ -36,6 +38,7 @@ def _input():
             "ReviewDate": "2026-08-09",
             "RenalCysts": "unilateral left",
             "KidneyBiopsy": "no",
+            "Comment": "changed source comment" if changed else "NR",
         }
     )
     vocabulary = modifier_vocabulary_from_rows(
@@ -96,8 +99,98 @@ async def test_typed_apply_persists_complete_accounting(db_session, curator_user
 
     run = (await db_session.execute(select(SourceImportRun))).scalar_one()
     revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
+    record = (await db_session.execute(select(Phenopacket))).scalar_one()
     assert run.status == "applied"
     assert run.observed_counts == {"records": 1, "observations": 1}
+    assert revision.revision_number == 1
     assert revision.import_run_id == run.id
+    profile = record.phenopacket["hnf1bCuration"]
+    assert profile["schemaVersion"] == "2.0"
+    assert set(profile["observationsById"]) == {str(observations["source-subject"][0].observation_id)}
+    stored_source = next(iter(profile["observationsById"].values()))["source"]
+    assert stored_source["provider"] == manifest.source_system
+    assert stored_source["datasetId"] == manifest.dataset_key
+    assert stored_source["manifestSha256"] == manifest.sha256
+    assert stored_source["importRunId"] == str(run.id)
+    assert profile["projection"]["algorithmVersion"] == "1.0"
     assert await db_session.scalar(select(func.count()).select_from(PhenopacketSubjectBinding)) == 1
     assert await db_session.scalar(select(func.count()).select_from(SourceReportBinding)) == 1
+
+
+@pytest.mark.asyncio
+async def test_typed_apply_is_a_noop_for_an_exact_snapshot_rerun(
+    db_session, curator_user
+):
+    manifest, observations = _input()
+    service = TypedObservationImportService(db_session, actor=curator_user)
+
+    await service.apply(manifest=manifest, observations_by_subject=observations)
+    await service.apply(manifest=manifest, observations_by_subject=observations)
+
+    assert await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
+    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 1
+
+
+@pytest.mark.asyncio
+async def test_typed_apply_rejects_observation_with_wrong_pinned_provenance(
+    db_session, curator_user
+):
+    manifest, observations = _input()
+    observation = observations["source-subject"][0]
+    invalid = observation.model_copy(
+        update={
+            "source": observation.source.model_copy(
+                update={"provider": "untrusted-provider"}
+            )
+        }
+    )
+
+    with pytest.raises(Exception, match="provenance"):
+        await TypedObservationImportService(db_session, actor=curator_user).apply(
+            manifest=manifest, observations_by_subject={"source-subject": [invalid]}
+        )
+
+    assert await db_session.scalar(select(func.count()).select_from(SourceDataset)) == 0
+
+
+@pytest.mark.asyncio
+async def test_changed_snapshot_refuses_to_overwrite_an_active_import_draft(
+    db_session, curator_user
+):
+    manifest, observations = _input()
+    await TypedObservationImportService(db_session, actor=curator_user).apply(
+        manifest=manifest, observations_by_subject=observations
+    )
+    changed_manifest, changed_observations = _input(changed=True)
+
+    with pytest.raises(RuntimeError, match="active draft"):
+        await TypedObservationImportService(db_session, actor=curator_user).apply(
+            manifest=changed_manifest, observations_by_subject=changed_observations
+        )
+
+    assert await db_session.scalar(select(func.count()).select_from(SourceImportRun)) == 1
+    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 1
+
+
+@pytest.mark.asyncio
+async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
+    db_session, curator_user
+):
+    manifest, observations = _input()
+    service = TypedObservationImportService(db_session, actor=curator_user)
+    await service.apply(manifest=manifest, observations_by_subject=observations)
+    record = (await db_session.execute(select(Phenopacket))).scalar_one()
+    initial_revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
+    record.state = "published"
+    record.head_published_revision_id = initial_revision.id
+    record.editing_revision_id = None
+    await db_session.flush()
+
+    changed_manifest, changed_observations = _input(changed=True)
+    result = await service.apply(
+        manifest=changed_manifest, observations_by_subject=changed_observations
+    )
+
+    assert result.applied is True
+    assert await db_session.scalar(select(func.count()).select_from(Phenopacket)) == 1
+    assert await db_session.scalar(select(func.count()).select_from(PhenopacketRevision)) == 2

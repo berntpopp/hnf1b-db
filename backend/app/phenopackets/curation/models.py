@@ -306,7 +306,11 @@ class PhenotypeAssessment(CurationModel):
         if provided is not None and provided != implied:
             raise ValueError("sourceStatus conflicts with the raw source cell")
         value = dict(data)
-        value["source_status"] = implied
+        # Input can use either the Python name or the persisted camelCase
+        # alias. Keep exactly one spelling so Pydantic does not treat the
+        # generated snake_case key as forbidden extra input on revalidation.
+        value.pop("source_status", None)
+        value["sourceStatus"] = implied
         return value
 
     @model_validator(mode="after")

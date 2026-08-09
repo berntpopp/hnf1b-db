@@ -80,20 +80,24 @@ def parse_laterality(
     if text in _NON_LATERALITY:
         return []
 
-    has_bilateral = "bilateral" in text
-    has_unilateral = "unilateral" in text
-    if not has_bilateral and not has_unilateral:
+    if not re.fullmatch(r"[a-z]+(?: [a-z]+)*", text):
+        if re.search(r"\b(?:bilateral|unilateral|left|right)\b", text):
+            raise ModifierVocabularyError("invalid laterality qualifier")
         return []
-    if has_bilateral and has_unilateral:
+    tokens = tuple(text.split())
+    if not any(token in {"bilateral", "unilateral", "left", "right"} for token in tokens):
         return []
+    allowed = {
+        ("bilateral",): ("bilateral",),
+        ("unilateral",): ("unilateral",),
+        ("unilateral", "left"): ("unilateral", "left"),
+        ("unilateral", "right"): ("unilateral", "right"),
+    }
+    keys = allowed.get(tokens)
+    if keys is None:
+        raise ModifierVocabularyError("invalid laterality qualifier")
     if vocabulary is None:
         raise ModifierVocabularyError("laterality requires a source modifier vocabulary")
-
-    keys = ["bilateral"] if has_bilateral else ["unilateral"]
-    if has_unilateral and "left" in text:
-        keys.append("left")
-    elif has_unilateral and "right" in text:
-        keys.append("right")
     return [
         {"id": vocabulary.terms[key][0], "label": vocabulary.terms[key][1]}
         for key in keys

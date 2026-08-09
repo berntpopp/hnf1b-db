@@ -11,7 +11,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -20,27 +22,97 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession
 from tqdm import tqdm
 
 from app.core.config import settings
+from app.database import async_session_maker
+from app.models.user import User
 from app.phenopackets.curation.projection import project_individual
+from migration.data_sources.local_fixture_adapter import LocalFixtureSourceAdapter
 from migration.data_sources.source_adapter import SourceAdapter
 from migration.database.storage import PhenopacketStorage
 from migration.phenopackets.laterality import (
     ModifierVocabulary,
     modifier_vocabulary_from_rows,
 )
-from migration.phenopackets.observation_extractor import extract_observation
+from migration.phenopackets.observation_extractor import (
+    ObservationExtractionError,
+    extract_observation,
+    validate_reviewer_mapping,
+)
 from migration.phenopackets.ontology_mapper import OntologyMapper
 from migration.phenopackets.publication_mapping import (
     PublicationReference,
     publication_mapping_from_rows,
 )
+from migration.source_manifest import SourceManifest
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+_SHA256 = re.compile(r"^[a-f0-9]{64}$", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class SourceImportCliConfiguration:
+    """All explicit, non-live dependencies required by the import command."""
+
+    target_db_url: str
+    adapter: LocalFixtureSourceAdapter
+    row_hmac_key: bytes
+    reviewer_mapping: Mapping[str, tuple[str, str]]
+    actor_id: int
+
+
+def source_import_cli_configuration(config: Any) -> SourceImportCliConfiguration:
+    """Build the CLI dependencies only from explicit pinned configuration."""
+    fixture_dir = str(config.SOURCE_IMPORT_FIXTURE_DIR).strip()
+    manifest_sha256 = str(config.SOURCE_IMPORT_MANIFEST_SHA256).strip()
+    row_hmac_key = str(config.SOURCE_IMPORT_ROW_HMAC_KEY).encode()
+    actor_id = config.SOURCE_IMPORT_ACTOR_ID
+    target_db_url = str(config.DATABASE_URL).strip()
+    if not target_db_url:
+        raise RuntimeError("source import requires a configured database URL")
+    if not fixture_dir or not Path(fixture_dir).is_dir():
+        raise RuntimeError("source import requires a configured pinned fixture directory")
+    if not _SHA256.fullmatch(manifest_sha256):
+        raise RuntimeError("source import requires a pinned SHA-256 manifest")
+    if len(row_hmac_key) < 16:
+        raise RuntimeError("source import requires a configured row HMAC key")
+    if not isinstance(actor_id, int) or actor_id < 1:
+        raise RuntimeError("source import requires a configured actor")
+    try:
+        raw_mapping = json.loads(config.SOURCE_IMPORT_REVIEWER_MAPPING_JSON)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("source import requires a configured reviewer mapping") from exc
+    if not isinstance(raw_mapping, dict) or not raw_mapping:
+        raise RuntimeError("source import requires a configured reviewer mapping")
+    reviewer_mapping: dict[str, tuple[str, str]] = {}
+    for source_reviewer, mapped in raw_mapping.items():
+        if (
+            not isinstance(source_reviewer, str)
+            or not isinstance(mapped, list)
+            or len(mapped) != 2
+            or not all(isinstance(value, str) for value in mapped)
+        ):
+            raise RuntimeError("source import reviewer mapping is invalid")
+        reviewer_mapping[source_reviewer] = (mapped[0], mapped[1])
+    try:
+        validate_reviewer_mapping(reviewer_mapping)
+    except ObservationExtractionError as exc:
+        raise RuntimeError("source import reviewer mapping is invalid") from exc
+    return SourceImportCliConfiguration(
+        target_db_url=target_db_url,
+        adapter=LocalFixtureSourceAdapter(
+            Path(fixture_dir), expected_manifest_sha256=manifest_sha256
+        ),
+        row_hmac_key=row_hmac_key,
+        reviewer_mapping=reviewer_mapping,
+        actor_id=actor_id,
+    )
 
 
 def write_dry_run_atomically(
@@ -112,7 +184,7 @@ class DirectSheetsToPhenopackets:
         self.phenotypes_df: Optional[pd.DataFrame] = None
         self.publications_df: Optional[pd.DataFrame] = None
         self.modifier_vocabulary: ModifierVocabulary | None = None
-        self._source_manifest = None
+        self._source_manifest: SourceManifest | None = None
 
     async def load_data(self) -> None:
         """Load one complete, validated source snapshot through the adapter."""
@@ -142,7 +214,9 @@ class DirectSheetsToPhenopackets:
         )
 
 
-    def _build_typed_observations(self) -> dict[str, list[Any]]:
+    def _build_typed_observations(
+        self, *, limit: int | None = None
+    ) -> dict[str, list[Any]]:
         """Extract the complete source ledger before any projection or apply."""
         if self.individuals_df is None or self._source_manifest is None:
             raise RuntimeError("source snapshot has not been loaded")
@@ -170,22 +244,39 @@ class DirectSheetsToPhenopackets:
                 observation.identifiers.source_subject_id, []
             ).append(observation)
 
-        return observations_by_subject
+        if limit is None:
+            return observations_by_subject
+        if limit < 1:
+            raise RuntimeError("test dry-run limit must be positive")
+        return dict(sorted(observations_by_subject.items())[:limit])
 
-    def build_typed_phenopackets(self) -> list[dict[str, Any]]:
+    def build_typed_phenopackets(self, *, limit: int | None = None) -> list[dict[str, Any]]:
         """Project validated observations without exporting source-ledger fields."""
-        observations_by_subject = self._build_typed_observations()
+        observations_by_subject = self._build_typed_observations(limit=limit)
+        return self._project_typed_observations(observations_by_subject)
+
+    @staticmethod
+    def _project_typed_observations(
+        observations_by_subject: Mapping[str, list[Any]],
+    ) -> list[dict[str, Any]]:
+        """Project a validated ledger without using the legacy builder."""
         output: list[dict[str, Any]] = []
         for observations in observations_by_subject.values():
             projection = project_individual(
-                observations, [], algorithm_version="source-import-v1"
+                observations, [], algorithm_version="1.0"
             )
             if projection.blocking_conflicts:
                 raise RuntimeError("source projection has unresolved conflicts")
             output.append(projection.phenopacket)
         return output
 
-    async def apply_typed(self, db, *, actor) -> None:
+    async def apply_typed(
+        self,
+        db: AsyncSession,
+        *,
+        actor: User,
+        observations_by_subject: Mapping[str, list[Any]] | None = None,
+    ) -> None:
         """Apply typed observations through the transactional import service."""
         from migration.typed_import_service import TypedObservationImportService
 
@@ -193,7 +284,11 @@ class DirectSheetsToPhenopackets:
             raise RuntimeError("source snapshot has not been loaded")
         await TypedObservationImportService(db, actor=actor).apply(
             manifest=self._source_manifest,
-            observations_by_subject=self._build_typed_observations(),
+            observations_by_subject=(
+                dict(observations_by_subject)
+                if observations_by_subject is not None
+                else self._build_typed_observations()
+            ),
         )
 
     def _is_valid_id(self, value: Any) -> bool:
@@ -301,6 +396,8 @@ class DirectSheetsToPhenopackets:
         limit: Optional[int] = None,
         test_mode: bool = False,
         dry_run: bool = False,
+        db: AsyncSession | None = None,
+        actor: User | None = None,
     ) -> None:
         """Execute the complete migration.
 
@@ -308,6 +405,8 @@ class DirectSheetsToPhenopackets:
             limit: Optional limit on number of individuals to process
             test_mode: If True, process only limited individuals
             dry_run: If True, output to JSON file instead of database
+            db: Caller-owned async session used only for a non-dry apply.
+            actor: Accountable import actor used only for a non-dry apply.
         """
         try:
             if not settings.SOURCE_IMPORT_ENABLED:
@@ -315,10 +414,10 @@ class DirectSheetsToPhenopackets:
             # Load all data
             await self.load_data()
 
-            # Build phenopackets
-            if limit:
-                raise RuntimeError("limited source imports are forbidden outside fixture mode")
-            phenopackets = self.build_typed_phenopackets()
+            if limit is not None and not (test_mode and dry_run):
+                raise RuntimeError("limited imports require test dry-run mode")
+            observations_by_subject = self._build_typed_observations(limit=limit)
+            phenopackets = self._project_typed_observations(observations_by_subject)
 
             if dry_run:
                 # Save to JSON file for inspection
@@ -328,13 +427,17 @@ class DirectSheetsToPhenopackets:
                 write_dry_run_atomically(output_file, phenopackets)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
-                raise RuntimeError("typed apply requires an injected session and actor")
+                if db is None or actor is None:
+                    raise RuntimeError("typed apply requires an injected session and actor")
+                await self.apply_typed(
+                    db, actor=actor, observations_by_subject=observations_by_subject
+                )
 
             # Generate summary report
             self.generate_summary(phenopackets)
 
-        except Exception as e:
-            logger.error(f"Migration failed: {e}")
+        except Exception:
+            logger.error("Migration failed")
             raise
         finally:
             # Clean up database connection
@@ -348,12 +451,9 @@ async def main():
     # collection) must not mutate os.environ. See
     # tests/test_migration_import_no_env_side_effects.py.
     load_dotenv()
-
-    # Get database URL from environment
-    target_db = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5433/hnf1b_phenopackets",
-    )
+    if not settings.SOURCE_IMPORT_ENABLED:
+        raise RuntimeError("source import is disabled by configuration")
+    configuration = source_import_cli_configuration(settings)
 
     # Parse command line arguments
     import sys
@@ -378,8 +478,23 @@ async def main():
         logger.info("Running in DRY RUN MODE - will output to JSON file")
 
     # Run migration
-    migration = DirectSheetsToPhenopackets(target_db)
-    await migration.migrate(limit=limit, test_mode=test_mode, dry_run=dry_run)
+    migration = DirectSheetsToPhenopackets(
+        configuration.target_db_url,
+        source_adapter=configuration.adapter,
+        reviewer_mapping=configuration.reviewer_mapping,
+        row_hmac_key=configuration.row_hmac_key,
+    )
+    async with async_session_maker() as session:
+        actor = await session.get(User, configuration.actor_id)
+        if actor is None:
+            raise RuntimeError("configured source import actor does not exist")
+        await migration.migrate(
+            limit=limit,
+            test_mode=test_mode,
+            dry_run=dry_run,
+            db=session,
+            actor=actor,
+        )
 
 
 if __name__ == "__main__":

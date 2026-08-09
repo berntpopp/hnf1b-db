@@ -312,3 +312,33 @@ Ruff: passed; clean isolated Alembic downgrade/upgrade smoke: passed.
 Fresh verification: focused Lane C suite: **37 passed**; targeted Ruff:
 passed. Isolated-worker migration smoke first asserted downgrade safety,
 then completed `c0f422b00004 -> b9f422b00003 -> c0f422b00004` successfully.
+
+## Active typed-import architecture completion — 2026-08-09
+
+- The direct command now accepts only explicit pinned local-fixture
+  configuration: fixture directory, manifest SHA-256, row-HMAC key, approved
+  pseudonymous reviewer map, accountable actor, and async session. It has no
+  live Sheets/default database authority. Non-dry mode invokes `apply_typed`;
+  limits are permitted only for explicit test dry-runs.
+- Typed apply now persists the complete v2 `hnf1bCuration` profile ledger
+  (`observationsById`, source HMAC/provenance, and run ID) alongside its
+  canonical deterministic GA4GH projection. Initial imported revisions are
+  revision 1 and carry projection version `1.0`; source subject/report
+  bindings point at the stored record/observation identities.
+- Preflight requires every map key and observation provenance to match the
+  pinned manifest and requires the Individuals row count to match built
+  observations. Exact applied snapshot reruns are no-ops. Changed snapshots
+  reject active drafts and otherwise append a state-service draft revision to
+  the bound record rather than creating a duplicate.
+- Laterality now recognizes only exact approved qualifier token sequences;
+  conflicting/reordered/punctuated qualifiers fail closed. Reviewer mapping
+  values are validated as opaque `reviewer-*`/`Reviewer N` references before
+  source loading and during extraction.
+- Retired `test_direct_phenopackets_migration.py`: it tested the deliberately
+  disabled legacy builder and its fabricated legacy disease behavior rather
+  than the supported typed importer.
+
+Fresh verification: typed DB migration/apply smoke **15 passed** on a fresh
+isolated `hnf1b_user` worker database; Alembic completed
+`c0f422b00004 -> b9f422b00003 -> c0f422b00004`; targeted Ruff passed; mypy
+reported **Success: no issues found in 9 source files**.
