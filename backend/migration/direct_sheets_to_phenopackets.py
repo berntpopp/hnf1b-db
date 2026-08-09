@@ -135,8 +135,8 @@ class DirectSheetsToPhenopackets:
         self.publication_mapper = PublicationMapper(self.publications_df)
 
 
-    def build_typed_phenopackets(self) -> list[dict[str, Any]]:
-        """Project validated observations without exporting source-ledger fields."""
+    def _build_typed_observations(self) -> dict[str, list[Any]]:
+        """Extract the complete source ledger before any projection or apply."""
         if self.individuals_df is None or self._source_manifest is None:
             raise RuntimeError("source snapshot has not been loaded")
         if self.modifier_vocabulary is None:
@@ -160,6 +160,11 @@ class DirectSheetsToPhenopackets:
                 observation.identifiers.source_subject_id, []
             ).append(observation)
 
+        return observations_by_subject
+
+    def build_typed_phenopackets(self) -> list[dict[str, Any]]:
+        """Project validated observations without exporting source-ledger fields."""
+        observations_by_subject = self._build_typed_observations()
         output: list[dict[str, Any]] = []
         for observations in observations_by_subject.values():
             projection = project_individual(
@@ -169,6 +174,17 @@ class DirectSheetsToPhenopackets:
                 raise RuntimeError("source projection has unresolved conflicts")
             output.append(projection.phenopacket)
         return output
+
+    async def apply_typed(self, db, *, actor) -> None:
+        """Apply typed observations through the transactional import service."""
+        from migration.typed_import_service import TypedObservationImportService
+
+        if self._source_manifest is None:
+            raise RuntimeError("source snapshot has not been loaded")
+        await TypedObservationImportService(db, actor=actor).apply(
+            manifest=self._source_manifest,
+            observations_by_subject=self._build_typed_observations(),
+        )
 
     def _is_valid_id(self, value: Any) -> bool:
         """Check if an ID value is valid (not NaN, empty, or whitespace)."""
@@ -302,10 +318,7 @@ class DirectSheetsToPhenopackets:
                 write_dry_run_atomically(output_file, phenopackets)
                 logger.info(f"Dry run complete. Phenopackets saved to {output_file}")
             else:
-                raise RuntimeError(
-                    "legacy direct import is disabled; use the atomic observation "
-                    "import service after staging and validation"
-                )
+                raise RuntimeError("typed apply requires an injected session and actor")
 
             # Generate summary report
             self.generate_summary(phenopackets)
