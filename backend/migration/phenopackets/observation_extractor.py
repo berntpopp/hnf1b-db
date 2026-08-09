@@ -114,28 +114,30 @@ def _phenotypes(
                 else AssessmentStatus.PRESENT
             )
             candidates = [definitions[item] for item in question.definition_ids]
-            if question.source_column == "RenalInsufficancy":
-                match = next((item for item in candidates if item.term_label.casefold() in lowered), None)
-            else:
-                match = next((item for item in candidates if item.term_label.casefold() in lowered), None)
-                if match is None and len(candidates) == 1:
-                    match = candidates[0]
-            if match is None:
+            matches = [item for item in candidates if item.term_label.casefold() in lowered]
+            if lowered in {"no", "none", "absent", "negative"}:
+                matches = candidates
+            if len(candidates) == 1 and not matches:
+                if lowered not in {"yes", "present", "positive"} and not parse_laterality(raw):
+                    raise ObservationExtractionError(
+                        f"unknown phenotype value for {question.source_column}"
+                    )
+                matches = candidates
+            if not matches:
                 raise ObservationExtractionError(
-                    f"unknown categorical value for {question.source_column}: {raw!r}"
+                    f"unknown categorical value for {question.source_column}"
                 )
             modifiers = tuple(
                 OntologyTerm(id=item["id"], label=item["label"])
                 for item in parse_laterality(raw)
             )
-            findings = (
+            findings = tuple(
                 PhenotypeFinding(
                     definition_id=match.definition_id,
-                    term=OntologyTerm(
-                        id=match.term_id, label=match.term_label
-                    ),
+                    term=OntologyTerm(id=match.term_id, label=match.term_label),
                     modifiers=modifiers,
-                ),
+                )
+                for match in matches
             )
         assessments.append(
             PhenotypeAssessment(

@@ -245,3 +245,13 @@ Fresh verification: focused plus legacy migration tests: **40 passed**;
 isolated Alembic worker-database smoke: **1 passed**; `ruff check app migration
 tests/test_alembic_env_autogenerate.py`: passed. Test runs emitted only the
 existing async event-loop deprecation warning.
+
+## Scoped re-review follow-up
+
+- `load_data()` now checks the import gate before invoking its adapter; invalid
+  IDs, limited non-fixture runs, and any individual build failure abort before
+  a dry-run artifact can be written. Logged build failures contain no source ID
+  or exception payload.
+- Phenotype extraction now rejects unrecognised single/multi values, retains all
+  recognised multi-biopsy findings, and attaches negative status to every
+  applicable configured definition rather than silently choosing a first one.

@@ -81,6 +81,8 @@ class DirectSheetsToPhenopackets:
 
     async def load_data(self) -> None:
         """Load one complete, validated source snapshot through the adapter."""
+        if not settings.SOURCE_IMPORT_ENABLED:
+            raise RuntimeError("source import is disabled by configuration")
         snapshot = await self.source_adapter.load()
         self.individuals_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Individuals"]))
 
@@ -139,10 +141,10 @@ class DirectSheetsToPhenopackets:
             individual_groups, desc="Building phenopackets"
         ):
             if not self._is_valid_id(individual_id):
+                errors.append("invalid source individual identifier")
                 continue
-
-            if limit and individual_count >= limit:
-                break
+            if limit:
+                raise RuntimeError("limited source imports are forbidden outside fixture mode")
 
             try:
                 # Build phenopacket for this individual
@@ -152,11 +154,11 @@ class DirectSheetsToPhenopackets:
                 phenopackets.append(phenopacket)
                 individual_count += 1
 
-            except Exception as e:
-                errors.append(f"individual {individual_id}: {e}")
+            except Exception:
+                errors.append("individual build failed")
 
         if errors:
-            raise RuntimeError("source build failed; no partial output: " + "; ".join(errors))
+            raise RuntimeError("source build failed; no partial output")
 
         logger.info(f"Built {len(phenopackets)} phenopackets")
         return phenopackets
