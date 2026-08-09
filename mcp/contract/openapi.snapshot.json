@@ -640,6 +640,211 @@
         "title": "CorrectionAppendRequest",
         "type": "object"
       },
+      "CurationCorrection": {
+        "additionalProperties": false,
+        "description": "Append-only correction preserving exact before and after JSON values.",
+        "properties": {
+          "actorId": {
+            "title": "Actorid",
+            "type": "integer"
+          },
+          "correctionId": {
+            "title": "Correctionid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "jsonPointer": {
+            "title": "Jsonpointer",
+            "type": "string"
+          },
+          "postimage": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "preimage": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "sourceManifestSha256": {
+            "title": "Sourcemanifestsha256",
+            "type": "string"
+          },
+          "supersedesCorrectionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedescorrectionid"
+          }
+        },
+        "required": [
+          "correctionId",
+          "jsonPointer",
+          "preimage",
+          "postimage",
+          "sourceManifestSha256",
+          "reason",
+          "actorId",
+          "createdAt"
+        ],
+        "title": "CurationCorrection",
+        "type": "object"
+      },
+      "CurationIssue": {
+        "additionalProperties": false,
+        "description": "A machine-addressable validation or projection issue.",
+        "properties": {
+          "assessmentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessmentid"
+          },
+          "candidateSetDigest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidatesetdigest"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "conflictKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflictkey"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "observationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observationid"
+          },
+          "path": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "severity": {
+            "default": "error",
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "CurationIssue",
+        "type": "object"
+      },
+      "CurationLedgerResponse": {
+        "additionalProperties": false,
+        "description": "Private curator ledger together with its active canonical projection.",
+        "properties": {
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/CurationCorrection"
+            },
+            "title": "Corrections",
+            "type": "array"
+          },
+          "observations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Observations",
+            "type": "array"
+          },
+          "phenopacketId": {
+            "title": "Phenopacketid",
+            "type": "string"
+          },
+          "projection": {
+            "$ref": "#/components/schemas/ProjectionPayload"
+          },
+          "resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectionResolution"
+            },
+            "title": "Resolutions",
+            "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "phenopacketId",
+          "revision",
+          "observations",
+          "corrections",
+          "resolutions",
+          "projection"
+        ],
+        "title": "CurationLedgerResponse",
+        "type": "object"
+      },
+      "CurationPreviewResponse": {
+        "additionalProperties": false,
+        "description": "Unsaved projected candidate response.",
+        "properties": {
+          "projection": {
+            "$ref": "#/components/schemas/ProjectionPayload"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision",
+          "projection"
+        ],
+        "title": "CurationPreviewResponse",
+        "type": "object"
+      },
       "CurationStatus": {
         "description": "Workflow state, intentionally separate from clinical assessment state.",
         "enum": [
@@ -2598,6 +2803,40 @@
         "title": "PhenotypeFinding",
         "type": "object"
       },
+      "ProjectionPayload": {
+        "additionalProperties": false,
+        "description": "Canonical GA4GH output and its projection diagnostics.",
+        "properties": {
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CurationIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "observationsDigest": {
+            "title": "Observationsdigest",
+            "type": "string"
+          },
+          "outputDigest": {
+            "title": "Outputdigest",
+            "type": "string"
+          },
+          "phenopacket": {
+            "additionalProperties": true,
+            "title": "Phenopacket",
+            "type": "object"
+          }
+        },
+        "required": [
+          "phenopacket",
+          "observationsDigest",
+          "outputDigest"
+        ],
+        "title": "ProjectionPayload",
+        "type": "object"
+      },
       "ProjectionPreviewRequest": {
         "additionalProperties": false,
         "description": "Project an unsaved replacement for a single source observation.",
@@ -2610,6 +2849,76 @@
           "observation"
         ],
         "title": "ProjectionPreviewRequest",
+        "type": "object"
+      },
+      "ProjectionResolution": {
+        "additionalProperties": false,
+        "description": "A curator decision whose candidate digest proves it remains current.",
+        "properties": {
+          "candidateSetDigest": {
+            "title": "Candidatesetdigest",
+            "type": "string"
+          },
+          "conflictKey": {
+            "title": "Conflictkey",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolutionId": {
+            "title": "Resolutionid",
+            "type": "string"
+          },
+          "resolvedAt": {
+            "format": "date-time",
+            "title": "Resolvedat",
+            "type": "string"
+          },
+          "resolvedByUserId": {
+            "title": "Resolvedbyuserid",
+            "type": "integer"
+          },
+          "resolvedValue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OntologyTerm"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedvalue"
+          },
+          "selectedObservationIds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Selectedobservationids",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/ResolutionStrategy"
+          }
+        },
+        "required": [
+          "resolutionId",
+          "conflictKey",
+          "candidateSetDigest",
+          "strategy",
+          "reason",
+          "resolvedByUserId",
+          "resolvedAt"
+        ],
+        "title": "ProjectionResolution",
         "type": "object"
       },
       "ProteinDomain": {
@@ -9378,9 +9687,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Curation Api V2 Phenopackets  Phenopacket Id  Curation Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CurationLedgerResponse"
                 }
               }
             },
@@ -9454,9 +9761,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Append Correction Api V2 Phenopackets  Phenopacket Id  Curation Corrections Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CurationLedgerResponse"
                 }
               }
             },
@@ -9514,9 +9819,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Preview Curation Api V2 Phenopackets  Phenopacket Id  Curation Preview Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CurationPreviewResponse"
                 }
               }
             },
@@ -9590,9 +9893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Append Resolution Api V2 Phenopackets  Phenopacket Id  Curation Resolutions Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CurationLedgerResponse"
                 }
               }
             },
@@ -9744,9 +10045,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Report Api V2 Phenopackets  Phenopacket Id  Reports  Observation Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CurationLedgerResponse"
                 }
               }
             },

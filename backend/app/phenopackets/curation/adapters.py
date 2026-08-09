@@ -98,6 +98,67 @@ def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
     return corrected
 
 
+def _profile_validation_input(block: dict[str, Any]) -> dict[str, Any]:
+    """Remove phenotype's derived source status before strict model parsing."""
+    prepared = deepcopy(block)
+    observations = prepared.get("observationsById")
+    if not isinstance(observations, dict):
+        return prepared
+    for observation in observations.values():
+        if not isinstance(observation, dict):
+            continue
+        for assessment in observation.get("phenotypes", []):
+            if isinstance(assessment, dict):
+                assessment.pop("sourceStatus", None)
+                assessment.pop("source_status", None)
+    return prepared
+
+
+def _active_projection_inputs(
+    profile: Hnf1bCurationProfile,
+) -> tuple[list[Any], list[Any]]:
+    """Return corrected observations and only current, non-superseded resolutions.
+
+    The ledger retains every resolution entry for audit. Projection, however,
+    may use only the newest decision for a conflict whose candidate digest is
+    still current; a changed correction therefore reopens the conflict instead
+    of making the entire packet unparsable.
+    """
+    try:
+        corrected_profile = Hnf1bCurationProfile.model_validate(
+            _profile_validation_input(
+                _apply_active_corrections(
+                    profile.model_dump(by_alias=True, mode="json")
+                )
+            )
+        )
+    except ValidationError as error:
+        raise CurationProjectionError("invalid_correction", str(error)) from error
+    observations = list(corrected_profile.observations_by_id.values())
+    try:
+        baseline = project_individual(
+            observations, [], algorithm_version=profile.projection.algorithm_version
+        )
+    except (TypeError, ValueError) as error:
+        raise CurationProjectionError("projection_error", str(error)) from error
+    conflicts = {item.conflict_key: item for item in baseline.blocking_conflicts}
+    newest_by_key: dict[str, Any] = {}
+    for resolution in profile.resolutions_by_id.values():
+        previous = newest_by_key.get(resolution.conflict_key)
+        if previous is None or (resolution.resolved_at, resolution.resolution_id) > (
+            previous.resolved_at,
+            previous.resolution_id,
+        ):
+            newest_by_key[resolution.conflict_key] = resolution
+    active = [
+        resolution
+        for key, resolution in newest_by_key.items()
+        if key in conflicts
+        and resolution.candidate_set_digest == conflicts[key].candidate_set_digest
+    ]
+    return observations, active
+
+
 def canonicalize_curation_document(
     document: dict[str, Any], *, publish: bool = False
 ) -> dict[str, Any]:
@@ -111,13 +172,14 @@ def canonicalize_curation_document(
     if not isinstance(block, dict) or "observationsById" not in block:
         return deepcopy(document)
     try:
-        profile = Hnf1bCurationProfile.model_validate(_apply_active_corrections(block))
+        profile = Hnf1bCurationProfile.model_validate(_profile_validation_input(block))
     except ValidationError as error:
         raise CurationProjectionError("invalid_profile", str(error)) from error
     try:
+        observations, active_resolutions = _active_projection_inputs(profile)
         result = project_individual(
-            list(profile.observations_by_id.values()),
-            list(profile.resolutions_by_id.values()),
+            observations,
+            active_resolutions,
             algorithm_version=profile.projection.algorithm_version,
         )
     except (ValueError, TypeError) as error:

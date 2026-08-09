@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from app.phenopackets.curation.models import (
+    CurationCorrection,
     OntologyTerm,
     ProjectionResolution,
     ReportObservation,
@@ -37,6 +38,7 @@ class CurationIssue(CurationApiModel):
     observation_id: str | None = None
     assessment_id: str | None = None
     conflict_key: str | None = None
+    candidate_set_digest: str | None = None
     severity: str = "error"
 
 
@@ -45,6 +47,37 @@ class CurationError(CurationApiModel):
 
     code: str
     errors: tuple[CurationIssue, ...]
+
+
+class ProjectionPayload(CurationApiModel):
+    """Canonical GA4GH output and its projection diagnostics."""
+
+    phenopacket: dict[str, Any]
+    observations_digest: str
+    output_digest: str
+    issues: tuple[CurationIssue, ...] = ()
+
+
+class CurationLedgerResponse(CurationApiModel):
+    """Private curator ledger together with its active canonical projection."""
+
+    phenopacket_id: str
+    revision: int
+    # Source-status is derived by the profile model but retained in the
+    # serialized source ledger. Keep this exact, forward-compatible evidence
+    # object opaque at the response boundary rather than re-parsing it and
+    # accidentally rejecting its derived field.
+    observations: tuple[dict[str, Any], ...]
+    corrections: tuple[CurationCorrection, ...]
+    resolutions: tuple[ProjectionResolution, ...]
+    projection: ProjectionPayload
+
+
+class CurationPreviewResponse(CurationApiModel):
+    """Unsaved projected candidate response."""
+
+    revision: int
+    projection: ProjectionPayload
 
 
 class ReportPatchRequest(CurationApiModel):

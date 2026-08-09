@@ -148,10 +148,10 @@ async def test_report_patch_reprojects_and_preserves_unknown_legacy_root_keys(
     )
 
 
-async def test_report_patch_returns_path_addressable_profile_errors(
+async def test_report_patch_returns_path_addressable_immutable_source_errors(
     async_client, db_session, admin_headers
 ):
-    """Cross-report identity violations never leak as a 500 database error."""
+    """Source identity changes never leak as a 500 database error."""
     await _insert_curation_record(db_session)
     observation = _curation_document()["hnf1bCuration"]["observationsById"]["report-1"]
     observation["identifiers"]["sourceSubjectId"] = "other-source-subject"
@@ -168,5 +168,146 @@ async def test_report_patch_returns_path_addressable_profile_errors(
 
     assert response.status_code == 422, response.text
     error = response.json()["detail"]
-    assert error["code"] == "invalid_profile"
+    assert error["code"] == "immutable_source"
     assert error["errors"][0]["path"]
+
+
+async def test_report_patch_cannot_change_nested_raw_or_provenance(
+    async_client, db_session, admin_headers
+):
+    """Source evidence is immutable below the report root as well."""
+    record = await _insert_curation_record(db_session)
+    report = record.phenopacket["hnf1bCuration"]["observationsById"]["report-1"]
+    report["phenotypes"] = [
+        {
+            "assessmentId": "assessment-report-1",
+            "column": "RenalCysts",
+            "rawValue": "yes",
+            "curationStatus": "UNCURATED",
+            "assessmentStatus": None,
+        }
+    ]
+    await db_session.commit()
+
+    changed = _curation_document()["hnf1bCuration"]["observationsById"]["report-1"]
+    changed.update(report)
+    changed["source"] = {**report["source"], "sheet": "Other sheet"}
+    changed["phenotypes"] = [{**report["phenotypes"][0], "rawValue": "no"}]
+    response = await async_client.patch(
+        "/api/v2/phenopackets/curation-api-317/reports/report-1",
+        json={
+            "observation": changed,
+            "revision": 1,
+            "changeReason": "Attempt to alter imported evidence.",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "immutable_source"
+
+
+async def test_legacy_put_is_blocked_for_observation_backed_packets(
+    async_client, db_session, admin_headers
+):
+    """Whole-ledger replacement must use the append/report curation API."""
+    record = await _insert_curation_record(db_session)
+
+    response = await async_client.put(
+        "/api/v2/phenopackets/curation-api-317",
+        json={
+            "phenopacket": record.phenopacket,
+            "revision": 1,
+            "change_reason": "Attempt wholesale source ledger replacement.",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "curation_api_required"
+
+
+async def test_get_projection_uses_active_correction_values(
+    async_client, db_session, admin_headers
+):
+    """A correction is an overlay for GET/preview, not merely audit metadata."""
+    record = await _insert_curation_record(db_session)
+    report = record.phenopacket["hnf1bCuration"]["observationsById"]["report-1"]
+    report["identifiers"]["sex"] = {
+        "raw": "M",
+        "sourceStatus": "stated",
+        "value": "MALE",
+    }
+    await db_session.commit()
+
+    response = await async_client.post(
+        "/api/v2/phenopackets/curation-api-317/curation/corrections",
+        json={
+            "jsonPointer": "/observationsById/report-1/identifiers/sex/value",
+            "preimage": "MALE",
+            "postimage": "FEMALE",
+            "reason": "Correct source normalization.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["projection"]["phenopacket"]["subject"]["sex"] == "FEMALE"
+    get_response = await async_client.get(
+        "/api/v2/phenopackets/curation-api-317/curation", headers=admin_headers
+    )
+    assert (
+        get_response.json()["projection"]["phenopacket"]["subject"]["sex"] == "FEMALE"
+    )
+
+
+async def test_correction_validates_its_active_postimage_against_domains(
+    async_client, db_session, admin_headers
+):
+    """A correction cannot bypass controlled vocabulary validation."""
+    record = await _insert_curation_record(db_session)
+    report = record.phenopacket["hnf1bCuration"]["observationsById"]["report-1"]
+    report["classification"] = {
+        "system": {"raw": "ACMG", "sourceStatus": "stated", "value": "ACMG"}
+    }
+    await db_session.commit()
+
+    response = await async_client.post(
+        "/api/v2/phenopackets/curation-api-317/curation/corrections",
+        json={
+            "jsonPointer": "/observationsById/report-1/classification/system/value",
+            "preimage": "ACMG",
+            "postimage": "not-a-classification-system",
+            "reason": "Exercise controlled-vocabulary validation.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "invalid_domain"
+
+
+async def test_curation_request_validation_uses_structured_422_errors(
+    async_client, db_session, admin_headers
+):
+    """Pydantic request failures share the ledger API's error contract."""
+    await _insert_curation_record(db_session)
+
+    response = await async_client.post(
+        "/api/v2/phenopackets/curation-api-317/curation/resolutions",
+        json={
+            "conflictKey": "subject:sex",
+            "candidateSetDigest": "sha256:fixture",
+            "strategy": "not-a-strategy",
+            "reason": "Exercise route request validation.",
+            "revision": 1,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "invalid_request"
+    assert detail["errors"][0]["path"]

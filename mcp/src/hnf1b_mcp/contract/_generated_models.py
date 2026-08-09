@@ -121,6 +121,22 @@ class CommentUpdate(BaseModel):
     ] = None
 
 
+class CurationIssue(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assessmentId: Annotated[Optional[str], Field(title="Assessmentid")] = None
+    candidateSetDigest: Annotated[Optional[str], Field(title="Candidatesetdigest")] = (
+        None
+    )
+    code: Annotated[str, Field(title="Code")]
+    conflictKey: Annotated[Optional[str], Field(title="Conflictkey")] = None
+    message: Annotated[str, Field(title="Message")]
+    observationId: Annotated[Optional[str], Field(title="Observationid")] = None
+    path: Annotated[Optional[list[str]], Field(title="Path")] = []
+    severity: Annotated[Optional[str], Field(title="Severity")] = "error"
+
+
 class CurationStatus(RootModel[Literal["UNCURATED", "CURATED"]]):
     root: Annotated[
         Literal["UNCURATED", "CURATED"],
@@ -611,6 +627,16 @@ class PhenotypeFinding(BaseModel):
     modifiers: Annotated[Optional[list[OntologyTerm]], Field(title="Modifiers")] = []
     sourceTerm: Optional[OntologyTerm] = None
     term: OntologyTerm
+
+
+class ProjectionPayload(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    issues: Annotated[Optional[list[CurationIssue]], Field(title="Issues")] = []
+    observationsDigest: Annotated[str, Field(title="Observationsdigest")]
+    outputDigest: Annotated[str, Field(title="Outputdigest")]
+    phenopacket: Annotated[dict[str, Any], Field(title="Phenopacket")]
 
 
 class ProteinDomain(
@@ -1270,6 +1296,31 @@ class CorrectionAppendRequest(BaseModel):
     ] = None
 
 
+class CurationCorrection(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    actorId: Annotated[int, Field(title="Actorid")]
+    correctionId: Annotated[str, Field(title="Correctionid")]
+    createdAt: Annotated[AwareDatetime, Field(title="Createdat")]
+    jsonPointer: Annotated[str, Field(title="Jsonpointer")]
+    postimage: JsonValue
+    preimage: JsonValue
+    reason: Annotated[str, Field(title="Reason")]
+    sourceManifestSha256: Annotated[str, Field(title="Sourcemanifestsha256")]
+    supersedesCorrectionId: Annotated[
+        Optional[str], Field(title="Supersedescorrectionid")
+    ] = None
+
+
+class CurationPreviewResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    projection: ProjectionPayload
+    revision: Annotated[int, Field(title="Revision")]
+
+
 class CursorMetaObject(BaseModel):
     page: CursorPageMeta
 
@@ -1392,6 +1443,25 @@ class PhenotypeAssessment(BaseModel):
     sourceStatus: SourceStatus
 
 
+class ProjectionResolution(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    candidateSetDigest: Annotated[str, Field(title="Candidatesetdigest")]
+    conflictKey: Annotated[str, Field(title="Conflictkey")]
+    reason: Annotated[str, Field(title="Reason")]
+    resolutionId: Annotated[str, Field(title="Resolutionid")]
+    resolvedAt: Annotated[AwareDatetime, Field(title="Resolvedat")]
+    resolvedByUserId: Annotated[int, Field(title="Resolvedbyuserid")]
+    resolvedValue: Annotated[
+        Optional[Union[str, list[OntologyTerm]]], Field(title="Resolvedvalue")
+    ] = None
+    selectedObservationIds: Annotated[
+        Optional[list[str]], Field(title="Selectedobservationids")
+    ] = []
+    strategy: ResolutionStrategy
+
+
 class PublicationObservation(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1466,6 +1536,18 @@ class ClassificationObservation(BaseModel):
     date: Optional[ObservedValueStr] = None
     system: Optional[ObservedValueStr] = None
     verdict: Optional[ObservedValueStr] = None
+
+
+class CurationLedgerResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    corrections: Annotated[list[CurationCorrection], Field(title="Corrections")]
+    observations: Annotated[list[dict[str, Any]], Field(title="Observations")]
+    phenopacketId: Annotated[str, Field(title="Phenopacketid")]
+    projection: ProjectionPayload
+    resolutions: Annotated[list[ProjectionResolution], Field(title="Resolutions")]
+    revision: Annotated[int, Field(title="Revision")]
 
 
 class DiseaseObservation(BaseModel):

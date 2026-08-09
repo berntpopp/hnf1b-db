@@ -13,6 +13,8 @@ from app.models.user import User
 from app.phenopackets.curation.api_models import (
     CorrectionAppendRequest,
     CurationError,
+    CurationLedgerResponse,
+    CurationPreviewResponse,
     ProjectionPreviewRequest,
     ReportPatchRequest,
     ResolutionAppendRequest,
@@ -95,7 +97,7 @@ def _map_state_error(error: Exception) -> NoReturn:
     raise error
 
 
-@router.get("/{phenopacket_id}/curation", response_model=dict[str, Any])
+@router.get("/{phenopacket_id}/curation", response_model=CurationLedgerResponse)
 async def get_curation(
     phenopacket_id: str,
     response: Response,
@@ -112,7 +114,9 @@ async def get_curation(
     return payload
 
 
-@router.post("/{phenopacket_id}/curation/preview", response_model=dict[str, Any])
+@router.post(
+    "/{phenopacket_id}/curation/preview", response_model=CurationPreviewResponse
+)
 async def preview_curation(
     phenopacket_id: str,
     body: ProjectionPreviewRequest,
@@ -138,7 +142,8 @@ async def _write_response(
 
 
 @router.patch(
-    "/{phenopacket_id}/reports/{observation_id}", response_model=dict[str, Any]
+    "/{phenopacket_id}/reports/{observation_id}",
+    response_model=CurationLedgerResponse,
 )
 async def patch_report(
     phenopacket_id: str,
@@ -170,7 +175,10 @@ async def patch_report(
         _map_state_error(error)
 
 
-@router.post("/{phenopacket_id}/curation/corrections", response_model=dict[str, Any])
+@router.post(
+    "/{phenopacket_id}/curation/corrections",
+    response_model=CurationLedgerResponse,
+)
 async def append_correction(
     phenopacket_id: str,
     body: CorrectionAppendRequest,
@@ -198,7 +206,10 @@ async def append_correction(
         _map_state_error(error)
 
 
-@router.post("/{phenopacket_id}/curation/resolutions", response_model=dict[str, Any])
+@router.post(
+    "/{phenopacket_id}/curation/resolutions",
+    response_model=CurationLedgerResponse,
+)
 async def append_resolution(
     phenopacket_id: str,
     body: ResolutionAppendRequest,

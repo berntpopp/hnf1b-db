@@ -547,6 +547,18 @@ async def update_phenopacket(
     pp = await repo.get_by_id(phenopacket_id)
     if pp is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
+    current_curation = pp.phenopacket.get("hnf1bCuration")
+    if isinstance(current_curation, dict) and "observationsById" in current_curation:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "curation_api_required",
+                "message": (
+                    "observation-backed phenopackets must use the curator "
+                    "report, correction, and resolution endpoints"
+                ),
+            },
+        )
 
     # Validate & sanitise content (reuse existing validator/sanitizer)
     sanitizer = PhenopacketSanitizer()

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.phenopackets.curation.adapters import (
     CurationProjectionError,
+    _active_projection_inputs,
     _apply_active_corrections,
     canonicalize_curation_document,
 )
@@ -52,6 +53,64 @@ class CurationService:
         """Bind service operations to a caller-owned async unit of work."""
         self.db = db
         self._state = PhenopacketStateService(db)
+
+    @staticmethod
+    def _source_immutability_issues(
+        existing: Any, proposed: Any, path: tuple[str, ...] = ()
+    ) -> tuple[CurationIssue, ...]:
+        """Return changed source-evidence paths that report PATCH may not mutate."""
+        protected = {
+            "assessmentId",
+            "correctionIds",
+            "identifiers",
+            "observationId",
+            "origin",
+            "raw",
+            "rawValue",
+            "source",
+            "sourceReview",
+            "sourceStatus",
+        }
+        if isinstance(existing, dict) and isinstance(proposed, dict):
+            issues: list[CurationIssue] = []
+            for key in sorted(set(existing) | set(proposed)):
+                next_path = (*path, key)
+                if key in protected and existing.get(key) != proposed.get(key):
+                    issues.append(
+                        CurationIssue(
+                            code="immutable_source",
+                            message=(
+                                "source-originated evidence is immutable; append a "
+                                "correction instead"
+                            ),
+                            path=next_path,
+                        )
+                    )
+                elif key not in protected:
+                    issues.extend(
+                        CurationService._source_immutability_issues(
+                            existing.get(key), proposed.get(key), next_path
+                        )
+                    )
+            return tuple(issues)
+        if isinstance(existing, list) and isinstance(proposed, list):
+            issues = []
+            for index, (old, new) in enumerate(zip(existing, proposed)):
+                issues.extend(
+                    CurationService._source_immutability_issues(
+                        old, new, (*path, str(index))
+                    )
+                )
+            if len(existing) != len(proposed):
+                issues.append(
+                    CurationIssue(
+                        code="immutable_source",
+                        message="source assessment membership is immutable",
+                        path=path,
+                    )
+                )
+            return tuple(issues)
+        return ()
 
     @staticmethod
     def _validation_payload(block: dict[str, Any]) -> dict[str, Any]:
@@ -127,11 +186,23 @@ class CurationService:
 
     @staticmethod
     def _projection(profile: Hnf1bCurationProfile) -> Any:
-        return project_individual(
-            list(profile.observations_by_id.values()),
-            list(profile.resolutions_by_id.values()),
-            algorithm_version=profile.projection.algorithm_version,
-        )
+        try:
+            observations, active_resolutions = _active_projection_inputs(profile)
+            return project_individual(
+                observations,
+                active_resolutions,
+                algorithm_version=profile.projection.algorithm_version,
+            )
+        except (CurationProjectionError, TypeError, ValueError) as exc:
+            raise CurationServiceError(
+                "projection_error",
+                str(exc),
+                CurationIssue(
+                    code="projection_error",
+                    message=str(exc),
+                    path=("projection",),
+                ),
+            ) from exc
 
     @classmethod
     def _issues(cls, profile: Hnf1bCurationProfile) -> tuple[CurationIssue, ...]:
@@ -145,6 +216,7 @@ class CurationService:
                     conflict.observation_ids[0] if conflict.observation_ids else None
                 ),
                 conflict_key=conflict.conflict_key,
+                candidate_set_digest=conflict.candidate_set_digest,
                 severity="blocking",
             )
             for conflict in result.blocking_conflicts
@@ -198,7 +270,22 @@ class CurationService:
 
     async def _validate_domain(self, document: dict[str, Any]) -> None:
         """Raise path-addressable errors for database-backed domain violations."""
-        errors = await DomainValidator(self.db).validate(document)
+        domain_document = deepcopy(document)
+        block = domain_document.get("hnf1bCuration")
+        if isinstance(block, dict):
+            try:
+                domain_document["hnf1bCuration"] = _apply_active_corrections(block)
+            except CurationProjectionError as exc:
+                raise CurationServiceError(
+                    exc.code,
+                    str(exc),
+                    CurationIssue(
+                        code=exc.code,
+                        message=str(exc),
+                        path=("hnf1bCuration",),
+                    ),
+                ) from exc
+        errors = await DomainValidator(self.db).validate(domain_document)
         if errors:
             raise CurationServiceError(
                 "invalid_domain",
@@ -314,22 +401,15 @@ class CurationService:
             raise CurationServiceError(
                 "observation_not_found", "observation is not part of this phenopacket"
             )
-        if existing.origin.value == "imported" and (
-            existing.source != request.observation.source
-            or existing.identifiers != request.observation.identifiers
-        ):
+        immutable_issues = self._source_immutability_issues(
+            existing.model_dump(by_alias=True, mode="json"),
+            request.observation.model_dump(by_alias=True, mode="json"),
+        )
+        if immutable_issues:
             raise CurationServiceError(
                 "immutable_source",
-                "imported source identity and provenance must be changed through "
-                "re-import",
-                CurationIssue(
-                    code="immutable_source",
-                    message=(
-                        "source and identifiers are immutable for imported observations"
-                    ),
-                    path=("observation",),
-                    observation_id=observation_id,
-                ),
+                "source evidence must be changed through append-only correction APIs",
+                *immutable_issues,
             )
         candidate = profile.model_dump(by_alias=True, mode="json")
         candidate["observationsById"][observation_id] = request.observation.model_dump(
