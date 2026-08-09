@@ -529,6 +529,14 @@ class SchemaValidator:
         """
         errors = []
         curation = phenopacket.get("hnf1bCuration")
+        if (
+            isinstance(curation, dict)
+            and "observationsById" in curation
+            and curation.get("schemaVersion") != "2.0"
+        ):
+            errors.append(
+                "hnf1bCuration: source observations require schemaVersion 2.0"
+            )
         if isinstance(curation, dict) and curation.get("schemaVersion") == "2.0":
             from pydantic import ValidationError
 

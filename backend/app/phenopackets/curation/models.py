@@ -640,7 +640,7 @@ class ProjectionMetadata(CurationModel):
 class Hnf1bCurationProfile(CurationModel):
     """The single clinical source of truth stored in the revisioned document."""
 
-    schema_version: str = "2.0"
+    schema_version: Literal["2.0"] = "2.0"
     definitions_version: str = "hnf1b-phenotypes/1"
     source_subject_id: str
     observations_by_id: dict[str, ReportObservation] = Field(default_factory=dict)
@@ -673,6 +673,14 @@ class Hnf1bCurationProfile(CurationModel):
         ]
         if len(superseded) != len(set(superseded)):
             raise ValueError("a correction may be superseded only once")
+        for correction in self.corrections_by_id.values():
+            seen: set[str] = set()
+            current = correction
+            while current.supersedes_correction_id is not None:
+                if current.correction_id in seen:
+                    raise ValueError("correction supersession chain contains a cycle")
+                seen.add(current.correction_id)
+                current = self.corrections_by_id[current.supersedes_correction_id]
         for key, resolution in self.resolutions_by_id.items():
             if key != resolution.resolution_id:
                 raise ValueError("resolutionsById key must equal resolutionId")
