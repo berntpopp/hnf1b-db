@@ -327,6 +327,22 @@ def project_individual(
     for descriptor_id in sorted(descriptors_by_id):
         descriptor = descriptors_by_id[descriptor_id]
         variant_observations = descriptor_observations[descriptor_id]
+        contributions = {
+            observation.classification.contribution.value
+            for observation in variant_observations
+            if observation.classification is not None
+            and observation.classification.contribution is not None
+            and observation.classification.contribution.source_status.value == "stated"
+        }
+        verdicts = {
+            observation.classification.verdict.value
+            for observation in variant_observations
+            if observation.classification is not None
+            and observation.classification.verdict is not None
+            and observation.classification.verdict.source_status.value == "stated"
+        }
+        if len(contributions) > 1 or len(verdicts) > 1:
+            raise ValueError("conflicting classifications for one VRS descriptor")
         observation = variant_observations[0]
         contribution = (
             observation.classification.contribution.value
