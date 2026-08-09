@@ -66,7 +66,7 @@ def _build_revision_response(
         state=rev.state,
         from_state=rev.from_state,
         to_state=rev.to_state,
-        is_head_published=rev.is_head_published,
+        is_head_published=pp.head_published_revision_id == rev.id,
         change_reason=rev.change_reason,
         actor_id=rev.actor_id,
         actor_username=actor_username,
@@ -129,6 +129,7 @@ async def post_transition(
             expected_revision=body.revision,
             actor=current_user,
         )
+        await db.commit()
     except PhenopacketStateService.RecordNotFound as exc:
         raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:

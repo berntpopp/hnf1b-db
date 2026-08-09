@@ -23,9 +23,9 @@ Wave 7 D.1 additions:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -61,6 +61,11 @@ from app.phenopackets.services.phenopacket_service import (
     ServiceNotFound,
     ServiceValidationError,
     stamp_curated_at,
+)
+from app.phenopackets.services.representation_service import (
+    RepresentationValidationError,
+    normalized_representation,
+    represent,
 )
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
@@ -379,7 +384,8 @@ async def get_phenopacket(
 @router.get("/{phenopacket_id}/export")
 async def export_phenopacket(
     phenopacket_id: str,
-    mode: Literal["conformant", "full"] = "conformant",
+    representation: str = Query("ga4gh"),
+    mode: Optional[str] = Query(None, deprecated=True),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
@@ -401,22 +407,30 @@ async def export_phenopacket(
     HNF1B-DB-specific curation has been stripped.
     """
     is_curator = is_curator_or_admin(current_user)
+    try:
+        selected_representation = normalized_representation(mode or representation)
+    except RepresentationValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     stmt = select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
-    stmt = curator_filter(stmt) if is_curator else public_filter(stmt)
+    stmt = (
+        curator_filter(stmt)
+        if selected_representation == "profile" and is_curator
+        else public_filter(stmt)
+    )
 
     result = await db.execute(stmt)
     pp = result.scalar_one_or_none()
     if pp is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
-    if mode == "full" and not is_curator:
+    if selected_representation == "profile" and not is_curator:
         raise HTTPException(
             status_code=403,
-            detail="full export requires curator access",
+            detail="profile export requires curator access",
         )
 
-    if is_curator:
+    if selected_representation == "profile":
         document = dict(resolve_curator_content(pp))
     else:
         public_content = await resolve_public_content(db, pp)
@@ -424,9 +438,13 @@ async def export_phenopacket(
             raise HTTPException(status_code=404, detail="Phenopacket not found")
         document = dict(public_content)
 
-    if mode == "conformant":
-        document.pop("hnf1bCuration", None)
-    return document
+    try:
+        return represent(document, selected_representation)
+    except RepresentationValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_representation", "message": str(exc)},
+        ) from exc
 
 
 # =============================================================================
@@ -468,6 +486,7 @@ async def create_phenopacket(
 async def update_phenopacket(
     phenopacket_id: str,
     phenopacket_data: PhenopacketUpdate,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -495,6 +514,28 @@ async def update_phenopacket(
         403: Forbidden (not draft owner)
         400: Validation error
     """
+    if phenopacket_data.revision is None and if_match is None:
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "code": "precondition_required",
+                "message": "revision or If-Match is required",
+            },
+        )
+    if phenopacket_data.revision is None:
+        try:
+            expected_revision = int(if_match.strip('"'))  # type: ignore[union-attr]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=428,
+                detail={
+                    "code": "precondition_required",
+                    "message": "If-Match must contain a revision",
+                },
+            ) from exc
+    else:
+        expected_revision = phenopacket_data.revision
+
     repo = PhenopacketRepository(db)
     pp = await repo.get_by_id(phenopacket_id)
     if pp is None:
@@ -525,13 +566,10 @@ async def update_phenopacket(
             pp.id,
             new_content=sanitized,
             change_reason=phenopacket_data.change_reason,
-            expected_revision=(
-                phenopacket_data.revision
-                if phenopacket_data.revision is not None
-                else pp.revision
-            ),
+            expected_revision=expected_revision,
             actor=current_user,
         )
+        await db.commit()
     except PhenopacketStateService.RecordNotFound as exc:
         raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:

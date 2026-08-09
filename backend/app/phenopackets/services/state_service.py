@@ -1,9 +1,8 @@
 """PhenopacketStateService — the four §6 transaction sequences.
 
-Every public method opens a single async transaction, acquires
-``SELECT ... FOR UPDATE`` on the phenopacket row, checks the optimistic lock,
-runs the guard matrix, mutates pointers + revisions + state atomically, then
-commits.
+Every public method acquires ``SELECT ... FOR UPDATE`` on the phenopacket row,
+checks the optimistic lock, and stages one append-only revision. Callers own
+the surrounding transaction and are solely responsible for committing.
 
 Spec reference:
   .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §6.
@@ -15,8 +14,8 @@ import logging
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError, MultipleResultsFound, NoResultFound
+from sqlalchemy import select
+from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -90,6 +89,43 @@ class PhenopacketStateService:
             .order_by(PhenopacketRevision.revision_number.desc())
         )
         return result.scalars().first()
+
+    async def _append_revision(
+        self,
+        pp: Phenopacket,
+        *,
+        state: str,
+        content: dict[str, Any],
+        change_patch: list[dict[str, Any]] | None,
+        change_reason: str,
+        actor: User,
+        from_state: str | None,
+        to_state: str,
+        event_type: str,
+        parent_revision_id: int | None = None,
+    ) -> PhenopacketRevision:
+        """Append and flush a revision; never update historical revision rows."""
+        parent = parent_revision_id
+        if parent is None:
+            latest = await self._latest_revision_row(pp.id)
+            parent = latest.id if latest is not None else None
+        pp.revision += 1
+        revision = PhenopacketRevision(
+            record_id=pp.id,
+            parent_revision_id=parent,
+            revision_number=pp.revision,
+            state=state,
+            content_jsonb=content,
+            change_patch=change_patch,
+            change_reason=change_reason,
+            actor_id=actor.id,
+            from_state=from_state,
+            to_state=to_state,
+            event_type=event_type,
+        )
+        self.db.add(revision)
+        await self.db.flush()
+        return revision
 
     async def _effective_state(self, pp: Phenopacket) -> State:
         """Return the state governing edit-cycle decisions for this phenopacket.
@@ -174,28 +210,23 @@ class PhenopacketStateService:
         ).scalar_one()
         patch = compute_json_patch(head_row.content_jsonb, new_content)
 
-        pp.revision += 1
-        rev = PhenopacketRevision(
-            record_id=pp.id,
-            revision_number=pp.revision,
+        rev = await self._append_revision(
+            pp,
             state="draft",
-            content_jsonb=new_content,
+            content=new_content,
             change_patch=patch,
             change_reason=change_reason,
-            actor_id=actor.id,
+            actor=actor,
             from_state="published",
             to_state="draft",
-            is_head_published=False,
+            event_type="draft_created",
         )
-        self.db.add(rev)
-        await self.db.flush()  # obtain rev.id before writing the FK
 
         pp.phenopacket = new_content
         pp.editing_revision_id = rev.id
         pp.draft_owner_id = actor.id
         # state stays 'published'; head_published_revision_id unchanged
 
-        await self.db.commit()
         return pp
 
     async def _inplace_save(
@@ -215,23 +246,25 @@ class PhenopacketStateService:
                 f"actor {actor.id} is not the draft owner ({pp.draft_owner_id})"
             )
 
-        pp.revision += 1
+        previous = await self._latest_revision_row(pp.id)
+        patch = (
+            compute_json_patch(previous.content_jsonb, new_content)
+            if previous is not None
+            else None
+        )
+        revision = await self._append_revision(
+            pp,
+            state=await self._effective_state(pp),
+            content=new_content,
+            change_patch=patch,
+            change_reason=change_reason,
+            actor=actor,
+            from_state=await self._effective_state(pp),
+            to_state=await self._effective_state(pp),
+            event_type="draft_saved",
+        )
         pp.phenopacket = new_content
-
-        # If there's an in-progress revision row, update its content in-place
-        if pp.editing_revision_id:
-            editing = (
-                await self.db.execute(
-                    select(PhenopacketRevision).where(
-                        PhenopacketRevision.id == pp.editing_revision_id
-                    )
-                )
-            ).scalar_one()
-            editing.content_jsonb = new_content
-            editing.change_reason = change_reason
-            # revision_number on the row is intentionally NOT updated (I6: gaps)
-
-        await self.db.commit()
+        pp.editing_revision_id = revision.id
         return pp
 
     # ------------------------------------------------------------------
@@ -310,22 +343,17 @@ class PhenopacketStateService:
         ).scalar_one_or_none()
         patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
 
-        pp.revision += 1
-
-        rev = PhenopacketRevision(
-            record_id=pp.id,
-            revision_number=pp.revision,
+        rev = await self._append_revision(
+            pp,
             state=to_state,
-            content_jsonb=pp.phenopacket,
+            content=pp.phenopacket,
             change_patch=patch,
             change_reason=reason,
-            actor_id=actor.id,
+            actor=actor,
             from_state=from_state,
             to_state=to_state,
-            is_head_published=False,
+            event_type="state_transition",
         )
-        self.db.add(rev)
-        await self.db.flush()  # get rev.id
 
         # I8: pp.state advances only for never-published records OR archive.
         if pp.head_published_revision_id is None or to_state == "archived":
@@ -341,7 +369,6 @@ class PhenopacketStateService:
             # so the curator can continue owning through the review cycle.
             pp.editing_revision_id = rev.id
 
-        await self.db.commit()
         return pp, rev
 
     async def _publish(
@@ -370,35 +397,22 @@ class PhenopacketStateService:
                 " — data integrity violation"
             )
 
-        # Clear any previous head-published flag for this record
-        await self.db.execute(
-            update(PhenopacketRevision)
-            .where(
-                PhenopacketRevision.record_id == pp.id,
-                PhenopacketRevision.is_head_published.is_(True),
-            )
-            .values(is_head_published=False)
+        published = await self._append_revision(
+            pp,
+            state="published",
+            content=approved.content_jsonb,
+            change_patch=compute_json_patch(pp.phenopacket, approved.content_jsonb),
+            change_reason=reason,
+            actor=actor,
+            from_state="approved",
+            to_state="published",
+            event_type="published",
+            parent_revision_id=approved.id,
         )
-
-        # Re-use the approved row: update its state + is_head_published
-        approved.state = "published"
-        approved.to_state = "published"
-        approved.is_head_published = True
-        approved.change_reason = reason
-
-        pp.revision += 1
         pp.state = "published"
         pp.phenopacket = approved.content_jsonb
-        pp.head_published_revision_id = approved.id
+        pp.head_published_revision_id = published.id
         pp.editing_revision_id = None  # cleared on publish (§6.2 step 10)
         pp.draft_owner_id = None  # I5: cleared on publish
 
-        try:
-            await self.db.commit()
-        except IntegrityError as exc:
-            # ux_head_published_per_record unique violation — concurrent publish
-            raise self.InvalidTransition(
-                "concurrent publish detected; please retry"
-            ) from exc
-
-        return pp, approved
+        return pp, published

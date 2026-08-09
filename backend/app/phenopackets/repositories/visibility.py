@@ -88,11 +88,6 @@ async def resolve_public_content(
     working copy) is *not* the authoritative public copy when a
     clone-to-draft edit is in progress.
 
-    Fast-path: when ``editing_revision_id IS NULL`` AND
-    ``state='published'`` the working copy equals the head-published
-    revision content (the head-swap guarantees this at publish time).
-    We skip the second DB round-trip in that case.
-
     Returns:
         The content dict, or ``None`` when ``head_published_revision_id``
         is ``NULL`` (i.e. the record has never been published).
@@ -100,11 +95,9 @@ async def resolve_public_content(
     if pp.head_published_revision_id is None:
         return None
 
-    # Fast-path: no active clone → working copy == public copy
-    if pp.editing_revision_id is None and pp.state == "published":
-        return pp.phenopacket
-
-    # Deref through head revision row
+    # Always dereference the immutable head. The mutable working-copy fast
+    # path is deliberately forbidden: working and head can diverge during
+    # drafts and future writers must not weaken this invariant.
     rev = (
         await db.execute(
             select(PhenopacketRevision).where(
