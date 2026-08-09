@@ -32,8 +32,25 @@
           </div>
         </div>
 
+        <ReportObservationWorkspace
+          v-else-if="isEditing && curationMode !== 'legacy' && !loadError"
+          :phenopacket-id="$route.params.phenopacket_id"
+          :record-state="savedRecordState || 'draft'"
+          :user-role="authStore?.user?.role || 'curator'"
+          :inert="showUnsavedDialog ? '' : undefined"
+          @available="curationMode = 'ledger'"
+          @unavailable="activateLegacyMode"
+          @dirty-change="ledgerDirty = $event"
+          @published="handleLedgerPublished"
+        />
+
         <!-- Form -->
-        <v-form v-else-if="!loadError" ref="form" @submit.prevent="handleSubmit">
+        <v-form
+          v-else-if="!loadError"
+          ref="form"
+          :inert="showUnsavedDialog ? '' : undefined"
+          @submit.prevent="handleSubmit"
+        >
           <!-- Phenopacket ID (read-only for edit) -->
           <v-text-field
             v-model="phenopacket.id"
@@ -318,6 +335,25 @@
             </v-col>
           </v-row>
         </v-form>
+
+        <div
+          v-if="showUnsavedDialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-dialog-title"
+          class="leave-dialog-backdrop"
+          @keydown.esc="cancelLeave"
+          @keydown.tab="trapLeaveDialogFocus"
+        >
+          <div ref="leaveDialog" class="leave-dialog-card">
+            <h2 id="leave-dialog-title" class="text-h6">Unsaved changes</h2>
+            <p>Your current curation changes have not been saved. Leave this page?</p>
+            <v-btn ref="leaveDialogCancel" @click="cancelLeave">Keep editing</v-btn>
+            <v-btn color="error" data-action="confirm-leave" @click="confirmLeave">
+              Leave without saving
+            </v-btn>
+          </div>
+        </div>
       </v-card-text>
     </v-card>
   </v-container>
@@ -334,6 +370,7 @@ import CompletenessRail from '@/components/curation/CompletenessRail.vue';
 import ClassificationSection from '@/components/curation/ClassificationSection.vue';
 import AgeSection from '@/components/curation/AgeSection.vue';
 import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
+import ReportObservationWorkspace from '@/components/curation/reports/ReportObservationWorkspace.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
 import { formatApiError } from '@/utils/apiError';
 
@@ -347,6 +384,7 @@ export default {
     ClassificationSection,
     AgeSection,
     ProvenanceSection,
+    ReportObservationWorkspace,
   },
   // Vue Router 4-style in-component guard (works with the Options API used
   // throughout this file). Prompts on navigate-away only when the live form
@@ -357,8 +395,10 @@ export default {
       next();
       return;
     }
-    const leave = window.confirm('You have unsaved changes. Leave without saving?');
-    next(leave);
+    this.pendingRouteNext = next;
+    this.dialogInvoker = document.activeElement;
+    this.showUnsavedDialog = true;
+    this.$nextTick(() => this.$refs.leaveDialogCancel?.$el?.focus());
   },
   setup() {
     const vocabularies = usePhenopacketVocabularies();
@@ -415,6 +455,7 @@ export default {
       // Separate from `error`: only a failure that makes the form
       // unbuildable may replace it. Recoverable errors render above it.
       loadError: null,
+      vocabularyLoadError: null,
       formSubmitted: false,
       // True while the detailed variant editor holds typed-but-uncommitted
       // changes; blocks submit so they are never silently dropped.
@@ -431,6 +472,11 @@ export default {
       // Set true immediately before the post-save navigation so
       // beforeRouteLeave doesn't prompt on the save flow's own redirect.
       justSaved: false,
+      curationMode: 'probing',
+      ledgerDirty: false,
+      showUnsavedDialog: false,
+      pendingRouteNext: null,
+      dialogInvoker: null,
       rules: {
         required: (value) => !!value || 'Required field',
         minLength: (value) => (value && value.length >= 5) || 'Must be at least 5 characters',
@@ -516,7 +562,8 @@ export default {
       window.logService.info('Loaded phenopacket vocabularies for form');
     } catch (err) {
       window.logService.error('Failed to load vocabularies', { error: err.message });
-      this.loadError = 'Failed to load form vocabularies. Please refresh the page.';
+      this.vocabularyLoadError = 'Failed to load form vocabularies. Please refresh the page.';
+      if (!this.isEditing) this.loadError = this.vocabularyLoadError;
     }
 
     if (this.isEditing) {
@@ -582,12 +629,43 @@ export default {
       });
     },
     hasUnsavedChanges() {
+      if (this.ledgerDirty) return true;
       if (this.initialSnapshot === null) return false;
       const current = JSON.stringify({
         phenopacket: this.phenopacket,
         publications: this.publications,
       });
       return current !== this.initialSnapshot;
+    },
+    confirmLeave() {
+      const next = this.pendingRouteNext;
+      this.pendingRouteNext = null;
+      this.showUnsavedDialog = false;
+      next?.();
+    },
+    cancelLeave() {
+      const next = this.pendingRouteNext;
+      this.pendingRouteNext = null;
+      this.showUnsavedDialog = false;
+      next?.(false);
+      this.$nextTick(() => this.dialogInvoker?.focus());
+    },
+    trapLeaveDialogFocus(event) {
+      const controls = [...(this.$refs.leaveDialog?.querySelectorAll('button') || [])];
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    activateLegacyMode() {
+      this.curationMode = 'legacy';
+      if (this.vocabularyLoadError) this.loadError = this.vocabularyLoadError;
     },
     async loadPhenopacket() {
       this.loading = true;
@@ -611,7 +689,7 @@ export default {
         this.revision = response.data.revision;
 
         // Capture state for toast message selection (Wave 7/D.1 §9.2)
-        this.savedRecordState = response.data.state ?? null;
+        this.savedRecordState = response.data.effective_state ?? response.data.state ?? null;
 
         // Load existing publications into the same state the template and
         // submit path use so edits stay round-trippable.
@@ -645,6 +723,12 @@ export default {
 
     addPublication() {
       this.publications.push({ pmid: '' });
+    },
+
+    handleLedgerPublished(result) {
+      this.savedRecordState = result?.effective_state ?? result?.state ?? 'published';
+      if (result?.revision !== undefined) this.revision = result.revision;
+      this.ledgerDirty = false;
     },
 
     removePublication(index) {
@@ -843,5 +927,30 @@ export default {
 <style scoped>
 .v-card-title {
   font-weight: 600;
+}
+
+.leave-dialog-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.leave-dialog-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.leave-dialog-card h2,
+.leave-dialog-card p {
+  flex-basis: 100%;
 }
 </style>

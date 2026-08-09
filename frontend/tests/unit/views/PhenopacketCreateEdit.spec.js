@@ -44,6 +44,13 @@ vi.mock('@/components/VariantAnnotationForm.vue', () => ({
     template: '<div class="mock-variant-annotation-form" />',
   },
 }));
+vi.mock('@/components/curation/reports/ReportObservationWorkspace.vue', () => ({
+  default: {
+    name: 'ReportObservationWorkspace',
+    props: ['phenopacketId', 'recordState', 'userRole'],
+    template: '<div class="mock-report-observation-workspace" />',
+  },
+}));
 
 // Task 8: PhenopacketCreateEdit.vue's setup() now calls useAuthStore() to
 // source curatedBy's display name (the no-reviewer-input-control
@@ -176,6 +183,17 @@ describe('PhenopacketCreateEdit.vue', () => {
     expect(ctx.loading).toBe(false);
     expect(ctx.revision).toBe(7);
     expect(ctx.savedRecordState).toBe('draft');
+  });
+
+  it('uses the editing revision effective state instead of the published head state', async () => {
+    getPhenopacket.mockResolvedValueOnce({
+      data: { ...phenopacketResponse, state: 'published', effective_state: 'approved' },
+    });
+    const ctx = createContext();
+
+    await PhenopacketCreateEdit.methods.loadPhenopacket.call(ctx);
+
+    expect(ctx.savedRecordState).toBe('approved');
   });
 
   it('submits PMID publications as backend-consumable externalReferences', async () => {
