@@ -23,6 +23,52 @@ class CurationProjectionError(ValueError):
         self.conflicts = conflicts
 
 
+def _apply_active_corrections(block: dict[str, Any]) -> dict[str, Any]:
+    """Apply active JSON-pointer postimages after proving every preimage."""
+    corrected = deepcopy(block)
+    corrections = corrected.get("correctionsById", {})
+    if not isinstance(corrections, dict):
+        return corrected
+    superseded = {
+        item.get("supersedesCorrectionId")
+        for item in corrections.values()
+        if isinstance(item, dict) and item.get("supersedesCorrectionId")
+    }
+    for correction_id, correction in sorted(corrections.items()):
+        if correction_id in superseded:
+            continue
+        if not isinstance(correction, dict):
+            raise CurationProjectionError("invalid_correction", "invalid correction")
+        pointer = correction.get("jsonPointer")
+        if not isinstance(pointer, str) or not pointer.startswith("/"):
+            raise CurationProjectionError(
+                "invalid_correction", "invalid correction pointer"
+            )
+        parts = [
+            part.replace("~1", "/").replace("~0", "~")
+            for part in pointer[1:].split("/")
+        ]
+        target: Any = corrected
+        try:
+            for part in parts[:-1]:
+                target = target[int(part)] if isinstance(target, list) else target[part]
+            leaf = parts[-1]
+            current = target[int(leaf)] if isinstance(target, list) else target[leaf]
+        except (IndexError, KeyError, ValueError):
+            # A correction can target a retired source path; it remains
+            # auditable but has no current source value to transform.
+            continue
+        if current != correction.get("preimage"):
+            raise CurationProjectionError(
+                "correction_preimage_mismatch", "correction preimage does not match"
+            )
+        if isinstance(target, list):
+            target[int(leaf)] = correction.get("postimage")
+        else:
+            target[leaf] = correction.get("postimage")
+    return corrected
+
+
 def canonicalize_curation_document(
     document: dict[str, Any], *, publish: bool = False
 ) -> dict[str, Any]:
@@ -36,7 +82,7 @@ def canonicalize_curation_document(
     if not isinstance(block, dict) or "observationsById" not in block:
         return deepcopy(document)
     try:
-        profile = Hnf1bCurationProfile.model_validate(block)
+        profile = Hnf1bCurationProfile.model_validate(_apply_active_corrections(block))
     except ValidationError as error:
         raise CurationProjectionError("invalid_profile", str(error)) from error
     try:
@@ -75,5 +121,14 @@ def canonicalize_curation_document(
         observations_digest=result.observations_digest,
         output_digest=result.output_digest,
     ).model_dump(by_alias=True, mode="json")
+    if result.blocking_conflicts:
+        canonical_block["projection"]["blockingConflicts"] = [
+            {
+                "conflictKey": conflict.conflict_key,
+                "candidateSetDigest": conflict.candidate_set_digest,
+                "observationIds": list(conflict.observation_ids),
+            }
+            for conflict in result.blocking_conflicts
+        ]
     canonical["hnf1bCuration"] = canonical_block
     return canonical

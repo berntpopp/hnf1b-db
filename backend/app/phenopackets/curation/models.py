@@ -635,6 +635,15 @@ class ProjectionMetadata(CurationModel):
     algorithm_version: str = "1.0"
     observations_digest: str | None = None
     output_digest: str | None = None
+    blocking_conflicts: tuple[ProjectionConflictSummary, ...] = ()
+
+
+class ProjectionConflictSummary(CurationModel):
+    """Persisted draft-only summary of a deterministic projection conflict."""
+
+    conflict_key: str
+    candidate_set_digest: str
+    observation_ids: tuple[str, ...]
 
 
 class Hnf1bCurationProfile(CurationModel):
