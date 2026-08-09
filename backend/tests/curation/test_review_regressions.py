@@ -274,6 +274,45 @@ def test_active_correction_chain_applies_a_to_b_to_c_in_order():
     assert block["value"] == "A"
 
 
+def test_canonicalizing_twice_preserves_the_raw_correction_profile():
+    """The persisted raw profile is not rewritten with correction postimages."""
+    from app.phenopackets.curation.adapters import canonicalize_curation_document
+
+    report = _report()
+    correction = CurationCorrection(
+        correction_id="digest-correction",
+        json_pointer=f"/observationsById/{report.observation_id}/source/sheet",
+        preimage="Individuals",
+        postimage="Corrected individuals",
+        source_manifest_sha256="sha256:one",
+        reason="test",
+        actor_id=1,
+        created_at="2026-08-09T00:00:00Z",
+    )
+    profile = Hnf1bCurationProfile(
+        source_subject_id="source-317",
+        observations_by_id={report.observation_id: report},
+        corrections_by_id={correction.correction_id: correction},
+    )
+    document = {
+        "id": "phenopacket-317",
+        "subject": {"id": "317"},
+        "metaData": {
+            "created": "2026-01-01T00:00:00Z",
+            "createdBy": "t",
+            "resources": [],
+        },
+        "hnf1bCuration": profile.model_dump(by_alias=True, mode="json"),
+    }
+    once = canonicalize_curation_document(document)
+    twice = canonicalize_curation_document(once)
+    assert twice == once
+    assert (
+        once["hnf1bCuration"]["correctionsById"]["digest-correction"]["preimage"]
+        == "Individuals"
+    )
+
+
 def test_malformed_scalar_correction_pointer_has_structured_error_code():
     """Bad pointer traversal does not leak a KeyError/TypeError from projection."""
     from app.phenopackets.curation.adapters import (
