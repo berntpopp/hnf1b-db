@@ -85,6 +85,8 @@ def project_individual(
         raise ValueError("at least one observation is required for projection")
     if len({item.observation_id for item in ordered}) != len(ordered):
         raise ValueError("duplicate observationId in projection input")
+    if len({item.conflict_key for item in resolutions}) != len(resolutions):
+        raise ValueError("duplicate resolutions for one conflictKey")
     subject_ids = {observation.identifiers.individual_id for observation in ordered}
     if len(subject_ids) != 1:
         raise ValueError("all observations must have the same individualId")
@@ -111,6 +113,7 @@ def project_individual(
                 )
 
     conflicts: list[ProjectionConflict] = []
+    applied_resolution_keys: set[str] = set()
     resolutions_by_key = {
         resolution.conflict_key: resolution for resolution in resolutions
     }
@@ -146,6 +149,7 @@ def project_individual(
                 ]
                 if not selected or len({candidate[1] for candidate in selected}) != 1:
                     raise ValueError("resolution must select one clinical polarity")
+                applied_resolution_keys.add(conflict.conflict_key)
                 status = selected[0][1]
                 feature = {
                     "type": _term_json(selected[0][2].term),
@@ -184,10 +188,9 @@ def project_individual(
     _validate_resolutions(
         frozen_conflicts,
         [
-            resolution
-            for resolution in resolutions
-            if resolution.conflict_key
-            in {item.conflict_key for item in frozen_conflicts}
+            item
+            for item in resolutions
+            if item.conflict_key not in applied_resolution_keys
         ],
     )
     phenopacket = {

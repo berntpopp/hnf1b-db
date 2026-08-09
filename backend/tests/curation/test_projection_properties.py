@@ -47,6 +47,7 @@ def test_stale_resolution_is_rejected_when_its_candidate_set_changes():
         conflict_key="phenotype:HP:0000107:polarity",
         candidate_set_digest="sha256:outdated",
         strategy="select_observations",
+        selected_observation_ids=("report-a",),
         reason="Later imaging is better evidence.",
         resolved_by_user_id=1,
         resolved_at="2026-08-09T00:00:00Z",

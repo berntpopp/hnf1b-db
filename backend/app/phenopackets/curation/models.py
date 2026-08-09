@@ -51,6 +51,13 @@ class AssessmentStatus(str, Enum):
     NOT_ASSESSED = "NOT_ASSESSED"
 
 
+class ObservationOrigin(str, Enum):
+    """Permitted provenance of an observation."""
+
+    IMPORTED = "imported"
+    MANUAL = "manual"
+
+
 ValueT = TypeVar("ValueT")
 
 
@@ -223,7 +230,7 @@ class ReportObservation(CurationModel):
     """One publication/report row attached to one biological individual."""
 
     observation_id: str
-    origin: str
+    origin: ObservationOrigin
     source: SourceManifestRef
     identifiers: SubjectObservation
     publication: PublicationObservation | None = None
@@ -239,7 +246,7 @@ class ReportObservation(CurationModel):
     @model_validator(mode="after")
     def validate_imported_contract(self) -> "ReportObservation":
         """Enforce complete source matrices and stable identities for imports."""
-        if self.origin != "imported":
+        if self.origin is not ObservationOrigin.IMPORTED:
             return self
         from app.phenopackets.curation.definitions import PHENOTYPE_QUESTIONS
         from app.phenopackets.curation.identifiers import (
@@ -298,6 +305,17 @@ class ProjectionResolution(CurationModel):
     reason: str
     resolved_by_user_id: int
     resolved_at: datetime
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "ProjectionResolution":
+        """Require an explicit, non-empty payload for supported strategies."""
+        if self.strategy not in {"select_observations", "resolved_value"}:
+            raise ValueError("unsupported resolution strategy")
+        if self.strategy == "select_observations" and not self.selected_observation_ids:
+            raise ValueError("select_observations requires selectedObservationIds")
+        if self.strategy == "resolved_value" and self.resolved_value is None:
+            raise ValueError("resolved_value requires resolvedValue")
+        return self
 
 
 class ProjectionMetadata(CurationModel):
