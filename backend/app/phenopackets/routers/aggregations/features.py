@@ -1,7 +1,6 @@
 """Feature aggregation endpoint for phenopackets.
 
 Aggregates phenopackets by phenotypic features (HPO terms).
-Uses materialized views when available for O(1) performance.
 """
 
 from typing import List
@@ -12,7 +11,6 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
-    check_materialized_view_exists,
     get_db,
     logger,
     text,
@@ -34,52 +32,20 @@ async def aggregate_by_feature(
 
     The main 'count' field represents present_count for backwards compatibility.
 
-    Performance: Uses mv_feature_aggregation materialized view when available.
+    Always reads published-head snapshots. Legacy materialized views are based
+    on mutable working copies and are therefore not public-safe.
     """
-    # Try materialized view first (O(1) indexed lookup)
-    if await check_materialized_view_exists(db, "mv_feature_aggregation"):
-        logger.debug("Using mv_feature_aggregation materialized view")
-        result = await db.execute(
-            text("""
-                SELECT hpo_id, label, present_count, absent_count,
-                       not_reported_count, total_phenopackets
-                FROM mv_feature_aggregation
-                ORDER BY present_count DESC
-            """)
-        )
-        rows = result.mappings().all()
-        total = sum(int(row["present_count"]) for row in rows)
-        rows_with_pct = calculate_percentages(
-            rows, total=total, count_key="present_count"
-        )
-
-        return [
-            AggregationResult(
-                label=row["label"] or row["hpo_id"],
-                count=int(row["present_count"]),
-                percentage=row["percentage"],
-                hpo_id=row["hpo_id"],
-                details={
-                    "hpo_id": row["hpo_id"],
-                    "present_count": int(row["present_count"]),
-                    "absent_count": int(row["absent_count"]),
-                    "not_reported_count": int(row["not_reported_count"]),
-                },
-            )
-            for row in rows_with_pct
-        ]
-
-    # Fallback: Live JSONB query (O(n) scan)
-    logger.debug("Falling back to live JSONB query for feature aggregation")
+    logger.debug("Reading published-head feature aggregation")
 
     # First, get total number of published phenopackets (public filter: I3 + I7)
     total_phenopackets_result = await db.execute(
         text(
-            "SELECT COUNT(*) as total FROM phenopackets"
-            " WHERE deleted_at IS NULL"
-            " AND state = 'published'"
-            " AND head_published_revision_id IS NOT NULL"
-            " AND phenopacket_id NOT LIKE 'e2e-%'"
+            "SELECT COUNT(*) as total FROM phenopackets p "
+            "JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id"
+            " WHERE p.deleted_at IS NULL"
+            " AND p.state = 'published'"
+            " AND p.head_published_revision_id IS NOT NULL"
+            " AND p.phenopacket_id NOT LIKE 'e2e-%'"
         )
     )
     total_phenopackets = total_phenopackets_result.scalar() or 0
@@ -97,13 +63,14 @@ async def aggregate_by_feature(
         SUM(CASE WHEN COALESCE((feature->>'excluded')::boolean, false)
             THEN 1 ELSE 0 END) as absent_count
     FROM
-        phenopackets,
-        jsonb_array_elements(phenopacket->'phenotypicFeatures') as feature
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+        jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') as feature
     WHERE
-        deleted_at IS NULL
-        AND state = 'published'
-        AND head_published_revision_id IS NOT NULL
-        AND phenopacket_id NOT LIKE 'e2e-%'
+        p.deleted_at IS NULL
+        AND p.state = 'published'
+        AND p.head_published_revision_id IS NOT NULL
+        AND p.phenopacket_id NOT LIKE 'e2e-%'
     GROUP BY
         feature->'type'->>'id'
     ORDER BY

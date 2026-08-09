@@ -77,8 +77,9 @@ phenopacket_variant_link AS (
                 'g'
             )
         ) as variant_id
-    FROM phenopackets p,
-         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+    FROM phenopackets p
+         JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+         jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
          jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
          jsonb_array_elements(
              gi->'variantInterpretation'->'variationDescriptor'->'expressions'
@@ -140,8 +141,9 @@ vcf_variants AS (
                 'g'
             )
         ) as variant_id
-    FROM phenopackets p,
-         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+    FROM phenopackets p
+         JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+         jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
          jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
          jsonb_array_elements(
              gi->'variantInterpretation'->'variationDescriptor'->'expressions'
@@ -157,8 +159,9 @@ internal_cnv_variants AS (
     -- Variants from variationDescriptor.id (internal CNV format)
     -- Format: var:GENE:CHROM:START-END:TYPE (e.g., var:HNF1B:17:36459258-37832869:DEL)
     SELECT DISTINCT vd->>'id' as variant_id
-    FROM phenopackets p,
-         jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+    FROM phenopackets p
+         JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+         jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
          jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi,
          LATERAL (
              SELECT gi->'variantInterpretation'->'variationDescriptor' as vd

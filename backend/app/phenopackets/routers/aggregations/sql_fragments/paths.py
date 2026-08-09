@@ -16,7 +16,9 @@ VD_EXTENSIONS = f"interp.value#>'{{{VD_BASE},extensions}}'"
 VD_EXPRESSIONS = f"interp.value#>'{{{VD_BASE},expressions}}'"
 
 # Subject age path (used in survival queries).
-CURRENT_AGE_PATH = "p.phenopacket->'subject'->'timeAtLastEncounter'->>'iso8601duration'"
+CURRENT_AGE_PATH = (
+    "r.content_jsonb->'subject'->'timeAtLastEncounter'->>'iso8601duration'"
+)
 
 # Interpretation status path (used for P/LP filtering).
 INTERP_STATUS_PATH = (

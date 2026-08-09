@@ -39,6 +39,7 @@ from app.phenopackets.models import (
     PhenopacketCreate,
     PhenopacketDelete,
     PhenopacketResponse,
+    PhenopacketRevision,
     PhenopacketUpdate,
 )
 from app.phenopackets.query_builders import (
@@ -49,7 +50,7 @@ from app.phenopackets.query_builders import (
 from app.phenopackets.repositories import (
     PhenopacketRepository,
     curator_filter,
-    public_filter,
+    public_head_query,
     resolve_curator_content,
     resolve_public_content,
 )
@@ -166,13 +167,16 @@ async def list_phenopackets(
         # Public listing also drops synthetic e2e-* fixtures so they never
         # appear in anonymous discovery/browse. Single-record GET below keeps
         # them (the e2e lifecycle self-check reads its own record by id).
-        query = public_filter(base_stmt).where(
+        query = public_head_query(base_stmt).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
         )
 
     # Apply sex and variant filters
-    query = add_sex_filter(query, filter_sex)
-    query = add_has_variants_filter(query, filter_has_variants)
+    public_json_column = PhenopacketRevision.content_jsonb if not is_curator else None
+    query = add_sex_filter(query, filter_sex, content=public_json_column)
+    query = add_has_variants_filter(
+        query, filter_has_variants, content=public_json_column
+    )
 
     # Apply sort
     if sort:
@@ -190,11 +194,13 @@ async def list_phenopackets(
     if is_curator:
         count_base = curator_filter(count_base)
     else:
-        count_base = public_filter(count_base).where(
+        count_base = public_head_query(count_base).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
         )
-    count_base = add_sex_filter(count_base, filter_sex)
-    count_base = add_has_variants_filter(count_base, filter_has_variants)
+    count_base = add_sex_filter(count_base, filter_sex, content=public_json_column)
+    count_base = add_has_variants_filter(
+        count_base, filter_has_variants, content=public_json_column
+    )
     count_result = await db.execute(count_base)
     total_count = int(count_result.scalar() or 0)
 
@@ -300,7 +306,7 @@ async def get_phenopackets_batch(
     if is_curator:
         stmt = curator_filter(stmt)
     else:
-        stmt = public_filter(stmt)
+        stmt = public_head_query(stmt)
 
     result = await db.execute(stmt)
     phenopackets_list = list(result.scalars().all())
@@ -355,7 +361,7 @@ async def get_phenopacket(
     if is_curator:
         stmt = curator_filter(stmt)
     else:
-        stmt = public_filter(stmt)
+        stmt = public_head_query(stmt)
 
     result = await db.execute(stmt)
     pp = result.scalar_one_or_none()
@@ -416,7 +422,7 @@ async def export_phenopacket(
     stmt = (
         curator_filter(stmt)
         if selected_representation == "profile" and is_curator
-        else public_filter(stmt)
+        else public_head_query(stmt)
     )
 
     result = await db.execute(stmt)

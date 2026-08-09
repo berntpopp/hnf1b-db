@@ -51,6 +51,22 @@ def public_filter(stmt: Select) -> Select:
     )
 
 
+def public_head_query(stmt: Select) -> Select:
+    """Join a public query to its authoritative published-head snapshot.
+
+    Public predicates over JSON must use ``PhenopacketRevision.content_jsonb``;
+    the mutable ``Phenopacket.phenopacket`` column is an editing copy and can
+    diverge while a draft is in progress.  Call this before adding public JSON
+    filters or aggregations.
+    """
+    return public_filter(
+        stmt.join(
+            PhenopacketRevision,
+            PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+        )
+    )
+
+
 def curator_filter(
     stmt: Select,
     *,

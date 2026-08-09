@@ -75,12 +75,13 @@ class ProteinDomainHandler(SurvivalHandler):
                 {CURRENT_AGE_PATH} as current_age,
                 EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                    FROM jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                     WHERE pf->'type'->>'id' IN {self._sql_list(kidney_failure_terms)}
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 ) as has_kidney_failure
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
@@ -89,7 +90,7 @@ class ProteinDomainHandler(SurvivalHandler):
                 AND {cnv_exclusion}
                 AND EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                    FROM jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                     WHERE pf->'type'->>'id' IN {self._sql_list(ckd_terms)}
                 )
         )
@@ -108,8 +109,9 @@ class ProteinDomainHandler(SurvivalHandler):
                 p.phenopacket_id,
                 {domain_sql} AS domain_group,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
@@ -124,8 +126,9 @@ class ProteinDomainHandler(SurvivalHandler):
                 COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM domain_classification dc
-            JOIN phenopackets p ON dc.phenopacket_id = p.phenopacket_id,
-                jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+            JOIN phenopackets p ON dc.phenopacket_id = p.phenopacket_id
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') as pf
             WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                 AND COALESCE((pf->>'excluded')::boolean, false) = false
         )
@@ -144,8 +147,9 @@ class ProteinDomainHandler(SurvivalHandler):
                 p.phenopacket_id,
                 {domain_sql} AS domain_group,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
@@ -158,8 +162,9 @@ class ProteinDomainHandler(SurvivalHandler):
             FROM domain_classification
             WHERE phenopacket_id NOT IN (
                 SELECT DISTINCT p.phenopacket_id
-                FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                    jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
                     AND {PUBLIC_FILTER_FRAGMENT}

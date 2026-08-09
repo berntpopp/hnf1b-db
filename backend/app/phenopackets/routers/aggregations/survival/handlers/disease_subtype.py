@@ -81,10 +81,11 @@ class DiseaseSubtypeHandler(SurvivalHandler):
         WITH disease_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                p.phenopacket as phenopacket_data,
+                r.content_jsonb as phenopacket_data,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -113,10 +114,11 @@ class DiseaseSubtypeHandler(SurvivalHandler):
         WITH disease_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                p.phenopacket as phenopacket_data,
+                r.content_jsonb as phenopacket_data,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -151,10 +153,11 @@ class DiseaseSubtypeHandler(SurvivalHandler):
         WITH disease_classification AS (
             SELECT DISTINCT
                 p.phenopacket_id,
-                p.phenopacket as phenopacket_data,
+                r.content_jsonb as phenopacket_data,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp
             WHERE {PUBLIC_FILTER_FRAGMENT}
                 AND {CURRENT_AGE_PATH} IS NOT NULL
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
@@ -167,8 +170,9 @@ class DiseaseSubtypeHandler(SurvivalHandler):
             FROM disease_classification dc
             WHERE dc.phenopacket_id NOT IN (
                 SELECT DISTINCT p.phenopacket_id
-                FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                    jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
                     AND {PUBLIC_FILTER_FRAGMENT}

@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 
 # Kidney morphology term labels, keyed by the id `get_morphology_features`
 # filters on. Module-level (rather than inline in the method) so
@@ -58,26 +58,33 @@ class ClinicalQueries:
             SQLAlchemy Select query object
         """
         # Base query using SQLAlchemy with proper column selection
-        query = select(
-            Phenopacket.phenopacket_id,
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "id"
-            ).label("subject_id"),
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "sex"
-            ).label("sex"),
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket,
-                "subject",
-                "timeAtLastEncounter",
-                "age",
-                "iso8601duration",
-            ).label("age"),
-            func.jsonb_path_query_array(
-                Phenopacket.phenopacket,
-                text("'$.phenotypicFeatures[*]'::jsonpath"),
-            ).label("features"),
-        ).select_from(Phenopacket)
+        query = (
+            select(
+                Phenopacket.phenopacket_id,
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "id"
+                ).label("subject_id"),
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "sex"
+                ).label("sex"),
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb,
+                    "subject",
+                    "timeAtLastEncounter",
+                    "age",
+                    "iso8601duration",
+                ).label("age"),
+                func.jsonb_path_query_array(
+                    PhenopacketRevision.content_jsonb,
+                    text("'$.phenotypicFeatures[*]'::jsonpath"),
+                ).label("features"),
+            )
+            .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+        )
 
         # Build JSONB conditions using SQLAlchemy functions
         conditions = []
@@ -88,7 +95,7 @@ class ClinicalQueries:
         for term in hpo_terms:
             hpo_conditions.append(
                 func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(
                         f"'$.phenotypicFeatures[*] ? (@.type.id == \"{term}\")'::jsonpath"
                     ),
@@ -98,7 +105,7 @@ class ClinicalQueries:
 
         # Check for non-excluded features
         excluded_condition = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text("'$.phenotypicFeatures[*] ? (@.excluded != true)'::jsonpath"),
         )
 
@@ -107,7 +114,7 @@ class ClinicalQueries:
         # Add stage filtering if specified
         if stage:
             stage_condition = func.jsonb_path_exists(
-                Phenopacket.phenopacket,
+                PhenopacketRevision.content_jsonb,
                 text(
                     f"'$.phenotypicFeatures[*].modifiers[*] ? (@.label like_regex \"Stage {stage}\")'::jsonpath"
                 ),
@@ -128,7 +135,7 @@ class ClinicalQueries:
         """
         transplant_exclusion = not_(
             func.jsonb_path_exists(
-                Phenopacket.phenopacket,
+                PhenopacketRevision.content_jsonb,
                 text(
                     "'$.medicalActions[*].procedure ? (@.code.id == \"NCIT:C157952\")'::jsonpath"
                 ),
@@ -156,10 +163,10 @@ class ClinicalQueries:
         columns = [
             Phenopacket.phenopacket_id,
             func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "id"
+                PhenopacketRevision.content_jsonb, "subject", "id"
             ).label("subject_id"),
             func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "sex"
+                PhenopacketRevision.content_jsonb, "subject", "sex"
             ).label("sex"),
         ]
 
@@ -167,7 +174,10 @@ class ClinicalQueries:
         # For simplicity, just get the first phenotypic feature
         # (Since we're filtering by HPO terms anyway)
         feature_expr = func.jsonb_array_element(
-            func.jsonb_extract_path(Phenopacket.phenopacket, "phenotypicFeatures"), 0
+            func.jsonb_extract_path(
+                PhenopacketRevision.content_jsonb, "phenotypicFeatures"
+            ),
+            0,
         )
 
         columns.append(
@@ -188,14 +198,21 @@ class ClinicalQueries:
                 func.jsonb_extract_path(feature_expr, "modifiers").label("modifiers")
             )
 
-        query = select(*columns).select_from(Phenopacket)
+        query = (
+            select(*columns)
+            .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+        )
 
         # Add existence check
         query = query.where(
             or_(
                 *[
                     func.jsonb_path_exists(
-                        Phenopacket.phenopacket,
+                        PhenopacketRevision.content_jsonb,
                         text(
                             f"'$.phenotypicFeatures[*] ? (@.type.id == \"{term}\" && @.excluded != true)'::jsonpath"
                         ),
@@ -221,7 +238,9 @@ class ClinicalQueries:
             Filtered query
         """
         return query.where(
-            func.jsonb_extract_path_text(Phenopacket.phenopacket, "subject", "sex")
+            func.jsonb_extract_path_text(
+                PhenopacketRevision.content_jsonb, "subject", "sex"
+            )
             == sex
         )
 
@@ -238,18 +257,25 @@ class ClinicalQueries:
         Returns:
             SQLAlchemy query for disease cases
         """
-        query = select(
-            Phenopacket.phenopacket_id,
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "id"
-            ).label("subject_id"),
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "sex"
-            ).label("sex"),
-            func.jsonb_path_query_array(
-                Phenopacket.phenopacket, text("'$.diseases[*]'::jsonpath")
-            ).label("diseases"),
-        ).select_from(Phenopacket)
+        query = (
+            select(
+                Phenopacket.phenopacket_id,
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "id"
+                ).label("subject_id"),
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "sex"
+                ).label("sex"),
+                func.jsonb_path_query_array(
+                    PhenopacketRevision.content_jsonb, text("'$.diseases[*]'::jsonpath")
+                ).label("diseases"),
+            )
+            .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+        )
 
         conditions = []
 
@@ -258,7 +284,7 @@ class ClinicalQueries:
             # Build OR condition for multiple disease terms
             for term in disease_terms:
                 id_condition = func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(f"'$.diseases[*] ? (@.term.id == \"{term}\")'::jsonpath"),
                 )
                 conditions.append(id_condition)
@@ -267,7 +293,7 @@ class ClinicalQueries:
         if disease_labels:
             for label in disease_labels:
                 label_condition = func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(
                         f"'$.diseases[*] ? (@.term.label like_regex \"{label}\")'::jsonpath"
                     ),
@@ -292,18 +318,26 @@ class ClinicalQueries:
         Returns:
             SQLAlchemy query for measurement cases
         """
-        query = select(
-            Phenopacket.phenopacket_id,
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "id"
-            ).label("subject_id"),
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "sex"
-            ).label("sex"),
-            func.jsonb_path_query_array(
-                Phenopacket.phenopacket, text("'$.measurements[*]'::jsonpath")
-            ).label("measurements"),
-        ).select_from(Phenopacket)
+        query = (
+            select(
+                Phenopacket.phenopacket_id,
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "id"
+                ).label("subject_id"),
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "sex"
+                ).label("sex"),
+                func.jsonb_path_query_array(
+                    PhenopacketRevision.content_jsonb,
+                    text("'$.measurements[*]'::jsonpath"),
+                ).label("measurements"),
+            )
+            .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+        )
 
         # Base condition for LOINC codes - OR multiple codes
         conditions = []
@@ -311,7 +345,7 @@ class ClinicalQueries:
         for code in loinc_codes:
             loinc_conditions.append(
                 func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(f"'$.measurements[*] ? (@.assay.id == \"{code}\")'::jsonpath"),
                 )
             )
@@ -321,7 +355,7 @@ class ClinicalQueries:
         # Add interpretation filter if provided
         if interpretation_hpo:
             interpretation_condition = func.jsonb_path_exists(
-                Phenopacket.phenopacket,
+                PhenopacketRevision.content_jsonb,
                 text(
                     f"'$.measurements[*] ? (@.interpretation.id == \"{interpretation_hpo}\")'::jsonpath"
                 ),
@@ -357,25 +391,33 @@ class ClinicalQueries:
         else:
             hpo_terms = all_morphology_hpo
 
-        query = select(
-            Phenopacket.phenopacket_id,
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "id"
-            ).label("subject_id"),
-            func.jsonb_extract_path_text(
-                Phenopacket.phenopacket, "subject", "sex"
-            ).label("sex"),
-            func.jsonb_path_query_array(
-                Phenopacket.phenopacket, text("'$.phenotypicFeatures[*]'::jsonpath")
-            ).label("morphology_features"),
-        ).select_from(Phenopacket)
+        query = (
+            select(
+                Phenopacket.phenopacket_id,
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "id"
+                ).label("subject_id"),
+                func.jsonb_extract_path_text(
+                    PhenopacketRevision.content_jsonb, "subject", "sex"
+                ).label("sex"),
+                func.jsonb_path_query_array(
+                    PhenopacketRevision.content_jsonb,
+                    text("'$.phenotypicFeatures[*]'::jsonpath"),
+                ).label("morphology_features"),
+            )
+            .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
+        )
 
         # Add existence condition - OR multiple HPO terms
         hpo_conditions = []
         for term in hpo_terms:
             hpo_conditions.append(
                 func.jsonb_path_exists(
-                    Phenopacket.phenopacket,
+                    PhenopacketRevision.content_jsonb,
                     text(
                         f"'$.phenotypicFeatures[*] ? (@.type.id == \"{term}\")'::jsonpath"
                     ),
@@ -398,40 +440,40 @@ class ClinicalQueries:
         """
         # Simplified query using existence checks for each system
         renal_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text(
                 "'$.phenotypicFeatures[*] ? (@.type.id like_regex \"^HP:00126\")'::jsonpath"
             ),
         )
 
         genital_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text(
                 '\'$.phenotypicFeatures[*] ? (@.type.id == "HP:0000078" || @.type.id == "HP:0000079")\'::jsonpath'
             ),
         )
 
         pancreatic_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text(
                 '\'$.phenotypicFeatures[*] ? (@.type.id == "HP:0001732" || @.type.id == "HP:0001738")\'::jsonpath'
             ),
         )
 
         liver_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text(
                 "'$.phenotypicFeatures[*] ? (@.type.id like_regex \"^HP:00013\")'::jsonpath"
             ),
         )
 
         metabolic_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text("'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0002917\")'::jsonpath"),
         )
 
         endocrine_check = func.jsonb_path_exists(
-            Phenopacket.phenopacket,
+            PhenopacketRevision.content_jsonb,
             text("'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"),
         )
 
@@ -450,10 +492,10 @@ class ClinicalQueries:
             select(
                 Phenopacket.phenopacket_id,
                 func.jsonb_extract_path_text(
-                    Phenopacket.phenopacket, "subject", "id"
+                    PhenopacketRevision.content_jsonb, "subject", "id"
                 ).label("subject_id"),
                 func.jsonb_extract_path_text(
-                    Phenopacket.phenopacket, "subject", "sex"
+                    PhenopacketRevision.content_jsonb, "subject", "sex"
                 ).label("sex"),
                 system_count.label("system_count"),
                 func.json_build_array(
@@ -466,6 +508,10 @@ class ClinicalQueries:
                 ).label("affected_systems"),
             )
             .select_from(Phenopacket)
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
+            )
             .where(system_count >= min_systems)
         )
 

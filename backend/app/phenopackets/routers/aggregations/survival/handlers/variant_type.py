@@ -56,12 +56,13 @@ class VariantTypeHandler(SurvivalHandler):
                 {CURRENT_AGE_PATH} as current_age,
                 EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                    FROM jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                     WHERE pf->'type'->>'id' IN {self._sql_list(kidney_failure_terms)}
                         AND COALESCE((pf->>'excluded')::boolean, false) = false
                 ) as has_kidney_failure
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE {PUBLIC_FILTER_FRAGMENT}
@@ -69,7 +70,7 @@ class VariantTypeHandler(SurvivalHandler):
                 AND {INTERP_STATUS_PATH} IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
                 AND EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                    FROM jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                     WHERE pf->'type'->>'id' IN {self._sql_list(ckd_terms)}
                 )
         )
@@ -85,8 +86,9 @@ class VariantTypeHandler(SurvivalHandler):
                 p.phenopacket_id,
                 {variant_type_sql} AS variant_group,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE {PUBLIC_FILTER_FRAGMENT}
@@ -100,8 +102,9 @@ class VariantTypeHandler(SurvivalHandler):
                 COALESCE(pf->'onset'->>'iso8601duration', pf->'onset'->>'age') as onset_age,
                 pf->'onset'->>'label' as onset
             FROM variant_classification vc
-            JOIN phenopackets p ON vc.phenopacket_id = p.phenopacket_id,
-                jsonb_array_elements(p.phenopacket->'phenotypicFeatures') as pf
+            JOIN phenopackets p ON vc.phenopacket_id = p.phenopacket_id
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') as pf
             WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                 AND COALESCE((pf->>'excluded')::boolean, false) = false
         )
@@ -117,8 +120,9 @@ class VariantTypeHandler(SurvivalHandler):
                 p.phenopacket_id,
                 {variant_type_sql} AS variant_group,
                 {CURRENT_AGE_PATH} as current_age
-            FROM phenopackets p,
-                jsonb_array_elements(p.phenopacket->'interpretations') as interp,
+            FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                jsonb_array_elements(r.content_jsonb->'interpretations') as interp,
                 jsonb_array_elements(interp->'diagnosis'->'genomicInterpretations') as gi
             LEFT JOIN variant_annotations va ON va.variant_id = ({get_vcf_id_extraction_sql()})
             WHERE {PUBLIC_FILTER_FRAGMENT}
@@ -130,8 +134,9 @@ class VariantTypeHandler(SurvivalHandler):
             FROM variant_classification
             WHERE phenopacket_id NOT IN (
                 SELECT DISTINCT p.phenopacket_id
-                FROM phenopackets p,
-                    jsonb_array_elements(p.phenopacket->'phenotypicFeatures') pf
+                FROM phenopackets p
+                JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+                    jsonb_array_elements(r.content_jsonb->'phenotypicFeatures') pf
                 WHERE pf->'type'->>'id' = ANY(:endpoint_hpo_terms)
                     AND COALESCE((pf->>'excluded')::boolean, false) = false
                     AND {PUBLIC_FILTER_FRAGMENT}

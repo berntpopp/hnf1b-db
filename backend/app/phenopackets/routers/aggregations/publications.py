@@ -36,8 +36,11 @@ async def aggregate_publication_types(
         ext_ref->>'reference' as pub_type,
         COUNT(DISTINCT p.id) as count
     FROM
-        phenopackets p,
-        jsonb_array_elements(p.phenopacket->'metaData'->'externalReferences') as ext_ref
+        phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
+        jsonb_array_elements(
+            r.content_jsonb->'metaData'->'externalReferences'
+        ) as ext_ref
     WHERE
         p.deleted_at IS NULL
         AND p.state = 'published'
@@ -97,9 +100,10 @@ async def get_publications_timeline(
             p.phenopacket_id,
             ext_ref->>'id' as pmid,
             pm.year as pub_year
-        FROM phenopackets p,
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
             jsonb_array_elements(
-                p.phenopacket->'metaData'->'externalReferences'
+                r.content_jsonb->'metaData'->'externalReferences'
             ) as ext_ref
         LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
         WHERE p.deleted_at IS NULL
@@ -172,9 +176,10 @@ async def get_publications_by_type(
         COUNT(DISTINCT p.phenopacket_id) as phenopacket_count,
         pm.year,
         pm.title
-    FROM phenopackets p,
+    FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
         jsonb_array_elements(
-            p.phenopacket->'metaData'->'externalReferences'
+            r.content_jsonb->'metaData'->'externalReferences'
         ) as ext_ref
     LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
     WHERE ext_ref->>'id' LIKE 'PMID:%'
@@ -234,9 +239,10 @@ async def get_publications_timeline_data(
             COALESCE(ext_ref->>'reference', 'unknown') as publication_type,
             COUNT(DISTINCT p.phenopacket_id) as phenopacket_count,
             pm.year
-        FROM phenopackets p,
+        FROM phenopackets p
+            JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id,
             jsonb_array_elements(
-                p.phenopacket->'metaData'->'externalReferences'
+                r.content_jsonb->'metaData'->'externalReferences'
             ) as ext_ref
         LEFT JOIN publication_metadata pm ON pm.pmid = ext_ref->>'id'
         WHERE ext_ref->>'id' LIKE 'PMID:%'

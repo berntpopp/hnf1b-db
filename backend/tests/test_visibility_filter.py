@@ -26,6 +26,7 @@ from app.phenopackets.models import Phenopacket
 from app.phenopackets.repositories.visibility import (
     curator_filter,
     public_filter,
+    public_head_query,
     resolve_curator_content,
     resolve_public_content,
 )
@@ -33,6 +34,13 @@ from app.phenopackets.repositories.visibility import (
 # ---------------------------------------------------------------------------
 # public_filter — invariants I3 + I7
 # ---------------------------------------------------------------------------
+
+
+def test_public_head_query_joins_immutable_snapshot():
+    """Public JSON filtering has an explicit published-head SQL source."""
+    compiled = str(public_head_query(select(Phenopacket)))
+    assert "phenopacket_revisions" in compiled
+    assert "head_published_revision_id" in compiled
 
 
 @pytest.mark.asyncio
