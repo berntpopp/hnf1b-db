@@ -25,6 +25,17 @@ export function assertTiptapDependencyConsistency(manifest, lock) {
         `${packageName} root lock version must be ${TIPTAP_VERSION}; found ${lockVersion}`
       );
     }
+
+    for (const [lockPath, packageData] of Object.entries(lock.packages ?? {})) {
+      if (
+        lockPath.endsWith(`node_modules/${packageName}`) &&
+        packageData.version !== TIPTAP_VERSION
+      ) {
+        throw new Error(
+          `${packageName} nested lock version must be ${TIPTAP_VERSION}; found ${packageData.version} at ${lockPath}`
+        );
+      }
+    }
   }
 }
 

@@ -39,4 +39,21 @@ describe('Tiptap dependency consistency', () => {
       '@tiptap/vue-3 manifest version must be 3.29.2'
     );
   });
+
+  it('rejects a nested lockfile Tiptap package that creates a split graph', () => {
+    const manifest = {
+      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.29.2'])),
+    };
+    const lock = {
+      ...lockWith('3.29.2'),
+      packages: {
+        ...lockWith('3.29.2').packages,
+        'node_modules/legacy-editor/node_modules/@tiptap/core': { version: '3.27.1' },
+      },
+    };
+
+    expect(() => assertTiptapDependencyConsistency(manifest, lock)).toThrow(
+      'nested lock version must be 3.29.2'
+    );
+  });
 });

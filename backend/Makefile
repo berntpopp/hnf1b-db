@@ -12,7 +12,7 @@ dev:  ## Install dependencies including dev and test groups
 
 check-env:  ## Verify virtual environment integrity
 	@echo "🔍 Checking virtual environment..."
-	@uv run python -c "import sys; sys.exit(0 if '.venv' in sys.executable else 1)" || \
+	@uv run --group dev --group test python -c "import sys; sys.exit(0 if '.venv' in sys.executable else 1)" || \
 		(echo "❌ ERROR: Not using project venv!"; \
 		 echo "Current: $$(uv run which python)"; \
 		 echo "Expected: $$(pwd)/.venv/bin/python"; \
@@ -21,7 +21,7 @@ check-env:  ## Verify virtual environment integrity
 		 exit 1)
 	@echo "✅ Virtual environment OK"
 	@echo "🔍 Checking critical dependencies..."
-	@uv run python -c "import asyncpg, pytest" 2>/dev/null || \
+	@uv run --group dev --group test python -c "import asyncpg, pytest" 2>/dev/null || \
 		(echo "❌ ERROR: Missing dependencies!"; \
 		 echo "FIX: uv sync --group dev --group test"; \
 		 exit 1)
@@ -29,19 +29,19 @@ check-env:  ## Verify virtual environment integrity
 	@echo "✅ Environment is healthy"
 
 test: check-env  ## Run tests (excluding benchmarks and live-network guards)
-	uv run pytest -m "not benchmark and not network"
+	uv run --group dev --group test pytest -m "not benchmark and not network"
 
 test-network: check-env  ## Run live-network guard tests (hits external APIs, e.g. HPO ontology)
-	uv run pytest -m network -v
+	uv run --group dev --group test pytest -m network -v
 
 test-all: check-env  ## Run all tests including benchmarks
-	uv run pytest
+	uv run --group dev --group test pytest
 
 test-benchmark: check-env  ## Run only benchmark tests
-	uv run pytest -m benchmark -v -s
+	uv run --group dev --group test pytest -m benchmark -v -s
 
 lint: check-env  ## Run linting (ruff)
-	uv run ruff check .
+	uv run --group dev --group test ruff check .
 
 format:  ## Format code (ruff)
 	uv run ruff format .
@@ -51,13 +51,13 @@ typecheck: check-env  ## Run type checking (mypy)
 	uv run --group dev --group test mypy app/ migration/
 
 export-requirements:  ## Regenerate requirements exports from uv.lock
-	uv export --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file requirements.txt
-	uv export --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file requirements-dev.txt
+	uv export --locked --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file requirements.txt
+	uv export --locked --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file requirements-dev.txt
 
 check-requirements-drift:  ## Verify requirements exports match uv.lock
 	@export_dir=$$(mktemp -d); trap 'rm -rf "$$export_dir"' EXIT; \
-	uv export --quiet --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file "$$export_dir/requirements.txt"; \
-	uv export --quiet --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file "$$export_dir/requirements-dev.txt"; \
+	uv export --locked --quiet --format requirements.txt --no-dev --no-hashes --no-emit-project --output-file "$$export_dir/requirements.txt"; \
+	uv export --locked --quiet --format requirements.txt --group dev --group test --no-hashes --no-emit-project --output-file "$$export_dir/requirements-dev.txt"; \
 	sed '1,2d' requirements.txt > "$$export_dir/committed-requirements.txt"; \
 	sed '1,2d' "$$export_dir/requirements.txt" > "$$export_dir/generated-requirements.txt"; \
 	diff -u "$$export_dir/committed-requirements.txt" "$$export_dir/generated-requirements.txt"; \
