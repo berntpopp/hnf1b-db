@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,10 +23,22 @@ class TypedImportApplyError(RuntimeError):
 class TypedObservationImportService:
     """Persist a complete typed snapshot in one caller-owned transaction."""
 
-    def __init__(self, db: AsyncSession, *, actor: User) -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        *,
+        actor: User,
+        stage_hook: Callable[[str], Awaitable[None]] | None = None,
+    ) -> None:
         """Bind a session and accountable actor to one import transaction."""
         self.db = db
         self.actor = actor
+        self._stage_hook = stage_hook
+
+    async def _checkpoint(self, stage: str) -> None:
+        """Expose flushed persistence boundaries for deterministic failure tests."""
+        if self._stage_hook is not None:
+            await self._stage_hook(stage)
 
     async def apply(
         self,
@@ -43,13 +55,15 @@ class TypedObservationImportService:
         if not observations or any(not items for items in observations_by_subject.values()):
             raise TypedImportApplyError("typed import requires complete observations")
 
-        async with self.db.begin():
+        transaction = self.db.begin_nested() if self.db.in_transaction() else self.db.begin()
+        async with transaction:
             repository = ImportRepository(self.db)
             dataset = await repository.get_or_create_dataset(
                 source_system=manifest.source_system,
                 dataset_key=manifest.dataset_key,
                 subject_namespace=manifest.dataset_key,
             )
+            await self._checkpoint("dataset")
             snapshot = await repository.get_or_create_snapshot(
                 dataset_id=dataset.id,
                 manifest_sha256=manifest.sha256,
@@ -59,6 +73,7 @@ class TypedObservationImportService:
                     "observations": len(observations),
                 },
             )
+            await self._checkpoint("snapshot")
             run = await repository.create_run(
                 snapshot_id=snapshot.id,
                 transformer_version="source-import-v1",
@@ -67,6 +82,7 @@ class TypedObservationImportService:
             )
             run.status = ImportRunStatus.APPLYING.value
             await self.db.flush()
+            await self._checkpoint("run")
             state = PhenopacketStateService(self.db)
             for subject_id, subject_observations in sorted(observations_by_subject.items()):
                 projection = project_individual(
@@ -86,6 +102,7 @@ class TypedObservationImportService:
                 )
                 self.db.add(record)
                 await self.db.flush()
+                await self._checkpoint("record")
                 revision = await state._append_revision(
                     record,
                     state="draft",
@@ -99,6 +116,13 @@ class TypedObservationImportService:
                     import_run_id=run.id,
                 )
                 record.editing_revision_id = revision.id
+                await self.db.flush()
+                await self._checkpoint("revision")
+                await repository.bind_subject(
+                    dataset_id=dataset.id,
+                    source_subject_id=subject_id,
+                    record_id=record.id,
+                )
                 for observation in subject_observations:
                     await repository.bind_report(
                         dataset_id=dataset.id,
@@ -107,6 +131,7 @@ class TypedObservationImportService:
                         observation_id=observation.observation_id,
                         run_id=run.id,
                     )
+            await self._checkpoint("binding")
             await repository.finish_run(
                 run,
                 status=ImportRunStatus.APPLIED,

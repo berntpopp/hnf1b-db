@@ -11,6 +11,10 @@ from migration.phenopackets.observation_extractor import (
     ObservationExtractionError,
     extract_observation,
 )
+from migration.phenopackets.publication_mapping import (
+    PublicationMappingError,
+    publication_mapping_from_rows,
+)
 from migration.phenopackets.source_column_map import SOURCE_COLUMNS
 
 
@@ -168,3 +172,74 @@ def test_kidney_biopsy_no_is_explicitly_not_assessed_not_two_negative_findings()
     biopsy = next(item for item in observation.phenotypes if item.column == "KidneyBiopsy")
     assert biopsy.assessment_status is AssessmentStatus.NOT_ASSESSED
     assert biopsy.findings == ()
+
+
+def test_extractor_normalizes_publication_alias_to_lossless_pmid_and_doi():
+    row = _row()
+    row["Publication"] = "family-study"
+    publications = publication_mapping_from_rows(
+        [
+            {
+                "publication_id": "study-2026",
+                "publication_alias": "family-study",
+                "PMID": "PMID:123456",
+                "DOI": "DOI:10.1000/Family.Study",
+            }
+        ]
+    )
+
+    observation = extract_observation(
+        row,
+        row_number=7,
+        source_system="local_fixture",
+        dataset_key="hnf1b-registry",
+        manifest_sha256="sha256:fixture",
+        row_hmac_key=b"test-only-key",
+        reviewer_mapping={"reviewer@example.test": ("reviewer-1", "Source reviewer 1")},
+        modifier_vocabulary=_modifier_vocabulary(),
+        publication_mapping=publications,
+    )
+
+    assert observation.publication.source_key.value == "family-study"
+    assert observation.publication.pmid == "123456"
+    assert observation.publication.doi == "10.1000/family.study"
+
+
+def test_extractor_refuses_an_unknown_publication_alias():
+    row = _row()
+    row["Publication"] = "unmapped-study"
+
+    with pytest.raises(ObservationExtractionError, match="publication alias"):
+        extract_observation(
+            row,
+            row_number=7,
+            source_system="local_fixture",
+            dataset_key="hnf1b-registry",
+            manifest_sha256="sha256:fixture",
+            row_hmac_key=b"test-only-key",
+            reviewer_mapping={
+                "reviewer@example.test": ("reviewer-1", "Source reviewer 1")
+            },
+            modifier_vocabulary=_modifier_vocabulary(),
+            publication_mapping=publication_mapping_from_rows([]),
+        )
+
+
+def test_publication_mapping_refuses_ambiguous_aliases():
+    with pytest.raises(PublicationMappingError, match="ambiguous publication alias"):
+        publication_mapping_from_rows(
+            [
+                {
+                    "publication_id": "study-one",
+                    "publication_alias": "shared",
+                    "PMID": "123456",
+                    "DOI": "10.1000/one",
+                },
+                {
+                    "publication_id": "study-two",
+                    "publication_alias": "shared",
+                    "PMID": "123457",
+                    "DOI": "10.1000/two",
+                },
+            ]
+        )

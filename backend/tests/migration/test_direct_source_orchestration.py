@@ -14,6 +14,7 @@ from migration.direct_sheets_to_phenopackets import (
 from migration.phenopackets.builder_simple import PhenopacketBuilder
 from migration.phenopackets.hpo_mapper import HPOMapper
 from migration.phenopackets.laterality import modifier_vocabulary_from_rows
+from migration.phenopackets.publication_mapping import publication_mapping_from_rows
 from migration.phenopackets.source_column_map import SOURCE_COLUMNS
 from migration.source_manifest import EXPECTED_HEADERS, build_source_manifest
 
@@ -54,7 +55,10 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
         "Phenotype_modifier": _csv(
             EXPECTED_HEADERS["Phenotype_modifier"], ["Bilateral", "HP:0012832"]
         ),
-        "Publications": _csv(EXPECTED_HEADERS["Publications"]),
+        "Publications": _csv(
+            EXPECTED_HEADERS["Publications"],
+            ["study-2026", "family-study", "123456", "10.1000/family.study"],
+        ),
     }
     # Four source terms are required; add the remaining three data rows.
     raw_sheets["Phenotype_modifier"] += (
@@ -79,6 +83,8 @@ async def test_load_data_versions_laterality_from_modifier_sheet(monkeypatch):
         "Phenotype_modifier"
     ].sha256
     assert migration.phenopacket_builder is None
+    assert migration.publication_mapping["family-study"].pmid == "123456"
+    assert migration.publication_mapping["family-study"].doi == "10.1000/family.study"
 
 
 @pytest.mark.asyncio
@@ -154,6 +160,7 @@ def test_typed_direct_output_omits_reviewer_email_and_comment():
             "ReviewBy": "reviewer@example.test",
             "ReviewDate": "2026-08-09",
             "Comment": "source-only comment",
+            "Publication": "family-study",
             "RenalCysts": "unilateral left",
             "KidneyBiopsy": "no",
         }
@@ -174,6 +181,16 @@ def test_typed_direct_output_omits_reviewer_email_and_comment():
         ],
         version_sha256=manifest.sheets["Phenotype_modifier"].sha256,
     )
+    migration.publication_mapping = publication_mapping_from_rows(
+        [
+            {
+                "publication_id": "study-2026",
+                "publication_alias": "family-study",
+                "PMID": "123456",
+                "DOI": "10.1000/family.study",
+            }
+        ]
+    )
 
     output = migration.build_typed_phenopackets()
 
@@ -181,3 +198,7 @@ def test_typed_direct_output_omits_reviewer_email_and_comment():
     assert "reviewer@example.test" not in serialized
     assert "source-only comment" not in serialized
     assert output[0]["phenotypicFeatures"][0]["modifiers"][0]["id"] == "HP:0012833"
+    assert {item["id"] for item in output[0]["metaData"]["externalReferences"]} == {
+        "PMID:123456",
+        "DOI:10.1000/family.study",
+    }

@@ -40,6 +40,11 @@ from migration.phenopackets.laterality import (
     ModifierVocabularyError,
     parse_laterality,
 )
+from migration.phenopackets.publication_mapping import (
+    PublicationMappingError,
+    PublicationReference,
+    resolve_publication,
+)
 from migration.phenopackets.source_column_map import SOURCE_COLUMNS
 from migration.phenopackets.strict_age_parser import AgeParseError, parse_source_age
 
@@ -179,6 +184,7 @@ def extract_observation(
     row_hmac_key: bytes,
     reviewer_mapping: Mapping[str, tuple[str, str]],
     modifier_vocabulary: ModifierVocabulary | None = None,
+    publication_mapping: Mapping[str, PublicationReference] | None = None,
 ) -> ReportObservation:
     """Return one complete observation or fail without retaining source emails."""
     missing = sorted(
@@ -203,6 +209,12 @@ def extract_observation(
         "\x1f".join(_string(row[item.header]) for item in SOURCE_COLUMNS).encode(),
         row_hmac_key,
     )
+    try:
+        publication = resolve_publication(
+            row["Publication"], mapping=publication_mapping
+        )
+    except PublicationMappingError as exc:
+        raise ObservationExtractionError("source publication alias is not importable") from exc
     return ReportObservation(
         observation_id=observation_id,
         origin=ObservationOrigin.IMPORTED,
@@ -225,7 +237,8 @@ def extract_observation(
         publication=PublicationObservation(
             source_key=_observed(row["Publication"]),
             publication_type=_observed(row["PublicationType"]),
-            pmid=_string(row["Publication"]).removeprefix("PMID:") or None,
+            pmid=publication.pmid if publication is not None else None,
+            doi=publication.doi if publication is not None else None,
         ),
         case=CaseObservation(
             duplicate_check=_observed(row["DupCheck"]),

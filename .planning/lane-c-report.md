@@ -291,3 +291,24 @@ targeted Ruff: passed; isolated test-database Alembic downgrade to
 
 Fresh verification: focused acceptance regressions: **26 passed**; targeted
 Ruff: passed; clean isolated Alembic downgrade/upgrade smoke: passed.
+
+## Transaction and publication acceptance completion — 2026-08-09
+
+- `TypedObservationImportService` now creates a source-subject binding as well
+  as each source-report binding. It executes in one outer transaction (or a
+  caller savepoint), with flushed checkpoints used only by deterministic
+  failure-injection tests.
+- Isolated PostgreSQL integration regression injects a failure after dataset,
+  snapshot, run, record, revision, and binding persistence. Every case proves
+  zero datasets, snapshots, runs, subject/report bindings, phenopackets, and
+  revisions remain. The success case proves `applied` run accounting, one
+  binding of each kind, and revision `import_run_id` provenance.
+- Publications are now read from the pinned validated sheet into a strict
+  mapping. Each non-placeholder row needs a PMID or DOI; aliases with
+  conflicting references fail closed, as do unknown source aliases. Raw source
+  aliases remain typed evidence while direct projection emits normalized PMID
+  and DOI identifiers.
+
+Fresh verification: focused Lane C suite: **37 passed**; targeted Ruff:
+passed. Isolated-worker migration smoke first asserted downgrade safety,
+then completed `c0f422b00004 -> b9f422b00003 -> c0f422b00004` successfully.

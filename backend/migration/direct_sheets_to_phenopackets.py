@@ -32,7 +32,10 @@ from migration.phenopackets.laterality import (
 )
 from migration.phenopackets.observation_extractor import extract_observation
 from migration.phenopackets.ontology_mapper import OntologyMapper
-from migration.phenopackets.publication_mapper import PublicationMapper
+from migration.phenopackets.publication_mapping import (
+    PublicationReference,
+    publication_mapping_from_rows,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -101,7 +104,7 @@ class DirectSheetsToPhenopackets:
         self.row_hmac_key = row_hmac_key
         self.storage = PhenopacketStorage(target_db_url)
         self.ontology_mapper = ontology_mapper
-        self.publication_mapper: Optional[PublicationMapper] = None
+        self.publication_mapping: Mapping[str, PublicationReference] | None = None
         self.phenopacket_builder = None
 
         # Data storage
@@ -131,8 +134,12 @@ class DirectSheetsToPhenopackets:
             modifier_df.to_dict(orient="records"),
             version_sha256=snapshot.manifest.sheets["Phenotype_modifier"].sha256,
         )
-        self.publications_df = pd.read_csv(BytesIO(snapshot.raw_sheets["Publications"]))
-        self.publication_mapper = PublicationMapper(self.publications_df)
+        self.publications_df = pd.read_csv(
+            BytesIO(snapshot.raw_sheets["Publications"]), dtype=str
+        ).fillna("")
+        self.publication_mapping = publication_mapping_from_rows(
+            self.publications_df.to_dict(orient="records")
+        )
 
 
     def _build_typed_observations(self) -> dict[str, list[Any]]:
@@ -141,6 +148,8 @@ class DirectSheetsToPhenopackets:
             raise RuntimeError("source snapshot has not been loaded")
         if self.modifier_vocabulary is None:
             raise RuntimeError("source modifier vocabulary has not been loaded")
+        if self.publication_mapping is None:
+            raise RuntimeError("source publication mapping has not been loaded")
         if not self.reviewer_mapping or self.row_hmac_key is None:
             raise RuntimeError("approved reviewer mapping and row HMAC key are required")
 
@@ -155,6 +164,7 @@ class DirectSheetsToPhenopackets:
                 row_hmac_key=self.row_hmac_key,
                 reviewer_mapping=self.reviewer_mapping,
                 modifier_vocabulary=self.modifier_vocabulary,
+                publication_mapping=self.publication_mapping,
             )
             observations_by_subject.setdefault(
                 observation.identifiers.source_subject_id, []

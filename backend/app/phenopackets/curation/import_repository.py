@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.phenopackets.curation.import_models import (
     ImportPayloadError,
     ImportRunStatus,
+    PhenopacketSubjectBinding,
     SourceCorrectionRegistry,
     SourceDataset,
     SourceImportRun,
@@ -173,6 +174,39 @@ class ImportRepository:
             first_seen_run_id=run_id,
             last_seen_run_id=run_id,
             active=True,
+        )
+        self.db.add(binding)
+        await self.db.flush()
+        return binding
+
+    async def bind_subject(
+        self,
+        *,
+        dataset_id: UUID,
+        source_subject_id: str,
+        record_id: UUID,
+    ) -> PhenopacketSubjectBinding:
+        """Bind a source subject to one record without allowing reassignment."""
+        binding = (
+            await self.db.execute(
+                select(PhenopacketSubjectBinding)
+                .where(
+                    PhenopacketSubjectBinding.dataset_id == dataset_id,
+                    PhenopacketSubjectBinding.source_subject_id == source_subject_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if binding is not None:
+            if binding.record_id != record_id:
+                raise SourceBindingConflict(
+                    "source subject cannot move to a different record"
+                )
+            return binding
+        binding = PhenopacketSubjectBinding(
+            dataset_id=dataset_id,
+            source_subject_id=source_subject_id,
+            record_id=record_id,
         )
         self.db.add(binding)
         await self.db.flush()
