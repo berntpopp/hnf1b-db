@@ -10,7 +10,7 @@ dependencies = [
     "pandas>=2.3.2",
     "pwdlib[argon2,bcrypt]>=0.2.1", # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
     "pydantic>=2.13.0",
-    "pydantic-settings>=2.14.2",
+    "pydantic-settings>=2.15.0",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.27",
@@ -59,10 +59,10 @@ test = [
 migration = [
     "tqdm>=4.67.3",  # Progress bars for migration
     "rich>=13.7.0",  # Rich console output
-    "deepdiff>=6.7.0",  # For comparing data structures
+    "deepdiff>=9.1.0",  # For comparing data structures
 ]
 phenopackets = [
-    "oaklib>=0.5.0",  # Ontology Access Kit (optional)
+    "oaklib>=0.7.4",  # Ontology Access Kit (optional)
 ]
 
 [tool.mypy]
