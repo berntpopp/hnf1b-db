@@ -264,7 +264,7 @@ types-pyyaml==6.0.12.20260408
 types-redis==4.6.0.20241004
 types-requests==2.33.0.20260408
     # via types-tqdm
-types-setuptools==82.0.0.20260408
+types-setuptools==83.0.0.20260807
     # via types-cffi
 types-tqdm==4.67.3.20260408
 typing-extensions==4.16.0
