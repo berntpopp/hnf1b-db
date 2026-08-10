@@ -255,7 +255,7 @@ tomli==2.4.1 ; python_full_version <= '3.11'
     #   mypy
     #   pytest
 tqdm==4.67.3
-types-cffi==2.0.0.20260408
+types-cffi==2.0.0.20260518
     # via types-pyopenssl
 types-jsonschema==4.26.0.20260408
 types-pyopenssl==24.1.0.20240722
