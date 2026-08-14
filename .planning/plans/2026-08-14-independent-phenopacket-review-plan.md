@@ -363,7 +363,7 @@ git commit -m "feat(backend): bind approval to exact candidate snapshot"
 - Expansion activation revision is `e0f422b00006`, down revision `d0f422b00005`.
 - Database functions/triggers lock the phenopacket row for blocking issue insert/resolve/reopen/delete/identity changes and active revision/state changes, then validate ownership/state/revision linkage; a deferred constraint trigger checks approved-plus-unresolved final state. Resolution events reject database UPDATE/DELETE.
 
-- [ ] **Step 1: Write failing blocking-issue API/service tests**
+- [x] **Step 1: Write failing blocking-issue API/service tests**
 
 ```python
 async def test_owner_cannot_resolve_or_delete_blocking_issue(...):
@@ -380,17 +380,17 @@ async def test_ordinary_comment_routes_remain_backward_compatible(...):
 
 Cover unrelated revision nomination, non-review state creation, missing rationale/disposition, retraction as resolution, append-only resolution/reopen events, all legacy resolve/unresolve/delete routes, admin-owner bypass attempts, and router rollback on failures.
 
-- [ ] **Step 2: Run focused comment tests and confirm bypasses**
+- [x] **Step 2: Run focused comment tests and confirm bypasses**
 
 Run: `cd backend && uv run pytest tests/test_blocking_review_issues.py tests/test_comments_service_mutations.py tests/test_comments_router.py -q`
 
 Expected: FAIL because current routes allow any curator resolve/unresolve and author/admin delete.
 
-- [ ] **Step 3: Implement phenopacket-first comment mutations**
+- [x] **Step 3: Implement phenopacket-first comment mutations**
 
 Load comment identity, acquire the phenopacket row lock by `record_id`, reload/lock the comment, then discriminate `review_revision_id`. Use Task 3 policy for blocking operations. Write a `CommentResolutionEvent` before updating the current projection. Reject DELETE on a blocking issue; do not soft-delete it.
 
-- [ ] **Step 4: Write failing raw-SQL race and activation-migration tests**
+- [x] **Step 4: Write failing raw-SQL race and activation-migration tests**
 
 Use two independent async connections/transactions and explicit barriers, not sleeps. Test all four orderings:
 
@@ -404,17 +404,17 @@ Tx B: insert/reopen issue -> blocks -> rejects review_closed after A commit
 
 Also assert active `editing_revision_id` requires `draft_owner_id` in both ORM metadata and the database, review revision belongs to the comment record, blocking issues cannot be soft/hard deleted or detached by direct SQL, resolution events are append-only, ambiguous owner preflight aborts, and downgrade refuses after a resolution event or v2 revision exists.
 
-- [ ] **Step 5: Implement activation migration and guarded downgrade**
+- [x] **Step 5: Implement activation migration and guarded downgrade**
 
 Create lock-taking trigger functions with one global order: `phenopackets FOR UPDATE` before revision/comment checks. Augment the existing pointer-state trigger rather than replacing it. Backfill missing active owners from recursive deterministic active-cycle ancestry; run a preflight that raises with record IDs when ancestry is ambiguous. Add the same audit-data downgrade preflight to the d0 expansion migration because the rollout intentionally runs v2 application writers before e0 activation. Both downgrade paths succeed only when no blocking issue, resolution event, v2 ledger revision, decision metadata, actor role, or content digest exists. Do not modify existing revision rows to reconstruct roles/hashes.
 
-- [ ] **Step 6: Run migration, race, comment, and state tests**
+- [x] **Step 6: Run migration, race, comment, and state tests**
 
 Run: `cd backend && uv run pytest tests/migration/test_independent_review_activation_migration.py tests/migration/test_independent_review_sql_races.py tests/test_blocking_review_issues.py tests/test_comments_service_mutations.py tests/test_comments_router.py tests/test_comments_permissions.py tests/test_comments_soft_delete.py tests/test_state_invariants.py tests/test_review_models.py tests/test_review_policy.py tests/test_alembic_env_autogenerate.py -q`
 
 Expected: PASS with both raw-SQL commit orders proven.
 
-- [ ] **Step 7: Commit review issues and invariant activation**
+- [x] **Step 7: Commit review issues and invariant activation**
 
 ```bash
 git add backend/app/comments/schemas.py backend/app/comments/service.py backend/app/comments/routers.py \
