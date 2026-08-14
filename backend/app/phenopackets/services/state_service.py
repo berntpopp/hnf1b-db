@@ -414,7 +414,7 @@ class PhenopacketStateService:
             ("in_review", "approved"),
             ("approved", "changes_requested"),
         }:
-            candidate = await self._active_review_candidate(pp, effective)
+            candidate = await self._active_review_candidate(pp)
             unresolved_count = (
                 await self._unresolved_review_issue_count(pp)
                 if to_state == "approved"
@@ -434,9 +434,7 @@ class PhenopacketStateService:
 
         return await self._simple_transition(pp, to_state, reason, actor)
 
-    async def _active_review_candidate(
-        self, pp: Phenopacket, effective_state: State
-    ) -> PhenopacketRevision:
+    async def _active_review_candidate(self, pp: Phenopacket) -> PhenopacketRevision:
         """Load the immutable submission snapshot for the active review cycle."""
         if pp.editing_revision_id is None:
             raise ReviewPolicyError(
@@ -449,38 +447,7 @@ class PhenopacketStateService:
                 "review_author_unknown",
                 "Reviewer independence cannot be established from the audit history.",
             )
-        if effective_state == "in_review" and active.state == "in_review":
-            return active
-
-        cycle_start: int | None = None
-        if pp.head_published_revision_id is not None:
-            head = await self.db.get(PhenopacketRevision, pp.head_published_revision_id)
-            if head is None or head.record_id != pp.id:
-                raise ReviewPolicyError(
-                    "review_author_unknown",
-                    "Reviewer independence cannot be established "
-                    "from the audit history.",
-                )
-            cycle_start = head.revision_number
-
-        stmt = select(PhenopacketRevision).where(
-            PhenopacketRevision.record_id == pp.id,
-            PhenopacketRevision.state == "in_review",
-            PhenopacketRevision.revision_number < active.revision_number,
-        )
-        if cycle_start is not None:
-            stmt = stmt.where(PhenopacketRevision.revision_number > cycle_start)
-        candidate = (
-            await self.db.execute(
-                stmt.order_by(PhenopacketRevision.revision_number.desc()).limit(1)
-            )
-        ).scalar_one_or_none()
-        if candidate is None:
-            raise ReviewPolicyError(
-                "review_author_unknown",
-                "Reviewer independence cannot be established from the audit history.",
-            )
-        return candidate
+        return await ReviewPolicy.active_candidate(self.db, pp, active)
 
     async def _unresolved_review_issue_count(self, pp: Phenopacket) -> int:
         """Count live unresolved blocking issues in the active edit cycle."""

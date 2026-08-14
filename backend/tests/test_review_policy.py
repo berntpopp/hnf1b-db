@@ -8,6 +8,7 @@ import pytest
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.review.policy import ReviewPolicy, ReviewPolicyError
+from app.phenopackets.review.schemas import ActionCapability
 
 
 async def _review_candidate(
@@ -123,10 +124,10 @@ async def test_review_eligibility_matrix(
     assert approve.allowed is allowed
     assert (approve.blocked_by[0] if approve.blocked_by else None) == code
     if is_owner and contributed:
-        assert approve.blocked_by == [
+        assert approve.blocked_by == (
             "self_review_forbidden",
             "reviewer_contributed",
-        ]
+        )
 
 
 @pytest.mark.asyncio
@@ -146,7 +147,7 @@ async def test_null_owner_fails_closed(db_session, curator_user, another_curator
         unresolved_count=0,
     )
 
-    assert _capability(capabilities, "approve").blocked_by == ["review_author_unknown"]
+    assert _capability(capabilities, "approve").blocked_by == ("review_author_unknown",)
     with pytest.raises(ReviewPolicyError) as exc_info:
         await ReviewPolicy.require_independent_reviewer(
             db_session,
@@ -195,7 +196,28 @@ async def test_only_content_events_create_contributor_blockers(
 
     approve = _capability(capabilities, "approve")
     assert approve.allowed is allowed
-    assert approve.blocked_by == ([] if allowed else ["reviewer_contributed"])
+    assert approve.blocked_by == (() if allowed else ("reviewer_contributed",))
+
+
+def test_action_capability_blockers_are_deeply_immutable_and_serialize_as_array():
+    """The Python collection cannot mutate while the wire DTO stays an array."""
+    capability = ActionCapability(
+        action="approve",
+        allowed=False,
+        blocked_by=["self_review_forbidden", "reviewer_contributed"],
+    )
+
+    with pytest.raises(AttributeError):
+        capability.blocked_by.append("review_closed")
+
+    assert capability.blocked_by == (
+        "self_review_forbidden",
+        "reviewer_contributed",
+    )
+    assert capability.model_dump(mode="json")["blocked_by"] == [
+        "self_review_forbidden",
+        "reviewer_contributed",
+    ]
 
 
 @pytest.mark.asyncio
@@ -238,11 +260,11 @@ async def test_unresolved_issues_block_only_approval(
     )
 
     assert _capability(capabilities, "request_changes").allowed is True
-    assert _capability(capabilities, "request_changes").blocked_by == []
+    assert _capability(capabilities, "request_changes").blocked_by == ()
     assert _capability(capabilities, "approve").allowed is False
-    assert _capability(capabilities, "approve").blocked_by == [
-        "unresolved_review_issues"
-    ]
+    assert _capability(capabilities, "approve").blocked_by == (
+        "unresolved_review_issues",
+    )
 
     with pytest.raises(ReviewPolicyError) as exc_info:
         await ReviewPolicy.require_independent_reviewer(
@@ -368,7 +390,7 @@ async def test_closed_candidate_has_stable_review_closed_blocker(
         unresolved_count=0,
     )
 
-    assert _capability(capabilities, "approve").blocked_by == ["review_closed"]
+    assert _capability(capabilities, "approve").blocked_by == ("review_closed",)
 
 
 @pytest.mark.asyncio

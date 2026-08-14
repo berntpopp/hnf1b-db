@@ -82,17 +82,26 @@ class ReviewPolicy:
             db, phenopacket
         )
         cycle_start = await cls._cycle_start_revision(db, phenopacket)
-        candidate_is_active = await cls._candidate_is_active(
-            db,
-            phenopacket,
-            candidate_revision,
-            effective_state,
-            active_revision,
+        candidate_ancestry_unknown = False
+        try:
+            expected_candidate = await cls.active_candidate(
+                db, phenopacket, active_revision
+            )
+        except ReviewPolicyError as exc:
+            expected_candidate = None
+            candidate_ancestry_unknown = exc.code == "review_author_unknown"
+        candidate_is_active = (
+            expected_candidate is not None
+            and expected_candidate.id == candidate_revision.id
         )
 
-        ancestry_unknown = cycle_start is False or (
-            cycle_start is not None
-            and candidate_revision.revision_number <= cycle_start
+        ancestry_unknown = (
+            candidate_ancestry_unknown
+            or cycle_start is False
+            or (
+                cycle_start is not None
+                and candidate_revision.revision_number <= cycle_start
+            )
         )
         if phenopacket.draft_owner_id is None or ancestry_unknown:
             common_blockers: list[ReviewBlockCode] = ["review_author_unknown"]
@@ -173,7 +182,7 @@ class ReviewPolicy:
         return ActionCapability(
             action=action,
             allowed=not blockers,
-            blocked_by=blockers,
+            blocked_by=tuple(blockers),
         )
 
     @staticmethod
@@ -191,43 +200,43 @@ class ReviewPolicy:
         return active_revision.state, active_revision
 
     @classmethod
-    async def _candidate_is_active(
+    async def active_candidate(
         cls,
         db: AsyncSession,
         phenopacket: Phenopacket,
-        candidate: PhenopacketRevision,
-        effective_state: str,
         active_revision: PhenopacketRevision | None,
-    ) -> bool:
-        """Confirm the submission snapshot belongs to the current review cycle."""
-        if (
-            candidate.record_id != phenopacket.id
-            or candidate.state != "in_review"
-            or effective_state not in ("in_review", "approved")
-        ):
-            return False
+    ) -> PhenopacketRevision:
+        """Resolve the inspected candidate from the active revision's direct chain.
 
-        if active_revision is None:
-            return False
-        if effective_state == "in_review":
-            return active_revision.id == candidate.id
+        Raises:
+            ReviewPolicyError: When active review ancestry is missing or invalid,
+                or when the active state is no longer reviewable.
+        """
+        if active_revision is None or active_revision.record_id != phenopacket.id:
+            raise cls._error("review_author_unknown")
+        if active_revision.state == "in_review":
+            return active_revision
+        if active_revision.state != "approved":
+            raise cls._error("review_closed")
+        if active_revision.parent_revision_id is None:
+            raise cls._error("review_author_unknown")
 
-        cycle_start = await cls._cycle_start_revision(db, phenopacket)
-        if cycle_start is False:
-            return False
-        stmt = select(PhenopacketRevision.id).where(
-            PhenopacketRevision.record_id == phenopacket.id,
-            PhenopacketRevision.state == "in_review",
-            PhenopacketRevision.revision_number < active_revision.revision_number,
+        candidate = await db.get(
+            PhenopacketRevision, active_revision.parent_revision_id
         )
-        if cycle_start is not None:
-            stmt = stmt.where(PhenopacketRevision.revision_number > cycle_start)
-        latest_candidate_id = (
-            await db.execute(
-                stmt.order_by(PhenopacketRevision.revision_number.desc()).limit(1)
-            )
-        ).scalar_one_or_none()
-        return latest_candidate_id == candidate.id
+        if (
+            candidate is None
+            or candidate.record_id != phenopacket.id
+            or candidate.state != "in_review"
+            or candidate.revision_number >= active_revision.revision_number
+        ):
+            raise cls._error("review_author_unknown")
+        return candidate
+
+    @classmethod
+    def _error(cls, code: ReviewBlockCode) -> ReviewPolicyError:
+        """Build one typed policy error without duplicating safe messages."""
+        return ReviewPolicyError(code, cls._MESSAGES[code])
 
     @classmethod
     async def _independence_blockers(
