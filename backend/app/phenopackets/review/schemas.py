@@ -24,7 +24,7 @@ class ActionCapability(BaseModel):
 
     action: ReviewAction
     allowed: bool
-    blocked_by: list[ReviewBlockCode] = Field(default_factory=list)
+    blocked_by: tuple[ReviewBlockCode, ...] = ()
 
 
 class ReviewCapabilities(BaseModel):
