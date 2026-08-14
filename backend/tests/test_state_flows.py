@@ -15,9 +15,34 @@ import pytest
 from sqlalchemy import select
 
 from app.comments.models import Comment
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
 from app.phenopackets.review.policy import ReviewPolicyError
 from app.phenopackets.services.state_service import PhenopacketStateService
+
+
+def _approval_fields(candidate: PhenopacketRevision) -> dict:
+    """Echo the exact candidate identity and affirmative review attestation."""
+    return {
+        "candidate_revision_id": candidate.id,
+        "candidate_content_sha256": candidate.content_sha256,
+        "attestation": ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    }
+
+
+def _publication_fields(approved: PhenopacketRevision) -> dict:
+    """Echo the exact approved snapshot identity."""
+    return {
+        "approved_revision_id": approved.id,
+        "approved_content_sha256": approved.content_sha256,
+    }
+
 
 # ---------------------------------------------------------------------------
 # §6.1 — clone-to-draft on a published record
@@ -312,7 +337,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
     svc = PhenopacketStateService(db_session)
 
     # submit
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="ready",
@@ -325,12 +350,13 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
     assert draft_record.draft_owner_id == curator_user.id  # preserved through submit
 
     # approve
-    await svc.transition(
+    _, approved = await svc.transition(
         draft_record.id,
         to_state="approved",
         reason="ok",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -343,6 +369,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
         reason="go live",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -410,7 +437,7 @@ async def test_direct_transition_cannot_bypass_independent_review(
     """The state service rejects an owner's direct self-approval attempt."""
     svc = PhenopacketStateService(db_session)
     # submit first to reach in_review
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="go",
@@ -424,6 +451,7 @@ async def test_direct_transition_cannot_bypass_independent_review(
             reason="self-approve",
             expected_revision=2,
             actor=curator_user,
+            **_approval_fields(candidate),
         )
     assert exc_info.value.code == "self_review_forbidden"
     assert draft_record.revision == 2
@@ -486,6 +514,7 @@ async def test_unresolved_review_issue_blocks_direct_approval(
             reason="cannot approve yet",
             expected_revision=2,
             actor=another_curator,
+            **_approval_fields(candidate),
         )
 
     assert exc_info.value.code == "unresolved_review_issues"
@@ -498,7 +527,7 @@ async def test_approved_candidate_can_be_reopened_by_independent_curator(
 ):
     """An eligible independent curator can reopen approval before publication."""
     svc = PhenopacketStateService(db_session)
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="ready",
@@ -511,6 +540,7 @@ async def test_approved_candidate_can_be_reopened_by_independent_curator(
         reason="reviewed",
         expected_revision=2,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
 
     _, reopened = await svc.transition(

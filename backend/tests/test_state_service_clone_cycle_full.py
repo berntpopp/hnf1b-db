@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.phenopackets.models import ApprovalAttestation
 from app.phenopackets.services.state_service import PhenopacketStateService
 
 
@@ -23,7 +24,7 @@ async def test_full_clone_cycle_republish(
         actor=curator_user,
     )
     # Submit
-    pp, _ = await svc.transition(
+    pp, candidate = await svc.transition(
         pp.id,
         to_state="in_review",
         reason="r",
@@ -31,12 +32,18 @@ async def test_full_clone_cycle_republish(
         actor=curator_user,
     )
     # Approve
-    pp, _ = await svc.transition(
+    pp, approved = await svc.transition(
         pp.id,
         to_state="approved",
         reason="ok",
         expected_revision=pp.revision,
         actor=admin_user,
+        candidate_revision_id=candidate.id,
+        candidate_content_sha256=candidate.content_sha256,
+        attestation=ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
     )
     # Publish
     pp, rev = await svc.transition(
@@ -45,6 +52,8 @@ async def test_full_clone_cycle_republish(
         reason="shipping",
         expected_revision=pp.revision,
         actor=admin_user,
+        approved_revision_id=approved.id,
+        approved_content_sha256=approved.content_sha256,
     )
 
     # Record-level state converges

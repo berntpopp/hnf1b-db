@@ -3,8 +3,26 @@
 import pytest
 from sqlalchemy import select
 
-from app.phenopackets.models import PhenopacketRevision
+from app.phenopackets.models import ApprovalAttestation, PhenopacketRevision
 from app.phenopackets.services.state_service import PhenopacketStateService
+
+
+def _approval_fields(candidate: PhenopacketRevision) -> dict:
+    return {
+        "candidate_revision_id": candidate.id,
+        "candidate_content_sha256": candidate.content_sha256,
+        "attestation": ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    }
+
+
+def _publication_fields(approved: PhenopacketRevision) -> dict:
+    return {
+        "approved_revision_id": approved.id,
+        "approved_content_sha256": approved.content_sha256,
+    }
 
 
 @pytest.mark.asyncio
@@ -65,7 +83,7 @@ async def test_publish_appends_a_new_head_without_rewriting_approved_revision(
         expected_revision=published_record.revision,
         actor=curator_user,
     )
-    record, _ = await service.transition(
+    record, candidate = await service.transition(
         record.id,
         to_state="in_review",
         reason="review",
@@ -78,6 +96,7 @@ async def test_publish_appends_a_new_head_without_rewriting_approved_revision(
         reason="approve",
         expected_revision=record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
     approved_id = approved.id
     record, published = await service.transition(
@@ -86,6 +105,7 @@ async def test_publish_appends_a_new_head_without_rewriting_approved_revision(
         reason="publish",
         expected_revision=record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
 
     reloaded_approved = (
@@ -98,6 +118,10 @@ async def test_publish_appends_a_new_head_without_rewriting_approved_revision(
     assert record.head_published_revision_id != original_head_id
     assert reloaded_approved.state == "approved"
     assert reloaded_approved.to_state == "approved"
+    assert approved.parent_revision_id == candidate.id
+    assert approved.content_jsonb == candidate.content_jsonb
+    assert published.parent_revision_id == approved.id
+    assert published.content_jsonb == approved.content_jsonb
 
 
 @pytest.mark.asyncio
@@ -152,7 +176,7 @@ async def test_publish_uses_the_current_editing_revision_not_historic_approval(
         expected_revision=published_record.revision,
         actor=curator_user,
     )
-    record, _ = await service.transition(
+    record, candidate = await service.transition(
         record.id,
         to_state="in_review",
         reason="review",
@@ -165,6 +189,7 @@ async def test_publish_uses_the_current_editing_revision_not_historic_approval(
         reason="approve",
         expected_revision=record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
 
     record, published = await service.transition(
@@ -173,6 +198,7 @@ async def test_publish_uses_the_current_editing_revision_not_historic_approval(
         reason="publish",
         expected_revision=record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
 
     assert published.parent_revision_id == approved.id
