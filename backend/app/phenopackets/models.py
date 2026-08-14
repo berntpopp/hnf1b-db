@@ -756,14 +756,20 @@ class TransitionRequest(BaseModel):
     @model_validator(mode="after")
     def validate_conditional_fields(self) -> "TransitionRequest":
         """Require only the exact-snapshot fields for the selected transition."""
-        candidate_fields_present = (
-            self.candidate_revision_id is not None
-            or self.candidate_content_sha256 is not None
-            or self.attestation is not None
+        candidate_fields_present = bool(
+            self.model_fields_set
+            & {
+                "candidate_revision_id",
+                "candidate_content_sha256",
+                "attestation",
+            }
         )
-        approved_fields_present = (
-            self.approved_revision_id is not None
-            or self.approved_content_sha256 is not None
+        approved_fields_present = bool(
+            self.model_fields_set
+            & {
+                "approved_revision_id",
+                "approved_content_sha256",
+            }
         )
 
         if self.to_state == "approved":

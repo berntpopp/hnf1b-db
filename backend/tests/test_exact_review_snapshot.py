@@ -154,6 +154,69 @@ async def test_submit_freezes_publish_canonical_content_once_and_publish_copies_
 
 
 @pytest.mark.asyncio
+async def test_resubmit_refreezes_once_before_candidate_and_not_during_decisions(
+    db_session,
+    draft_record,
+    curator_user,
+    another_curator,
+    admin_user,
+    monkeypatch,
+):
+    """Changes-requested resubmission freezes once before the new candidate."""
+    service = PhenopacketStateService(db_session)
+    record, first_candidate = await _submit(service, draft_record, curator_user)
+    record, _ = await service.transition(
+        record.id,
+        to_state="changes_requested",
+        reason="revise extension evidence",
+        expected_revision=record.revision,
+        actor=another_curator,
+    )
+    record = await service.edit_record(
+        record.id,
+        new_content={
+            "id": draft_record.phenopacket_id,
+            "hnf1bCuration": {"extensionOnlyEvidence": {"status": "revised"}},
+        },
+        change_reason="address review",
+        expected_revision=record.revision,
+        actor=curator_user,
+    )
+
+    calls: list[bool] = []
+
+    def canonicalize(content, *, publish=False):
+        calls.append(publish)
+        canonical = deepcopy(content)
+        canonical["hnf1bCuration"]["extensionOnlyEvidence"]["status"] = (
+            "frozen-resubmission"
+        )
+        return canonical
+
+    monkeypatch.setattr(
+        PhenopacketStateService,
+        "_canonicalize_for_persistence",
+        staticmethod(canonicalize),
+    )
+
+    record, resubmitted = await _submit(service, record, curator_user)
+
+    assert calls == [True]
+    assert resubmitted.id != first_candidate.id
+    assert resubmitted.content_jsonb["hnf1bCuration"] == {
+        "extensionOnlyEvidence": {"status": "frozen-resubmission"}
+    }
+    assert record.phenopacket == resubmitted.content_jsonb
+
+    record, approved = await _approve(service, record, resubmitted, admin_user)
+    record, published = await _publish(service, record, approved, admin_user)
+
+    assert calls == [True]
+    assert approved.content_jsonb == resubmitted.content_jsonb
+    assert published.content_jsonb == approved.content_jsonb
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("stale_field", ["candidate_revision_id", "digest"])
 async def test_approval_rejects_stale_exact_candidate_without_mutation(
     db_session,
