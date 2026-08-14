@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-14
 
-**Status:** User-approved design; independent spec review pending
+**Status:** User-approved design; independent review findings addressed; awaiting written-spec confirmation
 
 **Scope:** Phenopacket curation workflow, review audit, curator-facing review queue/workspace, and publication gate
 
@@ -70,11 +70,11 @@ The following are deliberate HNF1B-DB product policies rather than universal bio
 
 1. Make self-review impossible at every API and UI entry point.
 2. Let any eligible curator/admin review an open submission without assignment.
-3. Freeze candidate content during review and bind sign-off to an exact revision/hash.
+3. Canonicalize before review, freeze candidate content during review, and bind sign-off to an exact revision and full-content digest.
 4. Require all blocking review issues to have a recorded disposition before approval.
 5. Keep ordinary discussion separate from blocking review issues.
 6. Give curators a server-driven queue and focused before/after review workspace.
-7. Preserve old public content during re-review and publish only the approved snapshot.
+7. Preserve old public content during re-review and publish the approved content byte-for-byte under the canonical JSON contract.
 8. Keep the revision ledger as the sole sign-off audit source; avoid a parallel review-state model.
 9. Close comment/approval races for HTTP and direct database writers.
 10. Preserve pagination, filtering, sorting, accessibility, mobile behavior, and fail-closed error handling.
@@ -108,13 +108,13 @@ For a published record with an active edit, `phenopackets.state` remains `publis
 
 | From | To | Actor and conditions |
 | --- | --- | --- |
-| `draft` | `in_review` | owner, or admin acting on behalf; reason required |
-| `changes_requested` | `in_review` | owner, or admin acting on behalf; reason required |
+| `draft` | `in_review` | owner, or admin acting on behalf; publish canonicalization/validation succeeds; reason required |
+| `changes_requested` | `in_review` | owner, or admin acting on behalf; publish canonicalization/validation succeeds; reason required |
 | `in_review` | `draft` | owner withdraws; admin emergency withdrawal remains audited |
 | `in_review` | `changes_requested` | eligible independent curator/admin; reason required |
-| `in_review` | `approved` | eligible independent curator/admin; zero open blocking issues; attestation and reason required |
+| `in_review` | `approved` | eligible independent curator/admin; exact candidate revision/digest; zero open blocking issues; attestation and reason required |
 | `approved` | `changes_requested` | eligible independent curator/admin reopens before publication; reason required |
-| `approved` | `published` | admin only; exact approved revision/hash required |
+| `approved` | `published` | admin only; exact approved revision/full-content digest required; content copied unchanged |
 | any active state | `archived` | admin only; reason required |
 
 No transition bypass exists for admins when the rule concerns reviewer independence.
@@ -150,6 +150,7 @@ Resolution and reopening append an immutable event containing:
 
 - issue ID;
 - action (`resolved` or `reopened`);
+- resolution disposition (`addressed`, `accepted_with_rationale`, `retracted`, or `superseded`) when resolving;
 - disposition/rationale;
 - authenticated actor ID and role snapshot;
 - server timestamp.
@@ -160,17 +161,19 @@ The comment row retains `resolved_at` and `resolved_by_id` as the current-state 
 
 Review-issue creation, resolution, reopening, approval, reopen-approved, and publication acquire the same phenopacket row lock before reading or changing review state. Locks are always acquired phenopacket-first, then comment/revision, to prevent deadlocks.
 
+This lock protocol is enforced for every writer, not merely application services. Database triggers on blocking-issue insert/reopen/resolve and on active-revision/state changes first acquire `SELECT ... FOR UPDATE` on the owning phenopacket row, then validate the operation. Direct SQL writers therefore serialize on the same record-scoped lock. A direct writer that bypasses or disables those triggers is outside the supported write contract.
+
 Approval under the lock verifies:
 
 1. optimistic record revision;
 2. reviewer eligibility;
-3. active `in_review` revision identity;
+3. active `in_review` revision identity and full-content digest;
 4. zero live unresolved blocking issues;
 5. valid attestation.
 
 If issue creation wins the lock, approval observes it and returns `409 unresolved_review_issues`. If approval wins, the waiting issue creation observes `approved` and returns `409 review_closed`. No committed state may contain an approved active revision and a newly created unresolved blocking issue.
 
-A deferred database constraint/trigger enforces the approved-plus-unresolved invariant for non-HTTP writers. Application locking remains necessary to produce deterministic errors and avoid retry-only behavior.
+A deferred database constraint trigger performs a final approved-plus-unresolved check after the lock-taking triggers have serialized non-HTTP writers. The deferred check alone is not treated as concurrency protection. Application locking remains necessary to produce deterministic errors and avoid retry-only behavior.
 
 ## 6. Audit and storage changes
 
@@ -186,37 +189,51 @@ comment_resolution_events
     id BIGINT PK
     comment_id BIGINT NOT NULL REFERENCES comments(id) ON DELETE RESTRICT
     action TEXT NOT NULL CHECK action IN ('resolved', 'reopened')
+    disposition TEXT NULL
     rationale TEXT NOT NULL
     actor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT
     actor_role TEXT NOT NULL
     created_at TIMESTAMPTZ NOT NULL
 ```
 
-A partial index covers live unresolved blocking issues by record. A trigger verifies that `review_revision_id` belongs to the comment's phenopacket record and represents a review snapshot. Historical comments remain `NULL` and non-blocking.
+A check constraint requires an allowlisted disposition for `resolved` events and `NULL` disposition for `reopened` events. A partial index covers live unresolved blocking issues by record. Lock-taking triggers verify that `review_revision_id` belongs to the comment's phenopacket record and represents a review snapshot. Historical comments remain `NULL` and non-blocking.
 
 ### 6.2 Revision decision metadata
 
-Extend revision audit with an actor-role snapshot and structured decision metadata:
+Extend revision audit with a deterministic full-content digest, versioned ledger payload, actor-role snapshot, and structured decision metadata:
 
 ```text
 phenopacket_revisions.actor_role TEXT NULL
 phenopacket_revisions.decision_metadata JSONB NULL
+phenopacket_revisions.content_sha256 TEXT NULL
+phenopacket_revisions.ledger_version INTEGER NULL
 ```
 
-New revisions always snapshot `actor_role`. An approval revision stores a versioned payload equivalent to:
+`content_sha256` is SHA-256 over the complete `content_jsonb` serialized by the project's versioned canonical JSON function, including `hnf1bCuration` and extension fields. It is not the existing projection-only `projection_hash`. Every new revision records `content_sha256`, `actor_role`, and `ledger_version=2`. The v2 ledger hash covers parent/revision/state/event fields, full-content digest, actor role, and a canonical digest of decision metadata. Existing v1 hashes remain valid and are never rewritten.
+
+An approval revision stores a versioned payload equivalent to:
 
 ```json
 {
   "schemaVersion": 1,
   "reviewedRevisionId": 123,
+  "reviewedContentSha256": "sha256:...",
   "independentReview": true,
   "noUnmanagedConflict": true
 }
 ```
 
-The existing revision actor, timestamp, reason, parent, state, content, projection hash, and ledger hash remain authoritative. No mutable `reviewed_by` column or separate sign-off table is introduced.
+The existing revision actor, timestamp, reason, parent, state, content, projection hash, and ledger hash remain authoritative. The full-content digest closes the extension-field gap left by `projection_hash`. No mutable `reviewed_by` column or separate sign-off table is introduced.
 
-Existing revisions may backfill `actor_role` from current user roles for display, but the migration and documentation must label those values as reconstructed rather than historically guaranteed.
+Historical `actor_role`, `content_sha256`, and `ledger_version` remain `NULL`/v1 unless they were captured originally. The migration does not disable append-only protection or reconstruct a historical role from a user's current role. Display falls back to the current user relationship with an explicit “role at decision not recorded” label; it never presents that fallback as an attested snapshot.
+
+### 6.3 Canonical freeze and exact publication
+
+Publish canonicalization and publishability validation run while transitioning `draft` or `changes_requested` to `in_review`, before the candidate becomes reviewable. The resulting `in_review` revision is the exact canonical snapshot shown to reviewers. If canonicalization changes content, that canonical content, revision ID, and digest are returned to the submitter and review workspace.
+
+Approval requires the client-observed candidate revision ID and full-content digest, rechecks them under the row lock, and copies the candidate content unchanged into the approval revision. Publication requires the approved revision ID and digest, rechecks them under the lock, and copies approved `content_jsonb` unchanged into the new public-head revision. Publication performs validation assertions only; it must not canonicalize, default, normalize, timestamp, or otherwise mutate clinical or extension content.
+
+Any server-derived publication metadata must therefore be deterministic and present before review, or stored outside `content_jsonb` as publication audit metadata. Tests compare canonical serialized full content—not only projection fields—across candidate, approval, and published revisions.
 
 ### 6.3 Ownership integrity
 
@@ -263,9 +280,46 @@ The endpoint acquires a read lock compatible with the write protocol or uses one
 
 ### 7.4 Mutations
 
-Continue using `POST /api/v2/phenopackets/{id}/transitions`, adding structured approval attestation when `to_state='approved'`. The server rejects irrelevant or missing attestation fields.
+Continue using `POST /api/v2/phenopackets/{id}/transitions`. Approval additionally requires `candidate_revision_id`, `candidate_content_sha256`, and structured attestation. Publication additionally requires `approved_revision_id` and `approved_content_sha256`. The server rejects irrelevant, missing, or stale conditional fields.
 
-Extend comment mutations with `record_revision` and `review_revision_id` for blocking issues. The server verifies both values and never trusts a client-nominated unrelated revision.
+The existing comment routes remain, with explicit discriminated behavior:
+
+- `POST /api/v2/comments`: ordinary discussion keeps its existing body. A blocking issue additionally supplies `record_revision` and `review_revision_id`; the server verifies both and the reviewer's eligibility.
+- `POST /api/v2/comments/{id}/resolve`: ordinary discussion keeps backward-compatible optional input. A blocking issue requires `record_revision`, an allowlisted `disposition`, and a non-empty `rationale`; it uses phenopacket-first locking and independent-reviewer checks.
+- `POST /api/v2/comments/{id}/unresolve`: ordinary discussion keeps backward-compatible optional input. For a blocking issue this means reopen and requires `record_revision` plus a non-empty `rationale`; it uses the same locking and eligibility checks.
+- `DELETE /api/v2/comments/{id}`: continues to soft-delete ordinary discussion. It rejects blocking issues with `409 review_issue_delete_forbidden`, including for admins and the issue author.
+
+Blocking-issue retraction is `resolve` with `disposition='retracted'`; it is never deletion. The server loads the comment, discriminates on `review_revision_id`, and never trusts a client-nominated unrelated revision. Every legacy mutation route is covered by blocking-issue policy tests.
+
+Conditional request fields use explicit schemas:
+
+```text
+ApprovalAttestation
+    independent_review: Literal[true]
+    no_unmanaged_conflict: Literal[true]
+
+TransitionRequest additions
+    candidate_revision_id: PositiveInt | null
+    candidate_content_sha256: constrained sha256 string | null
+    approved_revision_id: PositiveInt | null
+    approved_content_sha256: constrained sha256 string | null
+    attestation: ApprovalAttestation | null
+
+CommentCreate additions
+    record_revision: NonNegativeInt | null
+    review_revision_id: PositiveInt | null
+
+ReviewIssueResolveRequest
+    record_revision: NonNegativeInt
+    disposition: addressed | accepted_with_rationale | retracted | superseded
+    rationale: string[1..500]
+
+ReviewIssueReopenRequest
+    record_revision: NonNegativeInt
+    rationale: string[1..500]
+```
+
+For ordinary comments, resolve/unresolve accept no body or an ignored-compatible empty body. For blocking issues the matching typed body is mandatory after the server loads and discriminates the comment. OpenAPI documents both cases and the API contract snapshot is refreshed.
 
 All curator-facing transition controls consume server-returned capabilities; the duplicated matrix in `TransitionMenu.vue` is removed.
 
@@ -279,6 +333,7 @@ Stable error codes include:
 - `unresolved_review_issues` with a count;
 - `review_revision_mismatch`;
 - `review_closed`;
+- `review_issue_delete_forbidden`;
 - `attestation_required`;
 - existing `revision_mismatch` and `invalid_transition`.
 
@@ -335,22 +390,24 @@ After publication, public detail may show “Independently reviewed” and the a
 1. Public queries continue to dereference only `head_published_revision_id`.
 2. Queue/context endpoints require active curator/admin role and never expose candidate data to viewers.
 3. Public search, aggregates, exports, and MCP results remain pinned to published heads during re-review.
-4. Publication canonicalization must not alter approved clinical content silently; any derived metadata change is hashed and tested.
+4. Canonicalization occurs before `in_review`; approval and publication assert the stored full-content digest and never alter approved clinical or extension content.
 5. Reviewer identity comes from authentication, never request bodies.
 6. Logs record transition/error codes and record/revision IDs but never clinical content or comment bodies.
 7. Metrics cover queue depth/age by state, approval latency, request-changes rate, and gate failures without patient-identifying labels.
 
 ## 10. Migration and rollout
 
-1. Add schema columns, resolution-event table, indexes, triggers, and constraints in one reversible Alembic migration based on the current head.
+1. Use an expand migration for nullable columns/table/indexes and an activation migration for lock-taking triggers, constraints, and ownership enforcement, both based on the current head.
 2. Preflight active edit cycles and deterministically backfill missing owners; abort with record IDs on ambiguity.
-3. Leave historical comments non-blocking and report their count.
+3. Leave historical comments non-blocking and historical revision audit fields unset; report their counts.
 4. Deploy backend schema/API support before enabling frontend navigation.
 5. Keep legacy `changes_requested` and history rendering throughout rollout.
 6. Validate queue counts against direct effective-state SQL before enabling decisions.
 7. Exercise the complete two-curator lifecycle in staging/local production-like configuration.
 
-No destructive data cleanup is part of the migration.
+Rollback is expand/activate, not destructive schema reversal. Application code may roll back while the added schema and audit rows remain. Alembic downgrade must refuse once any blocking issue, resolution event, v2 ledger revision, or decision metadata exists. Before activation and before any such data exists, downgrade may remove the unused expansion. This matches the repository precedent for refusing unsafe audit/invariant downgrades.
+
+No destructive data cleanup or audit erasure is part of migration or rollback.
 
 ## 11. Testing strategy
 
@@ -359,17 +416,20 @@ No destructive data cleanup is part of the migration.
 - pure policy matrix for every role, state, owner, contributor, and NULL-owner combination;
 - non-author curator/admin approval and request-changes;
 - author and content-contributor self-review rejection;
-- admin-only publication and exact approved revision/hash;
+- pre-review canonicalization and full-content digest stability, including extension-only changes;
+- admin-only publication and byte-for-byte canonical equality with the approved full-content snapshot;
 - ordinary, blocking, resolved, reopened, retracted, and historical comments;
 - required resolution rationale and approval attestation;
 - request-changes/resubmission with outstanding issues;
 - approved-to-changes-requested reopening;
-- two-real-session issue-create versus approve and issue-reopen versus approve in both lock orders;
+- two-real-session service-level issue-create versus approve and issue-reopen versus approve in both lock orders;
+- two-connection raw-SQL issue/approval races in both commit orders, proving lock-taking triggers prevent write skew;
 - concurrent approvals/request-changes with exactly one winner;
 - queue projection, counts, search, allowlisted sorting, and pagination;
 - physical `published` plus effective `in_review` projection;
 - new-record privacy and old-public-head visibility throughout re-review;
-- migration upgrade/downgrade, deterministic owner backfill, ambiguity failure, triggers, and legacy comment handling;
+- migration expand/activate, guarded downgrade refusal after audit data exists, deterministic owner backfill, ambiguity failure, lock-taking/deferred triggers, and legacy comment handling;
+- every legacy resolve/unresolve/delete route against a blocking issue;
 - approval audit actor/role/attestation and immutable revision behavior.
 
 ### 11.2 Frontend
@@ -409,13 +469,13 @@ The feature is complete only when all of the following are proven:
 1. No owner, active candidate submitter, or active-cycle content contributor can approve/request changes through UI, API, or direct transition service use.
 2. An eligible non-author curator and admin can review without assignment.
 3. Approval cannot commit with a live unresolved blocking issue, including under concurrent writes.
-4. Every approval identifies the exact candidate revision/hash, reviewer, role snapshot, rationale, attestation, and time.
-5. Admin publication promotes only that approved snapshot.
+4. Every approval identifies the exact candidate revision/full-content digest, reviewer, role snapshot, rationale, attestation, and time.
+5. Admin publication copies only that approved full-content snapshot without publish-time mutation.
 6. New candidates are private and old published heads remain public throughout re-review.
 7. The review queue is server-paginated/sorted/filtered and displays effective state correctly.
 8. The review workspace provides a usable before/after comparison, issues, history, and actor-correct actions on desktop and mobile.
 9. Ordinary historical comments do not unexpectedly block approval.
-10. Backend tests, frontend tests, lint, formatting, typing, build, focused Playwright, migration checks, and relevant GitHub Actions pass.
+10. Backend tests, frontend tests, lint, formatting, typing, build, focused Playwright, migration checks—including raw-SQL concurrency and guarded downgrade—and relevant GitHub Actions pass.
 11. A one-pass independent high-reasoning spec review and a one-pass independent high-reasoning PR review are completed, with actionable findings resolved or explicitly documented.
 
 ## 13. Rejected alternatives
