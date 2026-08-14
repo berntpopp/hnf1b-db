@@ -147,7 +147,7 @@ git commit -m "feat(backend): expand independent review schema"
 - The v2 payload includes parent revision, revision number, state/event/from/to, reason, patch, full-content digest, projection hash, actor ID, actor role, and canonical decision metadata.
 - Task 4 integrates these pure functions into all new revision writes; this task does not modify `state_service.py`.
 
-- [ ] **Step 1: Write failing digest and tamper-evidence tests**
+- [x] **Step 1: Write failing digest and tamper-evidence tests**
 
 ```python
 def test_content_digest_covers_extension_fields_and_ignores_key_order():
@@ -164,23 +164,23 @@ def test_v2_ledger_hash_changes_with_role_or_decision_metadata():
     assert ledger_sha256(base) != ledger_sha256({**base, "decision_metadata": {"independentReview": True}})
 ```
 
-- [ ] **Step 2: Run the tests and confirm imports fail**
+- [x] **Step 2: Run the tests and confirm imports fail**
 
 Run: `cd backend && uv run pytest tests/test_revision_ledger_v2.py -q`
 
 Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 3: Implement deterministic hashing**
+- [x] **Step 3: Implement deterministic hashing**
 
 Reuse `app.phenopackets.curation.hashing.canonical_json`/`sha256_digest`; do not introduce a second serializer. Normalize only the explicit ledger payload, never remove `hnf1bCuration` or unknown extension keys from content.
 
-- [ ] **Step 4: Run focused hashing and projection tests**
+- [x] **Step 4: Run focused hashing and projection tests**
 
 Run: `cd backend && uv run pytest tests/test_revision_ledger_v2.py tests/curation/test_projection_properties.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the ledger utility**
+- [x] **Step 5: Commit the ledger utility**
 
 ```bash
 git add backend/app/phenopackets/services/revision_ledger.py backend/tests/test_revision_ledger_v2.py
