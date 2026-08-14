@@ -265,6 +265,87 @@ async def test_transition_conditional_fields_are_discriminated_with_422(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("base_payload", "irrelevant_field"),
+    [
+        (
+            {
+                "to_state": "approved",
+                "candidate_revision_id": 1,
+                "candidate_content_sha256": "sha256:" + "1" * 64,
+                "attestation": {
+                    "independent_review": True,
+                    "no_unmanaged_conflict": True,
+                },
+            },
+            "approved_revision_id",
+        ),
+        (
+            {
+                "to_state": "approved",
+                "candidate_revision_id": 1,
+                "candidate_content_sha256": "sha256:" + "1" * 64,
+                "attestation": {
+                    "independent_review": True,
+                    "no_unmanaged_conflict": True,
+                },
+            },
+            "approved_content_sha256",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "candidate_revision_id",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "candidate_content_sha256",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "attestation",
+        ),
+        ({"to_state": "in_review"}, "candidate_revision_id"),
+        ({"to_state": "in_review"}, "candidate_content_sha256"),
+        ({"to_state": "in_review"}, "approved_revision_id"),
+        ({"to_state": "in_review"}, "approved_content_sha256"),
+        ({"to_state": "in_review"}, "attestation"),
+    ],
+)
+async def test_transition_explicit_null_irrelevant_fields_return_422(
+    async_client,
+    draft_record,
+    admin_headers,
+    base_payload,
+    irrelevant_field,
+):
+    """Explicit null cannot bypass the transition request discriminant."""
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={
+            "reason": "reject irrelevant null",
+            "revision": 1,
+            **base_payload,
+            irrelevant_field: None,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_stale_well_formed_candidate_digest_returns_stable_409(
     async_client,
     draft_record,
