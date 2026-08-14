@@ -439,18 +439,26 @@ git commit -m "feat(backend): gate approval on blocking review issues"
 - Create: `backend/app/phenopackets/review/repository.py`
 - Create: `backend/app/phenopackets/review/service.py`
 - Extend: `backend/app/phenopackets/review/schemas.py`
+- Modify: `backend/app/phenopackets/review/policy.py`
 - Create: `backend/app/phenopackets/routers/review.py`
 - Modify: `backend/app/phenopackets/routers/__init__.py`
 - Fix: `backend/app/phenopackets/routers/crud.py` effective-state projection
+- Modify: `backend/app/comments/schemas.py`
+- Modify: `backend/app/comments/service.py`
+- Modify: `backend/app/comments/routers.py`
 - Create: `backend/tests/test_review_queue.py`
 - Create: `backend/tests/test_review_context.py`
 - Modify: `backend/tests/test_crud_state_branching.py`
+- Modify: `backend/tests/test_comments_router.py`
+- Modify: `backend/tests/test_blocking_review_issues.py`
 - Modify: `backend/tests/test_openapi_contract.py`
+- Refresh: `mcp/contract/openapi.snapshot.json`; Task 12 refreshes it again after final seeding/E2E contract changes
 
 **Interfaces:**
 
 - `ReviewRepository.list_queue(actor, query) -> tuple[list[ReviewQueueRow], int, StateCounts]` uses one centralized SQL effective-state expression for data/count filters.
 - `ReviewRepository.get_context(record_id, actor) -> ReviewContext | None` reads candidate, public baseline, issues, audit, contributors, and capability inputs coherently.
+- Repository queries precompute page-level policy facts so queue capability calculation has a bounded query count independent of page size; no per-row `ReviewPolicy` database calls are allowed.
 - `ReviewService.semantic_changes(baseline, candidate) -> list[SemanticChange]` returns `section`, `operation`, JSON pointer `path`, `before`, and `after`.
 - `GET /api/v2/phenopackets/review-queue` and `GET /api/v2/phenopackets/{id}/review-context` implement the approved DTO/query contract.
 - Queue rows return both `physical_state` and `effective_state`; context and each blocking issue return actor-specific `ActionCapability` objects shaped as `{action, allowed, blocked_by}`.
@@ -474,7 +482,7 @@ async def test_viewer_review_queue_is_not_discoverable(...):
     assert response.status_code == 404
 ```
 
-Cover pagination/count parity, allowlisted sorting, oldest-submission default, state/owner/eligibility/issues filters, search, state counts, own-row visibility with disabled capabilities, and old public-head retention.
+Cover anonymous/viewer non-disclosure, pagination/count parity, allowlisted sorting, oldest-submission default, state/owner/eligibility/issues filters, search, state counts, own-row visibility with disabled capabilities, old public-head retention, and application SELECT-count independence between one-row and full-page responses.
 
 - [ ] **Step 2: Write failing coherent-context and semantic-change tests**
 
@@ -494,15 +502,18 @@ Register the review router before the CRUD catch-all. Keep SQL expressions share
 
 Run: `cd backend && uv run pytest tests/test_review_queue.py tests/test_review_context.py tests/test_crud_state_branching.py tests/test_visibility_endpoints.py tests/test_openapi_contract.py -q`
 
-Expected before snapshot refresh: only the snapshot equality test may fail due intentional API additions; vocabulary contract must pass. Snapshot refresh belongs to Task 12.
+Refresh the deterministic snapshot only after the live review schemas are correct, inspect the generated diff, then rerun. Expected: PASS; Task 12 performs the final refresh after its remaining contract changes.
 
 - [ ] **Step 6: Commit the review API**
 
 ```bash
 git add backend/app/phenopackets/review backend/app/phenopackets/routers/review.py \
   backend/app/phenopackets/routers/__init__.py backend/app/phenopackets/routers/crud.py \
+  backend/app/comments/schemas.py backend/app/comments/service.py backend/app/comments/routers.py \
   backend/tests/test_review_queue.py backend/tests/test_review_context.py \
-  backend/tests/test_crud_state_branching.py
+  backend/tests/test_crud_state_branching.py backend/tests/test_comments_router.py \
+  backend/tests/test_blocking_review_issues.py backend/tests/test_openapi_contract.py \
+  mcp/contract/openapi.snapshot.json
 git commit -m "feat(backend): expose review queue and context"
 ```
 
