@@ -17,12 +17,14 @@ from copy import deepcopy
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comments.models import Comment
 from app.models.user import User
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.review.policy import ReviewPolicy, ReviewPolicyError
 from app.phenopackets.services.transitions import (
     Role,
     State,
@@ -407,10 +409,108 @@ class PhenopacketStateService:
             # forbidden_role
             raise PermissionError(str(exc)) from exc
 
+        if (effective, to_state) in {
+            ("in_review", "changes_requested"),
+            ("in_review", "approved"),
+            ("approved", "changes_requested"),
+        }:
+            candidate = await self._active_review_candidate(pp, effective)
+            unresolved_count = (
+                await self._unresolved_review_issue_count(pp)
+                if to_state == "approved"
+                else 0
+            )
+            await ReviewPolicy.require_independent_reviewer(
+                self.db,
+                pp,
+                candidate,
+                actor,
+                unresolved_count,
+                action=("approve" if to_state == "approved" else "request_changes"),
+            )
+
         if to_state == "published":
             return await self._publish(pp, reason, actor)
 
         return await self._simple_transition(pp, to_state, reason, actor)
+
+    async def _active_review_candidate(
+        self, pp: Phenopacket, effective_state: State
+    ) -> PhenopacketRevision:
+        """Load the immutable submission snapshot for the active review cycle."""
+        if pp.editing_revision_id is None:
+            raise ReviewPolicyError(
+                "review_author_unknown",
+                "Reviewer independence cannot be established from the audit history.",
+            )
+        active = await self.db.get(PhenopacketRevision, pp.editing_revision_id)
+        if active is None or active.record_id != pp.id:
+            raise ReviewPolicyError(
+                "review_author_unknown",
+                "Reviewer independence cannot be established from the audit history.",
+            )
+        if effective_state == "in_review" and active.state == "in_review":
+            return active
+
+        cycle_start: int | None = None
+        if pp.head_published_revision_id is not None:
+            head = await self.db.get(PhenopacketRevision, pp.head_published_revision_id)
+            if head is None or head.record_id != pp.id:
+                raise ReviewPolicyError(
+                    "review_author_unknown",
+                    "Reviewer independence cannot be established "
+                    "from the audit history.",
+                )
+            cycle_start = head.revision_number
+
+        stmt = select(PhenopacketRevision).where(
+            PhenopacketRevision.record_id == pp.id,
+            PhenopacketRevision.state == "in_review",
+            PhenopacketRevision.revision_number < active.revision_number,
+        )
+        if cycle_start is not None:
+            stmt = stmt.where(PhenopacketRevision.revision_number > cycle_start)
+        candidate = (
+            await self.db.execute(
+                stmt.order_by(PhenopacketRevision.revision_number.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+        if candidate is None:
+            raise ReviewPolicyError(
+                "review_author_unknown",
+                "Reviewer independence cannot be established from the audit history.",
+            )
+        return candidate
+
+    async def _unresolved_review_issue_count(self, pp: Phenopacket) -> int:
+        """Count live unresolved blocking issues in the active edit cycle."""
+        stmt = (
+            select(func.count(Comment.id))
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Comment.review_revision_id,
+            )
+            .where(
+                Comment.record_type == "phenopacket",
+                Comment.record_id == pp.id,
+                Comment.review_revision_id.is_not(None),
+                Comment.resolved_at.is_(None),
+                Comment.deleted_at.is_(None),
+                PhenopacketRevision.record_id == pp.id,
+            )
+        )
+        if pp.head_published_revision_id is not None:
+            head = await self.db.get(PhenopacketRevision, pp.head_published_revision_id)
+            if head is None or head.record_id != pp.id:
+                raise ReviewPolicyError(
+                    "review_author_unknown",
+                    "Reviewer independence cannot be established "
+                    "from the audit history.",
+                )
+            stmt = stmt.where(
+                PhenopacketRevision.revision_number > head.revision_number
+            )
+        return int((await self.db.execute(stmt)).scalar_one())
 
     async def _simple_transition(
         self,

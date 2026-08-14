@@ -14,7 +14,9 @@ and shared with test_state_invariants.py (Nit #3).
 import pytest
 from sqlalchemy import select
 
+from app.comments.models import Comment
 from app.phenopackets.models import PhenopacketRevision
+from app.phenopackets.review.policy import ReviewPolicyError
 from app.phenopackets.services.state_service import PhenopacketStateService
 
 # ---------------------------------------------------------------------------
@@ -402,13 +404,10 @@ async def test_transition_revision_mismatch(db_session, draft_record, curator_us
 
 
 @pytest.mark.asyncio
-async def test_transition_forbidden_role(db_session, draft_record, curator_user):
-    """§6.4: curator cannot approve — raises PermissionError (forbidden_role).
-
-    The guard-matrix maps curator→approve to the 'forbidden_role' code, which
-    the service translates to PermissionError (not ForbiddenNotOwner, which is
-    reserved for the 'forbidden_not_owner' code path).
-    """
+async def test_direct_transition_cannot_bypass_independent_review(
+    db_session, draft_record, curator_user
+):
+    """The state service rejects an owner's direct self-approval attempt."""
     svc = PhenopacketStateService(db_session)
     # submit first to reach in_review
     await svc.transition(
@@ -418,7 +417,7 @@ async def test_transition_forbidden_role(db_session, draft_record, curator_user)
         expected_revision=1,
         actor=curator_user,
     )
-    with pytest.raises(PermissionError):
+    with pytest.raises(ReviewPolicyError) as exc_info:
         await svc.transition(
             draft_record.id,
             to_state="approved",
@@ -426,6 +425,104 @@ async def test_transition_forbidden_role(db_session, draft_record, curator_user)
             expected_revision=2,
             actor=curator_user,
         )
+    assert exc_info.value.code == "self_review_forbidden"
+    assert draft_record.revision == 2
+
+
+@pytest.mark.asyncio
+async def test_eligible_curator_can_request_changes_directly(
+    db_session, draft_record, curator_user, another_curator
+):
+    """A non-contributing curator may make a review decision through the service."""
+    svc = PhenopacketStateService(db_session)
+    await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+
+    _, decision = await svc.transition(
+        draft_record.id,
+        to_state="changes_requested",
+        reason="clarify evidence",
+        expected_revision=2,
+        actor=another_curator,
+    )
+
+    assert decision.state == "changes_requested"
+    assert decision.actor_id == another_curator.id
+
+
+@pytest.mark.asyncio
+async def test_unresolved_review_issue_blocks_direct_approval(
+    db_session, draft_record, curator_user, another_curator
+):
+    """The locked service derives the unresolved count from real issue rows."""
+    svc = PhenopacketStateService(db_session)
+    _, candidate = await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+    db_session.add(
+        Comment(
+            record_type="phenopacket",
+            record_id=draft_record.id,
+            author_id=another_curator.id,
+            body_markdown="Blocking review issue",
+            review_revision_id=candidate.id,
+        )
+    )
+    await db_session.flush()
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await svc.transition(
+            draft_record.id,
+            to_state="approved",
+            reason="cannot approve yet",
+            expected_revision=2,
+            actor=another_curator,
+        )
+
+    assert exc_info.value.code == "unresolved_review_issues"
+    assert exc_info.value.context == {"unresolved_count": 1}
+
+
+@pytest.mark.asyncio
+async def test_approved_candidate_can_be_reopened_by_independent_curator(
+    db_session, draft_record, curator_user, another_curator, admin_user
+):
+    """An eligible independent curator can reopen approval before publication."""
+    svc = PhenopacketStateService(db_session)
+    await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+    await svc.transition(
+        draft_record.id,
+        to_state="approved",
+        reason="reviewed",
+        expected_revision=2,
+        actor=admin_user,
+    )
+
+    _, reopened = await svc.transition(
+        draft_record.id,
+        to_state="changes_requested",
+        reason="new concern",
+        expected_revision=3,
+        actor=another_curator,
+    )
+
+    assert reopened.from_state == "approved"
+    assert reopened.to_state == "changes_requested"
 
 
 @pytest.mark.asyncio

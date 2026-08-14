@@ -1,8 +1,8 @@
-"""Pure-function transition guard matrix for Wave 7/D.1.
+"""Pure structural transition guard matrix.
 
-No I/O. Feeds both the endpoint handler (which validates before mutating)
-and the frontend-mirrored decision-making in TransitionMenu.vue (via an
-API-exposed version of ``allowed_transitions``).
+No I/O. This layer validates state, role, and submit/withdraw ownership.
+Actor-specific reviewer independence and blocking-issue decisions belong to
+``ReviewPolicy`` and are enforced by the state service under its record lock.
 
 Spec reference:
   .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
@@ -55,7 +55,7 @@ class StateTransition:
 
 
 # ---------------------------------------------------------------------------
-# Enumerated rule table — every legal (from_state, to_state) pair from §4.1.
+# Enumerated rule table — every legal structural (from_state, to_state) pair.
 # Any pair NOT in this dict is an invalid transition.
 # ---------------------------------------------------------------------------
 
@@ -74,17 +74,18 @@ _RULES: dict[tuple[State, State], StateTransition] = {
         requires_admin=False,
         requires_ownership_or_admin=True,
     ),
-    # in_review → changes_requested  (request_changes): admin only
+    # in_review → changes_requested: structural role check only; the state
+    # service applies actor-specific independent-review policy under lock.
     ("in_review", "changes_requested"): StateTransition(
         "in_review",
         "changes_requested",
-        requires_admin=True,
+        requires_admin=False,
     ),
-    # in_review → approved  (approve): admin only
+    # in_review → approved: structural role check only; policy is service-side.
     ("in_review", "approved"): StateTransition(
         "in_review",
         "approved",
-        requires_admin=True,
+        requires_admin=False,
     ),
     # changes_requested → in_review  (resubmit): curator must own OR admin
     ("changes_requested", "in_review"): StateTransition(
@@ -92,6 +93,12 @@ _RULES: dict[tuple[State, State], StateTransition] = {
         "in_review",
         requires_admin=False,
         requires_ownership_or_admin=True,
+    ),
+    # approved → changes_requested: an independent reviewer may reopen.
+    ("approved", "changes_requested"): StateTransition(
+        "approved",
+        "changes_requested",
+        requires_admin=False,
     ),
     # approved → published  (publish): admin only; triggers head-swap §6.2
     ("approved", "published"): StateTransition(
