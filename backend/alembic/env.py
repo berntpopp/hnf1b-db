@@ -47,6 +47,9 @@ try:
     from app.comments.models import (
         CommentMention as CommentMention,
     )
+    from app.comments.models import (
+        CommentResolutionEvent as CommentResolutionEvent,
+    )
     from app.database import Base
 
     # Core models (2).

@@ -68,6 +68,27 @@ _RAW_SQL_TABLES = {
 }
 
 
+def _env_imported_model_names() -> set[str]:
+    """Return ORM class names explicitly registered by Alembic's env module."""
+    env_py = Path(__file__).resolve().parents[1] / "alembic" / "env.py"
+    assert env_py.exists(), f"alembic env.py not found at {env_py}"
+
+    tree = ast.parse(env_py.read_text(encoding="utf-8"))
+    return {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        and node.module.startswith("app.")
+        for alias in node.names
+    }
+
+
+def test_env_py_catches_unregistered_resolution_event_metadata():
+    """Autogenerate must load the resolution-event table before comparison."""
+    assert "CommentResolutionEvent" in _env_imported_model_names()
+
+
 def test_alembic_autogenerate_does_not_drop_tables():
     """No ``remove_table`` ops allowed in ``compare_metadata`` output.
 
@@ -128,21 +149,7 @@ def test_env_py_imports_all_orm_models():
     appears there. That way, adding a new ORM model without also updating
     env.py fails the test loudly.
     """
-    env_py = (
-        Path(__file__).resolve().parents[1] / "alembic" / "env.py"
-    )  # backend/alembic/env.py
-    assert env_py.exists(), f"alembic env.py not found at {env_py}"
-
-    tree = ast.parse(env_py.read_text(encoding="utf-8"))
-    imported_names: set[str] = set()
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and node.module.startswith("app.")
-        ):
-            for alias in node.names:
-                imported_names.add(alias.name)
+    imported_names = _env_imported_model_names()
 
     # Discover every ORM model class currently known to Base.metadata and
     # map table-name back to its Python class name. Any class in this set
