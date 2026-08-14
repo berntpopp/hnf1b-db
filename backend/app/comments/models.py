@@ -97,7 +97,7 @@ class CommentResolutionEvent(Base):
     __table_args__ = (
         CheckConstraint(
             "(action = 'reopened' AND disposition IS NULL) OR "
-            "(action = 'resolved' AND disposition IN "
+            "(action = 'resolved' AND disposition IS NOT NULL AND disposition IN "
             "('addressed','accepted_with_rationale','retracted','superseded'))",
             name=conv("ck_comment_resolution_event_action_disposition"),
         ),

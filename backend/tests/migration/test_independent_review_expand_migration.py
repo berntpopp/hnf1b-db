@@ -51,6 +51,80 @@ def test_expand_migration_catches_wrong_revision_chain():
     assert migration.down_revision == "c0f422b00004"
 
 
+@pytest.mark.parametrize(
+    "invalid_insert",
+    [
+        """
+        INSERT INTO phenopacket_revisions
+            (id, decision_metadata, ledger_version)
+        VALUES (1, '{}'::jsonb, NULL)
+        """,
+        """
+        INSERT INTO comment_resolution_events
+            (comment_id, action, disposition, rationale, actor_id, actor_role)
+        VALUES (1, 'resolved', NULL, 'valid rationale', 1, 'curator')
+        """,
+    ],
+    ids=[
+        "decision-metadata-without-v2-ledger",
+        "resolved-event-without-disposition",
+    ],
+)
+def test_expand_migration_rejects_null_values_that_bypass_dependent_checks(
+    invalid_insert: str,
+):
+    """Dependent audit fields must not bypass checks through SQL NULL."""
+    migration = _migration_module()
+    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    engine = create_engine(sync_url)
+    schema = f"review_null_guard_{uuid.uuid4().hex}"
+
+    try:
+        with engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+                connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+                connection.execute(text("CREATE TABLE users (id BIGINT PRIMARY KEY)"))
+                connection.execute(
+                    text("CREATE TABLE phenopacket_revisions (id BIGINT PRIMARY KEY)")
+                )
+                connection.execute(
+                    text(
+                        """
+                        CREATE TABLE comments (
+                            id BIGINT PRIMARY KEY,
+                            record_type TEXT NOT NULL,
+                            record_id UUID NOT NULL,
+                            resolved_at TIMESTAMPTZ,
+                            deleted_at TIMESTAMPTZ
+                        )
+                        """
+                    )
+                )
+                connection.execute(text("INSERT INTO users (id) VALUES (1)"))
+                connection.execute(
+                    text(
+                        "INSERT INTO comments (id, record_type, record_id) "
+                        "VALUES (1, 'phenopacket', :record_id)"
+                    ),
+                    {"record_id": uuid.uuid4()},
+                )
+                migration.op = Operations(
+                    MigrationContext.configure(
+                        connection, opts={"target_metadata": Base.metadata}
+                    )
+                )
+                migration.upgrade()
+
+                with pytest.raises(IntegrityError):
+                    connection.execute(text(invalid_insert))
+            finally:
+                transaction.rollback()
+    finally:
+        engine.dispose()
+
+
 def test_expand_migration_catches_missing_database_guards_and_downgrade_cleanup():
     """Upgrade must enforce audit shape without activating workflow triggers."""
     migration = _migration_module()

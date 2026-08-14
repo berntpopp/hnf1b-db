@@ -53,7 +53,8 @@ def upgrade() -> None:
     op.create_check_constraint(
         op.f("ck_phenopacket_revisions_decision_metadata_ledger"),
         "phenopacket_revisions",
-        "decision_metadata IS NULL OR ledger_version = 2",
+        "decision_metadata IS NULL OR "
+        "(ledger_version IS NOT NULL AND ledger_version = 2)",
     )
 
     op.add_column(
@@ -84,7 +85,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "(action = 'reopened' AND disposition IS NULL) OR "
-            "(action = 'resolved' AND disposition IN "
+            "(action = 'resolved' AND disposition IS NOT NULL AND disposition IN "
             "('addressed','accepted_with_rationale','retracted','superseded'))",
             name=op.f("ck_comment_resolution_event_action_disposition"),
         ),

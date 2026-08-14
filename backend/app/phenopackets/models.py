@@ -314,7 +314,8 @@ class PhenopacketRevision(Base):
             name=conv("ck_phenopacket_revisions_ledger_version"),
         ),
         CheckConstraint(
-            "decision_metadata IS NULL OR ledger_version = 2",
+            "decision_metadata IS NULL OR "
+            "(ledger_version IS NOT NULL AND ledger_version = 2)",
             name=conv("ck_phenopacket_revisions_decision_metadata_ledger"),
         ),
     )
