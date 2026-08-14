@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
 
 
 class CommentMentionOut(BaseModel):
@@ -49,6 +49,32 @@ class CommentCreate(BaseModel):
     record_id: UUID
     body_markdown: str = Field(min_length=1, max_length=10000)
     mention_user_ids: List[int] = Field(default_factory=list, max_length=50)
+    record_revision: Optional[NonNegativeInt] = None
+    review_revision_id: Optional[PositiveInt] = None
+
+
+class _ReviewIssueRequest(BaseModel):
+    """Strict optimistic-concurrency input shared by issue actions."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    record_revision: NonNegativeInt
+    rationale: str = Field(min_length=1, max_length=500)
+
+
+class ReviewIssueResolveRequest(_ReviewIssueRequest):
+    """Evidence required to resolve or retract one blocking review issue."""
+
+    disposition: Literal[
+        "addressed",
+        "accepted_with_rationale",
+        "retracted",
+        "superseded",
+    ]
+
+
+class ReviewIssueReopenRequest(_ReviewIssueRequest):
+    """Evidence required to reopen one blocking review issue."""
 
 
 class CommentUpdate(BaseModel):

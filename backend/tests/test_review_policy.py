@@ -444,3 +444,98 @@ async def test_approved_capabilities_allow_reopen_and_admin_publish(
         "publish",
     ]
     assert _capability(admin_capabilities, "publish").allowed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("effective_state", "action", "allowed"),
+    [
+        ("in_review", "create", True),
+        ("in_review", "resolve", True),
+        ("in_review", "reopen", True),
+        ("changes_requested", "create", False),
+        ("changes_requested", "resolve", True),
+        ("changes_requested", "reopen", True),
+        ("approved", "resolve", False),
+    ],
+)
+async def test_issue_action_policy_uses_effective_state_and_exact_candidate(
+    db_session,
+    curator_user,
+    another_curator,
+    effective_state,
+    action,
+    allowed,
+):
+    """Issue actions stay open only in their specified active-cycle states."""
+    record, candidate = await _review_candidate(
+        db_session,
+        owner_id=curator_user.id,
+        submitter_id=curator_user.id,
+    )
+    if effective_state != "in_review":
+        active = PhenopacketRevision(
+            record_id=record.id,
+            parent_revision_id=candidate.id,
+            revision_number=2,
+            state=effective_state,
+            content_jsonb=candidate.content_jsonb,
+            change_reason=effective_state,
+            actor_id=another_curator.id,
+            from_state="in_review",
+            to_state=effective_state,
+            event_type="state_transition",
+        )
+        db_session.add(active)
+        await db_session.flush()
+        record.revision = 2
+        record.editing_revision_id = active.id
+        await db_session.flush()
+
+    if allowed:
+        await ReviewPolicy.require_issue_action(
+            db_session,
+            record,
+            candidate,
+            another_curator,
+            action=action,
+        )
+    else:
+        with pytest.raises(ReviewPolicyError) as exc_info:
+            await ReviewPolicy.require_issue_action(
+                db_session,
+                record,
+                candidate,
+                another_curator,
+                action=action,
+            )
+        assert exc_info.value.code == "review_closed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_admin", [False, True], ids=["curator", "admin"])
+async def test_issue_action_policy_never_allows_owner_admin_bypass(
+    db_session,
+    curator_user,
+    another_curator,
+    admin_user,
+    use_admin,
+):
+    """Draft ownership blocks issue actions even when the owner is an admin."""
+    actor = admin_user if use_admin else curator_user
+    record, candidate = await _review_candidate(
+        db_session,
+        owner_id=actor.id,
+        submitter_id=another_curator.id,
+    )
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await ReviewPolicy.require_issue_action(
+            db_session,
+            record,
+            candidate,
+            actor,
+            action="resolve",
+        )
+
+    assert exc_info.value.code == "self_review_forbidden"
