@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Computed,
     DateTime,
     ForeignKey,
@@ -19,6 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import conv
 
 from app.database import Base
 
@@ -298,6 +300,24 @@ class PhenopacketRevision(Base):
     """
 
     __tablename__ = "phenopacket_revisions"
+    __table_args__ = (
+        CheckConstraint(
+            "actor_role IS NULL OR actor_role IN ('viewer', 'curator', 'admin')",
+            name=conv("ck_phenopacket_revisions_actor_role"),
+        ),
+        CheckConstraint(
+            "content_sha256 IS NULL OR content_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name=conv("ck_phenopacket_revisions_content_sha256"),
+        ),
+        CheckConstraint(
+            "ledger_version IS NULL OR ledger_version = 2",
+            name=conv("ck_phenopacket_revisions_ledger_version"),
+        ),
+        CheckConstraint(
+            "decision_metadata IS NULL OR ledger_version = 2",
+            name=conv("ck_phenopacket_revisions_decision_metadata_ledger"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     record_id: Mapped[uuid.UUID] = mapped_column(
@@ -334,6 +354,12 @@ class PhenopacketRevision(Base):
     projection_version: Mapped[Optional[str]] = mapped_column(String(40))
     ledger_hash: Mapped[Optional[str]] = mapped_column(String(128))
     projection_hash: Mapped[Optional[str]] = mapped_column(String(128))
+    actor_role: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    decision_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    content_sha256: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ledger_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
