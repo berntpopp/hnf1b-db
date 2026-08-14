@@ -10,6 +10,8 @@ Spec reference:
 
 import pytest
 
+from app.phenopackets.models import ApprovalAttestation, PhenopacketRevision
+
 
 @pytest.mark.parametrize(
     "to_state",
@@ -62,14 +64,38 @@ async def test_pp_state_never_exits_published_or_archived_post_first_publish(
         ],
     }
 
+    candidate: PhenopacketRevision | None = None
+    approved: PhenopacketRevision | None = None
     for state_target, actor in sequence_to_target[to_state]:
-        pp, _ = await svc.transition(
+        exact_fields = {}
+        if state_target == "approved":
+            assert candidate is not None
+            exact_fields = {
+                "candidate_revision_id": candidate.id,
+                "candidate_content_sha256": candidate.content_sha256,
+                "attestation": ApprovalAttestation(
+                    independent_review=True,
+                    no_unmanaged_conflict=True,
+                ),
+            }
+        elif state_target == "published":
+            assert approved is not None
+            exact_fields = {
+                "approved_revision_id": approved.id,
+                "approved_content_sha256": approved.content_sha256,
+            }
+        pp, transition_revision = await svc.transition(
             pp.id,
             to_state=state_target,
             reason="r",
             expected_revision=pp.revision,
             actor=actor,  # type: ignore[arg-type]
+            **exact_fields,
         )
+        if state_target == "in_review":
+            candidate = transition_revision
+        elif state_target == "approved":
+            approved = transition_revision
 
     # I8: pp.state must never advance for a previously-published record
     # (unless the transition is 'archived', which is terminal).

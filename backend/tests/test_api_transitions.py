@@ -68,23 +68,46 @@ async def test_transition_endpoint_end_to_end(
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["phenopacket"]["state"] == "in_review"
+    candidate = data["revision"]
+    assert candidate["actor_role"] == "curator"
+    assert candidate["actor_role_at_decision_recorded"] is True
+    assert candidate["decision_metadata"] is None
+    assert candidate["content_sha256"].startswith("sha256:")
+    assert candidate["ledger_version"] == 2
     rev = data["phenopacket"]["revision"]
 
     # Step 2: admin approves in_review → approved
     resp = await async_client.post(
         _transitions_url(pid),
-        json={"to_state": "approved", "reason": "looks good", "revision": rev},
+        json={
+            "to_state": "approved",
+            "reason": "looks good",
+            "revision": rev,
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": candidate["content_sha256"],
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
         headers=admin_headers,
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["phenopacket"]["state"] == "approved"
+    approved = data["revision"]
     rev = data["phenopacket"]["revision"]
 
     # Step 3: admin publishes approved → published
     resp = await async_client.post(
         _transitions_url(pid),
-        json={"to_state": "published", "reason": "go live", "revision": rev},
+        json={
+            "to_state": "published",
+            "reason": "go live",
+            "revision": rev,
+            "approved_revision_id": approved["id"],
+            "approved_content_sha256": approved["content_sha256"],
+        },
         headers=admin_headers,
     )
     assert resp.status_code == 200, resp.text
@@ -96,10 +119,10 @@ async def test_transition_endpoint_end_to_end(
 
 
 @pytest.mark.asyncio
-async def test_transition_forbidden_role_returns_403(
+async def test_transition_self_review_returns_specific_403(
     async_client, draft_record, curator_user, curator_headers
 ):
-    """Curator trying an admin-only transition gets 403 with forbidden_role code."""
+    """A submitting curator receives the specific independence blocker code."""
     pid = draft_record.phenopacket_id
 
     # First get to in_review
@@ -109,6 +132,7 @@ async def test_transition_forbidden_role_returns_403(
         headers=curator_headers,
     )
     assert resp.status_code == 200
+    candidate = resp.json()["revision"]
 
     # Now curator tries to approve (admin-only)
     resp = await async_client.post(
@@ -117,13 +141,18 @@ async def test_transition_forbidden_role_returns_403(
             "to_state": "approved",
             "reason": "self-approve",
             "revision": resp.json()["phenopacket"]["revision"],
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": candidate["content_sha256"],
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
         },
         headers=curator_headers,
     )
     assert resp.status_code == 403
     body = resp.json()
-    # The error envelope wraps detail: body["detail"]["code"]
-    assert body["detail"]["code"] == "forbidden_role"
+    assert body["detail"]["code"] == "self_review_forbidden"
 
 
 @pytest.mark.asyncio
@@ -135,7 +164,13 @@ async def test_invalid_transition_returns_409(
 
     resp = await async_client.post(
         _transitions_url(pid),
-        json={"to_state": "published", "reason": "skip steps", "revision": 1},
+        json={
+            "to_state": "published",
+            "reason": "skip steps",
+            "revision": 1,
+            "approved_revision_id": 999,
+            "approved_content_sha256": "sha256:" + "0" * 64,
+        },
         headers=admin_headers,
     )
     assert resp.status_code == 409
@@ -158,6 +193,111 @@ async def test_transition_revision_mismatch_returns_409(
     assert resp.status_code == 409
     body = resp.json()
     assert body["detail"]["code"] == "revision_mismatch"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"to_state": "approved"},
+        {
+            "to_state": "approved",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+        },
+        {
+            "to_state": "approved",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+            "attestation": {
+                "independent_review": False,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        {
+            "to_state": "approved",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": False,
+            },
+        },
+        {
+            "to_state": "approved",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+            "approved_revision_id": 2,
+            "approved_content_sha256": "sha256:" + "2" * 64,
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        {"to_state": "published"},
+        {
+            "to_state": "published",
+            "approved_revision_id": 2,
+            "approved_content_sha256": "sha256:" + "2" * 64,
+            "candidate_revision_id": 1,
+        },
+        {
+            "to_state": "in_review",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+        },
+    ],
+)
+async def test_transition_conditional_fields_are_discriminated_with_422(
+    async_client,
+    draft_record,
+    admin_headers,
+    payload,
+):
+    """Missing, false, or irrelevant exact-review fields are malformed input."""
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={"reason": "invalid conditional body", "revision": 1, **payload},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_stale_well_formed_candidate_digest_returns_stable_409(
+    async_client,
+    draft_record,
+    curator_headers,
+    admin_headers,
+):
+    """A syntactically valid but stale exact candidate is a workflow conflict."""
+    submitted = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={"to_state": "in_review", "reason": "submit", "revision": 1},
+        headers=curator_headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    candidate = submitted.json()["revision"]
+
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={
+            "to_state": "approved",
+            "reason": "stale exact candidate",
+            "revision": submitted.json()["phenopacket"]["revision"],
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": "sha256:" + "0" * 64,
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "review_revision_mismatch"
 
 
 # ---------------------------------------------------------------------------
@@ -253,3 +393,69 @@ async def test_revision_detail_includes_content(
     assert body["id"] == revision_id
     assert body["content_jsonb"] is not None
     assert isinstance(body["content_jsonb"], dict)
+
+
+@pytest.mark.asyncio
+async def test_revision_detail_labels_legacy_role_snapshot_as_unrecorded(
+    async_client,
+    published_record,
+    admin_headers,
+):
+    """A current actor relationship never masquerades as historic role evidence."""
+    legacy_revision_id = published_record.head_published_revision_id
+    assert legacy_revision_id is not None
+
+    response = await async_client.get(
+        _revision_detail_url(published_record.phenopacket_id, legacy_revision_id),
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["actor_username"] is not None
+    assert body["actor_role"] is None
+    assert body["actor_role_at_decision_recorded"] is False
+    assert body["decision_metadata"] is None
+    assert body["content_sha256"] is None
+    assert body["ledger_version"] is None
+
+
+@pytest.mark.asyncio
+async def test_independence_policy_error_preserves_specific_403_code(
+    async_client,
+    db_session,
+    draft_record,
+    admin_user,
+    admin_headers,
+):
+    """An independence denial is not collapsed into generic forbidden_role."""
+    draft_record.draft_owner_id = admin_user.id
+    draft_record.created_by_id = admin_user.id
+    await db_session.commit()
+
+    submitted = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={"to_state": "in_review", "reason": "self submit", "revision": 1},
+        headers=admin_headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    candidate = submitted.json()["revision"]
+
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={
+            "to_state": "approved",
+            "reason": "self approve",
+            "revision": submitted.json()["phenopacket"]["revision"],
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": candidate["content_sha256"],
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "self_review_forbidden"

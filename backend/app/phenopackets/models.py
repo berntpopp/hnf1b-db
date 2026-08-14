@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -720,6 +720,13 @@ class AggregationResult(BaseModel):
 # Wave 7 D.1: state-machine Pydantic schemas (§7.3)
 
 
+class ApprovalAttestation(BaseModel):
+    """Affirmative statements required for an independent approval decision."""
+
+    independent_review: Literal[True]
+    no_unmanaged_conflict: Literal[True]
+
+
 class TransitionRequest(BaseModel):
     """Request body for POST /phenopackets/{id}/transitions.
 
@@ -736,6 +743,55 @@ class TransitionRequest(BaseModel):
     ]
     reason: str = Field(..., min_length=1, max_length=500)
     revision: int
+    candidate_revision_id: Optional[int] = Field(None, gt=0)
+    candidate_content_sha256: Optional[str] = Field(
+        None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    approved_revision_id: Optional[int] = Field(None, gt=0)
+    approved_content_sha256: Optional[str] = Field(
+        None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    attestation: Optional[ApprovalAttestation] = None
+
+    @model_validator(mode="after")
+    def validate_conditional_fields(self) -> "TransitionRequest":
+        """Require only the exact-snapshot fields for the selected transition."""
+        candidate_fields_present = (
+            self.candidate_revision_id is not None
+            or self.candidate_content_sha256 is not None
+            or self.attestation is not None
+        )
+        approved_fields_present = (
+            self.approved_revision_id is not None
+            or self.approved_content_sha256 is not None
+        )
+
+        if self.to_state == "approved":
+            if approved_fields_present:
+                raise ValueError("approval rejects approved snapshot fields")
+            if (
+                self.candidate_revision_id is None
+                or self.candidate_content_sha256 is None
+                or self.attestation is None
+            ):
+                raise ValueError(
+                    "approval requires candidate snapshot fields and attestation"
+                )
+            return self
+
+        if self.to_state == "published":
+            if candidate_fields_present:
+                raise ValueError("publication rejects candidate and attestation fields")
+            if (
+                self.approved_revision_id is None
+                or self.approved_content_sha256 is None
+            ):
+                raise ValueError("publication requires approved snapshot fields")
+            return self
+
+        if candidate_fields_present or approved_fields_present:
+            raise ValueError("conditional snapshot fields are not allowed")
+        return self
 
 
 class RevisionResponse(BaseModel):
@@ -758,7 +814,18 @@ class RevisionResponse(BaseModel):
     change_reason: str
     actor_id: int
     actor_username: Optional[str] = None
+    actor_role: Optional[str] = None
+    actor_role_at_decision_recorded: bool = False
+    decision_metadata: Optional[Dict[str, Any]] = None
+    content_sha256: Optional[str] = None
+    ledger_version: Optional[int] = None
     change_patch: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
     # populated only on /{id}/revisions/{rev_id}
     content_jsonb: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def derive_recorded_role_flag(self) -> "RevisionResponse":
+        """Label only immutable role snapshots as recorded decision evidence."""
+        self.actor_role_at_decision_recorded = self.actor_role is not None
+        return self
