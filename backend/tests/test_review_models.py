@@ -14,6 +14,13 @@ def _check_names(table) -> set[str]:
     }
 
 
+def _check_sql(table, name: str) -> str:
+    for constraint in table.constraints:
+        if isinstance(constraint, CheckConstraint) and constraint.name == name:
+            return str(constraint.sqltext)
+    raise AssertionError(f"missing check constraint {name}")
+
+
 def test_revision_model_catches_missing_nullable_v2_audit_storage():
     """A revision must expose nullable storage for every v2 audit component."""
     columns = PhenopacketRevision.__table__.c
@@ -39,6 +46,16 @@ def test_revision_model_catches_missing_nullable_v2_audit_storage():
         "ck_phenopacket_revisions_ledger_version",
         "ck_phenopacket_revisions_decision_metadata_ledger",
     } <= _check_names(PhenopacketRevision.__table__)
+
+
+def test_revision_model_catches_decision_metadata_with_null_ledger_version():
+    """ORM metadata must require an explicit v2 ledger for decision metadata."""
+    check_sql = _check_sql(
+        PhenopacketRevision.__table__,
+        "ck_phenopacket_revisions_decision_metadata_ledger",
+    )
+
+    assert "ledger_version IS NOT NULL" in check_sql
 
 
 def test_review_issue_model_catches_missing_restrictive_revision_link():
@@ -74,3 +91,13 @@ def test_resolution_event_model_catches_missing_append_only_audit_links():
         "ck_comment_resolution_event_rationale",
         "ck_comment_resolution_event_actor_role",
     } <= _check_names(event.__table__)
+
+
+def test_resolution_event_model_catches_resolved_event_with_null_disposition():
+    """ORM metadata must require a disposition for every resolved event."""
+    event = getattr(comments_models, "CommentResolutionEvent")
+    check_sql = _check_sql(
+        event.__table__, "ck_comment_resolution_event_action_disposition"
+    )
+
+    assert "disposition IS NOT NULL" in check_sql
