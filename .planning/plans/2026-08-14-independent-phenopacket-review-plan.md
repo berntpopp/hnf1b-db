@@ -337,6 +337,10 @@ git commit -m "feat(backend): bind approval to exact candidate snapshot"
 - Modify: `backend/app/comments/schemas.py`
 - Modify: `backend/app/comments/service.py`
 - Modify: `backend/app/comments/routers.py`
+- Modify: `backend/app/auth/dependencies.py`
+- Modify: `backend/app/phenopackets/models.py`
+- Modify: `backend/app/phenopackets/review/policy.py`
+- Modify: `backend/alembic/versions/d0f422b00005_expand_independent_review_audit.py`
 - Create: `backend/alembic/versions/e0f422b00006_activate_independent_review_invariants.py`
 - Create: `backend/tests/test_blocking_review_issues.py`
 - Create: `backend/tests/migration/test_independent_review_sql_races.py`
@@ -345,6 +349,9 @@ git commit -m "feat(backend): bind approval to exact candidate snapshot"
 - Modify: `backend/tests/test_comments_router.py`
 - Modify: `backend/tests/test_comments_permissions.py`
 - Modify: `backend/tests/test_comments_soft_delete.py`
+- Modify: `backend/tests/test_review_models.py`
+- Modify: `backend/tests/test_review_policy.py`
+- Modify: `backend/tests/test_alembic_env_autogenerate.py`
 
 **Interfaces:**
 
@@ -352,8 +359,9 @@ git commit -m "feat(backend): bind approval to exact candidate snapshot"
 - `ReviewIssueResolveRequest(record_revision, disposition, rationale)` and `ReviewIssueReopenRequest(record_revision, rationale)` implement the conditional bodies in the spec.
 - `CommentsService` mutation methods flush but never commit; routers own commit/rollback.
 - Blocking issue operations acquire the owning phenopacket `FOR UPDATE` before locking/loading the comment.
+- `ReviewPolicy` exposes a public issue-action eligibility entry point: create only in `in_review`; resolve/reopen in `in_review|changes_requested`; all retain owner/submitter/contributor exclusions.
 - Expansion activation revision is `e0f422b00006`, down revision `d0f422b00005`.
-- Database functions/triggers lock the phenopacket row for blocking issue insert/resolve/reopen and active revision/state changes, then validate ownership/state/revision linkage; a deferred constraint trigger checks approved-plus-unresolved final state.
+- Database functions/triggers lock the phenopacket row for blocking issue insert/resolve/reopen/delete/identity changes and active revision/state changes, then validate ownership/state/revision linkage; a deferred constraint trigger checks approved-plus-unresolved final state. Resolution events reject database UPDATE/DELETE.
 
 - [ ] **Step 1: Write failing blocking-issue API/service tests**
 
@@ -394,15 +402,15 @@ Tx A: approve/lock -> hold -> commit
 Tx B: insert/reopen issue -> blocks -> rejects review_closed after A commit
 ```
 
-Also assert active `editing_revision_id` requires `draft_owner_id`, review revision belongs to the comment record, ambiguous owner preflight aborts, and downgrade refuses after a resolution event or v2 revision exists.
+Also assert active `editing_revision_id` requires `draft_owner_id` in both ORM metadata and the database, review revision belongs to the comment record, blocking issues cannot be soft/hard deleted or detached by direct SQL, resolution events are append-only, ambiguous owner preflight aborts, and downgrade refuses after a resolution event or v2 revision exists.
 
 - [ ] **Step 5: Implement activation migration and guarded downgrade**
 
-Create lock-taking trigger functions with one global order: `phenopackets FOR UPDATE` before revision/comment checks. Augment the existing pointer-state trigger rather than replacing it. Backfill missing active owners from recursive deterministic active-cycle ancestry; run a preflight that raises with record IDs when ancestry is ambiguous. Guard downgrade before dropping any audit/invariant object: it succeeds only when no blocking issue, resolution event, v2 ledger revision, or decision metadata exists. Do not modify existing revision rows to reconstruct roles/hashes.
+Create lock-taking trigger functions with one global order: `phenopackets FOR UPDATE` before revision/comment checks. Augment the existing pointer-state trigger rather than replacing it. Backfill missing active owners from recursive deterministic active-cycle ancestry; run a preflight that raises with record IDs when ancestry is ambiguous. Add the same audit-data downgrade preflight to the d0 expansion migration because the rollout intentionally runs v2 application writers before e0 activation. Both downgrade paths succeed only when no blocking issue, resolution event, v2 ledger revision, decision metadata, actor role, or content digest exists. Do not modify existing revision rows to reconstruct roles/hashes.
 
 - [ ] **Step 6: Run migration, race, comment, and state tests**
 
-Run: `cd backend && uv run pytest tests/migration/test_independent_review_activation_migration.py tests/migration/test_independent_review_sql_races.py tests/test_blocking_review_issues.py tests/test_comments_service_mutations.py tests/test_comments_router.py tests/test_comments_permissions.py tests/test_comments_soft_delete.py tests/test_state_invariants.py -q`
+Run: `cd backend && uv run pytest tests/migration/test_independent_review_activation_migration.py tests/migration/test_independent_review_sql_races.py tests/test_blocking_review_issues.py tests/test_comments_service_mutations.py tests/test_comments_router.py tests/test_comments_permissions.py tests/test_comments_soft_delete.py tests/test_state_invariants.py tests/test_review_models.py tests/test_review_policy.py tests/test_alembic_env_autogenerate.py -q`
 
 Expected: PASS with both raw-SQL commit orders proven.
 
@@ -410,12 +418,17 @@ Expected: PASS with both raw-SQL commit orders proven.
 
 ```bash
 git add backend/app/comments/schemas.py backend/app/comments/service.py backend/app/comments/routers.py \
+  backend/app/auth/dependencies.py backend/app/phenopackets/models.py \
+  backend/app/phenopackets/review/policy.py \
+  backend/alembic/versions/d0f422b00005_expand_independent_review_audit.py \
   backend/alembic/versions/e0f422b00006_activate_independent_review_invariants.py \
   backend/tests/test_blocking_review_issues.py \
   backend/tests/migration/test_independent_review_sql_races.py \
   backend/tests/migration/test_independent_review_activation_migration.py \
   backend/tests/test_comments_service_mutations.py backend/tests/test_comments_router.py \
-  backend/tests/test_comments_permissions.py backend/tests/test_comments_soft_delete.py
+  backend/tests/test_comments_permissions.py backend/tests/test_comments_soft_delete.py \
+  backend/tests/test_review_models.py backend/tests/test_review_policy.py \
+  backend/tests/test_alembic_env_autogenerate.py
 git commit -m "feat(backend): gate approval on blocking review issues"
 ```
 
