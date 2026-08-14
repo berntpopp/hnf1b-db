@@ -13,8 +13,14 @@ from app.comments.schemas import (
     ReviewIssueResolveRequest,
 )
 from app.comments.service import CommentsService
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.models.user import User
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
 from app.phenopackets.review.policy import ReviewPolicyError
+from app.phenopackets.services.state_service import PhenopacketStateService
 
 
 async def _seed_review_cycle(db_session, *, owner, submitter):
@@ -397,6 +403,217 @@ async def test_blocking_issue_routes_require_conditional_evidence_and_independen
     )
     assert reopened.status_code == 200, reopened.json()
     assert reopened.json()["resolved_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_old_issue_in_current_cycle_remains_actionable_after_resubmit(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """Resubmission must not strand an issue linked to the earlier candidate."""
+    reviewer_headers = await _headers_for(
+        async_client, another_curator.username, "CuratorPass123!"
+    )
+    record, first_candidate = await _seed_review_cycle(
+        db_session, owner=curator_user, submitter=curator_user
+    )
+    created = await _post_issue(async_client, reviewer_headers, record, first_candidate)
+    assert created.status_code == 201, created.json()
+    issue_id = created.json()["id"]
+
+    state_service = PhenopacketStateService(db_session)
+    record, _ = await state_service.transition(
+        record.id,
+        to_state="changes_requested",
+        reason="address the blocking issue",
+        expected_revision=record.revision,
+        actor=another_curator,
+    )
+    record, resubmitted = await state_service.transition(
+        record.id,
+        to_state="in_review",
+        reason="resubmit after changes",
+        expected_revision=record.revision,
+        actor=curator_user,
+    )
+    assert resubmitted.id != first_candidate.id
+
+    resolved = await async_client.post(
+        f"/api/v2/comments/{issue_id}/resolve",
+        headers=reviewer_headers,
+        json={
+            "record_revision": record.revision,
+            "disposition": "addressed",
+            "rationale": "fixed during resubmission",
+        },
+    )
+    assert resolved.status_code == 200, resolved.json()
+    reopened = await async_client.post(
+        f"/api/v2/comments/{issue_id}/unresolve",
+        headers=reviewer_headers,
+        json={
+            "record_revision": record.revision,
+            "rationale": "verify one remaining concern",
+        },
+    )
+    assert reopened.status_code == 200, reopened.json()
+    resolved_again = await async_client.post(
+        f"/api/v2/comments/{issue_id}/resolve",
+        headers=reviewer_headers,
+        json={
+            "record_revision": record.revision,
+            "disposition": "accepted_with_rationale",
+            "rationale": "remaining concern accepted",
+        },
+    )
+    assert resolved_again.status_code == 200, resolved_again.json()
+
+    record = await db_session.get(Phenopacket, record.id)
+    assert record is not None
+    approved, _ = await state_service.transition(
+        record.id,
+        to_state="approved",
+        reason="all current-cycle issues handled",
+        expected_revision=record.revision,
+        actor=another_curator,
+        candidate_revision_id=resubmitted.id,
+        candidate_content_sha256=resubmitted.content_sha256,
+        attestation=ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    )
+    assert approved.state == "approved"
+
+
+@pytest.mark.asyncio
+async def test_published_cycle_issue_is_non_actionable_and_does_not_gate_next_cycle(
+    async_client,
+    db_session,
+    draft_record,
+    curator_user,
+    another_curator,
+    admin_user,
+):
+    """A resolved prior-cycle issue cannot reopen or gate the next approval."""
+    reviewer_headers = await _headers_for(
+        async_client, another_curator.username, "CuratorPass123!"
+    )
+    state_service = PhenopacketStateService(db_session)
+    root = PhenopacketRevision(
+        record_id=draft_record.id,
+        revision_number=draft_record.revision,
+        state="draft",
+        content_jsonb=draft_record.phenopacket,
+        change_reason="create",
+        actor_id=curator_user.id,
+        from_state=None,
+        to_state="draft",
+        event_type="created",
+    )
+    db_session.add(root)
+    await db_session.flush()
+    draft_record.editing_revision_id = root.id
+    await db_session.flush()
+    record, first_candidate = await state_service.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="first cycle submission",
+        expected_revision=draft_record.revision,
+        actor=curator_user,
+    )
+    created = await _post_issue(async_client, reviewer_headers, record, first_candidate)
+    assert created.status_code == 201, created.json()
+    issue_id = created.json()["id"]
+    resolved = await async_client.post(
+        f"/api/v2/comments/{issue_id}/resolve",
+        headers=reviewer_headers,
+        json={
+            "record_revision": record.revision,
+            "disposition": "addressed",
+            "rationale": "first cycle fixed",
+        },
+    )
+    assert resolved.status_code == 200, resolved.json()
+
+    record = await db_session.get(Phenopacket, record.id)
+    assert record is not None and first_candidate.content_sha256 is not None
+    record, approved = await state_service.transition(
+        record.id,
+        to_state="approved",
+        reason="approve first cycle",
+        expected_revision=record.revision,
+        actor=another_curator,
+        candidate_revision_id=first_candidate.id,
+        candidate_content_sha256=first_candidate.content_sha256,
+        attestation=ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    )
+    assert approved.content_sha256 is not None
+    record, _ = await state_service.transition(
+        record.id,
+        to_state="published",
+        reason="publish first cycle",
+        expected_revision=record.revision,
+        actor=admin_user,
+        approved_revision_id=approved.id,
+        approved_content_sha256=approved.content_sha256,
+    )
+    record = await state_service.edit_record(
+        record.id,
+        new_content=record.phenopacket,
+        change_reason="open second cycle",
+        expected_revision=record.revision,
+        actor=curator_user,
+    )
+    record, next_candidate = await state_service.transition(
+        record.id,
+        to_state="in_review",
+        reason="submit second cycle",
+        expected_revision=record.revision,
+        actor=curator_user,
+    )
+    record_id = record.id
+    reviewer_id = another_curator.id
+    next_candidate_id = next_candidate.id
+    next_candidate_digest = next_candidate.content_sha256
+    next_record_revision = record.revision
+    await db_session.commit()
+
+    historical_reopen = await async_client.post(
+        f"/api/v2/comments/{issue_id}/unresolve",
+        headers=reviewer_headers,
+        json={
+            "record_revision": next_record_revision,
+            "rationale": "must not reopen a published cycle",
+        },
+    )
+    assert historical_reopen.status_code == 409, historical_reopen.json()
+    assert historical_reopen.json()["detail"]["code"] == "review_closed"
+
+    record = await db_session.get(Phenopacket, record_id)
+    reviewer = await db_session.get(User, reviewer_id)
+    assert record is not None and reviewer is not None
+    assert next_candidate_digest is not None
+    record, next_approval = await state_service.transition(
+        record.id,
+        to_state="approved",
+        reason="prior-cycle issue is non-gating",
+        expected_revision=record.revision,
+        actor=reviewer,
+        candidate_revision_id=next_candidate_id,
+        candidate_content_sha256=next_candidate_digest,
+        attestation=ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    )
+    assert next_approval.state == "approved"
+    assert record.editing_revision_id == next_approval.id
 
 
 @pytest.mark.asyncio

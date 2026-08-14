@@ -96,7 +96,11 @@ def _isolated_schema():
                 connection.execute(
                     text(
                         """
-                        CREATE TABLE users (id BIGINT PRIMARY KEY, role TEXT NOT NULL);
+                        CREATE TABLE users (
+                            id BIGINT PRIMARY KEY,
+                            role TEXT NOT NULL,
+                            is_active BOOLEAN NOT NULL DEFAULT TRUE
+                        );
                         CREATE TABLE phenopackets (
                             id UUID PRIMARY KEY, state TEXT NOT NULL,
                             revision INTEGER NOT NULL, editing_revision_id BIGINT,
@@ -195,7 +199,9 @@ def _bind(connection, migration) -> None:
 
 
 def _seed_active_review(connection, record_id: uuid.UUID, owner: int | None) -> None:
-    connection.execute(text("INSERT INTO users VALUES (1, 'curator'), (2, 'curator')"))
+    connection.execute(
+        text("INSERT INTO users VALUES (1, 'curator', TRUE), (2, 'curator', TRUE)")
+    )
     connection.execute(
         text(
             """
@@ -219,6 +225,41 @@ def _seed_active_review(connection, record_id: uuid.UUID, owner: int | None) -> 
             """
         ),
         {"id": record_id, "owner": owner},
+    )
+
+
+def _seed_actor_eligibility_review(connection, record_id: uuid.UUID) -> None:
+    """Seed literal reviewer roles and one never-published candidate ancestry."""
+    connection.execute(
+        text(
+            """INSERT INTO users (id,role,is_active) VALUES
+            (1,'admin',TRUE),
+            (2,'curator',TRUE),
+            (3,'admin',TRUE),
+            (4,'curator',FALSE),
+            (5,'viewer',TRUE),
+            (6,'curator',TRUE),
+            (7,'admin',TRUE)"""
+        )
+    )
+    connection.execute(
+        text(
+            """INSERT INTO phenopacket_revisions
+            (id,record_id,parent_revision_id,revision_number,state,event_type,actor_id)
+            VALUES
+            (1,:id,NULL,1,'draft','created',1),
+            (2,:id,1,2,'draft','draft_saved',3),
+            (3,:id,2,3,'in_review','state_transition',2)"""
+        ),
+        {"id": record_id},
+    )
+    connection.execute(
+        text(
+            """INSERT INTO phenopackets
+            (id,state,revision,editing_revision_id,draft_owner_id)
+            VALUES (:id,'in_review',3,3,1)"""
+        ),
+        {"id": record_id},
     )
 
 
@@ -272,12 +313,22 @@ def test_upgrade_backfills_owner_and_preserves_pointer_trigger_identity() -> Non
             ("comments", "comments_review_issue_guard"),
             ("comments", "comments_review_issue_final_state"),
             ("comment_resolution_events", "comment_resolution_events_lock_record"),
+            (
+                "comment_resolution_events",
+                "comment_resolution_events_projection_final_state",
+            ),
             ("comment_resolution_events", "comment_resolution_events_immutable"),
         } <= names
         final_trigger = next(
             row for row in triggers if row[1] == "comments_review_issue_final_state"
         )
         assert final_trigger[2:] == (True, True)
+        event_final_trigger = next(
+            row
+            for row in triggers
+            if row[1] == "comment_resolution_events_projection_final_state"
+        )
+        assert event_final_trigger[2:] == (True, True)
 
         with pytest.raises(IntegrityError, match="active_edit_owner"):
             with connection.begin_nested():
@@ -330,6 +381,7 @@ def test_database_requires_event_first_and_rejects_issue_erasure() -> None:
         connection.execute(
             text("UPDATE comments SET resolved_at=now(), resolved_by_id=2 WHERE id=1")
         )
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         for statement in (
             "UPDATE comments SET review_revision_id=NULL WHERE id=1",
             "UPDATE comments SET deleted_at=now() WHERE id=1",
@@ -345,6 +397,218 @@ def test_database_requires_event_first_and_rejects_issue_erasure() -> None:
             with pytest.raises(DBAPIError, match="resolution events are append-only"):
                 with connection.begin_nested():
                     connection.execute(text(statement))
+
+
+def test_database_rejects_duplicate_event_before_projection_update() -> None:
+    """The comment re-lock observes an unprojected event in the same transaction."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','first',2,'curator')"""
+            )
+        )
+
+        with pytest.raises(
+            DBAPIError, match="review_issue_resolution_projection_mismatch"
+        ):
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        """INSERT INTO comment_resolution_events
+                        (comment_id,action,disposition,rationale,actor_id,actor_role)
+                        VALUES (1,'resolved','addressed','duplicate',2,'curator')"""
+                    )
+                )
+
+        connection.execute(
+            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'reopened',NULL,'supported reopen',2,'curator')"""
+            )
+        )
+        connection.execute(
+            text("UPDATE comments SET resolved_at=NULL,resolved_by_id=NULL WHERE id=1")
+        )
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+
+
+@pytest.mark.parametrize(
+    "projection_sql",
+    [None, "UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=999"],
+    ids=["event-only", "zero-row-projection"],
+)
+def test_deferred_event_projection_check_rejects_unprojected_commit(
+    projection_sql: str | None,
+) -> None:
+    """An event cannot commit unless its target projection reflects it."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        with pytest.raises(
+            DBAPIError, match="review_issue_resolution_projection_mismatch"
+        ):
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        """INSERT INTO comment_resolution_events
+                        (comment_id,action,disposition,rationale,actor_id,actor_role)
+                        VALUES (1,'resolved','addressed','must project',2,'curator')"""
+                    )
+                )
+                if projection_sql is not None:
+                    connection.execute(text(projection_sql))
+                connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM comment_resolution_events")
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_database_enforces_issue_author_independence_and_role() -> None:
+    """Raw issue insertion applies owner/submitter/contributor/account policy."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        _seed_actor_eligibility_review(connection, record_id)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        denied = (
+            (1, "self_review_forbidden"),
+            (2, "reviewer_submitted"),
+            (3, "reviewer_contributed"),
+            (4, "reviewer_not_eligible"),
+            (5, "reviewer_not_eligible"),
+        )
+        for author_id, error in denied:
+            with pytest.raises(DBAPIError, match=error):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            """INSERT INTO comments
+                            (record_type,record_id,author_id,body_markdown,
+                             review_revision_id)
+                            VALUES ('phenopacket',:id,:author_id,'denied',3)"""
+                        ),
+                        {"id": record_id, "author_id": author_id},
+                    )
+
+        for author_id in (6, 7):
+            connection.execute(
+                text(
+                    """INSERT INTO comments
+                    (record_type,record_id,author_id,body_markdown,review_revision_id)
+                    VALUES ('phenopacket',:id,:author_id,'eligible',3)"""
+                ),
+                {"id": record_id, "author_id": author_id},
+            )
+        assert (
+            connection.execute(text("SELECT count(*) FROM comments")).scalar_one() == 2
+        )
+
+
+def test_database_enforces_resolution_event_actor_independence_and_role() -> None:
+    """Raw issue events verify the stored user, role claim, and independence."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        _seed_actor_eligibility_review(connection, record_id)
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES
+                (1,'phenopacket',:id,6,'curator path',3),
+                (2,'phenopacket',:id,7,'admin path',3)"""
+            ),
+            {"id": record_id},
+        )
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        denied = (
+            (1, "admin", "self_review_forbidden"),
+            (2, "curator", "reviewer_submitted"),
+            (3, "admin", "reviewer_contributed"),
+            (4, "curator", "reviewer_not_eligible"),
+            (5, "viewer", "reviewer_not_eligible"),
+            (7, "curator", "reviewer_actor_role_mismatch"),
+        )
+        for actor_id, actor_role, error in denied:
+            with pytest.raises(DBAPIError, match=error):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            """INSERT INTO comment_resolution_events
+                            (comment_id,action,disposition,rationale,actor_id,actor_role)
+                            VALUES
+                            (1,'resolved','addressed','denied',:actor_id,:actor_role)"""
+                        ),
+                        {"actor_id": actor_id, "actor_role": actor_role},
+                    )
+
+        for comment_id, actor_id, actor_role in (
+            (1, 6, "curator"),
+            (2, 7, "admin"),
+        ):
+            connection.execute(
+                text(
+                    """INSERT INTO comment_resolution_events
+                    (comment_id,action,disposition,rationale,actor_id,actor_role)
+                    VALUES
+                    (:comment_id,'resolved','addressed','eligible',:actor_id,:actor_role)"""
+                ),
+                {
+                    "comment_id": comment_id,
+                    "actor_id": actor_id,
+                    "actor_role": actor_role,
+                },
+            )
+            connection.execute(
+                text(
+                    """UPDATE comments SET resolved_at=now(),resolved_by_id=:actor_id
+                    WHERE id=:comment_id"""
+                ),
+                {"comment_id": comment_id, "actor_id": actor_id},
+            )
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM comment_resolution_events")
+            ).scalar_one()
+            == 2
+        )
 
 
 def test_unresolved_current_cycle_issue_blocks_approved_revision_insert() -> None:
@@ -374,12 +638,153 @@ def test_unresolved_current_cycle_issue_blocks_approved_revision_insert() -> Non
                 )
 
 
+def test_old_issue_in_never_published_active_ancestry_can_resolve() -> None:
+    """An earlier candidate in the live ancestry remains an actionable issue."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        connection.execute(
+            text("INSERT INTO users VALUES (1, 'curator', TRUE), (2, 'curator', TRUE)")
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO phenopacket_revisions
+                    (id,record_id,parent_revision_id,revision_number,state,
+                     event_type,actor_id)
+                VALUES
+                    (1,:id,NULL,1,'draft','created',1),
+                    (2,:id,1,2,'in_review','state_transition',1),
+                    (3,:id,2,3,'changes_requested','state_transition',2),
+                    (4,:id,3,4,'draft','draft_saved',1),
+                    (5,:id,4,5,'in_review','state_transition',1)
+                """
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO phenopackets
+                (id,state,revision,editing_revision_id,draft_owner_id)
+                VALUES (:id,'in_review',5,5,1)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'old live-cycle issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','fixed on resubmit',2,'curator')"""
+            )
+        )
+        connection.execute(
+            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'reopened',NULL,'verify old issue',2,'curator')"""
+            )
+        )
+        connection.execute(
+            text("UPDATE comments SET resolved_at=NULL,resolved_by_id=NULL WHERE id=1")
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','verified',2,'curator')"""
+            )
+        )
+        connection.execute(
+            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
+        )
+        connection.execute(
+            text(
+                """INSERT INTO phenopacket_revisions
+                (id,record_id,parent_revision_id,revision_number,state,event_type,actor_id)
+                VALUES (6,:id,5,6,'approved','state_transition',2)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """UPDATE phenopackets
+                SET state='approved',revision=6,editing_revision_id=6 WHERE id=:id"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+
+
+def test_resolution_event_rejects_candidate_before_broken_active_cycle_root() -> None:
+    """The event guard must validate ancestry beyond the linked issue candidate."""
+    with _isolated_schema() as (connection, _schema, migration):
+        record_id = uuid.uuid4()
+        connection.execute(
+            text("INSERT INTO users VALUES (1, 'curator', TRUE), (2, 'curator', TRUE)")
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO phenopacket_revisions
+                    (id,record_id,parent_revision_id,revision_number,state,
+                     event_type,actor_id)
+                VALUES
+                    (2,:id,99,2,'in_review','state_transition',1),
+                    (5,:id,2,5,'in_review','state_transition',1)
+                """
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO phenopackets
+                (id,state,revision,editing_revision_id,draft_owner_id)
+                VALUES (:id,'in_review',5,5,1)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue before broken root',2)"""
+            ),
+            {"id": record_id},
+        )
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        with pytest.raises(DBAPIError, match="review_revision_mismatch"):
+            connection.execute(
+                text(
+                    """INSERT INTO comment_resolution_events
+                    (comment_id,action,disposition,rationale,actor_id,actor_role)
+                    VALUES (1,'resolved','addressed','invalid ancestry',2,'curator')"""
+                )
+            )
+
+
 def test_historical_cycle_issue_does_not_block_current_approval() -> None:
     """Only review snapshots newer than the exact public head gate approval."""
     with _isolated_schema() as (connection, _schema, migration):
         record_id = uuid.uuid4()
         connection.execute(
-            text("INSERT INTO users VALUES (1, 'curator'), (2, 'curator')")
+            text("INSERT INTO users VALUES (1, 'curator', TRUE), (2, 'curator', TRUE)")
         )
         connection.execute(
             text(
@@ -418,6 +823,16 @@ def test_historical_cycle_issue_does_not_block_current_approval() -> None:
         _install_existing_triggers(connection)
         _bind(connection, migration)
         migration.upgrade()
+
+        with pytest.raises(DBAPIError, match="review_revision_mismatch"):
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        """INSERT INTO comment_resolution_events
+                        (comment_id,action,disposition,rationale,actor_id,actor_role)
+                        VALUES (1,'resolved','addressed','historical',2,'curator')"""
+                    )
+                )
 
         connection.execute(
             text(
@@ -523,7 +938,9 @@ def test_owner_preflight_refuses_ambiguous_ancestry_before_backfill(
     with _isolated_schema() as (connection, _schema, migration):
         first = uuid.UUID("00000000-0000-0000-0000-000000000001")
         second = uuid.UUID("00000000-0000-0000-0000-000000000002")
-        connection.execute(text("INSERT INTO users VALUES (1,'curator'),(2,'curator')"))
+        connection.execute(
+            text("INSERT INTO users VALUES (1,'curator',TRUE),(2,'curator',TRUE)")
+        )
         connection.execute(
             text(
                 """INSERT INTO phenopacket_revisions

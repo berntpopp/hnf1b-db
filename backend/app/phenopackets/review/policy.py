@@ -203,27 +203,20 @@ class ReviewPolicy:
         if effective_state not in allowed_states or active_revision is None:
             raise cls._error("review_closed")
 
-        expected_candidate = active_revision
-        if effective_state == "changes_requested":
-            if active_revision.parent_revision_id is None:
-                raise cls._error("review_author_unknown")
-            parent = await db.get(
-                PhenopacketRevision, active_revision.parent_revision_id
+        if action == "create":
+            candidate_is_current = (
+                candidate_revision.id == active_revision.id
+                and candidate_revision.record_id == phenopacket.id
+                and candidate_revision.state == "in_review"
             )
-            if (
-                parent is None
-                or parent.record_id != phenopacket.id
-                or parent.state != "in_review"
-                or parent.revision_number >= active_revision.revision_number
-            ):
-                raise cls._error("review_author_unknown")
-            expected_candidate = parent
-
-        if (
-            candidate_revision.id != expected_candidate.id
-            or candidate_revision.record_id != phenopacket.id
-            or candidate_revision.state != "in_review"
-        ):
+        else:
+            candidate_is_current = await cls._candidate_in_active_cycle(
+                db,
+                phenopacket,
+                active_revision,
+                candidate_revision,
+            )
+        if not candidate_is_current:
             raise cls._error("review_closed")
 
         blockers = await cls._independence_blockers(
@@ -232,6 +225,53 @@ class ReviewPolicy:
         if blockers:
             code = blockers[0]
             raise ReviewPolicyError(code, cls._MESSAGES[code])
+
+    @staticmethod
+    async def _candidate_in_active_cycle(
+        db: AsyncSession,
+        phenopacket: Phenopacket,
+        active_revision: PhenopacketRevision,
+        candidate: PhenopacketRevision,
+    ) -> bool:
+        """Return whether an in-review candidate is in the active ancestry."""
+        if candidate.record_id != phenopacket.id or candidate.state != "in_review":
+            return False
+
+        head_id = phenopacket.head_published_revision_id
+        head: PhenopacketRevision | None = None
+        if head_id is not None:
+            head = await db.get(PhenopacketRevision, head_id)
+            if (
+                head is None
+                or head.record_id != phenopacket.id
+                or head.state != "published"
+                or candidate.revision_number <= head.revision_number
+            ):
+                return False
+
+        current = active_revision
+        visited: set[int] = set()
+        candidate_seen = False
+        while True:
+            if current.id in visited or current.record_id != phenopacket.id:
+                return False
+            visited.add(current.id)
+            if current.id == candidate.id:
+                candidate_seen = True
+            if head_id is not None and current.id == head_id:
+                return candidate_seen and current.state == "published"
+            if head_id is None and current.parent_revision_id is None:
+                return candidate_seen and current.event_type == "created"
+            if current.parent_revision_id is None:
+                return False
+            parent = await db.get(PhenopacketRevision, current.parent_revision_id)
+            if (
+                parent is None
+                or parent.record_id != phenopacket.id
+                or parent.revision_number >= current.revision_number
+            ):
+                return False
+            current = parent
 
     @staticmethod
     def _capability(

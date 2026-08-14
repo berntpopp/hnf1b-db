@@ -326,24 +326,16 @@ class CommentsService:
             raise self.ReviewRevisionMismatch("active review revision is invalid")
 
         effective_state = active.state
-        expected_candidate_id = active.id
         if action == "create":
             if effective_state != "in_review":
                 raise self.ReviewClosed("review is not open for issue creation")
+            if review_revision_id != active.id:
+                raise self.ReviewRevisionMismatch(
+                    "review issue is not linked to the active candidate"
+                )
         else:
             if effective_state not in ("in_review", "changes_requested"):
                 raise self.ReviewClosed("review is not open for issue action")
-            if effective_state == "changes_requested":
-                if active.parent_revision_id is None:
-                    raise self.ReviewRevisionMismatch(
-                        "changes-requested revision has no candidate"
-                    )
-                expected_candidate_id = active.parent_revision_id
-
-        if review_revision_id != expected_candidate_id:
-            raise self.ReviewRevisionMismatch(
-                "review issue is not linked to the active candidate"
-            )
         candidate = await self.db.get(PhenopacketRevision, review_revision_id)
         if (
             candidate is None

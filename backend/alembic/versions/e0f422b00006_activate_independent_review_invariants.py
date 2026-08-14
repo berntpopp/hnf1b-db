@@ -265,6 +265,63 @@ def _install_revision_lock_trigger() -> None:
 def _install_comment_and_event_triggers() -> None:
     op.execute(
         """
+        CREATE FUNCTION require_independent_review_actor(
+            packet_id UUID,
+            owner_id BIGINT,
+            candidate_id BIGINT,
+            head_number INTEGER,
+            review_actor_id BIGINT,
+            claimed_actor_role TEXT
+        ) RETURNS VOID AS $$
+        DECLARE
+            review_actor users%ROWTYPE;
+            candidate_submitter_id BIGINT;
+        BEGIN
+            IF owner_id IS NULL THEN
+                RAISE EXCEPTION 'review_author_unknown';
+            END IF;
+            SELECT * INTO review_actor FROM users WHERE id = review_actor_id;
+            IF NOT FOUND OR NOT review_actor.is_active
+               OR review_actor.role NOT IN ('curator','admin') THEN
+                RAISE EXCEPTION 'reviewer_not_eligible';
+            END IF;
+            IF claimed_actor_role IS NOT NULL
+               AND claimed_actor_role <> review_actor.role THEN
+                RAISE EXCEPTION 'reviewer_actor_role_mismatch';
+            END IF;
+            IF review_actor.id = owner_id THEN
+                RAISE EXCEPTION 'self_review_forbidden';
+            END IF;
+
+            SELECT actor_id INTO candidate_submitter_id
+              FROM phenopacket_revisions
+             WHERE id = candidate_id AND record_id = packet_id
+               AND state = 'in_review';
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'review_revision_mismatch';
+            END IF;
+            IF review_actor.id = candidate_submitter_id THEN
+                RAISE EXCEPTION 'reviewer_submitted';
+            END IF;
+            IF EXISTS (
+                SELECT 1 FROM phenopacket_revisions contribution
+                 WHERE contribution.record_id = packet_id
+                   AND contribution.actor_id = review_actor.id
+                   AND contribution.event_type IN
+                       ('created','draft_created','draft_saved')
+                   AND (
+                       head_number IS NULL
+                       OR contribution.revision_number > head_number
+                   )
+            ) THEN
+                RAISE EXCEPTION 'reviewer_contributed';
+            END IF;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
         CREATE FUNCTION validate_review_issue_insert()
         RETURNS trigger AS $$
         DECLARE
@@ -310,6 +367,14 @@ def _install_comment_and_event_triggers() -> None:
                     RAISE EXCEPTION 'review_revision_mismatch';
                 END IF;
             END IF;
+            PERFORM require_independent_review_actor(
+                packet.id,
+                packet.draft_owner_id,
+                reviewed_revision.id,
+                head_number,
+                NEW.author_id,
+                NULL
+            );
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -327,37 +392,60 @@ def _install_comment_and_event_triggers() -> None:
         CREATE FUNCTION lock_phenopacket_for_resolution_event()
         RETURNS trigger AS $$
         DECLARE
+            issue_probe comments%ROWTYPE;
             issue comments%ROWTYPE;
             packet phenopackets%ROWTYPE;
             active_revision phenopacket_revisions%ROWTYPE;
-            expected_candidate_id BIGINT;
             reviewed_revision phenopacket_revisions%ROWTYPE;
+            walk_revision phenopacket_revisions%ROWTYPE;
+            parent_revision phenopacket_revisions%ROWTYPE;
             head_number INTEGER;
+            candidate_in_cycle BOOLEAN := FALSE;
+            visited BIGINT[] := ARRAY[]::BIGINT[];
+            latest_event comment_resolution_events%ROWTYPE;
         BEGIN
-            SELECT * INTO issue FROM comments WHERE id = NEW.comment_id;
-            IF NOT FOUND OR issue.review_revision_id IS NULL
-               OR issue.record_type <> 'phenopacket'
-               OR issue.deleted_at IS NOT NULL THEN
+            SELECT * INTO issue_probe FROM comments WHERE id = NEW.comment_id;
+            IF NOT FOUND OR issue_probe.review_revision_id IS NULL
+               OR issue_probe.record_type <> 'phenopacket' THEN
                 RAISE EXCEPTION 'review_issue_mutation_forbidden';
             END IF;
 
             SELECT * INTO packet FROM phenopackets
-             WHERE id = issue.record_id FOR UPDATE;
+             WHERE id = issue_probe.record_id FOR UPDATE;
             IF NOT FOUND OR packet.draft_owner_id IS NULL THEN
                 RAISE EXCEPTION 'review_author_unknown';
+            END IF;
+            SELECT * INTO issue FROM comments
+             WHERE id = NEW.comment_id FOR UPDATE;
+            IF NOT FOUND OR issue.review_revision_id IS NULL
+               OR issue.record_type <> 'phenopacket'
+               OR issue.deleted_at IS NOT NULL
+               OR issue.record_id IS DISTINCT FROM issue_probe.record_id
+               OR issue.record_type IS DISTINCT FROM issue_probe.record_type
+               OR issue.review_revision_id IS DISTINCT FROM
+                  issue_probe.review_revision_id THEN
+                RAISE EXCEPTION 'review_issue_mutation_forbidden';
+            END IF;
+            SELECT * INTO latest_event FROM comment_resolution_events event
+             WHERE event.comment_id = issue.id
+             ORDER BY event.id DESC LIMIT 1;
+            IF FOUND AND NOT (
+                (
+                    latest_event.action = 'resolved'
+                    AND issue.resolved_at IS NOT NULL
+                    AND issue.resolved_by_id = latest_event.actor_id
+                ) OR (
+                    latest_event.action = 'reopened'
+                    AND issue.resolved_at IS NULL
+                    AND issue.resolved_by_id IS NULL
+                )
+            ) THEN
+                RAISE EXCEPTION 'review_issue_resolution_projection_mismatch';
             END IF;
             SELECT * INTO active_revision FROM phenopacket_revisions
              WHERE id = packet.editing_revision_id AND record_id = packet.id;
             IF NOT FOUND OR active_revision.state NOT IN ('in_review','changes_requested') THEN
                 RAISE EXCEPTION 'review_closed';
-            END IF;
-            expected_candidate_id := active_revision.id;
-            IF active_revision.state = 'changes_requested' THEN
-                expected_candidate_id := active_revision.parent_revision_id;
-            END IF;
-            IF expected_candidate_id IS NULL
-               OR expected_candidate_id <> issue.review_revision_id THEN
-                RAISE EXCEPTION 'review_revision_mismatch';
             END IF;
             SELECT * INTO reviewed_revision FROM phenopacket_revisions
              WHERE id = issue.review_revision_id
@@ -373,6 +461,52 @@ def _install_comment_and_event_triggers() -> None:
                     RAISE EXCEPTION 'review_revision_mismatch';
                 END IF;
             END IF;
+            walk_revision := active_revision;
+            LOOP
+                IF walk_revision.record_id <> packet.id
+                   OR walk_revision.id = ANY(visited) THEN
+                    RAISE EXCEPTION 'review_revision_mismatch';
+                END IF;
+                visited := array_append(visited, walk_revision.id);
+                IF walk_revision.id = issue.review_revision_id THEN
+                    candidate_in_cycle := TRUE;
+                END IF;
+
+                IF packet.head_published_revision_id IS NOT NULL
+                   AND walk_revision.id = packet.head_published_revision_id THEN
+                    IF walk_revision.state <> 'published'
+                       OR NOT candidate_in_cycle THEN
+                        RAISE EXCEPTION 'review_revision_mismatch';
+                    END IF;
+                    EXIT;
+                ELSIF packet.head_published_revision_id IS NULL
+                      AND walk_revision.parent_revision_id IS NULL THEN
+                    IF walk_revision.event_type <> 'created'
+                       OR NOT candidate_in_cycle THEN
+                        RAISE EXCEPTION 'review_revision_mismatch';
+                    END IF;
+                    EXIT;
+                ELSIF walk_revision.parent_revision_id IS NULL THEN
+                    RAISE EXCEPTION 'review_revision_mismatch';
+                END IF;
+
+                SELECT * INTO parent_revision FROM phenopacket_revisions
+                 WHERE id = walk_revision.parent_revision_id;
+                IF NOT FOUND OR parent_revision.record_id <> packet.id
+                   OR parent_revision.revision_number >=
+                      walk_revision.revision_number THEN
+                    RAISE EXCEPTION 'review_revision_mismatch';
+                END IF;
+                walk_revision := parent_revision;
+            END LOOP;
+            PERFORM require_independent_review_actor(
+                packet.id,
+                packet.draft_owner_id,
+                reviewed_revision.id,
+                head_number,
+                NEW.actor_id,
+                NEW.actor_role
+            );
             IF NEW.action = 'resolved' AND issue.resolved_at IS NOT NULL THEN
                 RAISE EXCEPTION 'review_issue_already_resolved';
             ELSIF NEW.action = 'reopened' AND issue.resolved_at IS NULL THEN
@@ -388,6 +522,44 @@ def _install_comment_and_event_triggers() -> None:
         CREATE TRIGGER comment_resolution_events_lock_record
         BEFORE INSERT ON comment_resolution_events
         FOR EACH ROW EXECUTE FUNCTION lock_phenopacket_for_resolution_event();
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION validate_resolution_event_projection()
+        RETURNS trigger AS $$
+        DECLARE
+            issue comments%ROWTYPE;
+            latest_event comment_resolution_events%ROWTYPE;
+        BEGIN
+            SELECT * INTO issue FROM comments WHERE id = NEW.comment_id;
+            SELECT * INTO latest_event FROM comment_resolution_events event
+             WHERE event.comment_id = NEW.comment_id
+             ORDER BY event.id DESC LIMIT 1;
+            IF issue.id IS NULL OR latest_event.id IS NULL OR NOT (
+                (
+                    latest_event.action = 'resolved'
+                    AND issue.resolved_at IS NOT NULL
+                    AND issue.resolved_by_id = latest_event.actor_id
+                ) OR (
+                    latest_event.action = 'reopened'
+                    AND issue.resolved_at IS NULL
+                    AND issue.resolved_by_id IS NULL
+                )
+            ) THEN
+                RAISE EXCEPTION 'review_issue_resolution_projection_mismatch';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER comment_resolution_events_projection_final_state
+        AFTER INSERT ON comment_resolution_events
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION validate_resolution_event_projection();
         """
     )
     op.execute(
@@ -667,12 +839,21 @@ def downgrade() -> None:
     )
     op.execute("DROP FUNCTION reject_comment_resolution_event_mutation()")
     op.execute(
+        "DROP TRIGGER comment_resolution_events_projection_final_state "
+        "ON comment_resolution_events"
+    )
+    op.execute("DROP FUNCTION validate_resolution_event_projection()")
+    op.execute(
         "DROP TRIGGER comment_resolution_events_lock_record "
         "ON comment_resolution_events"
     )
     op.execute("DROP FUNCTION lock_phenopacket_for_resolution_event()")
     op.execute("DROP TRIGGER comments_review_issue_guard ON comments")
     op.execute("DROP FUNCTION validate_review_issue_insert()")
+    op.execute(
+        "DROP FUNCTION require_independent_review_actor("
+        "UUID,BIGINT,BIGINT,INTEGER,BIGINT,TEXT)"
+    )
     op.execute(
         "DROP TRIGGER phenopacket_revisions_00_lock_record ON phenopacket_revisions"
     )
