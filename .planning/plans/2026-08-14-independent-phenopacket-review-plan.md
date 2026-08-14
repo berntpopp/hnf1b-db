@@ -209,7 +209,7 @@ git commit -m "feat(backend): add full-content revision digests"
 - Contributor scope is content events `created|draft_created|draft_saved` after the current published-head revision number, or all such events for a never-published record.
 - Pure transition rules allow curator/admin review transitions, but the state service must call policy checks before mutation; publish remains admin-only.
 
-- [ ] **Step 1: Write the failing role/owner/submitter/contributor matrix**
+- [x] **Step 1: Write the failing role/owner/submitter/contributor matrix**
 
 ```python
 @pytest.mark.parametrize(
@@ -228,23 +228,23 @@ async def test_review_eligibility_matrix(...):
 
 Also test NULL owner fails closed, viewer has no actions, unresolved issues block only approval, request-changes is available to an eligible curator, approved may reopen to changes requested, only admins may publish, and direct state-service calls cannot bypass actor-specific policy.
 
-- [ ] **Step 2: Run policy and transition tests to prove current admin-only behavior fails**
+- [x] **Step 2: Run policy and transition tests to prove current admin-only behavior fails**
 
 Run: `cd backend && uv run pytest tests/test_review_policy.py tests/test_state_transitions.py tests/test_state_flows.py -q`
 
 Expected: FAIL because curator review and independent-review errors are absent.
 
-- [ ] **Step 3: Implement the review policy and adjust the pure matrix**
+- [x] **Step 3: Implement the review policy and adjust the pure matrix**
 
 Keep structural state/role rules in `services/transitions.py`; move actor-specific owner/submitter/contributor/issue decisions into `ReviewPolicy`. Integrate the policy in `state_service.py` after the phenopacket row lock and candidate lookup but before any revision mutation. Add `approved -> changes_requested`. Do not allow `admin` to bypass independence in either layer.
 
-- [ ] **Step 4: Verify policy tests and mypy**
+- [x] **Step 4: Verify policy tests and mypy**
 
 Run: `cd backend && uv run pytest tests/test_review_policy.py tests/test_state_transitions.py tests/test_state_flows.py -q && uv run mypy app/phenopackets/review app/phenopackets/services/transitions.py app/phenopackets/services/state_service.py`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the policy layer**
+- [x] **Step 5: Commit the policy layer**
 
 ```bash
 git add backend/app/phenopackets/review backend/app/phenopackets/services/transitions.py \
