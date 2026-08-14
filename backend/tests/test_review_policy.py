@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,11 +35,26 @@ async def _review_candidate(
     db_session.add(record)
     await db_session.flush()
 
-    parent_id = None
+    root = PhenopacketRevision(
+        record_id=record.id,
+        revision_number=1,
+        state="draft",
+        content_jsonb={"id": "review-policy"},
+        change_reason="create",
+        actor_id=owner_id or submitter_id,
+        from_state=None,
+        to_state="draft",
+        event_type="created",
+    )
+    db_session.add(root)
+    await db_session.flush()
+
+    parent_id = root.id
     if contributor_id is not None:
         contribution = PhenopacketRevision(
             record_id=record.id,
-            revision_number=1,
+            parent_revision_id=parent_id,
+            revision_number=2,
             state="draft",
             content_jsonb={"id": "review-policy", "saved": True},
             change_reason="content contribution",
@@ -52,7 +70,7 @@ async def _review_candidate(
     candidate = PhenopacketRevision(
         record_id=record.id,
         parent_revision_id=parent_id,
-        revision_number=2 if contributor_id is not None else 1,
+        revision_number=3 if contributor_id is not None else 2,
         state="in_review",
         content_jsonb={"id": "review-policy", "saved": contributor_id is not None},
         change_reason="submit for review",
@@ -367,7 +385,7 @@ async def test_closed_candidate_has_stable_review_closed_blocker(
     closed = PhenopacketRevision(
         record_id=record.id,
         parent_revision_id=candidate.id,
-        revision_number=2,
+        revision_number=candidate.revision_number + 1,
         state="changes_requested",
         content_jsonb=candidate.content_jsonb,
         change_reason="review closed",
@@ -378,7 +396,7 @@ async def test_closed_candidate_has_stable_review_closed_blocker(
     )
     db_session.add(closed)
     await db_session.flush()
-    record.revision = 2
+    record.revision = closed.revision_number
     record.editing_revision_id = closed.id
     await db_session.flush()
 
@@ -406,7 +424,7 @@ async def test_approved_capabilities_allow_reopen_and_admin_publish(
     approved = PhenopacketRevision(
         record_id=record.id,
         parent_revision_id=candidate.id,
-        revision_number=2,
+        revision_number=candidate.revision_number + 1,
         state="approved",
         content_jsonb=candidate.content_jsonb,
         change_reason="approve",
@@ -418,7 +436,7 @@ async def test_approved_capabilities_allow_reopen_and_admin_publish(
     db_session.add(approved)
     await db_session.flush()
     record.state = "approved"
-    record.revision = 2
+    record.revision = approved.revision_number
     record.editing_revision_id = approved.id
     await db_session.flush()
 
@@ -477,7 +495,7 @@ async def test_issue_action_policy_uses_effective_state_and_exact_candidate(
         active = PhenopacketRevision(
             record_id=record.id,
             parent_revision_id=candidate.id,
-            revision_number=2,
+            revision_number=candidate.revision_number + 1,
             state=effective_state,
             content_jsonb=candidate.content_jsonb,
             change_reason=effective_state,
@@ -488,7 +506,7 @@ async def test_issue_action_policy_uses_effective_state_and_exact_candidate(
         )
         db_session.add(active)
         await db_session.flush()
-        record.revision = 2
+        record.revision = active.revision_number
         record.editing_revision_id = active.id
         await db_session.flush()
 
@@ -539,3 +557,54 @@ async def test_issue_action_policy_never_allows_owner_admin_bypass(
         )
 
     assert exc_info.value.code == "self_review_forbidden"
+
+
+@pytest.mark.asyncio
+async def test_issue_action_rejects_candidate_before_broken_active_cycle_root():
+    """Seeing the issue candidate is insufficient if its remaining ancestry is bad."""
+    record_id = uuid.uuid4()
+    candidate = SimpleNamespace(
+        id=2,
+        record_id=record_id,
+        parent_revision_id=99,
+        revision_number=2,
+        state="in_review",
+        event_type="state_transition",
+        actor_id=1,
+    )
+    active = SimpleNamespace(
+        id=5,
+        record_id=record_id,
+        parent_revision_id=2,
+        revision_number=5,
+        state="in_review",
+        event_type="state_transition",
+        actor_id=1,
+    )
+    record = SimpleNamespace(
+        id=record_id,
+        state="in_review",
+        editing_revision_id=active.id,
+        head_published_revision_id=None,
+        draft_owner_id=1,
+    )
+    actor = SimpleNamespace(id=2, is_active=True, role="curator")
+    query_result = MagicMock()
+    query_result.scalar_one_or_none.return_value = None
+    db = SimpleNamespace(
+        get=AsyncMock(
+            side_effect=lambda _model, key: {2: candidate, 5: active}.get(key)
+        ),
+        execute=AsyncMock(return_value=query_result),
+    )
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await ReviewPolicy.require_issue_action(
+            db,
+            record,
+            candidate,
+            actor,
+            action="resolve",
+        )
+
+    assert exc_info.value.code == "review_closed"

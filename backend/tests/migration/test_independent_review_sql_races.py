@@ -74,8 +74,9 @@ async def _insert_issue(connection, record_id, candidate_id, actor_id):
     )
 
 
-async def _approve(connection, record_id, candidate_id, actor_id):
-    approved_id = await connection.scalar(
+async def _insert_approved_revision(connection, record_id, candidate_id, actor_id):
+    """Insert approval evidence; its row trigger must acquire the record lock."""
+    return await connection.scalar(
         text(
             """
             INSERT INTO phenopacket_revisions
@@ -90,6 +91,10 @@ async def _approve(connection, record_id, candidate_id, actor_id):
         ),
         {"record_id": record_id, "candidate_id": candidate_id, "actor_id": actor_id},
     )
+
+
+async def _activate_approval(connection, record_id, approved_id):
+    """Project an already-inserted approval after lock causality is observed."""
     await connection.execute(
         text(
             """
@@ -100,7 +105,6 @@ async def _approve(connection, record_id, candidate_id, actor_id):
         ),
         {"approved_id": approved_id, "record_id": record_id},
     )
-    return approved_id
 
 
 async def _reopen(connection, issue_id, actor_id):
@@ -136,6 +140,23 @@ async def _wait_until_blocked(observer, winner_pid: int, loser_pid: int) -> None
     raise AssertionError(
         f"backend {loser_pid} never blocked behind expected winner {winner_pid}"
     )
+
+
+async def _assert_record_has_for_update_lock(observer, record_id) -> None:
+    """Distinguish the trigger's FOR UPDATE from the revision FK's KEY SHARE."""
+    savepoint = await observer.begin_nested()
+    try:
+        with pytest.raises(DBAPIError, match="could not obtain lock"):
+            await observer.execute(
+                text(
+                    """SELECT id FROM phenopackets WHERE id=:record_id
+                    FOR NO KEY UPDATE NOWAIT"""
+                ),
+                {"record_id": record_id},
+            )
+    finally:
+        if savepoint.is_active:
+            await savepoint.rollback()
 
 
 async def _race(
@@ -195,7 +216,7 @@ async def _race(
 
             async def approval_statement():
                 loser_started.set()
-                return await _approve(
+                return await _insert_approved_revision(
                     approval_conn, record_id, candidate_id, reviewer.id
                 )
 
@@ -213,18 +234,25 @@ async def _race(
                     _wait_until_blocked(observer, issue_pid, approval_pid), timeout=5
                 )
                 await issue_tx.commit()
-                with pytest.raises(DBAPIError, match="unresolved_review_issues"):
+                with pytest.raises(
+                    DBAPIError, match="unresolved_review_issues"
+                ) as exc_info:
                     await asyncio.wait_for(loser_task, timeout=5)
+                assert "INSERT INTO phenopacket_revisions" in str(
+                    exc_info.value.statement
+                )
                 await approval_tx.rollback()
             else:
-                approved_id = await _approve(
+                approved_id = await _insert_approved_revision(
                     approval_conn, record_id, candidate_id, reviewer.id
                 )
+                await _assert_record_has_for_update_lock(observer, record_id)
                 loser_task = asyncio.create_task(issue_statement())
                 await asyncio.wait_for(loser_started.wait(), timeout=5)
                 await asyncio.wait_for(
                     _wait_until_blocked(observer, approval_pid, issue_pid), timeout=5
                 )
+                await _activate_approval(approval_conn, record_id, approved_id)
                 await approval_tx.commit()
                 with pytest.raises(DBAPIError, match="review_closed"):
                     await asyncio.wait_for(loser_task, timeout=5)
