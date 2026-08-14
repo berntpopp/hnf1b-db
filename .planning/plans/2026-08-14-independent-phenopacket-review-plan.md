@@ -281,7 +281,7 @@ git commit -m "feat(backend): enforce independent review policy"
 - Approval calls Task 3 policy under the existing row lock and copies the `in_review` snapshot unchanged.
 - Publication validates expected approved ID/digest and copies approved content unchanged; `_canonicalize_for_persistence(..., publish=True)` must not run in `_publish`.
 
-- [ ] **Step 1: Write failing exact-snapshot service tests**
+- [x] **Step 1: Write failing exact-snapshot service tests**
 
 ```python
 async def test_submit_freezes_publish_canonical_content(db_session, draft_record, curator_user):
@@ -298,27 +298,27 @@ async def test_publish_copies_approved_extension_content_unchanged(...):
 
 Cover stale candidate ID, stale digest, missing/false attestation, publish-time canonicalizer mutation (must never be called), stale approved ID/digest, actor role and decision metadata in the v2 hash, and exact public-head pointer swap.
 
-- [ ] **Step 2: Run focused tests and observe current publish-time mutation behavior**
+- [x] **Step 2: Run focused tests and observe current publish-time mutation behavior**
 
 Run: `cd backend && uv run pytest tests/test_exact_review_snapshot.py tests/test_state_flows.py tests/test_revision_immutability.py -q`
 
 Expected: FAIL because current approval has no conditional digest/attestation and `_publish` canonicalizes.
 
-- [ ] **Step 3: Implement conditional schemas and service behavior**
+- [x] **Step 3: Implement conditional schemas and service behavior**
 
 Use Pydantic model validation so approval requires only candidate fields/attestation and publication requires only approved fields. Translate `ReviewPolicyError` to stable structured router errors. Preserve optimistic record `revision` checks in addition to candidate/approved identity checks.
 
-- [ ] **Step 4: Update creation writes to v2 audit without rewriting history**
+- [x] **Step 4: Update creation writes to v2 audit without rewriting history**
 
 Newly created records and all new revision events record actor role, full digest, and ledger v2. Existing rows with null v2 fields remain readable and immutable. Add response fields so review clients can echo exact IDs/digests.
 
-- [ ] **Step 5: Run lifecycle/API/visibility regression tests**
+- [x] **Step 5: Run lifecycle/API/visibility regression tests**
 
 Run: `cd backend && uv run pytest tests/test_exact_review_snapshot.py tests/test_state_flows.py tests/test_revision_immutability.py tests/test_api_transitions.py tests/test_visibility_endpoints.py tests/test_state_service_canonicalization_hook.py tests/test_state_invariants.py tests/test_state_service_clone_cycle_full.py tests/test_state_service_invariant_i8.py tests/test_openapi_contract.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit exact review semantics**
+- [x] **Step 6: Commit exact review semantics**
 
 ```bash
 git add backend/app/phenopackets/models.py backend/app/phenopackets/services/state_service.py \
