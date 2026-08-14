@@ -50,12 +50,21 @@ def test_content_digest_covers_extension_fields_and_ignores_key_order() -> None:
         "hnf1bCuration": {"flag": False},
         "unknownExtension": {"source": "registry"},
     }
+    changed_unknown_extension = {
+        "subject": {"id": "1"},
+        "hnf1bCuration": {"flag": True},
+        "unknownExtension": {"source": "publication"},
+    }
 
     digest = content_sha256(left)
 
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+    assert content_sha256({"label": "Müller", "subject": {"id": "1"}}) == (
+        "sha256:ebbb266d0272fd333d6b903df186114ae41449fd2c5c3c25a893c5c90d859e17"
+    )
     assert digest == content_sha256(reordered)
     assert digest != content_sha256(changed)
+    assert digest != content_sha256(changed_unknown_extension)
 
 
 def test_builder_returns_complete_v2_payload_with_explicit_optional_fields() -> None:
