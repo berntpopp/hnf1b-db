@@ -79,7 +79,7 @@
 - Migration revision is `d0f422b00005`, down revision `c0f422b00004`.
 - Does not add lock-taking triggers or the active-owner constraint; Task 5 activates those after application support exists.
 
-- [ ] **Step 1: Write failing ORM and migration-contract tests**
+- [x] **Step 1: Write failing ORM and migration-contract tests**
 
 ```python
 def test_revision_exposes_v2_audit_columns():
@@ -94,13 +94,13 @@ def test_review_issue_and_resolution_event_models_are_linked():
 
 The migration test must import the revision module, assert its revision chain, upgrade a temporary/test schema, inspect nullability/FKs/check constraints/indexes, and verify downgrade succeeds while all new tables/columns are empty.
 
-- [ ] **Step 2: Run the focused tests and confirm the schema is absent**
+- [x] **Step 2: Run the focused tests and confirm the schema is absent**
 
 Run: `cd backend && uv run pytest tests/migration/test_independent_review_expand_migration.py tests/test_review_models.py tests/test_alembic_env_autogenerate.py -q`
 
 Expected: FAIL because the migration, columns, and model do not exist.
 
-- [ ] **Step 3: Implement the nullable expansion**
+- [x] **Step 3: Implement the nullable expansion**
 
 Add the four nullable revision columns; add nullable `comments.review_revision_id` with `ON DELETE RESTRICT`; create `comment_resolution_events` with:
 
@@ -115,7 +115,7 @@ CheckConstraint(
 
 Add database checks for `content_sha256 ~ '^sha256:[0-9a-f]{64}$'`, `ledger_version IS NULL OR ledger_version = 2`, `decision_metadata IS NULL OR ledger_version = 2`, allowlisted actor-role snapshots where present, trimmed resolution rationale length `1..500`, and resolution-event actor role `curator|admin`. Create a partial index for live unresolved phenopacket blocking issues on `(record_id, review_revision_id)` where `record_type = 'phenopacket' AND review_revision_id IS NOT NULL AND resolved_at IS NULL AND deleted_at IS NULL`. Leave existing rows null and do not disable the revision immutability trigger. Import both new ORM models in `alembic/env.py` so autogenerate sees the complete metadata graph.
 
-- [ ] **Step 4: Register cleanup order and verify upgrade/downgrade**
+- [x] **Step 4: Register cleanup order and verify upgrade/downgrade**
 
 Add `comment_resolution_events` before `comments` in `_MUTABLE_TABLES`. Run:
 
@@ -123,7 +123,7 @@ Add `comment_resolution_events` before `comments` in `_MUTABLE_TABLES`. Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the expansion**
+- [x] **Step 5: Commit the expansion**
 
 ```bash
 git add backend/alembic/versions/d0f422b00005_expand_independent_review_audit.py \
