@@ -3,7 +3,7 @@
 from sqlalchemy import CheckConstraint
 
 from app.comments import models as comments_models
-from app.phenopackets.models import PhenopacketRevision
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 
 
 def _check_names(table) -> set[str]:
@@ -101,3 +101,10 @@ def test_resolution_event_model_catches_resolved_event_with_null_disposition():
     )
 
     assert "disposition IS NOT NULL" in check_sql
+
+
+def test_active_edit_owner_constraint_is_in_orm_metadata():
+    """ORM metadata mirrors the activated editing-pointer owner invariant."""
+    assert _check_sql(Phenopacket.__table__, "ck_phenopackets_active_edit_owner") == (
+        "editing_revision_id IS NULL OR draft_owner_id IS NOT NULL"
+    )

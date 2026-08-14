@@ -18,6 +18,39 @@ branch_labels = None
 depends_on = None
 
 
+def assert_independent_review_downgrade_safe(bind) -> None:
+    """Refuse to erase any independent-review or v2 ledger evidence."""
+    evidence = (
+        bind.execute(
+            sa.text(
+                """
+                SELECT
+                    (SELECT count(*) FROM comments
+                     WHERE review_revision_id IS NOT NULL) AS blocking_issues,
+                    (SELECT count(*) FROM comment_resolution_events)
+                        AS resolution_events,
+                    (SELECT count(*) FROM phenopacket_revisions
+                     WHERE ledger_version = 2) AS v2_revisions,
+                    (SELECT count(*) FROM phenopacket_revisions
+                     WHERE decision_metadata IS NOT NULL) AS decision_metadata,
+                    (SELECT count(*) FROM phenopacket_revisions
+                     WHERE actor_role IS NOT NULL) AS actor_roles,
+                    (SELECT count(*) FROM phenopacket_revisions
+                     WHERE content_sha256 IS NOT NULL) AS content_digests
+                """
+            )
+        )
+        .mappings()
+        .one()
+    )
+    present = [name for name, count in evidence.items() if int(count) > 0]
+    if present:
+        raise RuntimeError(
+            "refusing independent-review downgrade; evidence present: "
+            + ", ".join(present)
+        )
+
+
 def upgrade() -> None:
     """Add nullable audit storage without activating workflow constraints."""
     op.add_column(
@@ -114,6 +147,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove the unused nullable expansion without touching revision history."""
+    assert_independent_review_downgrade_safe(op.get_bind())
     op.drop_index(
         "ix_comments_live_unresolved_phenopacket_review_issues",
         table_name="comments",

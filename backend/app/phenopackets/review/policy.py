@@ -17,6 +17,7 @@ from app.phenopackets.review.schemas import (
 )
 
 DecisionAction = Literal["request_changes", "approve"]
+IssueAction = Literal["create", "resolve", "reopen"]
 _CONTENT_EVENTS = ("created", "draft_created", "draft_saved")
 
 
@@ -173,6 +174,64 @@ class ReviewPolicy:
             else {}
         )
         raise ReviewPolicyError(code, cls._MESSAGES[code], context)
+
+    @classmethod
+    async def require_issue_action(
+        cls,
+        db: AsyncSession,
+        phenopacket: Phenopacket,
+        candidate_revision: PhenopacketRevision,
+        actor: User,
+        *,
+        action: IssueAction,
+    ) -> None:
+        """Require an independent reviewer for an active-cycle issue action.
+
+        Creation is limited to an active ``in_review`` candidate. Resolution
+        and reopening remain available after ``changes_requested`` so the
+        issue ledger can be completed without reopening the whole review.
+        """
+        if not actor.is_active or actor.role not in ("curator", "admin"):
+            raise cls._error("review_closed")
+
+        effective_state, active_revision = await cls._effective_review_state(
+            db, phenopacket
+        )
+        allowed_states = (
+            {"in_review"} if action == "create" else {"in_review", "changes_requested"}
+        )
+        if effective_state not in allowed_states or active_revision is None:
+            raise cls._error("review_closed")
+
+        expected_candidate = active_revision
+        if effective_state == "changes_requested":
+            if active_revision.parent_revision_id is None:
+                raise cls._error("review_author_unknown")
+            parent = await db.get(
+                PhenopacketRevision, active_revision.parent_revision_id
+            )
+            if (
+                parent is None
+                or parent.record_id != phenopacket.id
+                or parent.state != "in_review"
+                or parent.revision_number >= active_revision.revision_number
+            ):
+                raise cls._error("review_author_unknown")
+            expected_candidate = parent
+
+        if (
+            candidate_revision.id != expected_candidate.id
+            or candidate_revision.record_id != phenopacket.id
+            or candidate_revision.state != "in_review"
+        ):
+            raise cls._error("review_closed")
+
+        blockers = await cls._independence_blockers(
+            db, phenopacket, candidate_revision, actor
+        )
+        if blockers:
+            code = blockers[0]
+            raise ReviewPolicyError(code, cls._MESSAGES[code])
 
     @staticmethod
     def _capability(

@@ -654,6 +654,10 @@ class PhenopacketStateService:
             # so the curator can continue owning through the review cycle.
             pp.editing_revision_id = rev.id
 
+        # Persist the projection after the immutable revision insert so any
+        # same-transaction review-issue writer observes the active candidate.
+        # Transaction ownership remains with the router/caller.
+        await self.db.flush()
         return pp, rev
 
     async def _publish(

@@ -39,6 +39,12 @@ class Phenopacket(Base):
     """
 
     __tablename__ = "phenopackets"
+    __table_args__ = (
+        CheckConstraint(
+            "editing_revision_id IS NULL OR draft_owner_id IS NOT NULL",
+            name=conv("ck_phenopackets_active_edit_owner"),
+        ),
+    )
 
     # Primary key
     id: Mapped[uuid.UUID] = mapped_column(
