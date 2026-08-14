@@ -265,6 +265,10 @@ git commit -m "feat(backend): enforce independent review policy"
 - Modify: `backend/tests/test_state_flows.py`
 - Modify: `backend/tests/test_revision_immutability.py`
 - Modify: `backend/tests/test_api_transitions.py`
+- Modify: `backend/tests/test_state_invariants.py`
+- Modify: `backend/tests/test_state_service_clone_cycle_full.py`
+- Modify: `backend/tests/test_state_service_invariant_i8.py`
+- Refresh: `mcp/contract/openapi.snapshot.json` for the conditional transition schema; Task 12 refreshes it again after the review endpoints are added
 
 **Interfaces:**
 
@@ -310,7 +314,7 @@ Newly created records and all new revision events record actor role, full digest
 
 - [ ] **Step 5: Run lifecycle/API/visibility regression tests**
 
-Run: `cd backend && uv run pytest tests/test_exact_review_snapshot.py tests/test_state_flows.py tests/test_revision_immutability.py tests/test_api_transitions.py tests/test_visibility_endpoints.py tests/test_state_service_canonicalization_hook.py -q`
+Run: `cd backend && uv run pytest tests/test_exact_review_snapshot.py tests/test_state_flows.py tests/test_revision_immutability.py tests/test_api_transitions.py tests/test_visibility_endpoints.py tests/test_state_service_canonicalization_hook.py tests/test_state_invariants.py tests/test_state_service_clone_cycle_full.py tests/test_state_service_invariant_i8.py tests/test_openapi_contract.py -q`
 
 Expected: PASS.
 
@@ -320,7 +324,9 @@ Expected: PASS.
 git add backend/app/phenopackets/models.py backend/app/phenopackets/services/state_service.py \
   backend/app/phenopackets/services/phenopacket_service.py backend/app/phenopackets/routers/transitions.py \
   backend/tests/test_exact_review_snapshot.py backend/tests/test_state_flows.py \
-  backend/tests/test_revision_immutability.py backend/tests/test_api_transitions.py
+  backend/tests/test_revision_immutability.py backend/tests/test_api_transitions.py \
+  backend/tests/test_state_invariants.py backend/tests/test_state_service_clone_cycle_full.py \
+  backend/tests/test_state_service_invariant_i8.py mcp/contract/openapi.snapshot.json
 git commit -m "feat(backend): bind approval to exact candidate snapshot"
 ```
 
